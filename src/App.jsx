@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 47/47 | Nao editar diretamente
+// Modulos: 49/49 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -2086,6 +2086,7 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
 /* 28/09/2026 — CRIAÇÃO › Edição de vídeo. Tela nova: nasce FECHADA (padrao:false → só sócios). */
 PX_BLOCOS.criacao={label:"Criação", navIcon:"edicao_video", color:"#db2777", grupos:[
   {id:"menu", label:"Menu", itens:[
+    {key:"criacao.edicao_arte", label:"Edição de arte", desc:"Editor de artes (camadas, textos, modelos com espaços, IA que mexe nos objetos) e abrir/salvar PSD, SVG, PDF. Padrão: fechado (só sócios)", padrao:false}, // 29/09/2026
     {key:"criacao.edicao_video", label:"Edição de vídeo", desc:"Fila dos vídeos para editar e o Kit de cada cliente (cores, fonte, legenda, tarja, logo e tela final). Padrão: fechado (só sócios)", padrao:false},
   ]},
 ]};
@@ -3883,6 +3884,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_whatsapp")      return <svg {...p}><path d="M21 11.5a8.4 8.4 0 01-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1121 11.5z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg>;
   if(id==="gestao_armazenamento") return <svg {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+  if(id==="edicao_arte")        return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.8"/></svg>; // 29/09/2026
   if(id==="edicao_video")       return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 9.5h18M7.5 5l2 4.5M12.5 5l2 4.5M17.5 5l2 4.5"/><path d="M10.5 12.5v4l3.5-2z"/></svg>; // 28/09/2026
   if(id==="gestao_eficiencia")  return <svg {...p}><path d="M4 20h16"/><rect x="5" y="12" width="3.5" height="6" rx="1"/><rect x="10.25" y="7" width="3.5" height="11" rx="1"/><rect x="15.5" y="10" width="3.5" height="8" rx="1"/></svg>; // 27/09/2026 (v2: placar)
   if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
@@ -3947,6 +3949,7 @@ const NAV=[
   //]},
   // 28/09/2026 — categoria CRIAÇÃO (abaixo de ESTRATÉGIA). Nasce fechada: Acessos › Criação.
   {type:"divider",label:"CRIAÇÃO"},
+  {id:"edicao_arte", icon:"edicao_arte", label:"Edição de arte"}, // 29/09/2026 — nasce fechada (Acessos › Criação)
   {id:"edicao_video", icon:"edicao_video", label:"Edição de vídeo"},
   {type:"divider",label:"PORTAL"},
   {id:"portal",     icon:"◯", label:"Portal do cliente"},
@@ -50974,6 +50977,7 @@ function _cardPodeSerResp(u){
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Baixar tudo
                     </button>}
+                    {_matCanEdit&&typeof PxBotaoLinkEnvio==="function"&&<PxBotaoLinkEnvio task={task}/>}{/* (29/09/2026) link de envio */}
                     {_matCanEdit&&<label htmlFor={"pixels-pick-mat-"+task.id}
                       style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(8,145,178,0.15)"}}
                       onMouseEnter={function(e){e.currentTarget.style.background="#0e7490";e.currentTarget.style.boxShadow="0 3px 10px rgba(8,145,178,0.35)";}}
@@ -57711,6 +57715,10 @@ function _PxNovaSenha({onDone}){
 
 // ── AgencyOS ──────────────────────────────────────────────────
 export default function AgencyOS(){
+  /* (29/09/2026) Link de envio: /?enviar=CODIGO abre a página pública de envio, sem login (53_link_envio.jsx).
+     O código não muda durante a vida da página, então os hooks abaixo nunca mudam de ordem. */
+  const _pxEnvCod=(typeof pxEnvioCodigoDaUrl==="function")?pxEnvioCodigoDaUrl():null;
+  if(_pxEnvCod) return <PxEnvioPublico codigo={_pxEnvCod}/>;
   const cachedProfile = ls.get(PROFILE_KEY);
   const initAuth = cachedProfile?(cachedProfile.user_type==="client"?"portal":"app"):"loading";
 
@@ -58888,6 +58896,7 @@ export default function AgencyOS(){
       case "gestao_projecao":      return _menuBloco("gestao.projecao",p);       // era verFinanceiro||sócio
       case "gestao_operacional":   return _menuBloco("gestao.operacao",p);       // era só sócio
       case "gestao_eficiencia":    return _menuBloco("gestao.eficiencia",p);     // (27/09/2026) nasce fechada
+      case "edicao_arte":          return _menuBloco("criacao.edicao_arte",p);   // (29/09/2026) Criação › Edição de arte — nasce fechada
       case "edicao_video":         return _menuBloco("criacao.edicao_video",p);  // (28/09/2026) Criação › Edição de vídeo — nasce fechada
       case "gestao_portfolio":     return _menuBloco("gestao.portfolio",p);      // era só sócio
       case "gestao_time":          return _menuBloco("gestao.time",p);           // era só sócio
@@ -59000,6 +59009,7 @@ export default function AgencyOS(){
       case "gestao_projecao":       return _menuBloco("gestao.projecao",effectivePerms)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
       case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_eficiencia":     return _menuBloco("gestao.eficiencia",effectivePerms)?<PageEficiencia isMob={isMob}/>:<NoPerm/>; // (27/09/2026)
+      case "edicao_arte":           return _menuBloco("criacao.edicao_arte",effectivePerms)?(typeof PageEdicaoArte==="function"?<PageEdicaoArte isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>):<NoPerm/>; // (29/09/2026)
       case "edicao_video":          return _menuBloco("criacao.edicao_video",effectivePerms)?<PageEdicaoVideo isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>; // (28/09/2026)
       case "gestao_portfolio":      return _menuBloco("gestao.portfolio",effectivePerms)?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_time":           return _menuBloco("gestao.time",effectivePerms)?<PageGestaoTime {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} onNavTo={nav}/>:<NoPerm/>;
@@ -113529,6 +113539,10 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      conferência antes de exportar, qualidade do arquivo, reduzir eco da sala, VOZ DE ESTÚDIO e MELHORAR IMAGEM no PC
      (tratar_videos.py + instalar_voz_estudio.bat; rpc criacao_tratar_pedir2), IA editando o projeto inteiro
      (edge video-editar v6). Banco: criacao_estudio_modelos_capa_v1 · criacao_tratar_opcoes_v2.
+   v8 (29/09/2026) — IA QUE APRENDE: botão "Falar o pedido" (microfone → whisper → texto na caixa), "Ensinar a IA com
+     este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
+     um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
+     Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
 
    Guias:
      • Fila — cards de VÍDEO em Demanda / Em execução / Ajustes (dado real: os mesmos cards da Linha de produção),
@@ -113621,7 +113635,7 @@ function _evKitPadrao(base){
 
 /* ═══ PÁGINA ═══ */
 function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
-  const [aba, setAba] = useState("fila");   // fila | estudio | kit | musicas
+  const [aba, setAba] = useState("fila");   // fila | estudio | kit | musicas | aprende
   const [taskEstudio, setTaskEstudio] = useState(null);
   const abrirEstudio = function(t){ setTaskEstudio(t ? t.id : null); setAba("estudio"); };
   return (
@@ -113631,7 +113645,7 @@ function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
       <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4}}>A IA edita os vídeos brutos do card seguindo o kit de cada cliente. Você assiste, pede ajuste e exporta.</div>
 
       <div style={{display:"flex",gap:isMob?14:22,marginTop:14,borderBottom:"1px solid "+_EV.linha,overflowX:"auto"}}>
-        {[["fila","Fila"],["estudio","Estúdio"],["kit","Kit do cliente"],["musicas","Músicas"]].map(function(g){ const on = aba===g[0];
+        {[["fila","Fila"],["estudio","Estúdio"],["kit","Kit do cliente"],["musicas","Músicas"],["aprende","IA que aprende"]].map(function(g){ const on = aba===g[0];
           return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
             borderBottom:"2px solid "+(on?_EV.roxo:"transparent"),color:on?_EV.roxo:_EV.sub,fontWeight:on?800:600,fontSize:_evF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
       </div>
@@ -113640,6 +113654,7 @@ function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
       {aba==="estudio" && <_EvEstudio tasks={tasks||[]} isMob={isMob} taskId={taskEstudio} setTaskId={setTaskEstudio} onAbrirCard={onAbrirCard}/>}
       {aba==="kit"  && <_EvKit isMob={isMob}/>}
       {aba==="musicas" && <_EvMusicas isMob={isMob}/>}
+      {aba==="aprende" && typeof _EvAprende==="function" && <_EvAprende isMob={isMob}/>}
     </div>
   );
 }
@@ -114437,6 +114452,48 @@ async function _evDesmontar(blob, quadroSeg, prog){
   } finally { URL.revokeObjectURL(url); }
 }
 
+/* ── preparar os brutos e pedir a edição à IA (v8 · 29/09: a MESMA função serve o Estúdio e o PC do escritório no Guvi editora) ── */
+async function _evPrepararMontar(t, setPasso, extra){
+  const brutos = _evBrutos(t).slice(0, 12);
+  if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
+  setPasso("Medindo os vídeos…");
+  const durs = []; for(let i=0;i<brutos.length;i++) durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url));
+  const total = durs.reduce(function(s,x){ return s+x; }, 0);
+  if(total > 20*60) throw new Error("Os brutos somam mais de 20 minutos. Deixe no card só o material deste vídeo.");
+  const quadroSeg = Math.max(2, Math.ceil(total/150));
+  const pasta = "edicao/" + _evUuid() + "/";
+  const bk = window._sb.storage.from("video-leituras");
+  const clipes = [];
+  for(let i=0;i<brutos.length;i++){
+    const f = brutos[i], nome = "vídeo " + (i+1) + " de " + brutos.length;
+    const src = f.previewUrl || f.url;
+    if(!f.previewUrl && Number(f.size||0) > 700*1024*1024) throw new Error("\"" + (f.name||"vídeo") + "\" é grande demais para abrir no navegador (mais de 700 MB).");
+    setPasso("Baixando o " + nome + "…");
+    const blob = await _evBaixar(src, function(p){ setPasso("Baixando o " + nome + "… " + p + "%"); });
+    const r = await _evDesmontar(blob, quadroSeg, function(m){ setPasso(nome.charAt(0).toUpperCase() + nome.slice(1) + ": " + m); });
+    const folhas = [], audio = [];
+    for(let k=0;k<r.folhas.length;k++){
+      setPasso("Enviando os quadros do " + nome + "… " + (k+1) + " de " + r.folhas.length);
+      const p = pasta + "c" + (i+1) + "_folha_" + String(k+1).padStart(2,"0") + ".jpg";
+      const u = await bk.upload(p, r.folhas[k], { contentType:"image/jpeg", upsert:false });
+      if(u.error) throw new Error("não consegui enviar os quadros (" + (u.error.message||"") + ")");
+      folhas.push(p);
+    }
+    for(let k=0;k<r.pedacos.length;k++){
+      setPasso("Enviando o áudio do " + nome + "… " + (k+1) + " de " + r.pedacos.length);
+      const p = pasta + "c" + (i+1) + "_fala_" + String(k+1).padStart(2,"0") + ".wav";
+      const u = await bk.upload(p, r.pedacos[k].blob, { contentType:"audio/wav", upsert:false });
+      if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message||"") + ")");
+      audio.push({ path:p, ini:r.pedacos[k].ini, fim:r.pedacos[k].fim });
+    }
+    clipes.push({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg });
+  }
+  setPasso("A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
+  const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(extra || {}) } });
+  if(res.error) throw new Error(await _evErroFn(res));
+  return res.data || {};
+}
+
 /* ── ESTÚDIO: tela ── */
 function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
   const cards = useMemo(function(){
@@ -114497,43 +114554,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     if(!t || passo) return;
     setErro(null);
     try{
-      const brutos = _evBrutos(t).slice(0, 12);
-      if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
-      setPasso("Medindo os vídeos…");
-      const durs = []; for(let i=0;i<brutos.length;i++) durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url));
-      const total = durs.reduce(function(s,x){ return s+x; }, 0);
-      if(total > 20*60) throw new Error("Os brutos somam mais de 20 minutos. Deixe no card só o material deste vídeo.");
-      const quadroSeg = Math.max(2, Math.ceil(total/150));
-      const pasta = "edicao/" + _evUuid() + "/";
-      const bk = window._sb.storage.from("video-leituras");
-      const clipes = [];
-      for(let i=0;i<brutos.length;i++){
-        const f = brutos[i], nome = "vídeo " + (i+1) + " de " + brutos.length;
-        const src = f.previewUrl || f.url;
-        if(!f.previewUrl && Number(f.size||0) > 700*1024*1024) throw new Error("\"" + (f.name||"vídeo") + "\" é grande demais para abrir no navegador (mais de 700 MB).");
-        setPasso("Baixando o " + nome + "…");
-        const blob = await _evBaixar(src, function(p){ setPasso("Baixando o " + nome + "… " + p + "%"); });
-        const r = await _evDesmontar(blob, quadroSeg, function(m){ setPasso(nome.charAt(0).toUpperCase() + nome.slice(1) + ": " + m); });
-        const folhas = [], audio = [];
-        for(let k=0;k<r.folhas.length;k++){
-          setPasso("Enviando os quadros do " + nome + "… " + (k+1) + " de " + r.folhas.length);
-          const p = pasta + "c" + (i+1) + "_folha_" + String(k+1).padStart(2,"0") + ".jpg";
-          const u = await bk.upload(p, r.folhas[k], { contentType:"image/jpeg", upsert:false });
-          if(u.error) throw new Error("não consegui enviar os quadros (" + (u.error.message||"") + ")");
-          folhas.push(p);
-        }
-        for(let k=0;k<r.pedacos.length;k++){
-          setPasso("Enviando o áudio do " + nome + "… " + (k+1) + " de " + r.pedacos.length);
-          const p = pasta + "c" + (i+1) + "_fala_" + String(k+1).padStart(2,"0") + ".wav";
-          const u = await bk.upload(p, r.pedacos[k].blob, { contentType:"audio/wav", upsert:false });
-          if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message||"") + ")");
-          audio.push({ path:p, ini:r.pedacos[k].ini, fim:r.pedacos[k].fim });
-        }
-        clipes.push({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg });
-      }
-      setPasso("A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes } });
-      if(res.error) throw new Error(await _evErroFn(res));
+      await _evPrepararMontar(t, setPasso);
       setPasso(null); _evToast("success", "Vídeo editado pela IA. Dê o play!"); setRec(function(n){ return n+1; });
     }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(n){ return n+1; }); }
   };
@@ -116343,7 +116364,7 @@ async function _evpDetectarBpm(buf){
   return Math.round(bpm);
 }
 
-function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou }){
+function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou, pcAuto }){
   _evpUsarMidia();
   const clipes = ed.clipes || [];
   const infoClipe = useMemo(function(){ const m = {}; clipes.forEach(function(c, i){ m[c.id] = Object.assign({ n:i+1, cor:_EV_CORES_CLIPE[i%12] }, c); }); return m; }, [ed.id]);
@@ -116931,6 +116952,21 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [verExp, setVerExp] = useState(false);
   const [verVersoes, setVerVersoes] = useState(false);
   const iaRef = useRef(null);
+  /* v8: a IA lê o histórico deste vídeo e propõe regras (pendentes até um sócio aprovar) */
+  const [ensinando, setEnsinando] = useState(false);
+  const ensinarIA = async function(){
+    if(ensinando) return;
+    if(alterado){ const ok = await salvar(); if(!ok) return; }
+    setEnsinando(true);
+    try{
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"aprender", id:ed.id } });
+      if(res.error) throw new Error(await _evErroFn(res));
+      const d = res.data || {};
+      if(!d.regras) _evToast("info", d.motivo ? "Nada novo para aprender: " + d.motivo : "A IA não achou nada novo para aprender neste vídeo.");
+      else _evToast("success", d.regras + (d.regras === 1 ? " regra proposta" : " regras propostas") + " — um sócio aprova em Edição de vídeo › IA que aprende.");
+    }catch(e){ _evToast("error", "A IA não conseguiu estudar: " + ((e && e.message) || e)); }
+    setEnsinando(false);
+  };
   const palcoRef = useRef(null); const [palco, setPalco] = useState({ w:700, h:520 });
   useEffect(function(){
     const el = palcoRef.current; if(!el || typeof ResizeObserver === "undefined") return;
@@ -117014,6 +117050,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
                 <button onClick={function(){ onVoltarVersao(v.n); setVerVersoes(false); }} style={Object.assign(_evpBtn(), {padding:"4px 9px",fontSize:11.5})}>Usar esta</button>
               </div>; })}
             <button onClick={function(){ setVerVersoes(false); onRefazer(); }} style={Object.assign(_evpBtn(), {marginTop:10,width:"100%",justifyContent:"center"})}>Refazer do zero com a IA</button>
+            <button onClick={ensinarIA} disabled={ensinando} title="A IA lê os pedidos e as mudanças deste vídeo e propõe regras. As regras só valem depois que um sócio aprova (Edição de vídeo › IA que aprende)."
+              style={Object.assign(_evpBtn("suave", !ensinando), {marginTop:8,width:"100%",justifyContent:"center"})}><_EvpIco n="ia" s={15}/>{ensinando ? "A IA está estudando este vídeo…" : "Ensinar a IA com este vídeo"}</button>
           </div>
         )}
       </div>
@@ -117090,7 +117128,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfo} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
             trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala}/>
         ) : (
-          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe}/>
+          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}/>
         )}
       </div>
 
@@ -117109,7 +117147,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfo} vozes={vozes} narr={narr} tratados={tratados}
             logoUrl={_evLogo(t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
             vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
-            onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob}/>
+            onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
+            prontoPC={!!pcAuto && !tratandoAudio && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)}/>
         </div>
       </div>
     </div>
@@ -117119,7 +117158,45 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
 /* ─── ASSISTENTE DE IA (painel da direita quando nada está selecionado) ─── */
 const _EVP_SUGESTOES = ["Tirar os silêncios e os \"éé\"", "Deixar mais dinâmico, cortes mais rápidos", "Fazer uma versão de 30 segundos", "Destacar o nome da cidade",
   "Legenda amarela estilo karaokê", "Filtro quente em tudo", "Música mais baixa na fala", "Começar pela frase mais forte"];
-function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFerr, clipAg, infoClipe }){
+function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFerr, clipAg, infoClipe, edId }){
+  /* v8 (29/09): pedido por voz — grava no microfone, a OpenAI (whisper) escreve, o texto entra na caixa para conferir antes de mandar */
+  const [voz, setVoz] = useState(null);              // null | "gravando" | "escrevendo"
+  const [segVoz, setSegVoz] = useState(0);
+  const recVoz = useRef(null);
+  useEffect(function(){ return function(){ try{ if(recVoz.current && recVoz.current.state !== "inactive") recVoz.current.stop(); }catch(_){} }; }, []);
+  useEffect(function(){ if(voz !== "gravando") return; const ini = Date.now(); setSegVoz(0);
+    const iv = setInterval(function(){ setSegVoz(Math.floor((Date.now() - ini) / 1000)); }, 500); return function(){ clearInterval(iv); }; }, [voz]);
+  const falarPedido = async function(){
+    if(voz === "gravando"){ try{ recVoz.current && recVoz.current.stop(); }catch(_){} return; }
+    if(voz || ajustando) return;
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){ _evToast("error", "Este navegador não grava áudio. Use o Chrome no computador."); return; }
+    let st = null;
+    try{ st = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true } }); }
+    catch(e){ _evToast("error", "Sem acesso ao microfone: libere no cadeado da barra de endereço (" + ((e && e.name) || "erro") + ")."); return; }
+    const tipos = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    const mime = tipos.find(function(x){ try{ return MediaRecorder.isTypeSupported(x); }catch(_){ return false; } }) || "";
+    let rec; try{ rec = new MediaRecorder(st, mime ? { mimeType:mime } : undefined); }catch(e){ st.getTracks().forEach(function(k){ k.stop(); }); _evToast("error", "Não consegui gravar."); return; }
+    const partes = [], ini = Date.now();
+    const teto = setTimeout(function(){ try{ if(rec.state !== "inactive") rec.stop(); }catch(_){} }, 120000);   // no máximo 2 minutos
+    rec.ondataavailable = function(e){ if(e.data && e.data.size) partes.push(e.data); };
+    rec.onstop = async function(){
+      clearTimeout(teto); st.getTracks().forEach(function(k){ k.stop(); });
+      const tipo = String(rec.mimeType || mime || "audio/webm").split(";")[0];
+      const blob = new Blob(partes, { type:tipo });
+      if(Date.now() - ini < 800 || blob.size < 1200){ setVoz(null); _evToast("warning", "Gravação curta demais. Clique, fale o pedido e clique de novo."); return; }
+      setVoz("escrevendo");
+      try{
+        const b64 = await new Promise(function(ok, falha){ const fr = new FileReader(); fr.onload = function(){ ok(String(fr.result).split(",")[1] || ""); }; fr.onerror = falha; fr.readAsDataURL(blob); });
+        const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"transcrever_pedido", id:edId || null, audio:b64, mime:tipo } });
+        if(res.error) throw new Error(await _evErroFn(res));
+        const tx = String((res.data && res.data.texto) || "").trim();
+        if(!tx) _evToast("warning", "Não entendi o áudio. Tente falar mais perto do microfone.");
+        else { setPedido(function(a){ const b = String(a || "").trim(); return (b ? b + " " : "") + tx; }); setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 30); }
+      }catch(e){ _evToast("error", "Não escreveu o áudio: " + ((e && e.message) || e)); }
+      setVoz(null);
+    };
+    recVoz.current = rec; rec.start(); setVoz("gravando");
+  };
   const rap = [["dividir","Dividir","dividir"],["volume","Volume","volume"],["vel","Velocidade","velocidade"],["recortar","Recorte","recortar"],
                ["estab","Qualidade","estab"],["cor","Cor","cor"],["trans","Transição","transicao"],["fundo","Fundo","pessoa"]];
   const inf = clipAg ? (infoClipe[clipAg.clipe] || {}) : null;
@@ -117131,6 +117208,10 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
         onKeyDown={function(e){ e.stopPropagation(); if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); pedirIA(); } }}
         placeholder="Peça um ajuste… (Ctrl + Enter envia)"
         style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:12,border:"1px solid "+_EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,fontSize:13,resize:"vertical",userSelect:"text"}}/>
+      <button onClick={falarPedido} disabled={ajustando || voz === "escrevendo"} aria-pressed={voz === "gravando"} title="Fale o pedido; clique de novo para parar (até 2 minutos)"
+        style={Object.assign(_evpBtn(voz === "gravando" ? null : "suave", !ajustando && voz !== "escrevendo"), {width:"100%",justifyContent:"center",marginTop:6},
+          voz === "gravando" ? { background:"#fee2e2", color:"#b91c1c", borderColor:"#fecaca" } : {})}>
+        <_EvpIco n={voz === "gravando" ? "parar" : "gravar"} s={16}/>{voz === "gravando" ? "Parar e escrever (" + segVoz + " s)" : voz === "escrevendo" ? "Escrevendo o que você falou…" : "Falar o pedido"}</button>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"8px 0 10px"}}>
         {_EVP_SUGESTOES.map(function(s){ return <button key={s} onClick={function(){ setPedido(s); if(iaRef.current) iaRef.current.focus(); }} disabled={ajustando}
           style={{font:"inherit",fontSize:11,fontWeight:700,padding:"5px 9px",borderRadius:99,border:"1px solid "+_EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,cursor:"pointer"}}>{s}</button>; })}
@@ -118762,7 +118843,7 @@ function _evpConferir(p, calc, o){
 }
 
 function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, vozes, narr, tratados, logoUrl, exp, setExp, alterado, salvar, trat, precisaEstab, mudar, onFeito, isMob,
-                       vozesTratadas, tirarTrechos, fala, setSel, irPara }){
+                       vozesTratadas, tirarTrechos, fala, setSel, irPara, pcAuto, prontoPC }){
   const [qualidade, setQualidade] = useState(function(){ try{ return localStorage.getItem("pxev-qualidade") || "alta"; }catch(_){ return "alta"; } });
   const BPS = { alta:12000000, padrao:8000000, leve:4000000 };
   const [comLegenda, setComLegenda] = useState(true);
@@ -118787,13 +118868,15 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     else if(a.id === "texto"){ const x = (projeto.textos || []).find(function(q){ return q.id === a.alvo; }); if(x){ setSel({ tipo:"texto", id:x.id }); irPara(x.t0 + 0.05); } }
     else if(a.id === "clip"){ const c = calc.clips.find(function(q){ return q.id === a.alvo; }); if(c){ setSel({ tipo:"clip", id:c.id }); irPara(c.t0 + 0.01); } }
   };
-  const exportar = async function(){
+  const exportar = async function(o){
+    o = (o && typeof o === "object" && !o.nativeEvent && !o.target) ? o : {};     // v8: o PC passa {qualidade, legenda}
+    const qual = o.qualidade || qualidade, leg = o.legenda != null ? !!o.legenda : comLegenda, audioSo = o.qualidade ? false : soAudio;
     if(exp && exp.fase && exp.fase !== "feito" && exp.fase !== "erro") return;
     if(faltaLicenca){ _evToast("warning", "Marque que a música do Envato foi registrada neste projeto."); return; }
     const mimeAudio = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find(function(x){ try{ return window.MediaRecorder && MediaRecorder.isTypeSupported(x); }catch(_){ return false; } });
-    const mime = soAudio ? mimeAudio : _evMimeGravacao();
+    const mime = audioSo ? mimeAudio : _evMimeGravacao();
     if(!mime || !HTMLCanvasElement.prototype.captureStream){ setExp({ fase:"erro", msg:"Este navegador não grava vídeo. Use o Google Chrome no computador." }); return; }
-    if(alterado){
+    if(alterado && !pcAuto){           // no PC: exporta o que a pessoa salvou (medições feitas lá entram só na gravação)
       setExp({ fase:"preparando", pct:0, msg:"Salvando a edição antes de exportar…" });
       const ok = await salvar(); if(!ok){ setExp({ fase:"erro", msg:"Não consegui salvar a edição. Tente salvar e exporte de novo." }); return; }
     }
@@ -118805,7 +118888,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       const AC = window.AudioContext || window.webkitAudioContext; ac = new AC({ sampleRate:48000 }); const dest = ac.createMediaStreamDestination();
       const tot = Math.max(0.1, calc.total);
       motor = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:ed.clipes||[], original:true, logoUrl:logoUrl, musicaUrl:musicaUrl,
-        vozes:vozes, narr:narr, tratados:tratados, ctx:ac, saida:dest, pausarAoEsperar:true, semLegenda:!comLegenda,
+        vozes:vozes, narr:narr, tratados:tratados, ctx:ac, saida:dest, pausarAoEsperar:true, semLegenda:!leg,
         onEspera:function(esp){
           try{ if(rec){ if(esp && rec.state === "recording") rec.pause(); else if(!esp && rec.state === "paused") rec.resume(); } }catch(_){}
           setExp(function(x){ return (x && x.fase === "gravando") ? Object.assign({}, x, { esperando:esp }) : x; });
@@ -118813,8 +118896,8 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
         onTempo:function(tt){ const pc = Math.round(tt / tot * 100); setExp(function(x){ return (x && x.fase === "gravando" && x.pct !== pc) ? Object.assign({}, x, { pct:pc }) : x; }); } });
       await motor.pronto;
       await ac.resume();
-      const stream = new MediaStream(soAudio ? dest.stream.getAudioTracks() : [].concat(cv.captureStream(30).getVideoTracks(), dest.stream.getAudioTracks()));
-      rec = new MediaRecorder(stream, soAudio ? { mimeType:mime, audioBitsPerSecond:192000 } : { mimeType:mime, videoBitsPerSecond:BPS[qualidade] || 12000000, audioBitsPerSecond:192000 });
+      const stream = new MediaStream(audioSo ? dest.stream.getAudioTracks() : [].concat(cv.captureStream(30).getVideoTracks(), dest.stream.getAudioTracks()));
+      rec = new MediaRecorder(stream, audioSo ? { mimeType:mime, audioBitsPerSecond:192000 } : { mimeType:mime, videoBitsPerSecond:BPS[qual] || 12000000, audioBitsPerSecond:192000 });
       const partes = [];
       rec.ondataavailable = function(e){ if(e.data && e.data.size) partes.push(e.data); };
       const acabou = new Promise(function(res){ rec.onstop = res; });
@@ -118829,9 +118912,9 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       parar.current = null;
       motor.destruir(); motor = null; try{ ac.close(); }catch(_){}
       if(cancelado){ setExp(null); return; }
-      const tipo = mime.split(";")[0], ext = soAudio ? (tipo.indexOf("mp4") >= 0 ? "m4a" : "webm") : tipo.indexOf("mp4") >= 0 ? "mp4" : "webm";
+      const tipo = mime.split(";")[0], ext = audioSo ? (tipo.indexOf("mp4") >= 0 ? "m4a" : "webm") : tipo.indexOf("mp4") >= 0 ? "mp4" : "webm";
       const blob = new Blob(partes, { type:tipo });
-      if(soAudio){                       // só o áudio: baixa no computador (não vai para o card)
+      if(audioSo){                       // só o áudio: baixa no computador (não vai para o card)
         const nomeA = String((t.title || "video") + "-audio").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) + "." + ext;
         const urlA = URL.createObjectURL(blob), a = document.createElement("a"); a.href = urlA; a.download = nomeA; document.body.appendChild(a); a.click(); setTimeout(function(){ try{ a.remove(); }catch(_){} }, 1000);
         setExp({ fase:"feito", msg:"Áudio pronto (" + Math.max(1, Math.round(blob.size/1048576)) + " MB). Baixou no computador — não foi para o card.", url:urlA, nome:nomeA });
@@ -118857,6 +118940,41 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     }
   };
   const ativo = exp && (exp.fase === "preparando" || exp.fase === "gravando" || exp.fase === "enviando");
+
+  /* v8 · EXPORTAR NO PC DO ESCRITÓRIO: a pessoa pode fechar o navegador; o PC abre este mesmo Estúdio escondido e grava igual */
+  const [pcSt, setPcSt] = useState(null);
+  const [pedindoPC, setPedindoPC] = useState(false);
+  const olharPC = function(){ if(!window._sb || pcAuto) return; window._sb.rpc("criacao_exportar_pc_status", { p_edicao:ed.id }).then(function(r){ if(!r.error) setPcSt(r.data || null); }).catch(function(){}); };
+  const pcItem = pcSt && pcSt.itens && pcSt.itens[0];
+  const pcAtivo = !!(pcItem && (pcItem.status === "fila" || pcItem.status === "processando"));
+  useEffect(function(){ if(isMob || pcAuto) return; olharPC(); const iv = setInterval(olharPC, pcAtivo ? 8000 : 30000); return function(){ clearInterval(iv); }; }, [ed.id, pcAtivo]);
+  useEffect(function(){ if(pcItem && pcItem.status === "pronto" && onFeito && !pcAuto) onFeito(); }, [pcItem && pcItem.id, pcItem && pcItem.status]);
+  const exportarNoPC = async function(){
+    if(pedindoPC || pcAtivo) return;
+    if(faltaLicenca){ _evToast("warning", "Marque que a música do Envato foi registrada neste projeto."); return; }
+    setPedindoPC(true);
+    try{
+      if(alterado){ const ok = await salvar(); if(!ok) throw new Error("não consegui salvar a edição antes"); }
+      const r = await window._sb.rpc("criacao_exportar_pc", { p_edicao:ed.id, p_opcoes:{ qualidade:qualidade, legenda:comLegenda } });
+      if(r.error) throw new Error(r.error.message || "erro");
+      _evToast("success", (r.data && r.data.ja_existia) ? "Já está na fila do PC." : "Pedido na fila do PC do escritório. Pode fechar esta tela.");
+      olharPC();
+    }catch(e){ _evToast("error", "Não pediu ao PC: " + ((e && e.message) || e)); }
+    setPedindoPC(false);
+  };
+  /* v8 · no PC (Edge sem janela): exporta sozinho quando tudo estiver pronto e conta o andamento */
+  const autoFoi = useRef(false);
+  useEffect(function(){
+    if(!pcAuto || autoFoi.current) return;
+    if(pendPC.length){ if(pcAuto.onEstado) pcAuto.onEstado({ fase:"esperando_pc", msg:"O PC ainda está tratando " + pendPC.length + " vídeo(s)" }); return; }
+    if(!prontoPC) return;
+    if(nErro > 0 && pcAuto.onEstado) pcAuto.onEstado({ fase:"aviso", msg:"Conferência com " + nErro + " ponto(s) em vermelho — exportando mesmo assim (pedido da pessoa)" });
+    autoFoi.current = true;
+    const op = pcAuto.opcoes || {};
+    exportar({ qualidade:op.qualidade || "alta", legenda:op.legenda !== false });
+  }, [pcAuto, prontoPC, pendPC.length]);
+  useEffect(function(){ if(pcAuto && pcAuto.onEstado && exp) pcAuto.onEstado(exp); }, [exp]);
+
   const aviso = function(cor, fundo, icone, txt){ return <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:fundo,color:cor,fontSize:12,fontWeight:700,display:"flex",gap:8,alignItems:"flex-start"}}><_EvpIco n={icone} s={15}/><span>{txt}</span></div>; };
   return (
     <div style={Object.assign({}, _EVP_PAINEL, {padding:14})}>
@@ -118912,12 +119030,2769 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
           {exp && exp.fase === "gravando" && <button onClick={function(){ if(parar.current) parar.current(); }} style={Object.assign(_evpBtn(), {marginTop:8})}>Cancelar</button>}
         </div>
       </div>
-      {!ativo && <button onClick={exportar} disabled={faltaLicenca || nErro > 0} title={nErro ? "Corrija o que está em vermelho na Conferência" : ""} style={Object.assign(_evpBtn("verde", !faltaLicenca && !nErro), {marginTop:10,padding:"10px 16px",fontSize:13.5})}>
+      {!ativo && <button onClick={function(){ exportar(); }} disabled={faltaLicenca || nErro > 0} title={nErro ? "Corrija o que está em vermelho na Conferência" : ""} style={Object.assign(_evpBtn("verde", !faltaLicenca && !nErro), {marginTop:10,padding:"10px 16px",fontSize:13.5})}>
         <_EvpIco n="baixar" s={16}/>{soAudio ? "Gravar e baixar o áudio" : alterado ? "Salvar, exportar e anexar no card" : ed.final ? "Exportar de novo e anexar no card" : "Aprovar, exportar e anexar no card"}</button>}
+      {!ativo && !soAudio && !isMob && !pcAuto && (
+        <div style={{marginTop:10,padding:"9px 11px",borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <button onClick={exportarNoPC} disabled={pedindoPC || pcAtivo || faltaLicenca || nErro > 0} title="O PC do escritório grava o vídeo e anexa no card. Você pode fechar o navegador."
+              style={Object.assign(_evpBtn("suave", !(pedindoPC || pcAtivo || faltaLicenca || nErro > 0)), {padding:"8px 12px"})}><_EvpIco n="pc" s={16}/>{pedindoPC ? "Pedindo…" : "Exportar no PC do escritório"}</button>
+            <span style={{fontSize:11.5,fontWeight:700,color:pcSt && pcSt.pc_online ? _EV.verde : _EV.amarelo}}>{!pcSt ? "" : pcSt.pc_online ? "PC ligado" : "PC sem sinal agora — o pedido espera ele ligar"}</span>
+          </div>
+          {pcItem && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.5}}>
+            {pcItem.status === "fila" ? "Na fila do PC (pedido por " + (pcItem.pedido_por || "") + ")" + (pcItem.erro ? " · " + pcItem.erro : "") + "."
+              : pcItem.status === "processando" ? "O PC " + (pcItem.pc || "") + " está gravando o vídeo agora (tentativa " + pcItem.tentativas + " de 3)."
+              : pcItem.status === "pronto" ? "Pronto no PC " + (pcItem.pc || "") + " — o vídeo está no card." + (pcItem.resultado && pcItem.resultado.whats_url ? " Tem versão leve para WhatsApp." : "")
+              : pcItem.status === "erro" ? "O PC não conseguiu: " + (pcItem.erro || "erro") : ""}</div>}
+        </div>
+      )}
       {exp && exp.fase === "erro" && aviso(_EV.verm, _EVP_COR.erro, "alerta", "Não exportou: " + exp.msg)}
       {exp && exp.fase === "feito" && <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:_EVP_COR.ok,color:_EV.verde,fontSize:12.5,fontWeight:700,display:"flex",gap:8,alignItems:"center"}}>
         <_EvpIco n="check" s={15}/>{exp.msg} {exp.url && <a href={exp.url} download={exp.nome} style={{color:_EV.verde,marginLeft:6}}>Baixar cópia</a>}</div>}
       {ed.final && ed.final.url && (!exp || exp.fase !== "feito") && <div style={{marginTop:8,fontSize:12,color:_EV.verde,fontWeight:700,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="check" s={14}/>Já tem vídeo final no card ({ed.final.addedAt || ""}) · <a href={ed.final.url} target="_blank" rel="noreferrer" style={{color:_EV.verde}}>abrir</a></div>}
     </div>
   );
+}
+
+/* ═══ IA QUE APRENDE (v8 · 29/09/2026) ═══
+   Placar (contas do banco, sem IA), preferências observadas nos vídeos exportados e as REGRAS que a IA propõe.
+   Regra proposta fica "pendente" e NÃO vale até um sócio aprovar (1 clique). Sócio também edita, recusa ou cria regra.
+   Tudo que vale entra no pedido da IA ao montar e ao ajustar (edge video-editar v8). Nada é apagado: recusar guarda no histórico.
+   Banco: criacao_aprendizado · criacao_regra_decidir · criacao_regra_criar. Celular só vê. */
+const _EV_AREAS = [
+  { id:"musica", label:"Música" }, { id:"voz", label:"Voz" }, { id:"cortes", label:"Cortes" }, { id:"legenda", label:"Legenda" },
+  { id:"textos", label:"Textos" }, { id:"visual", label:"Visual" }, { id:"ritmo", label:"Ritmo" }, { id:"formato", label:"Formato" }, { id:"outro", label:"Outro" },
+];
+function _evAreaNome(a){ const x = _EV_AREAS.find(function(q){ return q.id === a; }); return x ? x.label : (a || "Outro"); }
+function _evBrl(v){ const n = Number(v); return isFinite(n) ? "R$ " + n.toFixed(2).replace(".", ",") : "—"; }
+function _evNum1(v){ const n = Number(v); return v == null || !isFinite(n) ? "—" : String(Math.round(n * 10) / 10).replace(".", ","); }
+
+function _EvAprende({ isMob }){
+  const [cli, setCli] = useState("");
+  const [d, setD] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [rec, setRec] = useState(0);
+  const [editando, setEditando] = useState(null);      // { id, texto }
+  const [ocupado, setOcupado] = useState(null);        // id da regra em decisão
+  const [nova, setNova] = useState({ cliente:"", area:"musica", texto:"" });
+  const [criando, setCriando] = useState(false);
+  useEffect(function(){
+    if(!window._sb) return; let vivo = true; setErro(null);
+    window._sb.rpc("criacao_aprendizado", { p_client:cli || null }).then(function(r){
+      if(!vivo) return; if(r.error){ setErro(r.error.message || "erro"); setD({}); } else setD(r.data || {});
+    }).catch(function(e){ if(vivo){ setErro(String((e && e.message) || e)); setD({}); } });
+    return function(){ vivo = false; };
+  }, [cli, rec]);
+  const decidir = function(r, status, texto){
+    if(ocupado) return; setOcupado(r.id);
+    window._sb.rpc("criacao_regra_decidir", { p_id:r.id, p_status:status, p_regra:texto == null ? null : texto }).then(function(x){
+      setOcupado(null);
+      if(x.error){ _evToast("error", "Não salvou: " + (x.error.message || "erro")); return; }
+      _evToast("success", status === "aprovado" ? "Regra aprovada — a IA já usa nos próximos vídeos." : status === "recusado" ? "Regra recusada (fica guardada no histórico)." : "Regra salva.");
+      setEditando(null); setRec(function(n){ return n + 1; });
+    }).catch(function(e){ setOcupado(null); _evToast("error", String((e && e.message) || e)); });
+  };
+  const criar = function(){
+    const tx = nova.texto.trim(); if(tx.length < 8 || criando) return;
+    setCriando(true);
+    window._sb.rpc("criacao_regra_criar", { p_client:nova.cliente || null, p_area:nova.area, p_regra:tx }).then(function(x){
+      setCriando(false);
+      if(x.error){ _evToast("error", "Não criou: " + (x.error.message || "erro")); return; }
+      _evToast("success", "Regra criada e aprovada."); setNova({ cliente:nova.cliente, area:nova.area, texto:"" }); setRec(function(n){ return n + 1; });
+    }).catch(function(e){ setCriando(false); _evToast("error", String((e && e.message) || e)); });
+  };
+
+  const caixa = { background:"#fff", border:"1px solid " + _EV.linha, borderRadius:14, padding:isMob ? 12 : 16, marginTop:14 };
+  const campo = { font:"inherit", padding:"9px 12px", borderRadius:10, border:"1px solid " + _EV.linha, background:"#fff", fontSize:_evF(14, isMob), boxSizing:"border-box" };
+  const btn = function(tipo, on){ return { font:"inherit", padding:"7px 13px", borderRadius:9, fontWeight:800, fontSize:_evF(12.5, isMob), cursor:on === false ? "default" : "pointer", opacity:on === false ? 0.5 : 1,
+    border:tipo === "claro" ? "1px solid " + _EV.linha : 0, background:tipo === "verde" ? _EV.verde : tipo === "roxo" ? _EV.roxo : tipo === "verm" ? "#fff" : "#fff",
+    color:tipo === "verde" || tipo === "roxo" ? "#fff" : tipo === "verm" ? _EV.verm : _EV.sub, boxShadow:tipo === "verm" ? "inset 0 0 0 1px " + _EV.vermClaro : "none" }; };
+
+  if(!d) return <div style={Object.assign({}, caixa, { color:_EV.sub })}>Carregando…</div>;
+  const pl = d.placar || {}, pf = d.preferencias || {}, regras = Array.isArray(d.regras) ? d.regras : [];
+  const podeDecidir = !!d.pode_decidir && !isMob;
+  const clientes = (Array.isArray(d.clientes) ? d.clientes : []).slice().sort(function(a, b){ return _evNomeCliente(a).localeCompare(_evNomeCliente(b)); });
+  const pend = regras.filter(function(r){ return r.status === "pendente"; }), apr = regras.filter(function(r){ return r.status === "aprovado"; });
+  const videos = Number(pl.videos) || 0;
+
+  const cartao = function(rot, valor, sub){
+    return <div style={{flex:"1 1 150px",minWidth:0,border:"1px solid " + _EV.linha2,borderRadius:12,padding:"10px 12px",background:_EV.fundo}}>
+      <div style={{fontSize:_evF(11.5, isMob),color:_EV.sub,fontWeight:700}}>{rot}</div>
+      <div style={{fontSize:_evF(20, isMob),fontWeight:800,marginTop:2,fontVariantNumeric:"tabular-nums"}}>{valor}</div>
+      {sub && <div style={{fontSize:_evF(11.5, isMob),color:_EV.fraco,marginTop:2}}>{sub}</div>}
+    </div>;
+  };
+  const linhaRegra = function(r){
+    const ed = editando && editando.id === r.id, esc = r.client_id ? _evNomeCliente(r.client_id) : "Todos os clientes";
+    return <div key={r.id} style={{padding:"11px 0",borderTop:"1px solid " + _EV.linha2}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:5}}>
+        <span style={{padding:"2px 8px",borderRadius:99,background:_EV.roxoClaro,color:_EV.roxo,fontSize:_evF(11.5, isMob),fontWeight:800}}>{_evAreaNome(r.area)}</span>
+        <span style={{padding:"2px 8px",borderRadius:99,background:_EV.linha2,color:_EV.sub,fontSize:_evF(11.5, isMob),fontWeight:700}}>{esc}</span>
+        {r.status === "aprovado" && r.decidido_nome && <span style={{fontSize:_evF(11.5, isMob),color:_EV.fraco}}>aprovada por {r.decidido_nome}{r.decidido_em ? " em " + _evDataBR(r.decidido_em) : ""}</span>}
+        {r.status === "pendente" && <span style={{fontSize:_evF(11.5, isMob),color:_EV.amarelo,fontWeight:700}}>esperando um sócio{r.criado_em ? " · desde " + _evDataBR(r.criado_em) : ""}</span>}
+      </div>
+      {ed
+        ? <textarea value={editando.texto} maxLength={400} rows={2} onChange={function(e){ setEditando({ id:r.id, texto:e.target.value }); }} style={Object.assign({}, campo, { width:"100%", resize:"vertical" })}/>
+        : <div style={{fontSize:_evF(14, isMob),fontWeight:600,lineHeight:1.45}}>{r.regra}</div>}
+      {r.evidencia && !ed && <div style={{fontSize:_evF(12, isMob),color:_EV.sub,marginTop:3}}>De onde veio: {r.evidencia}</div>}
+      {podeDecidir && (
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+          {ed ? <>
+              <button onClick={function(){ decidir(r, r.status === "pendente" ? "aprovado" : r.status, editando.texto.trim()); }} disabled={ocupado === r.id || editando.texto.trim().length < 8} style={btn("verde", editando.texto.trim().length >= 8)}>{r.status === "pendente" ? "Salvar e aprovar" : "Salvar"}</button>
+              <button onClick={function(){ setEditando(null); }} style={btn("claro")}>Cancelar</button></>
+            : <>
+              {r.status === "pendente" && <button onClick={function(){ decidir(r, "aprovado"); }} disabled={ocupado === r.id} style={btn("verde", ocupado !== r.id)}>Aprovar</button>}
+              <button onClick={function(){ setEditando({ id:r.id, texto:r.regra }); }} style={btn("claro")}>Editar</button>
+              <button onClick={function(){ decidir(r, "recusado"); }} disabled={ocupado === r.id} style={btn("verm", ocupado !== r.id)}>{r.status === "pendente" ? "Recusar" : "Desligar"}</button></>}
+        </div>
+      )}
+    </div>;
+  };
+
+  return (
+    <div>
+      <div style={Object.assign({}, caixa, { display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" })}>
+        <div style={{flex:"1 1 320px",minWidth:0}}>
+          <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>A IA aprende com o que a equipe corrige</div>
+          <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub,marginTop:2,lineHeight:1.5}}>Quando um vídeo é aprovado (ou alguém clica em "Ensinar a IA com este vídeo" no Estúdio), a IA lê os pedidos, as mudanças feitas à mão e os comentários do cliente e propõe regras. Uma regra só vale depois que um sócio aprova.</div>
+        </div>
+        <select value={cli} onChange={function(e){ setCli(e.target.value); }} aria-label="Cliente" style={Object.assign({}, campo, { minWidth:200 })}>
+          <option value="">Todos os clientes</option>
+          {clientes.map(function(c){ return <option key={c} value={c}>{_evNomeCliente(c)}</option>; })}
+        </select>
+      </div>
+      {erro && <div style={Object.assign({}, caixa, { color:_EV.verm, background:_EV.vermClaro, borderColor:"#fecaca" })}>Não carregou: {erro}</div>}
+
+      <div style={caixa}>
+        <div style={{fontSize:_evF(15, isMob),fontWeight:800,marginBottom:10}}>Placar {cli ? "· " + _evNomeCliente(cli) : ""}</div>
+        {videos === 0 ? <div style={{color:_EV.sub,fontSize:_evF(13.5, isMob)}}>Nenhum vídeo editado no Estúdio ainda{cli ? " para este cliente" : ""}.</div> : (
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {cartao("Vídeos editados", videos, (Number(pl.exportados) || 0) + " exportado" + (Number(pl.exportados) === 1 ? "" : "s"))}
+            {cartao("Aprovados sem ajuste do cliente", (Number(pl.aprovados_sem_ajuste) || 0) + " de " + (Number(pl.aprovados) || 0), "aprovados no card")}
+            {cartao("Pedidos à IA por vídeo", _evNum1(pl.pedidos_ia_por_video),
+              pl.pedidos_ia_anteriores != null ? "últimos 5: " + _evNum1(pl.pedidos_ia_ultimos5) + " · antes: " + _evNum1(pl.pedidos_ia_anteriores) : "quanto menor, mais a IA acerta sozinha")}
+            {cartao("Mudanças à mão por vídeo", _evNum1(pl.manuais_por_video), "versões salvas na linha do tempo")}
+            {cartao("Custo de IA por vídeo", _evBrl(pl.custo_medio_brl), "total " + _evBrl(pl.custo_total_brl))}
+            {cartao("Horas até exportar", _evNum1(pl.horas_ate_exportar), "da 1ª edição ao arquivo final")}
+          </div>
+        )}
+        <div style={{fontSize:_evF(11.5, isMob),color:_EV.fraco,marginTop:8}}>Contas feitas direto do banco (sem IA). Regras valendo: {Number(pl.regras_aprovadas) || 0} · esperando sócio: {Number(pl.regras_pendentes) || 0}.</div>
+      </div>
+
+      <div style={caixa}>
+        <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>O que a IA observou {cli ? "em " + _evNomeCliente(cli) : ""}</div>
+        <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub,margin:"2px 0 10px"}}>Média dos vídeos exportados. A IA usa como ponto de partida, não como lei.</div>
+        {!(Number(pf.videos) > 0) ? <div style={{color:_EV.sub,fontSize:_evF(13.5, isMob)}}>Ainda não há vídeo exportado{cli ? " deste cliente" : ""} para observar.</div> : (
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {cartao("Vídeos observados", pf.videos)}
+            {pf.duracao_media_s != null && cartao("Duração média", _evNum1(pf.duracao_media_s) + " s")}
+            {pf.clipe_medio_s != null && cartao("Um corte a cada", _evNum1(pf.clipe_medio_s) + " s")}
+            {pf.textos_medio != null && cartao("Textos na tela", _evNum1(pf.textos_medio), "por vídeo")}
+            {Array.isArray(pf.musicas) && pf.musicas[0] && cartao("Música mais usada", pf.musicas[0].nome || "—", pf.musicas[0].vezes + " de " + pf.videos + " · volume " + (pf.musicas[0].vol_medio != null && isFinite(Number(pf.musicas[0].vol_medio)) ? Number(pf.musicas[0].vol_medio).toFixed(2).replace(".", ",") : "—"))}
+            {cartao("Voz de estúdio", (Number(pf.voz_estudio) || 0) + " de " + pf.videos)}
+          </div>
+        )}
+      </div>
+
+      <div style={caixa}>
+        <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>Regras esperando um sócio ({pend.length})</div>
+        {!pend.length && <div style={{color:_EV.sub,fontSize:_evF(13.5, isMob),marginTop:6}}>Nenhuma regra nova para decidir.</div>}
+        {pend.map(linhaRegra)}
+        {pend.length > 0 && !d.pode_decidir && <div style={{fontSize:_evF(12, isMob),color:_EV.fraco,marginTop:8}}>Só os sócios aprovam regras.</div>}
+      </div>
+
+      <div style={caixa}>
+        <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>Regras que a IA segue ({apr.length})</div>
+        {!apr.length && <div style={{color:_EV.sub,fontSize:_evF(13.5, isMob),marginTop:6}}>Nenhuma regra aprovada ainda.</div>}
+        {apr.map(linhaRegra)}
+      </div>
+
+      {podeDecidir && (
+        <div style={caixa}>
+          <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>Ensinar uma regra</div>
+          <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub,margin:"2px 0 10px"}}>Escreva como uma ordem curta. Ex.: "Música com volume 0,12 quando tem fala". Vale na hora.</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <select value={nova.cliente} onChange={function(e){ setNova(Object.assign({}, nova, { cliente:e.target.value })); }} aria-label="Vale para" style={Object.assign({}, campo, { flex:"0 1 220px" })}>
+              <option value="">Todos os clientes</option>
+              {(typeof CLIENTS !== "undefined" && Array.isArray(CLIENTS) ? CLIENTS : []).filter(function(c){ return c && c.id; }).map(function(c){ return <option key={c.id} value={c.id}>{c.name || c.id}</option>; })}
+            </select>
+            <select value={nova.area} onChange={function(e){ setNova(Object.assign({}, nova, { area:e.target.value })); }} aria-label="Assunto" style={Object.assign({}, campo, { flex:"0 1 160px" })}>
+              {_EV_AREAS.map(function(a){ return <option key={a.id} value={a.id}>{a.label}</option>; })}
+            </select>
+            <input value={nova.texto} maxLength={400} placeholder="A regra…" onChange={function(e){ setNova(Object.assign({}, nova, { texto:e.target.value })); }}
+              onKeyDown={function(e){ if(e.key === "Enter") criar(); }} style={Object.assign({}, campo, { flex:"1 1 280px", minWidth:0 })}/>
+            <button onClick={criar} disabled={criando || nova.texto.trim().length < 8} style={btn("roxo", !criando && nova.texto.trim().length >= 8)}>{criando ? "Salvando…" : "Criar regra"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ EXPORTAR NO PC (v8 · 29/09/2026) ═══
+   Só roda no PC do escritório: exportar_pc.py abre o Edge sem janela numa página local (estudio_pc.html) que monta
+   ESTE componente. Ele carrega a edição como a pessoa que pediu (motor_pc_como), abre o mesmo Estúdio e exporta sozinho.
+   onEstado({fase, msg, pct}) conta o andamento para o PC. Nada aqui aparece no app. */
+function _EvExportarNoPC({ trabalho, onEstado }){
+  const t = trabalho.task || {};
+  const [ed, setEd] = useState(null), [kit, setKit] = useState(null), [base, setBase] = useState({}), [musicas, setMusicas] = useState(null);
+  const avisar = function(o){ try{ if(onEstado) onEstado(o); }catch(_){} };
+  useEffect(function(){
+    let vivo = true;
+    (async function(){
+      try{
+        const r = await window._sb.rpc("criacao_edicao", { p_task:t.id });
+        if(r.error) throw new Error(r.error.message || "não carregou a edição");
+        const e = r.data || {};
+        if(!e.existe || !e.receita) throw new Error("este card ainda não tem edição pronta");
+        if(e.id !== trabalho.edicao_id) throw new Error("a edição do card mudou (" + e.id + ")");
+        const un = t.bioterUnit || "";
+        const k1 = await window._sb.rpc("criacao_kit", { p_client:t.client, p_unidade:un });
+        if(k1.error) throw new Error("kit: " + (k1.error.message || "erro"));
+        let d = k1.data || {}, kk = d.kit || {};
+        if(un && !d.versoes){ const k2 = await window._sb.rpc("criacao_kit", { p_client:t.client, p_unidade:"" }); if(!k2.error) kk = ((k2.data || {}).kit) || {}; }
+        const m = await window._sb.rpc("criacao_musicas");
+        if(!vivo) return;
+        setBase(d.base || {}); setKit(Object.assign({}, _evKitPadrao(d.base || {}), kk)); setMusicas(Array.isArray(m.data) ? m.data : []);
+        setEd(Object.assign({}, e, { rascunho:null, rascunho_em:null }));        // exporta a última versão salva
+        avisar({ fase:"carregado", msg:"Estúdio aberto no PC" });
+      }catch(err){ avisar({ fase:"erro", msg:String((err && err.message) || err) }); }
+    })();
+    return function(){ vivo = false; };
+  }, []);
+  const pcAuto = useMemo(function(){ return { opcoes:trabalho.opcoes || {}, onEstado:avisar }; }, []);
+  if(!ed || !kit || !musicas) return <div style={{padding:20,fontFamily:"system-ui"}}>Carregando…</div>;
+  return <_EvEditor key={ed.id} t={t} ed={ed} kit={kit} base={base} musicas={musicas} isMob={false}
+    onRecarregar={function(){}} onAjustar={function(){ return Promise.resolve(false); }} ajustando={false} onRefazer={function(){}} onVoltarVersao={function(){}}
+    onMusicasMudou={function(){}} pcAuto={pcAuto}/>;
+}
+
+/* ═══ PREPARAR NO PC (v8 · Guvi editora) ═══
+   O Guvi pede e o PC do escritório faz o que o botão "Editar com IA" faz no Estúdio: baixa os brutos do card, tira os quadros
+   e o áudio (mesma _evPrepararMontar) e pede a edição à IA em nome do sócio. onEstado({fase:"montado", edicao_id}) no fim. */
+function _EvMontarNoPC({ trabalho, onEstado }){
+  const [passo, setPasso] = useState("Começando…");
+  useEffect(function(){
+    let vivo = true;
+    const avisar = function(o){ try{ if(onEstado) onEstado(o); }catch(_){} };
+    avisar({ fase:"carregado", msg:"Preparando os brutos no PC" });
+    const passoPC = function(m){ if(!vivo) return; setPasso(m); avisar({ fase:"preparando", msg:String(m || "") }); };
+    const op = trabalho.opcoes || {};
+    _evPrepararMontar(trabalho.task || {}, passoPC, op.instrucoes ? { instrucoes:String(op.instrucoes).slice(0, 1500) } : null)
+      .then(function(d){ if(!d || !d.id) throw new Error("a IA não devolveu a edição"); avisar({ fase:"montado", edicao_id:d.id, custo_brl:d.custo_brl, msg:"A IA montou o vídeo" }); })
+      .catch(function(e){ avisar({ fase:"erro", msg:String((e && e.message) || e) }); });
+    return function(){ vivo = false; };
+  }, []);
+  return <div style={{padding:20,fontFamily:"system-ui"}}>{passo}</div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+   53_link_envio.jsx — LINK DE ENVIO DA PIXELS (29/09/2026, Bloco 2)
+   Pedido do Vinicius: "Prefiro o nosso link!" — o "WeTransfer" da Pixels.
+   • Página PÚBLICA  /?enviar=CODIGO  (sem login): a pessoa arrasta fotos/vídeos/áudios, até 2 GB cada,
+     e eles caem DIRETO no card (aba Arquivos › Materiais), na qualidade original.
+   • Envio RESUMÍVEL (TUS, pedaços de 6 MB): se a internet cair, continua de onde parou.
+   • Botão "Link de envio" no card (Materiais): gera/copía o link, mostra quantos chegaram, encerra.
+   • Servidor: edge function envio-link (confere o código, dá o token de envio de cada arquivo, põe no card,
+     avisa no WhatsApp) + RPCs envio_link_criar / envio_links_do_card / envio_link_encerrar.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+function pxEnvioCodigoDaUrl(){
+  try{
+    const c=new URLSearchParams(window.location.search).get("enviar");
+    return c&&/^[A-Za-z0-9_-]{16,40}$/.test(c)?c:null;
+  }catch(_){ return null; }
+}
+
+function _pxEnvSb(){
+  const sb=window._sb;
+  let url="", key="";
+  try{ url=(sb&&sb.supabaseUrl)||import.meta.env.VITE_SUPABASE_URL||""; }catch(_){ url=(sb&&sb.supabaseUrl)||""; }
+  try{ key=(sb&&sb.supabaseKey)||import.meta.env.VITE_SUPABASE_ANON_KEY||""; }catch(_){ key=(sb&&sb.supabaseKey)||""; }
+  return {url:String(url).replace(/\/$/,""), key:String(key)};
+}
+
+async function _pxEnvChamar(acao,corpo){
+  const {url,key}=_pxEnvSb();
+  const r=await fetch(url+"/functions/v1/envio-link",{method:"POST",
+    headers:{"content-type":"application/json","apikey":key,"authorization":"Bearer "+key},
+    body:JSON.stringify(Object.assign({acao:acao},corpo||{}))});
+  let j=null; try{ j=await r.json(); }catch(_){}
+  if(!j) j={ok:false,erro:"Sem resposta do servidor ("+r.status+")."};
+  return j;
+}
+
+function _pxEnvTam(b){
+  const n=Number(b)||0;
+  if(n>=1073741824) return (n/1073741824).toFixed(2).replace(".",",")+" GB";
+  if(n>=1048576) return Math.round(n/1048576)+" MB";
+  return Math.max(1,Math.round(n/1024))+" KB";
+}
+
+/* Envio resumível com o token assinado do link (sem login). Pedaços de 6 MB; cada pedaço tenta 5x;
+   se a conexão cair no meio, pergunta ao servidor até onde chegou (HEAD) e continua dali. */
+async function _pxEnvSubirTus(file,prep,onProg,cancelado){
+  const {url,key}=_pxEnvSb();
+  const CH=6*1024*1024;
+  const b64=function(s){ try{ return btoa(unescape(encodeURIComponent(s))); }catch(_){ return btoa(s); } };
+  const meta=["bucketName "+b64(prep.bucket||"agency-files"),"objectName "+b64(prep.path),
+    "contentType "+b64(file.type||"application/octet-stream"),"cacheControl "+b64("31536000")].join(",");
+  const base={"apikey":key,"x-signature":prep.token,"Tus-Resumable":"1.0.0"};
+  const espera=function(ms){ return new Promise(function(ok){ setTimeout(ok,ms); }); };
+  let loc=null;
+  for(let t=1;t<=4&&!loc;t++){
+    try{
+      const cr=await fetch(url+"/storage/v1/upload/resumable/sign",{method:"POST",
+        headers:Object.assign({},base,{"Upload-Length":String(file.size),"Upload-Metadata":meta,"x-upsert":"false"})});
+      if(cr.ok) loc=cr.headers.get("Location")||cr.headers.get("location");
+      else if(cr.status<500&&t>1) throw new Error("O servidor recusou o envio ("+cr.status+").");
+    }catch(e){ if(t===4) throw e; }
+    if(!loc) await espera(1500*t);
+  }
+  if(!loc) throw new Error("Não consegui começar o envio. Confira a internet e tente de novo.");
+  let off=0;
+  while(off<file.size){
+    if(cancelado&&cancelado()) throw new Error("Cancelado.");
+    const fim=Math.min(off+CH,file.size);
+    let ok=false, ult=null;
+    for(let t=1;t<=5&&!ok;t++){
+      try{
+        const pr=await fetch(loc,{method:"PATCH",
+          headers:Object.assign({},base,{"Upload-Offset":String(off),"Content-Type":"application/offset+octet-stream"}),
+          body:file.slice(off,fim)});
+        if(pr.ok){ off=Number(pr.headers.get("Upload-Offset")||pr.headers.get("upload-offset")||fim); ok=true; break; }
+        ult=new Error("HTTP "+pr.status);
+      }catch(e){ ult=e; }
+      // caiu: pergunta até onde chegou e continua dali
+      await espera(Math.min(15000,1500*Math.pow(2,t-1)));
+      try{
+        const hd=await fetch(loc,{method:"HEAD",headers:base});
+        const o=Number(hd.headers.get("Upload-Offset")||hd.headers.get("upload-offset"));
+        if(hd.ok&&o>=0&&o>=off){ off=o; ok=true; }
+      }catch(_){}
+    }
+    if(!ok) throw ult||new Error("A conexão caiu. Tente de novo.");
+    if(onProg) onProg(Math.min(99,Math.round(off/file.size*100)));
+  }
+}
+
+function PxEnvioPublico({codigo}){
+  const [info,setInfo]=useState(null);
+  const [erro,setErro]=useState("");
+  const [itens,setItens]=useState([]);            // {id,file,nome,tam,pct,estado:'fila'|'enviando'|'ok'|'erro',msg}
+  const [arrastando,setArrastando]=useState(false);
+  const [final,setFinal]=useState(null);
+  const inputRef=useRef(null);
+  const itensRef=useRef([]);
+  useEffect(function(){ itensRef.current=itens; },[itens]);
+  const filaRef=useRef([]);
+  const ativosRef=useRef(0);
+  const _mob=typeof _pxMob==="function"?_pxMob():false;
+
+  useEffect(function(){
+    try{ document.title="Enviar arquivos · Pixels"; }catch(_){}
+    _pxEnvChamar("info",{codigo:codigo}).then(function(j){ if(j&&j.ok) setInfo(j); else setErro((j&&j.erro)||"Link inválido."); })
+      .catch(function(){ setErro("Sem conexão. Confira a internet e recarregue a página."); });
+  },[codigo]);
+
+  // não deixa fechar sem querer enquanto envia
+  useEffect(function(){
+    const enviando=itens.some(function(i){ return i.estado==="enviando"||i.estado==="fila"; });
+    const h=function(e){ if(enviando){ e.preventDefault(); e.returnValue=""; } };
+    window.addEventListener("beforeunload",h);
+    return function(){ window.removeEventListener("beforeunload",h); };
+  },[itens]);
+
+  const muda=function(id,d){ setItens(function(v){ return v.map(function(i){ return i.id===id?Object.assign({},i,d):i; }); }); };
+
+  const terminouTudo=async function(){
+    const j=await _pxEnvChamar("finalizar",{codigo:codigo}).catch(function(){ return null; });
+    setFinal({novos:(j&&j.novos)||0});
+  };
+
+  const proximo=function(){
+    while(ativosRef.current<2&&filaRef.current.length){
+      const it=filaRef.current.shift();
+      ativosRef.current++;
+      enviaUm(it).finally(function(){
+        ativosRef.current--;
+        if(!filaRef.current.length&&ativosRef.current===0){
+          // espera o último "muda" entrar no estado e então avisa o servidor uma vez
+          setTimeout(function(){
+            const v=itensRef.current;
+            if(v.length&&v.every(function(i){ return i.estado==="ok"||i.estado==="erro"; })&&v.some(function(i){ return i.estado==="ok"; })) terminouTudo();
+          },300);
+        }
+        proximo();
+      });
+    }
+  };
+
+  const enviaUm=async function(it){
+    muda(it.id,{estado:"enviando",pct:0,msg:""});
+    try{
+      const p=await _pxEnvChamar("preparar",{codigo:codigo,nome:it.nome,tamanho:it.tam,tipo:it.file.type||""});
+      if(!p.ok) throw new Error(p.erro||"Não consegui preparar o envio.");
+      await _pxEnvSubirTus(it.file,p,function(pc){ muda(it.id,{pct:pc}); });
+      const c=await _pxEnvChamar("concluir",{codigo:codigo,path:p.path,nome:it.nome});
+      if(!c.ok) throw new Error(c.erro||"O arquivo não foi registrado.");
+      muda(it.id,{estado:"ok",pct:100});
+    }catch(e){
+      muda(it.id,{estado:"erro",msg:String((e&&e.message)||e)});
+    }
+  };
+
+  const adiciona=function(lista){
+    const arr=Array.from(lista||[]).filter(Boolean);
+    if(!arr.length) return;
+    setFinal(null);
+    const novos=arr.map(function(f,k){ return {id:Date.now()+"-"+k+"-"+Math.random().toString(36).slice(2,7),file:f,nome:f.name||"arquivo",tam:f.size||0,pct:0,estado:"fila",msg:""}; });
+    setItens(function(v){ return v.concat(novos); });
+    filaRef.current=filaRef.current.concat(novos);
+    setTimeout(proximo,0);
+  };
+
+  const tentarDeNovo=function(it){ filaRef.current.push(it); muda(it.id,{estado:"fila",pct:0,msg:""}); setTimeout(proximo,0); };
+
+  const roxo="#7c3aed";
+  const pag={minHeight:"100vh",background:"linear-gradient(180deg,#faf5ff 0%,#ffffff 45%)",fontFamily:"'Inter',system-ui,sans-serif",color:"#0f172a",padding:_mob?"22px 16px 40px":"48px 20px 60px",boxSizing:"border-box"};
+  const caixa={maxWidth:620,margin:"0 auto"};
+  const cabeca=<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:22}}>
+    <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#a140ff,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:18,boxShadow:"0 6px 18px rgba(124,58,237,.28)"}}>P</div>
+    <div><div style={{fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pixels Marketing Digital</div><div style={{color:"#94a3b8",fontSize:12}}>Envio de arquivos</div></div>
+  </div>;
+
+  if(erro) return <div style={pag}><div style={caixa}>{cabeca}
+    <div style={{background:"#fff",border:"1px solid #fecaca",borderRadius:16,padding:"26px 22px",textAlign:"center"}}>
+      <div style={{fontSize:34,marginBottom:8}}>🔗</div>
+      <div style={{fontWeight:800,fontSize:17,marginBottom:6}}>Não deu para abrir este link</div>
+      <div style={{color:"#64748b",fontSize:14,lineHeight:1.5}}>{erro}</div>
+    </div></div></div>;
+
+  if(!info) return <div style={pag}><div style={caixa}>{cabeca}<div style={{color:"#94a3b8",fontSize:14,padding:"30px 0",textAlign:"center"}}>Abrindo…</div></div></div>;
+
+  const enviando=itens.some(function(i){ return i.estado==="enviando"||i.estado==="fila"; });
+  const nOk=itens.filter(function(i){ return i.estado==="ok"; }).length;
+  const venc=new Date(info.expira_em);
+  const vencTxt=isNaN(venc)?"":(String(venc.getDate()).padStart(2,"0")+"/"+String(venc.getMonth()+1).padStart(2,"0"));
+
+  return <div style={pag}><div style={caixa}>
+    {cabeca}
+    <div style={{fontSize:_mob?22:26,fontWeight:800,letterSpacing:-.5,lineHeight:1.2,marginBottom:6}}>Mande seus arquivos para a Pixels</div>
+    <div style={{color:"#64748b",fontSize:14,lineHeight:1.55,marginBottom:18}}>
+      {info.titulo?<>Para: <b style={{color:"#0f172a"}}>{info.titulo}</b>{info.cliente?<> · {info.cliente}</>:null}<br/></>:null}
+      Fotos, vídeos e áudios na qualidade original, até {Math.round((info.max_mb||2048)/1024*10)/10} GB cada. {vencTxt?<>O link vale até {vencTxt}.</>:null}
+    </div>
+
+    <div onClick={function(){ if(inputRef.current) inputRef.current.click(); }}
+      onDragEnter={function(e){ e.preventDefault(); setArrastando(true); }}
+      onDragOver={function(e){ e.preventDefault(); }}
+      onDragLeave={function(e){ e.preventDefault(); setArrastando(false); }}
+      onDrop={function(e){ e.preventDefault(); setArrastando(false); adiciona(e.dataTransfer&&e.dataTransfer.files); }}
+      style={{cursor:"pointer",background:arrastando?"#f3e8ff":"#fff",border:"2px dashed "+(arrastando?roxo:"#d8b4fe"),borderRadius:18,padding:_mob?"30px 16px":"42px 20px",textAlign:"center",transition:"all .15s",boxShadow:"0 10px 30px rgba(124,58,237,.08)"}}>
+      <div style={{width:58,height:58,borderRadius:16,background:"#f5f3ff",color:roxo,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>{_mob?"Toque para escolher os arquivos":"Arraste os arquivos aqui"}</div>
+      <div style={{color:"#94a3b8",fontSize:13}}>{_mob?"pode escolher vários de uma vez":"ou clique para escolher — pode ser vários de uma vez"}</div>
+      <input ref={inputRef} type="file" multiple accept="image/*,video/*,audio/*,.mov,.mts,.m2ts,.heic,.cr2,.cr3,.nef,.arw,.dng" style={{display:"none"}}
+        onChange={function(e){ adiciona(e.target.files); e.target.value=""; }}/>
+    </div>
+
+    {itens.length>0&&<div style={{marginTop:18,background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"6px 16px"}}>
+      {itens.map(function(it){
+        const cor=it.estado==="erro"?"#dc2626":it.estado==="ok"?"#16a34a":roxo;
+        return <div key={it.id} style={{padding:"12px 0",borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1,minWidth:0,fontSize:13.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.nome}</div>
+            <div style={{fontSize:12,color:"#94a3b8",whiteSpace:"nowrap"}}>{_pxEnvTam(it.tam)}</div>
+            <div style={{fontSize:12,fontWeight:700,color:cor,whiteSpace:"nowrap",minWidth:64,textAlign:"right"}}>
+              {it.estado==="ok"?"✓ enviado":it.estado==="erro"?"falhou":it.estado==="fila"?"na fila":(it.pct+"%")}
+            </div>
+          </div>
+          <div style={{height:6,background:"#f1f5f9",borderRadius:99,marginTop:8,overflow:"hidden"}}>
+            <div style={{height:"100%",width:(it.estado==="ok"?100:it.pct)+"%",background:it.estado==="erro"?"#fecaca":cor,borderRadius:99,transition:"width .3s"}}/>
+          </div>
+          {it.estado==="erro"&&<div style={{display:"flex",alignItems:"center",gap:10,marginTop:8}}>
+            <div style={{flex:1,fontSize:12,color:"#b91c1c"}}>{it.msg}</div>
+            <button onClick={function(){ tentarDeNovo(it); }} style={{background:"#fff",color:roxo,border:"1px solid #d8b4fe",borderRadius:9,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Tentar de novo</button>
+          </div>}
+        </div>;
+      })}
+      <div style={{padding:"12px 0",fontSize:12.5,color:enviando?"#b45309":"#64748b",fontWeight:600}}>
+        {enviando?"⏳ Enviando… não feche esta página até terminar.":nOk?("Tudo certo: "+nOk+" arquivo(s) enviado(s)."):""}
+      </div>
+    </div>}
+
+    {final&&!enviando&&<div style={{marginTop:18,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:16,padding:"20px 18px",textAlign:"center"}}>
+      <div style={{fontSize:30,marginBottom:6}}>✅</div>
+      <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>Recebemos seus arquivos!</div>
+      <div style={{color:"#166534",fontSize:13.5,lineHeight:1.5}}>A equipe da Pixels já tem acesso. Pode fechar esta página — ou mandar mais arquivos pelo mesmo link.</div>
+    </div>}
+
+    {info.recebidos&&info.recebidos.length>0&&!itens.length&&<div style={{marginTop:16,color:"#94a3b8",fontSize:12.5}}>Este link já recebeu {info.recebidos.length} arquivo(s).</div>}
+    <div style={{marginTop:26,color:"#cbd5e1",fontSize:11.5,textAlign:"center"}}>Pixels Marketing Digital · envio seguro · quem tem este link só consegue enviar, não consegue ver nem baixar nada.</div>
+  </div></div>;
+}
+
+/* Botão no card (aba Arquivos › Materiais). Qualquer pessoa da equipe (não cliente) que pode subir material. */
+function PxBotaoLinkEnvio({task}){
+  const [aberto,setAberto]=useState(false);
+  const [links,setLinks]=useState(null);
+  const [ocupado,setOcupado]=useState(false);
+  const [copiado,setCopiado]=useState("");
+  const taskId=task&&task.id;
+  const carrega=async function(){
+    try{ const r=await window._sb.rpc("envio_links_do_card",{p_task_id:String(taskId)}); setLinks(Array.isArray(r.data)?r.data:[]); }
+    catch(_){ setLinks([]); }
+  };
+  useEffect(function(){ if(aberto) carrega(); },[aberto,taskId]);
+  useEffect(function(){
+    if(!aberto) return;
+    const fecha=function(){ setAberto(false); };
+    const t=setTimeout(function(){ document.addEventListener("click",fecha); },0);
+    return function(){ clearTimeout(t); document.removeEventListener("click",fecha); };
+  },[aberto]);
+  const gerar=async function(){
+    setOcupado(true);
+    try{
+      const r=await window._sb.rpc("envio_link_criar",{p_task_id:String(taskId),p_dias:7});
+      if(r.error) throw r.error;
+      await carrega();
+      copiar(r.data&&r.data.url);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui gerar o link: "+((e&&e.message)||e)); }
+    setOcupado(false);
+  };
+  const copiar=function(url){
+    if(!url) return;
+    try{ navigator.clipboard.writeText(url); setCopiado(url); setTimeout(function(){ setCopiado(""); },2500); }catch(_){}
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Link copiado! É só colar no WhatsApp ou e-mail do cliente.");
+  };
+  const encerrar=async function(cod){
+    if(!window.confirm("Encerrar este link? Quem tiver o endereço não consegue mais enviar.")) return;
+    try{ await window._sb.rpc("envio_link_encerrar",{p_codigo:cod}); await carrega(); }catch(_){}
+  };
+  const ativo=(links||[]).find(function(l){ return l.valido; });
+  const fmtD=function(s){ const d=new Date(s); return isNaN(d)?"":(String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")); };
+  return <span style={{position:"relative",display:"inline-flex"}}>
+    <button onClick={function(e){ e.stopPropagation(); setAberto(!aberto); }} title="Gerar um link para o cliente mandar arquivos grandes direto neste card"
+      style={{background:"#fff",color:"#0891b2",border:"1px solid #a5f3fc",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      Link de envio
+    </button>
+    {aberto&&<div onClick={function(e){ e.stopPropagation(); }}
+      style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:50,width:320,maxWidth:"86vw",background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,boxShadow:"0 16px 40px rgba(15,23,42,.16)",padding:14,textAlign:"left"}}>
+      <div style={{fontWeight:800,fontSize:13.5,marginBottom:4,color:"#0f172a"}}>Link de envio</div>
+      <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.5,marginBottom:10}}>O cliente abre sem login e manda fotos e vídeos de até 2 GB. Caem aqui em Materiais, na qualidade original.</div>
+      {links===null?<div style={{color:"#94a3b8",fontSize:12}}>Carregando…</div>:
+       ativo?<div>
+          <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 10px",fontSize:11.5,color:"#0f172a",wordBreak:"break-all",marginBottom:8}}>{ativo.url}</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            <button onClick={function(){ copiar(ativo.url); }} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{copiado===ativo.url?"✓ Copiado":"Copiar link"}</button>
+            <a href={"https://wa.me/?text="+encodeURIComponent("Oi! Pode mandar os arquivos por este link, sem perder qualidade (até 2 GB cada): "+ativo.url)} target="_blank" rel="noopener noreferrer"
+              style={{background:"#fff",color:"#16a34a",border:"1px solid #bbf7d0",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>Mandar no WhatsApp</a>
+            <button onClick={function(){ encerrar(ativo.codigo); }} style={{background:"#fff",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 10px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Encerrar</button>
+          </div>
+          <div style={{color:"#64748b",fontSize:11.5}}>Recebidos: <b>{ativo.recebidos}</b> · vale até {fmtD(ativo.expira_em)}</div>
+        </div>:
+        <button disabled={ocupado} onClick={gerar} style={{width:"100%",background:"#0891b2",color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:12.5,fontWeight:700,cursor:ocupado?"default":"pointer",opacity:ocupado?.6:1,fontFamily:"inherit"}}>{ocupado?"Gerando…":"Gerar link (vale 7 dias)"}</button>}
+      {(links||[]).filter(function(l){ return !l.valido; }).length>0&&<div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #f1f5f9",color:"#94a3b8",fontSize:11}}>
+        Links anteriores: {(links||[]).filter(function(l){ return !l.valido; }).map(function(l){ return (l.status==="encerrado"?"encerrado":"vencido")+" ("+l.recebidos+" arq.)"; }).join(" · ")}
+      </div>}
+    </div>}
+  </span>;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   CRIAÇÃO › EDIÇÃO DE ARTE  (v1 — 29/09/2026, Bloco 5)
+   Pedido do usuário: editor de artes "tipo Photoshop + Illustrator + IA" dentro do app, com modelos inteligentes,
+   IA que mexe nos objetos de verdade, variações, abrir SVG/PSD/AI/PDF e exportar PNG/JPG/PDF/SVG/PSD.
+   Decisões: nasce FECHADA (Acessos › Criação › "criacao.edicao_arte"; sócio sempre vê); celular só vê;
+   teto da IA R$ 50/mês (auto.config arte_ia_limite_mes_brl); nada é apagado (versões e histórico guardados).
+
+   Guias:
+     • Artes    — lista das artes (por cliente/card) + "Nova arte" (cliente, card, formato, modelo).
+     • Editor   — canvas Fabric.js 7 (MIT): camadas, grupos, texto rico, imagens, formas, máscara (recorte), alinhar,
+                  zoom, desfazer/refazer, páginas (várias artes no mesmo arquivo), salvar sozinho, versões, kit do cliente,
+                  espaços de modelo [LOGO] [HEADLINE] … preenchidos pelo cadastro, Pedir à IA (texto ou voz), variações,
+                  reencaixe Feed/Quadrado/Story, abrir SVG/PSD/AI/PDF, exportar PNG/JPG/PDF/SVG/PSD e mandar para o card.
+     • Modelos  — modelos com espaços, por cliente ou para todos.
+     • IA que aprende — regras de estilo por cliente (só valem depois que um sócio aprova).
+   Backend: tabelas arte_projetos · arte_versoes · arte_modelos · arte_regras · arte_ia_uso (só pelas funções arte_*,
+     trava _arte_pode = nível 1 ou chave criacao.edicao_arte) · Edge Function arte-ia (pedir, variacoes, transcrever, aprender).
+   Bibliotecas (carregadas só quando o editor abre, do jsDelivr): fabric 7.4.0 (MIT) · ag-psd 31.0.2 (MIT) ·
+     pdfjs-dist 6.3.289 (Apache-2.0) · jspdf 4.2.1 (MIT) · svg2pdf.js 2.8.1 (MIT) · MediaPipe selfie segmentation (Apache-2.0).
+   ══════════════════════════════════════════════════════════════════ */
+
+const _EA = { roxo:"#7c3aed", roxoClaro:"#f5f3ff", roxoBorda:"#ddd6fe", rosa:"#db2777", texto:"#0f172a", sub:"#64748b", fraco:"#94a3b8",
+              linha:"#e8edf3", linha2:"#f1f5f9", fundo:"#f8fafc", palco:"#eef1f5",
+              verde:"#15803d", verdeClaro:"#f0fdf4", amarelo:"#a16207", amareloClaro:"#fefce8", verm:"#b91c1c", vermClaro:"#fef2f2" };
+const _EA_FORMATOS = [
+  { id:"feed",     label:"Feed 4:5",     w:1080, h:1350 },
+  { id:"quadrado", label:"Quadrado 1:1", w:1080, h:1080 },
+  { id:"story",    label:"Story 9:16",   w:1080, h:1920 },
+  { id:"paisagem", label:"Paisagem 16:9",w:1920, h:1080 },
+  { id:"a4",       label:"A4 (folder)",  w:2480, h:3508 },
+];
+const _EA_ESPACOS = [
+  { id:"LOGO",          label:"Logo",              tipo:"imagem" },
+  { id:"HEADLINE",      label:"Título",            tipo:"texto" },
+  { id:"SUBTITLE",      label:"Subtítulo",         tipo:"texto" },
+  { id:"PRODUCT_IMAGE", label:"Foto do produto",   tipo:"imagem" },
+  { id:"BACKGROUND",    label:"Fundo",             tipo:"qualquer" },
+  { id:"BENEFIT",       label:"Benefício",         tipo:"texto" },
+  { id:"PRICE",         label:"Preço",             tipo:"texto" },
+  { id:"CTA",           label:"Chamada (CTA)",     tipo:"texto" },
+  { id:"PHONE",         label:"Telefone",          tipo:"texto" },
+  { id:"LOCATION",      label:"Local / endereço",  tipo:"texto" },
+];
+const _EA_FONTES = ["Montserrat","Poppins","Inter","Roboto","Open Sans","Lato","Raleway","Oswald","Bebas Neue","Anton","Playfair Display","Nunito","Barlow","Archivo Black","Work Sans","DM Sans"];
+const _EA_PROPS = ["id","nome","espaco","bloqueado","naoEditavel","aviso","origem","alturaMax","selectable","evented","hasControls",
+                   "lockMovementX","lockMovementY","lockScalingX","lockScalingY","lockRotation"];
+const _EA_LIBS_CDN = {
+  fabric:  "https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js",
+  agpsd:   "https://cdn.jsdelivr.net/npm/ag-psd@31.0.2/dist/bundle.js",
+  pdfjs:   "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs",
+  pdfwork: "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/legacy/build/pdf.worker.min.mjs",
+  jspdf:   "https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js",
+  svg2pdf: "https://cdn.jsdelivr.net/npm/svg2pdf.js@2.8.1/dist/svg2pdf.umd.min.js",
+  mpseg:   "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/",
+};
+function _eaLib(k){ try{ const o = (typeof window!=="undefined" && window.__EA_LIBS) || null; return (o && o[k]) || _EA_LIBS_CDN[k]; }catch(_){ return _EA_LIBS_CDN[k]; } }
+
+/* ─── utilidades ─── */
+function _eaF(n, isMob){ try{ return (typeof pxFonte==="function") ? pxFonte(n, isMob) : n; }catch(_){ return n; } }
+function _eaToast(tipo, msg){ try{ if(typeof pixelsToast!=="undefined" && pixelsToast && pixelsToast[tipo]) pixelsToast[tipo](msg); }catch(_){} }
+function _eaUid(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID().slice(0,8) + Date.now().toString(36).slice(-4); }catch(_){}
+  return "o" + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+function _eaUuid(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(_){}
+  return "xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx".replace(/x/g, function(){ return (Math.random()*16|0).toString(16); }); }
+function _eaCliente(id){ try{ return (typeof CLIENTS!=="undefined" && Array.isArray(CLIENTS)) ? (CLIENTS.find(function(c){ return c && c.id===id; }) || null) : null; }catch(_){ return null; } }
+function _eaNomeCliente(id){ const c = _eaCliente(id); return (c && c.name) || id || "—"; }
+function _eaLogo(id){ try{ return (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS && CLIENT_LOGOS[id]) || null; }catch(_){ return null; } }
+function _eaBrl(v){ const n = Number(v)||0; return "R$ " + n.toFixed(2).replace(".", ","); }
+function _eaDataHora(iso){ try{ const d = new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"America/Sao_Paulo"}) + " " + d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}); }catch(_){ return ""; } }
+function _eaErro(e){ return String((e && (e.message || e.error_description)) || e || "erro"); }
+async function _eaRpc(nome, args){
+  const r = await window._sb.rpc(nome, args || {});
+  if(r.error) throw new Error(r.error.message || String(r.error));
+  return r.data;
+}
+async function _eaFn(body){
+  const r = await window._sb.functions.invoke("arte-ia", { body:body });
+  let msg = null;
+  if(r.error){
+    try{ const ctx = r.error.context; if(ctx && typeof ctx.json==="function"){ const j = await ctx.json(); msg = j && j.erro; } }catch(_){}
+    throw new Error(msg || r.error.message || "a IA não respondeu");
+  }
+  if(r.data && r.data.erro) throw new Error(r.data.erro);
+  return r.data || {};
+}
+function _eaEhArte(t){ try{ return !(typeof pxIsVideoTask==="function" && pxIsVideoTask(t)); }catch(_){ return true; } }
+function _eaSemHtml(s){ return String(s||"").replace(/<\/p>\s*<p>/gi,"\n").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").trim(); }
+
+/* ─── bibliotecas (só quando precisa) ─── */
+const _eaCarregando = {};
+function _eaScript(url, global){
+  if(global && window[global]) return Promise.resolve(window[global]);
+  if(_eaCarregando[url]) return _eaCarregando[url];
+  _eaCarregando[url] = new Promise(function(ok, falha){
+    const s = document.createElement("script"); s.src = url; s.async = true; s.crossOrigin = "anonymous";
+    s.onload = function(){ if(!global || window[global]) ok(global ? window[global] : true); else falha(new Error("biblioteca não carregou: " + url)); };
+    s.onerror = function(){ delete _eaCarregando[url]; falha(new Error("sem internet para carregar " + url.split("/npm/")[1])); };
+    document.head.appendChild(s);
+  });
+  return _eaCarregando[url];
+}
+async function _eaFabric(){
+  const f = await _eaScript(_eaLib("fabric"), "fabric");
+  if(!f.__eaPronto){
+    // v7 mudou a origem padrão para o centro; o editor (e a IA) trabalham com left/top = canto de cima à esquerda
+    try{ f.FabricObject.ownDefaults.originX = "left"; f.FabricObject.ownDefaults.originY = "top"; }catch(_){}
+    try{ f.FabricObject.ownDefaults.transparentCorners = false; f.FabricObject.ownDefaults.cornerColor = "#7c3aed";
+         f.FabricObject.ownDefaults.cornerStrokeColor = "#ffffff"; f.FabricObject.ownDefaults.borderColor = "#7c3aed";
+         f.FabricObject.ownDefaults.cornerSize = 11; f.FabricObject.ownDefaults.cornerStyle = "circle"; }catch(_){}
+    f.__eaPronto = true;
+  }
+  return f;
+}
+function _eaAgPsd(){ return _eaScript(_eaLib("agpsd"), "agPsd"); }
+async function _eaPdfJs(){
+  if(window.__eaPdfjs) return window.__eaPdfjs;
+  const imp = new Function("u", "return import(u)");
+  const m = await imp(_eaLib("pdfjs"));
+  try{ m.GlobalWorkerOptions.workerSrc = _eaLib("pdfwork"); }catch(_){}
+  window.__eaPdfjs = m; return m;
+}
+async function _eaJsPdf(){
+  await _eaScript(_eaLib("jspdf"), "jspdf");
+  try{ await _eaScript(_eaLib("svg2pdf"), "svg2pdf"); }catch(_){ /* sem svg2pdf: PDF sai como imagem */ }
+  return window.jspdf;
+}
+const _eaFontesOk = {};
+function _eaCarregarFonte(nome){
+  if(!nome || typeof document==="undefined") return Promise.resolve(false);
+  if(_eaFontesOk[nome]) return _eaFontesOk[nome];
+  const id = "ea-fonte-" + nome.replace(/\s+/g,"-").toLowerCase();
+  if(!document.getElementById(id) && (window.__EA_SEM_GOOGLE_FONTS !== true)){
+    const l = document.createElement("link"); l.id = id; l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(nome).replace(/%20/g,"+") + ":ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&display=swap";
+    document.head.appendChild(l);
+  }
+  _eaFontesOk[nome] = (async function(){
+    try{
+      await new Promise(function(ok){ setTimeout(ok, 60); });
+      await Promise.race([Promise.all([document.fonts.load('400 40px "' + nome + '"'), document.fonts.load('800 40px "' + nome + '"')]), new Promise(function(ok){ setTimeout(ok, 2500); })]);
+      return _eaFonteExiste(nome);
+    }catch(_){ return false; }
+  })();
+  return _eaFontesOk[nome];
+}
+/* a fonte existe mesmo? (document.fonts.check diz "sim" até para fonte que não existe) — mede o texto contra as genéricas */
+function _eaFonteExiste(nome){
+  try{
+    const cv = _eaFonteExiste.cv || (_eaFonteExiste.cv = document.createElement("canvas")), cx = cv.getContext("2d");
+    const t = "mmmmmmmmmmlli1WWQ@#ÃÇ0123456789";
+    return ["monospace","serif","sans-serif"].some(function(g){
+      cx.font = "72px " + g; const a = cx.measureText(t).width;
+      cx.font = '72px "' + nome + '", ' + g; const b = cx.measureText(t).width;
+      return Math.abs(a - b) > 0.5;
+    });
+  }catch(_){ return false; }
+}
+
+/* sobe uma imagem/arquivo para o armazenamento (agency-files) e devolve o endereço público */
+async function _eaSubir(blob, pasta, nome){
+  const ext = (String(nome||"").match(/\.([a-z0-9]{2,5})$/i) || [])[1] || (String(blob.type||"").split("/")[1] || "bin").replace("jpeg","jpg").replace("svg+xml","svg");
+  const path = pasta.replace(/\/+$/,"") + "/" + Date.now() + "-" + Math.random().toString(36).slice(2,8) + "." + ext.toLowerCase();
+  if(blob.size > 40*1024*1024 && typeof pxUploadResumable==="function"){
+    const f = blob instanceof File ? blob : new File([blob], "arquivo." + ext, { type:blob.type || "application/octet-stream" });
+    await pxUploadResumable(f, path);
+  } else {
+    const r = await window._sb.storage.from("agency-files").upload(path, blob, { contentType:blob.type || "application/octet-stream", upsert:false });
+    if(r.error) throw new Error(r.error.message || "não subiu o arquivo");
+  }
+  const u = window._sb.storage.from("agency-files").getPublicUrl(path);
+  return { url:u.data.publicUrl, path:path, size:blob.size, type:blob.type };
+}
+function _eaDataUrlBlob(d){
+  const p = String(d).split(","), mime = (p[0].match(/:(.*?);/) || [])[1] || "image/png", bin = atob(p[1] || "");
+  const a = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i] = bin.charCodeAt(i);
+  return new Blob([a], { type:mime });
+}
+function _eaBaixarArquivo(blob, nome){
+  const u = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = u; a.download = nome; document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(u); a.remove(); }, 1500);
+}
+function _eaNomeArquivo(s){ return String(s||"arte").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "arte"; }
+
+/* ─── ícones de linha (mesma pegada do Estúdio) ─── */
+function _EaIc({ n, s }){
+  const p = { width:s||18, height:s||18, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:1.8, strokeLinecap:"round", strokeLinejoin:"round" };
+  const d = {
+    selecionar:<path d="M5 3l14 8-6 2-2 6z"/>,
+    texto:<g><path d="M5 5h14M12 5v14M9 19h6"/></g>,
+    imagem:<g><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 17l-5-5-9 8"/></g>,
+    retangulo:<rect x="4" y="6" width="16" height="12" rx="1.5"/>,
+    circulo:<circle cx="12" cy="12" r="8"/>,
+    linha:<path d="M5 19L19 5"/>,
+    camadas:<g><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></g>,
+    desfazer:<g><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></g>,
+    refazer:<g><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></g>,
+    lixo:<g><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></g>,
+    duplicar:<g><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/></g>,
+    frente:<g><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M4 16V5a1 1 0 011-1h11"/></g>,
+    tras:<g><rect x="4" y="4" width="12" height="12" rx="1.5"/><path d="M20 8v11a1 1 0 01-1 1H8"/></g>,
+    olho:<g><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></g>,
+    olhoOff:<g><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0112 5c6 0 10 7 10 7a17 17 0 01-3.2 3.9M6.1 6.1C3.5 7.8 2 12 2 12s4 7 10 7a9.8 9.8 0 004.2-.9"/></g>,
+    cadeado:<g><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></g>,
+    aberto:<g><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 017.5-2"/></g>,
+    grupo:<g><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/><path d="M11 7h4v4M13 17H9v-4"/></g>,
+    desagrupar:<g><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></g>,
+    mascara:<g><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16" strokeDasharray="2 2"/></g>,
+    ia:<g><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/></g>,
+    mic:<g><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></g>,
+    baixar:<g><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/></g>,
+    abrir:<g><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></g>,
+    salvar:<g><path d="M5 3h11l3 3v13a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/><path d="M7 3v6h8M8 21v-7h8v7"/></g>,
+    card:<g><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h8"/></g>,
+    alinharEsq:<g><path d="M4 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="7" y="14" width="6" height="4" rx="1"/></g>,
+    alinharCentroH:<g><path d="M12 3v18"/><rect x="6" y="6" width="12" height="4" rx="1"/><rect x="8" y="14" width="8" height="4" rx="1"/></g>,
+    alinharDir:<g><path d="M20 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="11" y="14" width="6" height="4" rx="1"/></g>,
+    alinharTopo:<g><path d="M3 4h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="7" width="4" height="6" rx="1"/></g>,
+    alinharMeioV:<g><path d="M3 12h18"/><rect x="6" y="6" width="4" height="12" rx="1"/><rect x="14" y="8" width="4" height="8" rx="1"/></g>,
+    alinharBase:<g><path d="M3 20h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="11" width="4" height="6" rx="1"/></g>,
+    zoomMais:<g><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></g>,
+    zoomMenos:<g><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/></g>,
+    encaixar:<g><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></g>,
+    pagina:<g><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/></g>,
+    mais:<path d="M12 5v14M5 12h14"/>,
+    espaco:<g><rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="3 3"/><path d="M8 12h8"/></g>,
+    varinha:<g><path d="M4 20L16 8M14 4v2M18 8h2M17 5l1-1M20 11l-1 1"/></g>,
+    reencaixar:<g><rect x="3" y="6" width="8" height="12" rx="1.5"/><rect x="14" y="3" width="7" height="18" rx="1.5"/><path d="M11 12h3"/></g>,
+    fechar:<path d="M6 6l12 12M18 6L6 18"/>,
+  }[n] || <circle cx="12" cy="12" r="3"/>;
+  return <svg {...p}>{d}</svg>;
+}
+
+/* ═══ PÁGINA ═══ */
+function PageEdicaoArte({ isMob, tasks, onAbrirCard }){
+  const [aba, setAba] = useState("artes");       // artes | editor | modelos | aprende
+  const [projetoId, setProjetoId] = useState(null);
+  const [preencher, setPreencher] = useState(null);     // arte recém-criada de um modelo: preenche os espaços ao abrir
+  const abrir = function(id, doModelo){ setProjetoId(id); setPreencher(doModelo ? id : null); setAba("editor"); };
+  const cheio = aba === "editor" && !!projetoId && !isMob;
+  return (
+    <div style={{padding:isMob?"14px 12px 90px":(cheio?"12px 16px 16px":"22px 28px 40px"),maxWidth:cheio?"none":1180,margin:"0 auto",color:_EA.texto,background:_EA.fundo,minHeight:"100%"}}>
+      {!cheio && <div>
+        <div style={{fontSize:_eaF(11.5,isMob),fontWeight:800,color:_EA.rosa,letterSpacing:".08em",textTransform:"uppercase"}}>Criação</div>
+        <div style={{fontSize:_eaF(isMob?20:24,isMob),fontWeight:800,letterSpacing:-0.3,marginTop:2}}>Edição de arte</div>
+        <div style={{fontSize:_eaF(13,isMob),color:_EA.sub,marginTop:4}}>Artes com camadas, modelos que se preenchem sozinhos e IA que mexe nos objetos. Tudo fica salvo e pode ir direto para o card.</div>
+      </div>}
+      <div style={{display:"flex",gap:isMob?14:22,marginTop:cheio?0:14,borderBottom:"1px solid "+_EA.linha,overflowX:"auto",alignItems:"flex-end"}}>
+        {cheio && <div style={{fontSize:13,fontWeight:800,color:_EA.rosa,letterSpacing:".06em",textTransform:"uppercase",paddingBottom:10,marginRight:4}}>Edição de arte</div>}
+        {[["artes","Artes"],["editor","Editor"],["modelos","Modelos"],["aprende","IA que aprende"]].map(function(g){ const on = aba===g[0];
+          return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
+            borderBottom:"2px solid "+(on?_EA.roxo:"transparent"),color:on?_EA.roxo:_EA.sub,fontWeight:on?800:600,fontSize:_eaF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
+      </div>
+      {aba==="artes"   && <_EaLista isMob={isMob} tasks={tasks||[]} onAbrir={abrir} onAbrirCard={onAbrirCard}/>}
+      {aba==="editor"  && (projetoId
+        ? <_EaEditor key={projetoId} isMob={isMob} tasks={tasks||[]} projetoId={projetoId} preencherAoAbrir={preencher===projetoId} onAbrirCard={onAbrirCard} onFechar={function(){ setAba("artes"); }} onAbrirOutro={abrir}/>
+        : <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub}}>
+            Abra uma arte na guia <b>Artes</b> ou crie uma nova.</div>)}
+      {aba==="modelos" && <_EaModelos isMob={isMob} onAbrir={abrir}/>}
+      {aba==="aprende" && <_EaAprende isMob={isMob}/>}
+    </div>
+  );
+}
+
+/* ═══ LISTA DE ARTES + NOVA ARTE ═══ */
+function _EaLista({ isMob, tasks, onAbrir, onAbrirCard }){
+  const [lista, setLista] = useState(null);
+  const [erro, setErro] = useState("");
+  const [cliente, setCliente] = useState("");
+  const [nova, setNova] = useState(false);
+  const [resumo, setResumo] = useState(null);
+  const carregar = function(){
+    setErro("");
+    _eaRpc("arte_projetos_lista", { p_client:cliente || null, p_task:null }).then(setLista).catch(function(e){ setErro(_eaErro(e)); setLista([]); });
+    _eaRpc("arte_resumo", {}).then(setResumo).catch(function(){});
+  };
+  useEffect(carregar, [cliente]);
+  const clientes = useMemo(function(){
+    try{ return (typeof CLIENTS!=="undefined" && Array.isArray(CLIENTS) ? CLIENTS : []).filter(function(c){ return c && c.id && c.name; })
+      .slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name),"pt-BR"); }); }catch(_){ return []; }
+  }, []);
+  const tarefa = function(id){ return (tasks||[]).find(function(t){ return t && String(t.id)===String(id); }) || null; };
+  const sel = { font:"inherit", padding:"9px 12px", borderRadius:10, border:"1px solid "+_EA.linha, background:"#fff", color:_EA.texto, fontSize:_eaF(14,isMob), fontWeight:600, minWidth:0 };
+  return (
+    <div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end",marginTop:14,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,padding:12}}>
+        <div style={{flex:"1 1 280px",minWidth:0}}>
+          <div style={{fontSize:_eaF(11.5,isMob),color:_EA.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}}>Cliente</div>
+          <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, sel, {width:"100%"})}>
+            <option value="">Todos os clientes</option>
+            {clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name}</option>; })}
+          </select>
+        </div>
+        {resumo && <div style={{padding:"8px 12px",borderRadius:10,background:_EA.fundo,border:"1px solid "+_EA.linha2,fontSize:_eaF(13,isMob)}}>
+          <span style={{color:_EA.sub}}>IA no mês </span><b>{_eaBrl(resumo.gasto_mes)}</b><span style={{color:_EA.sub}}> de {_eaBrl(resumo.limite_mes)}</span></div>}
+        {!isMob && <button onClick={function(){ setNova(true); }} style={{font:"inherit",padding:"10px 16px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",fontWeight:800,cursor:"pointer",display:"inline-flex",gap:8,alignItems:"center"}}>
+          <_EaIc n="mais" s={16}/> Nova arte</button>}
+      </div>
+      {isMob && <div style={{marginTop:10,fontSize:_eaF(12.5,isMob),color:_EA.sub}}>No celular dá para ver as artes. Para editar, use o computador.</div>}
+      {erro && <div style={{marginTop:12,padding:12,borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:13}}>{erro}</div>}
+      {lista===null && <div style={{marginTop:14,color:_EA.sub}}>Carregando…</div>}
+      {lista && lista.length===0 && !erro && <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub}}>
+        Nenhuma arte ainda{cliente?" deste cliente":""}. {isMob?"":"Clique em Nova arte para começar."}</div>}
+      {lista && lista.length>0 && <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginTop:14}}>
+        {lista.map(function(p){ const t = p.task_id ? tarefa(p.task_id) : null;
+          return <div key={p.id} style={{background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <button onClick={function(){ onAbrir(p.id); }} title="Abrir" style={{font:"inherit",border:0,padding:0,cursor:"pointer",background:_EA.palco,aspectRatio:"4/5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+              {p.thumb_url ? <img src={p.thumb_url} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:12}}>{p.largura}×{p.altura}</span>}
+            </button>
+            <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:3,flex:1}}>
+              <div style={{fontWeight:800,fontSize:_eaF(13.5,isMob),lineHeight:1.25}}>{p.titulo}</div>
+              <div style={{fontSize:_eaF(12,isMob),color:_EA.sub}}>{_eaNomeCliente(p.client_id)}{p.unidade?" · "+p.unidade:""}</div>
+              <div style={{fontSize:_eaF(11.5,isMob),color:_EA.fraco}}>{p.status==="exportado"?"✓ no card · ":""}v{p.versao} · {_eaDataHora(p.atualizado_em)}</div>
+              {t && <button onClick={function(){ if(onAbrirCard) onAbrirCard(t); }} style={{font:"inherit",marginTop:4,alignSelf:"flex-start",border:0,background:"none",padding:0,color:_EA.roxo,fontWeight:700,fontSize:12,cursor:"pointer"}}>Card: {t.title}</button>}
+            </div>
+          </div>; })}
+      </div>}
+      {nova && <_EaNova tasks={tasks} clientes={clientes} clienteIni={cliente} onFechar={function(){ setNova(false); }} onCriado={function(id, doModelo){ setNova(false); onAbrir(id, doModelo); }}/>}
+    </div>
+  );
+}
+
+function _eaDocVazio(w, h, fundo){
+  return { versao:1, paginas:[{ id:_eaUid(), nome:"Página 1", largura:w, altura:h, fabric:{ version:"7.4.0", objects:[], background:fundo || "#ffffff" } }] };
+}
+
+function _EaNova({ tasks, clientes, clienteIni, onFechar, onCriado }){
+  const [cliente, setCliente] = useState(clienteIni || "");
+  const [unidade, setUnidade] = useState("");
+  const [unidades, setUnidades] = useState([]);
+  const [task, setTask] = useState("");
+  const [formato, setFormato] = useState("feed");
+  const [titulo, setTitulo] = useState("");
+  const [modelos, setModelos] = useState([]);
+  const [modelo, setModelo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  useEffect(function(){
+    setUnidades([]); setUnidade("");
+    if(cliente) _eaRpc("arte_kit", { p_client:cliente, p_unidade:"" }).then(function(k){ setUnidades(Array.isArray(k && k.unidades) ? k.unidades : []); }).catch(function(){});
+    _eaRpc("arte_modelos_lista", { p_client:cliente || null }).then(function(m){ setModelos(Array.isArray(m)?m:[]); }).catch(function(){ setModelos([]); });
+  }, [cliente]);
+  const cards = useMemo(function(){
+    const ok = ["demanda","alteracao_copy","preencher_material","recebida","execucao","ajustes","avaliacao"];
+    return (tasks||[]).filter(function(t){ return t && !t.deletedAt && ok.indexOf(String(t.status||""))>=0 && _eaEhArte(t) && (!cliente || t.client===cliente); })
+      .sort(function(a,b){ return String(a.publishDate||"9").localeCompare(String(b.publishDate||"9")); }).slice(0, 200);
+  }, [tasks, cliente]);
+  const f = _EA_FORMATOS.find(function(x){ return x.id===formato; }) || _EA_FORMATOS[0];
+  const criar = async function(){
+    setErro(""); setSalvando(true);
+    try{
+      const m = modelos.find(function(x){ return x.id===modelo; }) || null;
+      const t = cards.find(function(x){ return String(x.id)===String(task); }) || null;
+      const w = m ? m.largura : f.w, h = m ? m.altura : f.h;
+      let doc = m ? JSON.parse(JSON.stringify(m.doc)) : _eaDocVazio(w, h, "#ffffff");
+      if(doc && Array.isArray(doc.paginas)) doc.paginas.forEach(function(p){ p.id = _eaUid(); });
+      const nome = (titulo || (t && t.title) || (m && m.nome) || "Arte") .slice(0,120);
+      const p = await _eaRpc("arte_projeto_criar", { p_client:cliente || null, p_unidade:unidade, p_task:task || null, p_titulo:nome,
+        p_formato:m ? m.formato : f.id, p_largura:w, p_altura:h, p_doc:doc, p_modelo:m ? m.id : null });
+      onCriado(p.id, !!m);
+    }catch(e){ setErro(_eaErro(e)); }
+    setSalvando(false);
+  };
+  const campo = { font:"inherit", width:"100%", padding:"9px 11px", borderRadius:10, border:"1px solid "+_EA.linha, background:"#fff", fontSize:14 };
+  const rot = function(t){ return <div style={{fontSize:11.5,color:_EA.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",margin:"12px 0 4px"}}>{t}</div>; };
+  return (
+    <div onClick={onFechar} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.35)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:16,padding:20,width:"min(560px,100%)",maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(15,23,42,.25)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontWeight:800,fontSize:18}}>Nova arte</div>
+          <button onClick={onFechar} style={{border:0,background:"none",cursor:"pointer",color:_EA.sub}}><_EaIc n="fechar"/></button>
+        </div>
+        {rot("Cliente")}
+        <select value={cliente} onChange={function(e){ setCliente(e.target.value); setTask(""); setModelo(""); }} style={campo}>
+          <option value="">— sem cliente —</option>
+          {clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name}</option>; })}
+        </select>
+        {unidades.length>0 && <div>{rot("Unidade")}
+          <select value={unidade} onChange={function(e){ setUnidade(e.target.value); }} style={campo}>
+            <option value="">Todas / geral</option>
+            {unidades.map(function(u){ return <option key={u} value={u}>{u}</option>; })}
+          </select></div>}
+        {rot("Card (opcional — a arte pronta vai para ele)")}
+        <select value={task} onChange={function(e){ setTask(e.target.value); }} style={campo}>
+          <option value="">— sem card —</option>
+          {cards.map(function(t){ return <option key={t.id} value={t.id}>{t.title}{t.publishDate?" · "+String(t.publishDate).slice(8,10)+"/"+String(t.publishDate).slice(5,7):""}{cliente?"":" · "+_eaNomeCliente(t.client)}</option>; })}
+        </select>
+        {rot("Modelo (opcional)")}
+        <select value={modelo} onChange={function(e){ setModelo(e.target.value); }} style={campo}>
+          <option value="">— começar do zero —</option>
+          {modelos.map(function(m){ return <option key={m.id} value={m.id}>{m.nome} · {m.largura}×{m.altura}{m.client_id?"":" · todos os clientes"}</option>; })}
+        </select>
+        {!modelo && <div>{rot("Formato")}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {_EA_FORMATOS.map(function(x){ const on = x.id===formato;
+              return <button key={x.id} onClick={function(){ setFormato(x.id); }} style={{font:"inherit",padding:"8px 12px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:700,
+                border:"1px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff",color:on?_EA.roxo:_EA.texto}}>{x.label}<div style={{fontSize:11,fontWeight:500,color:_EA.sub}}>{x.w}×{x.h}</div></button>; })}
+          </div></div>}
+        {rot("Nome da arte")}
+        <input value={titulo} onChange={function(e){ setTitulo(e.target.value); }} placeholder="Se deixar vazio, usa o nome do card" style={campo}/>
+        {erro && <div style={{marginTop:12,padding:10,borderRadius:10,background:_EA.vermClaro,color:_EA.verm,fontSize:13}}>{erro}</div>}
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+          <button onClick={onFechar} style={{font:"inherit",padding:"10px 16px",borderRadius:10,border:"1px solid "+_EA.linha,background:"#fff",cursor:"pointer",fontWeight:700}}>Cancelar</button>
+          <button disabled={salvando} onClick={criar} style={{font:"inherit",padding:"10px 18px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",cursor:"pointer",fontWeight:800,opacity:salvando?.6:1}}>{salvando?"Criando…":"Criar e abrir"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ EDITOR: funções do canvas (fora do React) ═══ */
+function _eaTipo(o){
+  const t = String(o && o.type || "").toLowerCase();
+  if(t==="textbox" || t==="i-text" || t==="itext" || t==="text" || t==="fabrictext") return "texto";
+  if(t==="image" || t==="fabricimage") return "imagem";
+  if(t==="rect") return "retangulo";
+  if(t==="circle" || t==="ellipse") return "circulo";
+  if(t==="group") return "grupo";
+  if(t==="line") return "linha";
+  return "forma";
+}
+function _eaNomeTipo(o){
+  const t = _eaTipo(o);
+  if(t==="texto") return (String(o.text||"").replace(/\s+/g," ").trim().slice(0,28) || "Texto");
+  return { imagem:"Imagem", retangulo:"Retângulo", circulo:"Círculo", grupo:"Grupo", linha:"Linha", forma:"Forma" }[t] || "Objeto";
+}
+function _eaCaixa(o){   // caixa do objeto na arte (sem zoom), já com escala e rotação
+  try{ if(!o.aCoords) o.setCoords(); const r = o.getBoundingRect(); return { left:r.left, top:r.top, width:r.width, height:r.height }; }
+  catch(_){ return { left:o.left||0, top:o.top||0, width:(o.width||0)*(o.scaleX||1), height:(o.height||0)*(o.scaleY||1) }; }
+}
+function _eaMoverCaixa(o, left, top){
+  const c = _eaCaixa(o);
+  if(isFinite(left)) o.set("left", (o.left||0) + (left - c.left));
+  if(isFinite(top))  o.set("top",  (o.top||0)  + (top  - c.top));
+  o.setCoords();
+}
+function _eaJsonPagina(fc){
+  const j = fc.toObject(_EA_PROPS);
+  j.background = fc.backgroundColor || "#ffffff";
+  return j;
+}
+function _eaFontesDoJson(j){
+  const s = new Set();
+  const ver = function(o){ if(!o) return; if(o.fontFamily) s.add(String(o.fontFamily).split(",")[0].replace(/["']/g,"").trim());
+    if(o.styles && typeof o.styles==="object") Object.values(o.styles).forEach(function(l){ Object.values(l||{}).forEach(function(st){ if(st && st.fontFamily) s.add(String(st.fontFamily)); }); });
+    (o.objects||[]).forEach(ver); };
+  (j && j.objects || []).forEach(ver);
+  return Array.from(s).filter(Boolean);
+}
+async function _eaCarregarJson(fc, j){
+  const fontes = _eaFontesDoJson(j);
+  await Promise.all(fontes.map(_eaCarregarFonte));
+  await fc.loadFromJSON(j || { objects:[] });
+  fc.backgroundColor = (j && j.background) || "#ffffff";
+  fc.getObjects().forEach(function(o){ if(!o.id) o.id = _eaUid(); if(_eaTipo(o)==="texto" && o.initDimensions){ try{ o.initDimensions(); }catch(_){ } } o.setCoords(); });
+  fc.requestRenderAll();
+}
+async function _eaImagemDeUrl(fabric, url, extra){
+  const img = await fabric.FabricImage.fromURL(url, { crossOrigin:"anonymous" });
+  img.set(Object.assign({ id:_eaUid() }, extra || {}));
+  return img;
+}
+/* encaixa a imagem numa caixa: "cobrir" (corta o que sobra) ou "caber" (mostra inteira) */
+function _eaEncaixarImagem(fabric, img, caixa, modo){
+  const w = img.width || 1, h = img.height || 1;
+  const s = modo === "caber" ? Math.min(caixa.width / w, caixa.height / h) : Math.max(caixa.width / w, caixa.height / h);
+  img.set({ scaleX:s, scaleY:s, angle:0, left:caixa.left + (caixa.width - w*s)/2, top:caixa.top + (caixa.height - h*s)/2 });
+  if(modo !== "caber"){
+    img.clipPath = new fabric.Rect({ left:caixa.left, top:caixa.top, width:caixa.width, height:caixa.height, absolutePositioned:true, strokeWidth:0 });
+  } else img.clipPath = null;
+  img.setCoords();
+}
+/* texto de espaço: diminui a fonte até caber na altura original */
+function _eaCaberTexto(o){
+  if(_eaTipo(o) !== "texto") return;
+  const max = Number(o.alturaMax) || 0;
+  if(!max) return;
+  let fs = o.fontSize || 40, n = 0;
+  try{ o.initDimensions(); }catch(_){}
+  while((o.height||0) * (o.scaleY||1) > max * 1.02 && fs > 10 && n < 60){ fs = Math.max(10, Math.floor(fs * 0.94)); o.set("fontSize", fs); try{ o.initDimensions(); }catch(_){} n++; }
+  o.setCoords();
+}
+/* miniatura (para a lista) */
+function _eaMiniatura(fc, W, largura){
+  const z = fc.getZoom() || 1;
+  return fc.toDataURL({ format:"jpeg", quality:0.82, multiplier:(largura || 360) / (W * z) });
+}
+/* imagem da página inteira no tamanho real */
+function _eaImagemPagina(fc, W, formato, qualidade, escala){
+  const z = fc.getZoom() || 1;
+  return fc.toDataURL({ format:formato || "png", quality:qualidade || 0.92, multiplier:(escala || 1) / z, enableRetinaScaling:false });
+}
+
+/* desfazer / refazer: fotos da página (JSON) */
+function _eaHistorico(){ return { pilha:[], pos:-1, pausado:false }; }
+function _eaHistPush(h, j){
+  const s = JSON.stringify(j);
+  if(h.pos >= 0 && h.pilha[h.pos] === s) return false;
+  h.pilha = h.pilha.slice(0, h.pos + 1); h.pilha.push(s);
+  if(h.pilha.length > 80) h.pilha.shift();
+  h.pos = h.pilha.length - 1;
+  return true;
+}
+
+/* ═══ EDITOR (componente) ═══ */
+function _EaEditor({ isMob, tasks, projetoId, preencherAoAbrir, onAbrirCard, onFechar, onAbrirOutro }){
+  const [proj, setProj] = useState(null);
+  const [erro, setErro] = useState("");
+  const [lib, setLib] = useState(null);
+  const [kit, setKit] = useState(null);
+  const [pag, setPag] = useState(0);
+  const [zoom, setZoom] = useState(0.5);
+  const [tick, setTick] = useState(0);
+  const [sel, setSel] = useState([]);
+  const [painel, setPainel] = useState("props");     // props | camadas | ia | espacos | arquivo | versoes
+  const [ferr, setFerr] = useState("selecionar");
+  const [salvo, setSalvo] = useState({ estado:"ok", em:null });
+  const [avisos, setAvisos] = useState([]);
+  const [titulo, setTitulo] = useState("");
+  const [pronto, setPronto] = useState(false);
+  const preencheuRef = useRef(false);
+  const palcoRef = useRef(null), elRef = useRef(null), fcRef = useRef(null), docRef = useRef(null), histRef = useRef(_eaHistorico());
+  const pagRef = useRef(0), timerRef = useRef(null), sujoRef = useRef(false), clipRef = useRef(null), montadoRef = useRef(true), projRef = useRef(null);
+  const toque = function(){ setTick(function(x){ return x + 1; }); };
+  const pagina = function(){ const d = docRef.current; return d && d.paginas ? d.paginas[pagRef.current] : null; };
+  const W = function(){ const p = pagina(); return p ? p.largura : 1080; };
+  const H = function(){ const p = pagina(); return p ? p.altura : 1350; };
+
+  /* carregar a arte, o kit e o Fabric */
+  useEffect(function(){
+    montadoRef.current = true;
+    (async function(){
+      try{
+        const [p, f] = await Promise.all([_eaRpc("arte_projeto", { p_id:projetoId }), isMob ? Promise.resolve(null) : _eaFabric()]);
+        if(!montadoRef.current) return;
+        let doc = p.doc && Array.isArray(p.doc.paginas) && p.doc.paginas.length ? p.doc : _eaDocVazio(p.largura, p.altura, "#ffffff");
+        docRef.current = JSON.parse(JSON.stringify(doc)); projRef.current = p;
+        setProj(p); setTitulo(p.titulo || ""); setLib(f);
+        if(p.client_id) _eaRpc("arte_kit", { p_client:p.client_id, p_unidade:p.unidade || "" }).then(function(k){ if(montadoRef.current){ setKit(k); const fk = k && k.kit && k.kit.fonte; if(fk) _eaCarregarFonte(fk); } }).catch(function(){});
+      }catch(e){ setErro(_eaErro(e)); }
+    })();
+    return function(){ montadoRef.current = false; };
+  }, [projetoId]);
+
+  /* criar o canvas quando o Fabric chegar */
+  useEffect(function(){
+    if(!lib || !proj || !elRef.current || fcRef.current) return;
+    const fc = new lib.Canvas(elRef.current, { preserveObjectStacking:true, backgroundColor:"#ffffff", stopContextMenu:true, fireRightClick:false, enableRetinaScaling:true });
+    fcRef.current = fc;
+    try{ if(window.__EA_TESTE) window.__eaFc = fc; }catch(_){ }
+    const mudou = function(){ if(histRef.current.pausado) return; if(_eaHistPush(histRef.current, _eaJsonPagina(fc))){ sujoRef.current = true; setSalvo({ estado:"sujo", em:null }); agendar(); } toque(); };
+    fc.on("object:added", function(e){ if(e.target && !e.target.id) e.target.id = _eaUid(); mudou(); });
+    fc.on("object:removed", mudou);
+    fc.on("object:modified", mudou);
+    fc.on("text:changed", function(e){ if(e.target && e.target.alturaMax) _eaCaberTexto(e.target); mudou(); });
+    fc.on("text:editing:exited", mudou);
+    const pegarSel = function(){ setSel(fc.getActiveObjects().slice()); toque(); };
+    fc.on("selection:created", pegarSel); fc.on("selection:updated", pegarSel); fc.on("selection:cleared", pegarSel);
+    abrirPagina(0, true);
+    return function(){ try{ salvarAgora(true); }catch(_){} try{ fc.dispose(); }catch(_){} fcRef.current = null; };
+  }, [lib, proj]);
+
+  /* atalhos do teclado */
+  useEffect(function(){
+    if(isMob) return;
+    const tecla = function(e){
+      const fc = fcRef.current; if(!fc) return;
+      const alvo = e.target && e.target.tagName;
+      if(alvo === "INPUT" || alvo === "TEXTAREA" || alvo === "SELECT" || (e.target && e.target.isContentEditable)) return;
+      const ativo = fc.getActiveObject();
+      if(ativo && ativo.isEditing) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      if(ctrl && (e.key === "z" || e.key === "Z")){ e.preventDefault(); if(e.shiftKey) refazer(); else desfazer(); return; }
+      if(ctrl && (e.key === "y" || e.key === "Y")){ e.preventDefault(); refazer(); return; }
+      if(ctrl && (e.key === "d" || e.key === "D")){ e.preventDefault(); duplicar(); return; }
+      if(ctrl && (e.key === "c" || e.key === "C")){ copiar(); return; }
+      if(ctrl && (e.key === "v" || e.key === "V")){ colar(); return; }
+      if(ctrl && (e.key === "s" || e.key === "S")){ e.preventDefault(); salvarVersao(); return; }
+      if((e.key === "Delete" || e.key === "Backspace") && fc.getActiveObjects().length){ e.preventDefault(); apagar(); return; }
+      const passo = e.shiftKey ? 10 : 1;
+      const mv = { ArrowLeft:[-passo,0], ArrowRight:[passo,0], ArrowUp:[0,-passo], ArrowDown:[0,passo] }[e.key];
+      if(mv && ativo){ e.preventDefault(); ativo.set({ left:ativo.left + mv[0], top:ativo.top + mv[1] }); ativo.setCoords(); fc.requestRenderAll(); fc.fire("object:modified", { target:ativo }); }
+    };
+    window.addEventListener("keydown", tecla);
+    return function(){ window.removeEventListener("keydown", tecla); };
+  }, [lib, proj]);
+
+  /* zoom que cabe na tela */
+  const zoomCaber = function(){
+    const pal = palcoRef.current; if(!pal) return 0.5;
+    const r = pal.getBoundingClientRect();
+    return Math.max(0.05, Math.min(2, Math.min((r.width - 48) / W(), (r.height - 48) / H())));
+  };
+  const aplicarZoom = function(z){
+    const fc = fcRef.current; if(!fc) return;
+    z = Math.max(0.05, Math.min(4, z));
+    fc.setDimensions({ width:Math.round(W() * z), height:Math.round(H() * z) });
+    fc.setZoom(z); fc.requestRenderAll(); setZoom(z);
+  };
+
+  async function abrirPagina(i, inicio){
+    const fc = fcRef.current, d = docRef.current; if(!fc || !d) return;
+    if(!inicio){ const atual = pagina(); if(atual) atual.fabric = _eaJsonPagina(fc); }
+    pagRef.current = Math.max(0, Math.min(d.paginas.length - 1, i)); setPag(pagRef.current);
+    histRef.current = _eaHistorico(); histRef.current.pausado = true;
+    try{ await _eaCarregarJson(fc, pagina().fabric); }catch(e){ _eaToast("error", "Não abri esta página: " + _eaErro(e)); }
+    histRef.current.pausado = false;
+    _eaHistPush(histRef.current, _eaJsonPagina(fc));
+    aplicarZoom(zoomCaber());
+    fc.discardActiveObject(); setSel([]);
+    if(inicio) setPronto(true);
+    toque();
+  }
+  /* arte nova feita de um modelo: preenche os espaços quando a página e o kit do cliente estiverem prontos */
+  useEffect(function(){
+    if(!pronto || !preencherAoAbrir || preencheuRef.current || !proj) return;
+    if(proj.client_id && !kit) return;
+    preencheuRef.current = true;
+    if(typeof _eaPreencherEspacos === "function") _eaPreencherEspacos(api(), { silencioso:true });
+  }, [pronto, kit, proj]);
+
+  /* salvar sozinho (rascunho) — as versões ficam guardadas à parte */
+  function agendar(){ if(timerRef.current) clearTimeout(timerRef.current); timerRef.current = setTimeout(function(){ salvarAgora(false); }, 4000); }
+  async function salvarAgora(saindo){
+    const fc = fcRef.current, d = docRef.current; if(!fc || !d || !sujoRef.current) return;
+    const p = pagina(); if(p) p.fabric = _eaJsonPagina(fc);
+    sujoRef.current = false;
+    if(!saindo) setSalvo({ estado:"salvando", em:null });
+    try{
+      let thumb = null;
+      if(!projRef.current.thumb_url && pagRef.current === 0){ try{ const up = await _eaSubir(_eaDataUrlBlob(_eaMiniatura(fc, W(), 360)), "arte/" + projetoId, "thumb.jpg"); thumb = up.url; projRef.current.thumb_url = thumb; }catch(_){ } }
+      await _eaRpc("arte_projeto_rascunho", { p_id:projetoId, p_doc:d, p_titulo:null, p_thumb:thumb });
+      if(!saindo && montadoRef.current) setSalvo({ estado:"ok", em:new Date().toISOString() });
+    }catch(e){ sujoRef.current = true; if(!saindo && montadoRef.current){ setSalvo({ estado:"erro", em:null }); _eaToast("error", "Não salvei: " + _eaErro(e)); } }
+  }
+  async function salvarVersao(motivo){
+    const fc = fcRef.current, d = docRef.current; if(!fc || !d) return;
+    const p = pagina(); if(p) p.fabric = _eaJsonPagina(fc);
+    setSalvo({ estado:"salvando", em:null });
+    try{
+      fc.discardActiveObject(); fc.requestRenderAll();
+      let thumb = null; try{ const up = await _eaSubir(_eaDataUrlBlob(_eaMiniatura(fc, W(), 360)), "arte/" + projetoId, "thumb.jpg"); thumb = up.url; projRef.current.thumb_url = thumb; }catch(_){ }
+      const r = await _eaRpc("arte_projeto_salvar", { p_id:projetoId, p_doc:d, p_motivo:motivo || "salva à mão", p_thumb:thumb });
+      sujoRef.current = false;
+      setProj(Object.assign({}, projRef.current, { versao:r.versao })); projRef.current.versao = r.versao;
+      setSalvo({ estado:"ok", em:new Date().toISOString() });
+      _eaToast("success", "Versão " + r.versao + " salva");
+      return r;
+    }catch(e){ setSalvo({ estado:"erro", em:null }); _eaToast("error", "Não salvei a versão: " + _eaErro(e)); }
+  }
+
+  /* ações */
+  function desfazer(){ const fc = fcRef.current, h = histRef.current; if(!fc || h.pos <= 0) return; h.pos--; restaurar(h.pilha[h.pos]); }
+  function refazer(){ const fc = fcRef.current, h = histRef.current; if(!fc || h.pos >= h.pilha.length - 1) return; h.pos++; restaurar(h.pilha[h.pos]); }
+  async function restaurar(s){
+    const fc = fcRef.current; histRef.current.pausado = true;
+    try{ await _eaCarregarJson(fc, JSON.parse(s)); aplicarZoom(fc.getZoom()); }catch(_){}
+    histRef.current.pausado = false; sujoRef.current = true; setSalvo({ estado:"sujo", em:null }); agendar(); setSel([]); toque();
+  }
+  function apagar(){
+    const fc = fcRef.current; if(!fc) return;
+    const objs = fc.getActiveObjects().filter(function(o){ return !o.bloqueado; });
+    if(!objs.length){ _eaToast("info", "Objeto travado: destrave na lista de camadas"); return; }
+    fc.discardActiveObject(); histRef.current.pausado = true; objs.forEach(function(o){ fc.remove(o); }); histRef.current.pausado = false;
+    fc.fire("object:modified", {}); fc.requestRenderAll();
+  }
+  async function duplicar(){
+    const fc = fcRef.current; if(!fc) return;
+    const objs = fc.getActiveObjects(); if(!objs.length) return;
+    fc.discardActiveObject(); const novos = [];
+    histRef.current.pausado = true;
+    for(const o of objs){ const c = await o.clone(_EA_PROPS); c.set({ id:_eaUid(), left:(c.left||0) + 24, top:(c.top||0) + 24, bloqueado:false }); fc.add(c); novos.push(c); }
+    histRef.current.pausado = false;
+    if(novos.length === 1) fc.setActiveObject(novos[0]); else if(novos.length) fc.setActiveObject(new lib.ActiveSelection(novos, { canvas:fc }));
+    fc.fire("object:modified", {}); fc.requestRenderAll();
+  }
+  async function copiar(){ const fc = fcRef.current; if(!fc) return; const objs = fc.getActiveObjects(); if(!objs.length) return; clipRef.current = await Promise.all(objs.map(function(o){ return o.clone(_EA_PROPS); })); }
+  async function colar(){
+    const fc = fcRef.current; if(!fc || !clipRef.current || !clipRef.current.length) return;
+    fc.discardActiveObject(); histRef.current.pausado = true; const novos = [];
+    for(const o of clipRef.current){ const c = await o.clone(_EA_PROPS); c.set({ id:_eaUid(), left:(c.left||0) + 24, top:(c.top||0) + 24 }); fc.add(c); novos.push(c); }
+    histRef.current.pausado = false;
+    if(novos.length === 1) fc.setActiveObject(novos[0]); else fc.setActiveObject(new lib.ActiveSelection(novos, { canvas:fc }));
+    fc.fire("object:modified", {}); fc.requestRenderAll();
+  }
+  function adicionar(o, selecionar){
+    const fc = fcRef.current; if(!fc) return;
+    if(!o.id) o.id = _eaUid();
+    fc.add(o); if(selecionar !== false){ fc.setActiveObject(o); } fc.requestRenderAll();
+  }
+  function novoTexto(){
+    const fk = (kit && kit.kit && kit.kit.fonte) || "Montserrat";
+    _eaCarregarFonte(fk).then(function(){
+      const t = new lib.Textbox("Escreva aqui", { left:W()*0.1, top:H()*0.1, width:W()*0.8, fontSize:Math.round(W()/14), fontFamily:fk, fontWeight:"800",
+        fill:"#0f172a", textAlign:"left", lineHeight:1.1, id:_eaUid(), nome:"" });
+      adicionar(t); setFerr("selecionar");
+    });
+  }
+  function novaForma(tipo){
+    const cor = (kit && kit.kit && kit.kit.cor_principal) || (kit && kit.base && kit.base.cor) || "#7c3aed";
+    let o;
+    if(tipo === "circulo") o = new lib.Circle({ left:W()*0.35, top:H()*0.35, radius:W()*0.15, fill:cor, strokeWidth:0 });
+    else if(tipo === "linha") o = new lib.Line([W()*0.2, H()*0.5, W()*0.8, H()*0.5], { stroke:cor, strokeWidth:Math.max(2, Math.round(W()/180)) });
+    else o = new lib.Rect({ left:W()*0.25, top:H()*0.35, width:W()*0.5, height:H()*0.2, fill:cor, rx:0, ry:0, strokeWidth:0 });
+    adicionar(o); setFerr("selecionar");
+  }
+  async function novaImagem(url, espaco, nome){
+    try{
+      const img = await _eaImagemDeUrl(lib, url, { nome:nome || "", espaco:espaco || "" });
+      const s = Math.min((W()*0.6) / (img.width||1), (H()*0.6) / (img.height||1), 1);
+      img.set({ scaleX:s, scaleY:s, left:(W() - img.width*s)/2, top:(H() - img.height*s)/2 });
+      adicionar(img);
+      return img;
+    }catch(e){ _eaToast("error", "Não abri a imagem: " + _eaErro(e)); return null; }
+  }
+  async function subirImagem(arquivos, espaco){
+    for(const f of Array.from(arquivos || [])){
+      if(!/^image\//.test(f.type)){ _eaToast("warning", f.name + ": não é imagem"); continue; }
+      if(/svg/.test(f.type)){ if(typeof _eaAbrirSvg === "function") await _eaAbrirSvg(api(), await f.text(), f.name); continue; }
+      try{ const up = await _eaSubir(f, "arte/" + projetoId, f.name); await novaImagem(up.url, espaco, f.name.replace(/\.[^.]+$/,"")); }
+      catch(e){ _eaToast("error", "Não subiu " + f.name + ": " + _eaErro(e)); }
+    }
+  }
+  function ordem(para){
+    const fc = fcRef.current, o = fc && fc.getActiveObject(); if(!o) return;
+    if(para === "frente") fc.bringObjectToFront(o); else if(para === "tras") fc.sendObjectToBack(o);
+    else if(para === "subir") fc.bringObjectForward(o); else fc.sendObjectBackwards(o);
+    fc.fire("object:modified", { target:o }); fc.requestRenderAll();
+  }
+  function agrupar(){
+    const fc = fcRef.current; if(!fc) return;
+    const objs = fc.getActiveObjects(); if(objs.length < 2) return;
+    fc.discardActiveObject(); histRef.current.pausado = true;
+    const idx = Math.min.apply(null, objs.map(function(o){ return fc.getObjects().indexOf(o); }));
+    objs.forEach(function(o){ fc.remove(o); });
+    const g = new lib.Group(objs, { id:_eaUid(), nome:"Grupo" });
+    fc.insertAt(Math.max(0, idx), g); histRef.current.pausado = false;
+    fc.setActiveObject(g); fc.fire("object:modified", { target:g }); fc.requestRenderAll();
+  }
+  function desagrupar(){
+    const fc = fcRef.current, g = fc && fc.getActiveObject(); if(!g || _eaTipo(g) !== "grupo") return;
+    const itens = g.getObjects().slice(), mats = itens.map(function(o){ return o.calcTransformMatrix(); });
+    const idx = fc.getObjects().indexOf(g);
+    fc.discardActiveObject(); histRef.current.pausado = true;
+    g.removeAll(); fc.remove(g);
+    itens.forEach(function(o, i){ lib.util.applyTransformToObject(o, mats[i]); o.setCoords(); fc.insertAt(idx + i, o); });
+    histRef.current.pausado = false;
+    fc.setActiveObject(new lib.ActiveSelection(itens, { canvas:fc })); fc.fire("object:modified", {}); fc.requestRenderAll();
+  }
+  function recortar(inverter){
+    const fc = fcRef.current; if(!fc) return;
+    const objs = fc.getActiveObjects();
+    if(objs.length !== 2){ _eaToast("info", "Selecione a imagem e a forma (2 objetos) para recortar"); return; }
+    const img = objs.find(function(o){ return _eaTipo(o) === "imagem" || _eaTipo(o) === "grupo"; }) || objs[0];
+    const forma = objs.find(function(o){ return o !== img; });
+    const mat = forma.calcTransformMatrix();
+    fc.discardActiveObject(); histRef.current.pausado = true;
+    fc.remove(forma);
+    lib.util.applyTransformToObject(forma, mat);
+    forma.set({ absolutePositioned:true, inverted:!!inverter }); forma.setCoords();
+    img.clipPath = forma; img.dirty = true;
+    histRef.current.pausado = false;
+    fc.setActiveObject(img); fc.fire("object:modified", { target:img }); fc.requestRenderAll();
+  }
+  function tirarRecorte(){
+    const fc = fcRef.current, o = fc && fc.getActiveObject(); if(!o || !o.clipPath) return;
+    const f = o.clipPath; o.clipPath = null; o.dirty = true;
+    if(f && f.absolutePositioned){ f.set({ absolutePositioned:false, inverted:false, id:_eaUid(), opacity:0.35 }); fc.add(f); }
+    fc.fire("object:modified", { target:o }); fc.requestRenderAll();
+  }
+  function alinhar(como){
+    const fc = fcRef.current; if(!fc) return;
+    const objs = fc.getActiveObjects(); if(!objs.length) return;
+    const varios = objs.length > 1;
+    fc.discardActiveObject();
+    let ref = { left:0, top:0, width:W(), height:H() };
+    if(varios){ const cs = objs.map(_eaCaixa); const l = Math.min.apply(null, cs.map(function(c){ return c.left; })), t = Math.min.apply(null, cs.map(function(c){ return c.top; }));
+      ref = { left:l, top:t, width:Math.max.apply(null, cs.map(function(c){ return c.left + c.width; })) - l, height:Math.max.apply(null, cs.map(function(c){ return c.top + c.height; })) - t }; }
+    objs.forEach(function(o){ if(o.bloqueado) return; const c = _eaCaixa(o);
+      if(como === "esq") _eaMoverCaixa(o, ref.left, NaN);
+      if(como === "centroH") _eaMoverCaixa(o, ref.left + (ref.width - c.width)/2, NaN);
+      if(como === "dir") _eaMoverCaixa(o, ref.left + ref.width - c.width, NaN);
+      if(como === "topo") _eaMoverCaixa(o, NaN, ref.top);
+      if(como === "meioV") _eaMoverCaixa(o, NaN, ref.top + (ref.height - c.height)/2);
+      if(como === "base") _eaMoverCaixa(o, NaN, ref.top + ref.height - c.height);
+    });
+    if(objs.length === 1) fc.setActiveObject(objs[0]); else fc.setActiveObject(new lib.ActiveSelection(objs, { canvas:fc }));
+    fc.fire("object:modified", {}); fc.requestRenderAll();
+  }
+  function mudar(o, props, semHist){
+    const fc = fcRef.current; if(!fc || !o) return;
+    if(o.isEditing && (props.fill !== undefined || props.fontWeight !== undefined || props.fontStyle !== undefined || props.underline !== undefined) && o.selectionStart !== o.selectionEnd){
+      o.setSelectionStyles(props, o.selectionStart, o.selectionEnd);
+    } else {
+      o.set(props);
+      if(_eaTipo(o) === "texto"){ try{ o.initDimensions(); }catch(_){ } if(props.text !== undefined && o.alturaMax) _eaCaberTexto(o); }
+    }
+    o.dirty = true; o.setCoords(); fc.requestRenderAll();
+    if(!semHist) fc.fire("object:modified", { target:o });
+    toque();
+  }
+  function fundo(cor){ const fc = fcRef.current; if(!fc) return; fc.backgroundColor = cor; fc.requestRenderAll(); fc.fire("object:modified", {}); toque(); }
+
+  /* páginas */
+  function novaPagina(w, h, copiarAtual){
+    const fc = fcRef.current, d = docRef.current; if(!fc || !d) return;
+    const atual = pagina(); if(atual) atual.fabric = _eaJsonPagina(fc);
+    const p = { id:_eaUid(), nome:"Página " + (d.paginas.length + 1), largura:w || W(), altura:h || H(),
+                fabric:copiarAtual ? JSON.parse(JSON.stringify(atual.fabric)) : { objects:[], background:"#ffffff" } };
+    d.paginas.push(p); sujoRef.current = true; agendar();
+    return abrirPagina(d.paginas.length - 1, true).then(function(){ return p; });
+  }
+  function renomearPagina(i, nome){ const d = docRef.current; if(!d || !d.paginas[i]) return; d.paginas[i].nome = String(nome||"").slice(0,40) || d.paginas[i].nome; sujoRef.current = true; agendar(); toque(); }
+
+  /* o que os outros painéis (IA, arquivos, espaços) usam */
+  function api(){
+    return { lib:lib, fc:fcRef.current, W:W(), H:H(), kit:kit, proj:projRef.current, projetoId:projetoId, tasks:tasks,
+             mudou:function(){ const fc = fcRef.current; if(fc){ fc.fire("object:modified", {}); fc.requestRenderAll(); } toque(); },
+             pausar:function(v){ histRef.current.pausado = !!v; },
+             adicionar:adicionar, novaImagem:novaImagem, subirImagem:subirImagem, mudar:mudar, fundo:fundo, novaPagina:novaPagina,
+             pagina:pagina, doc:function(){ const fc = fcRef.current; const p = pagina(); if(fc && p) p.fabric = _eaJsonPagina(fc); return docRef.current; },
+             salvarVersao:salvarVersao, setAvisos:function(a){ setAvisos(function(x){ return x.concat(a || []); }); }, toque:toque,
+             carregarDoc:async function(doc){ docRef.current = JSON.parse(JSON.stringify(doc)); sujoRef.current = true; await abrirPagina(0, true); agendar(); },
+             abrirPagina:abrirPagina, zoomCaber:function(){ aplicarZoom(zoomCaber()); } };
+  }
+
+  try{ if(window.__EA_TESTE) window.__eaApi = api; }catch(_){ }
+  if(erro) return <div style={{marginTop:14,padding:14,borderRadius:12,background:_EA.vermClaro,color:_EA.verm}}>Não abri a arte: {erro}</div>;
+  if(!proj) return <div style={{marginTop:14,color:_EA.sub}}>Abrindo a arte…</div>;
+
+  /* celular: só vê */
+  if(isMob){
+    return <div style={{marginTop:14}}>
+      <div style={{fontWeight:800,fontSize:16}}>{proj.titulo}</div>
+      <div style={{fontSize:12.5,color:_EA.sub,marginTop:2}}>{_eaNomeCliente(proj.client_id)} · {proj.largura}×{proj.altura} · v{proj.versao}</div>
+      <div style={{marginTop:12,background:_EA.palco,borderRadius:14,padding:10,display:"flex",justifyContent:"center"}}>
+        {proj.thumb_url ? <img src={proj.thumb_url} alt="" style={{maxWidth:"100%",borderRadius:6}}/> : <span style={{color:_EA.fraco,padding:30}}>Sem prévia ainda</span>}
+      </div>
+      <div style={{marginTop:10,fontSize:12.5,color:_EA.sub}}>No celular dá para ver. Para editar, use o computador.</div>
+      <button onClick={onFechar} style={{font:"inherit",marginTop:12,padding:"10px 14px",borderRadius:10,border:"1px solid "+_EA.linha,background:"#fff",fontWeight:700}}>Voltar</button>
+    </div>;
+  }
+
+  const fc = fcRef.current;
+  const d = docRef.current;
+  const um = sel.length === 1 ? sel[0] : null;
+  const h = histRef.current;
+  const botaoTopo = function(icone, titulo, acao, desligado, rotulo){
+    return <button title={titulo} disabled={!!desligado} onClick={acao} style={{font:"inherit",height:34,minWidth:34,padding:rotulo?"0 10px":0,borderRadius:9,border:"1px solid "+_EA.linha,background:"#fff",
+      color:desligado?_EA.fraco:_EA.texto,cursor:desligado?"default":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:13,fontWeight:700}}>
+      <_EaIc n={icone} s={17}/>{rotulo || null}</button>;
+  };
+  const ferramenta = function(id, icone, titulo, acao){ const on = ferr === id;
+    return <button key={id} title={titulo} onClick={function(){ setFerr(id); if(acao) acao(); }} style={{font:"inherit",width:40,height:40,borderRadius:10,border:0,cursor:"pointer",
+      background:on?_EA.roxoClaro:"transparent",color:on?_EA.roxo:_EA.texto,display:"flex",alignItems:"center",justifyContent:"center"}}><_EaIc n={icone} s={19}/></button>; };
+  const abas = [["props","Ajustes"],["camadas","Camadas"],["espacos","Modelo"],["ia","IA"],["arquivo","Arquivo"],["versoes","Versões"]];
+  const statusSalvo = salvo.estado === "salvando" ? "Salvando…" : salvo.estado === "sujo" ? "Alterações não salvas" : salvo.estado === "erro" ? "⚠️ Não salvou" : (salvo.em ? "Salvo " + _eaDataHora(salvo.em).slice(-5) : "Salvo");
+  const inpFile = "ea-arq-img-" + projetoId;
+
+  return (
+    <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:10,height:"calc(100vh - 150px)",minHeight:560}} data-ea-editor="1">
+      {/* barra de cima */}
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",background:"#fff",border:"1px solid "+_EA.linha,borderRadius:12,padding:"8px 10px"}}>
+        {botaoTopo("fechar","Voltar para a lista", function(){ salvarAgora(false); onFechar(); })}
+        <input value={titulo} onChange={function(e){ setTitulo(e.target.value); }} onBlur={function(){ if(titulo && titulo !== projRef.current.titulo){ _eaRpc("arte_projeto_dados",{ p_id:projetoId, p_titulo:titulo, p_task:projRef.current.task_id || null, p_client:projRef.current.client_id || null, p_unidade:projRef.current.unidade || "" }).then(function(){ projRef.current.titulo = titulo; }).catch(function(e){ _eaToast("error", _eaErro(e)); }); } }}
+          style={{font:"inherit",fontWeight:800,fontSize:15,border:"1px solid transparent",borderRadius:8,padding:"5px 8px",minWidth:160,flex:"0 1 260px"}} title="Nome da arte"/>
+        <span style={{fontSize:12,color:_EA.sub}}>{_eaNomeCliente(proj.client_id)} · {W()}×{H()}</span>
+        <div style={{flex:1}}/>
+        {botaoTopo("desfazer","Desfazer (Ctrl+Z)", desfazer, h.pos <= 0)}
+        {botaoTopo("refazer","Refazer (Ctrl+Shift+Z)", refazer, h.pos >= h.pilha.length - 1)}
+        <span style={{width:1,height:22,background:_EA.linha}}/>
+        {botaoTopo("zoomMenos","Diminuir", function(){ aplicarZoom(zoom / 1.2); })}
+        <span style={{fontSize:12.5,fontWeight:700,minWidth:44,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
+        {botaoTopo("zoomMais","Aumentar", function(){ aplicarZoom(zoom * 1.2); })}
+        {botaoTopo("encaixar","Caber na tela", function(){ aplicarZoom(zoomCaber()); })}
+        <span style={{width:1,height:22,background:_EA.linha}}/>
+        <span style={{fontSize:12,color:salvo.estado==="erro"?_EA.verm:_EA.sub,minWidth:90,textAlign:"right"}}>{statusSalvo}</span>
+        {botaoTopo("salvar","Salvar versão (Ctrl+S)", function(){ salvarVersao(); }, false, "Salvar versão")}
+        <button onClick={function(){ setPainel("arquivo"); }} style={{font:"inherit",height:34,padding:"0 12px",borderRadius:9,border:0,background:_EA.roxo,color:"#fff",fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+          <_EaIc n="baixar" s={16}/> Exportar</button>
+      </div>
+
+      <div style={{display:"flex",gap:10,flex:1,minHeight:0}}>
+        {/* ferramentas */}
+        <div style={{display:"flex",flexDirection:"column",gap:4,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:12,padding:6,alignItems:"center"}}>
+          {ferramenta("selecionar","selecionar","Selecionar e mover")}
+          {ferramenta("texto","texto","Texto", novoTexto)}
+          {ferramenta("imagem","imagem","Imagem do computador", function(){ const i = document.getElementById(inpFile); if(i) i.click(); })}
+          {ferramenta("retangulo","retangulo","Retângulo", function(){ novaForma("retangulo"); })}
+          {ferramenta("circulo","circulo","Círculo", function(){ novaForma("circulo"); })}
+          {ferramenta("linha","linha","Linha", function(){ novaForma("linha"); })}
+          <span style={{height:1,width:26,background:_EA.linha,margin:"4px 0"}}/>
+          {ferramenta("ia","ia","Pedir à IA", function(){ setPainel("ia"); setFerr("selecionar"); })}
+          {ferramenta("espaco","espaco","Espaços do modelo", function(){ setPainel("espacos"); setFerr("selecionar"); })}
+          <input id={inpFile} type="file" accept="image/*" multiple style={{display:"none"}} onChange={function(e){ subirImagem(e.target.files); e.target.value = ""; setFerr("selecionar"); }}/>
+        </div>
+
+        {/* palco */}
+        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
+          {d && d.paginas.length > 0 && <div style={{display:"flex",gap:6,alignItems:"center",overflowX:"auto"}}>
+            {d.paginas.map(function(p, i){ const on = i === pag;
+              return <button key={p.id} onClick={function(){ if(i !== pag) abrirPagina(i); }} onDoubleClick={function(){ const n = window.prompt("Nome da página", p.nome); if(n) renomearPagina(i, n); }}
+                title="Duplo clique para renomear" style={{font:"inherit",padding:"5px 10px",borderRadius:8,border:"1px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff",
+                color:on?_EA.roxo:_EA.texto,fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{p.nome} <span style={{color:_EA.fraco,fontWeight:500}}>{p.largura}×{p.altura}</span></button>; })}
+            <button onClick={function(){ novaPagina(W(), H(), false); }} title="Nova página (mesmo tamanho)" style={{font:"inherit",padding:"5px 9px",borderRadius:8,border:"1px dashed "+_EA.roxoBorda,background:"#fff",color:_EA.roxo,fontWeight:800,fontSize:12,cursor:"pointer"}}>+ Página</button>
+          </div>}
+          {avisos.length > 0 && <div style={{background:_EA.amareloClaro,border:"1px solid #fde68a",borderRadius:10,padding:"8px 10px",fontSize:12.5,color:_EA.amarelo}}>
+            {avisos.slice(-6).map(function(a, i){ return <div key={i}>⚠️ {a}</div>; })}
+            <button onClick={function(){ setAvisos([]); }} style={{font:"inherit",border:0,background:"none",color:_EA.amarelo,fontWeight:800,cursor:"pointer",padding:0,marginTop:4}}>Entendi</button>
+          </div>}
+          <div ref={palcoRef} onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ e.preventDefault(); if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){ if(typeof _eaAbrirArquivos === "function") _eaAbrirArquivos(api(), e.dataTransfer.files); } }}
+            style={{flex:1,minHeight:0,overflow:"auto",background:_EA.palco,borderRadius:12,border:"1px solid "+_EA.linha,display:"flex",alignItems:"safe center",justifyContent:"safe center",padding:24}}>
+            <div style={{boxShadow:"0 6px 30px rgba(15,23,42,.14)",background:"#fff",lineHeight:0}}><canvas ref={elRef}/></div>
+          </div>
+        </div>
+
+        {/* painel da direita */}
+        <div style={{width:318,flexShrink:0,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:12,display:"flex",flexDirection:"column",minHeight:0}}>
+          <div style={{display:"flex",flexWrap:"wrap",gap:2,padding:6,borderBottom:"1px solid "+_EA.linha2}}>
+            {abas.map(function(a){ const on = painel === a[0];
+              return <button key={a[0]} onClick={function(){ setPainel(a[0]); }} style={{font:"inherit",padding:"6px 9px",borderRadius:8,border:0,cursor:"pointer",fontSize:12.5,fontWeight:on?800:600,
+                background:on?_EA.roxoClaro:"transparent",color:on?_EA.roxo:_EA.sub}}>{a[1]}</button>; })}
+          </div>
+          <div style={{flex:1,overflow:"auto",padding:12}}>
+            {fc && painel === "props"   && <_EaPainelAjustes a={api()} sel={sel} um={um} tick={tick} alinhar={alinhar} ordem={ordem} apagar={apagar} duplicar={duplicar}
+                                             agrupar={agrupar} desagrupar={desagrupar} recortar={recortar} tirarRecorte={tirarRecorte}/>}
+            {fc && painel === "camadas" && <_EaPainelCamadas a={api()} sel={sel} tick={tick}/>}
+            {fc && painel === "espacos" && typeof _EaPainelEspacos === "function" && <_EaPainelEspacos a={api()} sel={sel} um={um} tick={tick}/>}
+            {fc && painel === "ia"      && typeof _EaPainelIA === "function" && <_EaPainelIA a={api()} sel={sel} tick={tick}/>}
+            {fc && painel === "arquivo" && typeof _EaPainelArquivo === "function" && <_EaPainelArquivo a={api()} onAbrirCard={onAbrirCard}/>}
+            {fc && painel === "versoes" && <_EaPainelVersoes a={api()} projetoId={projetoId} versaoAtual={proj.versao}/>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ PAINEL: AJUSTES DO OBJETO ═══ */
+function _EaCampo({ rot, children, dica }){
+  return <div style={{marginBottom:10}}>
+    <div style={{fontSize:11,color:_EA.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}} title={dica||""}>{rot}</div>
+    {children}
+  </div>;
+}
+function _EaNum({ v, on, min, max, passo, larg }){
+  const [t, setT] = useState(String(v));
+  useEffect(function(){ setT(String(v)); }, [v]);
+  const fim = function(){ const n = Number(String(t).replace(",", ".")); if(isFinite(n)) on(Math.min(max===undefined?1e6:max, Math.max(min===undefined?-1e6:min, n))); else setT(String(v)); };
+  return <input value={t} onChange={function(e){ setT(e.target.value); }} onBlur={fim} onKeyDown={function(e){ if(e.key==="Enter") fim(); if(e.key==="ArrowUp"||e.key==="ArrowDown"){ e.preventDefault(); const n = (Number(v)||0) + (e.key==="ArrowUp"?1:-1) * (passo||1) * (e.shiftKey?10:1); on(n); } }}
+    style={{font:"inherit",width:larg||"100%",padding:"6px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13}}/>;
+}
+function _EaCor({ v, on, kit }){
+  const cores = [];
+  if(kit){ const k = kit.kit || {}, b = kit.base || {}; [k.cor_principal, k.cor_secundaria, k.cor_texto, b.cor].forEach(function(c){ if(c && /^#/.test(c) && cores.indexOf(c) < 0) cores.push(c); }); }
+  ["#ffffff","#0f172a","#f59e0b","#16a34a","#dc2626","#2563eb"].forEach(function(c){ if(cores.indexOf(c) < 0) cores.push(c); });
+  const val = /^#[0-9a-f]{6}$/i.test(String(v||"")) ? v : "#000000";
+  return <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+    <input type="color" value={val} onChange={function(e){ on(e.target.value); }} style={{width:34,height:30,border:"1px solid "+_EA.linha,borderRadius:7,padding:0,background:"#fff"}}/>
+    {cores.slice(0,8).map(function(c, i){ return <button key={c+i} title={i < (kit?4:0) ? "Cor do kit do cliente" : c} onClick={function(){ on(c); }} style={{width:22,height:22,borderRadius:6,border:"1px solid "+(c.toLowerCase()==="#ffffff"?_EA.linha:"transparent"),background:c,cursor:"pointer",outline:String(v).toLowerCase()===c.toLowerCase()?"2px solid "+_EA.roxo:"none",outlineOffset:1}}/>; })}
+  </div>;
+}
+function _EaPainelAjustes({ a, sel, um, alinhar, ordem, apagar, duplicar, agrupar, desagrupar, recortar, tirarRecorte }){
+  const fc = a.fc, lib = a.lib;
+  const pequeno = { font:"inherit", padding:"6px 9px", borderRadius:8, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12.5, fontWeight:700, display:"inline-flex", alignItems:"center", gap:5 };
+  const icone = function(n, t, f, off){ return <button title={t} onClick={f} disabled={!!off} style={Object.assign({}, pequeno, {padding:6, color:off?_EA.fraco:_EA.texto})}><_EaIc n={n} s={16}/></button>; };
+  if(!sel.length){
+    return <div>
+      <_EaCampo rot="Fundo da página"><_EaCor v={fc.backgroundColor} on={function(c){ a.fundo(c); }} kit={a.kit}/></_EaCampo>
+      <div style={{fontSize:12.5,color:_EA.sub,lineHeight:1.5}}>Clique num objeto para mexer nele. Duplo clique no texto para escrever.<br/>
+        Atalhos: Ctrl+Z desfazer · Ctrl+D duplicar · Ctrl+C/V · Delete apagar · setas movem (Shift = 10 px) · Ctrl+S salva versão.</div>
+      {a.kit && <div style={{marginTop:14,padding:10,borderRadius:10,background:_EA.fundo,border:"1px solid "+_EA.linha2,fontSize:12.5}}>
+        <div style={{fontWeight:800,marginBottom:4}}>Kit do cliente</div>
+        <div>Fonte: <b>{(a.kit.kit && a.kit.kit.fonte) || "—"}</b></div>
+        <div>WhatsApp: {(a.kit.base && a.kit.base.whatsapp) || "—"}</div>
+        <div>Cidade: {(a.kit.base && a.kit.base.cidade) || "—"}</div>
+        {_eaLogo(a.proj && a.proj.client_id) && <button onClick={function(){ a.novaImagem(_eaLogo(a.proj.client_id), "LOGO", "Logo"); }} style={Object.assign({}, pequeno, {marginTop:8})}><_EaIc n="imagem" s={15}/> Pôr a logo</button>}
+      </div>}
+    </div>;
+  }
+  const o = um;
+  const tipo = o ? _eaTipo(o) : "varios";
+  const caixa = o ? _eaCaixa(o) : null;
+  const fontes = _EA_FONTES.slice(); const fk = a.kit && a.kit.kit && a.kit.kit.fonte; if(fk && fontes.indexOf(fk) < 0) fontes.unshift(fk);
+  const mudarFonte = function(n){ _eaCarregarFonte(n).then(function(){ a.mudar(o, { fontFamily:n }); }); };
+  return <div>
+    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
+      {icone("duplicar","Duplicar (Ctrl+D)", duplicar)}
+      {icone("frente","Trazer para a frente", function(){ ordem("frente"); }, !o)}
+      {icone("tras","Mandar para trás", function(){ ordem("tras"); }, !o)}
+      {sel.length > 1 && icone("grupo","Agrupar", agrupar)}
+      {tipo === "grupo" && icone("desagrupar","Desagrupar", desagrupar)}
+      {sel.length === 2 && icone("mascara","Recortar a imagem no formato da forma (máscara)", function(){ recortar(false); })}
+      {icone("lixo","Apagar (Delete)", apagar)}
+    </div>
+    <_EaCampo rot={sel.length > 1 ? "Alinhar entre si" : "Alinhar na página"}>
+      <div style={{display:"flex",gap:4}}>
+        {icone("alinharEsq","Esquerda", function(){ alinhar("esq"); })}{icone("alinharCentroH","Centro", function(){ alinhar("centroH"); })}{icone("alinharDir","Direita", function(){ alinhar("dir"); })}
+        {icone("alinharTopo","Topo", function(){ alinhar("topo"); })}{icone("alinharMeioV","Meio", function(){ alinhar("meioV"); })}{icone("alinharBase","Base", function(){ alinhar("base"); })}
+      </div>
+    </_EaCampo>
+    {o && <div>
+      {o.naoEditavel && <div style={{marginBottom:10,padding:8,borderRadius:8,background:_EA.amareloClaro,color:_EA.amarelo,fontSize:12}}>⚠️ {o.aviso || "Veio do arquivo original como imagem (não editável)."}</div>}
+      <_EaCampo rot="Posição e tamanho (px da arte)">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          <label style={{fontSize:11,color:_EA.sub}}>X<_EaNum v={Math.round(caixa.left)} on={function(n){ _eaMoverCaixa(o, n, NaN); a.mudou(); }}/></label>
+          <label style={{fontSize:11,color:_EA.sub}}>Y<_EaNum v={Math.round(caixa.top)} on={function(n){ _eaMoverCaixa(o, NaN, n); a.mudou(); }}/></label>
+          <label style={{fontSize:11,color:_EA.sub}}>Largura<_EaNum v={Math.round(caixa.width)} min={1} on={function(n){ if(tipo==="texto") a.mudar(o, { width:n / (o.scaleX||1) }); else { const s = n / (o.width||1); a.mudar(o, { scaleX:s, scaleY:o.lockUniScaling===false ? o.scaleY : s * ((o.scaleY||1)/(o.scaleX||1)) }); } }}/></label>
+          <label style={{fontSize:11,color:_EA.sub}}>Altura<_EaNum v={Math.round(caixa.height)} min={1} on={function(n){ if(tipo!=="texto"){ a.mudar(o, { scaleY:n / (o.height||1) }); } }}/></label>
+          <label style={{fontSize:11,color:_EA.sub}}>Giro (°)<_EaNum v={Math.round(o.angle||0)} min={-360} max={360} on={function(n){ o.rotate(n); a.mudou(); }}/></label>
+          <label style={{fontSize:11,color:_EA.sub}}>Opacidade %<_EaNum v={Math.round((o.opacity===undefined?1:o.opacity)*100)} min={0} max={100} on={function(n){ a.mudar(o, { opacity:n/100 }); }}/></label>
+        </div>
+      </_EaCampo>
+      {tipo === "texto" && <div>
+        <_EaCampo rot="Texto">
+          <textarea value={o.text || ""} onChange={function(e){ a.mudar(o, { text:e.target.value }, true); }} onBlur={function(){ a.mudou(); }} rows={3}
+            style={{font:"inherit",width:"100%",padding:"7px 9px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13,resize:"vertical"}}/>
+          <div style={{display:"flex",gap:5,marginTop:5}}>
+            <button style={pequeno} onClick={function(){ a.mudar(o, { text:String(o.text||"").toUpperCase() }); }}>AA</button>
+            <button style={pequeno} onClick={function(){ a.mudar(o, { text:String(o.text||"").toLowerCase() }); }}>aa</button>
+            <button style={pequeno} onClick={function(){ a.mudar(o, { text:String(o.text||"").toLowerCase().replace(/(^|[\s\n])(\S)/g, function(m, p1, p2){ return p1 + p2.toUpperCase(); }) }); }}>Aa</button>
+          </div>
+        </_EaCampo>
+        <_EaCampo rot="Fonte">
+          <select value={String(o.fontFamily||"").split(",")[0].replace(/["']/g,"")} onChange={function(e){ mudarFonte(e.target.value); }} style={{font:"inherit",width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13}}>
+            {fontes.indexOf(String(o.fontFamily||"").split(",")[0].replace(/["']/g,"")) < 0 && <option value={o.fontFamily}>{o.fontFamily} (do arquivo)</option>}
+            {fontes.map(function(f){ return <option key={f} value={f}>{f}{f===fk?" (kit)":""}</option>; })}
+          </select>
+        </_EaCampo>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          <_EaCampo rot="Tamanho"><_EaNum v={Math.round((o.fontSize||40))} min={4} max={1200} on={function(n){ a.mudar(o, { fontSize:n }); }}/></_EaCampo>
+          <_EaCampo rot="Peso">
+            <select value={String(o.fontWeight||"400")} onChange={function(e){ a.mudar(o, { fontWeight:e.target.value }); }} style={{font:"inherit",width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13}}>
+              {[["400","Normal"],["600","Médio"],["700","Negrito"],["800","Extra"],["900","Black"],["normal","Normal (arq.)"],["bold","Negrito (arq.)"]].map(function(x){ return <option key={x[0]} value={x[0]}>{x[1]}</option>; })}
+            </select>
+          </_EaCampo>
+          <_EaCampo rot="Entrelinha"><_EaNum v={Math.round((o.lineHeight||1.16)*100)/100} min={0.5} max={4} passo={0.05} on={function(n){ a.mudar(o, { lineHeight:n }); }}/></_EaCampo>
+          <_EaCampo rot="Espaço letras"><_EaNum v={Math.round(o.charSpacing||0)} min={-300} max={2000} passo={10} on={function(n){ a.mudar(o, { charSpacing:n }); }}/></_EaCampo>
+        </div>
+        <_EaCampo rot="Alinhamento">
+          <div style={{display:"flex",gap:4}}>
+            {[["left","Esq."],["center","Centro"],["right","Dir."],["justify","Just."]].map(function(x){ const on = (o.textAlign||"left")===x[0];
+              return <button key={x[0]} onClick={function(){ a.mudar(o, { textAlign:x[0] }); }} style={Object.assign({}, pequeno, {background:on?_EA.roxoClaro:"#fff",color:on?_EA.roxo:_EA.texto})}>{x[1]}</button>; })}
+            <button onClick={function(){ a.mudar(o, { fontStyle:o.fontStyle==="italic"?"normal":"italic" }); }} style={Object.assign({}, pequeno, {fontStyle:"italic"})}>I</button>
+            <button onClick={function(){ a.mudar(o, { underline:!o.underline }); }} style={Object.assign({}, pequeno, {textDecoration:"underline"})}>S</button>
+          </div>
+        </_EaCampo>
+        <_EaCampo rot={o.isEditing && o.selectionStart !== o.selectionEnd ? "Cor (só do trecho selecionado)" : "Cor"}><_EaCor v={o.fill} on={function(c){ a.mudar(o, { fill:c }); }} kit={a.kit}/></_EaCampo>
+        <_EaCampo rot="Faixa atrás do texto">
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <input type="checkbox" checked={!!o.backgroundColor} onChange={function(e){ a.mudar(o, { backgroundColor:e.target.checked ? ((a.kit && a.kit.kit && a.kit.kit.cor_principal) || "#7c3aed") : "" }); }}/>
+            {o.backgroundColor && <_EaCor v={o.backgroundColor} on={function(c){ a.mudar(o, { backgroundColor:c }); }} kit={a.kit}/>}
+          </div>
+        </_EaCampo>
+      </div>}
+      {(tipo === "texto" || tipo === "retangulo" || tipo === "circulo" || tipo === "forma" || tipo === "linha") && <div>
+        {tipo !== "texto" && tipo !== "linha" && <_EaCampo rot="Cor de preenchimento"><_EaCor v={typeof o.fill === "string" ? o.fill : "#000000"} on={function(c){ a.mudar(o, { fill:c }); }} kit={a.kit}/></_EaCampo>}
+        <_EaCampo rot="Contorno">
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <_EaNum v={o.strokeWidth || 0} min={0} max={200} larg={64} on={function(n){ a.mudar(o, { strokeWidth:n, stroke:o.stroke || "#0f172a" }); }}/>
+            <_EaCor v={o.stroke || "#0f172a"} on={function(c){ a.mudar(o, { stroke:c, strokeWidth:o.strokeWidth || 2 }); }} kit={a.kit}/>
+          </div>
+        </_EaCampo>
+        {tipo === "retangulo" && <_EaCampo rot="Cantos arredondados"><_EaNum v={Math.round(o.rx||0)} min={0} max={2000} on={function(n){ a.mudar(o, { rx:n, ry:n }); }}/></_EaCampo>}
+      </div>}
+      <_EaCampo rot="Sombra">
+        <input type="checkbox" checked={!!o.shadow} onChange={function(e){ a.mudar(o, { shadow:e.target.checked ? new lib.Shadow({ color:"rgba(0,0,0,0.35)", blur:Math.round(a.W/60), offsetX:0, offsetY:Math.round(a.W/200) }) : null }); }}/>
+      </_EaCampo>
+      {tipo === "imagem" && <_EaAjustesImagem a={a} o={o}/>}
+      {tipo !== "imagem" && tipo !== "texto" && ["PRODUCT_IMAGE","LOGO","BACKGROUND"].indexOf(o.espaco) >= 0 && <_EaCampo rot={"Imagem para o espaço " + o.espaco}><_EaEscolherImagem a={a} o={o} rotulo="Pôr imagem"/></_EaCampo>}
+      {o.clipPath && <_EaCampo rot="Recorte (máscara)">
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button style={pequeno} onClick={function(){ o.clipPath.inverted = !o.clipPath.inverted; o.dirty = true; a.mudou(); }}>{o.clipPath.inverted ? "Desinverter" : "Inverter"}</button>
+          <button style={pequeno} onClick={tirarRecorte}>Tirar recorte</button>
+        </div>
+      </_EaCampo>}
+    </div>}
+  </div>;
+}
+
+function _EaAjustesImagem({ a, o }){
+  const lib = a.lib;
+  const filtros = (o.filters || []);
+  const achar = function(tipo){ return filtros.find(function(f){ return f && f.type === tipo; }); };
+  const valor = function(tipo, k){ const f = achar(tipo); return f ? f[k] : 0; };
+  const por = function(tipo, k, v){
+    let f = achar(tipo);
+    if(!f){ const C = lib.filters[tipo]; if(!C) return; f = new C(); o.filters = (o.filters || []).concat([f]); }
+    f[k] = v; o.applyFilters(); a.mudou();
+  };
+  const pequeno = { font:"inherit", padding:"6px 9px", borderRadius:8, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12.5, fontWeight:700 };
+  const barra = function(rot, tipo, k, min, max){ return <label style={{display:"block",fontSize:11.5,color:_EA.sub,marginBottom:6}}>{rot}
+    <input type="range" min={min} max={max} step={0.01} value={valor(tipo, k)} onChange={function(e){ por(tipo, k, Number(e.target.value)); }} style={{width:"100%"}}/></label>; };
+  return <div>
+    <_EaCampo rot="Imagem">
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <_EaEscolherImagem a={a} o={o}/>
+        <button style={pequeno} onClick={function(){ _eaEncaixarImagem(lib, o, _eaCaixa(o.clipPath || o), "caber"); a.mudou(); }}>Mostrar inteira</button>
+        {typeof _eaRemoverFundo === "function" && <button style={pequeno} onClick={function(){ _eaRemoverFundo(a, o); }}>Tirar fundo (pessoa)</button>}
+      </div>
+    </_EaCampo>
+    <_EaCampo rot="Cor da imagem">
+      {barra("Brilho", "Brightness", "brightness", -0.6, 0.6)}
+      {barra("Contraste", "Contrast", "contrast", -0.6, 0.6)}
+      {barra("Saturação", "Saturation", "saturation", -1, 1)}
+    </_EaCampo>
+  </div>;
+}
+
+/* põe uma imagem no lugar de um objeto (espaço do modelo ou imagem), mantendo a caixa */
+async function _eaPorImagem(a, o, url, nome){
+  const lib = a.lib, fc = a.fc, tipo = _eaTipo(o);
+  const cx = _eaCaixa(o.clipPath && o.clipPath.absolutePositioned ? o.clipPath : o);
+  const modo = o.espaco === "LOGO" ? "caber" : "cobrir";
+  if(tipo === "imagem"){ await o.setSrc(url, { crossOrigin:"anonymous" }); _eaEncaixarImagem(lib, o, cx, modo); if(nome) o.set("nome", nome); a.mudou(); return o; }
+  const img = await _eaImagemDeUrl(lib, url, { espaco:o.espaco || "", nome:nome || o.nome || "" });
+  _eaEncaixarImagem(lib, img, cx, modo);
+  if(modo === "cobrir" && tipo === "retangulo" && (o.rx || 0) > 0 && img.clipPath){ img.clipPath.set({ rx:(o.rx||0) * (o.scaleX||1), ry:(o.ry||o.rx||0) * (o.scaleY||1) }); }
+  const i = fc.getObjects().indexOf(o);
+  a.pausar(true); fc.remove(o); fc.insertAt(Math.max(0, i), img); a.pausar(false);
+  fc.setActiveObject(img); a.mudou();
+  return img;
+}
+function _EaEscolherImagem({ a, o, rotulo }){
+  const [aberto, setAberto] = useState(false);
+  const id = "ea-img-" + (o && o.id);
+  const tarefa = a.proj && a.proj.task_id ? (a.tasks || []).find(function(t){ return String(t.id) === String(a.proj.task_id); }) : null;
+  const imgsCard = tarefa ? (Array.isArray(tarefa.files) ? tarefa.files : []).filter(function(f){ return f && f.url && (/^image\//.test(String(f.type||"")) || /\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(String(f.url))); }) : [];
+  const pequeno = { font:"inherit", padding:"6px 9px", borderRadius:8, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12.5, fontWeight:700 };
+  const doPc = function(e){
+    const arq = e.target.files && e.target.files[0]; e.target.value = ""; if(!arq) return;
+    _eaSubir(arq, "arte/" + a.projetoId, arq.name).then(function(up){ return _eaPorImagem(a, o, up.url, arq.name.replace(/\.[^.]+$/,"")); })
+      .catch(function(err){ _eaToast("error", "Não pus a imagem: " + _eaErro(err)); });
+  };
+  return <div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      <button style={pequeno} onClick={function(){ const i = document.getElementById(id); if(i) i.click(); }}>{rotulo || "Trocar imagem"} (computador)</button>
+      {imgsCard.length > 0 && <button style={pequeno} onClick={function(){ setAberto(!aberto); }}>Do card ({imgsCard.length})</button>}
+      {o.espaco === "LOGO" && _eaLogo(a.proj && a.proj.client_id) && <button style={pequeno} onClick={function(){ _eaPorImagem(a, o, _eaLogo(a.proj.client_id), "Logo"); }}>Logo do cliente</button>}
+    </div>
+    <input id={id} type="file" accept="image/*" style={{display:"none"}} onChange={doPc}/>
+    {aberto && <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginTop:6}}>
+      {imgsCard.slice(0, 30).map(function(f){ return <button key={f.id || f.url} title={f.name} onClick={function(){ setAberto(false); _eaPorImagem(a, o, f.url, String(f.name||"").replace(/\.[^.]+$/,"")).catch(function(err){ _eaToast("error", _eaErro(err)); }); }}
+        style={{border:"1px solid "+_EA.linha,borderRadius:6,padding:0,cursor:"pointer",background:_EA.palco,aspectRatio:"1",overflow:"hidden"}}><img src={f.thumbnail || f.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></button>; })}
+    </div>}
+  </div>;
+}
+
+/* ═══ PAINEL: CAMADAS ═══ */
+function _EaPainelCamadas({ a, sel }){
+  const fc = a.fc;
+  const objs = fc.getObjects().slice().reverse();
+  const [arrastando, setArrastando] = useState(null);
+  const pequeno = { border:0, background:"none", cursor:"pointer", padding:3, color:_EA.sub, display:"inline-flex" };
+  if(!objs.length) return <div style={{fontSize:13,color:_EA.sub}}>A página está vazia. Use as ferramentas da esquerda ou abra um arquivo em <b>Arquivo</b>.</div>;
+  return <div>
+    <div style={{fontSize:11.5,color:_EA.sub,marginBottom:8}}>De cima para baixo = da frente para trás. Arraste para mudar a ordem.</div>
+    {objs.map(function(o){
+      const on = sel.indexOf(o) >= 0, tipo = _eaTipo(o);
+      return <div key={o.id} draggable onDragStart={function(){ setArrastando(o); }} onDragOver={function(e){ e.preventDefault(); }}
+        onDrop={function(){ if(arrastando && arrastando !== o){ fc.moveObjectTo(arrastando, fc.getObjects().indexOf(o)); a.mudou(); } setArrastando(null); }}
+        onClick={function(){ if(o.selectable === false) return; fc.setActiveObject(o); fc.requestRenderAll(); a.toque(); }}
+        style={{display:"flex",alignItems:"center",gap:6,padding:"6px 6px",borderRadius:8,marginBottom:3,cursor:"pointer",border:"1px solid "+(on?_EA.roxoBorda:"transparent"),background:on?_EA.roxoClaro:"transparent"}}>
+        <span style={{color:_EA.sub,display:"inline-flex"}}><_EaIc n={tipo==="texto"?"texto":tipo==="imagem"?"imagem":tipo==="circulo"?"circulo":tipo==="grupo"?"grupo":"retangulo"} s={15}/></span>
+        <span style={{flex:1,minWidth:0,fontSize:12.5,fontWeight:on?800:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",opacity:o.visible===false?.45:1}}
+          onDoubleClick={function(e){ e.stopPropagation(); const n = window.prompt("Nome da camada", o.nome || _eaNomeTipo(o)); if(n !== null){ o.nome = n.slice(0,60); a.mudou(); } }}>
+          {o.nome || _eaNomeTipo(o)}{o.espaco ? <span style={{marginLeft:5,fontSize:10.5,fontWeight:800,color:_EA.roxo}}>[{o.espaco}]</span> : null}
+          {o.naoEditavel ? <span style={{marginLeft:5,fontSize:10.5,color:_EA.amarelo}}>imagem</span> : null}
+        </span>
+        <button title={o.visible===false?"Mostrar":"Esconder"} style={pequeno} onClick={function(e){ e.stopPropagation(); o.visible = o.visible === false; if(!o.visible) fc.discardActiveObject(); a.mudou(); }}><_EaIc n={o.visible===false?"olhoOff":"olho"} s={15}/></button>
+        <button title={o.bloqueado?"Destravar":"Travar (não mexe sem querer; a IA também não mexe)"} style={Object.assign({}, pequeno, {color:o.bloqueado?_EA.roxo:_EA.sub})} onClick={function(e){ e.stopPropagation();
+          const b = !o.bloqueado; o.set({ bloqueado:b, lockMovementX:b, lockMovementY:b, lockScalingX:b, lockScalingY:b, lockRotation:b, hasControls:!b }); if(b) fc.discardActiveObject(); a.mudou(); }}><_EaIc n={o.bloqueado?"cadeado":"aberto"} s={15}/></button>
+      </div>; })}
+  </div>;
+}
+
+/* ═══ PAINEL: VERSÕES ═══ */
+function _EaPainelVersoes({ a, projetoId, versaoAtual }){
+  const [lista, setLista] = useState(null);
+  const [motivo, setMotivo] = useState("");
+  const carregar = function(){ _eaRpc("arte_projeto", { p_id:projetoId }).then(function(p){ setLista(p.versoes || []); }).catch(function(){ setLista([]); }); };
+  useEffect(carregar, [versaoAtual]);
+  const voltar = async function(n){
+    if(!window.confirm("Abrir a versão " + n + "? O que está na tela agora fica salvo antes como versão nova (nada se perde).")) return;
+    try{
+      await a.salvarVersao("antes de voltar para a versão " + n);
+      const v = await _eaRpc("arte_versao", { p_id:projetoId, p_n:n });
+      await a.carregarDoc(v.doc);
+      _eaToast("success", "Versão " + n + " aberta. Salve uma versão para guardar assim.");
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+  };
+  return <div>
+    <div style={{display:"flex",gap:6}}>
+      <input value={motivo} onChange={function(e){ setMotivo(e.target.value); }} placeholder="O que mudou? (opcional)" style={{font:"inherit",flex:1,padding:"7px 9px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13}}/>
+      <button onClick={function(){ a.salvarVersao(motivo || null).then(function(){ setMotivo(""); carregar(); }); }} style={{font:"inherit",padding:"7px 10px",borderRadius:8,border:0,background:_EA.roxo,color:"#fff",fontWeight:800,cursor:"pointer",fontSize:12.5}}>Salvar</button>
+    </div>
+    <div style={{fontSize:11.5,color:_EA.sub,margin:"8px 0 10px"}}>A arte salva sozinha a cada poucos segundos. "Salvar versão" guarda uma foto que nunca é apagada.</div>
+    {lista === null && <div style={{color:_EA.sub,fontSize:13}}>Carregando…</div>}
+    {lista && !lista.length && <div style={{color:_EA.sub,fontSize:13}}>Nenhuma versão salva ainda.</div>}
+    {(lista||[]).map(function(v){ return <div key={v.n} style={{display:"flex",gap:8,alignItems:"center",padding:"7px 0",borderTop:"1px solid "+_EA.linha2}}>
+      {v.thumb_url ? <img src={v.thumb_url} alt="" style={{width:40,height:50,objectFit:"cover",borderRadius:4,border:"1px solid "+_EA.linha}}/> : <span style={{width:40}}/>}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontWeight:800,fontSize:12.5}}>Versão {v.n}</div>
+        <div style={{fontSize:11.5,color:_EA.sub}}>{v.por} · {_eaDataHora(v.em)}</div>
+        {v.motivo && <div style={{fontSize:11.5,color:_EA.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.motivo}</div>}
+      </div>
+      <button onClick={function(){ voltar(v.n); }} style={{font:"inherit",padding:"5px 8px",borderRadius:7,border:"1px solid "+_EA.linha,background:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>Abrir</button>
+    </div>; })}
+  </div>;
+}
+
+/* ═══ IA: resumo da arte e comandos ═══ */
+function _eaResumoIA(fc, W, H){
+  const objetos = fc.getObjects().map(function(o){
+    const c = _eaCaixa(o), tipo = _eaTipo(o);
+    const r = { id:o.id, tipo:tipo, left:Math.round(c.left), top:Math.round(c.top), width:Math.round(c.width), height:Math.round(c.height),
+                angle:Math.round(o.angle||0), opacity:o.opacity===undefined?1:o.opacity };
+    if(o.espaco) r.espaco = o.espaco;
+    if(o.nome) r.nome = o.nome;
+    if(o.visible === false) r.visible = false;
+    if(o.bloqueado || o.naoEditavel && tipo !== "texto") r.bloqueado = !!o.bloqueado;
+    if(tipo === "texto"){ r.text = o.text; r.fontFamily = String(o.fontFamily||"").split(",")[0].replace(/["']/g,""); r.fontSize = Math.round((o.fontSize||0) * (o.scaleY||1));
+      r.fontWeight = String(o.fontWeight||"400"); r.fill = typeof o.fill === "string" ? o.fill : ""; r.textAlign = o.textAlign || "left"; r.lineHeight = o.lineHeight; r.charSpacing = o.charSpacing || 0; }
+    else if(typeof o.fill === "string") r.fill = o.fill;
+    return r;
+  });
+  return { largura:W, altura:H, fundo:fc.backgroundColor || "#ffffff", objetos:objetos, selecionados:fc.getActiveObjects().map(function(o){ return o.id; }) };
+}
+async function _eaAplicarComandos(lib, fc, W, H, comandos, kit){
+  const achar = function(id){ return fc.getObjects().find(function(o){ return o.id === id; }) || null; };
+  let feitos = 0;
+  for(const c of (comandos || [])){
+    try{
+      if(c.op === "editar"){
+        const o = achar(c.id); if(!o || o.bloqueado) continue;
+        const p = Object.assign({}, c.props || {}), tipo = _eaTipo(o);
+        if(p.fontFamily) await _eaCarregarFonte(p.fontFamily);
+        const box = {};
+        ["left","top","width","height"].forEach(function(k){ if(p[k] !== undefined){ box[k] = Number(p[k]); delete p[k]; } });
+        if(p.sombra !== undefined){ p.shadow = p.sombra ? new lib.Shadow({ color:"rgba(0,0,0,0.35)", blur:Math.round(W/60), offsetX:0, offsetY:Math.round(W/200) }) : null; delete p.sombra; }
+        if(tipo !== "texto"){ ["text","fontFamily","fontSize","fontWeight","fontStyle","textAlign","charSpacing","lineHeight","underline"].forEach(function(k){ delete p[k]; }); }
+        if(tipo === "imagem"){ delete p.fill; }
+        if(p.fontSize !== undefined && (o.scaleY||1) !== 1) p.fontSize = p.fontSize / (o.scaleY||1);
+        o.set(p);
+        if(box.width !== undefined){
+          if(tipo === "texto") o.set("width", box.width / (o.scaleX||1));
+          else if(tipo === "circulo" && o.radius){ const s = box.width / (o.radius*2); o.set({ scaleX:s, scaleY:box.height !== undefined ? box.height / (o.radius*2) : s }); }
+          else { const sx = box.width / (o.width||1); o.set({ scaleX:sx, scaleY:box.height !== undefined ? box.height / (o.height||1) : (tipo === "imagem" ? sx : o.scaleY) }); }
+        } else if(box.height !== undefined && tipo !== "texto"){ o.set({ scaleY:box.height / (o.height||1) }); }
+        if(tipo === "texto"){ try{ o.initDimensions(); }catch(_){ } if(p.text !== undefined && o.alturaMax) _eaCaberTexto(o); }
+        if(box.left !== undefined || box.top !== undefined) _eaMoverCaixa(o, box.left !== undefined ? box.left : NaN, box.top !== undefined ? box.top : NaN);
+        o.dirty = true; o.setCoords(); feitos++;
+      } else if(c.op === "novo_texto"){
+        const p = c.props || {};
+        const fonte = p.fontFamily || (kit && kit.kit && kit.kit.fonte) || "Montserrat"; await _eaCarregarFonte(fonte);
+        const t = new lib.Textbox(String(p.text || "Texto"), { left:Number(p.left)||W*0.1, top:Number(p.top)||H*0.1, width:Number(p.width)||W*0.8, fontSize:Number(p.fontSize)||Math.round(W/16),
+          fontFamily:fonte, fontWeight:p.fontWeight || "700", fill:p.fill || "#0f172a", textAlign:p.textAlign || "left", lineHeight:Number(p.lineHeight)||1.12,
+          id:_eaUid(), espaco:c.espaco || "", nome:c.espaco ? (_EA_ESPACOS.find(function(e){ return e.id === c.espaco; }) || {}).label || "" : "" });
+        if(p.backgroundColor) t.set("backgroundColor", p.backgroundColor);
+        fc.add(t); feitos++;
+      } else if(c.op === "nova_forma"){
+        const p = c.props || {};
+        const o = c.forma === "circulo"
+          ? new lib.Circle({ left:Number(p.left)||0, top:Number(p.top)||0, radius:Math.max(2, (Number(p.width)||200)/2), fill:p.fill || "#7c3aed", opacity:p.opacity === undefined ? 1 : Number(p.opacity), strokeWidth:0, id:_eaUid() })
+          : new lib.Rect({ left:Number(p.left)||0, top:Number(p.top)||0, width:Number(p.width)||200, height:Number(p.height)||100, fill:p.fill || "#7c3aed", rx:Number(p.rx)||0, ry:Number(p.rx)||0, opacity:p.opacity === undefined ? 1 : Number(p.opacity), strokeWidth:0, id:_eaUid() });
+        fc.add(o); feitos++;
+      } else if(c.op === "remover"){
+        const o = achar(c.id); if(o && !o.bloqueado){ fc.remove(o); feitos++; }
+      } else if(c.op === "ordem"){
+        const o = achar(c.id); if(!o) continue;
+        if(c.para === "frente") fc.bringObjectToFront(o); else if(c.para === "tras") fc.sendObjectToBack(o); else if(c.para === "subir") fc.bringObjectForward(o); else fc.sendObjectBackwards(o);
+        feitos++;
+      } else if(c.op === "fundo"){
+        const bg = fc.getObjects().find(function(o){ return o.espaco === "BACKGROUND" && _eaTipo(o) !== "imagem" && !o.bloqueado; });
+        if(bg) bg.set("fill", c.cor); else fc.backgroundColor = c.cor;
+        feitos++;
+      }
+    }catch(_){ /* comando que não serviu é pulado */ }
+  }
+  fc.requestRenderAll();
+  return feitos;
+}
+
+/* prévia de uma variação: aplica os comandos numa cópia fora da tela */
+async function _eaPreviaVariacao(lib, json, W, H, comandos, kit, largura){
+  const el = document.createElement("canvas");
+  const sc = new lib.StaticCanvas(el, { width:W, height:H, enableRetinaScaling:false, renderOnAddRemove:false });
+  try{
+    await _eaCarregarJson(sc, json);
+    await _eaAplicarComandos(lib, sc, W, H, comandos, kit);
+    sc.renderAll();
+    return sc.toDataURL({ format:"jpeg", quality:0.8, multiplier:(largura||260) / W });
+  } finally { try{ sc.dispose(); }catch(_){ } }
+}
+
+/* reencaixe para outro formato (Feed ↔ Story ↔ Quadrado): regras por espaço, sem IA */
+function _eaReencaixar(json, W1, H1, W2, H2){
+  const j = JSON.parse(JSON.stringify(json));
+  const s = Math.min(W2 / W1, H2 / H1);
+  const dx = (W2 - W1 * s) / 2;
+  (j.objects || []).forEach(function(o){
+    const w = (o.width||0) * (o.scaleX||1), h = (o.height||0) * (o.scaleY||1);
+    const cobreTudo = o.espaco === "BACKGROUND" || (w >= W1 * 0.9 && h >= H1 * 0.9);
+    if(cobreTudo){
+      const k = Math.max(W2 / Math.max(1, w), H2 / Math.max(1, h));
+      o.scaleX = (o.scaleX||1) * k; o.scaleY = (o.scaleY||1) * k;
+      o.left = (W2 - w * k) / 2; o.top = (H2 - h * k) / 2;
+      if(o.clipPath && o.clipPath.absolutePositioned){ o.clipPath.left = 0; o.clipPath.top = 0; o.clipPath.width = W2; o.clipPath.height = H2; o.clipPath.scaleX = 1; o.clipPath.scaleY = 1; }
+      return;
+    }
+    const cy = (o.top||0) + h / 2, rel = cy / H1;
+    const topo = o.espaco === "LOGO" || (rel < 0.34 && ["CTA","PHONE","LOCATION"].indexOf(o.espaco) < 0);
+    const base = ["CTA","PHONE","LOCATION"].indexOf(o.espaco) >= 0 || rel > 0.66;
+    o.scaleX = (o.scaleX||1) * s; o.scaleY = (o.scaleY||1) * s;
+    o.left = dx + (o.left||0) * s;
+    if(topo) o.top = (o.top||0) * s;
+    else if(base) o.top = H2 - (H1 - (o.top||0)) * s;
+    else o.top = rel * H2 - (h * s) / 2;
+    if(o.clipPath && o.clipPath.absolutePositioned){
+      const c = o.clipPath, cw = (c.width||0) * (c.scaleX||1), ch = (c.height||0) * (c.scaleY||1), ccy = (c.top||0) + ch/2;
+      c.scaleX = (c.scaleX||1) * s; c.scaleY = (c.scaleY||1) * s; c.left = dx + (c.left||0) * s;
+      c.top = topo ? (c.top||0) * s : base ? H2 - (H1 - (c.top||0)) * s : (ccy / H1) * H2 - (ch * s)/2;
+      void cw;
+    }
+  });
+  return j;
+}
+
+/* ═══ PAINEL: IA ═══ */
+function _EaPainelIA({ a, sel }){
+  const [pedido, setPedido] = useState("");
+  const [ocupado, setOcupado] = useState("");
+  const [resp, setResp] = useState(null);
+  const [vars, setVars] = useState(null);
+  const [nVar, setNVar] = useState(3);
+  const [gravando, setGravando] = useState(false);
+  const [resumo, setResumo] = useState(null);
+  const recRef = useRef(null);
+  useEffect(function(){ _eaRpc("arte_resumo", {}).then(setResumo).catch(function(){}); }, [resp, vars]);
+  const base = function(){ return { projeto_id:a.projetoId, client_id:(a.proj && a.proj.client_id) || "", unidade:(a.proj && a.proj.unidade) || "", arte:_eaResumoIA(a.fc, a.W, a.H) }; };
+  const aplicar = async function(comandos){
+    const fc = a.fc;
+    a.pausar(true);
+    const n = await _eaAplicarComandos(a.lib, fc, a.W, a.H, comandos, a.kit);
+    a.pausar(false); a.mudou();
+    return n;
+  };
+  const pedir = async function(){
+    if(pedido.trim().length < 3){ _eaToast("info", "Escreva (ou fale) o que quer mudar"); return; }
+    setOcupado("pedir"); setResp(null);
+    try{
+      const r = await _eaFn(Object.assign({ acao:"pedir", pedido:pedido.trim() }, base()));
+      const n = await aplicar(r.comandos || []);
+      setResp({ ok:true, texto:r.explicacao || "", n:n, custo:r.custo_brl, desc:r.descartados || 0 });
+      setPedido("");
+    }catch(e){ setResp({ ok:false, texto:_eaErro(e) }); }
+    setOcupado("");
+  };
+  const variacoes = async function(){
+    setOcupado("var"); setVars(null);
+    try{
+      const r = await _eaFn(Object.assign({ acao:"variacoes", n:nVar, pedido:pedido.trim() || null }, base()));
+      const json = _eaJsonPagina(a.fc), lista = [];
+      for(const v of (r.variacoes || [])){ let img = null; try{ img = await _eaPreviaVariacao(a.lib, json, a.W, a.H, v.comandos, a.kit, 240); }catch(_){ } lista.push(Object.assign({ img:img }, v)); }
+      setVars({ lista:lista, custo:r.custo_brl, base:json });
+    }catch(e){ setVars({ erro:_eaErro(e) }); }
+    setOcupado("");
+  };
+  const usarVariacao = async function(v, comoPagina){
+    if(comoPagina){
+      await a.novaPagina(a.W, a.H, true);
+      await aplicar(v.comandos); a.toque();
+      _eaToast("success", "Variação \"" + v.nome + "\" virou uma página nova");
+    } else { await aplicar(v.comandos); _eaToast("success", "Variação aplicada (Ctrl+Z desfaz)"); }
+  };
+  const textosDoCard = async function(){
+    const t = a.proj && a.proj.task_id ? (a.tasks || []).find(function(x){ return String(x.id) === String(a.proj.task_id); }) : null;
+    if(!t){ _eaToast("info", "Esta arte não está ligada a um card"); return; }
+    const brief = _eaSemHtml(t.description || "").slice(0, 1400), leg = _eaSemHtml(t.caption || "").slice(0, 500);
+    if(!brief && !leg){ _eaToast("info", "O card não tem briefing nem legenda"); return; }
+    setPedido("Escreva os textos da arte (título, subtítulo, benefício e CTA que existirem) a partir deste briefing do card \"" + t.title + "\":\n" + brief + (leg ? "\nLegenda: " + leg : ""));
+  };
+  const falar = async function(){
+    if(gravando){ try{ recRef.current && recRef.current.stop(); }catch(_){ } return; }
+    try{
+      const st = await navigator.mediaDevices.getUserMedia({ audio:true });
+      const tipos = ["audio/webm;codecs=opus","audio/webm","audio/ogg;codecs=opus","audio/mp4"];
+      const mime = tipos.find(function(t){ try{ return MediaRecorder.isTypeSupported(t); }catch(_){ return false; } }) || "";
+      const rec = new MediaRecorder(st, mime ? { mimeType:mime } : undefined), partes = [];
+      recRef.current = rec;
+      rec.ondataavailable = function(e){ if(e.data && e.data.size) partes.push(e.data); };
+      rec.onstop = async function(){
+        st.getTracks().forEach(function(t){ t.stop(); }); setGravando(false);
+        const blob = new Blob(partes, { type:(rec.mimeType || "audio/webm") });
+        if(blob.size < 1500){ _eaToast("info", "Não ouvi nada"); return; }
+        setOcupado("voz");
+        try{
+          const b64 = await new Promise(function(ok, err){ const fr = new FileReader(); fr.onload = function(){ ok(String(fr.result).split(",")[1] || ""); }; fr.onerror = err; fr.readAsDataURL(blob); });
+          const r = await _eaFn({ acao:"transcrever", audio:b64, mime:blob.type, projeto_id:a.projetoId, client_id:(a.proj && a.proj.client_id) || "" });
+          setPedido(function(p){ return (p ? p + " " : "") + (r.texto || ""); });
+        }catch(e){ _eaToast("error", "Não entendi o áudio: " + _eaErro(e)); }
+        setOcupado("");
+      };
+      rec.start(); setGravando(true);
+      setTimeout(function(){ try{ if(rec.state === "recording") rec.stop(); }catch(_){ } }, 120000);
+    }catch(e){ _eaToast("error", "Sem microfone: " + _eaErro(e)); }
+  };
+  const ensinar = async function(){
+    if(!window.confirm("A IA vai olhar esta arte e sugerir regras de estilo para as próximas artes deste cliente. Elas só valem depois que um sócio aprovar. Seguir? (≈ R$ 0,05)")) return;
+    setOcupado("aprender");
+    try{ const r = await _eaFn({ acao:"aprender", projeto_id:a.projetoId, client_id:(a.proj && a.proj.client_id) || "", unidade:(a.proj && a.proj.unidade) || "", arte:_eaResumoIA(a.fc, a.W, a.H) });
+      _eaToast("success", r.regras ? (r.regras + " regra(s) esperando um sócio em IA que aprende") : "A IA não achou regra nova nesta arte"); }
+    catch(e){ _eaToast("error", _eaErro(e)); }
+    setOcupado("");
+  };
+  const reencaixar = function(f){
+    const json = _eaJsonPagina(a.fc);
+    const novo = _eaReencaixar(json, a.W, a.H, f.w, f.h);
+    const d = a.doc(); const atual = a.pagina();
+    d.paginas.push({ id:_eaUid(), nome:f.label + " (de " + (atual ? atual.nome : "página") + ")", largura:f.w, altura:f.h, fabric:novo });
+    a.abrirPagina(d.paginas.length - 1);
+    _eaToast("success", "Nova página " + f.label + ". Confira e ajuste o que precisar (ou peça à IA).");
+  };
+  const bt = { font:"inherit", padding:"8px 12px", borderRadius:9, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12.5, fontWeight:700, display:"inline-flex", alignItems:"center", gap:6 };
+  return <div>
+    <div style={{fontWeight:800,fontSize:14,marginBottom:4,display:"flex",alignItems:"center",gap:6}}><_EaIc n="ia" s={17}/> Pedir à IA</div>
+    <div style={{fontSize:12,color:_EA.sub,marginBottom:8}}>{sel.length ? "Vale para o que está selecionado (" + sel.length + ")." : "Vale para a arte toda. Selecione objetos para a IA mexer só neles."} A IA mexe nos objetos de verdade; Ctrl+Z desfaz.</div>
+    <textarea value={pedido} onChange={function(e){ setPedido(e.target.value); }} rows={4} placeholder="Ex.: deixa o título maior e amarelo, põe o WhatsApp embaixo do botão, fundo na cor da marca"
+      style={{font:"inherit",width:"100%",padding:"8px 10px",borderRadius:10,border:"1px solid "+_EA.linha,fontSize:13,resize:"vertical"}}/>
+    <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+      <button disabled={!!ocupado} onClick={pedir} style={Object.assign({}, bt, {background:_EA.roxo,color:"#fff",border:0,opacity:ocupado?.6:1})}>{ocupado === "pedir" ? "Pensando…" : "Pedir"}</button>
+      <button disabled={!!ocupado && ocupado !== "voz"} onClick={falar} style={Object.assign({}, bt, gravando ? {background:_EA.vermClaro,color:_EA.verm,borderColor:"#fecaca"} : {})}><_EaIc n="mic" s={15}/>{gravando ? "Parar" : ocupado === "voz" ? "Ouvindo…" : "Falar"}</button>
+      {a.proj && a.proj.task_id && <button disabled={!!ocupado} onClick={textosDoCard} style={bt}>Textos do briefing</button>}
+    </div>
+    <div style={{fontSize:11.5,color:_EA.fraco,marginTop:6}}>≈ R$ 0,03 a 0,15 por pedido{resumo ? " · no mês " + _eaBrl(resumo.gasto_mes) + " de " + _eaBrl(resumo.limite_mes) : ""}</div>
+    {resp && <div style={{marginTop:10,padding:10,borderRadius:10,background:resp.ok?_EA.verdeClaro:_EA.vermClaro,color:resp.ok?_EA.verde:_EA.verm,fontSize:12.5}}>
+      {resp.ok ? <span>✓ {resp.n} mudança(s). {resp.texto} <span style={{color:_EA.sub}}>({_eaBrl(resp.custo)})</span>{resp.desc ? " · " + resp.desc + " comando(s) ignorado(s) por segurança" : ""}</span> : resp.texto}
+    </div>}
+
+    <div style={{height:1,background:_EA.linha2,margin:"16px 0"}}/>
+    <div style={{fontWeight:800,fontSize:14,marginBottom:4}}>Variações</div>
+    <div style={{fontSize:12,color:_EA.sub,marginBottom:8}}>A IA propõe versões diferentes desta página (cores, hierarquia, posição). Use o campo acima para dar um foco, se quiser.</div>
+    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+      <select value={nVar} onChange={function(e){ setNVar(Number(e.target.value)); }} style={{font:"inherit",padding:"7px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:12.5}}>
+        {[2,3,4].map(function(n){ return <option key={n} value={n}>{n} variações</option>; })}
+      </select>
+      <button disabled={!!ocupado} onClick={variacoes} style={bt}>{ocupado === "var" ? "Criando…" : "Criar variações"}</button>
+    </div>
+    {vars && vars.erro && <div style={{marginTop:8,padding:8,borderRadius:8,background:_EA.vermClaro,color:_EA.verm,fontSize:12.5}}>{vars.erro}</div>}
+    {vars && vars.lista && <div style={{marginTop:10}}>
+      <div style={{fontSize:11.5,color:_EA.sub,marginBottom:6}}>Custo: {_eaBrl(vars.custo)}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {vars.lista.map(function(v, i){ return <div key={i} style={{border:"1px solid "+_EA.linha,borderRadius:10,overflow:"hidden",background:"#fff"}}>
+          {v.img ? <img src={v.img} alt="" style={{width:"100%",display:"block",background:_EA.palco}}/> : <div style={{padding:20,fontSize:11,color:_EA.fraco}}>sem prévia</div>}
+          <div style={{padding:"6px 7px"}}>
+            <div style={{fontSize:12,fontWeight:800,marginBottom:4}}>{v.nome}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              <button onClick={function(){ usarVariacao(v, false); }} style={Object.assign({}, bt, {padding:"4px 7px",fontSize:11.5})}>Usar</button>
+              <button onClick={function(){ usarVariacao(v, true); }} style={Object.assign({}, bt, {padding:"4px 7px",fontSize:11.5})}>Nova página</button>
+            </div>
+          </div>
+        </div>; })}
+      </div>
+    </div>}
+
+    <div style={{height:1,background:_EA.linha2,margin:"16px 0"}}/>
+    <div style={{fontWeight:800,fontSize:14,marginBottom:4,display:"flex",alignItems:"center",gap:6}}><_EaIc n="reencaixar" s={17}/> Outro formato</div>
+    <div style={{fontSize:12,color:_EA.sub,marginBottom:8}}>Cria uma página nova no outro tamanho: logo fica em cima, CTA/telefone embaixo, o fundo cobre tudo. Sem custo.</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {_EA_FORMATOS.filter(function(f){ return !(f.w === a.W && f.h === a.H); }).slice(0,4).map(function(f){ return <button key={f.id} onClick={function(){ reencaixar(f); }} style={bt}>{f.label}</button>; })}
+    </div>
+
+    <div style={{height:1,background:_EA.linha2,margin:"16px 0"}}/>
+    <button disabled={!!ocupado} onClick={ensinar} style={bt}>{ocupado === "aprender" ? "Estudando…" : "Ensinar a IA com esta arte"}</button>
+    <div style={{fontSize:11.5,color:_EA.fraco,marginTop:6}}>As regras aparecem em "IA que aprende" e só valem depois que um sócio aprova.</div>
+  </div>;
+}
+
+/* ═══ ARQUIVOS: abrir SVG / PSD / AI / PDF / imagens · exportar PNG / JPG / PDF / SVG / PSD · mandar para o card ═══ */
+
+/* roda uma função com a página no tamanho real (zoom 1), e volta como estava */
+async function _eaTamanhoReal(fc, W, H, fn){
+  const z = fc.getZoom(), vw = fc.getWidth(), vh = fc.getHeight(), ativo = fc.getActiveObject();
+  fc.discardActiveObject();
+  fc.setDimensions({ width:W, height:H }); fc.setZoom(1); fc.renderAll();
+  try{ return await fn(); }
+  finally{ fc.setDimensions({ width:vw, height:vh }); fc.setZoom(z); if(ativo) try{ fc.setActiveObject(ativo); }catch(_){ } fc.requestRenderAll(); }
+}
+function _eaCanvasBlob(cv, tipo, q){ return new Promise(function(ok){ cv.toBlob(function(b){ ok(b); }, tipo || "image/png", q || 0.92); }); }
+function _eaExt(nome){ return (String(nome||"").match(/\.([a-z0-9]+)$/i) || [])[1] ? String(nome).match(/\.([a-z0-9]+)$/i)[1].toLowerCase() : ""; }
+
+async function _eaAbrirArquivos(a, arquivos){
+  for(const f of Array.from(arquivos || [])){
+    const ext = _eaExt(f.name);
+    try{
+      if(ext === "psd" || ext === "psb") await _eaAbrirPsd(a, f);
+      else if(ext === "svg" || f.type === "image/svg+xml") await _eaAbrirSvg(a, await f.text(), f.name);
+      else if(ext === "pdf" || ext === "ai" || f.type === "application/pdf") await _eaAbrirPdf(a, f);
+      else if(/^image\//.test(f.type)) await a.subirImagem([f]);
+      else _eaToast("warning", f.name + ": tipo de arquivo que o editor não abre");
+    }catch(e){ _eaToast("error", "Não abri " + f.name + ": " + _eaErro(e)); }
+  }
+}
+
+/* textos do SVG (Inkscape/Illustrator põem letra por letra): junta em linhas, devolve os espaços e vira texto editável */
+function _eaSvgArrumarTextos(texto){
+  try{
+    const doc = new DOMParser().parseFromString(texto, "image/svg+xml");
+    if(doc.querySelector("parsererror")) return texto;
+    const cv = document.createElement("canvas").getContext("2d");
+    const estilo = function(el, k){ const m = String(el.getAttribute("style") || "").match(new RegExp("(?:^|;)\\s*" + k + "\\s*:\\s*([^;]+)")); return m ? m[1].trim() : (el.getAttribute(k) || ""); };
+    Array.from(doc.querySelectorAll("text")).forEach(function(t){
+      const tspans = Array.from(t.querySelectorAll("tspan"));
+      if(!tspans.length) return;
+      const novos = [];
+      tspans.forEach(function(ts){
+        const xs = String(ts.getAttribute("x") || t.getAttribute("x") || "0").trim().split(/[\s,]+/).map(Number);
+        const ys = String(ts.getAttribute("y") || t.getAttribute("y") || "0").trim().split(/[\s,]+/).map(Number);
+        let s = ts.textContent || "";
+        const fs = parseFloat(estilo(ts, "font-size") || estilo(t, "font-size")) || 16;
+        const fam = (estilo(ts, "font-family") || estilo(t, "font-family") || "sans-serif").replace(/['"]/g, "");
+        const peso = estilo(ts, "font-weight") || estilo(t, "font-weight") || "normal";
+        if(xs.length > 1 && xs.length === s.length){
+          cv.font = peso + " " + fs + "px \"" + fam + "\", sans-serif";
+          let out = s[0];
+          for(let i = 1; i < s.length; i++){
+            const folga = (xs[i] - xs[i-1]) - cv.measureText(s[i-1]).width;
+            if(folga > fs * 0.18 && s[i-1] !== " " && s[i] !== " ") out += " ";
+            out += s[i];
+          }
+          s = out;
+        }
+        if(!s.trim()) return;
+        const nt = t.cloneNode(false);
+        nt.removeAttribute("id"); nt.setAttribute("x", String(xs[0] || 0)); nt.setAttribute("y", String(ys[0] || 0));
+        if(ts.getAttribute("style")) nt.setAttribute("style", (t.getAttribute("style") || "") + ";" + ts.getAttribute("style"));
+        nt.textContent = s;
+        novos.push(nt);
+      });
+      novos.forEach(function(n){ t.parentNode.insertBefore(n, t); });
+      t.parentNode.removeChild(t);
+    });
+    return new XMLSerializer().serializeToString(doc);
+  }catch(_){ return texto; }
+}
+function _eaTextosEditaveis(lib, objs){
+  return objs.map(function(o){
+    const tp = String(o && o.type || "").toLowerCase();
+    if(tp !== "text" && tp !== "fabrictext" && tp !== "i-text") return o;
+    try{
+      o.setCoords();
+      const c = _eaCaixa(o), fs = (o.fontSize || 16) * (o.scaleY || 1);
+      return new lib.Textbox(String(o.text || ""), { left:c.left, top:c.top, width:Math.max(20, c.width * 1.08), fontSize:fs, fontFamily:String(o.fontFamily || "Inter").split(",")[0].replace(/["']/g,""),
+        fontWeight:o.fontWeight || "normal", fontStyle:o.fontStyle || "normal", fill:o.fill || "#000000", charSpacing:o.charSpacing || 0, lineHeight:1.1, angle:o.angle || 0,
+        opacity:o.opacity === undefined ? 1 : o.opacity, id:_eaUid(), nome:"Texto: " + String(o.text || "").slice(0, 30) });
+    }catch(_){ return o; }
+  });
+}
+
+/* SVG → objetos editáveis. O que o Fabric não entende (máscara, padrão, filtro, texto em curva) vira imagem, com aviso. */
+async function _eaAbrirSvg(a, texto, nome, opt){
+  const lib = a.lib;
+  const falta = [];
+  [["mask","máscara"],["pattern","padrão"],["filter","filtro"],["textPath","texto em curva"],["foreignObject","conteúdo HTML"]].forEach(function(x){
+    if(new RegExp("<" + x[0] + "\\b", "i").test(texto)) falta.push(x[1]); });
+  const r = await lib.loadSVGFromString(_eaSvgArrumarTextos(texto));
+  const fontes = Array.from(new Set((r.objects || []).filter(function(o){ return o && o.fontFamily; }).map(function(o){ return String(o.fontFamily).split(",")[0].replace(/["']/g,""); })));
+  await Promise.all(fontes.map(_eaCarregarFonte));
+  const objs = _eaTextosEditaveis(lib, (r.objects || []).filter(Boolean));
+  if(opt && opt.novaPagina){      // arquivo convertido no PC: vira uma página do tamanho dele, objetos no lugar certo
+    const op = r.options || {}, W = Math.round(Number(op.viewBoxWidth || op.width) || 1080), H = Math.round(Number(op.viewBoxHeight || op.height) || 1350);
+    const d = a.doc();
+    d.paginas.push({ id:_eaUid(), nome:String(nome || "Convertido").slice(0,40), largura:W, altura:H, fabric:{ objects:[], background:"#ffffff" } });
+    await a.abrirPagina(d.paginas.length - 1);
+    a.pausar(true);
+    objs.forEach(function(o){ o.set({ id:o.id || _eaUid(), origem:"pc" }); a.fc.add(o); });
+    a.pausar(false); a.mudou(); a.zoomCaber();
+    return objs.length;
+  }
+  let g = null;
+  if(objs.length){
+    g = lib.util.groupSVGElements(objs, r.options || {});
+    const s = Math.min((a.W*0.8) / Math.max(1, g.width||1), (a.H*0.8) / Math.max(1, g.height||1));
+    g.set({ scaleX:s, scaleY:s, id:_eaUid(), nome:(nome || "SVG").replace(/\.svg$/i,""), origem:"svg" });
+    g.set({ left:(a.W - (g.width||0)*s)/2, top:(a.H - (g.height||0)*s)/2 });
+  }
+  if(falta.length){
+    const blob = new Blob([texto], { type:"image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    try{
+      const im = await new Promise(function(ok, err){ const i = new Image(); i.onload = function(){ ok(i); }; i.onerror = function(){ err(new Error("SVG inválido")); }; i.src = url; });
+      const w0 = im.naturalWidth || 1000, h0 = im.naturalHeight || 1000, k = Math.min(3000 / Math.max(w0, h0), 3);
+      const cv = document.createElement("canvas"); cv.width = Math.round(w0 * k); cv.height = Math.round(h0 * k);
+      cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+      const up = await _eaSubir(await _eaCanvasBlob(cv), "arte/" + a.projetoId, "svg-imagem.png");
+      const img = await _eaImagemDeUrl(lib, up.url, { nome:(nome||"SVG") + " (imagem)", naoEditavel:true, origem:"svg",
+        aviso:"O SVG tinha " + falta.join(", ") + ", que o editor não desenha igual. Esta camada é a imagem fiel; a versão editável está escondida nas camadas." });
+      const s = g ? (g.width*g.scaleX) / img.width : Math.min((a.W*0.8)/img.width, (a.H*0.8)/img.height);
+      img.set({ scaleX:s, scaleY:s, left:g ? g.left : (a.W - img.width*s)/2, top:g ? g.top : (a.H - img.height*s)/2 });
+      if(g){ g.visible = false; a.adicionar(g, false); }
+      a.adicionar(img);
+      a.setAvisos([(nome||"SVG") + ": tinha " + falta.join(", ") + " — entrou como imagem fiel; a parte editável ficou escondida em Camadas."]);
+    } finally { URL.revokeObjectURL(url); }
+  } else if(g){ a.adicionar(g); }
+  else throw new Error("o SVG não tem nada que o editor consiga desenhar");
+  a.mudou();
+}
+
+/* PSD → página nova do tamanho do PSD, camada por camada */
+function _eaFontePsd(nome){
+  const n = String(nome || "").replace(/MT$|PSMT$/,"");
+  const m = n.match(/^([A-Za-z0-9]+?)(?:[-_ ]?(Thin|ExtraLight|UltraLight|Light|Regular|Book|Medium|SemiBold|DemiBold|Bold|ExtraBold|UltraBold|Heavy|Black)(Italic|It)?)?$/i);
+  const pesos = { thin:"100", extralight:"200", ultralight:"200", light:"300", regular:"400", book:"400", medium:"500", semibold:"600", demibold:"600", bold:"700", extrabold:"800", ultrabold:"800", heavy:"900", black:"900" };
+  let fam = (m ? m[1] : n.split("-")[0]) || "Montserrat";
+  fam = fam.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/OpenSans/i,"Open Sans");
+  return { familia:fam, peso:m && m[2] ? pesos[m[2].toLowerCase()] || "400" : "400", italico:!!(m && m[3]) };
+}
+const _EA_MISTURA = { "multiply":"multiply", "screen":"screen", "overlay":"overlay", "darken":"darken", "lighten":"lighten", "color dodge":"color-dodge", "color burn":"color-burn",
+  "hard light":"hard-light", "soft light":"soft-light", "difference":"difference", "exclusion":"exclusion", "hue":"hue", "saturation":"saturation", "color":"color", "luminosity":"luminosity" };
+async function _eaAbrirPsd(a, arquivo){
+  const ag = await _eaAgPsd();
+  _eaToast("info", "Abrindo " + arquivo.name + "…");
+  const buf = await arquivo.arrayBuffer();
+  const psd = ag.readPsd(buf, { skipThumbnail:true, skipCompositeImageData:false, skipLayerImageData:false, useImageData:false, logMissingFeatures:false });
+  const W = psd.width, H = psd.height, lib = a.lib, avisos = [], objs = [];
+  if(psd.colorMode !== undefined && psd.colorMode !== 3) avisos.push(arquivo.name + ": o PSD não é RGB (é CMYK ou outro). As cores foram convertidas para RGB.");
+  const camadas = [];
+  (function andar(lista, escondido, prefixo){
+    (lista || []).forEach(function(l){
+      if(l.children){ andar(l.children, escondido || !!l.hidden, (prefixo ? prefixo + " › " : "") + (l.name || "Grupo")); return; }
+      camadas.push({ l:l, escondido:escondido || !!l.hidden, nome:(prefixo ? prefixo + " › " : "") + (l.name || "Camada") });
+    });
+  })(psd.children, false, "");
+  let n = 0;
+  for(const c of camadas){
+    const l = c.l; n++;
+    if(n % 5 === 0) _eaToast("info", "Camadas: " + n + " de " + camadas.length);
+    const base = { nome:c.nome.slice(0,80), visible:!c.escondido, opacity:l.opacity === undefined ? 1 : l.opacity, origem:"psd" };
+    if(l.blendMode && l.blendMode !== "normal" && l.blendMode !== "pass through"){ const gco = _EA_MISTURA[l.blendMode]; if(gco) base.globalCompositeOperation = gco; else avisos.push(c.nome + ": modo de mistura \"" + l.blendMode + "\" virou normal."); }
+    const temEfeito = !!(l.effects && Object.keys(l.effects).some(function(k){ const v = l.effects[k]; return v && (Array.isArray(v) ? v.some(function(x){ return x && x.enabled !== false; }) : v.enabled !== false); }));
+    // camada de texto → texto editável (se a fonte existir)
+    if(l.text && l.text.text && !temEfeito){
+      const st = (l.text.style || {}), fo = _eaFontePsd(st.font && st.font.name);
+      const ok = await _eaCarregarFonte(fo.familia);
+      if(ok){
+        const tr = l.text.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
+        const cor = st.fillColor ? "#" + [st.fillColor.r, st.fillColor.g, st.fillColor.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : "#000000";
+        const al = { left:"left", center:"center", right:"right", justifyLeft:"justify", justifyCenter:"justify", justifyRight:"justify", justifyAll:"justify" }[(l.text.paragraphStyle && l.text.paragraphStyle.justification) || "left"] || "left";
+        const larg = Math.max(20, ((l.right||0) - (l.left||0)) * 1.08);
+        const t = new lib.Textbox(String(l.text.text).replace(/\r/g, "\n").replace(/\u0003/g, "\n"), Object.assign({}, base, { left:l.left||0, top:l.top||0, width:larg,
+          fontFamily:fo.familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
+          lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() }));
+        objs.push(t);
+        continue;
+      }
+      avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — a camada ficou como imagem (envie a fonte do cliente ou troque por outra).");
+    }
+    if(!l.canvas || !l.canvas.width || !l.canvas.height) { if(l.adjustment) avisos.push(c.nome + ": camada de ajuste do Photoshop não existe aqui (ficou de fora)."); continue; }
+    let cv = l.canvas;
+    if(l.mask && l.mask.canvas && !l.mask.disabled){
+      const k = document.createElement("canvas"); k.width = cv.width; k.height = cv.height;
+      const cx = k.getContext("2d"); cx.drawImage(cv, 0, 0);
+      cx.globalCompositeOperation = "destination-in"; cx.drawImage(l.mask.canvas, (l.mask.left||0) - (l.left||0), (l.mask.top||0) - (l.top||0));
+      cv = k;
+    }
+    const up = await _eaSubir(await _eaCanvasBlob(cv), "arte/" + a.projetoId, "psd.png");
+    const extra = Object.assign({}, base, { left:l.left||0, top:l.top||0 });
+    if(temEfeito || l.text){ extra.naoEditavel = true; extra.aviso = temEfeito ? "Tinha efeito do Photoshop (sombra, brilho…): entrou como imagem congelada." : "Texto com fonte que não temos: entrou como imagem."; }
+    if(temEfeito) avisos.push(c.nome + ": tinha efeito (sombra/brilho…) — entrou como imagem, não editável.");
+    if(l.clipping) avisos.push(c.nome + ": usava máscara de recorte do Photoshop — confira o resultado.");
+    const img = await _eaImagemDeUrl(lib, up.url, extra);
+    objs.push(img);
+  }
+  const d = a.doc();
+  const pag = { id:_eaUid(), nome:arquivo.name.replace(/\.[^.]+$/,"").slice(0,40), largura:W, altura:H, fabric:{ objects:[], background:"#ffffff" } };
+  d.paginas.push(pag);
+  await a.abrirPagina(d.paginas.length - 1);
+  a.pausar(true); objs.forEach(function(o){ a.fc.add(o); }); a.pausar(false);
+  a.mudou(); a.zoomCaber();
+  if(avisos.length) a.setAvisos(avisos);
+  _eaToast("success", arquivo.name + ": " + objs.length + " camada(s) abertas" + (avisos.length ? " (veja os avisos)" : ""));
+}
+
+/* PDF e AI (salvo "compatível com PDF") → página(s) com a imagem fiel + textos (escondidos) para usar */
+async function _eaAbrirPdf(a, arquivo){
+  const pdfjs = await _eaPdfJs();
+  const buf = new Uint8Array(await arquivo.arrayBuffer());
+  let pdf;
+  try{ pdf = await pdfjs.getDocument({ data:buf, isEvalSupported:false }).promise; }
+  catch(e){ if(_eaExt(arquivo.name) === "ai") throw new Error("este .ai não foi salvo com \"Criar arquivo compatível com PDF\" no Illustrator — sem isso nenhum programa fora do Illustrator abre"); throw e; }
+  const total = Math.min(pdf.numPages, 10), lib = a.lib;
+  if(pdf.numPages > 10) a.setAvisos([arquivo.name + ": tem " + pdf.numPages + " páginas; abri as 10 primeiras."]);
+  const d = a.doc();
+  for(let i = 1; i <= total; i++){
+    const pg = await pdf.getPage(i);
+    const v1 = pg.getViewport({ scale:1 });
+    const k = Math.min(2400 / Math.max(v1.width, v1.height), 4), vp = pg.getViewport({ scale:k });
+    const cv = document.createElement("canvas"); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+    await pg.render({ canvasContext:cv.getContext("2d"), viewport:vp, background:"rgba(0,0,0,0)" }).promise;
+    const up = await _eaSubir(await _eaCanvasBlob(cv), "arte/" + a.projetoId, "pdf.png");
+    const W = cv.width, H = cv.height;
+    const img = await _eaImagemDeUrl(lib, up.url, { left:0, top:0, nome:"Página " + i + " do arquivo (imagem)", naoEditavel:true, origem:"pdf",
+      aviso:"Arquivo PDF/AI entra como imagem fiel. Os textos estão nas camadas (escondidos) para você usar ou mostrar." });
+    const textos = [];
+    try{
+      const tc = await pg.getTextContent();
+      const linhas = {};
+      (tc.items || []).forEach(function(it){ if(!it.str || !it.str.trim()) return;
+        const m = pdfjs.Util.transform(vp.transform, it.transform), fs = Math.hypot(m[2], m[3]);
+        const y = Math.round((m[5] - fs) / Math.max(4, fs * 0.5));
+        const key = y + "|" + Math.round(fs);
+        (linhas[key] = linhas[key] || { x:m[4], y:m[5] - fs, fs:fs, partes:[] }).partes.push({ x:m[4], s:it.str });
+        linhas[key].x = Math.min(linhas[key].x, m[4]); });
+      Object.values(linhas).slice(0, 80).forEach(function(l){
+        const s = l.partes.sort(function(p, q){ return p.x - q.x; }).map(function(p){ return p.s; }).join(" ").replace(/\s+/g," ").trim();
+        if(s) textos.push(new lib.Textbox(s, { left:l.x, top:l.y, width:Math.max(60, W - l.x - 10), fontSize:Math.max(6, l.fs), fontFamily:"Inter", fill:"#0f172a",
+          visible:false, nome:"Texto do arquivo: " + s.slice(0, 30), origem:"pdf", id:_eaUid() }));
+      });
+    }catch(_){ }
+    d.paginas.push({ id:_eaUid(), nome:(arquivo.name.replace(/\.[^.]+$/,"") + (total > 1 ? " p" + i : "")).slice(0,40), largura:W, altura:H, fabric:{ objects:[], background:"#ffffff" } });
+    await a.abrirPagina(d.paginas.length - 1);
+    a.pausar(true); a.fc.add(img); textos.forEach(function(t){ a.fc.add(t); }); a.pausar(false);
+    a.mudou();
+  }
+  a.zoomCaber();
+  a.setAvisos([arquivo.name + ": entrou como imagem fiel" + (total > 1 ? " (" + total + " páginas)" : "") + ". Textos do arquivo ficaram escondidos em Camadas. Para tudo virar objeto editável, use o PC do escritório (Inkscape)."]);
+}
+
+/* tirar o fundo de uma foto de PESSOA (MediaPipe, grátis, roda no navegador) */
+let _eaSeg = null;
+function _eaSegmentador(){
+  if(_eaSeg) return _eaSeg;
+  _eaSeg = (async function(){
+    const base = _eaLib("mpseg");
+    await _eaScript(base + "selfie_segmentation.js", "SelfieSegmentation");
+    const s = new window.SelfieSegmentation({ locateFile:function(f){ return base + f; } });
+    s.setOptions({ modelSelection:0, selfieMode:false });
+    await s.initialize();
+    return s;
+  })();
+  _eaSeg.catch(function(){ _eaSeg = null; });
+  return _eaSeg;
+}
+async function _eaRemoverFundo(a, o){
+  if(!window.confirm("Tirar o fundo desta foto? Funciona bem com PESSOAS (é a IA grátis de recorte de pessoa). Para produto, o resultado pode ficar ruim. A foto original continua guardada.")) return;
+  try{
+    _eaToast("info", "Recortando…");
+    const seg = await _eaSegmentador();
+    const el = o.getElement(), w = el.naturalWidth || el.width, h = el.naturalHeight || el.height;
+    const mask = await new Promise(function(ok){ seg.onResults(function(r){ ok(r && r.segmentationMask); }); seg.send({ image:el }); setTimeout(function(){ ok(null); }, 8000); });
+    if(!mask) throw new Error("a IA de recorte não respondeu");
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const cx = cv.getContext("2d"); cx.drawImage(mask, 0, 0, w, h);
+    cx.globalCompositeOperation = "source-in"; cx.drawImage(el, 0, 0, w, h);
+    const up = await _eaSubir(await _eaCanvasBlob(cv), "arte/" + a.projetoId, "sem-fundo.png");
+    await o.setSrc(up.url, { crossOrigin:"anonymous" });
+    o.set({ nome:(o.nome || "Imagem") + " (sem fundo)" }); a.mudou();
+    _eaToast("success", "Fundo tirado (Ctrl+Z volta)");
+  }catch(e){ _eaToast("error", "Não recortei: " + _eaErro(e)); }
+}
+
+/* ─── exportar ─── */
+async function _eaExportarPagina(a, formato, escala){
+  const fc = a.fc, W = a.W, H = a.H;
+  return _eaTamanhoReal(fc, W, H, async function(){
+    if(formato === "svg"){ const s = fc.toSVG({ width:W, height:H, viewBox:{ x:0, y:0, width:W, height:H } }); return new Blob([s], { type:"image/svg+xml" }); }
+    const du = fc.toDataURL({ format:formato === "jpg" ? "jpeg" : "png", quality:0.93, multiplier:escala || 1, enableRetinaScaling:false });
+    return _eaDataUrlBlob(du);
+  });
+}
+async function _eaExportarPdf(a, vetor){
+  const jsp = await _eaJsPdf();
+  const d = a.doc(), atual = d.paginas.indexOf(a.pagina());
+  let doc = null;
+  for(let i = 0; i < d.paginas.length; i++){
+    const p = d.paginas[i];
+    if(i !== atual) await a.abrirPagina(i);
+    const W = p.largura, H = p.altura, ori = W > H ? "l" : "p";
+    if(!doc) doc = new jsp.jsPDF({ orientation:ori, unit:"px", format:[W, H], hotfixes:["px_scaling"], compress:true });
+    else doc.addPage([W, H], ori);
+    if(vetor && typeof doc.svg === "function"){
+      const s = await _eaTamanhoReal(a.fc, W, H, async function(){ return a.fc.toSVG({ width:W, height:H, viewBox:{ x:0, y:0, width:W, height:H } }); });
+      const el = new DOMParser().parseFromString(s, "image/svg+xml").documentElement;
+      await doc.svg(el, { x:0, y:0, width:W, height:H });
+    } else {
+      const du = await _eaTamanhoReal(a.fc, W, H, async function(){ return a.fc.toDataURL({ format:"jpeg", quality:0.95, multiplier:1, enableRetinaScaling:false }); });
+      doc.addImage(du, "JPEG", 0, 0, W, H, undefined, "FAST");
+    }
+  }
+  if(atual >= 0) await a.abrirPagina(atual);
+  return doc.output("blob");
+}
+async function _eaExportarPsd(a){
+  const ag = await _eaAgPsd(), fc = a.fc, W = a.W, H = a.H;
+  return _eaTamanhoReal(fc, W, H, async function(){
+    const filhos = [];
+    const fundo = document.createElement("canvas"); fundo.width = W; fundo.height = H;
+    const fx = fundo.getContext("2d"); fx.fillStyle = fc.backgroundColor || "#ffffff"; fx.fillRect(0, 0, W, H);
+    filhos.push({ name:"Fundo", left:0, top:0, canvas:fundo });
+    for(const o of fc.getObjects()){
+      let cv;
+      try{ cv = o.toCanvasElement({ multiplier:1, enableRetinaScaling:false }); }catch(_){ continue; }
+      if(!cv || !cv.width || !cv.height) continue;
+      const c = _eaCaixa(o);
+      const camada = { name:(o.nome || (o.espaco ? "[" + o.espaco + "] " : "") + _eaNomeTipo(o)).slice(0,60), left:Math.round(c.left), top:Math.round(c.top), canvas:cv,
+                       hidden:o.visible === false, opacity:o.opacity === undefined ? 1 : o.opacity };
+      if(_eaTipo(o) === "texto" && !o.angle){
+        const hex = String(typeof o.fill === "string" ? o.fill : "#000000").replace("#","");
+        const rgb = hex.length >= 6 ? { r:parseInt(hex.slice(0,2),16), g:parseInt(hex.slice(2,4),16), b:parseInt(hex.slice(4,6),16) } : { r:0, g:0, b:0 };
+        const fam = String(o.fontFamily || "Arial").split(",")[0].replace(/["']/g,"").replace(/\s+/g,"");
+        const peso = { "800":"ExtraBold", "900":"Black", "700":"Bold", "bold":"Bold", "600":"SemiBold" }[String(o.fontWeight)] || "Regular";
+        camada.text = { text:String(o.text || ""), transform:[1, 0, 0, 1, Math.round(c.left), Math.round(c.top + (o.fontSize||20) * (o.scaleY||1))],
+          style:{ font:{ name:fam + "-" + peso }, fontSize:(o.fontSize||20) * (o.scaleY||1), fillColor:rgb },
+          paragraphStyle:{ justification:{ left:"left", center:"center", right:"right", justify:"justifyAll" }[o.textAlign || "left"] || "left" } };
+      }
+      filhos.push(camada);
+    }
+    const comp = document.createElement("canvas"); comp.width = W; comp.height = H;
+    comp.getContext("2d").drawImage(fc.toCanvasElement(1), 0, 0, W, H);
+    const bin = ag.writePsd({ width:W, height:H, children:filhos, canvas:comp }, { generateThumbnail:false, invalidateTextLayers:true });
+    return new Blob([bin], { type:"image/vnd.adobe.photoshop" });
+  });
+}
+
+/* ═══ PAINEL: ARQUIVO ═══ */
+function _EaPainelArquivo({ a, onAbrirCard }){
+  const [ocupado, setOcupado] = useState("");
+  const [escala, setEscala] = useState(1);
+  const idAbrir = "ea-abrir-" + a.projetoId, idConv = "ea-conv-" + a.projetoId;
+  const [conv, setConv] = useState([]);
+  const convRef = useRef([]); convRef.current = conv;
+  const converterNoPc = async function(f){
+    try{
+      const ext = _eaExt(f.name);
+      const buf = new Uint8Array(await f.slice(0, 5).arrayBuffer());
+      if(String.fromCharCode.apply(null, buf) !== "%PDF-") throw new Error(ext === "ai" ? "este .ai não foi salvo com \"Criar arquivo compatível com PDF\" no Illustrator" : "o arquivo não é um PDF válido");
+      let paginas = 1;
+      try{ const pdfjs = await _eaPdfJs(); const pdf = await pdfjs.getDocument({ data:new Uint8Array(await f.arrayBuffer()), isEvalSupported:false }).promise; paginas = Math.min(10, pdf.numPages || 1); }catch(_){ }
+      const up = await _eaSubir(f, "arte/" + a.projetoId, f.name);
+      const r = await _eaRpc("arte_converter_pedir", { p_projeto:a.projetoId, p_path:up.path, p_nome:f.name, p_paginas:paginas });
+      setConv(function(x){ return x.concat([{ id:r.id, nome:f.name, status:"fila", pc_online:r.pc_online }]); });
+      _eaToast("info", r.pc_online ? "Pedido na fila do PC do escritório" : "Pedido feito — o PC do escritório está sem sinal agora, converte quando ligar");
+    }catch(e){ _eaToast("error", "Não pedi a conversão: " + _eaErro(e)); }
+  };
+  useEffect(function(){
+    const t = setInterval(async function(){
+      for(const c of convRef.current){
+        if(c.status === "pronto" || c.status === "erro" || c.abrindo) continue;
+        try{
+          const s = await _eaRpc("arte_converter_status", { p_id:c.id });
+          if(s.status === "pronto"){
+            c.abrindo = true;
+            for(const sv of ((s.resultado && s.resultado.svgs) || [])){ const txt = await (await fetch(sv.url)).text(); await _eaAbrirSvg(a, txt, c.nome.replace(/\.[^.]+$/,"") + " p" + sv.pagina + " (editável)", { novaPagina:true }); }
+          }
+          setConv(function(x){ return x.map(function(y){ return y.id === c.id ? Object.assign({}, y, { status:s.status, erro:s.erro, pc_online:s.pc_online }) : y; }); });
+        }catch(_){ }
+      }
+    }, 5000);
+    return function(){ clearInterval(t); };
+  }, []);
+  const nome = _eaNomeArquivo(a.proj && a.proj.titulo) + (a.doc().paginas.length > 1 ? "-" + _eaNomeArquivo((a.pagina() || {}).nome) : "");
+  const tarefa = a.proj && a.proj.task_id ? (a.tasks || []).find(function(t){ return String(t.id) === String(a.proj.task_id); }) : null;
+  const baixar = async function(tipo){
+    setOcupado(tipo);
+    try{
+      let b, ext = tipo;
+      if(tipo === "pdf" || tipo === "pdfv") { b = await _eaExportarPdf(a, tipo === "pdfv"); ext = "pdf"; }
+      else if(tipo === "psd") b = await _eaExportarPsd(a);
+      else b = await _eaExportarPagina(a, tipo, escala);
+      _eaBaixarArquivo(b, nome + "." + ext);
+      if(tipo === "psd") _eaToast("info", "PSD compatível: no Photoshop, clique em \"Atualizar\" nos textos. Efeitos não são recalculados.");
+    }catch(e){ _eaToast("error", "Não exportei: " + _eaErro(e)); }
+    setOcupado("");
+  };
+  const mandarCard = async function(formato){
+    if(!a.proj || !a.proj.task_id){ _eaToast("info", "Ligue a arte a um card primeiro (abaixo)"); return; }
+    setOcupado("card");
+    try{
+      await a.salvarVersao("mandada para o card");
+      const b = formato === "pdf" ? await _eaExportarPdf(a, false) : await _eaExportarPagina(a, formato, 1);
+      const up = await _eaSubir(b, "tasks/" + a.proj.task_id, nome + "." + formato);
+      const f = await _eaRpc("arte_projeto_final", { p_id:a.projetoId, p_file:{ url:up.url, storagePath:up.path, name:nome + "." + formato, type:b.type, size:b.size } });
+      _eaToast("success", "Arte no card: " + (f && f.name));
+    }catch(e){ _eaToast("error", "Não mandei para o card: " + _eaErro(e)); }
+    setOcupado("");
+  };
+  const [cardSel, setCardSel] = useState("");
+  const cards = useMemo(function(){
+    const ok = ["demanda","alteracao_copy","preencher_material","recebida","execucao","ajustes","avaliacao"];
+    return (a.tasks||[]).filter(function(t){ return t && !t.deletedAt && ok.indexOf(String(t.status||"")) >= 0 && _eaEhArte(t) && (!a.proj.client_id || t.client === a.proj.client_id); }).slice(0, 200);
+  }, [a.tasks]);
+  const ligar = async function(){
+    try{ await _eaRpc("arte_projeto_dados", { p_id:a.projetoId, p_titulo:null, p_task:cardSel || null, p_client:a.proj.client_id, p_unidade:a.proj.unidade });
+      a.proj.task_id = cardSel || null; a.toque(); _eaToast("success", "Arte ligada ao card"); }catch(e){ _eaToast("error", _eaErro(e)); }
+  };
+  const bt = { font:"inherit", padding:"8px 11px", borderRadius:9, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12.5, fontWeight:700, display:"inline-flex", alignItems:"center", gap:6 };
+  const tit = function(t){ return <div style={{fontWeight:800,fontSize:14,margin:"4px 0 6px"}}>{t}</div>; };
+  return <div>
+    {tit("Abrir arquivo")}
+    <div style={{fontSize:12,color:_EA.sub,marginBottom:8}}>PSD (camadas), SVG, PDF, AI (salvo "compatível com PDF") ou imagens. Também dá para arrastar para a arte.</div>
+    <button onClick={function(){ const i = document.getElementById(idAbrir); if(i) i.click(); }} style={bt}><_EaIc n="abrir" s={16}/> Escolher arquivo</button>
+    <input id={idAbrir} type="file" multiple accept=".psd,.svg,.pdf,.ai,image/*" style={{display:"none"}} onChange={function(e){ const f = e.target.files; _eaAbrirArquivos(a, f); e.target.value = ""; }}/>
+    <div style={{marginTop:12,padding:10,borderRadius:10,background:_EA.fundo,border:"1px solid "+_EA.linha2}}>
+      <div style={{fontWeight:800,fontSize:12.5}}>AI / PDF com tudo editável (PC do escritório)</div>
+      <div style={{fontSize:11.5,color:_EA.sub,margin:"3px 0 8px"}}>O PC converte com o Inkscape: textos continuam texto e as formas viram objetos. Leva 1 a 3 minutos.</div>
+      <button onClick={function(){ const i = document.getElementById(idConv); if(i) i.click(); }} style={bt}>Converter no PC</button>
+      <input id={idConv} type="file" accept=".pdf,.ai" style={{display:"none"}} onChange={function(e){ const f = e.target.files && e.target.files[0]; e.target.value = ""; if(f) converterNoPc(f); }}/>
+      {conv.map(function(c){ return <div key={c.id} style={{fontSize:12,marginTop:6,color:c.status === "erro" ? _EA.verm : c.status === "pronto" ? _EA.verde : _EA.sub}}>
+        {c.nome}: {c.status === "fila" ? (c.pc_online ? "na fila do PC…" : "esperando o PC ligar…") : c.status === "processando" ? "convertendo no PC…" : c.status === "pronto" ? "✓ aberto em página nova" : "⚠️ " + (c.erro || "não converteu")}
+      </div>; })}
+    </div>
+
+    <div style={{height:1,background:_EA.linha2,margin:"16px 0"}}/>
+    {tit("Baixar")}
+    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:8,fontSize:12.5}}>
+      Tamanho: <select value={escala} onChange={function(e){ setEscala(Number(e.target.value)); }} style={{font:"inherit",padding:"5px 7px",borderRadius:7,border:"1px solid "+_EA.linha,fontSize:12.5}}>
+        {[[1,"Real (" + a.W + "×" + a.H + ")"],[2,"2× (alta)"],[0.5,"Metade"]].map(function(x){ return <option key={x[0]} value={x[0]}>{x[1]}</option>; })}
+      </select>
+    </div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {[["png","PNG"],["jpg","JPG"],["pdf","PDF"],["svg","SVG"],["psd","PSD"]].map(function(x){ return <button key={x[0]} disabled={!!ocupado} onClick={function(){ baixar(x[0]); }} style={bt}>{ocupado === x[0] ? "…" : x[1]}</button>; })}
+      <button disabled={!!ocupado} onClick={function(){ baixar("pdfv"); }} style={bt} title="Texto selecionável; fontes que não são padrão podem mudar">{ocupado === "pdfv" ? "…" : "PDF vetor"}</button>
+    </div>
+    <div style={{fontSize:11.5,color:_EA.fraco,marginTop:6}}>PDF leva todas as páginas. PSD sai compatível (camadas e textos), não idêntico ao Photoshop.</div>
+
+    <div style={{height:1,background:_EA.linha2,margin:"16px 0"}}/>
+    {tit("Mandar para o card")}
+    {tarefa ? <div>
+      <div style={{fontSize:12.5,marginBottom:8}}>Card: <b>{tarefa.title}</b> {onAbrirCard && <button onClick={function(){ onAbrirCard(tarefa); }} style={{font:"inherit",border:0,background:"none",color:_EA.roxo,fontWeight:700,cursor:"pointer",padding:0}}>abrir</button>}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <button disabled={!!ocupado} onClick={function(){ mandarCard("png"); }} style={Object.assign({}, bt, {background:_EA.roxo,color:"#fff",border:0})}><_EaIc n="card" s={16}/>{ocupado === "card" ? "Mandando…" : "Esta página (PNG)"}</button>
+        <button disabled={!!ocupado} onClick={function(){ mandarCard("jpg"); }} style={bt}>JPG</button>
+        <button disabled={!!ocupado} onClick={function(){ mandarCard("pdf"); }} style={bt}>PDF (todas)</button>
+      </div>
+      <div style={{fontSize:11.5,color:_EA.fraco,marginTop:6}}>Salva uma versão e anexa no card como arquivo final.</div>
+    </div> : <div>
+      <div style={{fontSize:12.5,color:_EA.sub,marginBottom:6}}>Esta arte não está ligada a um card.</div>
+      <div style={{display:"flex",gap:6}}>
+        <select value={cardSel} onChange={function(e){ setCardSel(e.target.value); }} style={{font:"inherit",flex:1,minWidth:0,padding:"7px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:12.5}}>
+          <option value="">— escolha o card —</option>
+          {cards.map(function(t){ return <option key={t.id} value={t.id}>{t.title}</option>; })}
+        </select>
+        <button disabled={!cardSel} onClick={ligar} style={bt}>Ligar</button>
+      </div>
+    </div>}
+  </div>;
+}
+
+/* ═══ MODELOS INTELIGENTES: espaços [LOGO] [HEADLINE] … preenchidos pelo cadastro e pelo kit ═══ */
+async function _eaPreencherEspacos(a, opt){
+  const fc = a.fc, lib = a.lib, kit = a.kit || {}, base = kit.base || {}, k = kit.kit || {};
+  const cid = a.proj && a.proj.client_id;
+  if(!cid){ if(!(opt && opt.silencioso)) _eaToast("info", "Escolha o cliente da arte para preencher pelo cadastro"); return 0; }
+  let n = 0; const falta = [];
+  a.pausar(true);
+  for(const o of fc.getObjects().slice()){
+    if(!o.espaco || o.bloqueado) continue;
+    const tipo = _eaTipo(o);
+    try{
+      if(o.espaco === "LOGO"){
+        const url = _eaLogo(cid);
+        if(!url){ falta.push("logo"); continue; }
+        if(tipo === "imagem"){ const cx = _eaCaixa(o.clipPath || o); await o.setSrc(url, { crossOrigin:"anonymous" }); _eaEncaixarImagem(lib, o, cx, "caber"); n++; }
+        else { const cx = _eaCaixa(o); const img = await _eaImagemDeUrl(lib, url, { espaco:"LOGO", nome:"Logo" }); _eaEncaixarImagem(lib, img, cx, "caber");
+               const i = fc.getObjects().indexOf(o); fc.remove(o); fc.insertAt(i, img); n++; }
+      } else if(o.espaco === "PHONE" && tipo === "texto"){
+        if(base.whatsapp){ o.set("text", String(base.whatsapp)); _eaCaberTexto(o); n++; } else falta.push("WhatsApp/telefone no cadastro");
+      } else if(o.espaco === "LOCATION" && tipo === "texto"){
+        const loc = base.endereco || base.cidade;
+        if(loc){ o.set("text", String(loc)); _eaCaberTexto(o); n++; } else falta.push("cidade/endereço no cadastro");
+      } else if(o.espaco === "BACKGROUND" && tipo !== "imagem" && tipo !== "texto"){
+        const c = k.cor_principal || base.cor; if(c){ o.set("fill", c); n++; }
+      } else if(o.espaco === "CTA" && tipo !== "texto"){
+        const c = k.cor_secundaria || k.cor_principal || base.cor; if(c && /^#/.test(c)){ o.set("fill", c); n++; }
+      }
+      if(tipo === "texto" && k.fonte && ["HEADLINE","SUBTITLE","CTA","BENEFIT","PRICE","PHONE","LOCATION"].indexOf(o.espaco) >= 0){
+        await _eaCarregarFonte(k.fonte); o.set("fontFamily", k.fonte); try{ o.initDimensions(); }catch(_){ } _eaCaberTexto(o);
+      }
+      o.setCoords();
+    }catch(_){ }
+  }
+  a.pausar(false); a.mudou();
+  if(!(opt && opt.silencioso) || n) _eaToast(n ? "success" : "info", n ? n + " espaço(s) preenchidos pelo cadastro e kit" : "Nenhum espaço para preencher nesta página");
+  if(falta.length) a.setAvisos(["Não preenchi: falta " + Array.from(new Set(falta)).join(", ") + " (Clientes › cadastro / Kit do cliente)."]);
+  return n;
+}
+
+function _EaPainelEspacos({ a, sel, um }){
+  const fc = a.fc;
+  const com = fc.getObjects().filter(function(o){ return !!o.espaco; });
+  const [nomeModelo, setNomeModelo] = useState("");
+  const [todos, setTodos] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const bt = { font:"inherit", padding:"8px 11px", borderRadius:9, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12.5, fontWeight:700 };
+  const marcar = function(esp){
+    if(!um) return;
+    um.set({ espaco:esp || "", nome:esp ? ((_EA_ESPACOS.find(function(e){ return e.id === esp; }) || {}).label || um.nome) : um.nome });
+    if(esp && _eaTipo(um) === "texto") um.set("alturaMax", Math.round(_eaCaixa(um).height * 1.15)); else um.set("alturaMax", 0);
+    a.mudou();
+  };
+  const salvarModelo = async function(){
+    if(!nomeModelo.trim()){ _eaToast("info", "Dê um nome ao modelo"); return; }
+    if(!com.length && !window.confirm("Esta página não tem nenhum espaço marcado. Salvar como modelo mesmo assim?")) return;
+    setSalvando(true);
+    try{
+      const d = a.doc(), p = a.pagina();
+      const doc = { versao:1, paginas:[JSON.parse(JSON.stringify(p))] };
+      let thumb = null; try{ const up = await _eaSubir(_eaDataUrlBlob(_eaMiniatura(fc, a.W, 360)), "arte/modelos", "modelo.jpg"); thumb = up.url; }catch(_){ }
+      const f = _EA_FORMATOS.find(function(x){ return x.w === a.W && x.h === a.H; });
+      await _eaRpc("arte_modelo_salvar", { p_id:null, p_client:todos ? null : (a.proj && a.proj.client_id) || null, p_nome:nomeModelo.trim(), p_formato:f ? f.id : "custom",
+        p_largura:a.W, p_altura:a.H, p_doc:doc, p_espacos:Array.from(new Set(com.map(function(o){ return o.espaco; }))), p_thumb:thumb });
+      _eaToast("success", "Modelo \"" + nomeModelo.trim() + "\" salvo"); setNomeModelo(""); void d;
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+    setSalvando(false);
+  };
+  return <div>
+    <div style={{fontWeight:800,fontSize:14,marginBottom:4}}>Espaços do modelo</div>
+    <div style={{fontSize:12,color:_EA.sub,marginBottom:10}}>Marque cada objeto com o espaço que ele ocupa. Assim a arte vira modelo: logo, telefone, cidade e cores se preenchem pelo cadastro; título e CTA a IA escreve; texto que não cabe diminui sozinho.</div>
+    {um ? <_EaCampo rot={"Objeto selecionado: " + (um.nome || _eaNomeTipo(um))}>
+      <select value={um.espaco || ""} onChange={function(e){ marcar(e.target.value); }} style={{font:"inherit",width:"100%",padding:"7px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13}}>
+        <option value="">— sem espaço —</option>
+        {_EA_ESPACOS.map(function(e){ return <option key={e.id} value={e.id}>[{e.id}] {e.label}</option>; })}
+      </select>
+    </_EaCampo> : <div style={{fontSize:12.5,color:_EA.fraco,marginBottom:10}}>Selecione um objeto na arte para marcar o espaço dele.</div>}
+    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:12}}>
+      {_EA_ESPACOS.map(function(e){ const tem = com.filter(function(o){ return o.espaco === e.id; });
+        return <button key={e.id} onClick={function(){ if(tem[0]){ fc.setActiveObject(tem[0]); fc.requestRenderAll(); a.toque(); } }} title={e.label}
+          style={{font:"inherit",padding:"4px 8px",borderRadius:999,fontSize:11,fontWeight:800,cursor:tem.length?"pointer":"default",border:"1px solid "+(tem.length?_EA.roxoBorda:_EA.linha),
+            background:tem.length?_EA.roxoClaro:"#fff",color:tem.length?_EA.roxo:_EA.fraco}}>{e.id}{tem.length > 1 ? " ×" + tem.length : ""}</button>; })}
+    </div>
+    <button onClick={function(){ _eaPreencherEspacos(a); }} style={Object.assign({}, bt, {background:_EA.roxo,color:"#fff",border:0})}>Preencher pelo cadastro e kit</button>
+    <div style={{fontSize:11.5,color:_EA.fraco,marginTop:6}}>Logo, WhatsApp, cidade/endereço, cor de fundo e do CTA, fonte do kit. Sem custo.</div>
+
+    <div style={{height:1,background:_EA.linha2,margin:"16px 0"}}/>
+    <div style={{fontWeight:800,fontSize:14,marginBottom:6}}>Salvar esta página como modelo</div>
+    <input value={nomeModelo} onChange={function(e){ setNomeModelo(e.target.value); }} placeholder="Ex.: Post produto com preço" style={{font:"inherit",width:"100%",padding:"7px 9px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13}}/>
+    <label style={{display:"flex",gap:6,alignItems:"center",fontSize:12.5,margin:"8px 0"}}>
+      <input type="checkbox" checked={todos || !(a.proj && a.proj.client_id)} disabled={!(a.proj && a.proj.client_id)} onChange={function(e){ setTodos(e.target.checked); }}/>
+      Serve para todos os clientes {a.proj && a.proj.client_id ? "(senão, só " + _eaNomeCliente(a.proj.client_id) + ")" : ""}
+    </label>
+    <button disabled={salvando} onClick={salvarModelo} style={bt}>{salvando ? "Salvando…" : "Salvar modelo"}</button>
+  </div>;
+}
+
+/* modelos básicos da Pixels (feitos aqui, com espaços): Feed, Quadrado e Story */
+function _eaModelosBasicos(){
+  const T = function(id, esp, left, top, width, fontSize, extra){ return Object.assign({ type:"Textbox", version:"7.4.0", originX:"left", originY:"top", left:left, top:top, width:width,
+    fontSize:fontSize, fontFamily:"Montserrat", fontWeight:"800", fill:"#ffffff", textAlign:"left", lineHeight:1.08, charSpacing:0, id:id, espaco:esp,
+    nome:(_EA_ESPACOS.find(function(e){ return e.id === esp; }) || {}).label || "", styles:[] }, extra || {}); };
+  const R = function(id, esp, left, top, width, height, fill, extra){ return Object.assign({ type:"Rect", version:"7.4.0", originX:"left", originY:"top", left:left, top:top, width:width, height:height,
+    fill:fill, rx:0, ry:0, strokeWidth:0, id:id, espaco:esp || "", nome:esp ? ((_EA_ESPACOS.find(function(e){ return e.id === esp; }) || {}).label || "") : "Faixa" }, extra || {}); };
+  const pag = function(nome, W, H, objs){ return { versao:1, paginas:[{ id:"p1", nome:nome, largura:W, altura:H, fabric:{ version:"7.4.0", background:"#0f172a", objects:objs } }] }; };
+  const feed = pag("Feed", 1080, 1350, [
+    R("bg","BACKGROUND",0,0,1080,1350,"#1e3a8a"),
+    R("foto","PRODUCT_IMAGE",0,430,1080,560,"#334155",{ nome:"Foto do produto (troque a imagem)" }),
+    R("logo","LOGO",820,60,200,120,"rgba(255,255,255,0.15)",{ nome:"Logo (preenche sozinho)" }),
+    T("tit","HEADLINE",70,120,720,84,{ text:"TÍTULO FORTE EM ATÉ DUAS LINHAS", alturaMax:210 }),
+    T("sub","SUBTITLE",70,340,860,40,{ text:"Subtítulo com o benefício principal", fontWeight:"600", alturaMax:80 }),
+    R("btn","CTA",70,1060,520,110,"#f59e0b",{ rx:55, ry:55, nome:"Botão do CTA" }),
+    T("cta","CTA",90,1090,480,44,{ text:"Chame no WhatsApp", fill:"#0f172a", textAlign:"center", alturaMax:60 }),
+    T("tel","PHONE",70,1200,600,38,{ text:"(00) 00000-0000", fontWeight:"700", alturaMax:50 }),
+    T("loc","LOCATION",70,1250,900,30,{ text:"Cidade - UF", fontWeight:"400", alturaMax:45 }),
+  ]);
+  const quad = pag("Quadrado", 1080, 1080, [
+    R("bg","BACKGROUND",0,0,1080,1080,"#14532d"),
+    R("logo","LOGO",60,60,220,120,"rgba(255,255,255,0.15)",{ nome:"Logo (preenche sozinho)" }),
+    T("tit","HEADLINE",60,260,960,96,{ text:"TÍTULO DO POST", textAlign:"center", alturaMax:230 }),
+    T("ben","BENEFIT",120,520,840,44,{ text:"Benefício em uma frase curta", fontWeight:"600", textAlign:"center", alturaMax:110 }),
+    R("btn","CTA",290,800,500,110,"#f59e0b",{ rx:55, ry:55, nome:"Botão do CTA" }),
+    T("cta","CTA",310,830,460,44,{ text:"Peça seu orçamento", fill:"#0f172a", textAlign:"center", alturaMax:60 }),
+    T("tel","PHONE",240,960,600,36,{ text:"(00) 00000-0000", fontWeight:"700", textAlign:"center", alturaMax:48 }),
+  ]);
+  const story = pag("Story", 1080, 1920, [
+    R("bg","BACKGROUND",0,0,1080,1920,"#7c2d12"),
+    R("logo","LOGO",390,140,300,160,"rgba(255,255,255,0.15)",{ nome:"Logo (preenche sozinho)" }),
+    T("tit","HEADLINE",80,420,920,100,{ text:"TÍTULO DO STORY", textAlign:"center", alturaMax:330 }),
+    R("foto","PRODUCT_IMAGE",90,820,900,620,"#334155",{ rx:36, ry:36, nome:"Foto do produto (troque a imagem)" }),
+    R("btn","CTA",240,1560,600,120,"#f59e0b",{ rx:60, ry:60, nome:"Botão do CTA" }),
+    T("cta","CTA",260,1594,560,46,{ text:"Arraste para cima", fill:"#0f172a", textAlign:"center", alturaMax:64 }),
+    T("tel","PHONE",240,1720,600,38,{ text:"(00) 00000-0000", fontWeight:"700", textAlign:"center", alturaMax:50 }),
+  ]);
+  return [
+    { nome:"Pixels · Feed com foto e CTA", formato:"feed", w:1080, h:1350, doc:feed, espacos:["BACKGROUND","PRODUCT_IMAGE","LOGO","HEADLINE","SUBTITLE","CTA","PHONE","LOCATION"] },
+    { nome:"Pixels · Quadrado título + benefício", formato:"quadrado", w:1080, h:1080, doc:quad, espacos:["BACKGROUND","LOGO","HEADLINE","BENEFIT","CTA","PHONE"] },
+    { nome:"Pixels · Story com foto", formato:"story", w:1080, h:1920, doc:story, espacos:["BACKGROUND","LOGO","HEADLINE","PRODUCT_IMAGE","CTA","PHONE"] },
+  ];
+}
+
+/* ═══ GUIA: MODELOS ═══ */
+function _EaModelos({ isMob, onAbrir }){
+  const [lista, setLista] = useState(null);
+  const [erro, setErro] = useState("");
+  const [criando, setCriando] = useState(false);
+  const carregar = function(){ _eaRpc("arte_modelos_lista", { p_client:null }).then(setLista).catch(function(e){ setErro(_eaErro(e)); setLista([]); }); };
+  useEffect(carregar, []);
+  const basicos = async function(){
+    setCriando(true);
+    try{ for(const m of _eaModelosBasicos()) await _eaRpc("arte_modelo_salvar", { p_id:null, p_client:null, p_nome:m.nome, p_formato:m.formato, p_largura:m.w, p_altura:m.h, p_doc:m.doc, p_espacos:m.espacos, p_thumb:null });
+      _eaToast("success", "3 modelos básicos criados"); carregar(); }
+    catch(e){ _eaToast("error", _eaErro(e)); }
+    setCriando(false);
+  };
+  const tirar = async function(m){
+    if(!window.confirm("Tirar o modelo \"" + m.nome + "\" da lista? (Ele continua guardado no histórico.)")) return;
+    try{ await _eaRpc("arte_modelo_tirar", { p_id:m.id }); carregar(); }catch(e){ _eaToast("error", _eaErro(e)); }
+  };
+  const editar = async function(m){
+    try{
+      const doc = JSON.parse(JSON.stringify(m.doc)); (doc.paginas||[]).forEach(function(p){ p.id = _eaUid(); });
+      const p = await _eaRpc("arte_projeto_criar", { p_client:m.client_id || null, p_unidade:"", p_task:null, p_titulo:"Editando modelo: " + m.nome, p_formato:m.formato, p_largura:m.largura, p_altura:m.altura, p_doc:doc, p_modelo:m.id });
+      _eaToast("info", "Abri uma cópia do modelo. Ajuste e use \"Salvar esta página como modelo\" (em Modelo) com um nome novo.");
+      onAbrir(p.id, false);
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+  };
+  return <div>
+    <div style={{marginTop:14,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{fontSize:13,color:_EA.sub,flex:"1 1 320px"}}>Modelos com espaços. Ao criar uma arte com um modelo, logo, telefone, cidade e cores do cliente entram sozinhos. Para criar um modelo: monte a arte no Editor e use <b>Modelo › Salvar esta página como modelo</b>.</div>
+      {!isMob && <button disabled={criando} onClick={basicos} style={{font:"inherit",padding:"9px 14px",borderRadius:10,border:"1px solid "+_EA.roxoBorda,background:_EA.roxoClaro,color:_EA.roxo,fontWeight:800,cursor:"pointer"}}>{criando ? "Criando…" : "Criar 3 modelos básicos"}</button>}
+    </div>
+    {erro && <div style={{marginTop:12,padding:12,borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:13}}>{erro}</div>}
+    {lista === null && <div style={{marginTop:14,color:_EA.sub}}>Carregando…</div>}
+    {lista && !lista.length && <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub}}>Nenhum modelo ainda.</div>}
+    {lista && lista.length > 0 && <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(210px,1fr))",gap:12,marginTop:14}}>
+      {lista.map(function(m){ return <div key={m.id} style={{background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,overflow:"hidden"}}>
+        <div style={{background:_EA.palco,aspectRatio:"4/5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+          {m.thumb_url ? <img src={m.thumb_url} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:12}}>{m.largura}×{m.altura}</span>}
+        </div>
+        <div style={{padding:"10px 12px"}}>
+          <div style={{fontWeight:800,fontSize:13.5}}>{m.nome}</div>
+          <div style={{fontSize:12,color:_EA.sub}}>{m.client_id ? _eaNomeCliente(m.client_id) : "Todos os clientes"} · {m.largura}×{m.altura}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:3,margin:"6px 0"}}>{(m.espacos||[]).map(function(e){ return <span key={e} style={{fontSize:10,fontWeight:800,color:_EA.roxo,background:_EA.roxoClaro,borderRadius:999,padding:"2px 6px"}}>{e}</span>; })}</div>
+          {!isMob && <div style={{display:"flex",gap:6}}>
+            <button onClick={function(){ editar(m); }} style={{font:"inherit",padding:"5px 9px",borderRadius:8,border:"1px solid "+_EA.linha,background:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>Abrir cópia</button>
+            <button onClick={function(){ tirar(m); }} style={{font:"inherit",padding:"5px 9px",borderRadius:8,border:"1px solid "+_EA.linha,background:"#fff",cursor:"pointer",fontSize:12,fontWeight:700,color:_EA.sub}}>Tirar</button>
+          </div>}
+        </div>
+      </div>; })}
+    </div>}
+  </div>;
+}
+
+/* ═══ GUIA: IA QUE APRENDE (regras por cliente; só valem depois que um sócio aprova) ═══ */
+function _EaAprende({ isMob }){
+  const [lista, setLista] = useState(null);
+  const [erro, setErro] = useState("");
+  const [cliente, setCliente] = useState("");
+  const [nova, setNova] = useState("");
+  const [editando, setEditando] = useState(null);
+  const socio = (function(){ try{ return !!(typeof CURRENT_USER !== "undefined" && CURRENT_USER && Number(CURRENT_USER.level) === 1); }catch(_){ return false; } })();
+  const carregar = function(){ _eaRpc("arte_regras_lista", { p_client:null }).then(setLista).catch(function(e){ setErro(_eaErro(e)); setLista([]); }); };
+  useEffect(carregar, []);
+  const clientes = useMemo(function(){ try{ return (typeof CLIENTS!=="undefined" && Array.isArray(CLIENTS) ? CLIENTS : []).filter(function(c){ return c && c.id; }).slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name),"pt-BR"); }); }catch(_){ return []; } }, []);
+  const decidir = async function(r, st, texto){ try{ await _eaRpc("arte_regra_decidir", { p_id:r.id, p_status:st, p_regra:texto || null }); setEditando(null); carregar(); }catch(e){ _eaToast("error", _eaErro(e)); } };
+  const criar = async function(){ try{ await _eaRpc("arte_regra_criar", { p_client:cliente || null, p_unidade:"", p_regra:nova }); setNova(""); carregar(); _eaToast("success", socio ? "Regra ativa" : "Regra enviada para um sócio aprovar"); }catch(e){ _eaToast("error", _eaErro(e)); } };
+  const filtradas = (lista||[]).filter(function(r){ return !cliente || r.client_id === cliente || !r.client_id; });
+  const grupos = [["pendente","Esperando um sócio"],["aprovado","Valendo"],["recusado","Recusadas"]];
+  const bt = { font:"inherit", padding:"5px 9px", borderRadius:8, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12, fontWeight:700 };
+  return <div>
+    <div style={{marginTop:14,fontSize:13,color:_EA.sub}}>A IA da arte segue as regras <b>valendo</b> do cliente. Regras novas vêm de "Ensinar a IA com esta arte" (no Editor › IA) ou são escritas aqui. Só um sócio aprova.</div>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:12,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,padding:12,alignItems:"flex-end"}}>
+      <div style={{flex:"1 1 220px"}}><div style={{fontSize:11.5,color:_EA.sub,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Cliente</div>
+        <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={{font:"inherit",width:"100%",padding:"8px 10px",borderRadius:10,border:"1px solid "+_EA.linha,fontSize:14}}>
+          <option value="">Todos</option>{clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name}</option>; })}
+        </select></div>
+      {!isMob && <div style={{flex:"2 1 360px",display:"flex",gap:6}}>
+        <input value={nova} onChange={function(e){ setNova(e.target.value); }} placeholder={"Nova regra " + (cliente ? "para " + _eaNomeCliente(cliente) : "para todos os clientes") + " (ex.: logo sempre no canto superior direito)"}
+          style={{font:"inherit",flex:1,padding:"8px 10px",borderRadius:10,border:"1px solid "+_EA.linha,fontSize:13.5}}/>
+        <button disabled={nova.trim().length < 8} onClick={criar} style={Object.assign({}, bt, {padding:"8px 12px",background:_EA.roxo,color:"#fff",border:0})}>Ensinar</button>
+      </div>}
+    </div>
+    {erro && <div style={{marginTop:12,padding:12,borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:13}}>{erro}</div>}
+    {lista === null && <div style={{marginTop:14,color:_EA.sub}}>Carregando…</div>}
+    {grupos.map(function(g){ const rs = filtradas.filter(function(r){ return r.status === g[0]; }); if(!rs.length) return null;
+      return <div key={g[0]} style={{marginTop:16}}>
+        <div style={{fontSize:13,fontWeight:800,color:_EA.sub,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>{g[1]} · {rs.length}</div>
+        {rs.map(function(r){ return <div key={r.id} style={{background:"#fff",border:"1px solid "+_EA.linha,borderRadius:12,padding:"10px 12px",marginBottom:8}}>
+          {editando && editando.id === r.id
+            ? <textarea value={editando.texto} onChange={function(e){ setEditando({ id:r.id, texto:e.target.value }); }} rows={2} style={{font:"inherit",width:"100%",padding:8,borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13.5}}/>
+            : <div style={{fontSize:13.5,fontWeight:600}}>{r.regra}</div>}
+          <div style={{fontSize:11.5,color:_EA.sub,marginTop:3}}>{r.client_id ? _eaNomeCliente(r.client_id) : "Todos os clientes"} · {r.origem === "ia" ? "proposta pela IA" : "escrita por " + (r.criado_por || "alguém")} · {_eaDataHora(r.criado_em)}{r.decidido_nome ? " · decidido por " + r.decidido_nome : ""}</div>
+          {r.evidencia && <div style={{fontSize:11.5,color:_EA.fraco,marginTop:2}}>Por quê: {r.evidencia}</div>}
+          {socio && !isMob && <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+            {r.status !== "aprovado" && <button onClick={function(){ decidir(r, "aprovado", editando && editando.id === r.id ? editando.texto : null); }} style={Object.assign({}, bt, {color:_EA.verde})}>Aprovar</button>}
+            {editando && editando.id === r.id ? <button onClick={function(){ decidir(r, r.status === "pendente" ? "aprovado" : r.status, editando.texto); }} style={bt}>Salvar texto</button>
+              : <button onClick={function(){ setEditando({ id:r.id, texto:r.regra }); }} style={bt}>Editar</button>}
+            {r.status === "pendente" && <button onClick={function(){ decidir(r, "recusado"); }} style={Object.assign({}, bt, {color:_EA.verm})}>Recusar</button>}
+            {r.status === "aprovado" && <button onClick={function(){ decidir(r, "desligado"); }} style={Object.assign({}, bt, {color:_EA.sub})}>Desligar</button>}
+          </div>}
+        </div>; })}
+      </div>; })}
+    {lista && !filtradas.length && <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub}}>Nenhuma regra ainda.</div>}
+  </div>;
 }
