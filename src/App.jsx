@@ -8802,7 +8802,8 @@ function PxIcoBaixar({qual, size}){
   const s=size||16;
   /* v2 (29/09, Gustavo: "ícones de vídeo ficaram horríveis"): Full = seta de download (o arquivo inteiro);
      Comprimido = pena (versão leve). Os cantos pra fora/pra dentro da v1 saíram. */
-  if(qual==="leve") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>;
+  /* v4 (29/09, 11h04, Gustavo escolheu a opção B): comprimido = arquivo com seta pra baixo. */
+  if(qual==="leve") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>;
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 }
 function PxBaixarEntrega({task, variante, cor}){
@@ -8820,8 +8821,9 @@ function PxBaixarEntrega({task, variante, cor}){
   const botoes=[];
   if(al.tipo==="video"){
     const fs=al.full&&al.full.size, ls=al.leve&&al.leve.previewSize;
-    botoes.push({qual:"full", title:"Baixar vídeo full (original"+(fs?(" · "+_pxBxMB(fs)):"")+")"});
+    /* Full sempre no canto direito (29/09, Gustavo): comprimido primeiro, full por último. */
     botoes.push({qual:"leve", off:!al.leve, title:al.leve?("Baixar vídeo comprimido (leve"+(ls?(" · "+_pxBxMB(ls)):"")+")"):"Vídeo comprimido ainda não existe — dá pra gerar na Avaliação de vídeo"});
+    botoes.push({qual:"full", title:"Baixar vídeo full (original"+(fs?(" · "+_pxBxMB(fs)):"")+")"});
   } else {
     const n=al.itens.length;
     botoes.push({qual:"", title:n>1?("Baixar as "+n+" lâminas/arquivos da entrega"):"Baixar a arte"});
