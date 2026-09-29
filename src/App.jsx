@@ -115172,6 +115172,19 @@ function _evpProjetoDeReceita(receita, clipes){
   };
   return _evpNormalizar(p, clipes);
 }
+/* v10 (29/09/2026) — legenda: caixa das letras e altura na área segura (o tamanho da fonte nunca muda sozinho)
+   Área segura (pesquisa 29/09: Meta e guias de legenda): o Instagram cobre os 14% de cima e, no Reels, os 20% de baixo
+   (35% quando é anúncio: botões, som e legenda do post). Texto deve ficar dentro de um retângulo central de ~900×1400 px.
+   "segura": a borda de BAIXO do bloco fica em 79% da altura (cresce para cima); "anuncio": em 64%; "centro": 52%; "baixo": 75% (jeito antigo). */
+function _evpCaixaLeg(lg, s){ const c = (lg && lg.caixa) || (lg && lg.caixaAlta ? "alta" : ""); return c === "alta" ? String(s).toUpperCase() : c === "baixa" ? String(s).toLowerCase() : String(s); }
+function _evpLegCentro(pos, y, nLinhas, lh, H){
+  if(y != null && isFinite(Number(y)) && Number(y) > 0) return H * Number(y);
+  const bh = Math.max(1, nLinhas) * lh;
+  if(pos === "centro") return H * 0.52;
+  if(pos === "baixo") return H * 0.75;
+  if(pos === "anuncio") return H * 0.64 - bh / 2;
+  return H * 0.79 - bh / 2;
+}
 function _evpNormalizar(p, clipes){
   const dur = {}; (clipes||[]).forEach(function(c){ dur[c.id] = _evpNum(c.duracao, 0); });
   p.clips = (p.clips||[]).filter(function(c){ return c && dur[c.clipe]!=null; }).map(function(c){
@@ -115198,7 +115211,8 @@ function _evpNormalizar(p, clipes){
   p.formato = ["9x16","4x5","1x1","16x9"].indexOf(p.formato) >= 0 ? p.formato : "9x16";
   p.textos = (p.textos||[]).filter(Boolean).map(function(x){ const o = Object.assign({ id:_evpId(), tipo:"texto", texto:"", linha2:"", pos:"meio", tam:1, anim:"pop", cor:"principal", atras:false }, x);
     o.t0 = Math.max(0, _evpNum(o.t0,0)); o.t1 = Math.max(o.t0 + 0.2, _evpNum(o.t1, o.t0 + 2)); return o; });
-  p.legenda = Object.assign({ ativa:true, estilo:"", posicao:"", edits:{}, correcoes:[], tam:1, fonte:"", caixaAlta:false, cor:"principal" }, p.legenda||{});
+  p.legenda = Object.assign({ ativa:true, estilo:"", posicao:"", edits:{}, correcoes:[], tam:1, fonte:"", caixaAlta:false, cor:"principal", anim:"nenhuma", peso:"negrito", italico:false, caixa:"", y:null }, p.legenda||{});
+  if(!p.legenda.caixa && p.legenda.caixaAlta) p.legenda.caixa = "alta";     // v10: "caixa" (normal | alta | baixa) substitui o interruptor antigo
   p.marcas = (p.marcas||[]).filter(Boolean).map(function(m){ return Object.assign({ id:_evpId(), t:0, nota:"" }, m); });
   p.imagens = (p.imagens||[]).filter(function(x){ return x && (x.url || x.camada === "desfoque" || (x.camada === "video" && dur[x.clipe] != null)); }).map(function(x){
     const o = Object.assign({ id:_evpId(), camada:"imagem", t0:0, t1:3, x:0.5, y:0.3, escala:0.35, rot:0, anim:"pop", nome:"" }, x);
@@ -115256,7 +115270,7 @@ function _evpCalcular(p, fala, kit){
     for(let k=0;k<blocos.length-1;k++){ if(blocos[k+1].a - blocos[k].b < 0.3) blocos[k].b = blocos[k+1].a; }
   }
   return { clips:clips, fimCortes:fimCortes, total:total, textos:p.textos, blocos:blocos, estiloLegenda:estilo,
-           posLegenda:(p.legenda && p.legenda.posicao) || (kit && kit.legenda_posicao) || "baixo", musica:p.musica, sfx:p.sfx, audio:p.audio,
+           posLegenda:(p.legenda && p.legenda.posicao) || ((kit && kit.legenda_posicao) === "centro" ? "centro" : "segura"),   // v10: padrão = área segura do Reels musica:p.musica, sfx:p.sfx, audio:p.audio,
            faixas:p.faixas || { textos:{}, video:{ vol:1 }, sfx:{ vol:1 } }, imagens:p.imagens || [], abertura:p.abertura || {}, legenda:p.legenda || {},
            narracoes:p.narracoes || [], formato:p.formato || "9x16" };
 }
@@ -115751,7 +115765,7 @@ function _evpSrt(calc){
     const z = function(n, k){ return String(n).padStart(k, "0"); }; return z(h,2) + ":" + z(m,2) + ":" + z(se,2) + "," + z(ms === 1000 ? 999 : ms,3); };
   const lg = calc.legenda || {}, trd = lg.traducao && lg.traducao.blocos;
   return calc.blocos.map(function(b, i){ const txt = (trd && trd[b.words[0].chave]) || b.words.map(function(w){ return w.p; }).join(" ");
-    return (i + 1) + "\n" + tc(b.a) + " --> " + tc(b.b) + "\n" + (lg.caixaAlta ? txt.toUpperCase() : txt) + "\n"; }).join("\n");
+    return (i + 1) + "\n" + tc(b.a) + " --> " + tc(b.b) + "\n" + _evpCaixaLeg(lg, txt) + "\n"; }).join("\n");
 }
 
 /* ─── COMENTÁRIOS DO CLIENTE no tempo do vídeo (vêm da Avaliação de vídeo: "[01:23] texto" no card) ─── */
@@ -116096,13 +116110,22 @@ function _evpMotor(canvas, o){
       b = Object.assign({}, b, { words:pal.map(function(p2, k){ return { p:p2, a:b.a + (b.b - b.a) * k / pal.length, b:b.b, chave:"t" + k }; }) });
       if(est === "palavra" || est === "karaoke") est = "frase";
     }
+    // v10 (29/09/2026): fonte, peso, itálico, caixa, animação, posição na área segura — o tamanho NUNCA muda sozinho:
+    // a linha quebra por palavra (uma palavra grande fica sozinha na linha) dentro de 82% da largura (margem das laterais)
     const FL = lg.fonte ? "\"" + lg.fonte + "\", " + F : F;
     const hl = lg.cor === "amarelo" ? ["#facc15", "#111827"] : lg.cor === "branco" ? ["#ffffff", "#0f172a"] : [pri, txt];
-    const fs = Math.round(70 * tam); cx.save(); cx.font = "800 " + fs + "px " + FL; cx.textBaseline = "middle"; cx.lineJoin = "round";
-    const ws = b.words.map(function(w){ return Object.assign({}, w, { p:lg.caixaAlta ? String(w.p).toUpperCase() : w.p }); });
-    const linhas = _evQuebra(cx, ws, W*0.84), lh = fs*1.3;
-    const yc = calc.posLegenda === "centro" ? H*0.52 : H*0.75;
+    const cDest = hl[0] === "#ffffff" ? "#facc15" : hl[0];
+    const peso = lg.peso === "normal" ? 500 : lg.peso === "fino" ? 300 : 800, ital = lg.italico ? "italic " : "";
+    const fs = Math.round(70 * tam); cx.save(); cx.font = ital + peso + " " + fs + "px " + FL; cx.textBaseline = "middle"; cx.lineJoin = "round";
+    const ws = b.words.map(function(w){ return Object.assign({}, w, { p:_evpCaixaLeg(lg, String(w.p)) }); });
+    const linhas = _evQuebra(cx, ws, W*0.82), lh = fs*1.3;
+    const yc = _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H);
     let ativa = -1; ws.forEach(function(w, k){ if(t >= w.a) ativa = k; });
+    const anim = lg.anim || "nenhuma";
+    // animação do bloco inteiro: "sobe" (entra de baixo com fade)
+    let dyB = 0, alB = 1;
+    if(anim === "sobe"){ const k = _evClamp((t - b.a) / 0.22, 0, 1); dyB = (1 - (1 - Math.pow(1 - k, 3))) * 44; alB = k; }
+    cx.translate(0, dyB); cx.globalAlpha = alB;
     const sp = cx.measureText(" ").width; let n = 0;
     const chave = function(w){ return /\d/.test(w.p) || String(w.p).replace(/[^\wÀ-ú]/g, "").length >= 7; };
     if(est === "caixa"){
@@ -116114,11 +116137,27 @@ function _evpMotor(canvas, o){
       let x = (W - lw)/2; const y = yc - (linhas.length*lh)/2 + lh/2 + li*lh;
       l.forEach(function(w){
         const ww = cx.measureText(w.p).width, atual = n === ativa, falada = n <= ativa;
-        if(est === "palavra" && atual){ cx.fillStyle = hl[0]; _evRet(cx, x-14, y-fs*0.62, ww+28, fs*1.24, 16); cx.fill(); cx.fillStyle = hl[1]; cx.fillText(w.p, x, y); }
-        else if(est === "caixa"){ cx.fillStyle = atual ? hl[0] === "#ffffff" ? "#facc15" : hl[0] : "#fff"; cx.fillText(w.p, x, y); }
-        else {
-          const cor = (est === "karaoke" && falada) || (est === "chave" && chave(w)) ? (hl[0] === "#ffffff" ? "#facc15" : hl[0]) : "#fff";
-          cx.strokeStyle = "rgba(0,0,0,.88)"; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = cor; cx.fillText(w.p, x, y);
+        // animação por palavra
+        let esc = 1, mostra = true;
+        if(anim === "pop"){ if(!falada) mostra = false; else { const k = _evClamp((t - w.a) / 0.16, 0, 1); esc = 0.55 + 0.45 * _evEaseBack(k); } }
+        else if(anim === "digitar"){ if(!falada) mostra = false; }
+        else if(anim === "pulso"){ if(atual) esc = 1.12; }
+        if(mostra){
+          cx.save();
+          if(esc !== 1){ cx.translate(x + ww/2, y); cx.scale(esc, esc); cx.translate(-(x + ww/2), -y); }
+          if(est === "palavra" && atual){ cx.fillStyle = hl[0]; _evRet(cx, x-14, y-fs*0.62, ww+28, fs*1.24, 16); cx.fill(); cx.fillStyle = hl[1]; cx.fillText(w.p, x, y); }
+          else if(est === "caixa"){ cx.fillStyle = atual ? cDest : "#fff"; cx.fillText(w.p, x, y); }
+          else if(est === "neon"){ cx.shadowColor = cDest; cx.shadowBlur = atual ? 34 : 18; cx.fillStyle = atual ? cDest : "#fff"; cx.fillText(w.p, x, y); cx.fillText(w.p, x, y); }
+          else if(est === "contorno"){ cx.strokeStyle = atual ? cDest : "rgba(0,0,0,.88)"; cx.lineWidth = (atual ? 16 : 12) * tam; cx.strokeText(w.p, x, y); cx.fillStyle = "#fff"; cx.fillText(w.p, x, y); }
+          else if(est === "sublinhado"){
+            cx.strokeStyle = "rgba(0,0,0,.88)"; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = "#fff"; cx.fillText(w.p, x, y);
+            if(atual){ cx.fillStyle = cDest; _evRet(cx, x - 4, y + fs*0.5, ww + 8, Math.max(6, fs*0.14), 5); cx.fill(); }
+          }
+          else {
+            const cor = (est === "karaoke" && falada) || (est === "chave" && chave(w)) ? cDest : "#fff";
+            cx.strokeStyle = "rgba(0,0,0,.88)"; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = cor; cx.fillText(w.p, x, y);
+          }
+          cx.restore();
         }
         x += ww + sp; n++;
       });
@@ -116378,7 +116417,12 @@ const _EVP_OBJETIVOS = [ { id:"institucional", label:"Institucional" }, { id:"ve
 const _EVP_GENEROS = ["Country / Sertanejo","Clássica","Pop","Rock","Eletrônica","Hip-hop","Acústica / Folk","Corporativa","Cinemática / Épica","Lo-fi","Jazz","Latina","Ambiente","Infantil"];
 const _EVP_FONTES = ["Envato Elements","AudioJungle","YouTube Audio Library","Pixabay","Epidemic Sound","Artlist","Comprada / própria","Outra"];
 const _EVP_LEG_ESTILOS = [ { id:"palavra", label:"Palavra destacada" }, { id:"karaoke", label:"Karaokê" }, { id:"chave", label:"Palavra-chave colorida" },
-                          { id:"caixa", label:"Caixa escura" }, { id:"frase", label:"Frase simples" } ];
+                          { id:"caixa", label:"Caixa escura" }, { id:"frase", label:"Frase simples" },
+                          { id:"neon", label:"Neon (brilho)" }, { id:"contorno", label:"Contorno colorido" }, { id:"sublinhado", label:"Sublinhado" } ];   // v10: 3 modelos novos
+const _EVP_LEG_ANIMS = [ { id:"nenhuma", label:"Sem animação" }, { id:"pop", label:"Pop (palavra pula)" }, { id:"digitar", label:"Palavra por palavra" }, { id:"pulso", label:"Pulso na falada" }, { id:"sobe", label:"Bloco sobe" } ];
+const _EVP_LEG_POS = [ { id:"segura", label:"Área segura" }, { id:"anuncio", label:"Anúncio (mais alta)" }, { id:"centro", label:"No meio" }, { id:"baixo", label:"Embaixo (antiga)" } ];
+const _EVP_LEG_PESOS = [ { id:"negrito", label:"Negrito" }, { id:"normal", label:"Normal" }, { id:"fino", label:"Fino" } ];
+const _EVP_LEG_CAIXAS = [ { id:"", label:"Como falado" }, { id:"alta", label:"MAIÚSCULAS" }, { id:"baixa", label:"minúsculas" } ];
 const _EVP_MOVS = [ { id:"nenhum", label:"Parado" }, { id:"aproximar", label:"Aproximar" }, { id:"afastar", label:"Afastar" }, { id:"esq_dir", label:"Esquerda → direita" },
                     { id:"dir_esq", label:"Direita → esquerda" }, { id:"sobe", label:"Subir" }, { id:"desce", label:"Descer" } ];
 const _EVP_VOZES = [ { id:"coral", label:"Coral" }, { id:"nova", label:"Nova" }, { id:"shimmer", label:"Shimmer" }, { id:"sage", label:"Sage" }, { id:"ballad", label:"Ballad" },
@@ -116840,7 +116884,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   useEffect(recarregarModelos, [t.client]);
   const dadosModelo = function(){
     const x = pRef.current, t0 = (x.textos || []).find(function(q){ return q.tipo !== "tarja"; }) || {}, c1 = x.clips[1] || {};
-    return { legenda:{ estilo:x.legenda.estilo, posicao:x.legenda.posicao, tam:x.legenda.tam, fonte:x.legenda.fonte, caixaAlta:x.legenda.caixaAlta, cor:x.legenda.cor },
+    return { legenda:{ estilo:x.legenda.estilo, posicao:x.legenda.posicao, tam:x.legenda.tam, fonte:x.legenda.fonte, caixaAlta:x.legenda.caixaAlta, cor:x.legenda.cor, anim:x.legenda.anim, peso:x.legenda.peso, italico:x.legenda.italico, caixa:x.legenda.caixa, y:x.legenda.y },
       texto:{ fonte:t0.fonte || "", cor:t0.cor || "principal", contorno:t0.contorno, sombra:t0.sombra, fundo:t0.fundo, anim:t0.anim || "pop", tam:t0.tam || 1 },
       cor:Object.assign({}, (x.clips[0] || {}).cor || {}), trans:c1.trans || "corte", audio:Object.assign({}, x.audio),
       musica:x.musica ? { id:x.musica.id, vol:x.musica.vol, duck:x.musica.duck, fadeIn:x.musica.fadeIn, fadeOut:x.musica.fadeOut } : null,
@@ -117463,6 +117507,9 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
   useEffect(function(){ const b = boxRef.current; if(!b) return; const h2 = function(e){ rodaRef.current(e); }; b.addEventListener("wheel", h2, { passive:false }); return function(){ b.removeEventListener("wheel", h2); }; }, []);
   const [hover, setHover] = useState(false);
   const mvHover = function(e){ if(soVer || enquadrar) return; const on = !!acharTexto(e); if(on !== hover) setHover(on); };
+  // v10: área segura do Instagram por cima da prévia (ligada no menu Legenda)
+  const [areaSegura, setAreaSegura] = useState(function(){ try{ return localStorage.getItem("pxev-area-segura") === "1"; }catch(_){ return false; } });
+  useEffect(function(){ const f = function(){ try{ setAreaSegura(localStorage.getItem("pxev-area-segura") === "1"); }catch(_){} }; window.addEventListener("pxev-area-segura", f); return function(){ window.removeEventListener("pxev-area-segura", f); }; }, []);
   return (
     <div ref={boxRef} style={{position:"relative",width:w,height:h,borderRadius:16,overflow:"hidden",background:"#000",
         boxShadow:"0 0 0 1px rgba(15,23,42,.08), 0 20px 50px -24px rgba(49,46,129,.55)",cursor:enquadrar && sel ? "move" : hover ? "grab" : "pointer"}}
@@ -117483,6 +117530,15 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
           style={{position:"absolute",left:Math.max(4, escrevendo.caixa.x*ex - 6),top:escrevendo.caixa.y*ey - 6,width:Math.min(w - 8, escrevendo.caixa.w*ex + 12),minHeight:escrevendo.caixa.h*ey + 12,
             boxSizing:"border-box",font:"inherit",fontWeight:800,fontSize:14,padding:"6px 8px",borderRadius:8,border:"2px solid " + _EVP_COR.roxo,background:"rgba(255,255,255,.97)",
             color:_EVP_COR.ink,resize:"none",outline:"none",boxShadow:"0 0 0 4px rgba(124,58,237,.25)",userSelect:"text"}}/>
+      )}
+      {areaSegura && !soVer && (
+        <div aria-label="Área segura do Instagram" style={{position:"absolute",inset:0,pointerEvents:"none"}}>
+          <div style={{position:"absolute",left:0,right:0,top:0,height:"14%",background:"repeating-linear-gradient(135deg, rgba(239,68,68,.28) 0 6px, transparent 6px 14px)",borderBottom:"1.5px dashed rgba(255,255,255,.8)"}}/>
+          <div style={{position:"absolute",left:0,right:0,bottom:0,height:"20%",background:"repeating-linear-gradient(135deg, rgba(239,68,68,.28) 0 6px, transparent 6px 14px)",borderTop:"1.5px dashed rgba(255,255,255,.8)"}}/>
+          <div style={{position:"absolute",left:0,right:0,bottom:"35%",borderTop:"1.5px dashed rgba(250,204,21,.9)"}}><span style={{position:"absolute",left:6,top:2,fontSize:9,fontWeight:800,color:"#facc15",textShadow:"0 1px 2px #000"}}>limite em anúncio</span></div>
+          <div style={{position:"absolute",top:"14%",bottom:"20%",right:0,width:"12%",background:"repeating-linear-gradient(135deg, rgba(239,68,68,.18) 0 6px, transparent 6px 14px)",borderLeft:"1px dashed rgba(255,255,255,.5)"}}/>
+          <span style={{position:"absolute",left:6,top:"14.5%",fontSize:9,fontWeight:800,color:"#fff",textShadow:"0 1px 2px #000"}}>área segura</span>
+        </div>
       )}
       {enquadrar && sel && (
         <div style={{position:"absolute",inset:8,border:"1.5px dashed rgba(255,255,255,.85)",borderRadius:10,pointerEvents:"none"}}>
@@ -118000,24 +118056,44 @@ function _EvpMusicas(q){
 function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
   const lg = p.legenda || {};
   const est = lg.estilo || kit.legenda_estilo || "palavra";
+  const pos = lg.posicao || (kit.legenda_posicao === "centro" ? "centro" : "segura");
+  const caixa = lg.caixa || (lg.caixaAlta ? "alta" : "");
+  const [areaSegura, setAreaSegura] = useState(function(){ try{ return localStorage.getItem("pxev-area-segura") === "1"; }catch(_){ return false; } });
+  const mudarArea = function(v){ setAreaSegura(v); try{ localStorage.setItem("pxev-area-segura", v ? "1" : "0"); }catch(_){} try{ window.dispatchEvent(new Event("pxev-area-segura")); }catch(_){} };
+  const sel = {font:"inherit",padding:"6px 8px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo};
+  const tit = function(x){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:_EVP_COR.sub,margin:"8px 0 4px"}}>{x}</div>; };
   return (
     <div>
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+      {tit("Modelo")}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
         {_EVP_LEG_ESTILOS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.estilo = o.id; }); }} style={_evpChip(est === o.id)}>{o.label}</button>; })}
       </div>
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
-        {_EV_LEG_POS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.posicao = o.id; }); }} style={_evpChip((lg.posicao || kit.legenda_posicao || "baixo") === o.id)}>{o.label}</button>; })}
+      {tit("Animação")}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
+        {_EVP_LEG_ANIMS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.anim = o.id; }); }} style={_evpChip((lg.anim || "nenhuma") === o.id)}>{o.label}</button>; })}
       </div>
+      {tit("Posição")}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
+        {_EVP_LEG_POS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.posicao = o.id; np.legenda.y = null; }); }} style={_evpChip(lg.y == null && pos === o.id)}>{o.label}</button>; })}
+      </div>
+      <_EvpSlider ctl={ctl} rotulo="Altura na tela" v={lg.y != null ? _evpNum(lg.y, 0.72) : (pos === "centro" ? 0.52 : pos === "baixo" ? 0.75 : pos === "anuncio" ? 0.61 : 0.755)} min={0.15} max={0.9} step={0.005} fmt={function(v){ return Math.round(v*100) + "%"; }} aplicar={function(np, v){ np.legenda.y = v; }}/>
+      <div style={{fontSize:11,color:_EVP_COR.sub,margin:"-4px 0 8px"}}>Área segura: fora dos 14% de cima e dos 20% de baixo que o Instagram cobre (35% em anúncio). O tamanho da letra nunca muda sozinho: a linha quebra por palavra.</div>
+      <_EvpInterruptor on={areaSegura} onChange={mudarArea} label="Mostrar área segura na prévia"/>
+      {tit("Letra")}
       <_EvpSlider ctl={ctl} rotulo="Tamanho" v={_evpNum(lg.tam, 1)} min={0.6} max={1.6} step={0.05} padrao={1} fmt={function(v){ return Math.round(v*100) + "%"; }} aplicar={function(np, v){ np.legenda.tam = v; }}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-        <select value={lg.fonte || ""} aria-label="Fonte da legenda" onChange={function(e){ const v = e.target.value; try{ if(v) _evCarregarFonte(v); }catch(_){} mudar(function(np){ np.legenda.fonte = v; }); }}
-          style={{font:"inherit",padding:"6px 8px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
+        <select value={lg.fonte || ""} aria-label="Fonte da legenda" onChange={function(e){ const v = e.target.value; try{ if(v) _evCarregarFonte(v); }catch(_){} mudar(function(np){ np.legenda.fonte = v; }); }} style={sel}>
           <option value="">Fonte do kit</option>{_EV_FONTES.map(function(f){ return <option key={f} value={f}>{f}</option>; })}</select>
-        <select value={lg.cor || "principal"} aria-label="Cor de destaque da legenda" onChange={function(e){ const v = e.target.value; mudar(function(np){ np.legenda.cor = v; }); }}
-          style={{font:"inherit",padding:"6px 8px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo}}>
+        <select value={lg.cor || "principal"} aria-label="Cor de destaque da legenda" onChange={function(e){ const v = e.target.value; mudar(function(np){ np.legenda.cor = v; }); }} style={sel}>
           <option value="principal">Destaque: cor do cliente</option><option value="amarelo">Destaque: amarelo</option><option value="branco">Destaque: branco</option></select>
       </div>
-      <_EvpInterruptor on={!!lg.caixaAlta} onChange={function(v){ mudar(function(np){ np.legenda.caixaAlta = v; }); }} label="LETRAS MAIÚSCULAS"/>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
+        {_EVP_LEG_PESOS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.peso = o.id; }); }} style={_evpChip((lg.peso || "negrito") === o.id)}>{o.label}</button>; })}
+        <button onClick={function(){ mudar(function(np){ np.legenda.italico = !np.legenda.italico; }); }} style={Object.assign(_evpChip(!!lg.italico), {fontStyle:"italic"})}>Itálico</button>
+      </div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
+        {_EVP_LEG_CAIXAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.caixa = o.id; np.legenda.caixaAlta = o.id === "alta"; }); }} style={_evpChip(caixa === o.id)}>{o.label}</button>; })}
+      </div>
     </div>
   );
 }
@@ -118980,7 +119056,7 @@ function _evpConferir(p, calc, o){
   const narrFora = (p.narracoes || []).filter(function(n){ return n.t0 >= calc.total - 0.05; });
   if(narrFora.length) add("aviso", narrFora.length + " narração depois do fim do vídeo", "Ela não vai tocar. Arraste para dentro.");
   // textos por cima da legenda
-  const yLeg = calc.posLegenda === "centro" ? 0.52 : 0.75;
+  const yLeg = _evpLegCentro(calc.posLegenda, (p.legenda || {}).y, 2, 91/1920, 1);   // v10: centro aproximado (2 linhas) da legenda, em fração da altura
   const choque = (p.textos || []).filter(function(x){
     const y = x.y != null ? x.y + (x.tipo === "tarja" ? 0.03 : 0) : (x.tipo === "tarja" ? 0.65 : x.pos === "meio" ? 0.45 : x.pos === "baixo" ? 0.72 : 0.2);
     return Math.abs(y - yLeg) < 0.07 && calc.blocos.some(function(b){ return b.a < x.t1 && b.b > x.t0; }); });
