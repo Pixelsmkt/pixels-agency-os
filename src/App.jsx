@@ -46171,6 +46171,19 @@ function _pxEntregaNoTopo(finItems, task){
 }
 
 // Item mais recente de uma lista de arquivos (fallback: ultimo do array)
+/* (29/09/2026, Gustavo: "esse feedback do ajustar briefing é salvo no conhecimento?") — o "Ajustar
+   briefing" e o "Ajustar legenda" de DENTRO DO CARD passam a gravar o pedido em claude_copy_feedback,
+   a mesma tabela de aprendizado do "Ajustar copy" da Avaliação de copys. Antes só a Avaliação gravava.
+   Nunca trava o ajuste: se falhar, só avisa no console. */
+function _pxGravarFeedbackCard(o){
+  try{
+    const sb=(typeof window!=="undefined")?window._sb:null; const txt=String((o&&o.feedback)||"").trim();
+    if(!sb||!txt) return;
+    sb.from("claude_copy_feedback").insert({task_id:o.taskId||null,client:o.client||null,bioter_unit:o.unit||null,titulo:o.titulo||null,
+      tipo:"ajuste",feedback:"["+(o.alvo||"briefing")+", pelo card] "+txt,briefing_anterior:o.briefing||null,legenda_anterior:o.legenda||null,pedido_por:o.quem||null})
+      .then(function(r){ if(r&&r.error) console.warn("[feedback card]",r.error.message); },function(e){ console.warn("[feedback card]",(e&&e.message)||e); });
+  }catch(e){ console.warn("[feedback card]",(e&&e.message)||e); }
+}
 function _pxLastFile(list){
   const arr=(list||[]).slice();
   if(!arr.length) return null;
@@ -49147,6 +49160,7 @@ function _cardPodeSerResp(u){
           <button id="px-legia-go" disabled={!!legIA.loading||String(legIA.brief||"").trim().length<3}
             onClick={async function(){
               const _b=String(legIA.brief||"").trim();
+              if(legIA.modo==="alterar") _pxGravarFeedbackCard({taskId:task.id,client:client,unit:bioterUnit,titulo:title||task.title,alvo:"legenda",feedback:_b,briefing:desc,legenda:caption,quem:(user&&user.name)||null});
               setLegIA(function(p){return Object.assign({},p,{loading:true,erro:"",opcoes:null});});
               try{
                 const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;});
@@ -49283,6 +49297,7 @@ function _cardPodeSerResp(u){
             <button id="px-briefia-go" disabled={!_podeGerar}
               onClick={async function(){
                 const _p=String(briefIA.pedido||"").trim();
+                if(briefIA.modo==="alterar") _pxGravarFeedbackCard({taskId:task.id,client:client,unit:bioterUnit,titulo:title||task.title,alvo:"briefing",feedback:_p,briefing:desc,legenda:caption,quem:(user&&user.name)||null});
                 setBriefIA(function(p){return Object.assign({},p,{loading:true,erro:""});});
                 try{
                   const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;});
