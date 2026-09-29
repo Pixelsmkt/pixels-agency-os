@@ -35091,6 +35091,75 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 </span>))}
                 {/* ═════ Botões Baixar + Compartilhar — canto direito, após pagamento ═════ */}
                 {(tab==="video"||tab==="publicacao")&&_bl("pub.baixar")&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  {/* 29/09 (Gustavo): mesma regra da capa e do card — comprimido (Leve) primeiro, ORIGINAL sempre no canto direito */}
+                  {/* ═════ Gerar versão leve sob demanda (vídeos sem preview) ═════ */}
+                  {tab==="video"&&_ultimoVideo&&!(_previewVideo&&_previewVideo.previewUrl)&&(function(){
+                    const _g=(current&&genLeve[current.id])||{};
+                    const _busy=!!_g.busy;
+                    return <React.Fragment>
+                      <style>{"@keyframes pixelsSpin{to{transform:rotate(360deg)}}"}</style>
+                      <button type="button" disabled={_busy}
+                        title="Gerar a versão leve (720p) agora a partir do original. Deixe esta aba aberta e visível enquanto processa (roda em tempo real, ~1-2 min)."
+                        onClick={async function(){
+                          if(_busy||!current||!_ultimoVideo)return;
+                          const _cid=current.id, _vid=_ultimoVideo;
+                          _genAbortRef.current=false;
+                          setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:true,pct:0}});});
+                          if(typeof pixelsToast!=="undefined")pixelsToast.info("Gerando versão leve… mantenha esta aba aberta e visível.",4500);
+                          try{
+                            const res=await pixelsBackfillOneVideo(_cid,_vid,function(pct){setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:true,pct:pct}});});},_genAbortRef);
+                            if(res&&res.ok){
+                              setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:100,done:true}});});
+                              if(setTasks)setTasks(function(p){return p.map(function(t){return t.id===_cid?Object.assign({},t,{files:(t.files||[]).map(function(f){return (f&&f.id===_vid.id)?Object.assign({},f,{previewUrl:res.previewUrl,previewPath:res.previewPath,previewSize:res.previewSize}):f;})}):t;});});
+                              if(typeof pixelsToast!=="undefined")pixelsToast.success("Versão leve pronta! Já pode baixar/usar.",4500);
+                            }else{
+                              setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:0}});});
+                              const _motivo=(res&&res.skipped)?"o vídeo é pequeno, não precisa de versão leve.":((res&&res.reason==="download")?"não consegui baixar o original.":"a aba foi pro fundo ou o vídeo não encolheu o bastante. Tenta de novo deixando a aba aberta e visível.");
+                              if(typeof pixelsToast!=="undefined")pixelsToast.warning("Não gerou: "+_motivo,6000);
+                            }
+                          }catch(e){
+                            setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:0}});});
+                            if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao gerar: "+((e&&e.message)||"erro"),5000);
+                          }
+                        }}
+                        style={{background:_busy?"#f1f5f9":"#faf5ff",border:"1px solid "+(_busy?"#e2e8f0":"#e4d4fd"),borderRadius:9,height:36,padding:"0 12px",color:_busy?"#94a3b8":"#7c3aed",cursor:_busy?"default":"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",fontSize:11.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",transition:"all .15s"}}
+                        onMouseEnter={function(e){if(!_busy){e.currentTarget.style.background="#f3e8ff";e.currentTarget.style.borderColor="#c4b5fd";}}}
+                        onMouseLeave={function(e){if(!_busy){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.borderColor="#e4d4fd";}}}>
+                        {_busy
+                          ?<React.Fragment><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{animation:"pixelsSpin 0.8s linear infinite"}}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Gerando {_g.pct||0}%</React.Fragment>
+                          :<React.Fragment><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>Gerar versão leve</React.Fragment>}
+                      </button>
+                    </React.Fragment>;
+                  })()}
+                  {/* ═════ Baixar versão compactada — só aparece quando existe preview ═════ */}
+                  {tab==="video"&&_previewVideo&&_previewVideo.previewUrl&&(
+                  <button type="button" title="Baixar versão compactada (720p em alta taxa — bem menor que o original e sem perder qualidade de leitura)"
+                    onClick={async function(){
+                      try{
+                        const _url=_previewVideo.previewUrl;
+                        if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando versão compactada…",2500);
+                        const _title=current.title?String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_"):"video";
+                        const _extM=String(_url).toLowerCase().match(/\.(mp4|webm)(?:\?|$)/);
+                        const _fname=_title+"_compactado."+(_extM?_extM[1]:"mp4");
+                        const _r=await fetch(_url);
+                        const _b=await _r.blob();
+                        const _u=URL.createObjectURL(_b);
+                        const _a=document.createElement("a"); _a.href=_u; _a.download=_fname;
+                        document.body.appendChild(_a); _a.click();
+                        setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname,3000);
+                      }catch(e){
+                        console.warn("[download preview]",e);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download compactado: "+(e&&e.message||"erro"),4000);
+                        try{window.open(_previewVideo.previewUrl,"_blank");}catch(_){}
+                      }
+                    }}
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,height:36,padding:"0 10px",color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",fontSize:11.5,fontWeight:700,letterSpacing:-.1,transition:"all .15s",whiteSpace:"nowrap"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>{/* 29/09: mesmo ícone do "comprimido" da capa e do card */}
+                    {_previewVideo.previewSize?("Leve "+_fmtMB(_previewVideo.previewSize)):"Leve"}
+                  </button>)}
                   <button type="button" title={tab==="video"?(_previewVideo?"Baixar vídeo ORIGINAL (arquivo cheio, alta qualidade)":"Baixar vídeo original"):((current.contentType||current.tipo||"").toLowerCase()==="carrossel"?"Baixar todas as lâminas do carrossel":"Baixar arte final")}
                     onClick={async function(){
                       try{
@@ -35188,74 +35257,6 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     {(tab==="video"&&_origSize)?("Original "+_fmtMB(_origSize)):null}
                   </button>
-                  {/* ═════ Gerar versão leve sob demanda (vídeos sem preview) ═════ */}
-                  {tab==="video"&&_ultimoVideo&&!(_previewVideo&&_previewVideo.previewUrl)&&(function(){
-                    const _g=(current&&genLeve[current.id])||{};
-                    const _busy=!!_g.busy;
-                    return <React.Fragment>
-                      <style>{"@keyframes pixelsSpin{to{transform:rotate(360deg)}}"}</style>
-                      <button type="button" disabled={_busy}
-                        title="Gerar a versão leve (720p) agora a partir do original. Deixe esta aba aberta e visível enquanto processa (roda em tempo real, ~1-2 min)."
-                        onClick={async function(){
-                          if(_busy||!current||!_ultimoVideo)return;
-                          const _cid=current.id, _vid=_ultimoVideo;
-                          _genAbortRef.current=false;
-                          setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:true,pct:0}});});
-                          if(typeof pixelsToast!=="undefined")pixelsToast.info("Gerando versão leve… mantenha esta aba aberta e visível.",4500);
-                          try{
-                            const res=await pixelsBackfillOneVideo(_cid,_vid,function(pct){setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:true,pct:pct}});});},_genAbortRef);
-                            if(res&&res.ok){
-                              setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:100,done:true}});});
-                              if(setTasks)setTasks(function(p){return p.map(function(t){return t.id===_cid?Object.assign({},t,{files:(t.files||[]).map(function(f){return (f&&f.id===_vid.id)?Object.assign({},f,{previewUrl:res.previewUrl,previewPath:res.previewPath,previewSize:res.previewSize}):f;})}):t;});});
-                              if(typeof pixelsToast!=="undefined")pixelsToast.success("Versão leve pronta! Já pode baixar/usar.",4500);
-                            }else{
-                              setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:0}});});
-                              const _motivo=(res&&res.skipped)?"o vídeo é pequeno, não precisa de versão leve.":((res&&res.reason==="download")?"não consegui baixar o original.":"a aba foi pro fundo ou o vídeo não encolheu o bastante. Tenta de novo deixando a aba aberta e visível.");
-                              if(typeof pixelsToast!=="undefined")pixelsToast.warning("Não gerou: "+_motivo,6000);
-                            }
-                          }catch(e){
-                            setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:0}});});
-                            if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao gerar: "+((e&&e.message)||"erro"),5000);
-                          }
-                        }}
-                        style={{background:_busy?"#f1f5f9":"#faf5ff",border:"1px solid "+(_busy?"#e2e8f0":"#e4d4fd"),borderRadius:9,height:36,padding:"0 12px",color:_busy?"#94a3b8":"#7c3aed",cursor:_busy?"default":"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",fontSize:11.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",transition:"all .15s"}}
-                        onMouseEnter={function(e){if(!_busy){e.currentTarget.style.background="#f3e8ff";e.currentTarget.style.borderColor="#c4b5fd";}}}
-                        onMouseLeave={function(e){if(!_busy){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.borderColor="#e4d4fd";}}}>
-                        {_busy
-                          ?<React.Fragment><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{animation:"pixelsSpin 0.8s linear infinite"}}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Gerando {_g.pct||0}%</React.Fragment>
-                          :<React.Fragment><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>Gerar versão leve</React.Fragment>}
-                      </button>
-                    </React.Fragment>;
-                  })()}
-                  {/* ═════ Baixar versão compactada — só aparece quando existe preview ═════ */}
-                  {tab==="video"&&_previewVideo&&_previewVideo.previewUrl&&(
-                  <button type="button" title="Baixar versão compactada (720p em alta taxa — bem menor que o original e sem perder qualidade de leitura)"
-                    onClick={async function(){
-                      try{
-                        const _url=_previewVideo.previewUrl;
-                        if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando versão compactada…",2500);
-                        const _title=current.title?String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_"):"video";
-                        const _extM=String(_url).toLowerCase().match(/\.(mp4|webm)(?:\?|$)/);
-                        const _fname=_title+"_compactado."+(_extM?_extM[1]:"mp4");
-                        const _r=await fetch(_url);
-                        const _b=await _r.blob();
-                        const _u=URL.createObjectURL(_b);
-                        const _a=document.createElement("a"); _a.href=_u; _a.download=_fname;
-                        document.body.appendChild(_a); _a.click();
-                        setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
-                        if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname,3000);
-                      }catch(e){
-                        console.warn("[download preview]",e);
-                        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download compactado: "+(e&&e.message||"erro"),4000);
-                        try{window.open(_previewVideo.previewUrl,"_blank");}catch(_){}
-                      }
-                    }}
-                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,height:36,padding:"0 10px",color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",fontSize:11.5,fontWeight:700,letterSpacing:-.1,transition:"all .15s",whiteSpace:"nowrap"}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    {_previewVideo.previewSize?("Leve "+_fmtMB(_previewVideo.previewSize)):"Leve"}
-                  </button>)}
                   <button type="button" title="Copiar link do cartão"
                     onClick={async function(){
                       try{
