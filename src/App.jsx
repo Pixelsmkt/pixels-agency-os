@@ -21542,7 +21542,16 @@ function pxLacunasCalendario(tasks, iniIso, fimIso, hojeIso){
       if(!horiz) return;
       const fimContrato=(typeof PX_CASCATA_FIM_CONTRATO!=="undefined"&&PX_CASCATA_FIM_CONTRATO[cli])||"";
       const diasDoAlvo={}; porAlvo[a].forEach(function(t){ diasDoAlvo[t.publish_date]=true; });
-      const prefer=(typeof PX_AUTOPLAN_DIA!=="undefined"&&PX_AUTOPLAN_DIA[cli])||[];
+      // (29/09/2026, Gustavo: "por que não colocou no dia certo? seria quinta") — além do dia fixo de
+      // PX_AUTOPLAN_DIA, o app APRENDE os dias da cadência do alvo olhando as semanas cheias
+      // (ex.: Arabutã posta segunda e quinta → se a segunda já tem post, a lacuna vai pra quinta).
+      let prefer=(typeof PX_AUTOPLAN_DIA!=="undefined"&&PX_AUTOPLAN_DIA[cli])||[];
+      if(!prefer.length){
+        const freq={}; let semCheias=0;
+        Object.keys(porSem).forEach(function(ww){ const gg=conta(ww); if(gg.length<cap) return; semCheias++;
+          gg.forEach(function(t){ const wd=_pxApData(t.publish_date).getDay(); if(wd>=1&&wd<=5) freq[wd]=(freq[wd]||0)+1; }); });
+        if(semCheias>=3) prefer=Object.keys(freq).map(Number).sort(function(x,y){ return (freq[y]-freq[x])||(x-y); }).slice(0,cap);
+      }
       for(let s=semHoje; s<=horiz; s=addD(s,7)){
         if(s>fimIso||addD(s,6)<iniIso) continue;
         const g=conta(s); const falta=cap-g.length; if(falta<=0) continue;
@@ -21553,7 +21562,7 @@ function pxLacunasCalendario(tasks, iniIso, fimIso, hojeIso){
           if(diasDoAlvo[d]) continue;
           let nota=k*0.01;
           if(diasDoAlvo[addD(d,-1)]||diasDoAlvo[addD(d,1)]) nota+=10;
-          if(prefer.length&&prefer.indexOf(k)<0) nota+=5;
+          if(prefer.length&&prefer.indexOf(k)<0) nota+=20;   // dia da cadência pesa mais que "não colar em outro post" (29/09)
           if(nota<melhorNota){ melhorNota=nota; melhor=d; }
         }
         if(!melhor) continue;
