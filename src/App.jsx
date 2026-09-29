@@ -8822,8 +8822,8 @@ function PxIcoBaixar({qual, size}){
   /* v2 (29/09, Gustavo: "ícones de vídeo ficaram horríveis"): Full = seta de download (o arquivo inteiro);
      Comprimido = pena (versão leve). Os cantos pra fora/pra dentro da v1 saíram. */
   /* v4 (29/09, 11h04, Gustavo escolheu a opção B): comprimido = arquivo com seta pra baixo. */
-  if(qual==="leve") return <svg width={s} height={s} style={{display:"block",flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>;
-  return <svg width={s} height={s} style={{display:"block",flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+  if(qual==="leve") return <svg width={s} height={s} style={{display:"block",position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",margin:0,pointerEvents:"none"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>;
+  return <svg width={s} height={s} style={{display:"block",position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",margin:0,pointerEvents:"none"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 }
 function PxBaixarEntrega({task, variante, cor}){
   const [ocup,setOcup]=useState("");
@@ -8853,13 +8853,13 @@ function PxBaixarEntrega({task, variante, cor}){
     {botoes.map(function(b){
       const busy=ocup===(b.qual||"arte");
       const st=capa
-        ?{width:20,height:20,borderRadius:6,border:"1px solid rgba(255,255,255,0.18)",background:(typeof pxEscurecerCor==="function"?pxEscurecerCor(_cor,.42):"rgba(0,0,0,0.28)"),color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.15)",opacity:b.off?.45:(busy?.6:1)}
+        ?{width:20,height:20,minWidth:20,minHeight:20,borderRadius:6,border:"none",background:(typeof pxEscurecerCor==="function"?pxEscurecerCor(_cor,.42):"rgba(0,0,0,0.28)"),color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.20)",opacity:b.off?.45:(busy?.6:1)}
         :{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",color:b.off?"#cbd5e1":"#64748b"};
       return <button key={b.qual||"arte"} type="button" title={b.title} aria-label={b.title} onClick={clique(b.qual)}
         style={Object.assign({display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:0,fontSize:0,boxSizing:"border-box",verticalAlign:"middle",cursor:b.off?"help":"pointer",position:"relative",flexShrink:0,transition:"all .15s",opacity:busy?.6:1},st)}
         onMouseEnter={function(e){ if(b.off) return; if(capa){ e.currentTarget.style.transform="scale(1.1)"; } else { e.currentTarget.style.background="#f8fafc"; e.currentTarget.style.color="#0f172a"; } }}
         onMouseLeave={function(e){ if(capa){ e.currentTarget.style.transform=""; } else { e.currentTarget.style.background="#fff"; e.currentTarget.style.color=b.off?"#cbd5e1":"#64748b"; } }}>
-        <PxIcoBaixar qual={b.qual} size={capa?13:16}/>
+        <PxIcoBaixar qual={b.qual} size={capa?12:16}/>{/* capa: 20x20, raio 6, ícone 12 — igual ao chip de status do card (29/09) */}
         {b.badge?<span style={{position:"absolute",top:capa?-4:-5,right:capa?-4:-5,background:"#7c3aed",color:"#fff",fontSize:capa?7.5:8.5,fontWeight:800,borderRadius:99,padding:capa?"0 4px":"1px 5px",lineHeight:1.5,border:"1.5px solid #fff"}}>{b.badge}</span>:null}
       </button>;
     })}
