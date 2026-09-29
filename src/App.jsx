@@ -8827,6 +8827,15 @@ function PxIcoBaixar({qual, size}){
   if(qual==="leve") return <svg width={s} height={s} style={{display:"block",position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",margin:0,pointerEvents:"none"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>;
   return <svg width={s} height={s} style={{display:"block",position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",margin:0,pointerEvents:"none"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 }
+/* 29/09: o comprimido é gerado SOZINHO — no navegador de quem subiu (se a aba ficar aberta) e,
+   garantido, pelo PC da agência (previews_ffmpeg.py), que pega o vídeo ~4 min depois do upload.
+   Nos primeiros 30 min o botão avisa que está sendo gerado, em vez de mandar gerar à mão. */
+function _pxBxMsgSemLeve(f){
+  const ts=_pxBxTs(f);
+  if(ts&&(Date.now()-ts)<30*60*1000) return "Versão comprimida sendo gerada — fica pronta em alguns minutos, sozinha";
+  if(f&&f.size&&f.size<=20*1024*1024) return "Vídeo já é leve (até 20 MB) — não precisa de versão comprimida; use o full";
+  return "Versão comprimida ainda não ficou pronta — o PC da agência gera sozinho (precisa estar ligado); ou gere na Avaliação de vídeo";
+}
 function PxBaixarEntrega({task, variante, cor}){
   const [ocup,setOcup]=useState("");
   const al=pxBaixarAlvos(task);
@@ -8843,7 +8852,7 @@ function PxBaixarEntrega({task, variante, cor}){
   if(al.tipo==="video"){
     const fs=al.full&&al.full.size, ls=al.leve&&al.leve.previewSize;
     /* Full sempre no canto direito (29/09, Gustavo): comprimido primeiro, full por último. */
-    botoes.push({qual:"leve", off:!al.leve, title:al.leve?("Baixar vídeo comprimido (leve"+(ls?(" · "+_pxBxMB(ls)):"")+")"):"Vídeo comprimido ainda não existe — dá pra gerar na Avaliação de vídeo"});
+    botoes.push({qual:"leve", off:!al.leve, title:al.leve?("Baixar vídeo comprimido (leve"+(ls?(" · "+_pxBxMB(ls)):"")+")"):_pxBxMsgSemLeve(al.full)});
     botoes.push({qual:"full", title:"Baixar vídeo full (original"+(fs?(" · "+_pxBxMB(fs)):"")+")"});
   } else {
     const n=al.itens.length;
@@ -25626,8 +25635,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                         title={x.rotulo+": a semana está com "+x.falta+" post"+(x.falta>1?"s":"")+" a menos que a cadência. Nada é criado sozinho — clique em Criar card se quiser preencher."}
                         style={{border:"1.5px dashed "+_cor,borderRadius:8,padding:"6px 8px 7px",background:"rgba(255,255,255,0.82)",display:"flex",flexDirection:"column",gap:5,flexShrink:0,fontFamily:"'Inter',system-ui,sans-serif"}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-                          {/* (29/09/2026, Gustavo) triângulo de alerta no lugar da bolinha — mesmo selo amarelo do "sem material" */}
-                          <span aria-hidden="true" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#facc15",color:"#713f12",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                          {/* (29/09/2026, Gustavo) triângulo de alerta no lugar da bolinha — chip na cor do cliente, ícone branco */}
+                          <span aria-hidden="true" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:_cor,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                           <span style={{flex:1,minWidth:0,fontSize:pxFonte(10.5,isMob),fontWeight:800,color:_cor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.rotulo}</span>
                           <button type="button" title="Ignorar esta lacuna" onClick={function(e){e.stopPropagation();_ignorarLacuna(x);}}
                             style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:0,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
