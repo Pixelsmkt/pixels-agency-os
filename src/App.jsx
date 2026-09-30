@@ -35236,9 +35236,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                         const _multi = _urls.length>1;
                         // Numeração separada: feed 1..N, story 1..M
                         let _nFeed=0,_nStory=0;
-                        const _sufixo=_urls.map(function(u){ if(_storyUrls[u]){_nStory++;return "_story_"+_nStory;} _nFeed++; return "_lamina_"+_nFeed; });
+                        /* 30/09 (Gustavo): "título do card - 1". Com 10+ lâminas o número ganha zero à esquerda (01…10) pra pasta ordenar certo. */
+                        const _nTotFeed=_urls.filter(function(u){return !_storyUrls[u];}).length, _nTotStory=_urls.length-_nTotFeed;
+                        const _num=function(k,tot){ return tot>=10?String(k).padStart(2,"0"):String(k); };
+                        const _sufixo=_urls.map(function(u){ if(_storyUrls[u]){_nStory++;return " - story "+_num(_nStory,_nTotStory);} _nFeed++; return " - "+_num(_nFeed,_nTotFeed); });
                         if(typeof pixelsToast!=="undefined") pixelsToast.info(_multi?("Baixando "+_urls.length+" lâminas…"):"Baixando…",2500);
-                        const _title = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : (tab==="video"?"video":"arte");
+                        const _title = current.title ? String(current.title).replace(/[\\/:*?"<>|\u0000-\u001f]/g," ").replace(/\s+/g," ").trim().replace(/[. ]+$/,"").slice(0,90) || (tab==="video"?"video":"arte") : (tab==="video"?"video":"arte");
                         let _okCount = 0;
                         // 29/09 (Gustavo): baixa de trás pra frente — a pasta Downloads mostra o mais novo primeiro,
                         // então a lâmina 1 (baixada por último) aparece na frente e a sequência fica na ordem.
@@ -35246,15 +35249,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                           const _url = _urls[i];
                           let _fname = "";
                           try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
-                          if(!_fname || _fname.length<4){
+                          /* 30/09: sempre com o título do card (antes vinha o nome do storage: 1790021326656-9k5lf…png) */
+                          { const _dot0=_fname.lastIndexOf("."); const _extOrig=_dot0>0?_fname.slice(_dot0+1).toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,5):"";
                             const _extM = String(_url).toLowerCase().match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
-                            _fname = _title + (_multi?_sufixo[i]:"") + "." + (_extM?_extM[1]:(tab==="video"?"mp4":"png"));
-                          } else if(_multi){
-                            const _dot = _fname.lastIndexOf(".");
-                            const _base = _dot>0?_fname.slice(0,_dot):_fname;
-                            const _ext = _dot>0?_fname.slice(_dot):"";
-                            _fname = _base+_sufixo[i]+_ext;
-                          }
+                            _fname = _title + (_multi?_sufixo[i]:"") + "." + (_extOrig||(_extM?_extM[1]:(tab==="video"?"mp4":"png"))); }
                           try{
                             const _r = await fetch(_url);
                             const _b = await _r.blob();
@@ -100815,43 +100813,108 @@ function _pbScrollTo(id){
 }
 
 
+/* (30/09/2026, Gustavo) "esse 'lendo o material' tá coisa mais feia.. não tem como aparecer a porcentagem?"
+   A porcentagem sai do passo que a leitura já informa: guardar (0–10%), desenhar páginas (10–55%, real:
+   página X de Y), IA (55–97%, real entre partes; dentro de cada parte é estimada pelo tempo, porque a
+   IA não diz quanto falta), transcrição de reunião idem. Com vários arquivos, vira a média do lote.
+   Nunca volta pra trás e só chega a 100% quando termina. */
+function _pbPctDoPasso(passo,desdeMs){
+  const t=String(passo||"");
+  let i=1,n=1; const mLote=t.match(/^\((\d+)\/(\d+)\)/); if(mLote){ i=Number(mLote[1])||1; n=Math.max(1,Number(mLote[2])||1); }
+  const seg=Math.max(0,(Date.now()-(desdeMs||Date.now()))/1000);
+  const rampa=function(ini,fim,tau){ return ini+(fim-ini)*(1-Math.exp(-seg/tau)); };
+  let local;
+  let m;
+  const mPct=t.match(/[—-]\s*(\d{1,3})%/); const pReal=mPct?Math.min(100,Number(mPct[1])):null;   // "guardando … — 45%", "extraindo o áudio — 45%"
+  if(/guardando/i.test(t)) local=pReal!=null?2+8*pReal/100:rampa(2,10,6);
+  else if(/extraindo/i.test(t)&&pReal!=null) local=8+32*pReal/100;
+  else if((m=t.match(/p[áa]gina\s+(\d+)\s+de\s+(\d+)/i))) local=10+45*((Number(m[1])-1)/Math.max(1,Number(m[2])))+rampa(0,45/Math.max(1,Number(m[2])),4);
+  else if((m=t.match(/parte\s+(\d+)\s+de\s+(\d+)/i))){ const b=Number(m[1])||1,c=Math.max(1,Number(m[2])||1); local=55+42*((b-1)/c)+rampa(0,42/c*0.9,25); }
+  else if(/transcrevendo|baixando o áudio|extraindo|dividindo|conversor/i.test(t)) local=rampa(8,55,60);
+  else local=rampa(55,97,28);   // IA lendo (sem partes)
+  local=Math.min(97,Math.max(1,local));
+  return Math.min(99,((i-1)*100+local)/n);
+}
+function _PbProgressoLeitura({passo}){
+  const [agora,setAgora]=useState(0);
+  const refFase=useRef({fase:"",desde:Date.now(),max:0});
+  const fase=String(passo||"").replace(/\s*\(.*?\)\s*$/,"");
+  if(refFase.current.fase!==fase){ refFase.current.fase=fase; refFase.current.desde=Date.now(); }
+  useEffect(function(){ const id=setInterval(function(){ setAgora(Date.now()); },400); return function(){ clearInterval(id); }; },[]);
+  let pct=_pbPctDoPasso(passo,refFase.current.desde);
+  if(pct<refFase.current.max) pct=refFase.current.max; else refFase.current.max=pct;
+  const p=Math.round(pct);
+  return <span style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,width:"min(380px,100%)",marginTop:4}} data-t={agora}>
+    <span style={{display:"flex",alignItems:"baseline",gap:6}}>
+      <span style={{color:"#b45309",fontSize:26,fontWeight:800,letterSpacing:-1,fontFeatureSettings:"'tnum'"}}>{p}%</span>
+    </span>
+    <span style={{position:"relative",display:"block",width:"100%",height:8,borderRadius:99,background:"#f5b30122",overflow:"hidden"}}>
+      <span style={{position:"absolute",left:0,top:0,bottom:0,width:p+"%",borderRadius:99,background:"linear-gradient(90deg,#f5b301,#e09a00)",transition:"width .4s ease"}}/>
+      <span style={{position:"absolute",left:0,top:0,bottom:0,width:p+"%",borderRadius:99,background:"linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.45),rgba(255,255,255,0))",backgroundSize:"200% 100%",animation:"pxIndet 1.6s ease-in-out infinite",opacity:.6}}/>
+    </span>
+  </span>;
+}
+
+/* ─── (30/09/2026, Gustavo) "tenho que selecionar várias vezes a mesma foto pra subir" ───
+   Duas causas: (1) o seletor era um <input> solto que o app removia da página depois de 60 s —
+   navegando no Google Drive (G:) até a pasta leva mais que isso, e aí a escolha não chegava;
+   (2) arquivo do Drive que está só na nuvem (ícone de nuvem) ainda não foi baixado quando o
+   navegador entrega: a leitura falha ou vem vazia na 1ª vez e só funciona na 2ª.
+   Agora: o seletor fica vivo até você escolher ou cancelar, aceita várias fotos, e cada arquivo
+   é lido antes de subir com novas tentativas (espera o Drive baixar). */
+function _pxEscolherArquivos(opts){
+  const o=opts||{};
+  return new Promise(function(resolve){
+    const inp=document.createElement("input");
+    inp.type="file"; inp.accept=o.accept||"image/*"; if(o.multiple) inp.multiple=true;
+    inp.style.position="fixed"; inp.style.left="-9999px"; inp.style.opacity="0";
+    let feito=false;
+    const fim=function(lista){ if(feito) return; feito=true; try{ document.body.removeChild(inp); }catch(_){} resolve(lista||[]); };
+    inp.addEventListener("change",function(){ fim(Array.prototype.slice.call(inp.files||[])); });
+    inp.addEventListener("cancel",function(){ fim([]); });
+    document.body.appendChild(inp);
+    inp.click();
+    setTimeout(function(){ fim(Array.prototype.slice.call(inp.files||[])); },30*60000);
+  });
+}
+async function _pxArquivoPronto(file){
+  let ultimo=null;
+  for(let t=0;t<8;t++){
+    try{
+      const buf=await file.arrayBuffer();
+      if(buf&&buf.byteLength>0) return new Blob([buf],{type:file.type||"application/octet-stream"});
+      ultimo=new Error("arquivo veio vazio");
+    }catch(e){ ultimo=e; }
+    await new Promise(function(r){ setTimeout(r,t<3?800:1500); });
+  }
+  throw new Error("não consegui ler \""+(file&&file.name)+"\" — se ele estiver só na nuvem do Drive, espere baixar e tente de novo ("+((ultimo&&ultimo.message)||ultimo)+")");
+}
+async function _pxSubirImagemStorage(file,pasta){
+  const blob=await _pxArquivoPronto(file);
+  const ext=(String(file.name||"").split(".").pop()||"jpg").replace(/[^a-zA-Z0-9]/g,"").toLowerCase().slice(0,6)||"jpg";
+  const path=pasta+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,11)+"."+ext;
+  const {error}=await window._sb.storage.from("agency-files").upload(path,blob,{cacheControl:"3600",upsert:false,contentType:file.type||"image/jpeg"});
+  if(error) throw error;
+  const {data:pub}=window._sb.storage.from("agency-files").getPublicUrl(path);
+  if(!(pub&&pub.publicUrl)) throw new Error("sem endereço da imagem");
+  return {url:pub.publicUrl,blob:blob};
+}
+
 /* ─── _pbProdutoUploadImg — upload de imagem de produto direto pro Supabase Storage.
    Click sincrono (no handler do botão) → file picker → upload → atualiza prod.imgUrl. */
 /* ─── _pbTemplateUploadImg — upload de imagem de Template direto pro Supabase Storage.
    Mesmo padrão do produto: click sincrono (gesture context) → file picker → upload → seta imgUrl. */
 function _pbTemplateUploadImg(updFn){
-  try{
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "image/*";
-    inp.style.display = "none";
-    inp.onchange = async function(e){
-      const file = e.target.files && e.target.files[0];
-      if(!file) return;
-      try{
-        if(!window._sb) throw new Error("Supabase indisponível");
-        const ext = (file.name.split(".").pop()||"png").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
-        const rnd = Math.random().toString(36).slice(2,11);
-        const path = "playbook-templates/"+Date.now()+"-"+rnd+"."+ext;
-        if(typeof pixelsToast!=="undefined") pixelsToast.info("Enviando imagem...",1500);
-        const {error} = await window._sb.storage.from("agency-files").upload(path, file, {cacheControl:"3600", upsert:false});
-        if(error) throw error;
-        const {data:pub} = window._sb.storage.from("agency-files").getPublicUrl(path);
-        if(pub && pub.publicUrl){
-          updFn({imgUrl: pub.publicUrl});
-          if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida!",2000);
-        }
-      }catch(err){
-        console.warn("[upload template]", err);
-        if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err && err.message||"desconhecido"));
-      }
-    };
-    document.body.appendChild(inp);
-    inp.click();
-    setTimeout(()=>{try{document.body.removeChild(inp);}catch(_){}}, 60000);
-  }catch(err){
-    console.warn(err);
-  }
+  _pxEscolherArquivos({accept:"image/*"}).then(async function(files){
+    const file=files&&files[0]; if(!file) return;
+    try{
+      if(!window._sb) throw new Error("Supabase indisponível");
+      if(typeof pixelsToast!=="undefined") pixelsToast.info("Enviando imagem...",1500);
+      const r=await _pxSubirImagemStorage(file,"playbook-templates");
+      updFn({imgUrl:r.url});
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida!",2000);
+    }catch(err){ console.warn("[upload template]",err); if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err&&err.message||"desconhecido")); }
+  });
 }
 
 /* (23/09/2026, Vinicius: "sempre que passa ali pelos produtos dá uma travada")
@@ -100883,38 +100946,25 @@ async function _pbGerarThumb(src){
 function _pbThumbDe(prod,url){ const t=prod&&prod.thumbs; return (t&&typeof t==="object"&&t[url])||url; }
 
 function _pbProdutoUploadImg(pi, updFn){
-  try{
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "image/*";
-    inp.style.display = "none";
-    inp.onchange = async function(e){
-      const file = e.target.files && e.target.files[0];
-      if(!file) return;
+  /* (30/09/2026) seletor que não some, várias fotos de uma vez, leitura com novas tentativas */
+  _pxEscolherArquivos({accept:"image/*",multiple:true}).then(async function(files){
+    const lista=(files||[]).filter(function(f){ return !f.type||/^image\//.test(f.type); });
+    if(!lista.length) return;
+    if(!window._sb){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Supabase indisponível"); return; }
+    if(typeof pixelsToast!=="undefined") pixelsToast.info("Subindo "+lista.length+(lista.length===1?" foto…":" fotos…"),2000);
+    let ok=0;
+    for(let i=0;i<lista.length;i++){
       try{
-        if(!window._sb) throw new Error("Supabase indisponível");
-        const ext = (file.name.split(".").pop()||"png").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
-        const rnd = Math.random().toString(36).slice(2,11);
-        const path = "playbook-produtos/"+Date.now()+"-"+rnd+"."+ext;
-        const {error} = await window._sb.storage.from("agency-files").upload(path, file, {cacheControl:"3600", upsert:false});
-        if(error) throw error;
-        const {data:pub} = window._sb.storage.from("agency-files").getPublicUrl(path);
-        if(pub && pub.publicUrl){
-          let _thumb=""; try{ _thumb=await _pbGerarThumb(file); }catch(_e){ console.warn("[thumb produto]",_e&&_e.message||_e); }
-          updFn(pi, {imgUrl: pub.publicUrl, thumb:_thumb});
-          if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida.",1500);
-        }
+        const r=await _pxSubirImagemStorage(lista[i],"playbook-produtos");
+        let _thumb=""; try{ _thumb=await _pbGerarThumb(r.blob); }catch(_e){ console.warn("[thumb produto]",_e&&_e.message||_e); }
+        updFn(pi,{imgUrl:r.url,thumb:_thumb}); ok++;
       }catch(err){
-        console.warn("[upload produto]", err);
-        if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err && err.message||"desconhecido"));
+        console.warn("[upload produto]",err);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Não subiu "+lista[i].name+": "+(err&&err.message||"desconhecido"),6000);
       }
-    };
-    document.body.appendChild(inp);
-    inp.click();
-    setTimeout(()=>{try{document.body.removeChild(inp);}catch(_){}}, 60000);
-  }catch(err){
-    console.warn(err);
-  }
+    }
+    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.success(ok===1?"Foto subida.":(ok+" fotos subidas."),1800);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -101236,36 +101286,16 @@ function _pbNormStep(s){
 }
 // Upload de imagem de passo pro Supabase Storage (mesma pattern do _pbTemplateUploadImg)
 function _pbStepUploadImg(cb){
-  try{
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "image/*";
-    inp.style.display = "none";
-    inp.onchange = async function(e){
-      const file = e.target.files && e.target.files[0];
-      if(!file) return;
-      try{
-        if(!window._sb) throw new Error("Supabase indisponível");
-        const ext = (file.name.split(".").pop()||"png").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
-        const rnd = Math.random().toString(36).slice(2,11);
-        const path = "playbook-passos/"+Date.now()+"-"+rnd+"."+ext;
-        if(typeof pixelsToast!=="undefined") pixelsToast.info("Enviando imagem...",1500);
-        const {error} = await window._sb.storage.from("agency-files").upload(path, file, {cacheControl:"3600", upsert:false});
-        if(error) throw error;
-        const {data:pub} = window._sb.storage.from("agency-files").getPublicUrl(path);
-        if(pub && pub.publicUrl){
-          cb(pub.publicUrl);
-          if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida!",1500);
-        }
-      }catch(err){
-        console.warn("[upload passo]", err);
-        if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err && err.message||"desconhecido"));
-      }
-    };
-    document.body.appendChild(inp);
-    inp.click();
-    setTimeout(function(){try{document.body.removeChild(inp);}catch(_){}}, 60000);
-  }catch(err){ console.warn(err); }
+  _pxEscolherArquivos({accept:"image/*"}).then(async function(files){
+    const file=files&&files[0]; if(!file) return;
+    try{
+      if(!window._sb) throw new Error("Supabase indisponível");
+      if(typeof pixelsToast!=="undefined") pixelsToast.info("Enviando imagem...",1500);
+      const r=await _pxSubirImagemStorage(file,"playbook-passos");
+      cb(r.url);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida!",1500);
+    }catch(err){ console.warn("[upload passo]",err); if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err&&err.message||"desconhecido")); }
+  });
 }
 
 // Ícones disponíveis pro processo técnico — cada um com id + nome do Ico
@@ -103397,9 +103427,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
                  : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
       </span>
       {subindo && <span style={{color:"#b45309",fontSize:11.5,fontWeight:700,letterSpacing:-.1,wordBreak:"break-word",maxWidth:520}}>{subindo}</span>}
-      {subindo && <span style={{position:"relative",display:"block",width:"min(360px,100%)",height:5,borderRadius:99,background:"#f5b30122",overflow:"hidden",marginTop:2}}>
-        <span style={{position:"absolute",top:0,bottom:0,width:"42%",borderRadius:99,background:"linear-gradient(90deg,#f5b30100,#f5b301,#f5b30100)",animation:"pxIndet 1.4s ease-in-out infinite"}}/>
-      </span>}
+      {subindo && <_PbProgressoLeitura passo={subindo}/>}
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
         {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF, Word, PowerPoint, Excel, imagem, texto · <b>Gravação de reunião</b> (mp4, mkv, mov, mp3…): só o áudio sobe, a IA transcreve e vira ficha, PowerPoint, Excel, texto e imagem viram ficha · até 1 GB por arquivo · catálogo grande é lido página a página
       </span>
@@ -105050,7 +105078,7 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
   };
   const subirFotos=async function(p,files){
     if(!podeEditar||!files||!files.length||!sb) return;
-    const lista=Array.prototype.slice.call(files).filter(function(f){ return /^image\//.test(f.type||""); });
+    const lista=Array.prototype.slice.call(files).filter(function(f){ return !f.type||/^image\//.test(f.type); });
     if(!lista.length) return;
     setSalvando("foto:"+p.nome);
     let urls=(p.fotos||[]).map(function(f){return f.url;}), thumbs=Object.assign({},p.thumbs||{});
@@ -105059,12 +105087,13 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
       try{
         const ext=(String(file.name).split(".").pop()||"jpg").toLowerCase().slice(0,6);
         const path="playbook-produtos/portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,9)+"."+ext;
-        const up=await sb.storage.from("agency-files").upload(path,file,{cacheControl:"31536000",upsert:false,contentType:file.type||"image/jpeg"});
+        const blob=(typeof _pxArquivoPronto==="function")?await _pxArquivoPronto(file):file;   // (30/09) espera o Drive baixar
+        const up=await sb.storage.from("agency-files").upload(path,blob,{cacheControl:"31536000",upsert:false,contentType:file.type||"image/jpeg"});
         if(up.error) throw up.error;
         const pub=sb.storage.from("agency-files").getPublicUrl(path); const url=(pub&&pub.data&&pub.data.publicUrl)||"";
         if(!url) throw new Error("sem URL");
         urls=urls.concat([url]);
-        try{ if(typeof _pbGerarThumb==="function"){ const th=await _pbGerarThumb(file); if(th) thumbs[url]=th; } }catch(_){}
+        try{ if(typeof _pbGerarThumb==="function"){ const th=await _pbGerarThumb(blob); if(th) thumbs[url]=th; } }catch(_){}
       }catch(e){ _toastErr("Não subiu "+file.name+": ",e); }
     }
     await editar(p,{imgUrls:urls,thumbs:thumbs});
