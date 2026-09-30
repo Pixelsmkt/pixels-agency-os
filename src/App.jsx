@@ -25686,8 +25686,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                         title={x.rotulo+": a semana está com "+x.falta+" post"+(x.falta>1?"s":"")+" a menos que a cadência. Nada é criado sozinho — clique em Criar card se quiser preencher."}
                         style={{border:"1.5px dashed "+_cor,borderRadius:8,padding:"6px 8px 7px",background:"rgba(255,255,255,0.82)",display:"flex",flexDirection:"column",gap:5,flexShrink:0,fontFamily:"'Inter',system-ui,sans-serif"}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-                          {/* (29/09/2026, Gustavo) triângulo de alerta no lugar da bolinha — chip na cor do cliente, ícone branco */}
-                          <span aria-hidden="true" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:_cor,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                          {/* (29/09/2026, Gustavo) chip na cor do cliente, ícone branco.
+                              (30/09/2026, Gustavo) o triângulo de alerta já é o ícone do "Agendar" (rosa) — trocado por
+                              calendário com "+" (vaga na semana). svg display:block: inline ele sentava na linha de base
+                              e ficava fora do centro do quadrado. */}
+                          <span aria-hidden="true" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:_cor,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="13.5" x2="12" y2="18.5"/><line x1="9.5" y1="16" x2="14.5" y2="16"/></svg></span>
                           <span style={{flex:1,minWidth:0,fontSize:pxFonte(10.5,isMob),fontWeight:800,color:_cor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.rotulo}</span>
                           <button type="button" title="Ignorar esta lacuna" onClick={function(e){e.stopPropagation();_ignorarLacuna(x);}}
                             style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:0,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -50933,6 +50936,22 @@ function _cardPodeSerResp(u){
                             {_last.name&&<span style={{color:"#cbd5e1"}}>· {_last.name}</span>}
                           </div>
                         </div>
+                        {/* (30/09/2026, Gustavo) "parece duplicado": o vídeo aparecia grande aqui E pequeno na grade.
+                            Agora ele só aparece aqui — baixar e remover vieram pra cá; a grade abaixo mostra só os OUTROS arquivos. */}
+                        <div style={{display:"flex",gap:6,flexShrink:0}}>
+                          <button type="button" onClick={function(e){e.stopPropagation();downloadFile(_last.url,_last.name,_last.storagePath);}} title="Baixar vídeo"
+                            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,color:"#475569",cursor:"pointer",width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+                            onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+                            onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {canEdit&&<button type="button" onClick={function(e){e.stopPropagation();removeAttachment(_last.id);}} title="Remover vídeo"
+                            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,color:"#94a3b8",cursor:"pointer",width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+                            onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.color="#dc2626";}}
+                            onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
+                        </div>
                       </div>
                       <div style={{background:_v?"#0f172a":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
                         {_v
@@ -51051,8 +51070,13 @@ function _cardPodeSerResp(u){
                         </div>
                       );
                     };
-                    const _feedItems=finItems.filter(function(x){return !(isImg(x)&&typeof pxEhStory==="function"&&pxEhStory(x));});
-                    const _storyItems=finItems.filter(function(x){return isImg(x)&&typeof pxEhStory==="function"&&pxEhStory(x);});
+                    /* (30/09/2026) o vídeo que já está em destaque em cima NÃO se repete na grade (mesma regra do destaque:
+                       último arquivo, vídeo, card que não é carrossel). A grade fica só com os outros arquivos. */
+                    const _dstq=(function(){ const l=_pxLastFile(finItems)||finItems[finItems.length-1]; return (l&&isVid(l)&&!_ehCarrossel)?l.id:null; })();
+                    const _gridItems=_dstq?finItems.filter(function(x){return x.id!==_dstq;}):finItems;
+                    if(!_gridItems.length) return null;
+                    const _feedItems=_gridItems.filter(function(x){return !(isImg(x)&&typeof pxEhStory==="function"&&pxEhStory(x));});
+                    const _storyItems=_gridItems.filter(function(x){return isImg(x)&&typeof pxEhStory==="function"&&pxEhStory(x);});
                     const _gridStyle={display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8};
                     const _secHdr=function(label,sub,n,color,bg){
                       return <div style={{display:"flex",alignItems:"center",gap:8,margin:"6px 0 8px"}}>
@@ -51062,7 +51086,10 @@ function _cardPodeSerResp(u){
                       </div>;
                     };
                     if(_storyItems.length===0){
-                      return <div style={_gridStyle}>{finItems.map(function(a,i){return _renderTile(a,i,finItems);})}</div>;
+                      return <React.Fragment>
+                        {_dstq&&<div style={{color:"#64748b",fontSize:11.5,fontWeight:700,margin:"2px 0 8px",letterSpacing:-.05}}>Outros arquivos</div>}
+                        <div style={_gridStyle}>{_gridItems.map(function(a,i){return _renderTile(a,i,_gridItems);})}</div>
+                      </React.Fragment>;
                     }
                     // Feed e Story LADO A LADO no desktop (cada bloco cresce conforme a quantidade de artes);
                     // no mobile continuam empilhados.
