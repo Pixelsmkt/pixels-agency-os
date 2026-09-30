@@ -102020,16 +102020,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               cadastro do cliente anterior ficava na tela depois de trocar o seletor. */}
           <_PbCadastro key={"cad-"+cl.id+"-"+(_unitTab||"grupo")} clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin} data={data} onUpdate={onUpdate}/>
 
-          {/* Feedbacks — contexto (do cliente e da equipe) que alimenta a IA */}
-          <_PbMemoriaCliente clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
-
-          {/* Materiais do cliente — folder/manual/catálogo que viram ficha de fatos no cérebro */}
-          <_PbMateriais clientId={cl.id} clienteNome={cl.name||cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
-
-
-
-
-
           {/* (30/09/2026, Gustavo) CONTATOS COMERCIAIS — pra social media responder comentário/direct
               de quem pede orçamento: "fala com Fulano no WhatsApp tal". É a MESMA lista de Contatos
               (data.contatos / contatos_by_unit na Bioter) que o card mostra e que fecha a legenda quando
@@ -102049,7 +102039,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               const _wa=function(t){ let d=_dig(t); if(!d) return ""; if(d.length<=11) d="55"+d; return "https://wa.me/"+d; };
               const _resposta=function(c){
                 const f=String(c.funcao||"").trim();
-                return "Olá! Pra orçamento e mais informações, é só chamar "+String(c.nome||"").trim()+(f?(" ("+f+")"):"")+" no WhatsApp "+String(c.whatsapp||"").trim()+(_wa(c.whatsapp)?(": "+_wa(c.whatsapp)):"")+" 😊";
+                /* contato genérico ("Telefone comercial", "Vendas") não vira nome de pessoa na frase */
+                const n=String(c.nome||"").trim(), gen=/telefone|fone|whats|comercial|vendas|atendimento|central|escrit[óo]rio/i.test(n)&&!f;
+                const quem=gen?"nosso time comercial":(n+(f?(" ("+f+")"):""));
+                /* (30/09, Gustavo) com região: "esse é o nosso contato pra sua região" */
+                const reg=String(c.regiao||"").trim();
+                if(reg&&!/^(todas|todo|geral|demais)/i.test(reg)) return "Olá! Pra orçamento e mais informações, o contato da sua região ("+reg+") é "+quem+", no WhatsApp "+String(c.whatsapp||"").trim()+(_wa(c.whatsapp)?(": "+_wa(c.whatsapp)):"")+" 😊";
+                return "Olá! Pra orçamento e mais informações, é só chamar "+quem+" no WhatsApp "+String(c.whatsapp||"").trim()+(_wa(c.whatsapp)?(": "+_wa(c.whatsapp)):"")+" 😊";
               };
               const _copiar=function(t,msg){ try{ navigator.clipboard.writeText(t); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado",1800); }catch(_){} };
               const _uAtual=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(function(x){return x.id===_unitTab;}):null;
@@ -102067,7 +102063,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         <span style={{width:36,height:36,borderRadius:99,background:"#dcfce7",color:"#15803d",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,flexShrink:0}}>{String(c.nome||"?").trim().charAt(0).toUpperCase()}</span>
                         <div style={{minWidth:0}}>
                           <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{c.nome||"—"}</div>
-                          {c.funcao&&<div style={{color:"#15803d",fontSize:11.5,fontWeight:700}}>{c.funcao}</div>}
+                          {(c.funcao||c.regiao)&&<div style={{color:"#15803d",fontSize:11.5,fontWeight:700}}>{[c.funcao,c.regiao].filter(function(x){return String(x||"").trim();}).join(" · ")}</div>}
                         </div>
                       </div>
                       {c.quando&&<div style={{color:"#475569",fontSize:12,lineHeight:1.45,background:"#f8fafc",borderRadius:9,padding:"6px 9px"}}><b style={{color:"#334155"}}>Indicar quando:</b> {c.quando}</div>}
@@ -102086,8 +102082,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               return <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {_chip}
                 {_cc.map(function(c,i){
-                  return <div key={"cc"+(_porUnid?_unitTab:"")+i} style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"9px 11px"}}>
+                  return <div key={"cc"+(_porUnid?_unitTab:"")+i} style={{display:"flex",flexDirection:"column",gap:8,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"9px 11px"}}>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                     <input defaultValue={c.nome||""} placeholder="Nome — ex: Cristiano" onBlur={function(e){ if(e.target.value!==(c.nome||"")) _set(i,"nome",e.target.value); }} style={Object.assign({},_inp,{width:170,fontWeight:700})}/>
+                    <input defaultValue={c.regiao||""} placeholder="Região — ex: Oeste de SC, MS (vazio = todas)" onBlur={function(e){ if(e.target.value!==(c.regiao||"")) _set(i,"regiao",e.target.value); }} style={Object.assign({},_inp,{width:230})}/>
                     <input defaultValue={c.funcao||""} placeholder="Função — ex: Comercial, Vendedor" onBlur={function(e){ if(e.target.value!==(c.funcao||"")) _set(i,"funcao",e.target.value); }} style={Object.assign({},_inp,{width:170})}/>
                     <input defaultValue={c.whatsapp||""} placeholder="WhatsApp — (54) 99999-9999" onBlur={function(e){ if(e.target.value!==(c.whatsapp||"")) _set(i,"whatsapp",e.target.value); }} style={Object.assign({},_inp,{width:170})}/>
                     <input defaultValue={c.email||""} placeholder="E-mail (opcional)" onBlur={function(e){ if(e.target.value!==(c.email||"")) _set(i,"email",e.target.value); }} style={Object.assign({},_inp,{width:190})}/>
@@ -102096,13 +102094,31 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
                       onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                  </div>
+                  {/* (30/09) a mensagem pronta aparece também no modo edição (a Estratégia vive nele) */}
+                  {c.whatsapp&&String(c.nome||"").trim()&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:"#f0fdf4",border:"1px solid #dcfce7",borderRadius:9,padding:"7px 10px"}}>
+                    <span style={{flex:1,minWidth:220,color:"#166534",fontSize:12,lineHeight:1.45}}>{_resposta(c)}</span>
+                    <button type="button" onClick={function(){ _copiar(_resposta(c),"Resposta copiada — é só colar no comentário/direct"); }}
+                      style={{background:"#16a34a",border:"none",borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER,flexShrink:0}}>Copiar resposta pronta</button>
+                  </div>}
                   </div>;
                 })}
-                <button type="button" onClick={function(){ _upd(_cc.concat([{nome:"",funcao:"",whatsapp:"",email:"",quando:""}])); }}
+                <button type="button" onClick={function(){ _upd(_cc.concat([{nome:"",regiao:"",funcao:"",whatsapp:"",email:"",quando:""}])); }}
                   style={{background:"#16a34a0d",border:"1px dashed #16a34a55",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#15803d",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar contato</button>
               </div>;
             })()}
           </PlaybookBlock>
+
+          {/* Feedbacks — contexto (do cliente e da equipe) que alimenta a IA */}
+          <_PbMemoriaCliente clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
+
+          {/* Materiais do cliente — folder/manual/catálogo que viram ficha de fatos no cérebro */}
+          <_PbMateriais clientId={cl.id} clienteNome={cl.name||cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
+
+
+
+
+
 
           {/* Marcar no post (@) — DIFERENTE do GC: aqui vão os @ pra marcar na publicação */}
           <PlaybookBlock id="pb-marcacoes" title="Marcar no post (@)" subtitle="Perfis pra marcar na publicação — @ do cliente, sócios, parceiros (não é o GC)" icon="tag" color="#0ea5e9">
@@ -103087,8 +103103,10 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
        algo que é simples? era só pra registrar como funciona o sistema"). A ficha repetia a mesma frase em
        Como funciona, Diferenciais, Termos e Ângulos, e listava palavra comum como "termo oficial". */
     "SEM LINGUIÇA — a ficha NUNCA é maior que o material. Cada fato aparece UMA vez só: se já entrou numa seção, "+
-    "não repita em outra com outras palavras. Arte, lâmina, post ou folder de uma página: poucas linhas, só as "+
-    "seções que o material realmente tem (normalmente O QUE É ou COMO FUNCIONA, e FRASES DO MATERIAL), até ~120 palavras. "+
+    "não repita em outra com outras palavras. Arte, lâmina, post ou folder de uma página: só duas seções — "+
+    "RESUMO (3 a 5 frases com suas palavras: o que a peça comunica, pra que ela serve na apresentação da empresa e o "+
+    "contexto dos dados que traz; desenvolva a partir do que está escrito, sem copiar tudo e sem inventar) e FRASES DO "+
+    "MATERIAL (só as chamadas principais). Até ~120 palavras no total. "+
     "TERMOS OFICIAIS só com nome próprio (produto, marca, programa, sigla) — palavra comum (\"produtor\", "+
     "\"indicadores\", \"gargalos\") não é termo. ÂNGULOS DE COMUNICAÇÃO só se o próprio material sugerir ângulos "+
     "(um briefing de marketing, por exemplo) — não invente ângulo a partir de uma arte. Não escreva seção pra "+
