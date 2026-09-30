@@ -33763,8 +33763,15 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      Agora, entre cards do mesmo dia, o desempate é o ID: nunca muda, não importa
      o que se edite no card. A entrega só desempata quem NÃO tem data de publicação,
      onde ela é a única pista de prazo que existe. */
+  /* 30/09/2026 (Gustavo): sugestão que o CLIENTE aceitou no portal (tag "Aceita pelo cliente")
+     abre a fila — "aparece por primeiro no avaliação de copys". Vale enquanto está sem data de
+     publicação; entre elas, a mais recente primeiro. Depois de ganhar data, segue a regra normal. */
+  const _aceitaCli=(t)=>Array.isArray(t.tags)&&t.tags.some(x=>String((x&&(x.label||x.name||x.text))||x)==="Aceita pelo cliente");
   const sortStable=(arr)=>[...arr].sort((a,b)=>{
     const pa=_dataOrd(a.publishDate||a.publish_date), pb=_dataOrd(b.publishDate||b.publish_date);
+    const ca=!pa&&_aceitaCli(a), cb=!pb&&_aceitaCli(b);
+    if(ca!==cb) return ca?-1:1;
+    if(ca&&cb){ const ea=String(a.colEnteredAt||a.col_entered_at||a.createdAt||a.created_at||""), eb=String(b.colEnteredAt||b.col_entered_at||b.createdAt||b.created_at||""); if(ea!==eb) return ea<eb?1:-1; }
     if(pa&&pb){ if(pa!==pb) return pa<pb?-1:1; }
     /* 21/09/2026 — SEM DATA DE PUBLICAÇÃO VEM PRIMEIRO (pedido do Rodrigo).
        Antes ia pro fim da fila (regra de 13/09). Card sem data é justamente o
@@ -110236,7 +110243,12 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
   const [props,setProps]=useState(null);
   const _carregarProps=async function(){
     if(!sb||!cid){ setProps([]); return; }
-    try{ const r=await sb.rpc("portal_pauta_propostas",{p_client:cid}); setProps(r.error?[]:(r.data||[])); }catch(_){ setProps([]); }
+    try{
+      /* v5 (30/09): _v2 traz a resposta do cliente; se não existir ainda, cai na v1 */
+      let r=await sb.rpc("portal_pauta_propostas_v2",{p_client:cid});
+      if(r.error) r=await sb.rpc("portal_pauta_propostas",{p_client:cid});
+      setProps(r.error?[]:(r.data||[]));
+    }catch(_){ setProps([]); }
   };
   useEffect(function(){
     _carregarProps();
@@ -110246,7 +110258,53 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
   },[cid]);
   const visP=(props||[]).filter(function(r){ if(cid!=="bioter") return true; if(!unitFiltro||unitFiltro==="grupo"||unitFiltro==="_minhas_") return true; return String(r.unidade||"")===unitFiltro||!r.unidade; });
   const [abertoP,setAbertoP]=useState({});
+  /* v5 (30/09/2026, Gustavo): ACEITAR / NÃO FAZ SENTIDO em cada sugestão, bem visível no topo do card.
+     Aceitar → vira card em Copys (sem data, abre a fila da Avaliação de copys).
+     Não faz sentido → o cliente escreve por quê; some daqui e de Estratégia › Conteúdos
+     (fica guardada como descartada, nada apagado) e o motivo vai pro cérebro do cliente.
+     Tudo numa rpc só: portal_proposta_responder (security definer). */
+  const [recusando,setRecusando]=useState(null);   // {p, motivo}
+  const [respondendo,setRespondendo]=useState("");
+  const _quemP=(currentClientUser&&currentClientUser.name)||(cl&&cl.name)||"Cliente";
+  const _semPrecP=function(t){ return String(t||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim(); };
+  const _responder=async function(p,aceitar,motivo){
+    if(!sb||respondendo) return;
+    if(!aceitar&&!String(motivo||"").trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Conta pra gente por que não faz sentido."); return; }
+    setRespondendo(p.id);
+    try{
+      const _h=(typeof _pxTextoParaHtml==="function")?_pxTextoParaHtml:null;
+      const r=await sb.rpc("portal_proposta_responder",{p_id:p.id,p_aceitar:!!aceitar,p_motivo:aceitar?null:String(motivo).trim(),p_quem:_quemP,
+        p_video:_swEhVideo(p.content_type),p_desc_html:(aceitar&&_h)?_h(_semPrecP(p.briefing)):null,p_leg_html:(aceitar&&_h)?_h(p.legenda||""):null});
+      if(r.error) throw r.error;
+      if(aceitar) setProps(function(l){ return (l||[]).map(function(x){ return x.id===p.id?Object.assign({},x,{status:"aceita",cliente_resposta:"aceita",cliente_respondido_em:new Date().toISOString()}):x; }); });
+      else setProps(function(l){ return (l||[]).filter(function(x){ return x.id!==p.id; }); });
+      setRecusando(null);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(aceitar?"Aceita! A equipe da Pixels já começa a produzir.":"Combinado. Tiramos essa sugestão e a Pixels já fica sabendo o motivo.",3500);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra responder: "+((e&&e.message)||e),6000); }
+    setRespondendo("");
+  };
+  const _MOTIVOS_RAPIDOS=["Não tem a ver com a gente","Já fizemos algo assim","O tom não combina com a marca","Não é prioridade agora","Informação errada"];
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF}}>
+    {recusando&&<div onClick={function(){ if(!respondendo) setRecusando(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,padding:isMob?18:22,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 24px 60px rgba(15,23,42,.3)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Por que não faz sentido?</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5}}>"{recusando.p.titulo}" sai das suas sugestões. Com o seu motivo, as próximas ideias já vêm mais certeiras.</div>
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {_MOTIVOS_RAPIDOS.map(function(m){ const on=String(recusando.motivo||"").indexOf(m)>=0; return <button key={m} type="button"
+            onClick={function(){ const atual=String(recusando.motivo||"").trim(); setRecusando(Object.assign({},recusando,{motivo:on?atual.replace(m,"").replace(/^[\s.;-]+|[\s.;-]+$/g,"").replace(/\s*;\s*;\s*/g,"; "):(atual?atual+"; "+m:m)})); }}
+            style={{background:on?"#fef2f2":"#fff",color:on?"#b91c1c":"#475569",border:"1px solid "+(on?"#fca5a5":"#e2e8f0"),borderRadius:99,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{m}</button>; })}
+        </div>
+        <textarea autoFocus value={recusando.motivo||""} onChange={function(e){ setRecusando(Object.assign({},recusando,{motivo:e.target.value})); }} rows={3} placeholder="Escreva com suas palavras (obrigatório)"
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",fontSize:13.5,fontFamily:_RT_FF,resize:"vertical",outline:"none"}}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+          <button type="button" disabled={!!respondendo} onClick={function(){setRecusando(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 16px",color:"#475569",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Voltar</button>
+          <button type="button" disabled={!!respondendo||!String(recusando.motivo||"").trim()} onClick={function(){ _responder(recusando.p,false,recusando.motivo); }}
+            style={{background:String(recusando.motivo||"").trim()?"#dc2626":"#fca5a5",border:"none",borderRadius:11,padding:"10px 18px",color:"#fff",fontSize:13,fontWeight:800,cursor:String(recusando.motivo||"").trim()?"pointer":"default",fontFamily:_RT_FF}}>{respondendo?"Enviando…":"Tirar essa sugestão"}</button>
+        </div>
+      </div>
+    </div>}
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
       <div style={{width:44,height:44,borderRadius:12,background:_cor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+_cor+"44"}}><Ico n="video" size={20} color="#fff"/></div>
       <div style={{flex:1,minWidth:200}}>
@@ -110285,11 +110343,26 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
             return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_swTipoLabel(p.content_type)}</span></div>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>
-              <div style={{maxHeight:ab?"none":420,overflow:"hidden",position:"relative"}}><SwBriefing txt={p.briefing} cor={g.cor}/>{!ab&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:40,background:"linear-gradient(rgba(255,255,255,0),#fff)"}}/>}</div>
+              {p.status==="aceita"
+                ?<div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:12,padding:"9px 12px",color:"#065f46",fontSize:12.5,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><Ico n="check" size={15} color="#059669"/> Você aceitou — a Pixels já está produzindo</div>
+                :<div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  <div style={{display:"flex",gap:8}}>
+                    <button type="button" disabled={!!viewerIsPixels||!!respondendo} onClick={function(){ _responder(p,true); }}
+                      title={viewerIsPixels?"Só o cliente responde (você está vendo como Pixels)":"Aceitar: a Pixels produz esse conteúdo"}
+                      style={{flex:1,background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:11,padding:"11px 10px",color:"#fff",fontSize:13.5,fontWeight:800,cursor:viewerIsPixels?"default":"pointer",fontFamily:_RT_FF,boxShadow:"0 4px 12px rgba(22,163,74,.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,opacity:viewerIsPixels?.55:1}}>
+                      <Ico n="check" size={15} color="#fff"/> {respondendo===p.id?"Enviando…":"Aceitar"}</button>
+                    <button type="button" disabled={!!viewerIsPixels||!!respondendo} onClick={function(){ setRecusando({p:p,motivo:""}); }}
+                      title={viewerIsPixels?"Só o cliente responde (você está vendo como Pixels)":"Não faz sentido: conta por quê e a sugestão sai"}
+                      style={{flex:1,background:"#fff",border:"1.5px solid #fca5a5",borderRadius:11,padding:"11px 10px",color:"#b91c1c",fontSize:13.5,fontWeight:800,cursor:viewerIsPixels?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,opacity:viewerIsPixels?.55:1}}>
+                      ✕ Não faz sentido</button>
+                  </div>
+                  {viewerIsPixels&&<div style={{color:"#94a3b8",fontSize:11,textAlign:"center"}}>Aguardando o cliente responder</div>}
+                </div>}
+              <div style={{maxHeight:ab?"none":420,overflow:"hidden",position:"relative"}}><SwBriefing txt={p.briefing} cor={g.cor} limite={ab?0:2}/>{!ab&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:40,background:"linear-gradient(rgba(255,255,255,0),#fff)"}}/>}</div>
               {ab&&<SwLegenda txt={p.legenda} cor={g.cor}/>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
                 <button type="button" onClick={function(){ setAbertoP(function(o){ return Object.assign({},o,{[p.id]:!ab}); }); }} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{ab?"Ver menos":"Ver tudo"}</button>
-                <button type="button" onClick={_copiar} style={{background:"#16a34a",color:"#fff",border:"1px solid #16a34a",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Copiar</button>
+                <button type="button" onClick={_copiar} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Copiar</button>
               </div>
             </div>;
           })}
@@ -110343,9 +110416,46 @@ function _swBlocos(txt){
   const _fora=function(b){ return /^o que precisamos/i.test(String(b.rot||"").trim()); };
   return {cab:cab,blocos:out.filter(function(b){ return !_fora(b); }).map(function(b){ return {rot:b.rot,txt:b.txt.join("\n").replace(/^\n+|\n+$/g,"").replace(/\n{3,}/g,"\n\n")}; }).filter(function(b){ return b.rot||b.txt.trim(); })};
 }
-function SwBriefing({txt,cor}){
+/* v7 (30/09/2026, Gustavo): "tem tanta seção de lâmina, título, texto na arte.. fica poluído".
+   Arte e carrossel viram UM bloco por lâmina, sem rótulo: número em bolinha, título em negrito e o
+   texto logo abaixo, separados por um divisor fino. Vídeo (tem cabeçalho ROTEIRO) continua igual.
+   limite = quantas lâminas mostrar fechado (o resto vira "+N lâminas"). */
+function _swLaminas(blocos){
+  const out=[]; let cur=null;
+  const abre=function(n){ cur={n:n,titulo:"",texto:[],outros:[]}; out.push(cur); };
+  let reconhecido=0;
+  blocos.forEach(function(b){
+    const rot=String(b.rot||"").trim(), t=String(b.txt||"").trim(); let m;
+    if((m=rot.match(/^l[âa]mina\s*(\d+)/i))){ abre(Number(m[1])); if(t) cur.titulo=t; reconhecido++; return; }
+    if(!cur) abre(0);
+    if(/^t[íi]tulo/i.test(rot)){ if(t){ if(cur.titulo&&cur.titulo!==t) cur.texto.unshift(cur.titulo); cur.titulo=t; } reconhecido++; return; }
+    if(/^(texto|frase)/i.test(rot)){ if(t) cur.texto.push(t); reconhecido++; return; }
+    if(t||rot) cur.outros.push({rot:rot,txt:t});
+  });
+  return reconhecido?out.filter(function(l){ return l.titulo||l.texto.length||l.outros.length; }):null;
+}
+function SwBriefing({txt,cor,limite}){
   const r=_swBlocos(txt);
   if(!r.blocos.length&&!r.cab) return <div style={{color:"#94a3b8",fontSize:12.5}}>—</div>;
+  const lam=r.cab?null:_swLaminas(r.blocos);
+  if(lam&&lam.length){
+    const temNum=lam.some(function(l){return l.n>0;});
+    const mostrar=(limite&&lam.length>limite)?lam.slice(0,limite):lam;
+    const resto=lam.length-mostrar.length;
+    return <div style={{display:"flex",flexDirection:"column"}}>
+      {mostrar.map(function(l,i){
+        return <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 0",borderTop:i?"1px solid #f1f5f9":"none",minWidth:0}}>
+          {temNum&&<span style={{width:22,height:22,borderRadius:99,background:cor+"18",color:cor,fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{l.n||i+1}</span>}
+          <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:3}}>
+            {l.titulo&&<div style={{color:"#0f172a",fontSize:13,fontWeight:800,lineHeight:1.35}}>{l.titulo}</div>}
+            {l.texto.map(function(t,j){ return <div key={j} style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{t}</div>; })}
+            {l.outros.map(function(o,j){ return <div key={"o"+j} style={{color:"#64748b",fontSize:12,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{o.rot?<b style={{color:"#475569",fontWeight:700}}>{o.rot.charAt(0)+o.rot.slice(1).toLowerCase()}: </b>:null}{o.txt}</div>; })}
+          </div>
+        </div>;
+      })}
+      {resto>0&&<div style={{color:cor,fontSize:12,fontWeight:800,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>+{resto} {resto===1?"lâmina":"lâminas"}</div>}
+    </div>;
+  }
   return <div style={{display:"flex",flexDirection:"column",gap:7}}>
     {r.cab&&(function(){
       const fala=r.blocos.map(function(b){return b.txt;}).join(" ").trim();
@@ -110535,7 +110645,18 @@ async function pxPropostasDaSolicitacao(opts){
      "- O vídeo tem 60 SEGUNDOS: de 130 a 150 palavras de fala no total (nunca mais de 150). O título do briefing é \"• ROTEIRO (vídeo de 60s — o cliente grava)\".\n"+
      "- SEMPRE as 3 cenas com FALA: \"Cena 1 — Abertura\", \"Cena 2 — Desenvolvimento\", \"Cena 3 — Fechamento\". NUNCA vídeo sem fala, NUNCA \"o que aparece\", NUNCA \"vídeo simples\", NUNCA texto de tela ou instrução de imagem — só o que o cliente vai falar.\n\n";
   if(!G||grupo==="arte") u+="- ARTE ESTÁTICA → \"• TÍTULO\" (headline da peça, em caixa alta) e \"• TEXTO NA ARTE\" (NÃO repete o título; 2 frases de apoio, linha em branco, fecho — 260 a 480 caracteres).\n";
-  if(!G||grupo==="carrossel") u+="- CARROSSEL → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\"; a 5 é o CTA.\n";
+  /* v7 (30/09, Gustavo): "falando como se o público já soubesse o que é esse Radar ambiental… não tem uma
+     introdução, não seguem uma linha lógica como nas artes e nos vídeos". O carrossel passa a ter roteiro:
+     gancho → apresentação → desenvolvimento → fechamento com CTA, cada lâmina com • TÍTULO e • TEXTO NA ARTE. */
+  if(!G||grupo==="carrossel") u+="- CARROSSEL → de 4 a 5 lâminas. Cada lâmina: uma linha \"Lâmina N —\", depois \"• TÍTULO\" (curto, até 8 palavras) e \"• TEXTO NA ARTE\" (1 a 2 frases). "+
+     "O carrossel conta UMA história em sequência lógica, igual às artes e aos vídeos, pensando em quem está vendo o assunto pela PRIMEIRA vez no feed:\n"+
+     "  • Lâmina 1 = GANCHO: a situação ou a dor do público, em palavras simples, que faz a pessoa querer passar pra próxima. Nunca comece por um nome interno.\n"+
+     "  • Lâmina 2 = APRESENTAÇÃO/CONTEXTO: o que é e por que importa. Se o assunto é um projeto, programa, serviço ou produto do cliente, é AQUI que ele é apresentado (\"O X é… da <empresa> que…\").\n"+
+     "  • Lâminas do meio = DESENVOLVIMENTO: uma ideia por lâmina, cada uma puxando a próxima (o que mudou → quem é afetado → o que fazer, ou problema → como funciona → benefício).\n"+
+     "  • Última lâmina = FECHAMENTO + CHAMADA PRA AÇÃO.\n"+
+     "  Lido só pelas lâminas, sem a legenda, o carrossel tem que fazer sentido do começo ao fim.\n";
+  /* v7: vale pra tudo — nome interno do cliente sempre apresentado */
+  u+="- O seguidor NÃO conhece os nomes internos do cliente (projeto, programa, método, apelido de equipe, nome de ferramenta). Na primeira vez que um nome desses aparecer na peça, diga em poucas palavras o que é. Nunca escreva como se o público já soubesse do que se trata.\n";
   /* v6 (28/09, Gustavo): "tira essa merda o que precisamos" — em vídeo, arte e carrossel */
   u+="- Rótulos SEMPRE em maiúsculo: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO. PROIBIDO escrever \"• O QUE PRECISAMOS\", lista de materiais, fotos ou takes necessários — o briefing termina no conteúdo.\n\n";
 
@@ -110949,9 +111070,10 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:5}}>
             <span style={{background:corOrig+"14",color:corOrig,borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{_swTipoLabel(p.content_type)}</span>
-            {aceita&&<span style={{background:"#dcfce7",color:"#166534",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>✓ virou card em Copys</span>}
-            {desc&&<span style={{background:"#f1f5f9",color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>descartada</span>}
+            {aceita&&<span style={{background:"#dcfce7",color:"#166534",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_resposta==="aceita"?"✓ o cliente aceitou no portal — virou card em Copys":"✓ virou card em Copys"}</span>}
+            {desc&&<span style={{background:p.cliente_resposta==="recusada"?"#fef2f2":"#f1f5f9",color:p.cliente_resposta==="recusada"?"#b91c1c":"#64748b",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_resposta==="recusada"?"recusada pelo cliente":"descartada"}</span>}
           </div>
+          {desc&&p.cliente_resposta==="recusada"&&p.cliente_motivo&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"6px 9px",color:"#991b1b",fontSize:pxFonte(11.5,isMob),lineHeight:1.45,marginBottom:6}}><b>Motivo{p.cliente_respondido_por?(" ("+p.cliente_respondido_por+")"):""}:</b> {p.cliente_motivo}</div>}
           {ed?<input value={ed.titulo} onChange={function(e){ setEditando(Object.assign({},ed,{titulo:e.target.value})); }} style={Object.assign({},_inp,{fontWeight:800})}/>
              :<div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>}
           {p.de_onde_veio&&!ed&&<div style={{color:"#64748b",fontSize:12,marginTop:4,fontStyle:"italic"}}>{p.de_onde_veio}</div>}
