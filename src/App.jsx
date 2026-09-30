@@ -110245,7 +110245,8 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
     if(!sb||!cid){ setProps([]); return; }
     try{
       /* v5 (30/09): _v2 traz a resposta do cliente; se não existir ainda, cai na v1 */
-      let r=await sb.rpc("portal_pauta_propostas_v4",{p_client:cid});
+      let r=await sb.rpc("portal_pauta_propostas_v5",{p_client:cid});
+      if(r.error) r=await sb.rpc("portal_pauta_propostas_v4",{p_client:cid});
       if(r.error) r=await sb.rpc("portal_pauta_propostas_v3",{p_client:cid});
       if(r.error) r=await sb.rpc("portal_pauta_propostas_v2",{p_client:cid});
       if(r.error) r=await sb.rpc("portal_pauta_propostas",{p_client:cid});
@@ -110258,7 +110259,14 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
     try{ if(sb) ch=sb.channel("portal-propostas-"+cid).on("postgres_changes",{event:"*",schema:"public",table:"pauta_propostas"},rec).subscribe(); }catch(_){}
     return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
   },[cid]);
-  const visP=(props||[]).filter(function(r){ if(cid!=="bioter") return true; if(!unitFiltro||unitFiltro==="grupo"||unitFiltro==="_minhas_") return true; return String(r.unidade||"")===unitFiltro||!r.unidade; });
+  const visPTodas=(props||[]).filter(function(r){ if(cid!=="bioter") return true; if(!unitFiltro||unitFiltro==="grupo"||unitFiltro==="_minhas_") return true; return String(r.unidade||"")===unitFiltro||!r.unidade; });
+  /* v8 (30/09, Gustavo): aceitou → sai daqui e vai pra aba "Aprovadas" (lá dá pra pedir alteração).
+     Não faz sentido → some (o motivo fica só no cérebro). */
+  const [abaP,setAbaP]=useState("avaliar");
+  const nAvaliar=visPTodas.filter(function(p){return p.status==="proposta";}).length;
+  const nAprovadas=visPTodas.filter(function(p){return p.status==="aceita";}).length;
+  const visP=visPTodas.filter(function(p){ return abaP==="aprovadas"?p.status==="aceita":p.status==="proposta"; });
+  const [alterandoP,setAlterandoP]=useState(null);   // {p, texto}
   const [abertoP,setAbertoP]=useState({});
   /* v5 (30/09/2026, Gustavo): ACEITAR / NÃO FAZ SENTIDO em cada sugestão, bem visível no topo do card.
      Aceitar → vira card em Copys (sem data, abre a fila da Avaliação de copys).
@@ -110281,7 +110289,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
       if(aceitar) setProps(function(l){ return (l||[]).map(function(x){ return x.id===p.id?Object.assign({},x,{status:"aceita",cliente_resposta:"aceita",cliente_respondido_em:new Date().toISOString()}):x; }); });
       else setProps(function(l){ return (l||[]).filter(function(x){ return x.id!==p.id; }); });
       setRecusando(null);
-      if(typeof pixelsToast!=="undefined") pixelsToast.success(aceitar?"Aceita! A equipe da Pixels já começa a produzir.":"Combinado. Tiramos essa sugestão e a Pixels já fica sabendo o motivo.",3500);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(aceitar?"Aceita! Foi pra aba Aprovadas e a equipe da Pixels já começa a produzir.":"Combinado. Tiramos essa sugestão e a Pixels já fica sabendo o motivo.",3500);
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra responder: "+((e&&e.message)||e),6000); }
     setRespondendo("");
   };
@@ -110320,6 +110328,19 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
       setRefazendoP(null); _carregarProps();
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Pronto! A nova versão já está no lugar.",3000);
     }catch(err){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra refazer: "+((err&&err.message)||err),6000); }
+    setRespondendo("");
+  };
+  const _pedirAlteracaoP=async function(){
+    const e=alterandoP; if(!e||!sb||respondendo) return;
+    if(!String(e.texto||"").trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Conte o que você quer alterar."); return; }
+    setRespondendo(e.p.id);
+    try{
+      const r=await sb.rpc("portal_proposta_pedir_alteracao",{p_id:e.p.id,p_texto:String(e.texto).trim(),p_quem:_quemP});
+      if(r.error) throw r.error;
+      setProps(function(l){ return (l||[]).map(function(x){ return x.id===e.p.id?Object.assign({},x,{alteracoes_pedidas:(Array.isArray(x.alteracoes_pedidas)?x.alteracoes_pedidas:[]).concat([{em:new Date().toISOString(),por:_quemP,texto:String(e.texto).trim()}])}):x; }); });
+      setAlterandoP(null);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Pedido enviado. A equipe da Pixels ajusta e te mostra.",3500);
+    }catch(err){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra enviar: "+((err&&err.message)||err),6000); }
     setRespondendo("");
   };
   const _quandoP=function(iso){ try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } };
@@ -110384,9 +110405,30 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
         <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 60 segundos, ideias de posts e trends pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou aprovar as ideias que fazem sentido.</div>
       </div>
     </div>
+    {alterandoP&&<div onClick={function(){ if(!respondendo) setAlterandoP(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,padding:isMob?18:22,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 24px 60px rgba(15,23,42,.3)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Pedir alteração</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5}}>"{alterandoP.p.titulo}" já está em produção. Conta o que você quer mudar e a equipe da Pixels ajusta.</div>
+        </div>
+        <textarea autoFocus value={alterandoP.texto||""} onChange={function(e){ setAlterandoP(Object.assign({},alterandoP,{texto:e.target.value})); }} rows={4} placeholder="Ex.: trocar o título, falar também do produtor de leite…"
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",fontSize:13.5,fontFamily:_RT_FF,resize:"vertical",outline:"none"}}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+          <button type="button" disabled={!!respondendo} onClick={function(){setAlterandoP(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 16px",color:"#475569",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Voltar</button>
+          <button type="button" disabled={!!respondendo||!String(alterandoP.texto||"").trim()} onClick={_pedirAlteracaoP} style={{background:String(alterandoP.texto||"").trim()?"#ea580c":"#fdba74",border:"none",borderRadius:11,padding:"10px 18px",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF}}>{respondendo?"Enviando…":"Enviar pedido"}</button>
+        </div>
+      </div>
+    </div>}
+    {(props||[]).length>0&&<div style={{display:"inline-flex",alignSelf:"flex-start",background:"#f1f5f9",borderRadius:12,padding:3,gap:3}}>
+      {[{id:"avaliar",l:"Pra avaliar",n:nAvaliar},{id:"aprovadas",l:"Aprovadas",n:nAprovadas}].map(function(t){ const on=abaP===t.id; return <button key={t.id} type="button" onClick={function(){setAbaP(t.id);}}
+        style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 14px",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none",display:"inline-flex",alignItems:"center",gap:7}}>
+        {t.l}<span style={{background:on?(t.id==="aprovadas"?"#16a34a":_cor):"#e2e8f0",color:on?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:11,fontWeight:800}}>{t.n}</span></button>; })}
+    </div>}
+    {abaP==="aprovadas"&&nAprovadas===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"36px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Nenhuma sugestão aprovada ainda. Quando você aceitar uma, ela aparece aqui.</div>}
+    {abaP==="avaliar"&&(props||[]).length>0&&nAvaliar===0&&vis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"36px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Tudo avaliado por aqui! Quando a Pixels mandar novas sugestões, elas aparecem nesta aba.</div>}
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
-    {lista!==null&&vis.length===0&&visP.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
-    <div style={{overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(vis.length>=5?"repeat(5,minmax(0,1fr))":"repeat(auto-fill,minmax(300px,1fr))"),gap:12,alignItems:"start"}}>
+    {lista!==null&&vis.length===0&&(props||[]).length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
+    {abaP==="avaliar"&&<div style={{overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(vis.length>=5?"repeat(5,minmax(0,1fr))":"repeat(auto-fill,minmax(300px,1fr))"),gap:12,alignItems:"start"}}>
       {vis.map(function(r){ return <RoteiroCard key={r.id} r={Object.assign({},r,{produto_tag:_rtTagProduto(r,mapaEs)})} cor={_cor} agencia={false} isMob={isMob}
         onGravado={async function(){
           try{
@@ -110396,7 +110438,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
             if(typeof pixelsToast!=="undefined") pixelsToast.success(r.gravado_em?"Desmarcado.":"Anotado: gravado. A equipe da Pixels já vê.",3000);
           }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra marcar: "+((e&&e.message)||e),5000); }
         }}/>; })}
-    </div></div>
+    </div></div>}
     {visP.length>0&&(typeof _SW_GRUPOS!=="undefined"?_SW_GRUPOS:[]).map(function(g){
       const doG=visP.filter(function(p){ return _swGrupoDe(p.content_type)===g.id; });
       if(!doG.length) return null;
@@ -110415,7 +110457,13 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
             return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{_swTipoLabel(p.content_type)}</span>{p.cliente_editado_em&&<span title={(p.cliente_editado_por?("Por "+p.cliente_editado_por+" · "):"")+_quandoP(p.cliente_editado_em)} style={{background:"#fef3c7",color:"#92400e",borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{p.cliente_alteracao==="refez"?"↻ Refeita":"✎ Alterada"} por você · {_quandoP(p.cliente_editado_em)}</span>}</div>
               {p.status==="aceita"
-                ?<div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:12,padding:"9px 12px",color:"#065f46",fontSize:12.5,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><Ico n="check" size={15} color="#059669"/> Você aceitou — a Pixels já está produzindo</div>
+                ?<div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:12,padding:"9px 12px",color:"#065f46",fontSize:12.5,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><Ico n="check" size={15} color="#059669"/> Aprovada{p.cliente_respondido_em?(" em "+_quandoP(p.cliente_respondido_em)):""} — já está em produção</div>
+                  {Array.isArray(p.alteracoes_pedidas)&&p.alteracoes_pedidas.length>0&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"7px 10px",color:"#9a3412",fontSize:12,lineHeight:1.45}}><b>Alteração pedida{p.alteracoes_pedidas.length>1?(" ("+p.alteracoes_pedidas.length+")"):""}:</b> {p.alteracoes_pedidas[p.alteracoes_pedidas.length-1].texto}</div>}
+                  {!viewerIsPixels&&<button type="button" disabled={!!respondendo} onClick={function(){ setAlterandoP({p:p,texto:""}); }}
+                    style={{background:"#fff",border:"1.5px solid #fdba74",borderRadius:11,padding:"10px 10px",color:"#c2410c",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                    <span style={{width:22,height:22,borderRadius:99,background:"#ffedd5",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span>Pedir alteração</button>}
+                </div>
                 :<div style={{display:"flex",flexDirection:"column",gap:5}}>
                   <div style={{display:"flex",gap:8}}>
                     <button type="button" disabled={!!viewerIsPixels||!!respondendo} onClick={function(){ _responder(p,true); }}
@@ -110445,7 +110493,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
         </div>
       </div>;
     })}
-    {typeof PortalIdeiasPixels==="function"&&<PortalIdeiasPixels cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!!viewerIsPixels} embutido={true}/>}
+    {abaP==="avaliar"&&typeof PortalIdeiasPixels==="function"&&<PortalIdeiasPixels cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!!viewerIsPixels} embutido={true}/>}
   </div>;
 }
 
@@ -110902,8 +110950,12 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     return {transcricao:String(pauta.transcricao||"").trim()||trs.join("\n\n"),fichas:fichas};
   };
   const _gravarPropostas=async function(pauta,listaP,rodada,ordemIni){
+    /* (30/09, Gustavo: "completei as 5 pelo Conteúdos e não sincronizou") — se a pauta já está no portal
+       (alguma proposta viva com o olho ligado), as novas (+5, Trocar, Refazer) já nascem no portal. */
+    let noPortal=false;
+    try{ const rv=await sb.from("pauta_propostas").select("id").eq("pauta_id",pauta.id).eq("visivel_portal",true).neq("status","descartada").limit(1); noPortal=!!(rv.data&&rv.data.length); }catch(_){}
     const rows=listaP.map(function(p,i){ return {pauta_id:pauta.id,ordem:(ordemIni||0)+i+1,origem:p.origem,titulo:p.titulo,content_type:p.content_type,
-      briefing:p.briefing,legenda:p.legenda,de_onde_veio:p.de_onde_veio||"",status:"proposta",rodada:rodada||1}; });
+      briefing:p.briefing,legenda:p.legenda,de_onde_veio:p.de_onde_veio||"",status:"proposta",rodada:rodada||1,visivel_portal:noPortal}; });
     const r=await sb.from("pauta_propostas").insert(rows).select("*");
     if(r.error) throw r.error;
     return r.data||[];
@@ -111179,6 +111231,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
             {!desc&&p.cliente_editado_em&&<span style={{background:"#fef3c7",color:"#92400e",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_alteracao==="refez"?"↻ refeita pelo cliente":"✎ alterada pelo cliente"} · {(function(){ const d=new Date(p.cliente_editado_em); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); })()}{p.cliente_editado_por?(" · "+p.cliente_editado_por):""}</span>}
             {desc&&<span style={{background:p.cliente_resposta==="recusada"?"#fef2f2":"#f1f5f9",color:p.cliente_resposta==="recusada"?"#b91c1c":"#64748b",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_resposta==="recusada"?"recusada pelo cliente":p.cliente_resposta==="refeita"?"substituída (o cliente refez)":"descartada"}</span>}
           </div>
+          {aceita&&Array.isArray(p.cliente_alteracoes_pedidas)&&p.cliente_alteracoes_pedidas.length>0&&(function(){ const a=p.cliente_alteracoes_pedidas[p.cliente_alteracoes_pedidas.length-1]; return <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:9,padding:"6px 9px",color:"#9a3412",fontSize:pxFonte(11.5,isMob),lineHeight:1.45,marginBottom:6}}><b>O cliente pediu alteração{a.por?(" ("+a.por+")"):""}:</b> {a.texto} <span style={{color:"#c2410c"}}>— já foi como ajuste no card</span></div>; })()}
           {!desc&&p.cliente_alteracao==="refez"&&p.cliente_pedido&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:9,padding:"6px 9px",color:"#92400e",fontSize:pxFonte(11.5,isMob),lineHeight:1.45,marginBottom:6}}><b>O cliente pediu:</b> {p.cliente_pedido}</div>}
           {desc&&p.cliente_resposta==="recusada"&&p.cliente_motivo&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"6px 9px",color:"#991b1b",fontSize:pxFonte(11.5,isMob),lineHeight:1.45,marginBottom:6}}><b>Motivo{p.cliente_respondido_por?(" ("+p.cliente_respondido_por+")"):""}:</b> {p.cliente_motivo}</div>}
           {ed?<input value={ed.titulo} onChange={function(e){ setEditando(Object.assign({},ed,{titulo:e.target.value})); }} style={Object.assign({},_inp,{fontWeight:800})}/>
