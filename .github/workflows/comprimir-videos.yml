@@ -1,0 +1,37 @@
+# Compressão de vídeo na nuvem (30/09/2026)
+# Gera a "versão comprimida" dos vídeos dos cards sem depender de nenhum PC ligado.
+# Roda sozinho a cada 5 minutos. O PC da agência (previews_ffmpeg.py) continua como reserva.
+# Segredos necessários (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL, SUPABASE_SERVICE_KEY
+name: Comprimir vídeos
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+# Nunca roda duas ao mesmo tempo; a próxima espera a atual terminar (não cancela no meio).
+concurrency:
+  group: comprimir-videos
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  comprimir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: nuvem
+      - name: Instalar ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      - name: Comprimir
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          pip install -q requests
+          python nuvem/comprimir_videos.py

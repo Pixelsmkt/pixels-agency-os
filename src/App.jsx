@@ -8868,13 +8868,14 @@ function PxIcoBaixar({qual, size}){
   return <svg width={s} height={s} style={{display:"block",position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",margin:0,pointerEvents:"none"}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 }
 /* 29/09: o comprimido é gerado SOZINHO — no navegador de quem subiu (se a aba ficar aberta) e,
-   garantido, pelo PC da agência (previews_ffmpeg.py), que pega o vídeo ~4 min depois do upload.
+   garantido, pela NUVEM (GitHub Actions, nuvem/comprimir_videos.py, a cada 5 min — desde 30/09/2026)
+   e pelo PC da agência (previews_ffmpeg.py) como reserva. Pega o vídeo ~4 min depois do upload.
    Nos primeiros 30 min o botão avisa que está sendo gerado, em vez de mandar gerar à mão. */
 function _pxBxMsgSemLeve(f){
   const ts=_pxBxTs(f);
   if(ts&&(Date.now()-ts)<30*60*1000) return "Versão comprimida sendo gerada — fica pronta em alguns minutos, sozinha";
   if(f&&f.size&&f.size<=20*1024*1024) return "Vídeo já é leve (até 20 MB) — não precisa de versão comprimida; use o full";
-  return "Versão comprimida ainda não ficou pronta — o PC da agência gera sozinho (precisa estar ligado); ou gere na Avaliação de vídeo";
+  return "Versão comprimida ainda não ficou pronta — é gerada sozinha na nuvem em alguns minutos; ou gere na Avaliação de vídeo";
 }
 function PxBaixarEntrega({task, variante, cor}){
   const [ocup,setOcup]=useState("");
@@ -24469,7 +24470,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
   const _u=_calUser; // "ver como" fiel (18/09/2026)
   const _canCreateFromCal=_bl("criar"); // padrão: sócio ou coordenação
   // Helper: cria task draft (_isDraft=true) na data clicada com responsável Hellen, e abre o CardModal.
-  // Status="rascunhos" por padrão — Hellen finaliza e arrasta pra Copys depois.
+  // Status="demanda" (Copys) por padrão desde 30/09/2026 — entra direto na fila da Avaliação de copys.
   function _createDraftAtDay(dateObj,pre){
     if(!_canCreateFromCal)return;
     if(typeof mkId!=="function"||typeof smartFormatTitle!=="function"){
@@ -24485,7 +24486,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
     const draft={
       id:mkId(),title:smartFormatTitle("Nova publicação"),desc:"",
       assignee:respId,assignees:[respId],watchers:[],
-      client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"rascunhos",
+      client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"demanda", // 30/09 (Gustavo): card criado no calendário já nasce em Copys → cai direto na Avaliação de copys
       startDate:now.toISOString().split("T")[0],
       deadline:publishIso,
       publishDate:publishIso,       // camelCase — lido pelo state local do CardModal
@@ -27357,7 +27358,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _u=effectiveUser||((typeof CURRENT_USER!=="undefined")?CURRENT_USER:null);
   const _canCreateFromCal=!!(_u&&(_u.level===1||_u.dash==="coordinator"));
   // Helper: cria task draft (_isDraft=true) na data clicada com responsável Hellen, e abre o CardModal.
-  // Status="rascunhos" por padrão — Hellen finaliza e arrasta pra Copys depois.
+  // Status="demanda" (Copys) por padrão desde 30/09/2026 — entra direto na fila da Avaliação de copys.
   function _createDraftAtDay(dateObj){
     if(!_canCreateFromCal)return;
     if(typeof mkId!=="function"||typeof smartFormatTitle!=="function"){
@@ -27373,7 +27374,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const draft={
       id:mkId(),title:smartFormatTitle("Nova publicação"),desc:"",
       assignee:respId,assignees:[respId],watchers:[],
-      client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"rascunhos",
+      client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"demanda", // 30/09 (Gustavo): card criado no calendário já nasce em Copys → cai direto na Avaliação de copys
       startDate:now.toISOString().split("T")[0],
       deadline:publishIso,
       publishDate:publishIso,       // camelCase — lido pelo state local do CardModal
@@ -36362,7 +36363,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   Ação da FILA, não do card — por isso vem separada, embaixo de tudo.
                   Sempre "nova abordagem": mantém o assunto de cada card (o assunto veio do
                   planejamento, não pode mudar em massa) e reescreve só o texto. */}
-              {!isMob&&copyQueue.length>1&&_bl("copys.lote")&&(<>
+              {/* 30/09/2026 (Gustavo): "não precisa mais" — botão ESCONDIDO, não apagado.
+                  Pra voltar, é só tirar o "false&&" da linha abaixo. */}
+              {false&&!isMob&&copyQueue.length>1&&_bl("copys.lote")&&(<>
                 <button onClick={()=>{const _f=(copyQueue||[]).filter(function(t){return !_pxJaNoLote(t);}).length;setLoteTexto("");setLoteTudo(false);setLoteQtd(Math.max(1,Math.min(30,_f||copyQueue.length)));setLoteModal(true);}}
                   disabled={!!(lote&&!lote.fim)}
                   title="Reescreve de uma vez as próximas copys da fila, começando pelas que publicam mais cedo."
@@ -46983,15 +46986,21 @@ function _pxRoteiroParaHtml(txt){
 /* Botao roxo dos recursos de IA do cartao (Gerar/Ajustar briefing e legenda).
    FICA AQUI, UM SO: quando o estilo estava copiado nos dois lugares eles
    desencontraram na primeira mexida. Mudou aqui, muda nos dois. */
-function PxBotaoIA({label,hint,title,onClick}){
-  return <div style={{marginBottom:10}}>
-    <button type="button" onClick={onClick} title={title||""}
-      style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)",lineHeight:1.2,letterSpacing:-.1}}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
-      {label}
-    </button>
-    {hint&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>{hint}</div>}
-  </div>;
+/* 30/09/2026 (Gustavo): "muito feios, sobrando espaço" — virou um botão compacto
+   em tom claro (roxo suave), sem a dica embaixo. A dica foi pro tooltip (passa o mouse).
+   Vários PxBotaoIA seguidos ficam lado a lado numa linha só (use dentro de .px-ia-bar).
+   icone: "video" | padrão (faísca). loading: mostra spinner e bloqueia o clique. */
+function PxBotaoIA({label,hint,title,onClick,icone,loading}){
+  const _tip=[title,hint].filter(Boolean).join("\n\n");
+  const _ic=icone==="video"
+    ?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
+    :<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>;
+  return <button type="button" className="px-ia-btn" onClick={loading?undefined:onClick} disabled={!!loading} title={_tip}
+    style={{cursor:loading?"wait":"pointer",opacity:loading?.75:1}}>
+    <style>{".px-ia-btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:9px;border:1px solid #e4dcff;background:#f7f4ff;color:#6d28d9;font:600 12.5px/1 'Inter',system-ui,sans-serif;letter-spacing:-.1px;white-space:nowrap;transition:background .15s,border-color .15s,box-shadow .15s}.px-ia-btn:hover:not(:disabled){background:#efe9ff;border-color:#c4b5fd;box-shadow:0 1px 6px rgba(124,58,237,.14)}.px-ia-btn svg{flex-shrink:0}.px-ia-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}@keyframes pxIaGira{to{transform:rotate(360deg)}}"}</style>
+    {loading?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{animation:"pxIaGira .8s linear infinite"}}><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>:_ic}
+    {label}
+  </button>;
 }
 
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
@@ -50441,53 +50450,39 @@ function _cardPodeSerResp(u){
             })()}
             </div>
             <div>
-              {/* ── Ações de IA do briefing ──
-                   Em arte de data comemorativa são DOIS botões roxos aqui (roteiro de vídeo e
-                   Gerar/Ajustar briefing). Empilhados ficavam feios: agora ficam lado a lado, cada
-                   um com a dica embaixo. O BOTÃO NÃO ESTICA — mesmo tamanho natural do botão da aba
-                   Legenda. A COLUNA TEM TETO (max-width:290px): sem ele cada coluna virava
-                   metade do painel e sobrava um vazio enorme entre os dois botões (Vinicius,
-                   15/09/2026). white-space:nowrap no botão pra o rótulo não quebrar em duas
-                   linhas dentro do teto. Abaixo de ~575px de painel eles quebram um
-                   sobre o outro sozinhos. Com um botão só, fica como era. O marginBottom do
-                   wrapper dá o respiro até a barra de formatação e a caixa do briefing. */}
-              <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-start}.px-ia-row>div{flex:1 1 280px;min-width:0;max-width:290px;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{align-self:flex-start;white-space:nowrap}"}</style>
-              <div className={(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?"px-ia-row":undefined} style={{marginBottom:(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?18:8}}>
-              {/* ── Qualquer peça escrita (arte, carrossel, foto) → roteiro de vídeo de 60s ── */}
-              {pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&_bl("ia.roteiro")&&(<div style={{marginBottom:10}}>
-                <button type="button" disabled={!!(roteiroSt&&roteiroSt.loading)}
-                  onClick={async function(){
-                    setRoteiroSt({loading:true});
-                    try{
-                      const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===task.client;});
-                      const _nome=(_cl&&_cl.name)||task.client||"";
-                      const txt=await pxRoteiro60(task,_nome);
-                      setRoteiroSt({texto:txt});
-                    }catch(e){ setRoteiroSt({erro:(e&&e.message)||String(e)}); }
-                  }}
-                  title="Usa o briefing e a legenda deste card pra escrever um roteiro de vídeo de 90 segundos pro cliente gravar."
-                  style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:(roteiroSt&&roteiroSt.loading)?"wait":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)",opacity:(roteiroSt&&roteiroSt.loading)?.7:1}}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
-                  {(roteiroSt&&roteiroSt.loading)?"Escrevendo o roteiro…":"Transformar em roteiro de vídeo"}
-                </button>
-                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 90s a partir deste briefing e da legenda — dá pra copiar, colar embaixo do briefing ou virar o card em vídeo.</div>
-              </div>)}
-              {canEdit&&_bl("ia.briefing")&&(function(){
-                // Sem briefing ele gera, com briefing ele ajusta. Pra recomeçar do
-                // zero, apaga o texto — o botão volta sozinho pra "Gerar".
-                const _tem=_pxTextoPuro(desc).length>20;
-                return <PxBotaoIA
-                  label={_tem?"Ajustar briefing":"Gerar briefing"}
-                  title={_tem?"Você diz o que precisa ajustar e a IA reescreve o briefing mantendo o que já está bom."
-                             :"Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."}
-                  hint={_tem?"Diz o que está errado — ele corrige e mantém o resto igual. Pra começar outro do zero, é só apagar o briefing."
-                            :"Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo."}
-                  onClick={function(){ setBriefIA({modo:_tem?"alterar":"gerar",pedido:"",loading:false,versoes:[],idx:0,erro:"",
+              {/* ── Ações de IA do briefing (histórico do layout antigo lado a lado: 15/09/2026, Vinicius) ── */}
+              {/* 30/09/2026 (Gustavo): os dois botões de IA viraram uma barra compacta, lado a
+                  lado, sem a dica embaixo (foi pro tooltip). Mesma lógica de antes. */}
+              {(function(){
+                const _temB=_pxTextoPuro(desc).length>20;
+                const _vRot=pxPodeVirarRoteiro(task)&&_temB&&_bl("ia.roteiro");
+                const _vBri=canEdit&&_bl("ia.briefing");
+                if(!_vRot&&!_vBri) return null;
+                return <div className="px-ia-bar" style={{marginBottom:12}}>
+                  {_vBri&&<PxBotaoIA
+                    label={_temB?"Ajustar briefing":"Gerar briefing"}
+                    title={_temB?"Você diz o que precisa ajustar e a IA reescreve o briefing mantendo o que já está bom."
+                               :"Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."}
+                    hint={_temB?"Pra começar outro do zero, é só apagar o briefing.":""}
+                    onClick={function(){ setBriefIA({modo:_temB?"alterar":"gerar",pedido:"",loading:false,versoes:[],idx:0,erro:"",
                     // Foto de obra ja abre com "escrever a legenda tambem" marcado: e o caso
                     // em que o card nasce vazio dos dois lados (Vinicius, 15/09/2026).
-                    comLegenda:(!_tem&&!somenteStory&&pxEhFotoDeObra({title:title||task.title,contentType:contentType}))}); }}/>;
+                    comLegenda:(!_temB&&!somenteStory&&pxEhFotoDeObra({title:title||task.title,contentType:contentType}))}); }}/>}
+                  {_vRot&&<PxBotaoIA icone="video"
+                    loading={!!(roteiroSt&&roteiroSt.loading)}
+                    label={(roteiroSt&&roteiroSt.loading)?"Escrevendo o roteiro…":"Transformar em roteiro de vídeo"}
+                    title="Usa o briefing e a legenda deste card pra escrever um roteiro de vídeo de 90 segundos pro cliente gravar. Dá pra copiar, colar embaixo do briefing ou virar o card em vídeo."
+                    onClick={async function(){
+                      setRoteiroSt({loading:true});
+                      try{
+                        const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===task.client;});
+                        const _nome=(_cl&&_cl.name)||task.client||"";
+                        const txt=await pxRoteiro60(task,_nome);
+                        setRoteiroSt({texto:txt});
+                      }catch(e){ setRoteiroSt({erro:(e&&e.message)||String(e)}); }
+                    }}/>}
+                </div>;
               })()}
-              </div>
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
               <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
