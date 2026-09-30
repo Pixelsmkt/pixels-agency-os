@@ -102141,7 +102141,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         {c.whatsapp&&<button type="button" onClick={function(){ _copiar(String(c.whatsapp).trim(),"Número copiado"); }} title="Copiar o número"
                           style={{background:"color-mix(in srgb, var(--pb-cor) 7%, #fff)",border:"1px solid color-mix(in srgb, var(--pb-cor) 30%, #fff)",borderRadius:9,padding:"6px 10px",fontSize:12.5,fontWeight:800,color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",cursor:"pointer",fontFamily:PB_INTER}}>{c.whatsapp}</button>}
                         {c.whatsapp&&<button type="button" onClick={function(){ _copiar(_resposta(c),"Resposta copiada — é só colar no comentário/direct"); }}
-                          style={{background:"var(--pb-cor)",border:"none",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER}}>Copiar resposta pronta</button>}
+                          style={{background:"var(--pb-cor)",border:"none",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER}}>Copiar mensagem DM</button>}
                         {c.email&&<button type="button" onClick={function(){ _copiar(c.email,"E-mail copiado"); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#334155",cursor:"pointer",fontFamily:PB_INTER}}>{c.email}</button>}
                       </div>
                     </div>;
@@ -102175,7 +102175,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   {c.whatsapp&&String(c.nome||"").trim()&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:"color-mix(in srgb, var(--pb-cor) 7%, #fff)",border:"1px solid color-mix(in srgb, var(--pb-cor) 20%, #fff)",borderRadius:9,padding:"7px 10px"}}>
                     <span style={{flex:1,minWidth:220,color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",fontSize:12,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{_resposta(c)}</span>
                     <button type="button" onClick={function(){ _copiar(_resposta(c),"Resposta copiada — é só colar no comentário/direct"); }}
-                      style={{background:"var(--pb-cor)",border:"none",borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER,flexShrink:0}}>Copiar resposta pronta</button>
+                      style={{background:"var(--pb-cor)",border:"none",borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER,flexShrink:0}}>Copiar mensagem DM</button>
                   </div>}
                   </div>;
                 })}
@@ -103457,6 +103457,10 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   /* Lê (ou relê) o material. Guarda o arquivo primeiro: ficha é o bônus, o arquivo é o que
      não pode se perder. */
   const _lerArquivo=async function(m,file,extra){
+    /* (30/09/2026, Gustavo) "travou em 86": no lote, cada passo interno perdia o "(2/7)" e a barra calculava como
+       se fosse um arquivo só — o 1º chegava a 86% e os seguintes (que começam de novo em 55%) ficavam presos
+       atrás do "nunca volta". Agora todo passo leva o prefixo do lote e a barra soma certo. */
+    const _sp=function(t){ setSubindo(((extra&&extra.lote)||"")+t); };
     await _patch(m,{ficha_status:"lendo"});
     try{
       /* (25/09/2026) REUNIÃO: transcreve (se ainda não tem transcrição) e destila a ficha. */
@@ -103466,17 +103470,17 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
           let partes=extra&&extra.partes;
           if(!partes||!partes.length){
             if(!m.arquivo_url) throw new Error("sem áudio guardado");
-            setSubindo("baixando o áudio de "+(m.titulo||m.arquivo_nome));
+            _sp("baixando o áudio de "+(m.titulo||m.arquivo_nome));
             const r=await fetch(m.arquivo_url); if(!r.ok) throw new Error("não deu pra baixar o áudio (HTTP "+r.status+")");
             const bl=await r.blob();
-            const out=await _pbAudioDoVideo(new File([bl],m.arquivo_nome||"audio.mp3",{type:bl.type||"audio/mpeg"}),function(msg){ setSubindo(msg+" — "+(m.titulo||m.arquivo_nome)); });
+            const out=await _pbAudioDoVideo(new File([bl],m.arquivo_nome||"audio.mp3",{type:bl.type||"audio/mpeg"}),function(msg){ _sp(msg+" — "+(m.titulo||m.arquivo_nome)); });
             partes=out.partes;
           }
-          transcricao=await _pbTranscrever(partes,function(msg){ setSubindo(msg+" — "+(m.titulo||m.arquivo_nome)); });
+          transcricao=await _pbTranscrever(partes,function(msg){ _sp(msg+" — "+(m.titulo||m.arquivo_nome)); });
           if(!transcricao) throw new Error("a transcrição veio vazia — o áudio tem fala?");
           await _patch(m,{transcricao:transcricao});
         }
-        setSubindo("lendo "+(m.titulo||m.arquivo_nome)+" — IA, ficha da reunião");
+        _sp("lendo "+(m.titulo||m.arquivo_nome)+" — IA, ficha da reunião");
         const fichaR=await pxFichaDaReuniao(transcricao,m.titulo,clienteNome);
         await _patch(m,{ficha:fichaR,ficha_status:"pronta"});
         if(typeof pixelsToast!=="undefined") pixelsToast.success("Reunião transcrita e ficha pronta — confira antes de confiar nela.",5000);
@@ -103484,8 +103488,8 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
       }
       const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome,m.arquivo_url,function(a,b,c){
         try{
-          if(a==="ia") setSubindo(c>1?("lendo "+(m.titulo||m.arquivo_nome)+" — IA, parte "+b+" de "+c):("lendo "+(m.titulo||m.arquivo_nome)+" — IA"));
-          else setSubindo("desenhando "+(m.titulo||m.arquivo_nome)+" — página "+a+" de "+b);
+          if(a==="ia") _sp(c>1?("lendo "+(m.titulo||m.arquivo_nome)+" — IA, parte "+b+" de "+c):("lendo "+(m.titulo||m.arquivo_nome)+" — IA"));
+          else _sp("desenhando "+(m.titulo||m.arquivo_nome)+" — página "+a+" de "+b);
         }catch(_){}
       });
       await _patch(m,{ficha:ficha,ficha_status:"pronta"});
@@ -103569,7 +103573,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
     for(let i=0;i<guardados.length;i++){
       const g=guardados[i];
       setSubindo(_passo(i,guardados.length,"lendo",g.file.name));
-      try{ await _lerArquivo(g.novo,g.file,{partes:g.partes}); }catch(_e){}
+      try{ await _lerArquivo(g.novo,g.file,{partes:g.partes,lote:(guardados.length>1?("("+(i+1)+"/"+guardados.length+") "):"")}); }catch(_e){}
     }
     setSubindo("");
     if(guardados.length>1&&typeof pixelsToast!=="undefined")
