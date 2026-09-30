@@ -20019,6 +20019,30 @@ function _demTemProducao(t){
   }catch(_){return false;}
 }
 function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
+  /* 30/09/2026 (Gustavo): "super feio… ângulos mais arredondados, mais minimalista".
+     O modo big (Calendário de publicações) virou uma pílula clara e redonda: setas redondas,
+     mês em destaque, ano apagadinho, "Hoje" só aparece fora do mês atual. O modo compacto
+     (Calendário interno) continua o de antes, em _CalendarMonthNavCompacto. */
+  if(!big) return <_CalendarMonthNavCompacto calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>;
+  const _n=new Date();
+  const isToday=calMonth.getMonth()===_n.getMonth()&&calMonth.getFullYear()===_n.getFullYear();
+  const _seta=function(dir){
+    return <button type="button" className="px-mesnav-seta" title={dir<0?"Mês anterior":"Próximo mês"}
+      onClick={function(){ setCalMonth(function(m){ return new Date(m.getFullYear(),m.getMonth()+dir,1); }); }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">{dir<0?<polyline points="15 18 9 12 15 6"/>:<polyline points="9 18 15 12 9 6"/>}</svg>
+    </button>;
+  };
+  return(
+    <div className="px-mesnav">
+      <style>{".px-mesnav{display:inline-flex;align-items:center;gap:4px;padding:5px;background:#fff;border:1px solid #e9edf3;border-radius:999px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05);font-family:'Inter',system-ui,sans-serif}.px-mesnav-seta{width:34px;height:34px;border-radius:999px;border:none;background:transparent;color:#64748b;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,color .15s}.px-mesnav-seta:hover{background:#f1f5f9;color:#0f172a}.px-mesnav-mes{min-width:150px;text-align:center;font-size:15px;font-weight:700;color:#0f172a;letter-spacing:-.2px;text-transform:capitalize;user-select:none}.px-mesnav-mes span{color:#94a3b8;font-weight:500;margin-left:6px}.px-mesnav-hoje{height:30px;padding:0 13px;margin-left:2px;border-radius:999px;border:1px solid #e9edf3;background:#f8fafc;color:#334155;font:600 12px/1 'Inter',system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s}.px-mesnav-hoje:hover{background:#f1f5f9;border-color:#cbd5e1}"}</style>
+      {_seta(-1)}
+      <div className="px-mesnav-mes">{MONTHS[calMonth.getMonth()]}<span>{calMonth.getFullYear()}</span></div>
+      {_seta(1)}
+      {!isToday&&<button type="button" className="px-mesnav-hoje" onClick={function(){ setCalMonth(new Date()); }}>Hoje</button>}
+    </div>
+  );
+}
+function _CalendarMonthNavCompacto({calMonth, setCalMonth, MONTHS, big}){
   const isToday = (()=>{const n=new Date();return calMonth.getMonth()===n.getMonth()&&calMonth.getFullYear()===n.getFullYear();})();
   const _b=!!big;
   const _bt=_b?42:30, _ic=_b?18:14, _mw=_b?210:160, _mf=_b?18:13, _hf=_b?13:11, _hp=_b?"9px 18px":"6px 12px", _rad=_b?14:12, _gap=_b?8:6;
@@ -20612,6 +20636,24 @@ let _PX_CAS_PROTEGIDO=null;
      continua o desempate antigo.
    Card novo continua protegido pelo novoId; o id passado pra varredura continua valendo. */
 let _PX_CAS_MANUAL={};
+/* (30/09/2026, Gustavo) Card criado clicando num dia do calendário: quem escolheu o dia foi
+   gente, então a data vale como "mexida à mão" e a cascata não empurra ele — quem anda é o
+   outro (e se o outro não pode andar, ex.: já publicado, a semana fica com um a mais).
+   O trigger do banco só marca em UPDATE que muda a data; no INSERT não tinha como. Aqui grava
+   a marca depois que o card entra no banco (tenta algumas vezes: o save é assíncrono).
+   Só grava se ainda estiver vazia — nunca sobrescreve. */
+function _pxMarcarDataManual(id){
+  const sb=window._sb; if(!sb||!id) return;
+  const quando=new Date().toISOString();
+  [1500,5000,15000].forEach(function(ms){
+    setTimeout(function(){
+      try{
+        sb.from("tasks").update({publish_date_manual_at:quando}).eq("id",String(id))
+          .is("publish_date_manual_at",null).not("publish_date","is",null).then(function(){},function(){});
+      }catch(_){}
+    },ms);
+  });
+}
 function _pxCasManualAt(t){ return String((t&&(t.publish_date_manual_at||t.publishDateManualAt))||""); }
 function _pxCasProtegidosManuais(rows){
   const prot={}; const melhor={};
@@ -21270,6 +21312,18 @@ async function pxCascataVarrerCurtas(){
       const k=_pxApLinha(iso).iniIso;
       _pxColAlvos(x).forEach(function(a){ if(!PX_CASCATA_CAP[a]) return; if(!horizonte[a]||k>horizonte[a]) horizonte[a]=k; });
     });
+    /* (30/09/2026, Gustavo) Construções Clem: a semana de 26/10 ficou VAZIA e os posts de
+       04/11 e 11/11 não voltaram. A Clem não tem card autoplan-, então não tinha horizonte, e
+       semana vazia nunca contava como buraco. Agora o horizonte também vai até a última semana
+       com um post real que PODE andar (fora da data fixa, não marcado à mão) — se tem post
+       movível lá na frente, a vaga no meio é buraco de verdade. */
+    rows.forEach(function(x){
+      if(String(x.id||"").indexOf("autoplan-")===0) return;
+      if(!_pxCasMovivel(x,hoje,null)||_pxCasManualAt(x)) return;
+      const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
+      const k=_pxApLinha(iso).iniIso;
+      _pxColAlvos(x).forEach(function(a){ if(!PX_CASCATA_CAP[a]) return; if(!horizonte[a]||k>horizonte[a]) horizonte[a]=k; });
+    });
     if(!Object.keys(horizonte).length) return 0;
     const porSemana={};
     rows.forEach(function(x){
@@ -21277,16 +21331,24 @@ async function pxCascataVarrerCurtas(){
       const k=_pxApLinha(iso).iniIso; (porSemana[k]=porSemana[k]||[]).push(x);
     });
     const buracos=[];
-    for(const k of Object.keys(porSemana).sort()){
+    /* todas as semanas até o horizonte mais longe — inclusive as que não têm card nenhum */
+    const _semanas=Object.keys(porSemana);
+    const _hMax=Object.keys(horizonte).reduce(function(m,a){ return horizonte[a]>m?horizonte[a]:m; },"");
+    for(let _d=new Date(L0.ini); _pxApIso(_d)<=_hMax; _d.setDate(_d.getDate()+7)){ const _k=_pxApLinha(_pxApIso(_d)).iniIso; if(_semanas.indexOf(_k)<0) _semanas.push(_k); }
+    for(const k of _semanas.sort()){
       if(k<=L0.iniIso) continue;                       // semana corrente fica como está
       const L=_pxApLinha(k);
       if(L.fimIso<piso) continue;                      // perto demais de hoje
-      const daSemana=porSemana[k], alvos=[];
+      const daSemana=porSemana[k]||[], alvos=[];
       daSemana.forEach(function(x){ _pxColAlvos(x).forEach(function(a){ if(PX_CASCATA_CAP[a]&&alvos.indexOf(a)<0) alvos.push(a); }); });
+      /* semana vazia: entra todo alvo simples (fora a Bioter, que tem grade própria) que ainda
+         tem post movível mais pra frente */
+      Object.keys(horizonte).forEach(function(a){ if(a.indexOf("bioter")!==0&&k<horizonte[a]&&alvos.indexOf(a)<0) alvos.push(a); });
       for(const alvo of alvos){
         if(!horizonte[alvo]||k>horizonte[alvo]) continue;   // fora do que foi planejado
         const cap=PX_CASCATA_CAP[alvo], n=_pxCasConta(daSemana,alvo).length;
-        if(n<=0||n>=cap) continue;                     // 0 = semana não planejada pra esse alvo
+        if(n>=cap) continue;
+        if(n<=0&&(alvo.indexOf("bioter")===0||k>=horizonte[alvo])) continue;   // Bioter: semana vazia continua sendo "não planejada"
         const cli=String(alvo).split(":")[0], uni=alvo.indexOf("bioter:")===0?alvo.slice(7):"";
         const meio=new Date(L.ini); meio.setDate(L.ini.getDate()+3);
         /* (22/09/2026, Rodrigo) "por que na última arrastada faltou post de Chapecó na semana?"
@@ -21425,6 +21487,13 @@ async function pxCascataEspacar(){
    (é a grade das quartas nas 5 unidades), card publicado/reprovado/pausado e card de hoje
    ou do passado. E nada cai a menos de PX_CASCATA_PUXA_MIN_DIAS de hoje — antecipar post
    pra semana que vem sem ninguém pedir é pior do que deixar a semana com uma vaga.      */
+/* (30/09/2026, Gustavo) quanto mais pronto o card, mais perto ele vem na cascata pra trás. */
+function _pxCasProntidao(t){
+  const st=String((t&&t.status)||"");
+  const base={aprovado:50,aprovacao_final:50,agendado:50,avaliacao:40,ajustes:30,alteracao:30,execucao:20,recebida:10}[st]||0;
+  const fs=Array.isArray(t&&t.files)?t.files.filter(function(f){ return f&&!f.isAnnotation; }):[];
+  return base+(fs.length?5:0);
+}
 const PX_CASCATA_PUXA_MIN_DIAS=7;   // nada é antecipado pra dentro dos próximos 7 dias
 const PX_CASCATA_PUXA_MAX=40;       // teto de segurança por rodada
 async function pxCascataPuxar(removidos){
@@ -21450,7 +21519,7 @@ async function pxCascataPuxar(removidos){
 
     const L0=_pxApLinha(hoje);
     const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
-    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,publish_date_manual_at")
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,publish_date_manual_at,files")
       .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return 0;
     const rows=(r.data||[]);
@@ -21466,6 +21535,7 @@ async function pxCascataPuxar(removidos){
         if(_pxColAlvos(x).indexOf(alvo)<0) return false;
         if(String(x.publish_date||"").slice(0,10)<=L.fimIso) return false;   // tem que estar DEPOIS
         if(!_pxCasMovivel(x,hoje,null)) return false;                        // fixo/publicado não anda
+        if(_pxCasManualAt(x)) return false;   // (30/09, Gustavo) data escolhida à mão não é puxada: escolha manual prevalece
         if(_pxCasTrilha(x)==="collab") return false;
         /* (22/09/2026) Foto de obra e Short são a grade das segundas, EM GRUPO (as três
            principais juntas, as três filiais juntas). Puxar um deles sozinho pra trás quebra o
@@ -21475,8 +21545,10 @@ async function pxCascataPuxar(removidos){
         if(v.trilha==="material"&&_pxCasTrilha(x)!=="material") return false;   // vaga de Foto/Short só aceita Foto/Short
         return true;
       }).sort(function(p,q){
-        // (24/09) primeiro quem não tem data marcada à mão; entre iguais, o mais perto
-        const ma=_pxCasManualAt(p), mb=_pxCasManualAt(q); if(!!ma!==!!mb) return ma?1:-1;
+        // (30/09, Gustavo) "o card que estiver mais preparado sempre traz mais próximo":
+        // aprovado/agendado > em avaliação > em ajuste > em execução > com material > o resto.
+        // Entre iguais, o mais perto.
+        const pp=_pxCasProntidao(p), pq=_pxCasProntidao(q); if(pp!==pq) return pq-pp;
         return String(p.publish_date).localeCompare(String(q.publish_date));
       });
       if(!cand.length) continue;
@@ -24268,6 +24340,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
           (next||[]).forEach(function(t){
             const old=(prev||[]).find(function(p){return String(p.id)===String(t.id);});
             if(old&&old._isDraft===true&&!t._isDraft){
+              if(old._doCalendario&&typeof _pxMarcarDataManual==="function") _pxMarcarDataManual(t.id);
               _savedInSessionRef.current.add(String(t.id));
             }
           });
@@ -24505,7 +24578,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:respName,
       timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
-      _isDraft:true
+      _isDraft:true,
+      _doCalendario:true   // (30/09) nasceu clicando num dia do calendário → a data é escolha de gente
     };
     // (25/09/2026) veio do card tracejado de lacuna: já nasce com cliente/unidade/formato
     if(pre&&typeof pre==="object"){ Object.assign(draft,pre); if(draft.timeline&&draft.timeline[0]) draft.timeline[0].label="Demanda criada por "+respName+" pelo Calendário (lacuna da semana)"; }
@@ -24991,9 +25065,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
           </div>
         </div>
         <span style={{flex:1}}/>
-        {/* Seletor de mês — reposto aqui depois de remover o widget de progresso */}
-        {/* Celular: o seletor grande tem 380px e nao cabe em 390 — usa o compacto */}
-        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={!isMob}/>
+        {/* 30/09/2026 (Gustavo): o seletor de mês saiu deste canto — agora fica centralizado
+            logo abaixo da linha do "Gerar plano do mês" (ver PX_MESNAV_CENTRO mais abaixo). */}
       </div>
 
       {/* Modal: preview da sugestão de datas — cards existentes */}
@@ -25395,6 +25468,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
           })()}
         </div>;
       })()}
+      {/* PX_MESNAV_CENTRO — 30/09/2026 (Gustavo): seletor de mês centralizado, abaixo do "Gerar plano do mês" */}
+      <div style={{display:"flex",justifyContent:"center",margin:"2px 0 -2px"}}>
+        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
+      </div>
       {pautaAberta&&(filterClient==="todos"||(filterClient==="bioter"&&filterBioterUnit==="todos"))&&<_PxPlanoDoMesTodos soBioter={filterClient==="bioter"} mes={calMonth} tasks={tasks} setTasks={setTasks}
         onClose={function(){ setPautaAberta(false); _carregarPlanoUltimo(); }} onOpenCard={function(t){ setOpenCard(t); }}/>}
       {pautaAberta&&filterClient!=="todos"&&!(filterClient==="bioter"&&filterBioterUnit==="todos")&&<_PxPlanoDoMes client={filterClient} unit={filterClient==="bioter"&&filterBioterUnit!=="todos"?filterBioterUnit:""} mes={calMonth} tasks={tasks} setTasks={setTasks}
@@ -27388,7 +27465,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:respName,
       timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
-      _isDraft:true
+      _isDraft:true,
+      _doCalendario:true   // (30/09) nasceu clicando num dia do calendário → a data é escolha de gente
     };
     if(typeof setTasks==="function"){setTasks(function(p){return [].concat(p||[],[draft]);});}
     setOpenCard(draft);
@@ -27420,6 +27498,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           (next||[]).forEach(function(t){
             const old = (prev||[]).find(function(p){return String(p.id)===String(t.id);});
             if(old && old._isDraft === true && !t._isDraft){
+              if(old._doCalendario&&typeof _pxMarcarDataManual==="function") _pxMarcarDataManual(t.id);
               _savedInSessionRef.current.add(String(t.id));
             }
           });
@@ -50458,7 +50537,7 @@ function _cardPodeSerResp(u){
                 const _vRot=pxPodeVirarRoteiro(task)&&_temB&&_bl("ia.roteiro");
                 const _vBri=canEdit&&_bl("ia.briefing");
                 if(!_vRot&&!_vBri) return null;
-                return <div className="px-ia-bar" style={{marginBottom:12}}>
+                return <div className="px-ia-bar" style={{marginTop:-12,marginBottom:24}}>{/* 30/09 (Gustavo): no meio do espaço entre as abas e a caixa do briefing */}
                   {_vBri&&<PxBotaoIA
                     label={_temB?"Ajustar briefing":"Gerar briefing"}
                     title={_temB?"Você diz o que precisa ajustar e a IA reescreve o briefing mantendo o que já está bom."
