@@ -102037,15 +102037,24 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               };
               const _dig=function(t){ return String(t||"").replace(/\D/g,""); };
               const _wa=function(t){ let d=_dig(t); if(!d) return ""; if(d.length<=11) d="55"+d; return "https://wa.me/"+d; };
+              const _mascaraFone=function(t){ let d=_dig(t); if(d.length>11&&d.indexOf("55")===0) d=d.slice(2); d=d.slice(0,11);
+                if(d.length<=2) return d?("("+d):""; if(d.length<=6) return "("+d.slice(0,2)+") "+d.slice(2);
+                if(d.length<=10) return "("+d.slice(0,2)+") "+d.slice(2,6)+"-"+d.slice(6);
+                return "("+d.slice(0,2)+") "+d.slice(2,7)+"-"+d.slice(7); };
+              const _fone=function(t){ const d=_dig(t).replace(/^55(?=\d{10,11}$)/,""); if(d.length===11) return "("+d.slice(0,2)+") "+d.slice(2,7)+"-"+d.slice(7); if(d.length===10) return "("+d.slice(0,2)+") "+d.slice(2,6)+"-"+d.slice(6); return String(t||"").trim(); };
+              /* (30/09, Gustavo) mensagem pronta mais profissional, em linhas: cumprimento, quem atende
+                 (e pra qual região), número e link separados. Contato genérico vira "nosso time comercial". */
               const _resposta=function(c){
                 const f=String(c.funcao||"").trim();
-                /* contato genérico ("Telefone comercial", "Vendas") não vira nome de pessoa na frase */
                 const n=String(c.nome||"").trim(), gen=/telefone|fone|whats|comercial|vendas|atendimento|central|escrit[óo]rio/i.test(n)&&!f;
                 const quem=gen?"nosso time comercial":(n+(f?(" ("+f+")"):""));
-                /* (30/09, Gustavo) com região: "esse é o nosso contato pra sua região" */
-                const reg=String(c.regiao||"").trim();
-                if(reg&&!/^(todas|todo|geral|demais)/i.test(reg)) return "Olá! Pra orçamento e mais informações, o contato da sua região ("+reg+") é "+quem+", no WhatsApp "+String(c.whatsapp||"").trim()+(_wa(c.whatsapp)?(": "+_wa(c.whatsapp)):"")+" 😊";
-                return "Olá! Pra orçamento e mais informações, é só chamar "+quem+" no WhatsApp "+String(c.whatsapp||"").trim()+(_wa(c.whatsapp)?(": "+_wa(c.whatsapp)):"")+" 😊";
+                const reg=String(c.regiao||"").trim(), temReg=reg&&!/^(todas|todo|geral|demais)/i.test(reg);
+                const linhas=["Olá! Obrigado pelo interesse 😊",
+                  temReg?("Para orçamentos e mais informações na sua região ("+reg+"), fale com "+quem+":")
+                        :("Para orçamentos e mais informações, fale com "+quem+":"),
+                  "📱 WhatsApp: "+_fone(c.whatsapp)];
+                if(_wa(c.whatsapp)) linhas.push("👉 "+_wa(c.whatsapp));
+                return linhas.join("\n");
               };
               const _copiar=function(t,msg){ try{ navigator.clipboard.writeText(t); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado",1800); }catch(_){} };
               const _uAtual=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(function(x){return x.id===_unitTab;}):null;
@@ -102085,9 +102094,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   return <div key={"cc"+(_porUnid?_unitTab:"")+i} style={{display:"flex",flexDirection:"column",gap:8,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"9px 11px"}}>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                     <input defaultValue={c.nome||""} placeholder="Nome — ex: Cristiano" onBlur={function(e){ if(e.target.value!==(c.nome||"")) _set(i,"nome",e.target.value); }} style={Object.assign({},_inp,{width:170,fontWeight:700})}/>
-                    <input defaultValue={c.regiao||""} placeholder="Região — ex: Oeste de SC, MS (vazio = todas)" onBlur={function(e){ if(e.target.value!==(c.regiao||"")) _set(i,"regiao",e.target.value); }} style={Object.assign({},_inp,{width:230})}/>
                     <input defaultValue={c.funcao||""} placeholder="Função — ex: Comercial, Vendedor" onBlur={function(e){ if(e.target.value!==(c.funcao||"")) _set(i,"funcao",e.target.value); }} style={Object.assign({},_inp,{width:170})}/>
-                    <input defaultValue={c.whatsapp||""} placeholder="WhatsApp — (54) 99999-9999" onBlur={function(e){ if(e.target.value!==(c.whatsapp||"")) _set(i,"whatsapp",e.target.value); }} style={Object.assign({},_inp,{width:170})}/>
+                    <input defaultValue={c.regiao||""} placeholder="Região — ex: Oeste de SC, MS (vazio = todas)" onBlur={function(e){ if(e.target.value!==(c.regiao||"")) _set(i,"regiao",e.target.value); }} style={Object.assign({},_inp,{width:230})}/>
+                    {/* (30/09, Gustavo) máscara: vai formatando enquanto digita — (67) 8217-0044 / (67) 99607-2185 */}
+                    <input defaultValue={_fone(c.whatsapp||"")} placeholder="WhatsApp — (54) 99999-9999" inputMode="tel"
+                      onInput={function(e){ const el=e.target; const m=_mascaraFone(el.value); if(m!==el.value) el.value=m; }}
+                      onBlur={function(e){ const v=_fone(e.target.value); e.target.value=v; if(v!==(c.whatsapp||"")) _set(i,"whatsapp",v); }} style={Object.assign({},_inp,{width:170})}/>
                     <input defaultValue={c.email||""} placeholder="E-mail (opcional)" onBlur={function(e){ if(e.target.value!==(c.email||"")) _set(i,"email",e.target.value); }} style={Object.assign({},_inp,{width:190})}/>
                     <input defaultValue={c.quando||""} placeholder="Indicar quando — ex: orçamento no RS; Mato Grosso do Sul; peças" onBlur={function(e){ if(e.target.value!==(c.quando||"")) _set(i,"quando",e.target.value); }} style={Object.assign({},_inp,{flex:1,minWidth:220})}/>
                     <button type="button" onClick={function(){ _upd(_cc.filter(function(_,j){return j!==i;})); }} title="Tirar da lista"
@@ -102097,7 +102109,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   </div>
                   {/* (30/09) a mensagem pronta aparece também no modo edição (a Estratégia vive nele) */}
                   {c.whatsapp&&String(c.nome||"").trim()&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:"#f0fdf4",border:"1px solid #dcfce7",borderRadius:9,padding:"7px 10px"}}>
-                    <span style={{flex:1,minWidth:220,color:"#166534",fontSize:12,lineHeight:1.45}}>{_resposta(c)}</span>
+                    <span style={{flex:1,minWidth:220,color:"#166534",fontSize:12,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{_resposta(c)}</span>
                     <button type="button" onClick={function(){ _copiar(_resposta(c),"Resposta copiada — é só colar no comentário/direct"); }}
                       style={{background:"#16a34a",border:"none",borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER,flexShrink:0}}>Copiar resposta pronta</button>
                   </div>}
