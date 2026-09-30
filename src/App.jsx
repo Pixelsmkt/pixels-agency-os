@@ -114409,6 +114409,26 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v15 (30/09/2026) — BIBLIOTECA DE VOZES (guia "Vozes"): vozes da OpenAI com nome, jeito de falar (estilo, idade, energia, sotaque), gênero,
+     estilo, clientes e AMOSTRA para ouvir antes (edge video-editar acao "voz_amostra"). Tabela video_vozes (nada se apaga; histórico) ·
+     rpc criacao_vozes · criacao_voz_salvar · criacao_voz_arquivar. Kit do cliente: voz padrão e PRONÚNCIAS (como a voz deve falar nomes
+     difíceis). Estúdio › Áudio: locução pela biblioteca (já na voz padrão do cliente), "Puxar do roteiro do card" (blocos NARRAÇÃO:/LOCUÇÃO:/OFF:
+     ou [NARRAÇÃO]…[/NARRAÇÃO]; card com tag de narração avisa) e "Enviar áudio pronto" (ex.: gerado no CapCut). Fila mostra 🎙 Narração.
+   v14 (30/09/2026) — MODELO DO PHOTOSHOP (PSD) NA GALERIA: camadas com nome {texto}, {linha2}, {nome}, {cargo}, {chamada}, {whatsapp},
+     {instagram}, {site}, {endereco} e {foto} viram campos; o resto vira a arte fixa (atrás e na frente dos campos, desenhada igual ao Photoshop
+     pelo leitor da Edição de arte). Do texto vem posição/caixa, fonte (Google ou "envie a fonte"), tamanho, cor, alinhamento, maiúsculas,
+     espaçamento, contorno e sombra; a {foto} vira janela com a forma exata da camada (máscara). Avisa o que não dá para copiar igual.
+     Foto do elemento no Estúdio (fotos do card ou enviar). "Trocar pelo PSD novo" mantém nome, quando usar e padrão (o antes fica no histórico).
+   v13 (30/09/2026) — pedidos do sócio: "não quero que corte fala sem eu saber o que foi cortado" + "corrigir na linha do tempo, do segundo X
+     ao Y, o que fazer e POR QUÊ, para ela aprender":
+     · FALA DO CLIPE: duplo clique no clipe (ou ferramenta "Fala") abre a Cola só daquele bruto — o que está no clipe em destaque, o resto
+       riscado com o MOTIVO do corte (receita.motivos_corte, gravado pela IA: repetição, recomeço, fora do assunto, tempo, pedido…).
+       Passar o mouse no clipe mostra a fala dele. "Voltar para o vídeo" pede o porquê (projeto.voltas → a IA aprende o que não cortar).
+       Conferência avisa quantas frases com conteúdo saíram.
+     · CORRIGIR (menu novo): C marca o começo e o fim do trecho (ou "Marcar aqui"); cada correção = trecho + tipo + o que fazer + por quê
+       (projeto.ajustes_trecho). Faixa na régua. Ajustes da Avaliação ([mm:ss] no card) entram com um clique. "Tirar este trecho" corta sem IA.
+       "Aplicar correções" manda todas numa chamada (edge video-editar v27: correcoes[]); a IA diz o que fez em cada uma e você marca
+       "✓ era isso / ✗ não era isso" — tudo vira aprendizado (aprenderCom).
    v12 (30/09/2026) — GALERIA DO KIT (pedido do sócio: "a tela final de cada cliente, o GC de cada cliente… elementos, caixas de texto
      padrão para depois a IA escrever dentro… sugerir mudar o elemento… a IA inteligente e consciente sem fazer cagada"):
      · Kit do cliente › Galeria: Telas finais (PNG ou vídeo MP4), GC (PNG com as áreas do nome e da linha 2 marcadas) e Elementos
@@ -114544,9 +114564,147 @@ function _evKitPadrao(base){
            gc_final:["whatsapp","instagram"], cta_final:"Chame no WhatsApp", observacoes:"" };
 }
 
+
+/* ═══ v15: BIBLIOTECA DE VOZES ═══ */
+let _evVozesCache = null, _evVozesProm = null;
+function _evVozesCarregar(forcar){
+  if(!window._sb) return Promise.resolve([]);
+  if(_evVozesProm && !forcar) return _evVozesProm;
+  _evVozesProm = window._sb.rpc("criacao_vozes", { p_arquivadas:false }).then(function(r){ _evVozesCache = r.error ? [] : (Array.isArray(r.data) ? r.data : []); return _evVozesCache; }).catch(function(){ return []; });
+  return _evVozesProm;
+}
+function _evUsarVozes(){ const [v, setV] = useState(_evVozesCache || []); useEffect(function(){ let vivo = true; _evVozesCarregar().then(function(x){ if(vivo) setV(x); }); return function(){ vivo = false; }; }, []); return v; }
+function _evVozesDoCliente(vozes, cliente){ return (vozes || []).filter(function(v){ return !v.clientes || !v.clientes.length || v.clientes.indexOf(cliente) >= 0; }); }
+/* pronúncia: troca a grafia pela forma de falar SÓ no que vai para a voz (a legenda e o nome continuam certos) */
+function _evAplicarPronuncia(texto, prons){
+  let t = String(texto || "");
+  (Array.isArray(prons) ? prons : []).forEach(function(p){ if(!p || !p.escrita || !p.falada) return;
+    try{ const e = String(p.escrita).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); t = t.replace(new RegExp("(^|[^\\p{L}\\p{N}])(" + e + ")(?=$|[^\\p{L}\\p{N}])", "giu"), function(m, a){ return a + p.falada; }); }catch(_){} });
+  return t;
+}
+/* roteiro do card: blocos "NARRAÇÃO:", "LOCUÇÃO:", "OFF:" (até a linha vazia ou outro rótulo) ou [NARRAÇÃO]…[/NARRAÇÃO] */
+function _evTexto(html){ return String(html || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"); }
+function _evRoteiroNarracao(t){
+  const tx = _evTexto((t && t.description) || "") + "\n" + _evTexto((t && t.roteiro) || "");
+  const out = [];
+  tx.replace(/\[(?:narra[çc][aã]o|locu[çc][aã]o|off)\]([\s\S]*?)\[\/(?:narra[çc][aã]o|locu[çc][aã]o|off)\]/gi, function(m, a){ out.push(a.trim()); return m; });
+  if(!out.length){
+    const ls = tx.split(/\n/); let lendo = false, bloco = [];
+    const fecha = function(){ if(bloco.length){ out.push(bloco.join(" ").trim()); bloco = []; } };
+    ls.forEach(function(l){
+      const m = l.match(/^\s*(?:[-•*]\s*)?(?:🎙️?\s*)?(narra[çc][aã]o|locu[çc][aã]o|off|voz off|texto da narra[çc][aã]o)\s*(?:\(.*?\))?\s*[:\-–]\s*(.*)$/i);
+      if(m){ fecha(); lendo = true; if(m[2].trim()) bloco.push(m[2].trim()); return; }
+      if(lendo && (!l.trim() || /^\s*(?:[-•*]\s*)?(cena|imagem|texto na tela|legenda|gc|lettering|m[uú]sica|obs|observa[çc][aã]o|take|v[ií]deo)\s*\d*\s*[:\-–]/i.test(l))){ fecha(); lendo = false; return; }
+      if(lendo) bloco.push(l.trim());
+    });
+    fecha();
+  }
+  return out.filter(Boolean).join("\n\n").replace(/^["“”]+|["“”]+$/g, "").slice(0, 1500);
+}
+function _evTagNarracao(t){ return (Array.isArray(t && t.tags) ? t.tags : []).some(function(x){ return /narra|locu/i.test(String(x || "")); }); }
+
+function _EvVozes({ isMob }){
+  const [lista, setLista] = useState(null); const [rec, setRec] = useState(0); const [ed, setEd] = useState(null);
+  const [gerando, setGerando] = useState(false); const [salvando, setSalvando] = useState(false); const [verArq, setVerArq] = useState(false);
+  const clientes = useMemo(function(){ try{ return ((typeof CLIENTS !== "undefined" && Array.isArray(CLIENTS)) ? CLIENTS : []).filter(function(c){ return c && c.id && (!c.status || c.status === "ativo"); })
+    .map(function(c){ return { id:c.id, nome:c.name || c.id }; }).sort(function(a, b){ return a.nome.localeCompare(b.nome, "pt-BR"); }); }catch(_){ return []; } }, []);
+  useEffect(function(){ if(!window._sb) return; let vivo = true; setLista(null);
+    window._sb.rpc("criacao_vozes", { p_arquivadas:true }).then(function(r){ if(!vivo) return; setLista(r.error ? { erro:/does not exist|function/i.test(r.error.message || "") ? "A biblioteca de vozes ainda não foi ligada no banco." : r.error.message } : (Array.isArray(r.data) ? r.data : [])); });
+    _evVozesCarregar(true); return function(){ vivo = false; }; }, [rec]);
+  const toast = function(tp, m){ try{ pixelsToast[tp](m); }catch(_){} };
+  const nova = function(){ setEd({ id:null, nome:"", voz:"ash", instrucao:"", genero:"", estilo:"", clientes:[], amostra_url:"", amostra_texto:"Olá! Esta é a voz que vai narrar os vídeos. Fala com clareza, no ritmo certo e com a energia da marca." }); };
+  const amostra = async function(){
+    if(!ed || gerando) return; setGerando(true);
+    try{ const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"voz_amostra", voz:ed.voz, instrucao:ed.instrucao, texto:ed.amostra_texto } });
+      if(res.error) throw new Error(await _evErroFn(res)); const d = res.data || {}; if(!d.url) throw new Error("a IA não devolveu o áudio");
+      setEd(function(a){ return Object.assign({}, a, { amostra_url:d.url }); }); toast("success", "Amostra pronta" + (d.custo_brl != null ? " · R$ " + String(d.custo_brl).replace(".", ",") : "")); }
+    catch(e){ toast("error", "Não gerou: " + ((e && e.message) || e)); }
+    setGerando(false);
+  };
+  const salvar = function(){
+    if(!ed || !String(ed.nome || "").trim()){ toast("error", "Dê um nome para a voz."); return; }
+    setSalvando(true);
+    window._sb.rpc("criacao_voz_salvar", { p_id:ed.id, p_dados:{ nome:ed.nome.trim(), voz:ed.voz, instrucao:ed.instrucao || "", genero:ed.genero || "", estilo:ed.estilo || "",
+      amostra_url:ed.amostra_url || "", amostra_texto:ed.amostra_texto || "", clientes:ed.clientes || [] } }).then(function(r){
+      setSalvando(false); if(r.error){ toast("error", "Não salvou: " + r.error.message); return; } toast("success", "Voz salva na biblioteca"); setEd(null); setRec(function(n){ return n + 1; }); });
+  };
+  const arquivar = function(v, at){ window._sb.rpc("criacao_voz_arquivar", { p_id:v.id, p_ativo:at }).then(function(r){ if(r.error){ toast("error", r.error.message); return; } setRec(function(n){ return n + 1; }); }); };
+  const caixa = { background:"#fff", border:"1px solid " + _EV.linha, borderRadius:14, padding:isMob ? 12 : 16, marginTop:14 };
+  const inp = { font:"inherit", padding:"8px 10px", borderRadius:9, border:"1px solid " + _EV.linha, background:"#fff", fontSize:13, width:"100%", boxSizing:"border-box" };
+  const rot = function(t){ return <div style={{fontSize:11,color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",margin:"10px 0 4px"}}>{t}</div>; };
+  const vis = Array.isArray(lista) ? lista.filter(function(v){ return verArq ? v.ativo === false : v.ativo !== false; }) : [];
+  const nomeCli = function(id){ const c = clientes.find(function(x){ return x.id === id; }); return c ? c.nome : id; };
+  const PRESETS = [ ["Narrador animado", "Homem jovem, voz animada e confiante de narrador de vídeo curto para redes sociais, ritmo rápido, sorriso na voz. Português do Brasil."],
+    ["Institucional", "Voz grave e pausada de locutor institucional, transmite confiança e credibilidade. Português do Brasil."],
+    ["Oferta", "Energia alta de anúncio de oferta, frases curtas e marcadas, chama para a ação no fim. Português do Brasil."],
+    ["Acolhedora", "Voz calorosa e acolhedora, ritmo tranquilo, passa cuidado e proximidade. Português do Brasil."],
+    ["Regional Sul", "Estilo locutor de rádio do interior do Sul do Brasil, animado e próximo, leve sotaque gaúcho."] ];
+  return (<div>
+    <div style={Object.assign({}, caixa, {display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"})}>
+      <div style={{flex:"1 1 320px"}}><div style={{fontSize:15,fontWeight:800}}>Biblioteca de vozes</div>
+        <div style={{fontSize:12.5,color:_EV.sub,marginTop:2,lineHeight:1.5}}>Vozes da IA (OpenAI) com o jeito de falar de cada uma. Ouça a amostra, escolha a voz padrão no Kit do cliente e use no Estúdio (Áudio › Locução com IA).
+          Vozes do CapCut (como a Valentino) não saem do CapCut: gere lá e use <b>Enviar áudio pronto</b> no Estúdio.</div></div>
+      <label style={{display:"flex",gap:6,alignItems:"center",fontSize:12,color:_EV.sub,cursor:"pointer"}}><input type="checkbox" checked={verArq} onChange={function(e){ setVerArq(e.target.checked); }}/>Ver arquivadas</label>
+      {!isMob && <button onClick={nova} style={{font:"inherit",padding:"9px 16px",borderRadius:10,border:0,background:_EV.roxo,color:"#fff",fontWeight:800,cursor:"pointer"}}>+ Nova voz</button>}
+    </div>
+    {lista && lista.erro && <div style={Object.assign({}, caixa, {background:_EV.amareloClaro,color:_EV.amarelo,fontWeight:600})}>{lista.erro}</div>}
+    {!lista && <div style={{padding:20,color:_EV.sub}}>Carregando…</div>}
+    {ed && <div style={Object.assign({}, caixa, {border:"1.5px solid " + _EV.roxo})}>
+      <div style={{fontSize:14,fontWeight:800}}>{ed.id ? "Editar voz" : "Nova voz"}</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr" : "1fr 1fr",gap:10}}>
+        <div>{rot("Nome")}<input value={ed.nome} maxLength={60} onChange={function(e){ const v = e.target.value; setEd(function(a){ return Object.assign({}, a, { nome:v }); }); }} placeholder="Ex.: Narrador animado" style={inp}/></div>
+        <div>{rot("Voz base")}<select value={ed.voz} onChange={function(e){ const v = e.target.value; setEd(function(a){ return Object.assign({}, a, { voz:v, amostra_url:"" }); }); }} style={inp}>
+          {_EVP_VOZES.map(function(v){ return <option key={v.id} value={v.id}>{v.label} — {v.d}</option>; })}</select></div>
+      </div>
+      {rot("Jeito de falar (a voz segue isto)")}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>{PRESETS.map(function(p){ return <button key={p[0]} onClick={function(){ setEd(function(a){ return Object.assign({}, a, { instrucao:p[1], amostra_url:"" }); }); }}
+        style={{font:"inherit",fontSize:11.5,fontWeight:700,padding:"4px 9px",borderRadius:99,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.sub,cursor:"pointer"}}>{p[0]}</button>; })}</div>
+      <textarea value={ed.instrucao} maxLength={600} rows={3} onChange={function(e){ const v = e.target.value; setEd(function(a){ return Object.assign({}, a, { instrucao:v, amostra_url:"" }); }); }}
+        placeholder="Idade, energia, ritmo, sotaque, emoção. Ex.: homem de 30 anos, animado, ritmo rápido, sorriso na voz, português do Brasil." style={Object.assign({}, inp, {resize:"vertical"})}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr" : "1fr 1fr",gap:10}}>
+        <div>{rot("Gênero")}<select value={ed.genero} onChange={function(e){ const v = e.target.value; setEd(function(a){ return Object.assign({}, a, { genero:v }); }); }} style={inp}>
+          {[["","—"],["masculina","Masculina"],["feminina","Feminina"],["neutra","Neutra"]].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</select></div>
+        <div>{rot("Estilo")}<input value={ed.estilo} maxLength={40} onChange={function(e){ const v = e.target.value; setEd(function(a){ return Object.assign({}, a, { estilo:v }); }); }} placeholder="animado, institucional, vendas…" style={inp}/></div>
+      </div>
+      {rot("Clientes (vazio = todos)")}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",maxHeight:120,overflow:"auto"}}>{clientes.map(function(c){ const on = (ed.clientes || []).indexOf(c.id) >= 0;
+        return <button key={c.id} onClick={function(){ setEd(function(a){ const l = (a.clientes || []).slice(); const i = l.indexOf(c.id); if(i >= 0) l.splice(i, 1); else l.push(c.id); return Object.assign({}, a, { clientes:l }); }); }}
+          style={{font:"inherit",fontSize:11.5,fontWeight:700,padding:"3px 9px",borderRadius:99,border:"1px solid " + (on ? _EV.roxo : _EV.linha),background:on ? _EV.roxoClaro : "#fff",color:on ? _EV.roxo : _EV.sub,cursor:"pointer"}}>{(on ? "✓ " : "") + c.nome}</button>; })}</div>
+      {rot("Texto da amostra")}
+      <textarea value={ed.amostra_texto} maxLength={300} rows={2} onChange={function(e){ const v = e.target.value; setEd(function(a){ return Object.assign({}, a, { amostra_texto:v }); }); }} style={Object.assign({}, inp, {resize:"vertical"})}/>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:10}}>
+        <button onClick={amostra} disabled={gerando} style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:"1px solid " + _EV.roxoBorda,background:_EV.roxoClaro,color:_EV.roxo,fontWeight:800,cursor:gerando ? "wait" : "pointer"}}>{gerando ? "Gerando…" : "Gerar amostra"}</button>
+        {ed.amostra_url && <audio controls src={ed.amostra_url} style={{height:34}}/>}
+        <span style={{flex:1}}/>
+        <button onClick={function(){ setEd(null); }} style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.sub,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={salvar} disabled={salvando} style={{font:"inherit",padding:"8px 16px",borderRadius:10,border:0,background:_EV.roxo,color:"#fff",fontWeight:800,cursor:salvando ? "wait" : "pointer"}}>{salvando ? "Salvando…" : "Salvar voz"}</button>
+      </div>
+      <div style={{fontSize:11.5,color:_EV.fraco,marginTop:6}}>Amostra custa menos de R$ 0,01. Mudou a voz ou o jeito? Gere a amostra de novo antes de salvar.</div>
+    </div>}
+    {Array.isArray(lista) && <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(" + (isMob ? 260 : 300) + "px, 1fr))",gap:12,marginTop:14}}>
+      {vis.map(function(v){ const base = _EVP_VOZES.find(function(x){ return x.id === v.voz; }) || { label:v.voz, d:"" };
+        return <div key={v.id} style={{background:"#fff",border:"1px solid " + _EV.linha,borderRadius:14,padding:12,display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{fontSize:14,fontWeight:800}}>{v.nome}</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <span style={{fontSize:10.5,fontWeight:800,color:_EV.roxo,background:_EV.roxoClaro,borderRadius:99,padding:"1px 8px"}}>{base.label} · {base.d}</span>
+            {v.estilo && <span style={{fontSize:10.5,fontWeight:700,color:_EV.sub,background:_EV.fundo,borderRadius:99,padding:"1px 8px"}}>{v.estilo}</span>}
+            <span style={{fontSize:10.5,fontWeight:700,color:_EV.sub}}>{v.clientes && v.clientes.length ? v.clientes.map(nomeCli).join(", ") : "todos os clientes"}</span>
+          </div>
+          {v.instrucao && <div style={{fontSize:12,color:_EV.sub,lineHeight:1.45}}>{v.instrucao}</div>}
+          {v.amostra_url ? <audio controls preload="none" src={v.amostra_url} style={{width:"100%",height:34}}/> : <div style={{fontSize:11.5,color:_EV.fraco}}>Sem amostra ainda — edite e gere.</div>}
+          {!isMob && <div style={{display:"flex",gap:6,marginTop:"auto"}}>
+            {v.ativo !== false && <button onClick={function(){ setEd(Object.assign({ amostra_texto:"" }, v, { clientes:v.clientes || [], amostra_texto:v.amostra_texto || "Olá! Esta é a voz que vai narrar os vídeos." })); }} style={{font:"inherit",fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.sub,cursor:"pointer"}}>Editar</button>}
+            <button onClick={function(){ arquivar(v, v.ativo === false); }} style={{font:"inherit",fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.sub,cursor:"pointer"}}>{v.ativo === false ? "Restaurar" : "Arquivar"}</button>
+          </div>}
+        </div>; })}
+      {!vis.length && <div style={{color:_EV.fraco,fontSize:13}}>{verArq ? "Nenhuma voz arquivada." : "Nenhuma voz ainda."}</div>}
+    </div>}
+  </div>);
+}
+
 /* ═══ PÁGINA ═══ */
 function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
-  const [aba, setAba] = useState("fila");   // fila | estudio | kit | musicas | aprende
+  const [aba, setAba] = useState("fila");   // fila | estudio | kit | musicas | vozes | aprende
   const [taskEstudio, setTaskEstudio] = useState(null);
   const abrirEstudio = function(t){ setTaskEstudio(t ? t.id : null); setAba("estudio"); };
   return (
@@ -114556,7 +114714,7 @@ function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
       <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4}}>A IA edita os vídeos brutos do card seguindo o kit de cada cliente. Você assiste, pede ajuste e exporta.</div>
 
       <div style={{display:"flex",gap:isMob?14:22,marginTop:14,borderBottom:"1px solid "+_EV.linha,overflowX:"auto"}}>
-        {[["fila","Fila"],["estudio","Estúdio"],["kit","Kit do cliente"],["musicas","Músicas"],["aprende","IA que aprende"]].map(function(g){ const on = aba===g[0];
+        {[["fila","Fila"],["estudio","Estúdio"],["kit","Kit do cliente"],["musicas","Músicas"],["vozes","Vozes"],["aprende","IA que aprende"]].map(function(g){ const on = aba===g[0];
           return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
             borderBottom:"2px solid "+(on?_EV.roxo:"transparent"),color:on?_EV.roxo:_EV.sub,fontWeight:on?800:600,fontSize:_evF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
       </div>
@@ -114565,6 +114723,7 @@ function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
       {aba==="estudio" && <_EvEstudio tasks={tasks||[]} isMob={isMob} taskId={taskEstudio} setTaskId={setTaskEstudio} onAbrirCard={onAbrirCard}/>}
       {aba==="kit"  && <_EvKit isMob={isMob}/>}
       {aba==="musicas" && <_EvMusicas isMob={isMob}/>}
+      {aba==="vozes" && <_EvVozes isMob={isMob}/>}
       {aba==="aprende" && typeof _EvAprende==="function" && <_EvAprende isMob={isMob}/>}
     </div>
   );
@@ -114675,6 +114834,7 @@ function _EvFilaItem({ x, isMob, onAbrirCard, onEstudio }){
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7}}>
           {x.pub ? chip((x.atrasado ? "Atrasado · " : "Publica ") + _evDataBR(x.pub), x.atrasado ? [_EV.vermClaro,_EV.verm] : [_EV.fundo,_EV.texto])
                  : chip("Sem data de publicação", [_EV.fundo,_EV.sub])}
+          {(_evTagNarracao(t) || _evRoteiroNarracao(t)) && chip("🎙 Narração", ["#fff7ed","#c2410c"])}
           {x.brutos>0 ? chip("🎞 " + x.brutos + (x.brutos===1 ? " bruto no card" : " brutos no card"), [_EV.verdeClaro,_EV.verde])
                       : chip("Sem bruto no card", [_EV.amareloClaro,_EV.amarelo])}
           {x.refs>0 && chip(x.refs + (x.refs===1 ? " referência" : " referências"), [_EV.roxoClaro,_EV.roxo])}
@@ -114939,6 +115099,8 @@ function _EvKit({ isMob }){
                 </span>
               </div>
             )}
+            {/* v15: VOZ e PRONÚNCIA (salva com o kit) */}
+            <_EvKitVoz f={f} set={set} cliente={cliente} soVer={soVer} isMob={isMob}/>
             {/* v12: GALERIA — tela final, GC e elementos (cada item salva sozinho) */}
             <_EvgGaleria cliente={cliente} unidade={unidade} kit={f} base={base} isMob={isMob} soVer={soVer}/>
           </div>
@@ -114950,6 +115112,35 @@ function _EvKit({ isMob }){
       )}
     </div>
   );
+}
+
+function _EvKitVoz({ f, set, cliente, soVer, isMob }){
+  const vozes = _evUsarVozes(), doCli = _evVozesDoCliente(vozes, cliente);
+  const atual = vozes.find(function(v){ return v.id === f.voz_padrao; }) || null;
+  const prons = Array.isArray(f.pronuncias) ? f.pronuncias : [];
+  const muda = function(i, k, v){ const l = prons.map(function(x){ return Object.assign({}, x); }); l[i][k] = v; set("pronuncias", l); };
+  const inp = { font:"inherit", padding:"7px 9px", borderRadius:9, border:"1px solid " + _EV.linha, background:"#fff", fontSize:13, minWidth:0, boxSizing:"border-box" };
+  return (<div style={{background:"#fff",border:"1px solid " + _EV.linha,borderRadius:14,padding:isMob ? 12 : 16,marginTop:14}}>
+    <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Voz e pronúncia</div>
+    <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,marginBottom:10}}>A voz que narra os vídeos deste cliente (Locução com IA) e como ela fala os nomes difíceis. Salva junto com o kit.</div>
+    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <select value={f.voz_padrao || ""} disabled={soVer} onChange={function(e){ set("voz_padrao", e.target.value); }} style={Object.assign({}, inp, {flex:"1 1 260px"})}>
+        <option value="">Sem voz padrão (escolhe na hora)</option>
+        {doCli.map(function(v){ return <option key={v.id} value={v.id}>{v.nome}{v.estilo ? " · " + v.estilo : ""}</option>; })}
+      </select>
+      {atual && atual.amostra_url && <audio controls preload="none" src={atual.amostra_url} style={{height:34}}/>}
+    </div>
+    {!doCli.length && <div style={{fontSize:12,color:_EV.fraco,marginTop:6}}>Nenhuma voz na biblioteca — cadastre na guia Vozes.</div>}
+    <div style={{fontSize:11.5,color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",margin:"12px 0 6px"}}>Pronúncia (escrito → como a voz fala)</div>
+    {prons.map(function(p, i){ return <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
+      <input value={p.escrita || ""} disabled={soVer} maxLength={60} onChange={function(e){ muda(i, "escrita", e.target.value); }} placeholder="Construschorr" style={Object.assign({}, inp, {flex:1})}/>
+      <span style={{color:_EV.fraco}}>→</span>
+      <input value={p.falada || ""} disabled={soVer} maxLength={80} onChange={function(e){ muda(i, "falada", e.target.value); }} placeholder="Constru-chór" style={Object.assign({}, inp, {flex:1})}/>
+      {!soVer && <button onClick={function(){ set("pronuncias", prons.filter(function(_, k){ return k !== i; })); }} aria-label="Tirar" style={{font:"inherit",border:"1px solid " + _EV.linha,background:"#fff",borderRadius:8,width:30,height:30,cursor:"pointer",color:_EV.sub}}>×</button>}
+    </div>; })}
+    {!soVer && <button onClick={function(){ set("pronuncias", prons.concat([{ escrita:"", falada:"" }])); }} style={{font:"inherit",fontSize:12.5,fontWeight:700,padding:"6px 12px",borderRadius:9,border:"1px solid " + _EV.roxoBorda,background:_EV.roxoClaro,color:_EV.roxo,cursor:"pointer"}}>+ Pronúncia</button>}
+    <div style={{fontSize:11.5,color:_EV.fraco,marginTop:6}}>Só muda o que a voz fala — a legenda e os textos continuam com a grafia certa. Depois clique em Salvar kit.</div>
+  </div>);
 }
 
 /* ═══ v12: GALERIA DO KIT — telas finais, GC e elementos (caixas de texto) de cada cliente + Modelos Pixels ═══
@@ -114976,6 +115167,124 @@ function _evgMedirArquivo(fl){
       v.onloadedmetadata = function(){ ok({ w:v.videoWidth, h:v.videoHeight, dur:Math.round((v.duration || 0) * 10) / 10 }); URL.revokeObjectURL(u); }; v.onerror = function(){ ok({}); }; v.src = u; return; }
     const im = new Image(); im.onload = function(){ ok({ w:im.naturalWidth, h:im.naturalHeight }); URL.revokeObjectURL(u); }; im.onerror = function(){ ok({}); }; im.src = u;
   });
+}
+
+
+/* ─── v14: MODELO DO PHOTOSHOP — lê o PSD (mesmo leitor fiel da Edição de arte), separa a arte fixa dos campos {…} ─── */
+const _EVG_VAR = { texto:"texto", linha2:"linha2", subtitulo:"linha2", nome:"nome", cargo:"linha2", funcao:"linha2", cidade:"linha2", chamada:"cta", cta:"cta",
+  whatsapp:"whatsapp", whats:"whatsapp", telefone:"whatsapp", instagram:"instagram", site:"site", endereco:"endereco", empresa:"nome", foto:"foto", logo:"foto", imagem:"foto" };
+function _evgVarDe(nome, tipo){
+  const m = String(nome || "").match(/\{\s*([^}]{1,30})\s*\}/); if(!m) return null;
+  let id = _EVG_VAR[_evNorm(m[1]).replace(/[^a-z0-9]/g, "")]; if(!id) return { invalido:m[1] };
+  if(tipo === "gc"){ if(id === "texto") id = "nome"; if(["nome","linha2","foto"].indexOf(id) < 0) return { invalido:m[1] }; }
+  else if(tipo === "elemento"){ if(id === "nome") id = "texto"; if(["texto","linha2","foto"].indexOf(id) < 0) return { invalido:m[1] }; }
+  else { if(id === "texto") id = "cta"; if(["cta","whatsapp","instagram","site","endereco","nome","foto"].indexOf(id) < 0) return { invalido:m[1] }; }
+  return { id:id };
+}
+function _evgHex(c){ if(!c) return ""; const r = c.r != null ? c.r : (c.fr != null ? c.fr * 255 : 0), g = c.g != null ? c.g : (c.fg != null ? c.fg * 255 : 0), b = c.b != null ? c.b : (c.fb != null ? c.fb * 255 : 0);
+  return "#" + [r, g, b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v || 0))).toString(16).padStart(2, "0"); }).join(""); }
+function _evgBlob(cv){ return new Promise(function(ok, falha){ cv.toBlob(function(b){ if(b) ok(b); else falha(new Error("não gerou a imagem")); }, "image/png"); }); }
+function _evgTemPixel(cv){ try{ const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data; for(let i=3;i<d.length;i+=16) if(d[i] > 8) return true; }catch(_){ return true; } return false; }
+async function _evgLerPsd(arquivo, tipo, cliente, passo){
+  if(typeof _eaAgPsd !== "function" || typeof _eaPsdDesenhar !== "function") throw new Error("O leitor de PSD da Edição de arte não carregou. Atualize a página (Ctrl+F5) e tente de novo.");
+  const mb = Math.round((arquivo.size || 0) / 1048576);
+  if(mb > 400) throw new Error("PSD de " + mb + " MB é grande demais. No Photoshop, salve uma cópia só com as camadas do modelo.");
+  passo && passo("Lendo o PSD…");
+  const ag = await _eaAgPsd();
+  const psd = ag.readPsd(await arquivo.arrayBuffer(), { skipThumbnail:true, skipCompositeImageData:true, skipLayerImageData:false, useImageData:false, logMissingFeatures:false });
+  const W = psd.width, H = psd.height, avisos = [];
+  if(psd.colorMode !== undefined && psd.colorMode !== 3) avisos.push("O PSD não é RGB (é CMYK ou outro): as cores foram convertidas.");
+  const camadas = [];
+  (function andar(lista, pai){ let base = null;
+    (lista || []).forEach(function(l){
+      const escondido = pai.escondido || !!l.hidden;
+      if(l.children){ andar(l.children, { escondido:escondido, opacidade:pai.opacidade * (l.opacity == null ? 1 : l.opacity), grupos:pai.grupos.concat((l.mask || l.vectorMask) ? [l] : []) }); base = null; return; }
+      const it = { l:l, escondido:escondido, opacidade:pai.opacidade, grupos:pai.grupos, base:l.clipping ? base : null, v:_evgVarDe(l.name, tipo) };
+      if(it.v && it.v.invalido){ avisos.push("Camada \"" + l.name + "\": {" + it.v.invalido + "} não serve para " + (tipo === "gc" ? "GC ({nome}, {cargo}, {foto})" : tipo === "elemento" ? "elemento ({texto}, {linha2}, {foto})" : "tela final ({chamada}, {whatsapp}, {instagram}, {site}, {endereco}, {nome}, {foto})") + " — ficou como arte fixa."); it.v = null; }
+      camadas.push(it); if(!l.clipping) base = it;
+    });
+  })(psd.children, { escondido:false, opacidade:1, grupos:[] });
+  const vars = camadas.filter(function(c){ return c.v; });
+  if(!vars.length) throw new Error("Não achei nenhuma camada com nome entre chaves, como {texto} ou {nome}. No Photoshop, renomeie a camada do texto que muda.");
+  const topo = camadas.indexOf(vars[vars.length - 1]);
+  const atras = _eaPsdCv(W, H), frente = _eaPsdCv(W, H); let bb = null;
+  const junta = function(x, y, w, h){ if(!(w > 0 && h > 0)) return; if(!bb) bb = { x0:x, y0:y, x1:x + w, y1:y + h }; else { bb.x0 = Math.min(bb.x0, x); bb.y0 = Math.min(bb.y0, y); bb.x1 = Math.max(bb.x1, x + w); bb.y1 = Math.max(bb.y1, y + h); } };
+  const campos = [], exemplo = {}; let foto = null, n = 0;
+  for(const c of camadas){
+    const l = c.l; n++; if(passo && n % 4 === 0) passo("Camadas: " + n + " de " + camadas.length);
+    if(c.v && c.v.id === "foto"){
+      const r = _eaPsdDesenhar(l, W, H, { grupos:c.grupos, base:null }); if(!r){ avisos.push("{foto}: a camada está vazia — desenhe a forma da janela da foto (retângulo, círculo…)."); continue; }
+      foto = { px:r.x, py:r.y, pw:r.cv.width, ph:r.cv.height, masc:r.cv }; junta(r.x, r.y, r.cv.width, r.cv.height); continue;
+    }
+    if(c.v){
+      if(!(l.text && l.text.text != null)){ avisos.push("Camada \"" + l.name + "\" não é texto — para um campo, use uma camada de TEXTO do Photoshop."); continue; }
+      const t = l.text, st = t.style || {}, tr = t.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
+      const fs = Math.max(4, (st.fontSize || 24) * esc), amostra = String(t.text).replace(/\u0003/g, "\n").replace(/\r/g, "\n").trim();
+      const nL = Math.max(1, amostra.split("\n").length);
+      let x = l.left || 0, y = l.top || 0, w = Math.max(10, (l.right || 0) - (l.left || 0)), h = Math.max(fs * 1.15 * nL, (l.bottom || 0) - (l.top || 0));
+      const just = (t.paragraphStyle && t.paragraphStyle.justification) || "left", alinhar = /center/i.test(just) ? "centro" : /right/i.test(just) ? "direita" : "esquerda";
+      if(t.shapeType === "box" && Array.isArray(t.boxBounds) && t.boxBounds.length >= 4){ x = tr[4] + t.boxBounds[0] * esc; y = tr[5] + t.boxBounds[1] * esc; w = (t.boxBounds[2] - t.boxBounds[0]) * esc; h = (t.boxBounds[3] - t.boxBounds[1]) * esc; }
+      else { const extra = w * 0.3; if(alinhar === "centro"){ x -= extra / 2; } else if(alinhar === "direita"){ x -= extra; } w += extra; y -= fs * 0.12; h += fs * 0.24; }
+      const fo = typeof _eaFontePsd === "function" ? _eaFontePsd(st.font && st.font.name) : { familia:"Montserrat", peso:"700", italico:false };
+      let temGoogle = false; try{ temGoogle = typeof _eaCarregarFonte === "function" ? !!(await _eaCarregarFonte(fo.familia)) : false; }catch(_){}
+      const ef = (l.effects && !l.effects.disabled) ? l.effects : {};
+      const sol = _eaPsdAtivos(ef.solidFill)[0], cont = _eaPsdAtivos(ef.stroke)[0], somb = _eaPsdAtivos(ef.dropShadow)[0];
+      const cor = _evgHex((sol && sol.color) || st.fillColor) || "#ffffff";
+      const campo = { id:c.v.id, px:x, py:y, pw:w, ph:h, fs:fs, peso:Number(fo.peso) || 700, cor:cor, alinhar:alinhar,
+        caixa:(st.fontCaps === 2 || (/[A-ZÀ-Ú]/.test(amostra) && amostra === amostra.toUpperCase())) ? "alta" : "normal",
+        max_linhas:t.shapeType === "box" ? Math.max(nL, Math.floor(h / (fs * 1.15))) : nL,
+        max_letras:Math.max(amostra.length + 4, Math.ceil(amostra.length * (t.shapeType === "box" ? 1.4 : 1.3))) };
+      if(st.tracking) campo.espaco = Number(st.tracking);
+      if(temGoogle) campo.fonte = fo.familia;
+      else { campo.fonte_psd = (st.font && st.font.name) || fo.familia; avisos.push("Fonte \"" + campo.fonte_psd + "\" (camada " + l.name + ") não está no Google Fonts: envie o arquivo da fonte no campo \"" + c.v.id + "\" (Enviar fonte da marca). Até lá usa a fonte do kit."); }
+      if(cont){ campo.contorno = true; campo.contorno_cor = _evgHex(cont.color) || "#000000"; campo.contorno_rel = Math.min(0.2, _eaPsdUn(cont.size) / fs); }
+      if(somb) campo.sombra = true;
+      if(_eaPsdAtivos(ef.gradientOverlay).length) avisos.push("{" + c.v.id + "}: degradê dentro da letra vira cor sólida.");
+      if(_eaPsdAtivos(ef.bevel).length || _eaPsdAtivos(ef.innerShadow).length || _eaPsdAtivos(ef.satin).length) avisos.push("{" + c.v.id + "}: bisel/sombra interna/acetinado na letra não entram.");
+      if(t.warp && t.warp.style && t.warp.style !== "none") avisos.push("{" + c.v.id + "}: texto deformado (warp) sai reto.");
+      const cores = {}; (t.styleRuns || []).forEach(function(r){ if(r && r.style && r.style.fillColor) cores[_evgHex(r.style.fillColor)] = 1; });
+      if(Object.keys(cores).length > 1) avisos.push("{" + c.v.id + "}: cores diferentes dentro do mesmo texto — usei " + cor + ". Para duas cores, faça {texto} e {linha2}.");
+      if(campos.some(function(q){ return q.id === campo.id; })){ avisos.push("{" + c.v.id + "} aparece duas vezes: usei a de cima."); campos.splice(campos.findIndex(function(q){ return q.id === campo.id; }), 1); }
+      campos.push(campo); exemplo[campo.id === "nome" && tipo === "gc" ? "nome" : campo.id] = amostra.replace(/\n/g, " ").slice(0, 120);
+      junta(x, y, w, h); continue;
+    }
+    if(c.escondido) continue;
+    if(l.adjustment && !(l.canvas && l.canvas.width)){ avisos.push("Camada de ajuste \"" + (l.name || "") + "\" não entra."); continue; }
+    if(l.clipping && c.base && c.base.v) avisos.push("\"" + l.name + "\" está recortada num campo {…}: saiu sem o recorte.");
+    const r = _eaPsdDesenhar(l, W, H, { grupos:c.grupos, base:c.base && c.base.feito ? c.base.feito : null }); if(!r) continue;
+    c.feito = r; (r.avisos || []).forEach(function(a){ avisos.push((l.name || "Camada") + ": " + a); });
+    const x2 = (camadas.indexOf(c) < topo ? atras : frente).getContext("2d");
+    x2.save(); x2.globalAlpha = (l.opacity == null ? 1 : l.opacity) * c.opacidade;
+    if(l.blendMode && l.blendMode !== "normal" && l.blendMode !== "pass through" && typeof _EA_MISTURA !== "undefined" && _EA_MISTURA[l.blendMode]) x2.globalCompositeOperation = _EA_MISTURA[l.blendMode];
+    x2.drawImage(r.cv, r.x, r.y); x2.restore();
+    junta(r.x, r.y, r.cv.width, r.cv.height);
+  }
+  // recorte: GC/elemento = só a área usada; tela final = a tela inteira
+  const cheia = Math.abs(W / H - 9 / 16) < 0.03;
+  let B = { x:0, y:0, w:W, h:H };
+  if(tipo !== "tela_final" && bb){ const m = 2; B = { x:Math.max(0, Math.floor(bb.x0) - m), y:Math.max(0, Math.floor(bb.y0) - m) }; B.w = Math.min(W, Math.ceil(bb.x1) + m) - B.x; B.h = Math.min(H, Math.ceil(bb.y1) + m) - B.y; }
+  const corta = function(cv){ const k = _eaPsdCv(B.w, B.h); k.getContext("2d").drawImage(cv, -B.x, -B.y); return k; };
+  const pasta = "kits/" + String(cliente || "pixels").replace(/[^A-Za-z0-9_-]/g, "") + "/galeria/", marca = tipo + "-" + Date.now();
+  const subir = async function(cv, nome){ const bl = await _evgBlob(cv); const path = pasta + marca + "-" + nome + ".png";
+    await pxUploadResumable(new File([bl], nome + ".png", { type:"image/png" }), path, function(){}); return window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl; };
+  passo && passo("Guardando a arte…");
+  const url = await subir(corta(atras), "atras");
+  const frC = corta(frente), url_frente = _evgTemPixel(frC) ? await subir(frC, "frente") : "";
+  const rel = function(q){ return { x:Math.round((q.px - B.x) / B.w * 10000) / 10000, y:Math.round((q.py - B.y) / B.h * 10000) / 10000, w:Math.round(q.pw / B.w * 10000) / 10000, h:Math.round(q.ph / B.h * 10000) / 10000 }; };
+  const camposF = campos.map(function(q){ const o = Object.assign({}, q, rel(q), { fs_rel:Math.round(q.fs / B.w * 100000) / 100000 }); delete o.px; delete o.py; delete o.pw; delete o.ph; delete o.fs; return o; });
+  let fotoF = null;
+  if(foto){ const k = _eaPsdCv(foto.pw, foto.ph); k.getContext("2d").drawImage(foto.masc, 0, 0); fotoF = Object.assign(rel(foto), { mascara:await subir(k, "mascara") }); }
+  let psdUrl = "";
+  if(mb <= 80){ try{ passo && passo("Guardando o PSD…"); const path = pasta + marca + ".psd"; await pxUploadResumable(arquivo, path, function(){}); psdUrl = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl; }catch(_){} }
+  const d = { v:1, midia:"imagem", url:url, w:B.w, h:B.h, campos:camposF, exemplo:exemplo, anim:tipo === "gc" ? "deslizar" : "pop",
+    psd:{ nome:arquivo.name, url:psdUrl, W:W, H:H, em:new Date().toISOString() } };
+  if(url_frente) d.url_frente = url_frente;
+  if(fotoF) d.foto = fotoF;
+  if(tipo === "tela_final") d.dur = 3;
+  else { d.quando_usar = ""; d.pos = cheia && W >= 600 ? { x:Math.round((B.x + B.w / 2) / W * 1000) / 1000, y:Math.round((B.y + B.h / 2) / H * 1000) / 1000, larg:Math.round(B.w / W * 1000) / 1000 }
+                                              : { x:tipo === "gc" ? 0.45 : 0.5, y:tipo === "gc" ? 0.6 : 0.26, larg:tipo === "gc" ? 0.8 : 0.84 };
+         if(!cheia) avisos.push("O PSD não é 1080×1920: o lugar no vídeo ficou no padrão — arraste para ajustar."); }
+  return { dados:d, avisos:avisos, nome:arquivo.name.replace(/\.[^.]+$/, "").slice(0, 60) };
 }
 
 function _EvgGaleria({ cliente, unidade, kit, base, isMob, soVer }){
@@ -115007,6 +115316,13 @@ function _EvgGaleria({ cliente, unidade, kit, base, isMob, soVer }){
   };
   const enviar = async function(fl){
     if(!fl) return;
+    if(/\.psd$/i.test(fl.name || "")){              // v14: modelo do Photoshop com camadas {…}
+      setSubindo("PSD");
+      try{ const r = await _evgLerPsd(fl, aba, cliente, function(m){ setSubindo(m); });
+        setEditando({ item:null, tipo:aba, dados:r.dados, nome:r.nome, avisos:r.avisos, padrao:!itens.some(function(x){ return x.tipo === aba && x.padrao && x.origem !== "pixels" && x.ativo !== false; }), pixels:false }); }
+      catch(e){ toast("error", String((e && e.message) || e)); }
+      setSubindo(null); return;
+    }
     const video = /^video\/(mp4|webm|quicktime)$/.test(fl.type || ""), imagem = /^image\/(png|jpeg|webp|svg\+xml)$/.test(fl.type || "");
     if(!imagem && !(video && aba === "tela_final")){ toast("error", aba === "tela_final" ? "Use PNG, JPG, WEBP ou vídeo MP4." : "Use PNG (sem fundo fica melhor), WEBP ou SVG. PSD: exporte em PNG no Photoshop."); return; }
     if(fl.size > (video ? 200 : 15) * 1024 * 1024){ toast("error", video ? "Vídeo acima de 200 MB." : "Imagem acima de 15 MB."); return; }
@@ -115040,9 +115356,9 @@ function _EvgGaleria({ cliente, unidade, kit, base, isMob, soVer }){
           <input type="checkbox" checked={verArq} onChange={function(e){ setVerArq(e.target.checked); }}/>Ver arquivados</label>
       </div>
       <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginBottom:10,lineHeight:1.5}}>
-        {aba === "tela_final" ? "A tela do fim do vídeo. Envie a arte pronta (PNG 1080×1920) ou um vídeo animado (MP4, sem som). Dá para marcar onde entram a chamada e o WhatsApp — os dados vêm do cadastro, a IA não escreve aqui."
-          : aba === "gc" ? "A tarja com o nome de quem fala. Envie o PNG sem fundo e marque onde vai o nome e a segunda linha — ou monte com as cores do kit."
-          : "Caixas de texto que a IA preenche (destaque, pergunta, preço…). Diga QUANDO USAR e o limite de letras: a IA escolhe pelo \"quando usar\" e nunca passa do limite."}
+        {aba === "tela_final" ? "A tela do fim do vídeo. Envie o PSD (camadas {chamada}, {whatsapp}, {instagram}, {site}, {endereco}, {foto} = logo), a arte pronta (PNG 1080×1920) ou um vídeo animado (MP4, sem som). Os dados vêm do cadastro, a IA não escreve aqui."
+          : aba === "gc" ? "A tarja com o nome de quem fala. Melhor: o PSD do Photoshop com as camadas de texto {nome} e {cargo} (e {foto}, se tiver). Ou o PNG sem fundo marcando as áreas, ou monte com as cores do kit."
+          : "Caixas de texto que a IA preenche (destaque, pergunta, preço…). Melhor: o PSD com a camada de texto {texto} (e {linha2}, {foto}). Diga QUANDO USAR e o limite de letras: a IA escolhe pelo \"quando usar\" e nunca passa do limite."}
       </div>
       {lista && lista.erro && <div style={{padding:12,borderRadius:10,background:_EV.amareloClaro,color:_EV.amarelo,fontSize:13,fontWeight:600}}>{lista.erro}</div>}
       {!lista && <div style={{fontSize:13,color:_EV.sub,padding:10}}>Carregando…</div>}
@@ -115073,8 +115389,8 @@ function _EvgGaleria({ cliente, unidade, kit, base, isMob, soVer }){
       {!soVer && Array.isArray(lista) && !verArq && (
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
           <label style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:"1px solid " + _EV.roxo,background:_EV.roxo,color:"#fff",fontWeight:800,fontSize:_evF(13,isMob),cursor:subindo != null ? "wait" : "pointer"}}>
-            {subindo != null ? "Enviando… " + subindo + "%" : aba === "tela_final" ? "+ Enviar tela final (PNG ou MP4)" : "+ Enviar arte (PNG)"}
-            <input ref={inp} type="file" accept={aba === "tela_final" ? "image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime" : "image/png,image/webp,image/svg+xml,image/jpeg"} style={{display:"none"}} disabled={subindo != null}
+            {subindo != null ? (typeof subindo === "number" ? "Enviando… " + subindo + "%" : subindo) : aba === "tela_final" ? "+ Enviar tela final (PSD, PNG ou MP4)" : "+ Enviar arte (PSD ou PNG)"}
+            <input ref={inp} type="file" accept={aba === "tela_final" ? ".psd,image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime" : ".psd,image/png,image/webp,image/svg+xml,image/jpeg"} style={{display:"none"}} disabled={subindo != null}
               onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; enviar(fl); }}/>
           </label>
           {aba !== "tela_final" && <button onClick={function(){ setEditando({ item:null, tipo:aba, dados:_EVG_NOVO[aba](), nome:aba === "gc" ? "GC" : "Novo elemento", padrao:false, pixels:false }); }}
@@ -115091,6 +115407,18 @@ function _EvgGaleria({ cliente, unidade, kit, base, isMob, soVer }){
 
 function _EvgEditor({ ed, cliente, unidade, kit, base, onFechar, onSalvo }){
   const [d, setD] = useState(ed.dados);
+  const [avisosPsd, setAvisosPsd] = useState(ed.avisos || []);
+  const [lendoPsd, setLendoPsd] = useState(null);
+  const trocarPsd = async function(fl){
+    if(!fl) return; setLendoPsd("Lendo…");
+    try{ const r = await _evgLerPsd(fl, ed.tipo, ed.pixels ? "pixels" : cliente, function(m){ setLendoPsd(m); });
+      setD(function(a){ const n = Object.assign({}, r.dados); if(a.quando_usar) n.quando_usar = a.quando_usar; if(a.pos && ed.tipo !== "tela_final" && !(r.dados.psd && Math.abs(r.dados.psd.W / r.dados.psd.H - 9/16) < 0.03)) n.pos = a.pos;
+        (n.campos || []).forEach(function(c){ const v = (a.campos || []).find(function(q){ return q.id === c.id; }); if(v){ if(v.max_letras) c.max_letras = v.max_letras; if(v.fonte_url && !c.fonte){ c.fonte_url = v.fonte_url; c.fonte_nome = v.fonte_nome; } } });
+        return n; });
+      setAvisosPsd(r.avisos); try{ pixelsToast.success("PSD novo lido — confira e salve (o anterior fica no histórico)"); }catch(_){} }
+    catch(e){ try{ pixelsToast.error(String((e && e.message) || e)); }catch(_){} }
+    setLendoPsd(null);
+  };
   const [nome, setNome] = useState(ed.nome || "");
   const [padrao, setPadrao] = useState(!!ed.padrao);
   const [campoSel, setCampoSel] = useState(null);
@@ -115106,6 +115434,7 @@ function _EvgEditor({ ed, cliente, unidade, kit, base, onFechar, onSalvo }){
   const vals = tipo === "tela_final" ? _evgValores(item, null, kit, base)
     : tipo === "gc" ? { nome:ex.nome || base.nome || "Nome da pessoa", linha2:ex.linha2 != null ? ex.linha2 : (base.cidade || "Cidade/UF") }
     : { texto:ex.texto || "Texto de exemplo", linha2:ex.linha2 || "" };
+  if(d.foto && tipo !== "tela_final") vals.foto = ex.foto || "";
   const listaCampos = _EVG_CAMPOS[tipo] || [];
   const campos = Array.isArray(d.campos) ? d.campos : [];
   const set = function(fn){ setD(function(a){ const b = JSON.parse(JSON.stringify(a)); fn(b); return b; }); };
@@ -115199,6 +115528,12 @@ function _EvgEditor({ ed, cliente, unidade, kit, base, onFechar, onSalvo }){
             <div style={{fontSize:16,fontWeight:800}}>{ed.item ? "Editar" : "Novo"} · {(_EVG_TIPOS.find(function(t){ return t.id === tipo; }) || {}).label}{ed.pixels ? " · Modelo Pixels (todos os clientes)" : ""}</div>
             <button onClick={onFechar} aria-label="Fechar" style={{font:"inherit",border:0,background:"transparent",fontSize:20,cursor:"pointer",color:_EV.sub}}>×</button>
           </div>
+          {avisosPsd.length > 0 && <div style={{marginTop:10,padding:"8px 10px",borderRadius:10,background:_EV.amareloClaro,color:_EV.amarelo,fontSize:12,lineHeight:1.45}}>
+            <b>Do PSD, o que não saiu igual:</b>{avisosPsd.slice(0, 12).map(function(a, i){ return <div key={i}>• {a}</div>; })}</div>}
+          {d.psd && <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:10,fontSize:12,color:_EV.sub}}>Modelo do Photoshop: <b>{d.psd.nome}</b>
+            {d.psd.url && <a href={d.psd.url} target="_blank" rel="noreferrer" style={{color:_EV.roxo,fontWeight:700}}>baixar o PSD</a>}
+            <label style={{font:"inherit",padding:"4px 10px",borderRadius:8,border:"1px solid " + _EV.roxoBorda,background:_EV.roxoClaro,color:_EV.roxo,fontWeight:700,cursor:"pointer"}}>{lendoPsd || "Trocar pelo PSD novo"}
+              <input type="file" accept=".psd" style={{display:"none"}} disabled={!!lendoPsd} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; trocarPsd(fl); }}/></label></div>}
           {rot("Nome")}<input value={nome} maxLength={60} onChange={function(e){ setNome(e.target.value); }} style={inp}/>
           {!ed.pixels && <label style={{display:"flex",gap:8,alignItems:"center",fontSize:13,fontWeight:700,marginTop:10,cursor:"pointer"}}>
             <input type="checkbox" checked={padrao} onChange={function(e){ setPadrao(e.target.checked); }}/>Padrão deste cliente{unidade && !ed.item ? " (" + _evNomeUnidade(unidade) + ")" : ""}
@@ -115240,7 +115575,8 @@ function _EvgEditor({ ed, cliente, unidade, kit, base, onFechar, onSalvo }){
                   <input value={ex[lc.id] || ""} maxLength={120} onChange={function(e){ const v = e.target.value; set(function(b){ b.exemplo = Object.assign({}, b.exemplo, { [lc.id]:v }); }); }} style={inp}/></div>}
                 <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Cor da letra</div>{corSel(c.cor || "texto", function(v){ setCampo(lc.id, function(q){ q.cor = v; }); })}</div>
                 <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Fonte</div>
-                  {sel(c.fonte_url ? "__marca" : (c.fonte || ""), [["","Fonte do kit (" + (kit.fonte || "Montserrat") + ")"]].concat(_EV_FONTES.map(function(f){ return [f, f]; })).concat(c.fonte_url ? [["__marca", "Da marca: " + (c.fonte_nome || "enviada")]] : []),
+                  {c.fonte_psd && !c.fonte_url && <div style={{fontSize:11,color:_EV.amarelo,fontWeight:700,marginBottom:3}}>No PSD: {c.fonte_psd} — envie o arquivo dela</div>}
+                  {sel(c.fonte_url ? "__marca" : (c.fonte || ""), [["","Fonte do kit (" + (kit.fonte || "Montserrat") + ")"]].concat(c.fonte && _EV_FONTES.indexOf(c.fonte) < 0 ? [[c.fonte, c.fonte + " (do PSD)"]] : []).concat(_EV_FONTES.map(function(f){ return [f, f]; })).concat(c.fonte_url ? [["__marca", "Da marca: " + (c.fonte_nome || "enviada")]] : []),
                     function(v){ if(v === "__marca") return; setCampo(lc.id, function(q){ q.fonte = v; delete q.fonte_url; delete q.fonte_nome; }); })}
                   <label style={{fontSize:11,color:_EV.roxo,fontWeight:700,cursor:"pointer",display:"inline-block",marginTop:3}}>{subFonte != null ? "Enviando… " + subFonte + "%" : "Enviar fonte da marca"}
                     <input type="file" accept=".ttf,.otf,.woff,.woff2" style={{display:"none"}} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; enviarFonte(lc.id, fl); }}/></label></div>
@@ -115829,11 +116165,11 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(n){ return n+1; }); }
   };
 
-  const ajustar = async function(texto){
+  const ajustar = async function(texto, extra){
     const p = String(typeof texto === "string" ? texto : pedido).trim(); if(!p || !ed || !ed.id || ajustando) return false;
     setAjustando(true); setErro(null); let ok = false;
     try{
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"ajustar", id:ed.id, pedido:p } });
+      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:p }, extra && typeof extra === "object" ? extra : {}) });   // v13: correções da linha do tempo
       if(res.error) throw new Error(await _evErroFn(res));
       setPedido(""); _evToast("success", "Ajuste feito — versão " + ((res.data && res.data.versao) || "nova")); setRec(function(n){ return n+1; }); ok = true;
     }catch(e){ setErro(String((e && e.message) || e)); }
@@ -117027,8 +117363,8 @@ function _evgDoTexto(kit, x){
 function _evgDaTela(kit, tf){ const m = tf && tf.modelo; if(m === "app") return null; return m ? _evgAchar(kit, m) : _evgPadrao(kit, "tela_final"); }
 function _evgValores(it, x, kit, base){
   if(!it) return {};
-  if(it.tipo === "gc") return { nome:String((x && x.texto) || ""), linha2:String((x && x.linha2) || "") };
-  if(it.tipo === "elemento") return { texto:String((x && x.texto) || ""), linha2:String((x && x.linha2) || "") };
+  if(it.tipo === "gc") return { nome:String((x && x.texto) || ""), linha2:String((x && x.linha2) || ""), foto:String((x && x.foto) || "") };
+  if(it.tipo === "elemento") return { texto:String((x && x.texto) || ""), linha2:String((x && x.linha2) || ""), foto:String((x && x.foto) || "") };
   const b = base || {};
   return { cta:String((kit && kit.cta_final) || ""), whatsapp:b.whatsapp ? String(b.whatsapp) : "", instagram:b.instagram ? "@" + String(b.instagram).replace(/^@/, "") : "",
            site:String(b.site || ""), endereco:String(b.endereco || ""), nome:String(b.nome || "") };
@@ -117058,11 +117394,31 @@ function _evgFonteUrl(url){
   try{ const ff = new FontFace(fam, "url(" + JSON.stringify(url) + ")"); o.prom = ff.load().then(function(f){ document.fonts.add(f); o.pronto = true; }).catch(function(){ o.erro = true; }); }catch(_){ o.erro = true; }
   return fam;
 }
+function _evgCarregarFonte(nome){          // fonte do Google com todos os pesos (o PSD pode usar 400, 700, 900…)
+  try{
+    if(!nome || typeof document === "undefined") return;
+    const id = "evg-fonte-" + nome.replace(/\s+/g, "-").toLowerCase(); if(document.getElementById(id)) return;
+    const l = document.createElement("link"); l.id = id; l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(nome).replace(/%20/g, "+") + ":ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&display=swap";
+    document.head.appendChild(l);
+  }catch(_){}
+}
 function _evgFamilia(campo, kit){
   const base = "\"" + ((kit && kit.fonte) || "Montserrat") + "\", Montserrat, system-ui, sans-serif";
   if(campo && campo.fonte_url){ const f = _evgFonteUrl(campo.fonte_url); if(f) return "\"" + f + "\", " + base; }
-  if(campo && campo.fonte){ try{ _evCarregarFonte(campo.fonte); }catch(_){} return "\"" + campo.fonte + "\", " + base; }
+  if(campo && campo.fonte){ _evgCarregarFonte(campo.fonte); return "\"" + campo.fonte + "\", " + base; }
   return base;
+}
+function _evgEspaco(cx, campo, fs){ try{ cx.letterSpacing = campo && Number(campo.espaco) ? (Number(campo.espaco) / 1000 * fs).toFixed(1) + "px" : "0px"; }catch(_){} }
+/* {foto} do modelo: a foto cobre a janela e fica com a forma exata da camada do PSD (máscara) */
+function _evgFoto(cx, B, f, foto, masc){
+  if(!f || !foto || !(foto.naturalWidth || foto.videoWidth)) return;
+  const r = { x:B.x + (Number(f.x) || 0) * B.w, y:B.y + (Number(f.y) || 0) * B.h, w:Math.max(2, (Number(f.w) || 1) * B.w), h:Math.max(2, (Number(f.h) || 1) * B.h) };
+  const k = document.createElement("canvas"); k.width = Math.max(2, Math.round(r.w)); k.height = Math.max(2, Math.round(r.h)); const x = k.getContext("2d");
+  const fw = foto.naturalWidth || foto.videoWidth, fh = foto.naturalHeight || foto.videoHeight, s = Math.max(k.width / fw, k.height / fh);
+  x.drawImage(foto, (k.width - fw * s) / 2, (k.height - fh * s) / 2, fw * s, fh * s);
+  if(masc && masc.complete && masc.naturalWidth){ x.globalCompositeOperation = "destination-in"; x.drawImage(masc, 0, 0, k.width, k.height); }
+  cx.drawImage(k, r.x, r.y, r.w, r.h);
 }
 
 /* quebra o texto em linhas que cabem em maxW (null = uma palavra sozinha já não cabe) */
@@ -117088,27 +117444,27 @@ function _evgCaber(cx, texto, campo, fam, maxW, maxH, fs0){
   const txt = campo.caixa === "alta" ? String(texto).toUpperCase() : String(texto);
   let fs = fs0, ult = null;
   for(let n=0;n<16;n++){
-    cx.font = peso + " " + Math.round(fs) + "px " + fam;
+    cx.font = peso + " " + Math.round(fs) + "px " + fam; _evgEspaco(cx, campo, fs);
     const ls = _evgQuebrar(cx, txt, maxW, !!campo.lista);
     if(ls && ls.length <= maxL && (!maxH || ls.length * fs * lh <= maxH + 1)) return { linhas:ls, fs:Math.round(fs), lh:lh, cabe:true };
     ult = ls;
     if(fs <= fs0 * 0.5) break;
     fs = Math.max(fs0 * 0.5, fs * 0.93);
   }
-  cx.font = peso + " " + Math.round(fs) + "px " + fam;
+  cx.font = peso + " " + Math.round(fs) + "px " + fam; _evgEspaco(cx, campo, fs);
   const ls = _evgQuebrar(cx, txt, maxW * 3, !!campo.lista) || [txt];
   return { linhas:ls.slice(0, maxL), fs:Math.round(fs), lh:lh, cabe:false };
 }
 function _evgEscrever(cx, lay, campo, cor, x, y, w, alinhar, fam){
   const peso = campo.peso || 800;
-  cx.font = peso + " " + lay.fs + "px " + fam; cx.textBaseline = "top";
+  cx.font = peso + " " + lay.fs + "px " + fam; cx.textBaseline = "top"; _evgEspaco(cx, campo, lay.fs);
   cx.textAlign = alinhar === "esquerda" ? "left" : alinhar === "direita" ? "right" : "center";
   const ax = alinhar === "esquerda" ? x : alinhar === "direita" ? x + w : x + w / 2;
   lay.linhas.forEach(function(l, i){
     const yy = y + i * lay.fs * lay.lh + lay.fs * (lay.lh - 1) / 2;
     cx.save();
     if(campo.sombra){ cx.shadowColor = "rgba(0,0,0,.55)"; cx.shadowBlur = lay.fs * 0.25; cx.shadowOffsetY = lay.fs * 0.05; }
-    if(campo.contorno){ cx.strokeStyle = "rgba(0,0,0,.88)"; cx.lineWidth = Math.max(4, lay.fs * 0.14); cx.lineJoin = "round"; cx.strokeText(l, ax, yy); cx.shadowBlur = 0; }
+    if(campo.contorno){ cx.strokeStyle = campo.contorno_cor || "rgba(0,0,0,.88)"; cx.lineWidth = Math.max(2, lay.fs * (Number(campo.contorno_rel) > 0 ? Number(campo.contorno_rel) * 2 : 0.14)); cx.lineJoin = "round"; cx.strokeText(l, ax, yy); cx.shadowBlur = 0; }
     cx.fillStyle = cor; cx.fillText(l, ax, yy); cx.restore();
   });
 }
@@ -117132,7 +117488,7 @@ function _evgDesenhar(cx, W, H, it, vals, o){
     campos.forEach(function(c){
       const r = { x:box.x + (Number(c.x) || 0) * w, y:box.y + (Number(c.y) || 0) * h, w:Math.max(4, (Number(c.w) || 1) * w), h:Math.max(4, (Number(c.h) || 1) * h) };
       const fam = _evgFamilia(c, kit), maxL = Math.max(1, Number(c.max_linhas) || 1);
-      const lay = _evgCaber(cx, vals[c.id], c, fam, r.w, r.h, Math.min(r.h / maxL / 1.14, U * 0.2));
+      const lay = _evgCaber(cx, vals[c.id], c, fam, r.w, r.h, Math.min(r.h / maxL / 1.14, U * 0.2, Number(c.fs_rel) > 0 ? Number(c.fs_rel) * w : 1e9));
       if(!lay.cabe) cabe = false;
       lays.push({ c:c, lay:lay, r:r, fam:fam, fundo:null });
     });
@@ -117169,7 +117525,8 @@ function _evgDesenhar(cx, W, H, it, vals, o){
   cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, al));
   const ccx = box.x + box.w / 2, ccy = box.y + box.h / 2;
   cx.translate(ccx + dx, ccy + dy); cx.scale(sc, sc); cx.translate(-ccx, -ccy);
-  if(im){ if(im.complete && im.naturalWidth) cx.drawImage(im, box.x, box.y, box.w, box.h); }
+  if(im){ if(im.complete && im.naturalWidth) cx.drawImage(im, box.x, box.y, box.w, box.h);
+    if(d.foto && vals.foto && o.img) _evgFoto(cx, box, d.foto, o.img(vals.foto), d.foto.mascara ? o.img(d.foto.mascara) : null); }
   else {
     const fm = d.forma || {};
     if(fm.tipo !== "nenhum"){
@@ -117188,6 +117545,7 @@ function _evgDesenhar(cx, W, H, it, vals, o){
     const y0 = q.r.y + Math.max(0, (q.r.h - hL) / 2);
     _evgEscrever(cx, q.lay, q.c, cor, q.r.x, y0, q.r.w, q.c.alinhar || (d.midia === "imagem" ? "esquerda" : "centro"), q.fam);
   });
+  if(im && d.url_frente && o.img){ const fr = o.img(d.url_frente); if(fr.complete && fr.naturalWidth) cx.drawImage(fr, box.x, box.y, box.w, box.h); }   // v14: arte do PSD que fica na frente do texto
   cx.restore();
   return { x:box.x, y:box.y, w:box.w, h:box.h, cabe:cabe };
 }
@@ -117204,24 +117562,27 @@ function _evgTelaFinal(cx, W, H, it, vals, o){
     const s = Math.max(W / fw, H / fh); R = { x:(W - fw * s) / 2, y:(H - fh * s) / 2, w:fw * s, h:fh * s };
     cx.drawImage(fonte, R.x, R.y, R.w, R.h);
   }
+  if(d.foto && o.img){ const fo = o.fotoUrl ? o.img(o.fotoUrl) : o.logo; if(fo) _evgFoto(cx, R, d.foto, fo, d.foto.mascara ? o.img(d.foto.mascara) : null); }   // v14: {foto} = logo do cliente
   (Array.isArray(d.campos) ? d.campos : []).forEach(function(c){
     const v = String(vals[c.id] || "").trim(); if(!v) return;
     const r = { x:R.x + (Number(c.x) || 0) * R.w, y:R.y + (Number(c.y) || 0) * R.h, w:Math.max(4, (Number(c.w) || 1) * R.w), h:Math.max(4, (Number(c.h) || 0.1) * R.h) };
     const fam = _evgFamilia(c, kit), maxL = Math.max(1, Number(c.max_linhas) || 1);
-    const lay = _evgCaber(cx, v, c, fam, r.w, r.h, r.h / maxL / 1.14);
+    const lay = _evgCaber(cx, v, c, fam, r.w, r.h, Math.min(r.h / maxL / 1.14, Number(c.fs_rel) > 0 ? Number(c.fs_rel) * R.w : 1e9));
     const hL = lay.linhas.length * lay.fs * lay.lh;
     _evgEscrever(cx, lay, c, _evgCor(c.cor || "texto", kit), r.x, r.y + Math.max(0, (r.h - hL) / 2), r.w, c.alinhar || "centro", fam);
   });
+  if(d.url_frente && o.img){ const fr = o.img(d.url_frente); if(fr.complete && fr.naturalWidth) cx.drawImage(fr, R.x, R.y, R.w, R.h); }
   cx.restore();
 }
 
 /* antes de gravar (navegador e PC): carrega as artes e fontes da galeria que o vídeo usa (até 15 s) */
-function _evgPreparar(kit){
+function _evgPreparar(kit, proj){
   const ps = [];
+  ((proj && proj.textos) || []).forEach(function(x){ if(x && x.foto) ps.push(new Promise(function(ok){ const im = new Image(); im.crossOrigin = "anonymous"; im.onload = ok; im.onerror = ok; im.src = x.foto; })); });
   ((kit && kit._galeria) || []).forEach(function(it){
     const d = (it && it.dados) || {};
-    if(d.url && d.midia === "imagem"){ ps.push(new Promise(function(ok){ const im = new Image(); im.crossOrigin = "anonymous"; im.onload = ok; im.onerror = ok; im.src = d.url; })); }
-    (Array.isArray(d.campos) ? d.campos : []).forEach(function(c){ if(c && c.fonte_url){ _evgFonteUrl(c.fonte_url); const f = _evgFontes[c.fonte_url]; if(f && f.prom) ps.push(f.prom); } if(c && c.fonte){ try{ _evCarregarFonte(c.fonte); }catch(_){} } });
+    [d.midia === "imagem" ? d.url : "", d.url_frente, d.foto && d.foto.mascara].filter(Boolean).forEach(function(u){ ps.push(new Promise(function(ok){ const im = new Image(); im.crossOrigin = "anonymous"; im.onload = ok; im.onerror = ok; im.src = u; })); });
+    (Array.isArray(d.campos) ? d.campos : []).forEach(function(c){ if(c && c.fonte_url){ _evgFonteUrl(c.fonte_url); const f = _evgFontes[c.fonte_url]; if(f && f.prom) ps.push(f.prom); } if(c && c.fonte) _evgCarregarFonte(c.fonte); });
   });
   try{ if(document.fonts && document.fonts.ready) ps.push(document.fonts.ready); }catch(_){}
   return Promise.race([Promise.all(ps), new Promise(function(ok){ setTimeout(ok, 15000); })]);
@@ -117781,7 +118142,7 @@ function _evpMotor(canvas, o){
   }
   function desenharFinal(al){
     const itF = _evgDaTela(kit, calc.tela_final);
-    if(itF){ _evgTelaFinal(cx, W, H, itF, _evgValores(itF, null, kit, base), { kit:kit, img:imagem, video:elFinal(itF), alfa:al }); return; }
+    if(itF){ _evgTelaFinal(cx, W, H, itF, _evgValores(itF, null, kit, base), { kit:kit, img:imagem, video:elFinal(itF), alfa:al, logo:logo }); return; }
     cx.save(); cx.globalAlpha = al;
     cx.fillStyle = pri; cx.fillRect(0, 0, W, H);
     const g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgba(255,255,255,0.10)"); g.addColorStop(1, "rgba(0,0,0,0.22)"); cx.fillStyle = g; cx.fillRect(0, 0, W, H);
@@ -117934,10 +118295,10 @@ const _EVP_FAIXAS = [ { id:"imagens", label:"Imagens", icone:"figurinha", h:30 }
                       { id:"musica", label:"Música", icone:"musica", h:34 }, { id:"sfx", label:"Efeitos", icone:"efeitos", h:30 } ];
 const _EVP_MENUS = [ { id:"midia", label:"Mídia", icone:"midia" }, { id:"editar", label:"Editar", icone:"editar" }, { id:"audio", label:"Áudio", icone:"audio" }, { id:"texto", label:"Texto", icone:"texto" },
                      { id:"musica", label:"Música", icone:"musica" }, { id:"imagem", label:"Imagem", icone:"imagem" }, { id:"efeitos", label:"Efeitos", icone:"efeitos" },
-                     { id:"legenda", label:"Legenda", icone:"legenda" } ];
+                     { id:"legenda", label:"Legenda", icone:"legenda" }, { id:"corrigir", label:"Corrigir", icone:"lapis" } ];
 /* ferramentas da barra embaixo do vídeo, por tipo de item (ação = faz na hora; o resto abre a seção no painel da direita) */
 const _EVP_FERR = {
-  clip:[ { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
+  clip:[ { id:"fala", label:"Fala", icone:"fala2", acao:true }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
          { id:"volume", label:"Volume", icone:"volume" }, { id:"vel", label:"Velocidade", icone:"velocidade" }, { id:"recortar", label:"Recortar", icone:"recortar" },
          { id:"mov", label:"Movimento", icone:"movimento" }, { id:"congelar", label:"Congelar", icone:"congelar", acao:true }, { id:"fundo", label:"Fundo", icone:"pessoa" },
          { id:"estab", label:"Qualidade", icone:"estab" }, { id:"cor", label:"Cor", icone:"cor" }, { id:"trans", label:"Transição", icone:"transicao" },
@@ -117975,8 +118336,11 @@ const _EVP_LEG_PESOS = [ { id:"negrito", label:"Negrito" }, { id:"normal", label
 const _EVP_LEG_CAIXAS = [ { id:"", label:"Como falado" }, { id:"alta", label:"MAIÚSCULAS" }, { id:"baixa", label:"minúsculas" } ];
 const _EVP_MOVS = [ { id:"nenhum", label:"Parado" }, { id:"aproximar", label:"Aproximar" }, { id:"afastar", label:"Afastar" }, { id:"esq_dir", label:"Esquerda → direita" },
                     { id:"dir_esq", label:"Direita → esquerda" }, { id:"sobe", label:"Subir" }, { id:"desce", label:"Descer" } ];
-const _EVP_VOZES = [ { id:"coral", label:"Coral" }, { id:"nova", label:"Nova" }, { id:"shimmer", label:"Shimmer" }, { id:"sage", label:"Sage" }, { id:"ballad", label:"Ballad" },
-                     { id:"onyx", label:"Onyx" }, { id:"ash", label:"Ash" }, { id:"echo", label:"Echo" }, { id:"verse", label:"Verse" }, { id:"alloy", label:"Alloy" } ];
+const _EVP_VOZES = [ { id:"coral", label:"Coral", d:"feminina, calorosa" }, { id:"nova", label:"Nova", d:"feminina, jovem" }, { id:"shimmer", label:"Shimmer", d:"feminina, suave" },
+                     { id:"sage", label:"Sage", d:"feminina, calma" }, { id:"marin", label:"Marin", d:"feminina, natural" }, { id:"ballad", label:"Ballad", d:"masculina, suave" },
+                     { id:"onyx", label:"Onyx", d:"masculina, grave" }, { id:"ash", label:"Ash", d:"masculina, clara" }, { id:"echo", label:"Echo", d:"masculina, firme" },
+                     { id:"verse", label:"Verse", d:"masculina, expressiva" }, { id:"cedar", label:"Cedar", d:"masculina, natural" }, { id:"alloy", label:"Alloy", d:"neutra" },
+                     { id:"fable", label:"Fable", d:"masculina, narrador" } ];
 const _EVP_IDIOMAS = [ { id:"es", label:"Espanhol" }, { id:"en", label:"Inglês" } ];
 const _EVP_ENERGIA = [ { id:"baixa", label:"Baixa" }, { id:"media", label:"Média" }, { id:"alta", label:"Alta" } ];
 
@@ -118447,6 +118811,28 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     setSel({ tipo:"imagem", id:id });
   };
   const addMarca = function(){ const id = _evpId(); mudar(function(np){ np.marcas.push({ id:id, t:tempo, nota:"" }); }); _evToast("success", "Marcador em " + _evTempo(tempo)); };
+  /* v13: CORRIGIR — C marca o começo e o fim do trecho; a correção abre no menu Corrigir */
+  const [marcaCorr, setMarcaCorr] = useState(null); const [focoCorr, setFocoCorr] = useState(null);
+  const novaCorrecao = function(a, b){
+    const id = _evpId(), t0 = Math.max(0, Math.round(a * 100) / 100), t1 = Math.round(Math.max(a + 0.3, b) * 100) / 100;
+    mudar(function(np){ np.ajustes_trecho = (np.ajustes_trecho || []).concat([{ id:id, t0:t0, t1:t1, tipo:"corte", oque:"", porque:"", status:"aberto", origem:"estudio", em:new Date().toISOString() }]); });
+    setMenu("corrigir"); setFocoCorr(id); setMarcaCorr(null);
+  };
+  const marcarCorrecao = function(){
+    if(marcaCorr == null){ setMarcaCorr(tempo); setMenu("corrigir"); _evToast("success", "Começo em " + _evTempo(tempo) + " — aperte C no fim do trecho"); return; }
+    const a = Math.min(marcaCorr, tempo), b = Math.max(marcaCorr, tempo); novaCorrecao(a, b - a < 0.3 ? a + 2 : b);
+  };
+  const marcarPontoCorr = function(){ novaCorrecao(Math.max(0, tempo - 0.8), Math.min(calc.total, tempo + 1.2)); };
+  const aplicarCorrecoes = async function(lista){
+    if(!lista || !lista.length){ _evToast("warning", "Escreva o que fazer em pelo menos uma correção."); return; }
+    if(ajustando) return;
+    const np0 = _evpCopia(pRef.current);               // o que está nos campos entra no projeto antes de salvar
+    lista.forEach(function(x){ const o = (np0.ajustes_trecho || []).find(function(q){ return q.id === x.id; }); if(o){ o.oque = x.oque; o.porque = x.porque || ""; } });
+    pRef.current = np0; setP(np0);
+    const ok = await salvar(); if(!ok) return;
+    const texto = "Correções marcadas na linha do tempo:\n" + lista.map(function(x, i){ return (i + 1) + ") " + _evTempo(x.t0) + "–" + _evTempo(x.t1) + " [" + (x.tipo || "outro") + "] " + x.oque + (x.porque ? " — porque: " + x.porque : ""); }).join("\n");
+    await onAjustar(texto, { correcoes:lista.map(function(x){ return { id:x.id, t0:x.t0, t1:x.t1, tipo:x.tipo || "outro", oque:String(x.oque || "").slice(0, 600), porque:String(x.porque || "").slice(0, 600) }; }) });
+  };
   const tirarTrechos = function(lista, rotulo){
     if(!lista.length){ _evToast("warning", "Nada para tirar."); return 0; }
     const ant = pRef.current, np = _evpTirarTrechos(ant, lista, clipes);
@@ -118458,8 +118844,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   };
   /* v11: COLA DA FALA — o que foi cortado VOLTA para o vídeo (no lugar certo, encostado no trecho do mesmo bruto); textos e efeitos depois dele andam junto */
   const voltarTrechos = function(lista){
+    const info = arguments[1];               // v13: {texto, motivo_corte, porque} — o porquê de voltar ensina a IA
     if(!lista || !lista.length){ _evToast("warning", "Marque o que estava riscado para voltar."); return 0; }
     const ant = pRef.current, np = _evpCopia(ant);
+    // v13: o que o sócio trouxe de volta (e por quê) ensina a IA o que NÃO cortar
+    if(info && info.texto) np.voltas = (np.voltas || []).concat([{ em:new Date().toISOString(), texto:String(info.texto).slice(0, 300), motivo_corte:String(info.motivo_corte || "").slice(0, 200), porque:String(info.porque || "").slice(0, 200) }]).slice(-60);
     const grupos = {}; lista.forEach(function(x){ if(x && x.clipe && x.b > x.a) (grupos[x.clipe] = grupos[x.clipe] || []).push({ a:x.a, b:x.b }); });
     const empurra = function(T, d){ if(d <= 0) return;
       (np.textos || []).forEach(function(x){ if(x.t0 >= T - 0.01){ x.t0 += d; x.t1 += d; } });
@@ -118692,21 +119081,28 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   };
   useEffect(function(){ return function(){ if(recRef.current){ try{ recRef.current.stop(); }catch(_){} } }; }, []);
   const [gerandoVoz, setGerandoVoz] = useState(false);
-  const locucaoIA = async function(texto, voz, jeito){
+  const locucaoIA = async function(texto, voz, jeito, nomeVoz){
     const tx = String(texto || "").trim(); if(!tx || gerandoVoz) return false;
     setGerandoVoz(true); let ok = false;
     try{
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"locucao", id:ed.id, texto:tx, voz:voz, instrucao:jeito || "" } });
+      const falado = _evAplicarPronuncia(tx, kit && kit.pronuncias);          // v15: nomes difíceis do jeito que se fala (só no áudio)
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"locucao", id:ed.id, texto:falado, voz:voz, instrucao:jeito || "" } });
       if(res.error) throw new Error(await _evErroFn(res));
       const d = res.data || {}; if(!d.url) throw new Error("a IA não devolveu o áudio");
       const r = await fetch(d.url); if(!r.ok) throw new Error("não consegui baixar o áudio (" + r.status + ")");
       const blob = await r.blob();
-      await subirNarracao(blob, Math.min(tempo, Math.max(0, calc.total - 0.1)), true, "Locução IA · " + tx.slice(0, 24), { url:d.url });
+      await subirNarracao(blob, Math.min(tempo, Math.max(0, calc.total - 0.1)), true, (nomeVoz ? nomeVoz + " · " : "Locução IA · ") + tx.slice(0, 24), { url:d.url });
       if(d.custo_brl != null) _evToast("success", "Locução pronta · custo R$ " + String(d.custo_brl).replace(".", ","));
       ok = true;
     }catch(e){ _evToast("error", "Locução não saiu: " + ((e && e.message) || e)); }
     setGerandoVoz(false);
     return ok;
+  };
+  /* v15: áudio pronto (ex.: gerado no CapCut) entra como narração na agulha */
+  const enviarAudioPronto = async function(fl){
+    if(!fl) return; if(fl.size > 60 * 1024 * 1024){ _evToast("warning", "Áudio acima de 60 MB."); return; }
+    try{ await subirNarracao(fl, Math.min(tempo, Math.max(0, calc.total - 0.1)), false, "Áudio · " + String(fl.name || "enviado").replace(/\.[^.]+$/, "").slice(0, 30)); }
+    catch(e){ _evToast("error", "Não entrou: " + ((e && e.message) || e)); }
   };
   /* legenda em outra língua: a IA traduz bloco a bloco (o tempo de cada bloco continua o mesmo) */
   const [traduzindo, setTraduzindo] = useState(false);
@@ -118750,6 +119146,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       else if(ctl && (k === "d" || k === "D")){ e.preventDefault(); duplicar(); }
       else if(!ctl && (k === "s" || k === "S")){ e.preventDefault(); cortar(); }
       else if(!ctl && (k === "m" || k === "M")){ e.preventDefault(); addMarca(); }
+      else if(!ctl && (k === "c" || k === "C")){ e.preventDefault(); marcarCorrecao(); }
       else if(k === "Delete" || k === "Backspace"){ e.preventDefault(); apagar(); }
       else if(k === "ArrowLeft"){ e.preventDefault(); irPara(tempo - (e.shiftKey ? 1 : 1/30)); }
       else if(k === "ArrowRight"){ e.preventDefault(); irPara(tempo + (e.shiftKey ? 1 : 1/30)); }
@@ -118802,6 +119199,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const ferrAtual = (function(){ if(!sel || !selObj) return null; const f = ferr[sel.tipo]; const ok = ferramentas.find(function(x){ return x.id === f && !x.acao; });
     return ok ? f : (ferramentas.find(function(x){ return !x.acao; }) || {}).id; })();
   const usarFerr = function(f){
+    if(f.id === "fala" && sel && sel.tipo === "clip"){ const c = calc.clips.find(function(x){ return x.id === sel.id; }); if(c) window.dispatchEvent(new CustomEvent("evp-cola", { detail:{ cid:c.clipe, clipId:c.id } })); return; }
     if(f.id === "dividir") return cortar();
     if(f.id === "congelar") return congelar();
     if(f.id === "duplicar") return duplicar();
@@ -118946,6 +119344,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         </div>
         <_EvpPainelMenu menu={menu} p={p} calc={calc} sel={sel} setSel={setSel} mudar={mudar} irPara={irPara} tempo={tempo} infoClipe={infoClipe} clipes={clipes}
           musicas={musicas} musInfo={musInfoN} setMusica={setMusica} addClipe={addClipe} addTexto={addTexto} addSfx={addSfx} kit={kit} base={base}
+          motivos={(ed.receita && ed.receita.motivos_corte) || []} comentarios={comentarios} cliente={t.client} tagNarr={_evTagNarracao(t)} roteiroNarr={_evRoteiroNarracao(t)} enviarAudioPronto={enviarAudioPronto} aplicarCorrecoes={aplicarCorrecoes} ajustando={ajustando}
+          marcaCorr={marcaCorr} marcarCorrecao={marcarCorrecao} marcarPontoCorr={marcarPontoCorr} focoCorr={focoCorr} setFocoCorr={setFocoCorr}
           cortar={cortar} duplicar={duplicar} apagar={apagar} metodoRuido={metodoRuido} tratandoAudio={tratandoAudio} pedirEstab={pedirEstab}
           onMusicasMudou={onMusicasMudou} setFerr={setFerr} pRef={pRef} setP={setP} confirmar={confirmar}
           addImagem={addImagem} addMarca={addMarca} tirarTrechos={tirarTrechos} fala={ed.fala} modelos={modelos} salvarModelo={salvarModelo} aplicarModelo={aplicarModelo}
@@ -119005,7 +119405,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <_EvpSugestoes ed={ed} p={p} mudar={mudar} kit={kit}/>
         <div style={{flex:1,minHeight:0}}>
         {sel && selObj ? (
-          <_EvpInspetor prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
+          <_EvpInspetor fotosCard={(Array.isArray(t.files) ? t.files : []).filter(function(f){ return f && !f.isAnnotation && typeof f.url === "string" && (/^image\//.test(String(f.type || "")) || /\.(png|jpe?g|webp)(\?|#|$)/i.test(f.url)); }).map(function(f){ return { url:f.url, nome:f.name || "" }; })}
+            tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
             trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala}/>
         ) : (
@@ -119018,7 +119419,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       <div style={{flexShrink:0}}>
         <_EvpTimeline p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
           setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
-          alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}/>
+          alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}
+          fala={ed.fala} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }}/>
       </div>
 
       {/* ── Exportar: janela por cima (fica montada para não parar uma exportação em andamento) ── */}
@@ -119256,12 +119658,18 @@ function _EvpPainelMenu(q){
   const ctl = _evpUsarCtl(q.pRef, q.setP, q.confirmar, mudar);
   const [minSil, setMinSil] = useState(0.7);
   const [transc, setTransc] = useState(false);
+  useEffect(function(){ const f = function(e){ setTransc((e && e.detail) || true); }; window.addEventListener("evp-cola", f); return function(){ window.removeEventListener("evp-cola", f); }; }, []);
   const [nomeModelo, setNomeModelo] = useState("");
   const [tituloCapa, setTituloCapa] = useState("");
   const [subindoImg, setSubindoImg] = useState(null);
   const inpImg = useRef(null);
   const [ouvirGravando, setOuvirGravando] = useState(false);
   const [locTexto, setLocTexto] = useState(""); const [locVoz, setLocVoz] = useState("coral"); const [locJeito, setLocJeito] = useState("");
+  const vozesLib = _evVozesDoCliente(_evUsarVozes(), q.cliente);
+  const [locLib, setLocLib] = useState(function(){ return (kit && kit.voz_padrao) || ""; });
+  useEffect(function(){ if(kit && kit.voz_padrao && !locLib) setLocLib(kit.voz_padrao); }, [kit && kit.voz_padrao]);
+  const vozLib = vozesLib.find(function(v){ return v.id === locLib; }) || null;
+  const inpAudio = useRef(null);
   const [sobreCid, setSobreCid] = useState("");
   const [segGrav, setSegGrav] = useState(0);
   useEffect(function(){ if(!q.gravando){ setSegGrav(0); return; } const iv = setInterval(function(){ setSegGrav(Math.floor((Date.now() - q.gravando.em) / 1000)); }, 250); return function(){ clearInterval(iv); }; }, [q.gravando]);
@@ -119397,18 +119805,29 @@ function _EvpPainelMenu(q){
         </div>
         <div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:10,background:_EVP_COR.faixa,marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700,marginBottom:6}}><_EvpIco n="robo" s={16}/>Locução com IA</div>
+          {(q.tagNarr || q.roteiroNarr) && <div style={{fontSize:11.5,fontWeight:700,color:"#7c2d12",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:9,padding:"6px 8px",marginBottom:6}}>
+            🎙 {q.tagNarr ? "Este card pede narração com IA." : "O roteiro do card tem texto de narração."}
+            {q.roteiroNarr && <button onClick={function(){ setLocTexto(q.roteiroNarr); }} style={Object.assign(_evpBtn("suave", true), {marginLeft:6,padding:"3px 8px",fontSize:11})}>Puxar do roteiro</button>}</div>}
+          <select value={locLib} onChange={function(e){ setLocLib(e.target.value); }} aria-label="Voz da biblioteca" style={{font:"inherit",width:"100%",padding:"6px 7px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo,marginBottom:6}}>
+            <option value="">Voz livre (escolher abaixo)</option>
+            {vozesLib.map(function(v){ return <option key={v.id} value={v.id}>{v.nome}{kit && kit.voz_padrao === v.id ? " (padrão do cliente)" : ""}</option>; })}</select>
+          {vozLib && vozLib.amostra_url && <audio controls preload="none" src={vozLib.amostra_url} style={{width:"100%",height:30,marginBottom:6}}/>}
           <textarea value={locTexto} onChange={function(e){ setLocTexto(e.target.value); }} rows={3} maxLength={1500} aria-label="Texto da locução" placeholder="Escreva o que a voz vai falar"
             style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"7px 9px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,resize:"vertical",userSelect:"text",background:_EVP_COR.campo}}/>
-          <div style={{display:"grid",gridTemplateColumns:"96px minmax(0,1fr)",gap:6,marginTop:6}}>
-            <select value={locVoz} onChange={function(e){ setLocVoz(e.target.value); }} aria-label="Voz" style={{font:"inherit",padding:"6px 7px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo}}>
-              {_EVP_VOZES.map(function(v){ return <option key={v.id} value={v.id}>{v.label}</option>; })}</select>
-            <input value={locJeito} onChange={function(e){ setLocJeito(e.target.value); }} maxLength={200} aria-label="Jeito de falar" placeholder="Jeito (ex.: animado, locutor de rádio)"
+          <div style={{display:"grid",gridTemplateColumns:vozLib ? "minmax(0,1fr)" : "96px minmax(0,1fr)",gap:6,marginTop:6}}>
+            {!vozLib && <select value={locVoz} onChange={function(e){ setLocVoz(e.target.value); }} aria-label="Voz" style={{font:"inherit",padding:"6px 7px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo}}>
+              {_EVP_VOZES.map(function(v){ return <option key={v.id} value={v.id}>{v.label}</option>; })}</select>}
+            <input value={locJeito} onChange={function(e){ setLocJeito(e.target.value); }} maxLength={200} aria-label="Jeito de falar" placeholder={vozLib ? "Ajuste só neste vídeo (opcional, ex.: mais animado)" : "Jeito (ex.: animado, locutor de rádio)"}
               style={{font:"inherit",minWidth:0,padding:"6px 8px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,userSelect:"text",background:_EVP_COR.campo}}/>
           </div>
-          <button onClick={function(){ q.locucaoIA(locTexto, locVoz, locJeito).then(function(ok){ if(ok) setLocTexto(""); }); }} disabled={!locTexto.trim() || q.gerandoVoz}
+          <button onClick={function(){ const vz = vozLib ? vozLib.voz : locVoz, jt = vozLib ? (vozLib.instrucao + (locJeito.trim() ? " " + locJeito.trim() : "")) : locJeito;
+              q.locucaoIA(locTexto, vz, jt, vozLib ? vozLib.nome : "").then(function(ok){ if(ok) setLocTexto(""); }); }} disabled={!locTexto.trim() || q.gerandoVoz}
             style={Object.assign(_evpBtn(locTexto.trim() && !q.gerandoVoz ? "suave" : null, !!locTexto.trim() && !q.gerandoVoz), {width:"100%",justifyContent:"center",marginTop:6})}>
             <_EvpIco n="ia" s={15}/>{q.gerandoVoz ? "Gerando a voz…" : "Gerar locução na agulha"}</button>
-          <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>Voz sintética (OpenAI). Custa uns centavos por minuto e entra no gasto do mês.</div>
+          <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>Voz sintética (OpenAI). Custa uns centavos por minuto e entra no gasto do mês. Nomes difíceis: Kit do cliente › Pronúncia.</div>
+          <button onClick={function(){ if(inpAudio.current) inpAudio.current.click(); }} disabled={q.subindoNarr != null} style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center",marginTop:8})}>
+            <_EvpIco n="audio" s={15}/>{q.subindoNarr != null ? "Enviando… " + q.subindoNarr + "%" : "Enviar áudio pronto (ex.: do CapCut)"}</button>
+          <input ref={inpAudio} type="file" accept="audio/*,.mp3,.wav,.m4a" style={{display:"none"}} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; if(fl) q.enviarAudioPronto(fl); }}/>
         </div>
         {(p.narracoes || []).map(function(n){ const on = sel && sel.tipo === "narracao" && sel.id === n.id;
           return <button key={n.id} onClick={function(){ setSel({ tipo:"narracao", id:n.id }); irPara(n.t0 + 0.01); }} style={Object.assign({}, linhaBtn, {padding:"7px 9px"}, on ? { borderColor:_EVP_COR.roxo, background:_EVP_COR.roxoSoft } : {})}>
@@ -119524,7 +119943,9 @@ function _EvpPainelMenu(q){
             <span style={{fontFamily:_EVP_MONO,fontSize:10.5,color:_EVP_COR.sub}}>{_evTempo(b.a)}</span><span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{b.words.map(function(w){ return w.p; }).join(" ")}</span></button>; })}
         {!calc.blocos.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Sem fala para legendar.</div>}
       </div>)}
-      {transc && <_EvpTranscricao p={p} calc={calc} fala={q.fala} infoClipe={infoClipe} onFechar={function(){ setTransc(false); }} tirarTrechos={q.tirarTrechos} irPara={irPara}
+      {menu === "corrigir" && <_EvpCorrigir p={p} calc={calc} tempo={tempo} irPara={irPara} mudar={mudar} comentarios={q.comentarios} tirarTrechos={q.tirarTrechos}
+        aplicar={q.aplicarCorrecoes} ajustando={q.ajustando} marcaCorr={q.marcaCorr} marcar={q.marcarCorrecao} marcarPonto={q.marcarPontoCorr} foco={q.focoCorr} setFoco={q.setFocoCorr}/>}
+      {transc && <_EvpTranscricao foco={typeof transc === "object" ? transc : null} motivos={q.motivos} p={p} calc={calc} fala={q.fala} infoClipe={infoClipe} onFechar={function(){ setTransc(false); }} tirarTrechos={q.tirarTrechos} irPara={irPara}
         voltarTrechos={q.voltarTrechos} pintarTrechos={q.pintarTrechos} corrigirTexto={q.corrigirTexto} addNome={q.addNome} coresCli={q.coresCli} nomesKit={q.nomesKit} clipesTodos={q.clipesTodos} kit={kit}/>}
     </div>
   );
@@ -119857,11 +120278,24 @@ function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
   );
 }
 
+/* ─── v13: MOTIVO de cada corte de fala (a IA grava em receita.motivos_corte; o resto o app deduz) ─── */
+const _EVP_MOTIVOS = { repeticao:"Repetição (usou outra tomada)", recomeco:"Recomeço", abandonada:"Frase abandonada", fora_do_assunto:"Fora do assunto/roteiro",
+  tempo:"Para caber no tempo", quem_filma:"Fala de quem filma", erro:"Erro ou gaguejo", fraca:"Frase fraca", vicio:"Vício (é, né…)", apoio:"Vídeo de apoio",
+  descartado:"Arquivo descartado", sem_fala:"Som sem fala", pedido:"Pedido no ajuste", correcao:"Correção na linha do tempo", mao:"Cortado à mão", outro:"Saiu" };
+function _evpMotivoTxt(m){ if(!m) return "Saiu (sem motivo registrado)"; return (_EVP_MOTIVOS[m.motivo] || "Saiu") + (m.nota ? " — " + String(m.nota).slice(0, 90) : ""); }
+function _evpMotivoDe(motivos, clipe, a, b){
+  let melhor = null, mo = 0;
+  (motivos || []).forEach(function(m){ if(!m || m.clipe !== clipe) return; const o = Math.min(b, Number(m.fim) + 0.05) - Math.max(a, Number(m.ini) - 0.05); if(o > mo){ mo = o; melhor = m; } });
+  return mo > Math.min(0.15, (b - a) * 0.3) ? melhor : null;
+}
+function _evpSoMuletas(ps){ return ps.length > 0 && ps.every(function(w){ return _EVP_MULETAS.indexOf(_evNorm(w).replace(/[^a-z]/g, "")) >= 0; }); }
+
 /* ─── v11 (30/09/2026): COLA DA FALA — toda a fala de TODOS os brutos. O que ficou no vídeo aparece normal (com o nº da ordem na linha do tempo),
    o que saiu aparece RISCADO. Clique marca (Shift = trecho). Com o marcado: cortar, VOLTAR para o vídeo, corrigir a legenda (aqui ou em todo o vídeo,
    guardando o nome no dicionário do cliente) e pintar a legenda só naquele trecho (colab: cada empresa com a sua cor). ─── */
-function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irPara, voltarTrechos, pintarTrechos, corrigirTexto, addNome, coresCli, nomesKit, clipesTodos, kit }){
+function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irPara, voltarTrechos, pintarTrechos, corrigirTexto, addNome, coresCli, nomesKit, clipesTodos, kit, foco, motivos }){
   const [marc, setMarc] = useState({});           // chave → item
+  const [porqueVolta, setPorqueVolta] = useState("");     // v13: por que voltou (ensina a IA o que não cortar)
   const [ultimo, setUltimo] = useState(null);
   const [ver, setVer] = useState("tudo");         // tudo | ficou | saiu
   const [modoCor, setModoCor] = useState("destaque");
@@ -119876,7 +120310,7 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
     // correção de UMA palavra em todo o vídeo (igual à legenda): mostra na cola como vai sair
     const corr = {}; (lg.correcoes || []).forEach(function(c){ if(c && c.de && c.para && String(c.de).indexOf(" ") < 0) corr[_evNorm(c.de)] = String(c.para); });
     const fixa = function(w){ const k = _evNorm(w); if(!k || !corr[k]) return w; const m = String(w).match(/[.,!?;:…]+$/); return corr[k] + (m ? m[0] : ""); };
-    return ids.map(function(cid){
+    return ids.filter(function(cid){ return !foco || !foco.cid || cid === foco.cid; }).map(function(cid){
       const ws = _evpFalaDe(fala, cid, lgN);
       const usos = calc.clips.filter(function(c){ return c.clipe === cid && _evpClipeFalaNormal(c); });
       const achar = function(x){ return usos.find(function(c){ return x >= c.ini - 0.03 && x < c.fim - 0.03; }) || null; };
@@ -119891,9 +120325,16 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
           t:u ? u.t0 + (Math.max(u.ini, i) - u.ini) / (u.vel || 1) : null });
         ant = Math.max(ant == null ? 0 : ant, f);
       });
+      // v13: cada trecho riscado ganha o MOTIVO (o que a IA gravou; senão: só vício → vício; senão "sem motivo registrado")
+      let run = null;
+      const fechar = function(){ if(!run) return; const ps = run.ws.map(function(x){ return x.p; });
+        const m = _evpMotivoDe(motivos, cid, run.ws[0].i, run.ws[run.ws.length - 1].b) || (_evpSoMuletas(ps) ? { motivo:"vicio" } : null);
+        run.ws[0].motivoRun = m || { sem:true }; run.ws[0].runTexto = ps.join(" "); run.ws.forEach(function(x){ x.runId = run.ws[0].chave; x.runMotivo = m; }); run = null; };
+      itens.forEach(function(it){ if(it.tipo !== "palavra") return; if(it.uso){ fechar(); return; } if(!run) run = { ws:[] }; run.ws.push(it); });
+      fechar();
       return { cid:cid, itens:itens, fala:fala0, ficou:ficou0 };
     });
-  }, [calc, fala, lgN, clipesTodos]);
+  }, [calc, fala, lgN, clipesTodos, foco && foco.cid, motivos]);
   const todos = useMemo(function(){ return [].concat.apply([], brutos.map(function(b){ return b.itens; })); }, [brutos]);
   const tot = brutos.reduce(function(a, b){ return { fala:a.fala + b.fala, ficou:a.ficou + b.ficou }; }, { fala:0, ficou:0 });
   const clicar = function(it, ev){
@@ -119921,6 +120362,7 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
         <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:"1px solid " + _EVP_COR.linha,flexWrap:"wrap"}}>
           <span style={{width:30,height:30,borderRadius:9,display:"grid",placeItems:"center",color:"#fff",background:"linear-gradient(135deg," + _EVP_COR.roxo + "," + _EVP_COR.roxo2 + ")"}}><_EvpIco n="fala2" s={16}/></span>
           <div style={{minWidth:0,flex:1}}><b style={{fontSize:15}}>Cola da fala</b>
+            {foco && foco.cid && <div style={{fontSize:12,fontWeight:800,color:_EVP_COR.roxo}}>Fala do clipe {(infoClipe[foco.cid] || {}).n ? (infoClipe[foco.cid] || {}).n + ". " : ""}{(infoClipe[foco.cid] || {}).nome || foco.cid} — o que ficou no clipe em destaque, o que saiu riscado com o motivo</div>}
             <div style={{fontSize:11.5,color:_EVP_COR.sub}}>Tudo o que foi falado nos brutos. <b>Normal</b> = está no vídeo (nº = ordem na linha do tempo) · <s>riscado</s> = saiu. Clique marca, Shift + clique marca um trecho, duplo clique leva a agulha.</div></div>
           <button onClick={onFechar} aria-label="Fechar" style={_evpBtn("icone")}><_EvpIco n="fechar" s={16}/></button>
         </div>
@@ -119956,11 +120398,17 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
                   style={{font:"inherit",fontFamily:_EVP_MONO,fontSize:11,border:"1px dashed " + (on ? _EV.verm : _EVP_COR.linha),background:on ? _EVP_COR.erro : "transparent",color:on ? _EV.verm : _EVP_COR.fraco,borderRadius:6,padding:"0 5px",margin:"0 3px",cursor:"pointer",textDecoration:dentro ? "none" : "line-through"}}>
                   ⋯ {f1(it.b - it.a)} s</button>];
                 const mudou = it.txt !== it.p;
-                return [badge, <span key={it.chave} onClick={function(e){ clicar(it, e); }} onDoubleClick={function(){ if(it.t != null) irPara(it.t); }}
+                const noFoco = !!(foco && foco.clipId && it.uso && it.uso.id === foco.clipId);
+                const chipMot = !dentro && it.motivoRun ? <span key={it.chave + "!"} title={"Por que saiu: " + (it.motivoRun.sem ? "sem motivo registrado (corte à mão ou antes da v13)" : _evpMotivoTxt(it.motivoRun))}
+                  style={{fontSize:10,fontWeight:800,borderRadius:99,padding:"1px 7px",margin:"0 4px 0 6px",verticalAlign:"2px",whiteSpace:"nowrap",
+                    background:it.motivoRun.sem ? "#f1f5f9" : it.motivoRun.motivo === "pedido" || it.motivoRun.motivo === "correcao" || it.motivoRun.motivo === "mao" ? "#eff6ff" : "#fff7ed",
+                    color:it.motivoRun.sem ? "#64748b" : it.motivoRun.motivo === "pedido" || it.motivoRun.motivo === "correcao" || it.motivoRun.motivo === "mao" ? "#1d4ed8" : "#c2410c"}}>
+                  ✂ {it.motivoRun.sem ? "sem motivo" : (_EVP_MOTIVOS[it.motivoRun.motivo] || "saiu")}</span> : null;
+                return [badge, chipMot, <span key={it.chave} onClick={function(e){ clicar(it, e); }} onDoubleClick={function(){ if(it.t != null) irPara(it.t); }}
                   title={(dentro ? "No vídeo" : "Saiu do vídeo") + (mudou ? " · legenda: \"" + it.txt + "\"" : "") + (it.cor ? " · cor do trecho" : "")}
                   style={{fontSize:15,padding:"2px 3px",margin:"0 1px",borderRadius:5,cursor:"pointer",
                     textDecoration:dentro ? "none" : "line-through",textDecorationColor:dentro ? undefined : "rgba(100,116,139,.8)",
-                    background:on ? (dentro ? _EVP_COR.erro : _EVP_COR.roxoSoft) : "transparent",
+                    background:on ? (dentro ? _EVP_COR.erro : _EVP_COR.roxoSoft) : noFoco ? "rgba(250,204,21,.28)" : "transparent", fontWeight:noFoco ? 800 : undefined,
                     color:on && dentro ? _EV.verm : dentro ? _EVP_COR.ink : _EVP_COR.fraco,
                     borderBottom:it.cor ? "3px solid " + it.cor : "3px solid transparent"}}>{mudou && dentro ? it.txt || "∅" : it.p}</span>]; })}
             </div>; })}
@@ -119970,7 +120418,11 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
             <span style={{fontSize:12,color:_EVP_COR.sub}}>{lista.length ? lista.length + " marcado" + (lista.length > 1 ? "s" : "") + (ficou.length ? " · " + ficou.length + " no vídeo" : "") + (saiu.length ? " · " + saiu.length + " fora" : "") : "Nada marcado"}</span>
             {lista.length > 0 && <button onClick={limpar} style={_evpBtn()}>Limpar</button>}
             <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button onClick={function(){ if(voltarTrechos(saiu.filter(function(x){ return x.tipo === "palavra"; }).map(function(x){ return { clipe:x.clipe, a:x.a, b:x.b }; }))) limpar(); }}
+              {saiu.length > 0 && <input value={porqueVolta} onChange={function(e){ setPorqueVolta(e.target.value); }} maxLength={200} aria-label="Por que voltar"
+                placeholder="Por que voltar? (ensina a IA)" style={{font:"inherit",fontSize:12,padding:"6px 9px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,minWidth:220}}/>}
+              <button onClick={function(){ const ps = saiu.filter(function(x){ return x.tipo === "palavra"; });
+                  const mots = []; ps.forEach(function(x){ const t = x.runMotivo ? _evpMotivoTxt(x.runMotivo) : "sem motivo registrado"; if(mots.indexOf(t) < 0) mots.push(t); });
+                  if(voltarTrechos(ps.map(function(x){ return { clipe:x.clipe, a:x.a, b:x.b }; }), { porque:porqueVolta.trim(), texto:ps.map(function(x){ return x.p; }).join(" ").slice(0, 300), motivo_corte:mots.join("; ").slice(0, 200) })){ limpar(); setPorqueVolta(""); } }}
                 disabled={!saiu.length} style={_evpBtn("suave", !!saiu.length)}><_EvpIco n="desfazer" s={16}/>Voltar para o vídeo</button>
               <button onClick={function(){ if(tirarTrechos(ficou.map(function(x){ return { cid:x.uso.id, a:x.a, b:x.b }; }), "Cortado pela cola")) limpar(); }}
                 disabled={!ficou.length} style={_evpBtn("primario", !!ficou.length)}><_EvpIco n="dividir" s={16}/>Cortar do vídeo</button>
@@ -120118,7 +120570,7 @@ function _EvpOnda({ clipe, ini, fim, w, h, cor, mudo, vol }){
   return <canvas ref={ref} style={{width:w, height:h, display:"block"}}/>;
 }
 
-function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef }){
+function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef, fala, marcaCorr, onCorrecao }){
   _evpUsarMidia();
   const scRef = useRef(null), inRef = useRef(null), ancora = useRef(null);
   const [ima, setIma] = useState(true);
@@ -120378,6 +120830,11 @@ function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, se
               {marcas.map(function(s){ return <div key={s} style={{position:"absolute",left:s*pxs,top:0,bottom:0,borderLeft:"1px solid #3a4266",paddingLeft:4,fontSize:10.5,color:_EVP_TL.sub,fontWeight:600,fontFamily:_EVP_MONO,pointerEvents:"none",lineHeight:"16px"}}>{_evpRotuloT(s)}</div>; })}
               {(p.marcas||[]).map(function(m){ return <div key={m.id} title={(m.nota || "Marcador") + " · " + _evTempo(m.t)} onPointerDown={function(e){ e.stopPropagation(); irPara(m.t); }}
                 style={{position:"absolute",left:m.t*pxs - 1,top:0,width:10,height:14,background:"#f59e0b",clipPath:"polygon(0 0,100% 0,100% 70%,0 100%)",cursor:"pointer",zIndex:3}}/>; })}
+              {(p.ajustes_trecho || []).filter(function(x){ return x.status !== "arquivado" && x.status !== "ok"; }).map(function(x){ const cor = x.status === "aplicado" ? "#3b82f6" : x.status === "nao" ? "#ef4444" : "#f97316";
+                return <div key={"corr" + x.id} title={"Correção " + _evTempo(x.t0) + "–" + _evTempo(x.t1) + ": " + (x.oque || "(escreva o que fazer)") + (x.porque ? " · porque: " + x.porque : "")}
+                  onPointerDown={function(e){ e.stopPropagation(); irPara(x.t0); if(onCorrecao) onCorrecao(x.id); }}
+                  style={{position:"absolute",left:x.t0*pxs,width:Math.max(4, (x.t1 - x.t0)*pxs),bottom:0,height:6,background:cor,borderRadius:3,cursor:"pointer",zIndex:3,opacity:0.95}}/>; })}
+              {marcaCorr != null && <div title="Começo da correção (aperte C no fim)" style={{position:"absolute",left:Math.min(marcaCorr, tempo)*pxs,width:Math.max(2, Math.abs(tempo - marcaCorr)*pxs),bottom:0,height:6,background:"repeating-linear-gradient(90deg,#f97316 0 4px,transparent 4px 7px)",zIndex:3,pointerEvents:"none"}}/>}
               {(comentarios || []).filter(function(c){ return !(p.revisao || {})[c.chave]; }).map(function(c){ return <div key={c.chave} title={"Cliente: " + c.texto + " · " + _evTempo(c.t)} aria-label={"Comentário do cliente em " + _evTempo(c.t)} onPointerDown={function(e){ e.stopPropagation(); irPara(c.t); }}
                 style={{position:"absolute",left:c.t*pxs - 6,top:1,width:13,height:12,borderRadius:"4px 4px 4px 1px",background:"#2563eb",cursor:"pointer",zIndex:3,boxShadow:"0 0 0 1.5px #fff"}}/>; })}
             </div>
@@ -120426,7 +120883,9 @@ function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, se
                 for(let k=0; k<n; k++){ const u = _evpThumbEm(c.clipe, c.ini + (k * tw + tw/2) / pxs * c.vel); thumbs.push(<div key={k} style={{position:"absolute",left:k*tw,top:0,width:tw,bottom:0,background:u ? "#000 url(" + u + ") center/cover" : "#2a3150",borderRight:"1px solid rgba(0,0,0,.25)"}}/>); }
                 const moveu = arr && arr.id === c.id, vol = c.mudo ? 0 : (c.vol == null ? 1 : c.vol);
                 const marcas2 = [c.vel !== 1 ? String(c.vel).replace(".", ",") + "x" : null, c.estab ? "estab." : null, (c.corte && (c.corte.l || c.corte.r || c.corte.t || c.corte.b)) ? "recorte" : null].filter(Boolean);
-                return <div key={c.id} onPointerDown={function(e){ moverClipe(e, c); }}
+                const falaC = ((fala && fala[c.clipe]) || []).filter(function(q){ return Number(q.i) >= c.ini - 0.05 && Number(q.i) < c.fim - 0.05; }).map(function(q){ return q.p; }).join(" ");
+                return <div key={c.id} onPointerDown={function(e){ moverClipe(e, c); }} onDoubleClick={function(e){ e.stopPropagation(); window.dispatchEvent(new CustomEvent("evp-cola", { detail:{ cid:c.clipe, clipId:c.id } })); }}
+                  title={(falaC ? "Fala: \u201c" + falaC.slice(0, 400) + "\u201d" : "Sem fala neste trecho") + "\n(duplo clique: a fala inteira deste vídeo e o que foi cortado)"}
                   style={Object.assign(bloco(inf.cor || _EVP_COR.roxo, on), { left:c.t0*pxs, width:w - 1, padding:0, border:"2px solid " + (inf.cor || _EVP_COR.roxo),
                     transform: moveu ? "translateX(" + arr.dx + "px)" : "none", opacity: moveu ? 0.75 : 1, zIndex: moveu ? 6 : on ? 3 : 1 })}>
                   {thumbs}
@@ -120535,7 +120994,7 @@ function _EvpSlider(q){
 }
 
 /* ─── PAINEL DA DIREITA: mostra só a ferramenta escolhida na barra embaixo do vídeo ─── */
-function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef, confirmar, kit, base, infoClipe, musicas, musInfo, setMusica, enquadrar, setEnquadrar,
+function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef, confirmar, kit, base, infoClipe, musicas, musInfo, setMusica, enquadrar, setEnquadrar,
                         trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev }){
   const ctl = _evpUsarCtl(pRef, setP, confirmar, mudar);
   const caixa = Object.assign({}, _EVP_PAINEL, { padding:14, overflow:"auto", height:"100%", boxSizing:"border-box", minWidth:0 });
@@ -120742,7 +121201,7 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
           </div>)}
           <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:10}}>Também dá para dar duplo clique no texto dentro do vídeo.</div>
         </div>)}
-        {ferr === "elemento" && <_EvpElementoSel x={x} kit={kit} base={base} mudar={mudar} nt={nt}/>}
+        {ferr === "elemento" && <_EvpElementoSel x={x} kit={kit} base={base} mudar={mudar} nt={nt} fotos={fotosCard} t={tCard}/>}
         {ferr === "estilo" && (<div>
           {_evgDoTexto(kit, x) && <div style={{fontSize:11.5,color:_EVP_COR.fraco,background:_EVP_COR.roxoSoft,borderRadius:8,padding:"6px 8px",marginBottom:8}}>Este texto usa o elemento "{_evgDoTexto(kit, x).nome}" da galeria: cor, fonte e fundo vêm dele. Aqui vale o tamanho e o lugar.</div>}
           <div style={{..._EVP_TIT, marginTop:0}}>Tipo</div>
@@ -120951,6 +121410,88 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
 }
 
 
+
+/* ─── v13: CORRIGIR EDIÇÃO NA LINHA DO TEMPO — trecho (do segundo X ao Y) + tipo + o que fazer + POR QUÊ. A IA aplica todas juntas,
+   diz o que fez em cada uma e o sócio confirma (✓ era isso / ✗ não era isso). Tudo fica em projeto.ajustes_trecho e ensina a IA. ─── */
+const _EVP_CORR_TIPOS = [ { id:"corte", label:"Corte" }, { id:"texto", label:"Texto" }, { id:"legenda", label:"Legenda" }, { id:"musica", label:"Música" },
+  { id:"apoio", label:"Imagem de apoio" }, { id:"ritmo", label:"Ritmo" }, { id:"som", label:"Som" }, { id:"cor", label:"Cor" }, { id:"outro", label:"Outro" } ];
+const _EVP_CORR_ST = { aberto:["A fazer", "#c2410c", "#fff7ed"], aplicado:["A IA aplicou — confira", "#1d4ed8", "#eff6ff"], nao_feito:["A IA não conseguiu", "#b91c1c", "#fef2f2"],
+  ok:["✓ Era isso", "#15803d", "#f0fdf4"], nao:["✗ Não era isso — de novo", "#b91c1c", "#fef2f2"], feito_mao:["Feito à mão", "#15803d", "#f0fdf4"] };
+function _EvpCorrigir({ p, calc, tempo, irPara, mudar, comentarios, tirarTrechos, aplicar, ajustando, marcaCorr, marcar, marcarPonto, foco, setFoco }){
+  const [rasc, setRasc] = useState({});                 // rascunho dos textos (grava ao sair do campo)
+  const [verTodas, setVerTodas] = useState(false);
+  const lista = (p.ajustes_trecho || []).filter(function(x){ return x.status !== "arquivado" && (verTodas || (x.status !== "ok" && x.status !== "feito_mao")); })
+    .slice().sort(function(a, b){ return a.t0 - b.t0; });
+  const jaVieram = {}; (p.ajustes_trecho || []).forEach(function(x){ if(x.chave_av) jaVieram[x.chave_av] = 1; });
+  const daAval = (comentarios || []).filter(function(c){ return !jaVieram[c.chave] && !(p.revisao || {})[c.chave]; });
+  const ref = useRef({});
+  useEffect(function(){ if(foco && ref.current[foco]){ try{ ref.current[foco].scrollIntoView({ block:"nearest", behavior:"smooth" }); }catch(_){} } }, [foco]);
+  const campoV = function(x, k){ const r = rasc[x.id]; return r && r[k] != null ? r[k] : (x[k] || ""); };
+  const escrever = function(x, k, v){ setRasc(function(o){ const n = Object.assign({}, o); n[x.id] = Object.assign({}, n[x.id] || {}, { [k]:v }); return n; }); };
+  const gravar = function(x, k){ const r = rasc[x.id]; if(!r || r[k] == null || r[k] === (x[k] || "")) return;
+    mudar(function(np){ const o = (np.ajustes_trecho || []).find(function(q){ return q.id === x.id; }); if(o) o[k] = String(r[k]).slice(0, 600); }); };
+  const muda = function(x, fn){ mudar(function(np){ const o = (np.ajustes_trecho || []).find(function(q){ return q.id === x.id; }); if(o) fn(o); }); };
+  const trazer = function(){
+    mudar(function(np){ np.ajustes_trecho = (np.ajustes_trecho || []).concat(daAval.map(function(c){ return { id:_evpId(), t0:Math.max(0, c.t - 0.5), t1:Math.min(calc.total, c.t + 2), tipo:"outro",
+      oque:c.texto, porque:"", status:"aberto", origem:"avaliacao", chave_av:c.chave, por:c.user || "", em:new Date().toISOString() }; })); });
+    _evToast("success", daAval.length + " ajuste" + (daAval.length > 1 ? "s" : "") + " da Avaliação na lista — confira o trecho e escreva o porquê");
+  };
+  const tirar = function(x){
+    const a = Math.max(0, Number(x.t0)), b = Math.min(calc.fimCortes, Number(x.t1)); const lst = [];
+    calc.clips.forEach(function(c){ if(c.t1 <= a || c.t0 >= b || !_evpClipeFalaNormal(c)) return;
+      const sa = _evpSrcT(c, Math.max(a, c.t0)), sb = _evpSrcT(c, Math.min(b, c.t1)); if(sb - sa > 0.05) lst.push({ cid:c.id, a:sa, b:sb }); });
+    if(!lst.length){ _evToast("warning", "Nesse trecho não tem vídeo normal para tirar (congelado, rampa ou ao contrário: corte no clipe)."); return; }
+    if(tirarTrechos(lst, "Correção " + _evTempo(a))) mudar(function(np){ const o = (np.ajustes_trecho || []).find(function(q){ return q.id === x.id; }); if(o){ o.status = "feito_mao"; o.resultado = "Trecho tirado à mão (sem IA)."; o.t1 = o.t0 + 0.3; } });
+  };
+  const final = function(){ return (p.ajustes_trecho || []).map(function(x){ const r = rasc[x.id]; return r ? Object.assign({}, x, r) : x; }); };
+  const abertas = final().filter(function(x){ return (x.status === "aberto" || x.status === "nao") && String(x.oque || "").trim(); });
+  const chip = function(on){ return Object.assign(_evpChip(on), { padding:"3px 8px", fontSize:11 }); };
+  const area = { font:"inherit", width:"100%", boxSizing:"border-box", fontSize:12.5, padding:"6px 8px", borderRadius:9, border:"1px solid " + _EVP_COR.linha, background:_EVP_COR.campo, resize:"vertical", userSelect:"text" };
+  return (<div>
+    <div style={{marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="lapis"/></span>Corrigir a edição</div>
+      <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2}}>Dê play e aperte <b>C</b> no começo e <b>C</b> no fim do trecho. Escreva o que fazer e <b>por quê</b> — a IA aplica e aprende com o porquê.</div></div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"8px 0"}}>
+      <button onClick={marcar} style={Object.assign(_evpBtn(marcaCorr != null ? "primario" : "suave", true), {flex:"1 1 150px",justifyContent:"center"})}>
+        <_EvpIco n="mais" s={15}/>{marcaCorr == null ? "Marcar começo (C)" : "Marcar fim (C) · desde " + _evTempo(marcaCorr)}</button>
+      <button onClick={marcarPonto} style={Object.assign(_evpBtn(), {flex:"1 1 110px",justifyContent:"center"})} title="Trecho de 2 s em volta da agulha">Marcar aqui ({_evTempo(tempo)})</button>
+    </div>
+    {daAval.length > 0 && <button onClick={trazer} style={Object.assign(_evpBtn("suave", true), {width:"100%",justifyContent:"center",marginBottom:8})}>Trazer {daAval.length} ajuste{daAval.length > 1 ? "s" : ""} da Avaliação do card</button>}
+    {!lista.length && <div style={{fontSize:12,color:_EVP_COR.fraco,padding:"8px 2px"}}>Nenhuma correção aberta.</div>}
+    {lista.map(function(x){ const st = _EVP_CORR_ST[x.status] || _EVP_CORR_ST.aberto, on = foco === x.id;
+      return <div key={x.id} ref={function(el){ ref.current[x.id] = el; }} onClick={function(){ setFoco(x.id); }}
+        style={{border:"1.5px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),borderRadius:12,padding:8,marginBottom:8,background:_EVP_COR.campo}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          <button onClick={function(e){ e.stopPropagation(); irPara(x.t0 + 0.01); setFoco(x.id); }} title="Ir para o trecho" style={Object.assign(chip(false), {fontFamily:_EVP_MONO})}>{_evTempo(x.t0)} → {_evTempo(x.t1)}</button>
+          <span style={{fontSize:10.5,fontWeight:800,color:st[1],background:st[2],borderRadius:99,padding:"2px 8px"}}>{st[0]}</span>
+          {x.origem === "avaliacao" && <span style={{fontSize:10.5,color:_EVP_COR.sub}}>da Avaliação{x.por ? " · " + x.por : ""}</span>}
+          <button onClick={function(e){ e.stopPropagation(); muda(x, function(o){ o.status = "arquivado"; }); }} title="Tirar da lista (fica guardada)" style={Object.assign(_evpBtn("icone"), {marginLeft:"auto",width:26,height:26})}><_EvpIco n="fechar" s={13}/></button>
+        </div>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap",margin:"6px 0"}}>{_EVP_CORR_TIPOS.map(function(tp){ return <button key={tp.id} onClick={function(){ muda(x, function(o){ o.tipo = tp.id; }); }} style={chip((x.tipo || "outro") === tp.id)}>{tp.label}</button>; })}</div>
+        <div style={{display:"flex",gap:4,marginBottom:4}}>
+          <button onClick={function(){ muda(x, function(o){ o.t0 = Math.max(0, Math.min(tempo, o.t1 - 0.2)); }); }} style={chip(false)} title="O trecho começa na agulha">Começo = agulha</button>
+          <button onClick={function(){ muda(x, function(o){ o.t1 = Math.max(o.t0 + 0.2, tempo); }); }} style={chip(false)} title="O trecho termina na agulha">Fim = agulha</button>
+        </div>
+        <textarea rows={2} maxLength={600} value={campoV(x, "oque")} placeholder="O que fazer (ex.: tirar esse ‘então’ do começo)" aria-label="O que fazer"
+          onChange={function(e){ escrever(x, "oque", e.target.value); }} onBlur={function(){ gravar(x, "oque"); }} onKeyDown={function(e){ e.stopPropagation(); }} style={area}/>
+        <textarea rows={2} maxLength={600} value={campoV(x, "porque")} placeholder="Por quê? (ex.: começo arrastado, perde a pessoa) — é isso que ensina a IA" aria-label="Por quê"
+          onChange={function(e){ escrever(x, "porque", e.target.value); }} onBlur={function(){ gravar(x, "porque"); }} onKeyDown={function(e){ e.stopPropagation(); }} style={Object.assign({}, area, {marginTop:5})}/>
+        {x.resultado && <div style={{fontSize:11.5,color:_EVP_COR.sub,background:_EVP_COR.faixa,borderRadius:8,padding:"6px 8px",marginTop:6}}><b>O que a IA fez:</b> {x.resultado}</div>}
+        {(x.status === "aplicado" || x.status === "nao_feito") && <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+          <button onClick={function(){ muda(x, function(o){ o.status = "ok"; o.conferido_em = new Date().toISOString(); }); _evToast("success", "Anotado: era isso — a IA aprende"); }} style={Object.assign(_evpBtn("primario", true), {padding:"5px 10px",fontSize:11.5})}>✓ Era isso</button>
+          <button onClick={function(){ muda(x, function(o){ o.status = "nao"; o.tentativas = (o.tentativas || 0) + 1; o.historico = (o.historico || []).concat([{ em:new Date().toISOString(), resultado:o.resultado || "" }]).slice(-5); }); }}
+            style={Object.assign(_evpBtn("suave", true), {padding:"5px 10px",fontSize:11.5})}>✗ Não era isso</button>
+        </div>}
+        {x.status === "nao" && <div style={{fontSize:11,color:"#b91c1c",marginTop:4}}>Explique melhor no "o que fazer" ou no "por quê" e aplique de novo.</div>}
+        {(x.tipo === "corte") && (x.status === "aberto" || x.status === "nao") && <button onClick={function(){ tirar(x); }} style={Object.assign(_evpBtn(), {marginTop:6,padding:"5px 10px",fontSize:11.5})}
+          title="Tira exatamente o trecho marcado, sem IA (R$ 0)"><_EvpIco n="dividir" s={14}/>Tirar este trecho agora (sem IA)</button>}
+      </div>; })}
+    <label style={{display:"flex",gap:6,alignItems:"center",fontSize:11.5,color:_EVP_COR.sub,margin:"2px 0 8px",cursor:"pointer"}}><input type="checkbox" checked={verTodas} onChange={function(e){ setVerTodas(e.target.checked); }}/>Ver também as já conferidas</label>
+    <button onClick={function(){ aplicar(abertas); }} disabled={!abertas.length || ajustando} style={Object.assign(_evpBtn("primario", !!abertas.length && !ajustando), {width:"100%",justifyContent:"center",padding:"10px 12px"})}>
+      <_EvpIco n="robo" s={16}/>{ajustando ? "A IA está corrigindo…" : "Aplicar " + abertas.length + " correç" + (abertas.length === 1 ? "ão" : "ões") + " com a IA"}</button>
+    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>Vai tudo numa chamada só (custa como um ajuste). Sem o porquê ela faz, mas aprende menos.</div>
+  </div>);
+}
+
 /* ─── v12: GALERIA no Estúdio — miniatura, trocar o elemento, escolher a tela final e as SUGESTÕES da IA ─── */
 function _EvgMini({ it, kit, base, vals, w, h, fundo }){
   const ref = useRef(null);
@@ -120984,7 +121525,29 @@ function _evgLimiteTxt(it, vals){
   return ((it && it.dados && it.dados.campos) || []).filter(function(c){ return c.max_letras; }).map(function(c){
     const n = String((vals || {})[c.id] || "").length; return { id:c.id, n:n, max:Number(c.max_letras), passou:n > Number(c.max_letras) }; });
 }
-function _EvpElementoSel({ x, kit, base, mudar, nt }){
+function _EvpFotoSel({ x, it, mudar, nt, fotos, t }){
+  const [subindo, setSubindo] = useState(null);
+  const enviar = async function(fl){
+    if(!fl || !/^image\//.test(fl.type || "")) return;
+    setSubindo(0);
+    try{ const path = "tasks/" + String((t && t.id) || "estudio").replace(/[^A-Za-z0-9_-]/g, "") + "/estudio/foto-" + Date.now() + "." + ((fl.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
+      await pxUploadResumable(fl, path, function(pc){ setSubindo(pc); });
+      const u = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl; mudar(nt(function(o){ o.foto = u; })); }
+    catch(e){ _evToast("error", "Não subiu: " + ((e && e.message) || e)); }
+    setSubindo(null);
+  };
+  return (<div style={{marginTop:10}}>
+    <div style={_EVP_TIT}>Foto do elemento</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      {(fotos || []).slice(0, 18).map(function(f){ const on = x.foto === f.url;
+        return <button key={f.url} onClick={function(){ mudar(nt(function(o){ o.foto = f.url; })); }} title={f.nome || ""} style={{width:52,height:52,borderRadius:8,border:"2px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),background:"#000 url(" + JSON.stringify(f.url) + ") center/cover",cursor:"pointer",padding:0}}/>; })}
+      <label style={Object.assign(_evpBtn("suave", true), {cursor:"pointer"})}>{subindo != null ? subindo + "%" : "Enviar foto"}<input type="file" accept="image/*" style={{display:"none"}} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; enviar(fl); }}/></label>
+      {x.foto && <button onClick={function(){ mudar(nt(function(o){ delete o.foto; })); }} style={_evpBtn()}>Tirar foto</button>}
+    </div>
+    {!(fotos || []).length && <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>O card não tem fotos — envie uma aqui.</div>}
+  </div>);
+}
+function _EvpElementoSel({ x, kit, base, mudar, nt, fotos, t }){
   const tipoG = x.tipo === "tarja" ? "gc" : "elemento";
   const itens = _evgItens(kit, tipoG), atual = _evgDoTexto(kit, x), pad = _evgPadrao(kit, tipoG);
   const escolher = function(id){ mudar(nt(function(o){ if(id == null) delete o.modelo; else o.modelo = id; o.y = null; o.dx = 0;
@@ -121012,6 +121575,7 @@ function _EvpElementoSel({ x, kit, base, mudar, nt }){
     {pix.length > 0 && <div style={_EVP_TIT}>Modelos Pixels (cores do cliente)</div>}
     {pix.length > 0 && <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:6}}>{pix.map(cartao)}</div>}
     {!itens.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Nenhum {tipoG === "gc" ? "GC" : "elemento"} na galeria deste cliente. Cadastre em Kit do cliente › Galeria.</div>}
+    {atual && atual.dados && atual.dados.foto && <_EvpFotoSel x={x} it={atual} mudar={mudar} nt={nt} fotos={fotos} t={t}/>}
   </div>);
 }
 function _EvpTelaFinalSel({ p, kit, base, mudar }){
@@ -121141,6 +121705,21 @@ function _evpConferir(p, calc, o){
   if(sil.length) add("aviso", sil.length + " silêncio" + (sil.length > 1 ? "s" : "") + " maior" + (sil.length > 1 ? "es" : "") + " que 1,2 s", "Deixa o vídeo arrastado.", { id:"silencio", label:"Tirar", lista:sil });
   // estabilização
   if(o.pendPC && o.pendPC.length) add("aviso", "O PC do escritório ainda está trabalhando", "Estabilizar, melhorar a imagem ou voz de estúdio: espere terminar para a qualidade máxima.");
+  // v13: fala com CONTEÚDO que saiu do vídeo (não conta vício, repetição, recomeço, fala de quem filma nem som sem fala) — para olhar antes de exportar
+  try{
+    const leves = { vicio:1, repeticao:1, recomeco:1, quem_filma:1, sem_fala:1, apoio:1, descartado:1, erro:1 };
+    let nFr = 0; const vistos = {};
+    Object.keys(fala).forEach(function(cid){
+      const usos = calc.clips.filter(function(c){ return c.clipe === cid && _evpClipeFalaNormal(c); }); if(!usos.length) return;
+      let run = [];
+      const fecha = function(){ if(run.length >= 3){ const m = _evpMotivoDe(o.motivos, cid, Number(run[0].i), Number(run[run.length - 1].f));
+          const ps = run.map(function(w){ return w.p; }); if(!(m && leves[m.motivo]) && !_evpSoMuletas(ps)){ const k = cid + "@" + run[0].i; if(!vistos[k]){ vistos[k] = 1; nFr++; } } } run = []; };
+      (fala[cid] || []).forEach(function(w){ const i = Number(w.i); const dentro = usos.some(function(c){ return i >= c.ini - 0.03 && i < c.fim - 0.03; });
+        if(dentro) fecha(); else run.push(w); });
+      fecha();
+    });
+    if(nFr) add("aviso", nFr + " trecho" + (nFr > 1 ? "s" : "") + " de fala com conteúdo ficou de fora", "Confira se não saiu nada importante (duplo clique no clipe mostra o que saiu e o motivo).", { id:"cola", label:"Ver a fala" });
+  }catch(_){}
   // tela final
   if(!(calc.total > calc.fimCortes)) add("aviso", "Sem tela final", "Sem chamada para o WhatsApp no fim.");
   // v12: GALERIA — o texto cabe na caixa? passou do limite de letras? ficou fora da área segura ou em cima da legenda?
@@ -121180,7 +121759,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     .filter(function(v, i, a){ return a.indexOf(v) === i; });
   const envato = !!(projeto.musica && !projeto.musica.mudo && musInfo && /envato/i.test(musInfo.fonte || ""));
   const faltaLicenca = envato && !projeto.musica.licenca_ok;
-  const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit]);
+  const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit, motivos:(ed.receita && ed.receita.motivos_corte) || [] }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit]);
   const nErro = conf.filter(function(x){ return x.nivel === "erro"; }).length, nAviso = conf.filter(function(x){ return x.nivel === "aviso"; }).length;
   const [verConf, setVerConf] = useState(false);
   const agir = function(a){
@@ -121191,6 +121770,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     else if(a.id === "legenda") mudar(function(np){ np.legenda.ativa = true; });
     else if(a.id === "silencio") tirarTrechos(a.lista, "Silêncios tirados");
     else if(a.id === "texto"){ const x = (projeto.textos || []).find(function(q){ return q.id === a.alvo; }); if(x){ setSel({ tipo:"texto", id:x.id }); irPara(x.t0 + 0.05); } }
+    else if(a.id === "cola"){ window.dispatchEvent(new CustomEvent("evp-cola", { detail:true })); }
     else if(a.id === "clip"){ const c = calc.clips.find(function(q){ return q.id === a.alvo; }); if(c){ setSel({ tipo:"clip", id:c.id }); irPara(c.t0 + 0.01); } }
   };
   const exportar = async function(o){
@@ -121206,7 +121786,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       const ok = await salvar(); if(!ok){ setExp({ fase:"erro", msg:"Não consegui salvar a edição. Tente salvar e exporte de novo." }); return; }
     }
     setExp({ fase:"preparando", pct:0, msg:"Abrindo os vídeos originais…" });
-    try{ await _evgPreparar(kit); }catch(_){}                // v12: artes e fontes da galeria do kit prontas antes de gravar
+    try{ await _evgPreparar(kit, projeto); }catch(_){}                // v12: artes e fontes da galeria do kit prontas antes de gravar
     await new Promise(function(r){ setTimeout(r, 60); });
     const cv = cvRef.current; if(!cv){ setExp({ fase:"erro", msg:"Não consegui abrir a tela de gravação." }); return; }
     let motor = null, ac = null, rec = null;
@@ -121717,7 +122297,7 @@ function _EvExportarNoPC({ trabalho, onEstado }){
         const m = await window._sb.rpc("criacao_musicas");
         // v12: galeria do kit (tela final, GC, elementos) — as artes e fontes já carregadas antes de gravar
         let gal = []; try{ const gq = await window._sb.rpc("criacao_galeria", { p_client:t.client, p_unidade:un }); if(!gq.error && Array.isArray(gq.data)) gal = gq.data; }catch(_){}
-        try{ await _evgPreparar({ _galeria:gal }); }catch(_){}
+        try{ await _evgPreparar({ _galeria:gal }, e.receita && e.receita.projeto); }catch(_){}
         if(!vivo) return;
         setBase(d.base || {}); setKit(Object.assign({}, _evKitPadrao(d.base || {}), kk, { _galeria:gal })); setMusicas(Array.isArray(m.data) ? m.data : []);
         // v11: teste "A ou B?" — o PC grava a OPÇÃO B (receita.variantes) sem mexer na edição
