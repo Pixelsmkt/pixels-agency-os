@@ -49644,13 +49644,15 @@ function _cardPodeSerResp(u){
             </button>}
             {/* Cor de Capa removida — botão de paleta sumiu do header */}
             {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
-            <div style={{display:"flex",flexDirection:isMobile?"row":"column",gap:5,alignItems:"stretch",flex:isMobile?"1 1 100%":undefined,flexWrap:"wrap"}}>
-              {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>Salvar</button>}
+            {/* (30/09/2026, Gustavo) "feios, tão diferentes": os botões de ação agora são UMA família — lado a lado, altura 36
+                (a mesma dos ícones do topo), raio 10, Inter 13/650, ícone à esquerda. Estilo em _pxBtnAcaoSt (fim do arquivo). */}
+            <div style={{display:"flex",flexDirection:"row",gap:8,alignItems:"center",flex:isMobile?"1 1 100%":undefined,flexWrap:"wrap"}}>
+              {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={_pxBtnAcaoSt("#0f172a","15,23,42",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Salvar</button>}
               {/* Concluir p/ avaliação — designer/editor envia card de execução/ajustes pra aprovação interna */}
               {canEdit&&_bl("acao.concluir")&&(task.status==="execucao"||task.status==="ajustes")&&<button
                 onClick={()=>setConclusionStep(1)}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(22,163,74,0.28)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"inherit"}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                style={_pxBtnAcaoSt("#16a34a","22,163,74",isMobile)}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 Concluir p/ avaliação
               </button>}
               {/* Enviar p/ aprovação — só pra cards em "Alteração de copy"; volta pra Copys (demanda) e entra na fila de Avaliação. */}
@@ -49683,7 +49685,7 @@ function _cardPodeSerResp(u){
                   }:t));
                   onClose();
                 }}
-                style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(161,64,255,0.28)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>
+                style={_pxBtnAcaoSt("#a140ff","161,64,255",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 Enviar p/ aprovação
               </button>}
               {/* PREENCHER MATERIAL → DEMANDA (14/09/2026).
@@ -49706,8 +49708,8 @@ function _cardPodeSerResp(u){
                     _enviarProDemanda();
                   }}
                   title={_temMaterial?("Material anexado ("+_mats.length+"). Vira demanda pro freelancer."):"Ainda não tem nenhum arquivo anexado neste card."}
-                  style={{background:"#f97316",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(249,115,22,0.30)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>
-                  Material pronto → Demanda
+                  style={_pxBtnAcaoSt("#f97316","249,115,22",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                  Material pronto: Demanda
                 </button>;
               })()}
               {/* Drive folder — shown when approved */}
@@ -50877,18 +50879,20 @@ function _cardPodeSerResp(u){
                       <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Arquivo final {totalFin>0&&<span style={{background:"#ede9fe",color:"#6d28d9",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalFin}</span>}</div>
                       <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>entrega final da equipe — pronto pra avaliação</div>
                     </div>
-                    {totalFin>0&&<button onClick={function(){downloadAll([].concat(imgFin,vidFin),"Arquivos finais");}} title="Baixa todos os arquivos finais"
-                      style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
+                    {/* (30/09/2026, Gustavo) botões do topo redesenhados: mesma altura (34), mesmo raio, ícone centralizado.
+                        "Baixar tudo" só com 2+ arquivos — com 1 só, quem baixa é o próprio arquivo (comprimido/full). */}
+                    {totalFin>1&&<button onClick={function(){downloadAll([].concat(imgFin,vidFin),"Arquivos finais");}} title="Baixa todos os arquivos finais"
+                      style={{height:34,boxSizing:"border-box",background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:10,padding:"0 13px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",letterSpacing:-.1,fontFamily:"inherit",boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}
                       onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Baixar tudo
                     </button>}
                     {canEdit&&<label htmlFor={"pixels-pick-final-"+task.id}
-                      style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.12)"}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#1e293b";e.currentTarget.style.boxShadow="0 3px 10px rgba(15,23,42,0.3)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background="#0f172a";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.12)";}}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      style={{height:34,boxSizing:"border-box",background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"0 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",boxShadow:"0 1px 3px rgba(124,58,237,0.30)"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#6d28d9";e.currentTarget.style.boxShadow="0 4px 12px rgba(124,58,237,0.35)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.boxShadow="0 1px 3px rgba(124,58,237,0.30)";}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                       Adicionar
                     </label>}
                   </div>
@@ -50938,15 +50942,16 @@ function _cardPodeSerResp(u){
                         </div>
                         {/* (30/09/2026, Gustavo) "parece duplicado": o vídeo aparecia grande aqui E pequeno na grade.
                             Agora ele só aparece aqui — baixar e remover vieram pra cá; a grade abaixo mostra só os OUTROS arquivos. */}
-                        <div style={{display:"flex",gap:6,flexShrink:0}}>
-                          <button type="button" onClick={function(e){e.stopPropagation();downloadFile(_last.url,_last.name,_last.storagePath);}} title="Baixar vídeo"
-                            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,color:"#475569",cursor:"pointer",width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
-                            onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
-                            onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                          </button>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          {/* comprimido + full — os MESMOS botões do topo do card (PxBaixarEntrega) */}
+                          {typeof PxBaixarEntrega==="function"
+                            ? <PxBaixarEntrega task={Object.assign({},task,{files:attachments})}/>
+                            : <button type="button" onClick={function(e){e.stopPropagation();downloadFile(_last.url,_last.name,_last.storagePath);}} title="Baixar vídeo"
+                                style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,color:"#64748b",cursor:"pointer",width:36,height:36,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                              </button>}
                           {canEdit&&<button type="button" onClick={function(e){e.stopPropagation();removeAttachment(_last.id);}} title="Remover vídeo"
-                            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,color:"#94a3b8",cursor:"pointer",width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+                            style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,color:"#94a3b8",cursor:"pointer",width:36,height:36,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
                             onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.color="#dc2626";}}
                             onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -53157,6 +53162,15 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
       </div>}
     </div>
   );
+}
+
+/* (30/09/2026, Gustavo) Botões de ação do topo do card (Salvar, Concluir p/ avaliação, Enviar p/ aprovação,
+   Material pronto) — uma família só. Altura 36 = ícones do topo; Inter 13/650; ícone 15 à esquerda. */
+function _pxBtnAcaoSt(bg,rgb,isMobile){
+  return {height:36,boxSizing:"border-box",background:bg,color:"#fff",border:"none",borderRadius:10,padding:"0 16px",
+    fontFamily:"'Inter',system-ui,sans-serif",fontWeight:650,fontSize:13,letterSpacing:-.15,cursor:"pointer",whiteSpace:"nowrap",
+    display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,flex:isMobile?1:undefined,
+    boxShadow:"0 1px 2px rgba("+rgb+",0.20), 0 4px 12px rgba("+rgb+",0.22)",transition:"transform .12s, box-shadow .12s"};
 }
 
 const DASHBOARD_WIDGETS=[
