@@ -8743,6 +8743,32 @@ function _pxBxTs(f){
 }
 function _pxBxEhVideo(f){ return !!f&&(String(f.type||"").toLowerCase().indexOf("video/")===0||/\.(mp4|m4v|mov|webm|mkv|avi)(\?|#|$)/i.test(String(f.url||f.name||""))); }
 function _pxBxMB(b){ if(!b||b<=0) return ""; return b>=1048576?(Math.max(1,Math.round(b/1048576))+" MB"):(Math.max(1,Math.round(b/1024))+" KB"); }
+/* (30/09/2026, Gustavo) NOME DOS ARQUIVOS BAIXADOS — vale pra todo download de entrega do app:
+   "Título do card - Empresa - 1.png". Arquivo único sai sem número; vídeo leva "- full" / "- comprimido".
+   Com 10+ arquivos o número ganha zero à esquerda (01…10) pra pasta ordenar certo. Acentos e espaços
+   ficam; só sai o que o Windows não aceita em nome de arquivo. Bioter leva a unidade: "Bioter Chapecó". */
+function _pxNomeLimpo(s){ return String(s||"").replace(/[\\/:*?"<>|\u0000-\u001f]/g," ").replace(/\s+/g," ").trim().replace(/[. ]+$/,""); }
+function pxEmpresaDoCard(task){
+  if(!task) return "";
+  const cid=String(task.client||task.client_id||"");
+  let nome=cid;
+  try{ const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){ return x.id===cid; }); if(c&&c.name) nome=c.name; }catch(_){}
+  const un=String(task.bioterUnit||task.bioter_unit||"");
+  if(un&&typeof BIOTER_UNITS!=="undefined"){ const u=BIOTER_UNITS.find(function(x){ return x.id===un; }); const lb=u?(u.pickerLabel||u.label):un; if(lb&&String(lb).toLowerCase().indexOf(String(nome).toLowerCase())<0) nome=nome+" "+lb; }
+  return _pxNomeLimpo(nome);
+}
+/* opts: {i (1..n), total, sufixo ("full", "comprimido", "story 1"...), ext} */
+function pxNomeDownload(task, opts){
+  const o=opts||{};
+  const titulo=_pxNomeLimpo(task&&task.title).slice(0,90)||"arquivo";
+  const empresa=pxEmpresaDoCard(task);
+  const partes=[titulo];
+  if(empresa&&titulo.toLowerCase().indexOf(empresa.toLowerCase())<0) partes.push(empresa);
+  if(o.sufixo) partes.push(o.sufixo);
+  if(o.total>1&&o.i){ partes.push(o.total>=10?String(o.i).padStart(2,"0"):String(o.i)); }
+  const ext=String(o.ext||"png").replace(/^\./,"").toLowerCase();
+  return partes.join(" - ")+"."+ext;
+}
 function _pxBxNomeBase(task){ return (task&&task.title)?(String(task.title).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_").slice(0,80)||"arquivo"):"arquivo"; }
 /* O que dá pra baixar de um card: {tipo:"video", full, leve} | {tipo:"arte", itens:[...]} | null */
 function pxBaixarAlvos(task){
@@ -8810,12 +8836,12 @@ async function pxBaixarEntrega(task, qual){
     if(qual==="leve"){
       if(!al.leve){ if(_t) _t.warning("Esse vídeo ainda não tem versão comprimida. Dá pra gerar na Avaliação de vídeo.",4500); return; }
       if(_t) _t.info("Baixando o vídeo comprimido…",2500);
-      const ok=await pxBaixarArquivo(al.leve.previewUrl, al.leve.previewPath, base+"_comprimido."+_pxBxExt({url:al.leve.previewUrl},"mp4"));
+      const ok=await pxBaixarArquivo(al.leve.previewUrl, al.leve.previewPath, pxNomeDownload(task,{sufixo:"comprimido",ext:_pxBxExt({url:al.leve.previewUrl},"mp4")}));
       if(!ok&&_t) _t.error("Não consegui baixar o comprimido.",4000);
       return;
     }
     if(_t) _t.info("Baixando o vídeo full…",2500);
-    const ok=await pxBaixarArquivo(al.full.url, al.full.storagePath, base+"_full."+_pxBxExt(al.full,"mp4"));
+    const ok=await pxBaixarArquivo(al.full.url, al.full.storagePath, pxNomeDownload(task,{sufixo:"full",ext:_pxBxExt(al.full,"mp4")}));
     if(!ok&&_t) _t.error("Não consegui baixar o vídeo.",4000);
     return;
   }
@@ -8826,7 +8852,7 @@ async function pxBaixarEntrega(task, qual){
      (baixada por último) aparece primeiro e a sequência fica certa. Os nomes continuam numerados. */
   for(let i=n-1;i>=0;i--){
     const f=al.itens[i];
-    const nome=base+(n>1?("_lamina_"+String(i+1).padStart(2,"0")):"")+"."+_pxBxExt(f,_pxBxEhVideo(f)?"mp4":"png");
+    const nome=pxNomeDownload(task,{i:i+1,total:n,ext:_pxBxExt(f,_pxBxEhVideo(f)?"mp4":"png")});
     if(await pxBaixarArquivo(f.url, f.storagePath, nome, n>1)) ok++;   // várias = uma de cada vez, na ordem do carrossel
     if(i>0) await new Promise(function(r){ setTimeout(r,350); });
   }
@@ -33229,12 +33255,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   try{
                     if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando vídeo…", 2000);
                     // Extrai filename da URL ou usa titulo do card + .mp4
-                    let _fname = "";
-                    try{ _fname = decodeURIComponent(String(currentSrc).split("/").pop().split("?")[0]||""); }catch(_){}
-                    if(!_fname || _fname.length<4){
-                      const _t = (current && current.title) ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : "video";
-                      _fname = _t + ".mp4";
-                    }
+                    /* 30/09: "Título - Empresa.mp4" (pxNomeDownload) */
+                    const _extV = (String(currentSrc).toLowerCase().split("?")[0].match(/\.(mp4|mov|webm|m4v)$/)||[])[1]||"mp4";
+                    let _fname = (typeof pxNomeDownload==="function") ? pxNomeDownload(current,{ext:_extV}) : ("video."+_extV);
                     // Fetch+blob pra baixar mesmo com cross-origin
                     const _r = await fetch(currentSrc);
                     const _b = await _r.blob();
@@ -35168,9 +35191,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                       try{
                         const _url=_previewVideo.previewUrl;
                         if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando versão compactada…",2500);
-                        const _title=current.title?String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_"):"video";
                         const _extM=String(_url).toLowerCase().match(/\.(mp4|webm)(?:\?|$)/);
-                        const _fname=_title+"_compactado."+(_extM?_extM[1]:"mp4");
+                        const _fname=(typeof pxNomeDownload==="function")?pxNomeDownload(current,{sufixo:"comprimido",ext:_extM?_extM[1]:"mp4"}):("video_compactado."+(_extM?_extM[1]:"mp4"));
                         const _r=await fetch(_url);
                         const _b=await _r.blob();
                         const _u=URL.createObjectURL(_b);
@@ -35239,7 +35261,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                         /* 30/09 (Gustavo): "título do card - 1". Com 10+ lâminas o número ganha zero à esquerda (01…10) pra pasta ordenar certo. */
                         const _nTotFeed=_urls.filter(function(u){return !_storyUrls[u];}).length, _nTotStory=_urls.length-_nTotFeed;
                         const _num=function(k,tot){ return tot>=10?String(k).padStart(2,"0"):String(k); };
-                        const _sufixo=_urls.map(function(u){ if(_storyUrls[u]){_nStory++;return " - story "+_num(_nStory,_nTotStory);} _nFeed++; return " - "+_num(_nFeed,_nTotFeed); });
+                        const _sufixo=_urls.map(function(u){ if(_storyUrls[u]){_nStory++;return {sufixo:"story",i:_nStory,total:Math.max(2,_nTotStory)};} _nFeed++; return {i:_nFeed,total:_nTotFeed}; });
                         if(typeof pixelsToast!=="undefined") pixelsToast.info(_multi?("Baixando "+_urls.length+" lâminas…"):"Baixando…",2500);
                         const _title = current.title ? String(current.title).replace(/[\\/:*?"<>|\u0000-\u001f]/g," ").replace(/\s+/g," ").trim().replace(/[. ]+$/,"").slice(0,90) || (tab==="video"?"video":"arte") : (tab==="video"?"video":"arte");
                         let _okCount = 0;
@@ -35252,7 +35274,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                           /* 30/09: sempre com o título do card (antes vinha o nome do storage: 1790021326656-9k5lf…png) */
                           { const _dot0=_fname.lastIndexOf("."); const _extOrig=_dot0>0?_fname.slice(_dot0+1).toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,5):"";
                             const _extM = String(_url).toLowerCase().match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
-                            _fname = _title + (_multi?_sufixo[i]:"") + "." + (_extOrig||(_extM?_extM[1]:(tab==="video"?"mp4":"png"))); }
+                            const _ext1 = _extOrig||(_extM?_extM[1]:(tab==="video"?"mp4":"png"));
+                            _fname = (typeof pxNomeDownload==="function")
+                              ? pxNomeDownload(current, Object.assign({ext:_ext1}, _multi?_sufixo[i]:{}))
+                              : (_title + "." + _ext1); }
                           try{
                             const _r = await fetch(_url);
                             const _b = await _r.blob();
@@ -72412,15 +72437,9 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
                   let _ok=0;
                   for(let i=0;i<_urls.length;i++){
                     const _url=_urls[i];
-                    let _fname="";
-                    try{ _fname=decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
-                    if(!_fname||_fname.length<4){
-                      const _ext=String(_url).toLowerCase().match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
-                      _fname=_base+(_multi?("_"+(i+1)):"")+"."+(_ext?_ext[1]:"png");
-                    }else if(_multi){
-                      const _d=_fname.lastIndexOf(".");
-                      _fname=(_d>0?_fname.slice(0,_d):_fname)+"_"+(i+1)+(_d>0?_fname.slice(_d):"");
-                    }
+                    /* 30/09: "Título - Empresa - 1.png" (pxNomeDownload), igual ao resto do app */
+                    const _extA=(String(_url).toLowerCase().split("?")[0].match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)$/)||[])[1]||"png";
+                    const _fname=(typeof pxNomeDownload==="function")?pxNomeDownload(current,{i:i+1,total:_urls.length,ext:_extA}):(_base+(_multi?("_"+(i+1)):"")+"."+_extA);
                     try{
                       const _r=await fetch(_url);
                       const _b=await _r.blob();
@@ -100988,13 +101007,13 @@ const PB_CADEIRAS = [
   {id:"estrategia", label:"Estratégia",   icon:"target",      color:"#7c3aed",
    blocos:null}, // null = TODOS os blocos (a estrategista vê o playbook inteiro)
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
-   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-chamadas","pb-produtos","pb-briefing-auto"]},
+   blocos:["pb-sobre","pb-contatos-com","pb-comunicacao","pb-marcacoes","pb-chamadas","pb-produtos","pb-briefing-auto"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
    blocos:["pb-sobre","pb-briefing-auto","pb-designer","pb-equipe","pb-templates","pb-chamadas","pb-produtos","pb-siteredes"]},
   {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
    blocos:["pb-sobre","pb-briefing-auto","pb-processos","pb-equipe","pb-produtos","pb-siteredes"]},
   {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
-   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-briefing-auto"]},
+   blocos:["pb-sobre","pb-contatos-com","pb-comunicacao","pb-produtos","pb-chamadas","pb-briefing-auto"]},
 ];
 // ═══ PERMISSÕES POR BLOCO (17/09/2026) ═══
 // Lista de TODOS os blocos do playbook (id + nome) — é o que aparece em
@@ -101011,6 +101030,7 @@ const PB_BLOCOS = [
   {id:"pb-briefing-auto",       label:"Dados cadastrais"},
   {id:"pb-memoria",             label:"Feedbacks"},
   {id:"pb-materiais",           label:"Materiais do cliente"},
+  {id:"pb-contatos-com",        label:"Contatos comerciais"},
   {id:"pb-marcacoes",           label:"Marcar no post (@)"},
   {id:"pb-comunicacao",         label:"Comunicação da marca"},
   {id:"pb-produtos",            label:"Produtos/serviços"},
@@ -101844,6 +101864,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Anchors visíveis nesta área
   const SECTIONS = [
     {id:"pb-sobre",        label:"Sobre",        icon:"building"},
+    {id:"pb-contatos-com", label:"Contatos comerciais", icon:"phone"},
     {id:"pb-comunicacao",  label:"Comunicação",  icon:"sparkles"},
     {id:"pb-memoria",      label:"Feedbacks",    icon:"message"},
     {id:"pb-designer",     label:"Designer",     icon:"image"},
@@ -102007,6 +102028,81 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
 
 
+
+
+          {/* (30/09/2026, Gustavo) CONTATOS COMERCIAIS — pra social media responder comentário/direct
+              de quem pede orçamento: "fala com Fulano no WhatsApp tal". É a MESMA lista de Contatos
+              (data.contatos / contatos_by_unit na Bioter) que o card mostra e que fecha a legenda quando
+              não há Fone/WhatsApp nos Dados cadastrais — agora com função e "quando indicar". */}
+          <PlaybookBlock id="pb-contatos-com" title="Contatos comerciais" subtitle="Pra quem encaminhar quem pede orçamento nos comentários e no direct — copie a resposta pronta" icon="phone" color="#16a34a">
+            {(function(){
+              const _norm=function(raw){ if(!raw) return []; if(Array.isArray(raw)) return raw.filter(Boolean);
+                if(typeof raw==="object"){ const w=raw.whatsapp||raw.telefone; return (raw.nome||w)?[{nome:raw.nome||"",whatsapp:w||"",email:raw.email||""}]:[]; } return []; };
+              const _porUnid=_isBioter&&_unitTab;
+              const _cc=_porUnid?_norm((data.contatos_by_unit||{})[_unitTab]):_norm(data.contatos);
+              /* grava E acerta o estado do auto-save (editContatos) — senão o auto-save devolvia a lista velha */
+              const _upd=function(lista){
+                if(_porUnid){ const nb=Object.assign({},data.contatos_by_unit||{},{[_unitTab]:lista}); setEditContatosByUnit(nb); onUpdate({contatos_by_unit:nb}); }
+                else { setEditContatos(lista); onUpdate({contatos:lista}); }
+              };
+              const _dig=function(t){ return String(t||"").replace(/\D/g,""); };
+              const _wa=function(t){ let d=_dig(t); if(!d) return ""; if(d.length<=11) d="55"+d; return "https://wa.me/"+d; };
+              const _resposta=function(c){
+                const f=String(c.funcao||"").trim();
+                return "Olá! Pra orçamento e mais informações, é só chamar "+String(c.nome||"").trim()+(f?(" ("+f+")"):"")+" no WhatsApp "+String(c.whatsapp||"").trim()+(_wa(c.whatsapp)?(": "+_wa(c.whatsapp)):"")+" 😊";
+              };
+              const _copiar=function(t,msg){ try{ navigator.clipboard.writeText(t); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado",1800); }catch(_){} };
+              const _uAtual=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(function(x){return x.id===_unitTab;}):null;
+              const _chip=_isBioter?<div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800}}>{(_uAtual&&(_uAtual.pickerLabel||_uAtual.label))||(_unitTab||"Grupo Bioter")}</span>
+                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unitTab?"contatos desta unidade — troque no seletor do topo":"contatos do grupo — escolha uma unidade no topo pra ver os dela"}</span></div>:null;
+              const _inp={background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER,boxSizing:"border-box"};
+              if(!editMode){
+                const vis=_cc.filter(function(c){ return c&&(c.nome||c.whatsapp); });
+                if(!vis.length) return <React.Fragment>{_chip}<_PbEmpty icon="phone" text="Nenhum contato comercial cadastrado." sub={isAdmin?"Ative o modo edição pra cadastrar quem atende orçamento (comercial, vendedor, representante).":"Peça pra estratégia cadastrar quem atende orçamento."}/></React.Fragment>;
+                return <React.Fragment>{_chip}<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+                  {vis.map(function(c,i){
+                    return <div key={i} style={{background:"#fff",border:"1px solid #dcfce7",borderRadius:14,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{width:36,height:36,borderRadius:99,background:"#dcfce7",color:"#15803d",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,flexShrink:0}}>{String(c.nome||"?").trim().charAt(0).toUpperCase()}</span>
+                        <div style={{minWidth:0}}>
+                          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{c.nome||"—"}</div>
+                          {c.funcao&&<div style={{color:"#15803d",fontSize:11.5,fontWeight:700}}>{c.funcao}</div>}
+                        </div>
+                      </div>
+                      {c.quando&&<div style={{color:"#475569",fontSize:12,lineHeight:1.45,background:"#f8fafc",borderRadius:9,padding:"6px 9px"}}><b style={{color:"#334155"}}>Indicar quando:</b> {c.quando}</div>}
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        {c.whatsapp&&<button type="button" onClick={function(){ _copiar(String(c.whatsapp).trim(),"Número copiado"); }} title="Copiar o número"
+                          style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9,padding:"6px 10px",fontSize:12.5,fontWeight:800,color:"#15803d",cursor:"pointer",fontFamily:PB_INTER}}>{c.whatsapp}</button>}
+                        {c.whatsapp&&<button type="button" onClick={function(){ _copiar(_resposta(c),"Resposta copiada — é só colar no comentário/direct"); }}
+                          style={{background:"#16a34a",border:"none",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER}}>Copiar resposta pronta</button>}
+                        {c.email&&<button type="button" onClick={function(){ _copiar(c.email,"E-mail copiado"); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#334155",cursor:"pointer",fontFamily:PB_INTER}}>{c.email}</button>}
+                      </div>
+                    </div>;
+                  })}
+                </div></React.Fragment>;
+              }
+              const _set=function(i,campo,v){ _upd(_cc.map(function(x,j){ return j===i?Object.assign({},x,{[campo]:v}):x; })); };
+              return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {_chip}
+                {_cc.map(function(c,i){
+                  return <div key={"cc"+(_porUnid?_unitTab:"")+i} style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"9px 11px"}}>
+                    <input defaultValue={c.nome||""} placeholder="Nome — ex: Cristiano" onBlur={function(e){ if(e.target.value!==(c.nome||"")) _set(i,"nome",e.target.value); }} style={Object.assign({},_inp,{width:170,fontWeight:700})}/>
+                    <input defaultValue={c.funcao||""} placeholder="Função — ex: Comercial, Vendedor" onBlur={function(e){ if(e.target.value!==(c.funcao||"")) _set(i,"funcao",e.target.value); }} style={Object.assign({},_inp,{width:170})}/>
+                    <input defaultValue={c.whatsapp||""} placeholder="WhatsApp — (54) 99999-9999" onBlur={function(e){ if(e.target.value!==(c.whatsapp||"")) _set(i,"whatsapp",e.target.value); }} style={Object.assign({},_inp,{width:170})}/>
+                    <input defaultValue={c.email||""} placeholder="E-mail (opcional)" onBlur={function(e){ if(e.target.value!==(c.email||"")) _set(i,"email",e.target.value); }} style={Object.assign({},_inp,{width:190})}/>
+                    <input defaultValue={c.quando||""} placeholder="Indicar quando — ex: orçamento no RS; Mato Grosso do Sul; peças" onBlur={function(e){ if(e.target.value!==(c.quando||"")) _set(i,"quando",e.target.value); }} style={Object.assign({},_inp,{flex:1,minWidth:220})}/>
+                    <button type="button" onClick={function(){ _upd(_cc.filter(function(_,j){return j!==i;})); }} title="Tirar da lista"
+                      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                  </div>;
+                })}
+                <button type="button" onClick={function(){ _upd(_cc.concat([{nome:"",funcao:"",whatsapp:"",email:"",quando:""}])); }}
+                  style={{background:"#16a34a0d",border:"1px dashed #16a34a55",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#15803d",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar contato</button>
+              </div>;
+            })()}
+          </PlaybookBlock>
 
           {/* Marcar no post (@) — DIFERENTE do GC: aqui vão os @ pra marcar na publicação */}
           <PlaybookBlock id="pb-marcacoes" title="Marcar no post (@)" subtitle="Perfis pra marcar na publicação — @ do cliente, sócios, parceiros (não é o GC)" icon="tag" color="#0ea5e9">
@@ -102987,6 +103083,16 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
     "passa de 3.000 palavras — e LISTA (benefícios, aplicações, clientes, contatos) entra "+
     "INTEIRA, nunca resumida. Isto NÃO é resumo executivo; é o material destilado em fatos "+
     "aproveitáveis. Termine TODAS as seções: uma ficha cortada no meio não serve.\n\n"+
+    /* (30/09/2026, Gustavo, sobre a ficha de UMA lâmina da VetService: "por que você enche tanta linguiça em
+       algo que é simples? era só pra registrar como funciona o sistema"). A ficha repetia a mesma frase em
+       Como funciona, Diferenciais, Termos e Ângulos, e listava palavra comum como "termo oficial". */
+    "SEM LINGUIÇA — a ficha NUNCA é maior que o material. Cada fato aparece UMA vez só: se já entrou numa seção, "+
+    "não repita em outra com outras palavras. Arte, lâmina, post ou folder de uma página: poucas linhas, só as "+
+    "seções que o material realmente tem (normalmente O QUE É ou COMO FUNCIONA, e FRASES DO MATERIAL), até ~120 palavras. "+
+    "TERMOS OFICIAIS só com nome próprio (produto, marca, programa, sigla) — palavra comum (\"produtor\", "+
+    "\"indicadores\", \"gargalos\") não é termo. ÂNGULOS DE COMUNICAÇÃO só se o próprio material sugerir ângulos "+
+    "(um briefing de marketing, por exemplo) — não invente ângulo a partir de uma arte. Não escreva seção pra "+
+    "dizer que falta informação, a não ser NÃO COBERTO em material longo.\n\n"+
     "Use as seções abaixo e PULE a que o material não tiver:\n"+
     "O QUE É\n"+
     "PRA QUEM / QUANDO USAR\n"+
@@ -110481,7 +110587,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
         </div>
         <div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(280px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
           {doG.map(function(p){
-            const ab=!!abertoP[p.id];
+            const ab=true;   /* (30/09, Gustavo) portal: tudo aberto, sem "Ver tudo" */
             const _copiar=function(){ const t=p.titulo+"\n\n"+String(p.briefing||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim()+(String(p.legenda||"").trim()?("\n\nLegenda:\n"+p.legenda):""); if(typeof _rtCopiar==="function") _rtCopiar(t,"Copiado — é só colar no WhatsApp"); };
             return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{_swTipoLabel(p.content_type)}</span>{p.cliente_editado_em&&<span title={(p.cliente_editado_por?("Por "+p.cliente_editado_por+" · "):"")+_quandoP(p.cliente_editado_em)} style={{background:"#fef3c7",color:"#92400e",borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{p.cliente_alteracao==="refez"?"↻ Refeita":"✎ Alterada"} por você · {_quandoP(p.cliente_editado_em)}</span>}</div>
@@ -110510,7 +110616,6 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
               <div style={{maxHeight:ab?"none":420,overflow:"hidden",position:"relative"}}><SwBriefing txt={p.briefing} cor={g.cor} limite={ab?0:2}/>{!ab&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:40,background:"linear-gradient(rgba(255,255,255,0),#fff)"}}/>}</div>
               {ab&&<SwLegenda txt={p.legenda} cor={g.cor}/>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
-                <button type="button" onClick={function(){ setAbertoP(function(o){ return Object.assign({},o,{[p.id]:!ab}); }); }} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{ab?"Ver menos":"Ver tudo"}</button>
                 <button type="button" onClick={_copiar} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Copiar</button>
                 {p.status!=="aceita"&&!viewerIsPixels&&<button type="button" disabled={!!respondendo} onClick={function(){ setEditandoP({p:p,titulo:p.titulo||"",briefing:_semPrecP(p.briefing),legenda:p.legenda||""}); }} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5}}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>Editar</button>}
