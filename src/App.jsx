@@ -110342,22 +110342,22 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
             const _copiar=function(){ const t=p.titulo+"\n\n"+String(p.briefing||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim()+(String(p.legenda||"").trim()?("\n\nLegenda:\n"+p.legenda):""); if(typeof _rtCopiar==="function") _rtCopiar(t,"Copiado — é só colar no WhatsApp"); };
             return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_swTipoLabel(p.content_type)}</span></div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>
               {p.status==="aceita"
                 ?<div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:12,padding:"9px 12px",color:"#065f46",fontSize:12.5,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><Ico n="check" size={15} color="#059669"/> Você aceitou — a Pixels já está produzindo</div>
                 :<div style={{display:"flex",flexDirection:"column",gap:5}}>
                   <div style={{display:"flex",gap:8}}>
                     <button type="button" disabled={!!viewerIsPixels||!!respondendo} onClick={function(){ _responder(p,true); }}
                       title={viewerIsPixels?"Só o cliente responde (você está vendo como Pixels)":"Aceitar: a Pixels produz esse conteúdo"}
-                      style={{flex:1,background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:11,padding:"11px 10px",color:"#fff",fontSize:13.5,fontWeight:800,cursor:viewerIsPixels?"default":"pointer",fontFamily:_RT_FF,boxShadow:"0 4px 12px rgba(22,163,74,.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,opacity:viewerIsPixels?.55:1}}>
-                      <Ico n="check" size={15} color="#fff"/> {respondendo===p.id?"Enviando…":"Aceitar"}</button>
+                      style={{flex:1,background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:11,padding:"11px 10px",color:"#fff",fontSize:13.5,fontWeight:800,cursor:viewerIsPixels?"default":"pointer",fontFamily:_RT_FF,boxShadow:"0 4px 12px rgba(22,163,74,.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,opacity:viewerIsPixels?.8:1}}>
+                      <span style={{width:22,height:22,borderRadius:99,background:"rgba(255,255,255,.22)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>{respondendo===p.id?"Enviando…":"Aceitar"}</button>
                     <button type="button" disabled={!!viewerIsPixels||!!respondendo} onClick={function(){ setRecusando({p:p,motivo:""}); }}
                       title={viewerIsPixels?"Só o cliente responde (você está vendo como Pixels)":"Não faz sentido: conta por quê e a sugestão sai"}
-                      style={{flex:1,background:"#fff",border:"1.5px solid #fca5a5",borderRadius:11,padding:"11px 10px",color:"#b91c1c",fontSize:13.5,fontWeight:800,cursor:viewerIsPixels?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,opacity:viewerIsPixels?.55:1}}>
-                      ✕ Não faz sentido</button>
+                      style={{flex:1,background:"#fff",border:"1.5px solid #fca5a5",borderRadius:11,padding:"11px 10px",color:"#b91c1c",fontSize:13.5,fontWeight:800,cursor:viewerIsPixels?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,opacity:viewerIsPixels?.8:1}}>
+                      <span style={{width:22,height:22,borderRadius:99,background:"#fee2e2",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="3.6" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>Não faz sentido</button>
                   </div>
                   {viewerIsPixels&&<div style={{color:"#94a3b8",fontSize:11,textAlign:"center"}}>Aguardando o cliente responder</div>}
                 </div>}
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>
               <div style={{maxHeight:ab?"none":420,overflow:"hidden",position:"relative"}}><SwBriefing txt={p.briefing} cor={g.cor} limite={ab?0:2}/>{!ab&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:40,background:"linear-gradient(rgba(255,255,255,0),#fff)"}}/>}</div>
               {ab&&<SwLegenda txt={p.legenda} cor={g.cor}/>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
@@ -110590,6 +110590,7 @@ async function pxPropostasDaSolicitacao(opts){
     "use a grafia do playbook/materiais quando bater. "+
     (py?"O cliente é a unidade do Paraguai: TÍTULO, texto da peça, fala do roteiro e LEGENDA em ESPANHOL; rótulos do briefing e DE_ONDE_VEIO em português. "
        :"Escreva em português do Brasil. ")+
+    "Cada peça é pro PÚBLICO da rede social, não pra equipe: planejamento interno do cliente (formatos, frequência, públicos, fluxo de produção) nunca vira conteúdo. "+
     "Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
 
   let u="CLIENTE: "+clienteNome+(unit?(" — unidade "+unit):"")+"\n\n";
@@ -110656,6 +110657,16 @@ async function pxPropostasDaSolicitacao(opts){
      "  • Última lâmina = FECHAMENTO + CHAMADA PRA AÇÃO.\n"+
      "  Lido só pelas lâminas, sem a legenda, o carrossel tem que fazer sentido do começo ao fim.\n";
   /* v7: vale pra tudo — nome interno do cliente sempre apresentado */
+  /* v8 (30/09, Gustavo): "uma mesma pesquisa pode dar origem a diferentes conteúdos… carrossel, artigo, Stories —
+     e você colocou isso como copy? não percebeu que eram instruções internas?". O material do cliente era o
+     ESCOPO do projeto (formatos, frequência, públicos, fluxo) e a IA fez post sobre o próprio planejamento. */
+  u+="- ⛔ PLANEJAMENTO INTERNO NÃO É ASSUNTO DE POST. O material e o áudio do cliente muitas vezes trazem bastidor pra equipe: escopo do projeto, linha editorial, "+
+     "frequência, formatos (carrossel, Stories, artigo, vídeo, YouTube), canais, públicos-alvo, região onde vai atuar, como a equipe pesquisa, verifica e escolhe as pautas. "+
+     "Isso serve SÓ pra você entender o que o público precisa saber — NUNCA vira título, texto de arte, roteiro ou legenda. "+
+     "Proibido post sobre: como o projeto/conteúdo funciona, em que formatos sai, de quanto em quanto tempo, pra quem é, como as pautas são escolhidas, onde o projeto vai atuar, que a dúvida do público vira pauta. "+
+     "Escreva o ASSUNTO em si (a regra que mudou, o que o produtor tem que fazer, o erro comum, a dúvida real, o cuidado antes de investir). "+
+     "Neste formato, no máximo UMA proposta pode apresentar o projeto/lançamento ao público — e só se o cliente quer divulgar.\n"+
+     "- TESTE de cada proposta antes de entregar: um seguidor que nunca ouviu falar da empresa aprende algo útil pra atividade dele? Se a peça fala só da própria empresa, do projeto ou do processo de produção, TROQUE o tema.\n";
   u+="- O seguidor NÃO conhece os nomes internos do cliente (projeto, programa, método, apelido de equipe, nome de ferramenta). Na primeira vez que um nome desses aparecer na peça, diga em poucas palavras o que é. Nunca escreva como se o público já soubesse do que se trata.\n";
   /* v6 (28/09, Gustavo): "tira essa merda o que precisamos" — em vídeo, arte e carrossel */
   u+="- Rótulos SEMPRE em maiúsculo: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO. PROIBIDO escrever \"• O QUE PRECISAMOS\", lista de materiais, fotos ou takes necessários — o briefing termina no conteúdo.\n\n";
