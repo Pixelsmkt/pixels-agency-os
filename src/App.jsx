@@ -10158,6 +10158,75 @@ function PxAprovacoesClienteCard({tasks, isMob, userId}){
   </div>;
 }
 
+/* ═══ FOLLOW-UPS EM DESTAQUE (30/09/2026, Gustavo) ═════════════════════════════════════
+   "o Vinicius que é do comercial.. quando tiver follow up próximo deve ser destaque no topo do Dashboard dele"
+   Lê o Comercial (app_data "pixels-comercial-v1", o mesmo do Kanban de prospects): prospects em aberto com
+   próxima ação marcada + follow-ups pendentes, do RESPONSÁVEL que é o dono do dashboard. Janela: atrasados,
+   hoje e os próximos 3 dias. Some sozinho quando não há nada. Clique leva pro Comercial. */
+function PxFollowupsDestaque({user,onNavTo,isMob}){
+  const ler=function(){ try{ return JSON.parse(localStorage.getItem("pixels-comercial-v1")||"null")||{}; }catch(_){ return {}; } };
+  const [st,setSt]=useState(ler);
+  useEffect(function(){
+    let vivo=true;
+    try{
+      const sb=window._sb; if(!sb) return;
+      sb.from("app_data").select("value").eq("key","pixels-comercial-v1").maybeSingle().then(function(r){
+        if(vivo&&r&&r.data&&r.data.value) setSt(r.data.value);
+      });
+    }catch(_){}
+    return function(){ vivo=false; };
+  },[]);
+  const uid=user&&user.id; if(!uid) return null;
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  const iso=function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+  const hojeIso=iso(hoje); const lim=new Date(hoje); lim.setDate(lim.getDate()+3); const limIso=iso(lim);
+  const prospects=Array.isArray(st.prospects)?st.prospects:[];
+  const nomeDe=function(t){ const p=prospects.find(function(x){ return x&&(x.id===t||x.empresa===t); }); return p?(p.empresa||t):String(t||""); };
+  const itens=[];
+  prospects.forEach(function(p){
+    if(!p||p.responsavel!==uid) return; if(p.status==="ganho"||p.status==="perdido") return;
+    const d=String(p.proximaAcaoData||"").slice(0,10); if(!d||d>limIso) return;
+    itens.push({k:"p"+p.id,quem:p.empresa||"(sem nome)",acao:p.proximaAcao||"",data:d});
+  });
+  (Array.isArray(st.followups)?st.followups:[]).forEach(function(f){
+    if(!f||f.responsavel!==uid||f.status==="feito") return;
+    const d=String(f.data||"").slice(0,10); if(!d||d>limIso) return;
+    itens.push({k:"f"+f.id,quem:nomeDe(f.target)||"Follow-up",acao:f.proximaAcao||"",data:d});
+  });
+  if(!itens.length) return null;
+  itens.sort(function(a,b){ return a.data.localeCompare(b.data); });
+  const quando=function(d){
+    if(d<hojeIso){ const n=Math.round((hoje-new Date(d+"T00:00:00"))/86400000); return {t:n===1?"atrasado 1 dia":"atrasado "+n+" dias",c:"#dc2626",bg:"#fee2e2"}; }
+    if(d===hojeIso) return {t:"hoje",c:"#b45309",bg:"#fef3c7"};
+    const n=Math.round((new Date(d+"T00:00:00")-hoje)/86400000);
+    return {t:n===1?"amanhã":("em "+n+" dias · "+d.slice(8,10)+"/"+d.slice(5,7)),c:"#0369a1",bg:"#e0f2fe"};
+  };
+  const atras=itens.filter(function(x){ return x.data<hojeIso; }).length;
+  return <div onClick={function(){ if(typeof onNavTo==="function") onNavTo("comercial"); }}
+    style={{background:"#fff",border:"1px solid "+(atras?"#fecaca":"#e2e8f0"),borderRadius:16,padding:isMob?"14px":"16px 20px",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.05)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+      <span style={{width:36,height:36,borderRadius:10,background:atras?"#dc2626":"#7c3aed",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </span>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3,lineHeight:1.2}}>{itens.length===1?"1 follow-up chegando":(itens.length+" follow-ups chegando")}</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{atras?(atras===1?"1 já passou da data — ":atras+" já passaram da data — "):""}Comercial · atrasados, hoje e próximos 3 dias</div>
+      </div>
+      <span style={{color:"#7c3aed",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap"}}>Abrir Comercial →</span>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
+      {itens.slice(0,8).map(function(x){ const q=quando(x.data);
+        return <div key={x.k} style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #eef0f4",borderRadius:11,padding:"9px 12px",minWidth:0}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.quem}</div>
+            {x.acao&&<div style={{color:"#64748b",fontSize:11.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.acao}</div>}
+          </div>
+          <span style={{background:q.bg,color:q.c,fontSize:10.5,fontWeight:800,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",textTransform:"uppercase",letterSpacing:.3}}>{q.t}</span>
+        </div>; })}
+    </div>
+  </div>;
+}
+
 function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif,selfProfile,viewingAs,perms}){
   // Quando estamos "visualizando como" outro colaborador, trocamos TUDO pra esse user
   const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
@@ -10264,6 +10333,8 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(effectiveUser.id));
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%"}}>
+    {/* (30/09/2026) follow-ups do comercial chegando — primeira coisa da tela */}
+    <PxFollowupsDestaque user={effectiveUser} onNavTo={onNavTo} isMob={isMob}/>
     {/* ── CAPA: foto grande + nome + cargo + data + demandas + sino ── */}
     {_bl("capa")&&<div style={{position:"relative",borderRadius:18,overflow:"hidden",background:`linear-gradient(135deg,${coverColor} 0%,${coverColor}ee 42%,${coverColor}c4 100%)`,padding:isMob?"16px 16px":"22px 26px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:"wrap",border:"1px solid rgba(255,255,255,0.07)",boxShadow:"0 16px 40px rgba(8,10,14,0.30)"}}>
       {/* Brilho sutil no canto — da profundidade sem clarear o grafite */}
@@ -21607,17 +21678,26 @@ function pxLacunasCalendario(tasks, iniIso, fimIso, hojeIso){
           if(nota<melhorNota){ melhorNota=nota; melhor=d; }
         }
         if(!melhor) continue;
-        // formato: o que falta frente ao mix das semanas cheias vizinhas
+        /* formato (30/09/2026, Gustavo): "não falta uma arte, falta um CONTEÚDO — pode ser arte ou vídeo".
+           Padrão agora é "conteúdo". Só especifica arte/vídeo quando é CERTO: o cliente tem 2+ posts por semana,
+           as semanas cheias vizinhas têm SEMPRE o mesmo mix (ex.: Construschorr = 1 vídeo + 1 arte) e o que
+           falta nesta semana cai inteiro num formato só. Chute pela mediana (como era) não vale mais. */
         let formato="post";
-        if(cli!=="bioter"){
+        if(cli!=="bioter"&&cap>=2){
           const viz=[]; for(let j=-6;j<=6;j++){ if(!j) continue; const ww=addD(s,7*j); const gg=conta(ww); if(gg.length===cap) viz.push(gg); }
-          const med=function(tr){ if(!viz.length) return 0; const v=viz.map(function(gg){ return gg.filter(function(t){return trilha(t)===tr;}).length; }).sort(); return v[Math.floor(v.length/2)]; };
-          const tem=function(tr){ return g.filter(function(t){return trilha(t)===tr;}).length; };
-          const fV=med("video")-tem("video"), fA=med("arte")-tem("arte");
-          formato=(fV>0&&fV>=fA)?"video":(fA>0?"arte":(cap>=2&&!tem("video")?"video":"arte"));
+          const qt=function(gg,tr){ return gg.filter(function(t){return trilha(t)===tr;}).length; };
+          if(viz.length>=3){
+            const vs=viz.map(function(gg){ return qt(gg,"video"); });
+            const fixo=vs.every(function(v){ return v===vs[0]; });
+            if(fixo){
+              const fV=vs[0]-qt(g,"video"), fA=(cap-vs[0])-qt(g,"arte");
+              if(fV===falta&&fA<=0) formato="video";
+              else if(fA===falta&&fV<=0) formato="arte";
+            }
+          }
         }
         out.push({alvo:a,cli:cli,unit:a.indexOf(":")>0?a.split(":")[1]:"",semanaIni:s,dia:melhor,falta:falta,formato:formato,rotulo:NOME[a]||a,
-          texto:(NOME[a]||a)+" · falta "+falta+" "+(formato==="video"?(falta>1?"vídeos":"vídeo"):formato==="arte"?(falta>1?"artes":"arte"):(falta>1?"posts":"post"))+" nesta semana"});
+          texto:(NOME[a]||a)+" · falta "+falta+" "+(formato==="video"?(falta>1?"vídeos":"vídeo"):formato==="arte"?(falta>1?"artes":"arte"):(falta>1?"conteúdos":"conteúdo"))+" nesta semana"});
       }
     });
     return out;
@@ -25611,8 +25691,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               const _tem=(Array.isArray(t.files)?t.files:[]).some(function(f){
                                 return f&&f.url&&!f.uploading&&!f.isAnnotation&&!f.isRef&&(!f.tipo||f.tipo==="material"||f.tipo==="referencia"||f.tipo==="final");
                               });
-                              if(_tem) return null;
-                              return <span title={_foto?"Foto de obra sem material — nenhuma foto dentro do card":"Vídeo short sem material — nenhum vídeo dentro do card"}
+                              /* (30/09/2026, Gustavo) Short que JÁ TEM material mas está em "Alteração de copy": mesmo alerta —
+                                 o vídeo chegou e o card está parado esperando a copy. */
+                              const _travadoCopy=_short&&_tem&&t.status==="alteracao_copy";
+                              if(_tem&&!_travadoCopy) return null;
+                              return <span title={_travadoCopy?"Vídeo short com material, mas parado em Alteração de copy — falta a copy":(_foto?"Foto de obra sem material — nenhuma foto dentro do card":"Vídeo short sem material — nenhum vídeo dentro do card")}
                                 style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:"#facc15",color:"#713f12",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                               </span>;
@@ -25680,18 +25763,20 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                     {_canCreateFromCal&&(_lacunasPorDia[fmtDay(day)]||[]).map(function(x){
                       const _cl=CLIENTS.find(function(c){return c.id===x.cli;});
                       const _cor=x.cli==="bioter"?(["gloria","uberlandia","paraguay"].indexOf(x.unit)>=0?"#16a34a":"#166534"):((_cl&&_cl.color)||"#475569");
-                      const _fmt=x.formato==="video"?"vídeo":x.formato==="arte"?"arte":"post";
-                      const _plur=x.falta>1?(x.formato==="video"?"vídeos":x.formato==="arte"?"artes":"posts"):_fmt;
+                      const _fmt=x.formato==="video"?"vídeo":x.formato==="arte"?"arte":"conteúdo";
+                      const _plur=x.falta>1?(x.formato==="video"?"vídeos":x.formato==="arte"?"artes":"conteúdos"):_fmt;
                       return <div key={"lac-"+x.alvo+"-"+x.dia} data-lacuna onClick={function(e){e.stopPropagation();}}
-                        title={x.rotulo+": a semana está com "+x.falta+" post"+(x.falta>1?"s":"")+" a menos que a cadência. Nada é criado sozinho — clique em Criar card se quiser preencher."}
+                        title={x.rotulo+": a semana está com "+x.falta+" "+(x.falta>1?"conteúdos":"conteúdo")+" a menos que a cadência. Nada é criado sozinho — clique em Criar card se quiser preencher."}
                         style={{border:"1.5px dashed "+_cor,borderRadius:8,padding:"6px 8px 7px",background:"rgba(255,255,255,0.82)",display:"flex",flexDirection:"column",gap:5,flexShrink:0,fontFamily:"'Inter',system-ui,sans-serif"}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
                           {/* (29/09/2026, Gustavo) chip na cor do cliente, ícone branco.
                               (30/09/2026, Gustavo) o triângulo de alerta já é o ícone do "Agendar" (rosa) — trocado por
                               calendário com "+" (vaga na semana). svg display:block: inline ele sentava na linha de base
-                              e ficava fora do centro do quadrado. */}
-                          <span aria-hidden="true" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:_cor,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="13.5" x2="12" y2="18.5"/><line x1="9.5" y1="16" x2="14.5" y2="16"/></svg></span>
-                          <span style={{flex:1,minWidth:0,fontSize:pxFonte(10.5,isMob),fontWeight:800,color:_cor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.rotulo}</span>
+                              e ficava fora do centro do quadrado.
+                              (30/09, 15h53) quadrado 20 e ícone 12: sobra PAR (4 px de cada lado). Com 18/11 sobrava 3,5 px e o
+                              navegador arredondava meio pixel pra direita e pra baixo. Nome do cliente 10,5 → 12,5. */}
+                          <span aria-hidden="true" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:_cor,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="13.5" x2="12" y2="18.5"/><line x1="9.5" y1="16" x2="14.5" y2="16"/></svg></span>
+                          <span style={{flex:1,minWidth:0,fontSize:pxFonte(12.5,isMob),fontWeight:800,letterSpacing:-.15,lineHeight:1.2,color:_cor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.rotulo}</span>
                           <button type="button" title="Ignorar esta lacuna" onClick={function(e){e.stopPropagation();_ignorarLacuna(x);}}
                             style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:0,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -35571,9 +35656,45 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               }
               out.push(String(ln).replace(/\u0001/g,"*").replace(/\u0002/g,"*").replace(/[ \t\u00a0]+$/,""));
             });
-            const corpo=out.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+            let corpo=out.join("\n").replace(/\n{3,}/g,"\n\n").trim();
             const tit=String((current&&current.title)||"").trim();
-            return (tit?("*"+tit+"*\n\n"):"")+corpo;
+            /* (30/09/2026, Gustavo) "mais bem explicado, sem parecer tão GPT.. no topo o tipo de conteúdo, a data de
+               entrega prevista… algo mais profissional". Cabeçalho de ficha: título, tipo · lâminas · cliente,
+               entrega/publicação/responsáveis; depois o briefing, sem repetir o título e com as lâminas em
+               caixa normal ("Lâmina 1 — Controle dos efluentes"). Sem emoji. */
+            try{
+              const _cap=function(x){ const t=String(x||"").trim(); if(!t||t!==t.toUpperCase()) return t; const l=t.toLowerCase(); const SIG=/^(PEAD|PEBDL|ETA|CV|PR|SC|RS|MS|MT|GO|UV|ROI|CCS|IA|APP|PVC|EPI|NR|ABNT|ISO)$/; return (l.charAt(0).toUpperCase()+l.slice(1)).split(" ").map(function(w,i){ const o=t.split(" ")[i]||""; return SIG.test(o.replace(/[^A-ZÀ-Ú]/g,""))?o:w; }).join(" "); };
+              const _ls=corpo.split("\n"); const _o=[]; let _pulaTit=false;
+              _ls.forEach(function(l){
+                if(/^\*•\s*T[ÍI]TULO\*$/i.test(l.trim())){ _pulaTit=true; return; }
+                if(_pulaTit){ if(!l.trim()) return; _pulaTit=false; if(l.trim().toLowerCase()===tit.toLowerCase()) return; }
+                const mR=l.match(/^\*•\s*(.+)\*$/); if(mR){ _o.push("*"+mR[1].trim().toUpperCase()+"*"); return; }
+                const mC=l.match(/^\*((?:L[âa]mina|Cena|Slide|Tela)\s*\d+)\s*[—–-]\s*(.+)\*$/i); if(mC){ _o.push("*"+mC[1]+" — "+_cap(mC[2])+"*"); return; }
+                _o.push(l);
+              });
+              corpo=_o.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+            }catch(_){}
+            const _ct=String((current&&(current.contentType||current.content_type))||"");
+            const _CT={arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",folder:"Folder",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",video_short:"Short",corte:"Corte de vídeo"};
+            const _nLam=(corpo.match(/^\*L[âa]mina\s*\d+/gim)||[]).length;
+            const _uni=(cl&&cl.id==="bioter"&&typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit).map(function(u){return u.label;}).join(", "):"";
+            const _cli=cl?(String(cl.name||cl.id)+(_uni?(" · "+_uni):"")):"";
+            const _dBR=function(iso){ const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return ""; const d=new Date(+m[1],+m[2]-1,+m[3]); const ds=["dom","seg","ter","qua","qui","sex","sáb"][d.getDay()]; return m[3]+"/"+m[2]+"/"+m[1]+" ("+ds+")"; };
+            const _ent=_dBR(current&&current.deadline);
+            const _pub=_dBR(current&&(current.publishDate||current.publish_date));
+            const _hr=String((current&&(current.publishTime||current.publish_time))||"").slice(0,5);
+            const _ids=(current&&Array.isArray(current.assignees)&&current.assignees.length)?current.assignees:(current&&current.assignee?[current.assignee]:[]);
+            const _resp=_ids.map(function(id){ const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===id;}); return u?u.name:""; }).filter(Boolean).join(", ");
+            const _story=!!(current&&(current.somenteStory||current.somente_story));
+            const _linha1=[_CT[_ct]||"",_nLam>1?(_nLam+" lâminas"):"",_story?"somente story":"",_cli].filter(Boolean).join(" · ");
+            const _cab=[];
+            if(tit) _cab.push("*"+tit+"*");
+            if(_linha1) _cab.push(_linha1);
+            const _meta=[];
+            if(_ent) _meta.push("*Entrega prevista:* "+_ent);
+            if(_pub) _meta.push("*Publicação:* "+_pub+(_hr?(", às "+_hr):""));
+            if(_resp) _meta.push("*Responsáveis:* "+_resp);
+            return _cab.join("\n")+(_meta.length?("\n\n"+_meta.join("\n")):"")+"\n\n——————————\n\n"+corpo;
           };
           const _copiarBriefWhats=async ()=>{
             const t=_pxBriefWhats(descTxt2);
@@ -58259,9 +58380,11 @@ export default function AgencyOS(){
   const [themeKey,setThemeKey]     = useState(_themeKey);
   // ═══ PÁGINA ATUAL — persiste em localStorage para sobreviver F5 ═══
   const [page,setPage]             = useState(()=>{
-    try{const s=localStorage.getItem("pixels-current-page");const _off=!s||s==="chat"||s==="analises"||s==="ia"||s.slice(0,3)==="ia_";return _off?"meudash":s;}catch{return "meudash";}
+    /* (30/09/2026, Gustavo) "sempre que qualquer um abrir o app abre em Dashboard". Abrir o app (aba nova, navegador
+       reaberto) → Dashboard. O F5 continua na mesma tela: a página fica em sessionStorage, que só vive na aba. */
+    try{const s=sessionStorage.getItem("pixels-current-page");const _off=!s||s==="chat"||s==="analises"||s==="ia"||s.slice(0,3)==="ia_";return _off?"meudash":s;}catch{return "meudash";}
   });
-  useEffect(()=>{try{localStorage.setItem("pixels-current-page",page);}catch(e){}},[page]);
+  useEffect(()=>{try{sessionStorage.setItem("pixels-current-page",page);localStorage.setItem("pixels-current-page",page);}catch(e){}},[page]);
   const [expanded,setExpanded]     = useState({});
   const [notifDrawer,setNotifDrawer] = useState(false);
   // Auto-perfil: qualquer colaborador pode abrir seu próprio perfil pelo avatar do topbar
