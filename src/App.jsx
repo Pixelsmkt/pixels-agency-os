@@ -121172,6 +121172,8 @@ function PxBotaoLinkEnvio({task}){
      • IA que aprende — regras de estilo por cliente (só valem depois que um sócio aprova).
    Backend: tabelas arte_projetos · arte_versoes · arte_modelos · arte_regras · arte_ia_uso (só pelas funções arte_*,
      trava _arte_pode = nível 1 ou chave criacao.edicao_arte) · Edge Function arte-ia (pedir, variacoes, transcrever, aprender).
+   v3 (30/09/2026): PSD FIEL — máscaras de pixel (vinham em cinza e eram ignoradas) e de vetor, recorte, opacidade do preenchimento,
+     efeitos (cor, degradê, contorno, sombra, brilho), forma/contorno de forma, grupos com máscara/opacidade; original achatado escondido embaixo.
    v2 (30/09/2026): PSD ENTRA PELO BOTÃO "IMAGEM" TAMBÉM — antes o botão Imagem (e o arrastar) só aceitava imagem comum;
      agora PSD/PSB entra com as camadas NA PÁGINA ABERTA (encaixado no tamanho da arte), e SVG/PDF/AI também.
      Arquivo › "Do card": abre ou acrescenta os PSD/PDF/SVG/AI/imagens que estão no card ligado. PSD acima de 250 MB avisa; acima de 700 MB não abre.
@@ -122797,6 +122799,165 @@ function _eaFontePsd(nome){
 }
 const _EA_MISTURA = { "multiply":"multiply", "screen":"screen", "overlay":"overlay", "darken":"darken", "lighten":"lighten", "color dodge":"color-dodge", "color burn":"color-burn",
   "hard light":"hard-light", "soft light":"soft-light", "difference":"difference", "exclusion":"exclusion", "hue":"hue", "saturation":"saturation", "color":"color", "luminosity":"luminosity" };
+/* ─── v3 (30/09/2026): PSD FIEL — o sócio abriu um PSD e o azul cobriu tudo, sem o degradê, sem a curva, logo colorido.
+   Causas: a máscara de camada vem em CINZA (a biblioteca não põe em transparência), a máscara de VETOR (forma curva) não era
+   aplicada, a máscara de RECORTE era ignorada e os EFEITOS (sobreposição de cor, degradê, contorno, sombra) não eram desenhados.
+   Agora cada camada é desenhada como no Photoshop antes de entrar na arte: máscaras de pixel e de vetor (também as do grupo),
+   recorte na camada de baixo, opacidade do preenchimento, cor/degradê/contorno/sombra/brilho, forma e contorno de forma.
+   Continua separada e editável. O ORIGINAL ACHATADO do Photoshop entra escondido embaixo de tudo, para comparar. ─── */
+function _eaPsdCv(w, h){ const c = document.createElement("canvas"); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
+function _eaPsdCor(c, alfa){
+  const a = alfa == null ? 1 : alfa;
+  if(!c) return "rgba(0,0,0," + a + ")";
+  let r = c.r, g = c.g, b = c.b;
+  if(r == null && c.fr != null){ r = c.fr * 255; g = c.fg * 255; b = c.fb * 255; }
+  if(r == null && c.k != null){ r = g = b = 255 - c.k * 255 / 100; }
+  return "rgba(" + Math.round(r || 0) + "," + Math.round(g || 0) + "," + Math.round(b || 0) + "," + a + ")";
+}
+function _eaPsdUn(v){ return !v ? 0 : typeof v === "number" ? v : Number(v.value) || 0; }
+function _eaPsdAtivos(v){ return (Array.isArray(v) ? v : v ? [v] : []).filter(function(x){ return x && x.enabled !== false && x.present !== false; }); }
+/* caminho do vetor (pontos já em pixels do documento): [controle antes, ponto, controle depois] */
+function _eaPsdCaminho(ctx, vm, dx, dy){
+  ctx.beginPath();
+  (vm.paths || []).forEach(function(p){
+    const k = p.knots || []; if(!k.length) return;
+    ctx.moveTo(k[0].points[2] - dx, k[0].points[3] - dy);
+    const n = p.open ? k.length - 1 : k.length;
+    for(let i = 1; i <= n; i++){ const a = k[i - 1], b = k[i % k.length];
+      ctx.bezierCurveTo(a.points[4] - dx, a.points[5] - dy, b.points[0] - dx, b.points[1] - dy, b.points[2] - dx, b.points[3] - dy); }
+    if(!p.open) ctx.closePath();
+  });
+}
+function _eaPsdCaixaVetor(vm){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  (vm.paths || []).forEach(function(p){ (p.knots || []).forEach(function(k){ for(let i = 0; i < 6; i += 2){ x0 = Math.min(x0, k.points[i]); x1 = Math.max(x1, k.points[i]); y0 = Math.min(y0, k.points[i+1]); y1 = Math.max(y1, k.points[i+1]); } }); });
+  return isFinite(x0) ? { x:x0, y:y0, w:x1 - x0, h:y1 - y0 } : null;
+}
+/* máscara de VETOR: fica só o que está dentro da forma (invertida: o de fora) */
+function _eaPsdAplicarVetor(cv, R, vm){
+  if(!vm || vm.disable || !(vm.paths || []).length) return;
+  const k = _eaPsdCv(cv.width, cv.height), x = k.getContext("2d");
+  x.fillStyle = "#000"; _eaPsdCaminho(x, vm, R.x, R.y);
+  const regra = (vm.paths || []).some(function(p){ return p.fillRule === "non-zero"; }) ? "nonzero" : "evenodd";
+  x.fill(regra);
+  if(vm.invert){ x.globalCompositeOperation = "xor"; x.fillRect(0, 0, k.width, k.height); }
+  const c = cv.getContext("2d"); c.save(); c.globalCompositeOperation = "destination-in"; c.drawImage(k, 0, 0); c.restore();
+}
+/* máscara de PIXEL: vem em cinza (branco mostra, preto esconde) — vira transparência; fora dela vale a cor padrão */
+function _eaPsdAplicarMascara(cv, R, m){
+  if(!m || m.disabled || m.fromVectorData) return;
+  const k = _eaPsdCv(cv.width, cv.height), x = k.getContext("2d");
+  if((m.defaultColor || 0) >= 128){ x.fillStyle = "#fff"; x.fillRect(0, 0, k.width, k.height); }
+  if(m.canvas) x.drawImage(m.canvas, (m.left || 0) - R.x, (m.top || 0) - R.y);
+  const d = x.getImageData(0, 0, k.width, k.height), p = d.data, dens = m.userMaskDensity == null ? 1 : m.userMaskDensity;
+  for(let i = 0; i < p.length; i += 4){ const v = p[i] * p[i+3] / 255; p[i+3] = Math.round(255 - dens * (255 - v)); p[i] = p[i+1] = p[i+2] = 0; }
+  x.putImageData(d, 0, 0);
+  const c = cv.getContext("2d"); c.save(); c.globalCompositeOperation = "destination-in"; c.drawImage(k, 0, 0); c.restore();
+}
+function _eaPsdSilhueta(S, cor){ const k = _eaPsdCv(S.width, S.height), x = k.getContext("2d"); x.drawImage(S, 0, 0); x.globalCompositeOperation = "source-in"; x.fillStyle = cor; x.fillRect(0, 0, k.width, k.height); return k; }
+function _eaPsdEngordar(S, r){                       // silhueta engordada r px (contorno por fora, brilho)
+  const k = _eaPsdCv(S.width, S.height), x = k.getContext("2d");
+  if(r <= 0.5){ x.drawImage(S, 0, 0); return k; }
+  const passos = Math.max(12, Math.min(48, Math.round(r * 3)));
+  [r, r * 0.66, r * 0.33].forEach(function(rr){ for(let i = 0; i < passos; i++){ const a = i / passos * Math.PI * 2; x.drawImage(S, Math.cos(a) * rr, Math.sin(a) * rr); } });
+  x.drawImage(S, 0, 0);
+  return k;
+}
+function _eaPsdDegrade(x, g, caixa, ef){
+  const ang = (ef.angle == null ? 90 : ef.angle) * Math.PI / 180, cx = caixa.x + caixa.w / 2, cy = caixa.y + caixa.h / 2;
+  const meio = (Math.abs(Math.cos(ang)) * caixa.w + Math.abs(Math.sin(ang)) * caixa.h) / 2 * ((ef.scale || 100) / 100);
+  const dx = Math.cos(ang) * meio, dy = -Math.sin(ang) * meio;
+  const gr = ef.type === "radial" ? x.createRadialGradient(cx, cy, 0, cx, cy, meio) : x.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+  const cs = (g && g.colorStops) || [], os = (g && g.opacityStops) || [];
+  const opEm = function(loc){ if(!os.length) return 1; let a = os[0], b = os[os.length - 1]; for(let i = 0; i < os.length - 1; i++){ if(loc >= os[i].location && loc <= os[i+1].location){ a = os[i]; b = os[i+1]; break; } }
+    const t = b.location === a.location ? 0 : (loc - a.location) / (b.location - a.location); return (a.opacity == null ? 1 : a.opacity) * (1 - t) + (b.opacity == null ? 1 : b.opacity) * t; };
+  (cs.length ? cs : [{ color:{ r:0, g:0, b:0 }, location:0 }, { color:{ r:255, g:255, b:255 }, location:1 }]).forEach(function(s){
+    const loc = Math.max(0, Math.min(1, ef.reverse ? 1 - s.location : s.location)); gr.addColorStop(loc, _eaPsdCor(s.color, opEm(s.location))); });
+  return gr;
+}
+function _eaPsdCaixaAlfa(S){                         // caixa do que tem pixel (para o degradê)
+  const x = S.getContext("2d"), d = x.getImageData(0, 0, S.width, S.height).data;
+  let x0 = S.width, y0 = S.height, x1 = 0, y1 = 0;
+  for(let y = 0; y < S.height; y += 2) for(let xx = 0; xx < S.width; xx += 2){ if(d[(y * S.width + xx) * 4 + 3] > 8){ if(xx < x0) x0 = xx; if(xx > x1) x1 = xx; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
+  return x1 >= x0 ? { x:x0, y:y0, w:x1 - x0 + 1, h:y1 - y0 + 1 } : { x:0, y:0, w:S.width, h:S.height };
+}
+/* desenha UMA camada do PSD como o Photoshop mostra: devolve { cv, x, y, S (forma sem efeitos, para recorte), avisos } */
+function _eaPsdDesenhar(l, W, H, ctx){
+  const avisos = [], ef = (l.effects && !l.effects.disabled) ? l.effects : {}, esc = (ef.scale || 1);
+  const sombras = _eaPsdAtivos(ef.dropShadow), brilhos = _eaPsdAtivos(ef.outerGlow), cores = _eaPsdAtivos(ef.solidFill), degr = _eaPsdAtivos(ef.gradientOverlay), contornos = _eaPsdAtivos(ef.stroke);
+  const vm = l.vectorMask && !l.vectorMask.disable ? l.vectorMask : null;
+  const vs = l.vectorStroke && l.vectorStroke.strokeEnabled !== false && vm ? l.vectorStroke : null;
+  // área da camada
+  let R = null;
+  if(vm && !vm.invert){ const b = _eaPsdCaixaVetor(vm); if(b) R = b; }
+  if(!R && l.canvas && l.canvas.width) R = { x:l.left || 0, y:l.top || 0, w:l.canvas.width, h:l.canvas.height };
+  if(!R) R = { x:0, y:0, w:W, h:H };
+  let margem = 2;
+  sombras.forEach(function(s){ margem = Math.max(margem, (_eaPsdUn(s.distance) + _eaPsdUn(s.size)) * esc + 4); });
+  brilhos.forEach(function(s){ margem = Math.max(margem, _eaPsdUn(s.size) * esc + 4); });
+  contornos.forEach(function(s){ margem = Math.max(margem, _eaPsdUn(s.size) * esc + 4); });
+  if(vs) margem = Math.max(margem, _eaPsdUn(vs.lineWidth) + 4);
+  const x0 = Math.max(0, Math.floor(R.x - margem)), y0 = Math.max(0, Math.floor(R.y - margem));
+  const x1 = Math.min(W, Math.ceil(R.x + R.w + margem)), y1 = Math.min(H, Math.ceil(R.y + R.h + margem));
+  if(x1 - x0 < 1 || y1 - y0 < 1) return null;
+  const A = { x:x0, y:y0, w:x1 - x0, h:y1 - y0 };
+  // 1) a forma (pixels da camada, ou a cor/degradê da camada de preenchimento)
+  const S = _eaPsdCv(A.w, A.h), s = S.getContext("2d");
+  if(l.canvas && l.canvas.width) s.drawImage(l.canvas, (l.left || 0) - A.x, (l.top || 0) - A.y);
+  else if(l.vectorFill && l.vectorFill.type === "color"){ s.fillStyle = _eaPsdCor(l.vectorFill.color); s.fillRect(0, 0, A.w, A.h); }
+  else if(l.vectorFill && l.vectorFill.type === "solid"){ s.fillStyle = _eaPsdDegrade(s, l.vectorFill, { x:R.x - A.x, y:R.y - A.y, w:R.w, h:R.h }, l.vectorFill); s.fillRect(0, 0, A.w, A.h); }
+  else if(!vs) return null;
+  // 2) máscaras: vetor, pixel, as do grupo e o recorte na camada de baixo
+  if(vm) _eaPsdAplicarVetor(S, A, vm);
+  _eaPsdAplicarMascara(S, A, l.mask);
+  (ctx.grupos || []).forEach(function(g){ if(g.vectorMask && !g.vectorMask.disable) _eaPsdAplicarVetor(S, A, g.vectorMask); _eaPsdAplicarMascara(S, A, g.mask); });
+  if(l.clipping){
+    if(ctx.base){ s.save(); s.globalCompositeOperation = "destination-in"; s.drawImage(ctx.base.S, ctx.base.x - A.x, ctx.base.y - A.y); s.restore(); }
+    else avisos.push("máscara de recorte sem camada de baixo — ficou sem recorte");
+  }
+  // 3) resultado: sombra/brilho embaixo · conteúdo (opacidade do preenchimento) · cor · degradê · contorno em cima
+  const O = _eaPsdCv(A.w, A.h), o = O.getContext("2d");
+  sombras.forEach(function(sh){
+    const ang = (sh.angle == null ? 120 : sh.angle) * Math.PI / 180, dist = _eaPsdUn(sh.distance) * esc, tam = _eaPsdUn(sh.size) * esc;
+    o.save(); o.globalAlpha = sh.opacity == null ? 0.75 : sh.opacity; if(tam > 0) o.filter = "blur(" + (tam / 2) + "px)";
+    o.drawImage(_eaPsdSilhueta(S, _eaPsdCor(sh.color)), -Math.cos(ang) * dist, Math.sin(ang) * dist); o.restore(); });
+  brilhos.forEach(function(gl){
+    const tam = _eaPsdUn(gl.size) * esc;
+    o.save(); o.globalAlpha = gl.opacity == null ? 0.75 : gl.opacity; if(tam > 0) o.filter = "blur(" + (tam / 2) + "px)";
+    o.drawImage(_eaPsdSilhueta(_eaPsdEngordar(S, tam / 2), _eaPsdCor(gl.color, 1)), 0, 0); o.restore(); });
+  o.save(); o.globalAlpha = l.fillOpacity == null ? 1 : l.fillOpacity; o.drawImage(S, 0, 0); o.restore();
+  cores.forEach(function(c){ o.save(); o.globalAlpha = c.opacity == null ? 1 : c.opacity; o.drawImage(_eaPsdSilhueta(S, _eaPsdCor(c.color)), 0, 0); o.restore(); });
+  degr.forEach(function(g){
+    if(!g.gradient || g.gradient.type === "noise"){ avisos.push("degradê de ruído do Photoshop ficou de fora"); return; }
+    const k = _eaPsdCv(A.w, A.h), x = k.getContext("2d"); x.fillStyle = _eaPsdDegrade(x, g.gradient, _eaPsdCaixaAlfa(S), g); x.fillRect(0, 0, A.w, A.h);
+    x.globalCompositeOperation = "destination-in"; x.drawImage(S, 0, 0);
+    o.save(); o.globalAlpha = g.opacity == null ? 1 : g.opacity; o.drawImage(k, 0, 0); o.restore(); });
+  // contorno de FORMA (o traço da forma desenhada com a caneta/retângulo do Photoshop)
+  if(vs && vm){
+    const lw = _eaPsdUn(vs.lineWidth) || 1, al = vs.lineAlignment || "center";
+    const k = _eaPsdCv(A.w, A.h), x = k.getContext("2d");
+    x.lineWidth = al === "center" ? lw : lw * 2; x.lineJoin = "round"; x.strokeStyle = vs.content && vs.content.color ? _eaPsdCor(vs.content.color) : "#000";
+    _eaPsdCaminho(x, vm, A.x, A.y); x.stroke();
+    if(al === "inside"){ x.globalCompositeOperation = "destination-in"; _eaPsdCaminho(x, vm, A.x, A.y); x.fill(); }
+    if(al === "outside"){ x.globalCompositeOperation = "destination-out"; _eaPsdCaminho(x, vm, A.x, A.y); x.fill(); }
+    o.save(); o.globalAlpha = vs.opacity == null ? 1 : vs.opacity; o.drawImage(k, 0, 0); o.restore();
+  }
+  contornos.forEach(function(st){
+    if(st.fillType && st.fillType !== "color"){ avisos.push("contorno com degradê/padrão virou cor lisa"); }
+    const tam = _eaPsdUn(st.size) * esc, pos = st.position || "outside";
+    const k = _eaPsdCv(A.w, A.h), x = k.getContext("2d");
+    const gordo = _eaPsdEngordar(S, pos === "center" ? tam / 2 : pos === "outside" ? tam : 0);
+    x.drawImage(_eaPsdSilhueta(gordo, _eaPsdCor(st.color || { r:0, g:0, b:0 })), 0, 0);
+    if(pos === "outside"){ x.globalCompositeOperation = "destination-out"; x.drawImage(S, 0, 0); }
+    if(pos === "inside"){ // por dentro: a forma menos a forma "afinada" (aproximação: borda de dentro pela diferença com a forma deslocada)
+      const inv = _eaPsdCv(A.w, A.h), iv = inv.getContext("2d"); iv.fillRect(0, 0, A.w, A.h); iv.globalCompositeOperation = "destination-out"; iv.drawImage(S, 0, 0);
+      const borda = _eaPsdEngordar(inv, tam); x.clearRect(0, 0, A.w, A.h); x.drawImage(_eaPsdSilhueta(borda, _eaPsdCor(st.color || { r:0, g:0, b:0 })), 0, 0);
+      x.globalCompositeOperation = "destination-in"; x.drawImage(S, 0, 0); }
+    o.save(); o.globalAlpha = st.opacity == null ? 1 : st.opacity; o.drawImage(k, 0, 0); o.restore(); });
+  ["innerShadow", "innerGlow", "bevel", "satin", "patternOverlay"].forEach(function(n){ if(_eaPsdAtivos(ef[n]).length) avisos.push("efeito \"" + ({ innerShadow:"sombra interna", innerGlow:"brilho interno", bevel:"chanfro", satin:"cetim", patternOverlay:"padrão" })[n] + "\" do Photoshop ficou de fora"); });
+  return { cv:O, x:A.x, y:A.y, S:S, avisos:avisos };
+}
+
 async function _eaAbrirPsd(a, arquivo, op){
   const mb = Math.round((arquivo.size || 0) / 1048576);
   if(mb > 700) throw new Error("PSD de " + mb + " MB é grande demais para abrir no navegador. No Photoshop: Arquivo › Salvar uma cópia com menos camadas ou menor, e mande de novo.");
@@ -122807,23 +122968,39 @@ async function _eaAbrirPsd(a, arquivo, op){
   const psd = ag.readPsd(buf, { skipThumbnail:true, skipCompositeImageData:false, skipLayerImageData:false, useImageData:false, logMissingFeatures:false });
   const W = psd.width, H = psd.height, lib = a.lib, avisos = [], objs = [];
   if(psd.colorMode !== undefined && psd.colorMode !== 3) avisos.push(arquivo.name + ": o PSD não é RGB (é CMYK ou outro). As cores foram convertidas para RGB.");
+  // camadas de baixo para cima, com o que vem do grupo (escondido, opacidade, máscaras) e a camada-base do recorte
   const camadas = [];
-  (function andar(lista, escondido, prefixo){
+  (function andar(lista, pai){
+    let base = null;
     (lista || []).forEach(function(l){
-      if(l.children){ andar(l.children, escondido || !!l.hidden, (prefixo ? prefixo + " › " : "") + (l.name || "Grupo")); return; }
-      camadas.push({ l:l, escondido:escondido || !!l.hidden, nome:(prefixo ? prefixo + " › " : "") + (l.name || "Camada") });
+      const escondido = pai.escondido || !!l.hidden;
+      if(l.children){
+        andar(l.children, { escondido:escondido, prefixo:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Grupo"),
+          opacidade:pai.opacidade * (l.opacity == null ? 1 : l.opacity), grupos:pai.grupos.concat((l.mask || l.vectorMask) ? [l] : []) });
+        base = null; return;
+      }
+      const item = { l:l, escondido:escondido, nome:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Camada"), opacidade:pai.opacidade, grupos:pai.grupos, base:l.clipping ? base : null };
+      camadas.push(item);
+      if(!l.clipping) base = item;
     });
-  })(psd.children, false, "");
+  })(psd.children, { escondido:false, prefixo:"", opacidade:1, grupos:[] });
+  // original achatado do Photoshop (para comparar) — escondido, embaixo de tudo
+  if(psd.canvas && psd.canvas.width){
+    try{ const up0 = await _eaSubir(await _eaCanvasBlob(psd.canvas), "arte/" + a.projetoId, "psd-original.png");
+      objs.push(await _eaImagemDeUrl(lib, up0.url, { left:0, top:0, nome:"Original do Photoshop (achatado — para comparar)", visible:false, origem:"psd", naoEditavel:true,
+        aviso:"É a imagem pronta que o Photoshop guardou no PSD. Ligue o olho para comparar ou para usar como está." })); }catch(_){ }
+  }
   let n = 0;
   for(const c of camadas){
     const l = c.l; n++;
     if(n % 5 === 0) _eaToast("info", "Camadas: " + n + " de " + camadas.length);
-    const base = { nome:c.nome.slice(0,80), visible:!c.escondido, opacity:l.opacity === undefined ? 1 : l.opacity, origem:"psd" };
+    const base = { nome:c.nome.slice(0,80), visible:!c.escondido, opacity:(l.opacity === undefined ? 1 : l.opacity) * c.opacidade, origem:"psd" };
     if(l.blendMode && l.blendMode !== "normal" && l.blendMode !== "pass through"){ const gco = _EA_MISTURA[l.blendMode]; if(gco) base.globalCompositeOperation = gco; else avisos.push(c.nome + ": modo de mistura \"" + l.blendMode + "\" virou normal."); }
-    const temEfeito = !!(l.effects && Object.keys(l.effects).some(function(k){ const v = l.effects[k]; return v && (Array.isArray(v) ? v.some(function(x){ return x && x.enabled !== false; }) : v.enabled !== false); }));
-    // camada de texto → texto editável (se a fonte existir). v2: fonte que não temos → texto editável com fonte parecida
+    const temEfeito = !!(l.effects && !l.effects.disabled && Object.keys(l.effects).some(function(k){ return _eaPsdAtivos(l.effects[k]).length > 0 && k !== "scale" && k !== "disabled"; }));
+    const temMascara = !!((l.mask && !l.mask.disabled && !l.mask.fromVectorData) || (l.vectorMask && !l.vectorMask.disable) || l.clipping || (c.grupos || []).length || (l.fillOpacity != null && l.fillOpacity < 1));
+    // camada de texto → texto editável (se a fonte existir). Fonte que não temos → texto editável com fonte parecida
     //   (se o PSD tem o desenho do texto, ele entra como imagem igual ao PSD e a cópia editável fica escondida logo acima)
-    if(l.text && l.text.text && !temEfeito){
+    if(l.text && l.text.text){
       const st = (l.text.style || {}), fo = _eaFontePsd(st.font && st.font.name);
       const ok = await _eaCarregarFonte(fo.familia);
       const tr = l.text.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
@@ -122831,32 +123008,29 @@ async function _eaAbrirPsd(a, arquivo, op){
       const al = { left:"left", center:"center", right:"right", justifyLeft:"justify", justifyCenter:"justify", justifyRight:"justify", justifyAll:"justify" }[(l.text.paragraphStyle && l.text.paragraphStyle.justification) || "left"] || "left";
       const larg = Math.max(20, ((l.right||0) - (l.left||0)) * 1.08);
       const temDesenho = !!(l.canvas && l.canvas.width && l.canvas.height);
+      const simples = ok && !temEfeito && !temMascara;
       const familia = ok ? fo.familia : "Montserrat";
       if(!ok) await _eaCarregarFonte("Montserrat");
       const t = new lib.Textbox(String(l.text.text).replace(/\r/g, "\n").replace(/\u0003/g, "\n"), Object.assign({}, base, { left:l.left||0, top:l.top||0, width:larg,
         fontFamily:familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
         lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },
-        ok ? {} : { nome:(c.nome + (temDesenho ? " (texto editável, fonte trocada)" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
-      if(ok){ objs.push(t); continue; }
-      avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (temDesenho
-        ? "entrou como imagem (igual ao PSD) e tem uma cópia em TEXTO EDITÁVEL escondida logo acima, com fonte parecida (ligue o olho em Camadas para editar)."
+        simples ? {} : { nome:(c.nome + (temDesenho ? " (texto editável" + (ok ? "" : ", fonte trocada") + ")" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
+      if(simples){ objs.push(t); continue; }
+      if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (temDesenho
+        ? "entrou igual ao PSD (imagem) e tem uma cópia em TEXTO EDITÁVEL escondida logo acima, com fonte parecida (ligue o olho em Camadas para editar)."
         : "entrou como texto editável com fonte parecida (Montserrat). Para ficar igual, envie a fonte do cliente."));
       if(!temDesenho){ objs.push(t); continue; }
       l.__textoEditavel = t;          // entra logo acima da imagem
     }
-    if(!l.canvas || !l.canvas.width || !l.canvas.height) { if(l.adjustment) avisos.push(c.nome + ": camada de ajuste do Photoshop não existe aqui (ficou de fora)."); continue; }
-    let cv = l.canvas;
-    if(l.mask && l.mask.canvas && !l.mask.disabled){
-      const k = document.createElement("canvas"); k.width = cv.width; k.height = cv.height;
-      const cx = k.getContext("2d"); cx.drawImage(cv, 0, 0);
-      cx.globalCompositeOperation = "destination-in"; cx.drawImage(l.mask.canvas, (l.mask.left||0) - (l.left||0), (l.mask.top||0) - (l.top||0));
-      cv = k;
-    }
-    const up = await _eaSubir(await _eaCanvasBlob(cv), "arte/" + a.projetoId, "psd.png");
-    const extra = Object.assign({}, base, { left:l.left||0, top:l.top||0 });
-    if(temEfeito || l.text){ extra.naoEditavel = true; extra.aviso = temEfeito ? "Tinha efeito do Photoshop (sombra, brilho…): entrou como imagem congelada." : "Texto com fonte que não temos: entrou como imagem."; }
-    if(temEfeito) avisos.push(c.nome + ": tinha efeito (sombra/brilho…) — entrou como imagem, não editável.");
-    if(l.clipping) avisos.push(c.nome + ": usava máscara de recorte do Photoshop — confira o resultado.");
+    if(l.adjustment && !(l.canvas && l.canvas.width)){ avisos.push(c.nome + ": camada de ajuste do Photoshop (" + (l.adjustment.type || "ajuste") + ") não existe aqui — ficou de fora."); continue; }
+    const r = _eaPsdDesenhar(l, W, H, { grupos:c.grupos, base:c.base && c.base.feito ? c.base.feito : null });
+    if(!r){ continue; }
+    c.feito = r;
+    r.avisos.forEach(function(x){ avisos.push(c.nome + ": " + x); });
+    const up = await _eaSubir(await _eaCanvasBlob(r.cv), "arte/" + a.projetoId, "psd.png");
+    const extra = Object.assign({}, base, { left:r.x, top:r.y });
+    if(l.placedLayer) extra.aviso = "Objeto inteligente do Photoshop: entrou como imagem (dá para mover, redimensionar e esconder).";
+    if(temEfeito){ extra.aviso = "Efeitos do Photoshop desenhados na camada (sombra, contorno, cor…): para mudar o efeito, edite no Photoshop."; }
     const img = await _eaImagemDeUrl(lib, up.url, extra);
     objs.push(img);
     if(l.__textoEditavel) objs.push(l.__textoEditavel);
