@@ -113740,6 +113740,15 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v10e (30/09/2026) — pedidos do sócio:
+     • MÚSICAS: "Enviar músicas" na biblioteca manda VÁRIAS de uma vez (arrastar ou escolher); o volume de cada música é MEDIDO
+       (criacao_musica_nivel) e o Estúdio mostra quanto a música fica abaixo da voz; "Acertar volume" deixa uns 13 dB abaixo da voz;
+       "Abaixa na fala: pouco/médio/muito" (padrão médio −7 dB; antes −10 dB e a música sumia); aviso "Música baixa demais".
+     • LEGENDA: UMA linha só (padrão; opção 2 linhas), cor da letra e do destaque livres (bolinhas + qualquer cor) e ARRASTAR a
+       legenda na prévia para onde quiser.
+     • LOGO no canto (marca d'água): não aparece mais (nenhum cliente por enquanto); botão "Logo" na prévia mostra/esconde
+       neste vídeo; no Kit do cliente: enviar a logo dos vídeos e "Mostrar a logo nos vídeos" (padrão: não).
+     • Respiro entre falas coladas: clipe "quadro parado" curto sem som (vem da IA, edge video-editar v22 — o som decide o corte).
    v10d (30/09/2026) — APOIO COM VELOCIDADE: vídeo por cima com "vel" (0,5 a 2×; a IA acelera processo e deixa lento o que é beleza/emoção),
      slider "Velocidade do apoio" e o motivo da cena ("Por que esta cena") no painel.
    v10c (30/09/2026) — MÚSICA E EFEITOS VOLTARAM: "musica, sfx, audio" tinham ficado dentro de um comentário no cálculo do vídeo
@@ -113812,6 +113821,8 @@ function _evCliente(id){
 function _evNomeCliente(id){ const c = _evCliente(id); return (c && c.name) || id || "—"; }
 function _evCorCliente(id){ const c = _evCliente(id); return (c && c.color) || _EV.roxo; }
 function _evLogo(id){ try{ return (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS && CLIENT_LOGOS[id]) || null; }catch(_){ return null; } }
+/* v10e: a logo dos vídeos vem do KIT do cliente (enviada lá); sem ela, a do cadastro */
+function _evLogoKit(kit, id){ return (kit && /^https:\/\//.test(String(kit.logo_url || "")) && kit.logo_url) || _evLogo(id); }
 function _evPessoa(id){
   try{ const t = (typeof TEAM!=="undefined" && Array.isArray(TEAM)) ? TEAM.find(function(x){ return x && x.id===id; }) : null; return (t && t.name) || id; }catch(_){ return id; }
 }
@@ -114039,6 +114050,22 @@ function _EvKit({ isMob }){
   useEffect(function(){ if(f && f.fonte) _evCarregarFonte(f.fonte); }, [f && f.fonte]);
 
   const configurado = function(id){ return resumo.some(function(k){ return k.client_id===id; }); };
+  /* v10e: logo dos vídeos enviada no próprio kit */
+  const [logoSubindo, setLogoSubindo] = useState(null);
+  const enviarLogo = async function(fl){
+    if(!fl) return;
+    if(!/^image\/(png|jpeg|webp|svg\+xml)$/.test(fl.type || "")){ try{ pixelsToast.error("Use PNG, JPG, WEBP ou SVG."); }catch(_){} return; }
+    if(fl.size > 5*1024*1024){ try{ pixelsToast.error("Logo acima de 5 MB."); }catch(_){} return; }
+    setLogoSubindo(0);
+    try{
+      const ext = (fl.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+      const path = "kits/" + String(cliente).replace(/[^A-Za-z0-9_-]/g, "") + "/logo-" + Date.now() + "." + ext;
+      await pxUploadResumable(fl, path, function(pc){ setLogoSubindo(pc); });
+      set("logo_url", window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl);
+      try{ pixelsToast.success("Logo enviada — clique em Salvar kit"); }catch(_){}
+    }catch(e){ try{ pixelsToast.error("Não subiu a logo: " + ((e && e.message) || e)); }catch(_){} }
+    setLogoSubindo(null);
+  };
   const set = function(k, v){ setF(function(p){ const n = Object.assign({}, p); n[k] = v; return n; }); };
   const toggleGc = function(id){ setF(function(p){ const a = Array.isArray(p.gc_final) ? p.gc_final.slice() : [];
     const i = a.indexOf(id); if(i>=0) a.splice(i,1); else a.push(id); return Object.assign({}, p, { gc_final:a }); }); };
@@ -114165,6 +114192,28 @@ function _EvKit({ isMob }){
                 {escolha("tarja_modelo","Tarja (nome e cidade)", _EV_TARJA)}
                 {escolha("logo_posicao","Logo no vídeo", _EV_LOGO)}
               </div>
+              {/* v10e: a logo dos vídeos fica no kit (prático: envia uma vez) e só aparece no canto se ligar */}
+              <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",marginTop:14,paddingTop:12,borderTop:"1px solid "+_EV.linha2}}>
+                <div style={{width:64,height:64,borderRadius:12,border:"1px solid "+_EV.linha,background:"#fff",display:"grid",placeItems:"center",overflow:"hidden",flexShrink:0}}>
+                  {_evLogoKit(f, cliente) ? <img src={_evLogoKit(f, cliente)} alt="Logo" style={{maxWidth:"86%",maxHeight:"86%",objectFit:"contain"}}/> : <span style={{fontSize:11,color:_EV.fraco}}>sem logo</span>}
+                </div>
+                <div style={{flex:"1 1 220px",minWidth:0}}>
+                  <div style={{fontWeight:800,fontSize:_evF(13.5,isMob)}}>Logo dos vídeos</div>
+                  <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginTop:2}}>{f.logo_url ? "Enviada aqui no kit." : base.tem_logo ? "Usando a logo do cadastro. Envie outra se quiser (PNG sem fundo fica melhor)." : "Envie a logo (PNG sem fundo fica melhor)."} Vale para a abertura, a tela final e o canto do vídeo.</div>
+                  {!soVer && <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+                    <label style={{font:"inherit",padding:"7px 12px",borderRadius:10,border:"1px solid "+_EV.roxo,background:_EV.roxoClaro,color:_EV.roxo,fontWeight:700,fontSize:_evF(12.5,isMob),cursor:logoSubindo!=null?"wait":"pointer"}}>
+                      {logoSubindo!=null ? "Enviando… " + logoSubindo + "%" : f.logo_url ? "Trocar a logo" : "Enviar a logo"}
+                      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{display:"none"}} disabled={logoSubindo!=null} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; enviarLogo(fl); }}/>
+                    </label>
+                    {f.logo_url && <button onClick={function(){ set("logo_url", ""); }} style={{font:"inherit",padding:"7px 12px",borderRadius:10,border:"1px solid "+_EV.linha,background:"#fff",color:_EV.sub,fontWeight:700,fontSize:_evF(12.5,isMob),cursor:"pointer"}}>Usar a do cadastro</button>}
+                  </div>}
+                </div>
+                <label style={{display:"flex",gap:8,alignItems:"center",fontSize:_evF(13,isMob),fontWeight:700,cursor:soVer?"default":"pointer",flex:"1 1 100%"}}>
+                  <input type="checkbox" checked={f.logo_mostrar === true} disabled={soVer} onChange={function(e){ set("logo_mostrar", e.target.checked); }} style={{width:18,height:18,accentColor:_EV.roxo}}/>
+                  Mostrar a logo no canto dos vídeos (marca d'água)
+                  <span style={{fontWeight:500,color:_EV.sub,fontSize:_evF(12,isMob)}}>— desligado: não aparece. No Estúdio, o botão "Logo" liga ou desliga só naquele vídeo.</span>
+                </label>
+              </div>
             </div>
 
             <div style={caixa}>
@@ -114212,11 +114261,11 @@ function _EvKit({ isMob }){
 
 /* ═══ PRÉVIA DO ESTILO (exemplo, não é vídeo de verdade) ═══ */
 function _EvPrevia({ cliente, base, f, isMob }){
-  const logo = _evLogo(cliente);
+  const logo = _evLogoKit(f, cliente);
   const fonte = "'" + (f.fonte||"Montserrat") + "', system-ui, sans-serif";
   const pri = f.cor_principal || "#7c3aed", sec = f.cor_secundaria || "#ffffff", txt = f.cor_texto || "#ffffff";
   const W = isMob ? 220 : 236, H = Math.round(W * 16 / 9);
-  const posLogo = { sup_dir:{top:10,right:10}, sup_esq:{top:10,left:10}, inf_dir:{bottom:10,right:10} }[f.logo_posicao];
+  const posLogo = f.logo_mostrar === true ? { sup_dir:{top:10,right:10}, sup_esq:{top:10,left:10}, inf_dir:{bottom:10,right:10} }[f.logo_posicao] : null;   // v10e
   const cidade = base.cidade || "Cidade/UF";
   const legTop = f.legenda_posicao==="centro" ? "46%" : "80%";
   const palavras = ["Veja","como","ficou","o","resultado"];
@@ -114415,7 +114464,7 @@ function _evMotor(canvas, o){
     }
   }
   function desenharLogo(){
-    if(!logo || kit.logo_posicao==="nenhum") return;
+    if(!logo || kit.logo_posicao==="nenhum" || kit.logo_mostrar !== true) return;     // v10e: logo no canto só se o kit pedir
     const S = 150, P = 16, M = 44;
     const pos = { sup_dir:[W-M-S, M], sup_esq:[M, M], inf_dir:[W-M-S, H-M-S-160] }[kit.logo_posicao||"sup_dir"] || [W-M-S, M];
     cx.save(); cx.fillStyle = "rgba(255,255,255,0.95)"; _evRet(cx, pos[0], pos[1], S, S, 26); cx.fill();
@@ -114663,7 +114712,7 @@ async function _evDesmontar(blob, quadroSeg, prog){
 
 /* ── preparar os brutos e pedir a edição à IA (v8 · 29/09: a MESMA função serve o Estúdio e o PC do escritório no Guvi editora) ── */
 async function _evPrepararMontar(t, setPasso, extra){
-  const brutos = _evBrutos(t).slice(0, 12);
+  const brutos = _evBrutos(t).slice(0, 30);            // v10e: até 30 arquivos por edição (antes 12)
   if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
   setPasso("Medindo os vídeos…");
   const durs = []; for(let i=0;i<brutos.length;i++) durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url));
@@ -115026,39 +115075,13 @@ function _EvExportarV2({ t, ed, linha, kit, base, musica, logoUrl, exp, setExp, 
 function _EvMusicas({ isMob }){
   const [lista, setLista] = useState(null);
   const [rec, setRec] = useState(0);
-  const [arq, setArq] = useState(null);
-  const [nome, setNome] = useState("");
-  const [clima, setClima] = useState("calma");
-  const [licenca, setLicenca] = useState("");
-  const [subindo, setSubindo] = useState(null);
   const [tirar, setTirar] = useState(null);
-  const inp = useRef(null);
   useEffect(function(){
     if(!window._sb) return; let vivo = true;
     window._sb.rpc("criacao_musicas").then(function(r){ if(vivo) setLista(r.error ? [] : (Array.isArray(r.data) ? r.data : [])); }).catch(function(){ if(vivo) setLista([]); });
     return function(){ vivo = false; };
   }, [rec]);
-  const escolher = function(f){ if(!f) return; setArq(f); if(!nome) setNome(String(f.name||"").replace(/\.[^.]+$/,"").replace(/[_-]+/g," ").slice(0,120)); };
-  const subir = async function(){
-    if(!arq || subindo) return;
-    if(!/\.(mp3|m4a|aac|wav)$/i.test(arq.name||"")){ _evToast("error","Use MP3, M4A ou WAV."); return; }
-    if(arq.size > 40*1024*1024){ _evToast("error","Arquivo acima de 40 MB."); return; }
-    if(!licenca.trim()){ _evToast("warning","Diga de onde veio a música (a licença)."); return; }
-    setSubindo(0);
-    try{
-      const dur = await new Promise(function(res){ const a = new Audio(); const u = URL.createObjectURL(arq);
-        a.onloadedmetadata = function(){ URL.revokeObjectURL(u); res(isFinite(a.duration) ? Math.round(a.duration) : null); }; a.onerror = function(){ URL.revokeObjectURL(u); res(null); }; a.src = u; });
-      const ext = (arq.name.split(".").pop()||"mp3").toLowerCase();
-      const path = "musicas/" + Date.now() + "-" + Math.random().toString(36).slice(2,10) + "." + ext;
-      await pxUploadResumable(arq, path, function(p){ setSubindo(p); });
-      const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
-      const r = await window._sb.rpc("criacao_musica_salvar", { p_nome:nome.trim()||arq.name, p_clima:clima, p_url:url, p_path:path, p_duracao:dur, p_licenca:licenca.trim() });
-      if(r.error) throw new Error(r.error.message);
-      _evToast("success","Música na biblioteca"); setArq(null); setNome(""); setLicenca(""); if(inp.current) inp.current.value = "";
-      setRec(function(n){ return n+1; });
-    }catch(e){ _evToast("error","Não subiu: " + ((e && e.message) || e)); }
-    setSubindo(null);
-  };
+  const generos = useMemo(function(){ const g = {}; (lista || []).forEach(function(m){ if(m.genero) g[m.genero] = 1; }); return Object.keys(g).sort(); }, [lista]);
   const confirmarTirar = function(id){
     window._sb.rpc("criacao_musica_tirar", { p_id:id }).then(function(r){ if(r.error) _evToast("error", r.error.message); setTirar(null); setRec(function(n){ return n+1; }); });
   };
@@ -115069,16 +115092,9 @@ function _EvMusicas({ isMob }){
     <div>
       {!isMob && (
         <div style={caixa}>
-          <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Adicionar música</div>
-          <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,marginBottom:12}}>Só músicas com licença para uso comercial (ex.: YouTube Audio Library, Pixabay, música comprada). A IA escolhe pelo clima.</div>
-          <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-            <div style={{flex:"1 1 260px",minWidth:0}}>{rot("Arquivo")}<input ref={inp} type="file" accept=".mp3,.m4a,.aac,.wav,audio/*" onChange={function(e){ escolher(e.target.files && e.target.files[0]); }} style={campo}/></div>
-            <div style={{flex:"1 1 220px",minWidth:0}}>{rot("Nome")}<input value={nome} maxLength={120} onChange={function(e){ setNome(e.target.value); }} style={campo}/></div>
-            <div style={{flex:"0 1 180px",minWidth:0}}>{rot("Clima")}<select value={clima} onChange={function(e){ setClima(e.target.value); }} style={campo}>{_EV_CLIMAS.map(function(c){ return <option key={c.id} value={c.id}>{c.label}</option>; })}</select></div>
-            <div style={{flex:"1 1 260px",minWidth:0}}>{rot("De onde veio (licença)")}<input value={licenca} maxLength={300} placeholder="Ex.: YouTube Audio Library — sem atribuição" onChange={function(e){ setLicenca(e.target.value); }} style={campo}/></div>
-          </div>
-          <button onClick={subir} disabled={!arq || subindo!=null} style={{font:"inherit",marginTop:12,padding:"10px 18px",borderRadius:11,border:0,background:_EV.roxo,color:"#fff",fontWeight:800,cursor:(!arq||subindo!=null)?"default":"pointer",opacity:(!arq||subindo!=null)?0.6:1}}>
-            {subindo!=null ? "Enviando… " + subindo + "%" : "Subir música"}</button>
+          <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Adicionar músicas</div>
+          <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,marginBottom:12}}>Só músicas com licença para uso comercial (ex.: Envato Elements, YouTube Audio Library, Pixabay, música comprada). Pode mandar várias de uma vez: a IA escolhe pelo clima, pelo ritmo e pelo objetivo do vídeo.</div>
+          <div style={_EVP_TEMAS.claro}><_EvpEnvioMusicas modo="area" generos={generos} onEnviou={function(){ setRec(function(n){ return n+1; }); }}/></div>
         </div>
       )}
       <div style={caixa}>
@@ -115089,7 +115105,7 @@ function _EvMusicas({ isMob }){
           return <div key={m.id} style={{display:"flex",gap:12,alignItems:isMob?"flex-start":"center",flexDirection:isMob?"column":"row",padding:"10px 0",borderTop:"1px solid "+_EV.linha2}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:700,fontSize:_evF(14,isMob)}}>{m.nome} <span style={{marginLeft:6,padding:"2px 8px",borderRadius:99,background:_EV.roxoClaro,color:_EV.roxo,fontSize:_evF(11.5,isMob),fontWeight:700}}>{c ? c.label : m.clima}</span></div>
-              <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginTop:2}}>{m.duracao ? _evTempo(m.duracao).replace(/\.\d$/,"") + " · " : ""}{m.licenca} · {m.criado_por}</div>
+              <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginTop:2}}>{[m.duracao ? _evTempo(m.duracao).replace(/\.\d$/,"") : null, m.genero, m.bpm ? Math.round(m.bpm) + " BPM" : null, m.nivel_db != null ? "volume " + String(m.nivel_db).replace(".", ",") + " dB" : null, m.licenca, m.criado_por].filter(Boolean).join(" · ")}</div>
             </div>
             <audio controls preload="none" src={m.url} style={{height:34,maxWidth:"100%"}}/>
             {!isMob && (tirar===m.id
@@ -115228,6 +115244,7 @@ function _evpProjetoDeReceita(receita, clipes){
    (35% quando é anúncio: botões, som e legenda do post). Texto deve ficar dentro de um retângulo central de ~900×1400 px.
    "segura": a borda de BAIXO do bloco fica em 79% da altura (cresce para cima); "anuncio": em 64%; "centro": 52%; "baixo": 75% (jeito antigo). */
 function _evpCaixaLeg(lg, s){ const c = (lg && lg.caixa) || (lg && lg.caixaAlta ? "alta" : ""); return c === "alta" ? String(s).toUpperCase() : c === "baixa" ? String(s).toLowerCase() : String(s); }
+function _evpLuz(hex){ const h = String(hex || "").replace("#", ""); if(h.length !== 6) return 1; const c = [0, 2, 4].map(function(i){ const v = parseInt(h.substr(i, 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2]; }
 function _evpLegCentro(pos, y, nLinhas, lh, H){
   if(y != null && isFinite(Number(y)) && Number(y) > 0) return H * Number(y);
   const bh = Math.max(1, nLinhas) * lh;
@@ -115262,7 +115279,13 @@ function _evpNormalizar(p, clipes){
   p.formato = ["9x16","4x5","1x1","16x9"].indexOf(p.formato) >= 0 ? p.formato : "9x16";
   p.textos = (p.textos||[]).filter(Boolean).map(function(x){ const o = Object.assign({ id:_evpId(), tipo:"texto", texto:"", linha2:"", pos:"meio", tam:1, anim:"pop", cor:"principal", atras:false }, x);
     o.t0 = Math.max(0, _evpNum(o.t0,0)); o.t1 = Math.max(o.t0 + 0.2, _evpNum(o.t1, o.t0 + 2)); return o; });
-  p.legenda = Object.assign({ ativa:true, estilo:"", posicao:"", edits:{}, correcoes:[], tam:1, fonte:"", caixaAlta:false, cor:"principal", anim:"nenhuma", peso:"negrito", italico:false, caixa:"", y:null }, p.legenda||{});
+  p.legenda = Object.assign({ ativa:true, estilo:"", posicao:"", edits:{}, correcoes:[], tam:1, fonte:"", caixaAlta:false, cor:"principal", anim:"nenhuma", peso:"negrito", italico:false, caixa:"", y:null,
+    linhas:1, corTexto:"", corDestaque:"", dx:0 }, p.legenda||{});                 // v10e: 1 linha (padrão), cores livres, posição arrastada (dx)
+  p.legenda.linhas = _evpNum(p.legenda.linhas, 1) === 2 ? 2 : 1;
+  if(!/^#[0-9a-fA-F]{6}$/.test(String(p.legenda.corTexto || ""))) p.legenda.corTexto = "";
+  if(!/^#[0-9a-fA-F]{6}$/.test(String(p.legenda.corDestaque || ""))) p.legenda.corDestaque = "";
+  p.legenda.dx = Math.max(-0.4, Math.min(0.4, _evpNum(p.legenda.dx, 0)));
+  p.logo = Object.assign({ mostrar:null, pos:"" }, p.logo || {});           // v10e: logo no canto — null = segue o kit (padrão: escondida)
   if(!p.legenda.caixa && p.legenda.caixaAlta) p.legenda.caixa = "alta";     // v10: "caixa" (normal | alta | baixa) substitui o interruptor antigo
   p.marcas = (p.marcas||[]).filter(Boolean).map(function(m){ return Object.assign({ id:_evpId(), t:0, nota:"" }, m); });
   p.imagens = (p.imagens||[]).filter(function(x){ return x && (x.url || x.camada === "desfoque" || (x.camada === "video" && dur[x.clipe] != null)); }).map(function(x){
@@ -115290,7 +115313,8 @@ function _evpNormalizar(p, clipes){
   const fx = p.faixas || {};
   p.faixas = { textos:Object.assign({ oculta:false }, fx.textos||{}), video:Object.assign({ vol:1, mudo:false }, fx.video||{}), sfx:Object.assign({ vol:1, mudo:false }, fx.sfx||{}) };
   p.tela_final = Object.assign({ dur:3 }, p.tela_final||{});
-  if(p.musica) p.musica = Object.assign({ vol:0.15, mudo:false, t0:0, ini:0, duck:true, fadeIn:0.5, fadeOut:1.5 }, p.musica);
+  if(p.musica) p.musica = Object.assign({ vol:0.15, mudo:false, t0:0, ini:0, duck:true, fadeIn:0.5, fadeOut:1.5, abaixa:0.45 }, p.musica);
+  if(p.musica && [0.3, 0.45, 0.63].indexOf(_evpNum(p.musica.abaixa, 0.45)) < 0) p.musica.abaixa = 0.45;   // v10e: quanto abaixa na fala
   if(p.legenda.traducao && !(p.legenda.traducao.idioma && p.legenda.traducao.blocos)) delete p.legenda.traducao;
   const rv = {}; Object.keys(p.revisao || {}).slice(0, 400).forEach(function(k){ if(p.revisao[k]) rv[String(k).slice(0, 80)] = true; }); p.revisao = rv;
   return p;
@@ -115329,7 +115353,7 @@ function _evpCalcular(p, fala, kit){
            posLegenda:(p.legenda && p.legenda.posicao) || ((kit && kit.legenda_posicao) === "centro" ? "centro" : "segura"),   // v10: padrão = área segura do Reels
            musica:p.musica, sfx:p.sfx, audio:p.audio,   // v10c (30/09): estas 3 estavam presas no comentário da linha de cima — a música e os efeitos não tocavam
            faixas:p.faixas || { textos:{}, video:{ vol:1 }, sfx:{ vol:1 } }, imagens:p.imagens || [], abertura:p.abertura || {}, legenda:p.legenda || {},
-           narracoes:p.narracoes || [], formato:p.formato || "9x16" };
+           narracoes:p.narracoes || [], formato:p.formato || "9x16", logo:p.logo || {} };
 }
 function _evpClipEm(calc, t){ const cs = calc.clips; for(let i=0;i<cs.length;i++){ if(t < cs[i].t1) return i; } return cs.length - 1; }
 
@@ -115798,6 +115822,23 @@ function _evpSegmentar(fonte){
   });
 }
 
+/* ─── v10e: VOLUME DA MÚSICA — média das partes com som (janelas de 400 ms acima de −50 dBFS), a mesma conta do "nivelar" da voz (−18 dB) ─── */
+function _evpNivelDb(buf){
+  try{
+    const n = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate, jan = Math.round(sr * 0.4); if(len < jan) return null;
+    const chs = []; for(let c=0;c<n;c++) chs.push(buf.getChannelData(c));
+    let soma = 0, qt = 0;
+    for(let i=0;i + jan <= len;i += jan){ let s = 0; for(let k=i;k<i+jan;k+=2){ let x = 0; for(let c=0;c<n;c++) x += chs[c][k]; x /= n; s += x*x; } const r = Math.sqrt(s / (jan/2)); if(r > 0.00316){ soma += r*r; qt++; } }
+    if(!qt) return null; return Math.round(10 * Math.log10(soma / qt) * 10) / 10;
+  }catch(_){ return null; }
+}
+const _EVP_VOZ_DB = -18, _EVP_ALVO_MUS = -31;      // voz nivelada a −18 dB; música na fala uns 13 dB abaixo
+/* nível real da música no vídeo: onde tem fala (abaixada) e onde não tem */
+function _evpMusNaFala(mu, nivel){ if(!mu || nivel == null) return null; const v = Math.max(0.0001, _evpNum(mu.vol, 0.15)), ab = mu.duck === false ? 1 : _evpNum(mu.abaixa, 0.45);
+  return { fala:Math.round((nivel + 20*Math.log10(v*ab)) * 10) / 10, solta:Math.round((nivel + 20*Math.log10(v)) * 10) / 10 }; }
+function _evpVolIdeal(mu, nivel){ if(nivel == null) return 0.3; const ab = mu && mu.duck === false ? 1 : _evpNum(mu && mu.abaixa, 0.45);
+  return Math.round(Math.min(0.7, Math.max(0.12, Math.pow(10, (_EVP_ALVO_MUS - nivel) / 20) / ab)) * 100) / 100; }
+
 /* ─── CORTE NO RITMO: onde caem as batidas da música ─── */
 function _evpFaseBatida(peaks, passo, bpm){
   if(!peaks || !peaks.length || !bpm) return 0;
@@ -115912,7 +115953,7 @@ function _evpMotor(canvas, o){
       .concat(Object.keys(extras).map(function(f){ return document.fonts && document.fonts.load ? document.fonts.load("800 70px \"" + f + "\"") : null; })).filter(Boolean);
     let fontesOk = false; const fontes = function(){ if(fontesOk) return; fontesOk = true; um(); };
     Promise.all(lista).then(fontes, fontes); setTimeout(fontes, 4000);
-    if(o.logoUrl && kit.logo_posicao!=="nenhum"){ const im = new Image(); if(!/^data:/.test(o.logoUrl)) im.crossOrigin = "anonymous"; im.onload = function(){ logo = im; um(); }; im.onerror = um; im.src = o.logoUrl; } else um();
+    if(o.logoUrl){ const im = new Image(); if(!/^data:/.test(o.logoUrl)) im.crossOrigin = "anonymous"; im.onload = function(){ logo = im; um(); }; im.onerror = um; im.src = o.logoUrl; } else um();
     if(calc.clips[0]){ const v0 = el(calc.clips[0]); let foi = false; const ok = function(){ if(foi) return; foi = true; um(); }; v0.addEventListener("canplay", ok, { once:true }); v0.addEventListener("error", ok, { once:true }); setTimeout(ok, 15000); } else um();
     if(o.musicaUrl){
       fetch(o.musicaUrl).then(function(r){ return r.arrayBuffer(); }).then(function(ab){ return ac.decodeAudioData(ab); }).then(function(b){ musBuf = b; if(tocando) agendar(); }).catch(function(){}).finally(um);
@@ -115980,7 +116021,7 @@ function _evpMotor(canvas, o){
           if(fim - x < fo) v *= Math.max(0, (fim - x) / Math.max(0.01, fo));
           if(mu.duck !== false){
             const es = envVoz.filter(function(q){ return x >= q[0] && x < q[1]; });
-            if(es.some(function(e){ const p = pk(e[2]); if(!p) return false; const k = Math.floor((e[3] + (x - e[0]) * e[4]) / 0.02); let mx = 0; for(let j=k-10;j<=k+10;j++){ if(p[j] > mx) mx = p[j]; } return mx > 0.05; })) v *= 0.3;
+            if(es.some(function(e){ const p = pk(e[2]); if(!p) return false; const k = Math.floor((e[3] + (x - e[0]) * e[4]) / 0.02); let mx = 0; for(let j=k-10;j<=k+10;j++){ if(p[j] > mx) mx = p[j]; } return mx > 0.05; })) v *= _evpNum(mu.abaixa, 0.45);     // v10e: 0,45 ≈ −7 dB (antes 0,3 = −10 dB e a música sumia)
           }
           pts.push(v);
         }
@@ -116091,9 +116132,12 @@ function _evpMotor(canvas, o){
     cx.drawImage(vl, 0, 0);
   }
   function desenharLogo(){
-    if(!logo || kit.logo_posicao === "nenhum") return;
+    // v10e: a logo no canto (marca d'água) só aparece quando pedem — neste vídeo (botão "Logo") ou no kit ("Mostrar a logo nos vídeos")
+    const lgo = calc.logo || {}, mostrar = lgo.mostrar === true || (lgo.mostrar == null && kit.logo_mostrar === true);
+    if(!logo || !mostrar) return;
     const S = 150, P = 16, M = 44;
-    const pos = { sup_dir:[W-M-S, M], sup_esq:[M, M], inf_dir:[W-M-S, H-M-S-160] }[kit.logo_posicao||"sup_dir"] || [W-M-S, M];
+    const posId = lgo.pos || (kit.logo_posicao && kit.logo_posicao !== "nenhum" ? kit.logo_posicao : "sup_dir");
+    const pos = { sup_dir:[W-M-S, M], sup_esq:[M, M], inf_dir:[W-M-S, H-M-S-160] }[posId] || [W-M-S, M];
     cx.save(); cx.fillStyle = "rgba(255,255,255,0.95)"; _evRet(cx, pos[0], pos[1], S, S, 26); cx.fill();
     const r = Math.min((S-2*P)/logo.width, (S-2*P)/logo.height), w = logo.width*r, h = logo.height*r;
     cx.drawImage(logo, pos[0] + (S-w)/2, pos[1] + (S-h)/2, w, h); cx.restore();
@@ -116170,28 +116214,44 @@ function _evpMotor(canvas, o){
     // v10 (29/09/2026): fonte, peso, itálico, caixa, animação, posição na área segura — o tamanho NUNCA muda sozinho:
     // a linha quebra por palavra (uma palavra grande fica sozinha na linha) dentro de 82% da largura (margem das laterais)
     const FL = lg.fonte ? "\"" + lg.fonte + "\", " + F : F;
-    const hl = lg.cor === "amarelo" ? ["#facc15", "#111827"] : lg.cor === "branco" ? ["#ffffff", "#0f172a"] : [pri, txt];
-    const cDest = hl[0] === "#ffffff" ? "#facc15" : hl[0];
+    // v10e: cor da letra e do destaque livres (corTexto / corDestaque); sem escolha, fica como antes (branco + cor do kit)
+    const ehCor = function(c){ return /^#[0-9a-fA-F]{6}$/.test(String(c || "")); };
+    let hl = lg.cor === "amarelo" ? ["#facc15", "#111827"] : lg.cor === "branco" ? ["#ffffff", "#0f172a"] : [pri, txt];
+    if(ehCor(lg.corDestaque)) hl = [lg.corDestaque, _evpLuz(lg.corDestaque) > 0.6 ? "#0f172a" : "#ffffff"];
+    const cDest = ehCor(lg.corDestaque) ? lg.corDestaque : hl[0] === "#ffffff" ? "#facc15" : hl[0];
+    const corT = ehCor(lg.corTexto) ? lg.corTexto : "#fff";
+    const borda = ehCor(lg.corTexto) && _evpLuz(lg.corTexto) < 0.35 ? "rgba(255,255,255,.92)" : "rgba(0,0,0,.88)";   // letra escura: contorno claro
     const peso = lg.peso === "normal" ? 500 : lg.peso === "fino" ? 300 : 800, ital = lg.italico ? "italic " : "";
     const fs = Math.round(70 * tam); cx.save(); cx.font = ital + peso + " " + fs + "px " + FL; cx.textBaseline = "middle"; cx.lineJoin = "round";
     const ws = b.words.map(function(w){ return Object.assign({}, w, { p:_evpCaixaLeg(lg, String(w.p)) }); });
-    const linhas = _evQuebra(cx, ws, W*0.82), lh = fs*1.3;
-    const yc = _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H);
+    let linhas = _evQuebra(cx, ws, W*0.82); const lh = fs*1.3;
     let ativa = -1; ws.forEach(function(w, k){ if(t >= w.a) ativa = k; });
+    // v10e: UMA linha só (padrão) — quando a frase não cabe, mostra a linha da palavra que está sendo falada
+    let n0 = 0;
+    if(_evpNum(lg.linhas, 1) !== 2 && linhas.length > 1){
+      let li = 0, acc = 0;
+      for(let k=0;k<linhas.length;k++){ if(ativa < acc + linhas[k].length){ li = k; break; } acc += linhas[k].length; li = k; }
+      for(let k=0;k<li;k++) n0 += linhas[k].length;
+      linhas = [linhas[li]];
+    }
+    const yc = _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), dxL = W * _evpNum(lg.dx, 0);
     const anim = lg.anim || "nenhuma";
     // animação do bloco inteiro: "sobe" (entra de baixo com fade)
     let dyB = 0, alB = 1;
     if(anim === "sobe"){ const k = _evClamp((t - b.a) / 0.22, 0, 1); dyB = (1 - (1 - Math.pow(1 - k, 3))) * 44; alB = k; }
     cx.translate(0, dyB); cx.globalAlpha = alB;
-    const sp = cx.measureText(" ").width; let n = 0;
+    const sp = cx.measureText(" ").width; let n = n0;
+    // área da legenda na tela (para clicar e ARRASTAR na prévia)
+    (function(){ const larg = Math.max.apply(null, linhas.map(function(l){ return l.reduce(function(s2, w, k){ return s2 + cx.measureText(w.p).width + (k ? sp : 0); }, 0); }).concat([40]));
+      caixas.push({ id:"legenda", tipo:"legenda", x:(W - larg)/2 + dxL - 20, y:yc - linhas.length*lh/2 - 10, w:larg + 40, h:linhas.length*lh + 20 }); })();
     const chave = function(w){ return /\d/.test(w.p) || String(w.p).replace(/[^\wÀ-ú]/g, "").length >= 7; };
     if(est === "caixa"){
       const larg = Math.max.apply(null, linhas.map(function(l){ return l.reduce(function(s, w, k){ return s + cx.measureText(w.p).width + (k ? sp : 0); }, 0); }));
-      cx.fillStyle = "rgba(11,16,32,.72)"; _evRet(cx, (W - larg)/2 - 34, yc - linhas.length*lh/2 - 18, larg + 68, linhas.length*lh + 36, 28); cx.fill();
+      cx.fillStyle = "rgba(11,16,32,.72)"; _evRet(cx, (W - larg)/2 + dxL - 34, yc - linhas.length*lh/2 - 18, larg + 68, linhas.length*lh + 36, 28); cx.fill();
     }
     linhas.forEach(function(l, li){
       const lw = l.reduce(function(s, w, k){ return s + cx.measureText(w.p).width + (k ? sp : 0); }, 0);
-      let x = (W - lw)/2; const y = yc - (linhas.length*lh)/2 + lh/2 + li*lh;
+      let x = (W - lw)/2 + dxL; const y = yc - (linhas.length*lh)/2 + lh/2 + li*lh;
       l.forEach(function(w){
         const ww = cx.measureText(w.p).width, atual = n === ativa, falada = n <= ativa;
         // animação por palavra
@@ -116203,16 +116263,16 @@ function _evpMotor(canvas, o){
           cx.save();
           if(esc !== 1){ cx.translate(x + ww/2, y); cx.scale(esc, esc); cx.translate(-(x + ww/2), -y); }
           if(est === "palavra" && atual){ cx.fillStyle = hl[0]; _evRet(cx, x-14, y-fs*0.62, ww+28, fs*1.24, 16); cx.fill(); cx.fillStyle = hl[1]; cx.fillText(w.p, x, y); }
-          else if(est === "caixa"){ cx.fillStyle = atual ? cDest : "#fff"; cx.fillText(w.p, x, y); }
-          else if(est === "neon"){ cx.shadowColor = cDest; cx.shadowBlur = atual ? 34 : 18; cx.fillStyle = atual ? cDest : "#fff"; cx.fillText(w.p, x, y); cx.fillText(w.p, x, y); }
-          else if(est === "contorno"){ cx.strokeStyle = atual ? cDest : "rgba(0,0,0,.88)"; cx.lineWidth = (atual ? 16 : 12) * tam; cx.strokeText(w.p, x, y); cx.fillStyle = "#fff"; cx.fillText(w.p, x, y); }
+          else if(est === "caixa"){ cx.fillStyle = atual ? cDest : corT; cx.fillText(w.p, x, y); }
+          else if(est === "neon"){ cx.shadowColor = cDest; cx.shadowBlur = atual ? 34 : 18; cx.fillStyle = atual ? cDest : corT; cx.fillText(w.p, x, y); cx.fillText(w.p, x, y); }
+          else if(est === "contorno"){ cx.strokeStyle = atual ? cDest : borda; cx.lineWidth = (atual ? 16 : 12) * tam; cx.strokeText(w.p, x, y); cx.fillStyle = corT; cx.fillText(w.p, x, y); }
           else if(est === "sublinhado"){
-            cx.strokeStyle = "rgba(0,0,0,.88)"; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = "#fff"; cx.fillText(w.p, x, y);
+            cx.strokeStyle = borda; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = corT; cx.fillText(w.p, x, y);
             if(atual){ cx.fillStyle = cDest; _evRet(cx, x - 4, y + fs*0.5, ww + 8, Math.max(6, fs*0.14), 5); cx.fill(); }
           }
           else {
-            const cor = (est === "karaoke" && falada) || (est === "chave" && chave(w)) ? cDest : "#fff";
-            cx.strokeStyle = "rgba(0,0,0,.88)"; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = cor; cx.fillText(w.p, x, y);
+            const cor = (est === "karaoke" && falada) || (est === "chave" && chave(w)) ? cDest : corT;
+            cx.strokeStyle = borda; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = cor; cx.fillText(w.p, x, y);
           }
           cx.restore();
         }
@@ -116820,7 +116880,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const chaveMotor = ed.id + "|" + (musicaUrl || "") + "|" + Object.keys(tratados).sort().join(",") + "|" + (p.formato || "9x16");
   useEffect(function(){
     const cv = cvRef.current; if(!cv) return;
-    const m = _evpMotor(cv, { calc:calc, projeto:p, kit:kit, base:base, clipes:clipes, original:false, logoUrl:_evLogo(t.client), musicaUrl:musicaUrl, vozes:vozes, narr:narr, tratados:tratados,
+    const m = _evpMotor(cv, { calc:calc, projeto:p, kit:kit, base:base, clipes:clipes, original:false, logoUrl:_evLogoKit(kit, t.client), musicaUrl:musicaUrl, vozes:vozes, narr:narr, tratados:tratados,
       onTempo:function(tt, toc, esp){       // tocando: a tela (linha do tempo, painéis) atualiza 20×/s — o vídeo continua a 60
         const agora = performance.now(), ult = tempoUi.current;
         if(!toc || !ult.toc || agora - ult.em > 50 || !!esp !== ult.esp){ tempoUi.current = { em:agora, toc:toc, esp:!!esp }; setTempo(tt); setTocando(toc); setEsperando(!!esp); } },
@@ -116840,6 +116900,21 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     });
     return function(){ vivo = false; };
   }, [p.musica && p.musica.id, musInfo && musInfo.bpm]);
+
+  /* v10e: VOLUME DA MÚSICA — mede a música usada (uma vez; fica salvo no banco para a IA também usar) */
+  const [niveisMus, setNiveisMus] = useState({});
+  const nivelMus = musInfo ? (musInfo.nivel_db != null ? Number(musInfo.nivel_db) : (niveisMus[musInfo.id] != null ? niveisMus[musInfo.id] : null)) : null;
+  useEffect(function(){
+    if(!musInfo || musInfo.nivel_db != null || niveisMus[musInfo.id] != null) return;
+    let vivo = true; const mid = musInfo.id;
+    _evpAudio("mus:" + mid, musInfo.url).then(function(buf){
+      if(!vivo || !buf) return; const n = _evpNivelDb(buf); if(n == null) return;
+      setNiveisMus(function(a){ const o = Object.assign({}, a); o[mid] = n; return o; });
+      try{ window._sb.rpc("criacao_musica_nivel", { p_id:mid, p_nivel:n }).then(function(){}, function(){}); }catch(_){}
+    });
+    return function(){ vivo = false; };
+  }, [musInfo && musInfo.id, musInfo && musInfo.nivel_db]);
+  const musInfoN = useMemo(function(){ return musInfo ? Object.assign({}, musInfo, { nivel_db:nivelMus }) : null; }, [musInfo, nivelMus]);
 
   /* ─── mudanças com desfazer/refazer ─── */
   const confirmar = function(anterior, novo){ setDesf(function(d){ return d.concat([anterior]).slice(-120); }); setRefaz([]); setP(_evpNormalizar(novo, clipes)); };
@@ -116957,10 +117032,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   useEffect(recarregarModelos, [t.client]);
   const dadosModelo = function(){
     const x = pRef.current, t0 = (x.textos || []).find(function(q){ return q.tipo !== "tarja"; }) || {}, c1 = x.clips[1] || {};
-    return { legenda:{ estilo:x.legenda.estilo, posicao:x.legenda.posicao, tam:x.legenda.tam, fonte:x.legenda.fonte, caixaAlta:x.legenda.caixaAlta, cor:x.legenda.cor, anim:x.legenda.anim, peso:x.legenda.peso, italico:x.legenda.italico, caixa:x.legenda.caixa, y:x.legenda.y },
+    return { legenda:{ estilo:x.legenda.estilo, posicao:x.legenda.posicao, tam:x.legenda.tam, fonte:x.legenda.fonte, caixaAlta:x.legenda.caixaAlta, cor:x.legenda.cor, anim:x.legenda.anim, peso:x.legenda.peso, italico:x.legenda.italico, caixa:x.legenda.caixa, y:x.legenda.y, linhas:x.legenda.linhas, corTexto:x.legenda.corTexto, corDestaque:x.legenda.corDestaque, dx:x.legenda.dx },
       texto:{ fonte:t0.fonte || "", cor:t0.cor || "principal", contorno:t0.contorno, sombra:t0.sombra, fundo:t0.fundo, anim:t0.anim || "pop", tam:t0.tam || 1 },
       cor:Object.assign({}, (x.clips[0] || {}).cor || {}), trans:c1.trans || "corte", audio:Object.assign({}, x.audio),
-      musica:x.musica ? { id:x.musica.id, vol:x.musica.vol, duck:x.musica.duck, fadeIn:x.musica.fadeIn, fadeOut:x.musica.fadeOut } : null,
+      musica:x.musica ? { id:x.musica.id, vol:x.musica.vol, duck:x.musica.duck, abaixa:x.musica.abaixa, fadeIn:x.musica.fadeIn, fadeOut:x.musica.fadeOut } : null,
       abertura:Object.assign({}, x.abertura), tela_final:Object.assign({}, x.tela_final), objetivo:x.objetivo || "" };
   };
   const salvarModelo = function(nome){
@@ -117349,7 +117424,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
               <_EvpIco n={m.icone} s={20}/>{m.label}</button>; })}
         </div>
         <_EvpPainelMenu menu={menu} p={p} calc={calc} sel={sel} setSel={setSel} mudar={mudar} irPara={irPara} tempo={tempo} infoClipe={infoClipe} clipes={clipes}
-          musicas={musicas} musInfo={musInfo} setMusica={setMusica} addClipe={addClipe} addTexto={addTexto} addSfx={addSfx} kit={kit}
+          musicas={musicas} musInfo={musInfoN} setMusica={setMusica} addClipe={addClipe} addTexto={addTexto} addSfx={addSfx} kit={kit}
           cortar={cortar} duplicar={duplicar} apagar={apagar} metodoRuido={metodoRuido} tratandoAudio={tratandoAudio} pedirEstab={pedirEstab}
           onMusicasMudou={onMusicasMudou} setFerr={setFerr} pRef={pRef} setP={setP} confirmar={confirmar}
           addImagem={addImagem} addMarca={addMarca} tirarTrechos={tirarTrechos} fala={ed.fala} modelos={modelos} salvarModelo={salvarModelo} aplicarModelo={aplicarModelo}
@@ -117360,7 +117435,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             padding:"14px 12px 10px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minWidth:0,minHeight:0,overflow:"hidden"})}>
           <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando}
             sel={sel} selObj={selObj} enquadrar={enquadrar && sel && sel.tipo === "clip"} pRef={pRef} setP={setP} confirmar={confirmar} tempo={tempo}
-            onSelTexto={function(id, tipo){ setSel({ tipo:tipo || "texto", id:id }); }} onSemTexto={function(){ if(sel && (sel.tipo === "texto" || sel.tipo === "imagem")){ setSel(null); return true; } return false; }}
+            onSelTexto={function(id, tipo){ if(tipo === "legenda"){ let k = calc.blocos.findIndex(function(b){ return tempo >= b.a && tempo < b.b; }); if(k < 0) k = 0; if(calc.blocos.length) setSel({ tipo:"legenda", id:k }); return; } setSel({ tipo:tipo || "texto", id:id }); }}
+            onSemTexto={function(){ if(sel && (sel.tipo === "texto" || sel.tipo === "imagem" || sel.tipo === "legenda")){ setSel(null); return true; } return false; }}
             onMover={function(dx, dy, dz, fim){
               const c = sel && sel.tipo === "clip" && p.clips.find(function(x){ return x.id === sel.id; }); if(!c) return;
               if(fim){ confirmar(fim.anterior, pRef.current); return; }
@@ -117374,6 +117450,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             <button onClick={function(){ irPara(calc.total); }} aria-label="Fim" title="Fim" style={_evpBtn("icone")}><_EvpIco n="fim" s={16}/></button>
             <span style={{fontFamily:_EVP_MONO,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",padding:"7px 11px",borderRadius:10,background:"#0b1020",color:"#e9e6ff",letterSpacing:".02em"}}>
               {_evTempo(tempo)} <span style={{color:"#7e7aa8"}}>/ {_evTempo(calc.total)}</span></span>
+            {/* v10e: logo no canto (marca d'água) — mostra ou esconde só neste vídeo */}
+            {(function(){ const temLogo = !!_evLogoKit(kit, t.client), lg = p.logo || {}, on = lg.mostrar === true || (lg.mostrar == null && !!(kit && kit.logo_mostrar === true));
+              return <button onClick={function(){ if(!temLogo){ _evToast("warning", "Este cliente não tem logo. Envie no Kit do cliente."); return; } mudar(function(np){ np.logo = Object.assign({}, np.logo, { mostrar:!on }); }); }}
+                aria-pressed={on} title={temLogo ? (on ? "Esconder a logo do canto neste vídeo" : "Mostrar a logo no canto neste vídeo") : "Envie a logo no Kit do cliente"}
+                style={Object.assign(_evpBtn(on ? "suave" : null), {marginLeft:6,opacity:temLogo ? 1 : 0.55})}><_EvpIco n={on ? "olho" : "olhoFechado"} s={15}/>Logo</button>; })()}
           </div>
           {/* barra do item selecionado */}
           <div style={{marginTop:10,width:"100%",maxWidth:880,flexShrink:0}}>
@@ -117400,7 +117481,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         </div>
         {sel && selObj ? (
           <_EvpInspetor prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
-            infoClipe={infoClipe} musicas={musicas} musInfo={musInfo} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
+            infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
             trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala}/>
         ) : (
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}/>
@@ -117410,7 +117491,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       {/* ── linha do tempo (grafite; a borda de cima muda a altura) ── */}
       <div style={{flexShrink:0}}>
         <_EvpTimeline p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
-          setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfo} batidas={batidas} gravando={gravando} comentarios={comentarios}
+          setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
           alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}/>
       </div>
 
@@ -117419,8 +117500,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:"center",justifyContent:"center",padding:16}}>
         <div ref={expRef} style={{width:"min(620px, 100%)",maxHeight:"90vh",overflow:"auto",position:"relative"}}>
           <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
-          <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfo} vozes={vozes} narr={narr} tratados={tratados}
-            logoUrl={_evLogo(t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
+          <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
+            logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
             vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
             onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
             prontoPC={!!pcAuto && !tratandoAudio && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)}/>
@@ -117510,7 +117591,7 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
   const [caixa, setCaixa] = useState(null);         // caixa do texto selecionado (px do canvas 1080×1920)
   const [escrevendo, setEscrevendo] = useState(null);
   const D = dim || { w:_EV_W, h:_EV_H }, ex = w / D.w, ey = h / D.h;
-  const textoSel = sel && (sel.tipo === "texto" || sel.tipo === "imagem") ? sel.id : null;
+  const textoSel = sel && (sel.tipo === "texto" || sel.tipo === "imagem") ? sel.id : sel && sel.tipo === "legenda" ? "legenda" : null;
   useEffect(function(){
     if(!textoSel){ setCaixa(null); return; }
     const iv = setInterval(function(){ const m = motorRef && motorRef.current; if(!m) return;
@@ -117537,6 +117618,19 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
     const hit = acharTexto(e);
     if(!hit){ if(!(onSemTexto && onSemTexto())) tocar(); return; }
     e.preventDefault();
+    if(hit.tipo === "legenda"){            // v10e: arrastar a legenda para onde quiser (para cima/baixo e para os lados)
+      onSelTexto("legenda", "legenda");
+      const x0 = e.clientX, y0 = e.clientY, anterior = pRef.current, lg0 = anterior.legenda || {};
+      const yBase = lg0.y != null ? _evpNum(lg0.y, 0.72) : (hit.y + hit.h / 2) / D.h, dx0 = _evpNum(lg0.dx, 0);
+      let movido = false, ultimo = null;
+      const mv = function(ev){ const dx = ev.clientX - x0, dy = ev.clientY - y0; if(!movido && Math.abs(dx) + Math.abs(dy) < 4) return; movido = true;
+        const np = _evpCopia(anterior); np.legenda = Object.assign({}, np.legenda);
+        let nx = _evClamp(dx0 + dx / w, -0.4, 0.4); if(Math.abs(nx) < 0.025) nx = 0;           // ímã no centro
+        np.legenda.y = Math.round(_evClamp(yBase + dy / h, 0.12, 0.92) * 1000) / 1000; np.legenda.dx = Math.round(nx * 1000) / 1000; ultimo = np; setP(np); };
+      const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); if(movido && ultimo) confirmar(anterior, ultimo); };
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+      return;
+    }
     if(hit.tipo === "imagem"){
       onSelTexto(hit.id, "imagem");
       const x0 = e.clientX, y0 = e.clientY, anterior = pRef.current, i0 = (anterior.imagens || []).find(function(q){ return q.id === hit.id; }); if(!i0) return;
@@ -117558,7 +117652,7 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
     const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); if(movido && ultimo) confirmar(anterior, ultimo); };
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
   };
-  const duplo = function(e){ if(soVer || enquadrar) return; const hit = acharTexto(e); if(!hit || hit.tipo === "imagem") return; const o = pRef.current.textos.find(function(q){ return q.id === hit.id; }); if(!o) return;
+  const duplo = function(e){ if(soVer || enquadrar) return; const hit = acharTexto(e); if(!hit || hit.tipo === "imagem" || hit.tipo === "legenda") return; const o = pRef.current.textos.find(function(q){ return q.id === hit.id; }); if(!o) return;
     onSelTexto(hit.id); setEscrevendo({ id:hit.id, caixa:hit, anterior:pRef.current, valor:o.texto }); };
   const fecharEscrita = function(salvar){
     const es = escrevendo; if(!es) return; setEscrevendo(null);
@@ -117591,7 +117685,7 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
       {caixa && !escrevendo && (
         <div style={{position:"absolute",left:caixa.x*ex - 4,top:caixa.y*ey - 4,width:caixa.w*ex + 8,height:caixa.h*ey + 8,border:"1.5px solid #fff",borderRadius:8,
           boxShadow:"0 0 0 1.5px " + _EVP_COR.roxo + ", 0 0 18px rgba(124,58,237,.6)",pointerEvents:"none"}}>
-          <span style={{position:"absolute",left:0,top:caixa.y*ey > 30 ? -22 : caixa.h*ey + 12,background:_EVP_COR.roxo,color:"#fff",fontSize:10,fontWeight:800,borderRadius:6,padding:"2px 6px",whiteSpace:"nowrap"}}>{sel && sel.tipo === "imagem" ? "arraste para mover · roda do mouse = tamanho" : "arraste para mover · duplo clique para escrever"}</span>
+          <span style={{position:"absolute",left:0,top:caixa.y*ey > 30 ? -22 : caixa.h*ey + 12,background:_EVP_COR.roxo,color:"#fff",fontSize:10,fontWeight:800,borderRadius:6,padding:"2px 6px",whiteSpace:"nowrap"}}>{sel && sel.tipo === "imagem" ? "arraste para mover · roda do mouse = tamanho" : sel && sel.tipo === "legenda" ? "arraste para mover a legenda" : "arraste para mover · duplo clique para escrever"}</span>
         </div>
       )}
       {escrevendo && (
@@ -117933,86 +118027,15 @@ function _EvpLooks({ thumbClipe, atual, onEscolher }){
 
 /* ─── MÚSICA: objetivo do vídeo, rank, ouvir, enviar várias de uma vez ─── */
 let _evpPlayer = null;
-function _EvpMusicas(q){
-  const { p, calc, mudar, musicas, musInfo, setMusica, onMusicasMudou } = q;
-  const [busca, setBusca] = useState(""); const [genero, setGenero] = useState(""); const [tocandoId, setTocandoId] = useState(null);
-  const [envio, setEnvio] = useState(null);       // lista de arquivos sendo preparados
-  const [editando, setEditando] = useState(null);
-  const inp = useRef(null);
-  useEffect(function(){ return function(){ if(_evpPlayer){ try{ _evpPlayer.pause(); }catch(_){} } }; }, []);
-  const objetivo = p.objetivo || "";
-  const lista = useMemo(function(){
-    const b = _evNorm(busca);
-    return (musicas||[]).filter(function(m){ return (!genero || m.genero === genero) && (!b || _evNorm(m.nome + " " + (m.genero||"") + " " + (m.clima||"")).indexOf(b) >= 0); })
-      .map(function(m){ return Object.assign({}, m, { nota:objetivo ? _evpNotaMusica(m, objetivo, calc.total) : null }); })
-      .sort(function(a, b2){ return (b2.nota == null ? -1 : b2.nota) - (a.nota == null ? -1 : a.nota) || String(b2.criado_em||"").localeCompare(String(a.criado_em||"")); });
-  }, [musicas, busca, genero, objetivo, calc.total]);
-  const generos = useMemo(function(){ const s = {}; (musicas||[]).forEach(function(m){ if(m.genero) s[m.genero] = 1; }); return Object.keys(s).sort(); }, [musicas]);
-  const ouvir = function(m){
-    try{
-      if(tocandoId === m.id && _evpPlayer){ _evpPlayer.pause(); setTocandoId(null); return; }
-      if(!_evpPlayer) _evpPlayer = new Audio();
-      _evpPlayer.pause(); _evpPlayer.src = m.url; _evpPlayer.currentTime = 0; _evpPlayer.volume = 0.8;
-      _evpPlayer.onended = function(){ setTocandoId(null); };
-      const pr = _evpPlayer.play(); if(pr && pr.catch) pr.catch(function(){ setTocandoId(null); });
-      setTocandoId(m.id);
-    }catch(_){ setTocandoId(null); }
-  };
-  /* envio: prepara cada arquivo (duração + BPM lidos do próprio arquivo) */
-  const escolherArquivos = async function(files){
-    const arr = Array.from(files || []).filter(function(f){ return /\.(mp3|m4a|aac|wav)$/i.test(f.name || ""); }).slice(0, 40);
-    if(!arr.length){ _evToast("warning", "Escolha arquivos MP3, M4A ou WAV."); return; }
-    const itens = arr.map(function(f){ return { f:f, id:_evpId(), nome:String(f.name).replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 120), genero:"", clima:"", energia:"",
-      objetivos:objetivo ? [objetivo] : [], fonte:"Envato Elements", licenca:"", bpm:null, duracao:null, estado:f.size > 40*1024*1024 ? "grande" : "lendo", pct:0 }; });
-    setEnvio(itens);
-    const AC = window.AudioContext || window.webkitAudioContext;
-    for(const it of itens){
-      if(it.estado === "grande") continue;
-      try{
-        const ab = await it.f.arrayBuffer(); const ac = new AC(); const buf = await ac.decodeAudioData(ab); try{ ac.close(); }catch(_){}
-        const bpm = await _evpDetectarBpm(buf);
-        setEnvio(function(l){ return (l||[]).map(function(x){ return x.id === it.id ? Object.assign({}, x, { duracao:Math.round(buf.duration), bpm:bpm, estado:"pronto",
-          energia:x.energia || (bpm >= 118 ? "alta" : bpm >= 92 ? "media" : "baixa") }) : x; }); });
-      }catch(_){ setEnvio(function(l){ return (l||[]).map(function(x){ return x.id === it.id ? Object.assign({}, x, { estado:"pronto" }) : x; }); }); }
-    }
-  };
-  const mudarItem = function(id, campos){ setEnvio(function(l){ return (l||[]).map(function(x){ return x.id === id ? Object.assign({}, x, campos) : x; }); }); };
-  const aplicarTodos = function(campo, valor){ setEnvio(function(l){ return (l||[]).map(function(x){ const o = Object.assign({}, x); o[campo] = valor; return o; }); }); };
-  const enviarTodos = async function(){
-    const falta = (envio||[]).filter(function(x){ return x.estado === "pronto" && (!x.clima || !x.nome.trim()); });
-    if(falta.length){ _evToast("warning", "Falta o clima (ou o nome) em " + falta.length + " música" + (falta.length > 1 ? "s" : "") + "."); return; }
-    let ok = 0, falhas = 0;
-    for(const it of (envio||[])){
-      if(it.estado !== "pronto") continue;
-      mudarItem(it.id, { estado:"enviando", pct:0 });
-      try{
-        const ext = (it.f.name.split(".").pop() || "mp3").toLowerCase();
-        const path = "musicas/" + Date.now() + "-" + Math.random().toString(36).slice(2, 10) + "." + ext;
-        await pxUploadResumable(it.f, path, function(pc){ mudarItem(it.id, { pct:pc }); });
-        const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
-        const lic = it.licenca.trim() || (it.fonte === "Envato Elements" ? "Envato Elements — registrar a música em cada projeto antes de publicar" : it.fonte);
-        const r = await window._sb.rpc("criacao_musica_salvar2", { p_url:url, p_path:path, p_duracao:it.duracao, p_dados:{ nome:it.nome, clima:it.clima, genero:it.genero, objetivos:it.objetivos,
-          bpm:it.bpm, energia:it.energia, fonte:it.fonte, licenca:lic } });
-        if(r.error) throw new Error(r.error.message);
-        mudarItem(it.id, { estado:"ok" }); ok++;
-      }catch(e){ falhas++; mudarItem(it.id, { estado:"erro", erro:String((e && e.message) || e) }); }
-    }
-    if(ok){ _evToast("success", ok + " música" + (ok > 1 ? "s" : "") + " na biblioteca"); if(onMusicasMudou) onMusicasMudou(); }
-    if(!falhas) setEnvio(null);          // tudo certo: fecha a janela (com erro, fica aberta mostrando qual falhou)
-  };
-  const salvarEdicao = async function(){
-    const m = editando; if(!m) return;
-    const r = await window._sb.rpc("criacao_musica_editar", { p_id:m.id, p_dados:{ nome:m.nome, clima:m.clima, genero:m.genero, objetivos:m.objetivos || [], bpm:m.bpm, energia:m.energia, fonte:m.fonte, licenca:m.licenca } });
-    if(r.error){ _evToast("error", "Não salvou: " + r.error.message); return; }
-    _evToast("success", "Música atualizada"); setEditando(null); if(onMusicasMudou) onMusicasMudou();
-  };
-  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"6px 8px", borderRadius:8, borderWidth:1, borderStyle:"solid", borderColor:_EVP_COR.linha, fontSize:12, background:_EVP_COR.campo, userSelect:"text" };
-  const fichaCampos = function(x, set){
+/* ─── v10e: ENVIAR VÁRIAS MÚSICAS de uma vez (biblioteca e menu Música do Estúdio) — duração, BPM e VOLUME lidos do arquivo ─── */
+const _EVP_CAMPO_MUS = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"6px 8px", borderRadius:8, borderWidth:1, borderStyle:"solid", borderColor:_EVP_COR.linha, fontSize:12, background:_EVP_COR.campo, userSelect:"text" };
+function _evpFichaMusica(x, set){
+  const campo = _EVP_CAMPO_MUS;
     return (
       <div style={{display:"grid",gap:6}}>
         <input value={x.nome} onChange={function(e){ set({ nome:e.target.value }); }} placeholder="Nome" style={campo}/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6}}>
-          <input list="evp-generos" value={x.genero || ""} onChange={function(e){ set({ genero:e.target.value }); }} placeholder="Pegada (ex.: Country)" style={campo}/>
+          <input list="evp-generos-envio" value={x.genero || ""} onChange={function(e){ set({ genero:e.target.value }); }} placeholder="Pegada (ex.: Country)" style={campo}/>
           <select value={x.clima || ""} onChange={function(e){ set({ clima:e.target.value }); }} style={Object.assign({}, campo, !x.clima ? { borderColor:"#f59e0b" } : {})}>
             <option value="">Clima…</option>{_EV_CLIMAS.map(function(c){ return <option key={c.id} value={c.id}>{c.label}</option>; })}</select>
           <select value={x.energia || ""} onChange={function(e){ set({ energia:e.target.value }); }} style={campo}>
@@ -118027,26 +118050,72 @@ function _EvpMusicas(q){
         </div>
       </div>
     );
+}
+function _EvpEnvioMusicas({ objetivo, onEnviou, modo, generos }){
+  const [envio, setEnvio] = useState(null);
+  const envioRef = useRef(null); envioRef.current = envio;
+  const inp = useRef(null);
+  const [sobre, setSobre] = useState(false);
+  const campo = _EVP_CAMPO_MUS;
+  const fichaCampos = _evpFichaMusica;
+  /* envio: prepara cada arquivo (duração + BPM lidos do próprio arquivo) */
+  const escolherArquivos = async function(files){
+    const arr = Array.from(files || []).filter(function(f){ return /\.(mp3|m4a|aac|wav)$/i.test(f.name || ""); }).slice(0, 40);
+    if(!arr.length){ _evToast("warning", "Escolha arquivos MP3, M4A ou WAV."); return; }
+    const itens = arr.map(function(f){ return { f:f, id:_evpId(), nome:String(f.name).replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 120), genero:"", clima:"", energia:"",
+      objetivos:objetivo ? [objetivo] : [], fonte:"Envato Elements", licenca:"", bpm:null, duracao:null, estado:f.size > 40*1024*1024 ? "grande" : "lendo", pct:0 }; });
+    setEnvio(itens);
+    const AC = window.AudioContext || window.webkitAudioContext;
+    for(const it of itens){
+      if(it.estado === "grande") continue;
+      try{
+        const ab = await it.f.arrayBuffer(); const ac = new AC(); const buf = await ac.decodeAudioData(ab); try{ ac.close(); }catch(_){}
+        const bpm = await _evpDetectarBpm(buf), nivel = _evpNivelDb(buf);          // v10e: o volume da música também é medido
+        setEnvio(function(l){ return (l||[]).map(function(x){ return x.id === it.id ? Object.assign({}, x, { duracao:Math.round(buf.duration), bpm:bpm, nivel:nivel, estado:"pronto",
+          energia:x.energia || (bpm >= 118 ? "alta" : bpm >= 92 ? "media" : "baixa") }) : x; }); });
+      }catch(_){ setEnvio(function(l){ return (l||[]).map(function(x){ return x.id === it.id ? Object.assign({}, x, { estado:"pronto" }) : x; }); }); }
+    }
   };
+  const mudarItem = function(id, campos){ setEnvio(function(l){ return (l||[]).map(function(x){ return x.id === id ? Object.assign({}, x, campos) : x; }); }); };
+  const aplicarTodos = function(campo, valor){ setEnvio(function(l){ return (l||[]).map(function(x){ const o = Object.assign({}, x); o[campo] = valor; return o; }); }); };
+  const enviarTodos = async function(){
+    const falta = (envio||[]).filter(function(x){ return x.estado === "pronto" && (!x.clima || !x.nome.trim()); });
+    if(falta.length){ _evToast("warning", "Falta o clima (ou o nome) em " + falta.length + " música" + (falta.length > 1 ? "s" : "") + "."); return; }
+    let ok = 0, falhas = 0;
+    for(const it0 of (envio||[])){
+      const it = (envioRef.current || []).find(function(x){ return x.id === it0.id; }) || it0;
+      if(it.estado !== "pronto") continue;
+      mudarItem(it.id, { estado:"enviando", pct:0 });
+      try{
+        const ext = (it.f.name.split(".").pop() || "mp3").toLowerCase();
+        const path = "musicas/" + Date.now() + "-" + Math.random().toString(36).slice(2, 10) + "." + ext;
+        await pxUploadResumable(it.f, path, function(pc){ mudarItem(it.id, { pct:pc }); });
+        const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+        const lic = it.licenca.trim() || (it.fonte === "Envato Elements" ? "Envato Elements — registrar a música em cada projeto antes de publicar" : it.fonte);
+        const r = await window._sb.rpc("criacao_musica_salvar2", { p_url:url, p_path:path, p_duracao:it.duracao, p_dados:{ nome:it.nome, clima:it.clima, genero:it.genero, objetivos:it.objetivos,
+          bpm:it.bpm, energia:it.energia, fonte:it.fonte, licenca:lic } });
+        if(r.error) throw new Error(r.error.message);
+        const cur = (envioRef.current || []).find(function(x){ return x.id === it.id; }) || it;
+        if(r.data && cur.nivel != null){ try{ await window._sb.rpc("criacao_musica_nivel", { p_id:r.data, p_nivel:cur.nivel }); }catch(_){} }
+        mudarItem(it.id, { estado:"ok" }); ok++;
+      }catch(e){ falhas++; mudarItem(it.id, { estado:"erro", erro:String((e && e.message) || e) }); }
+    }
+    if(ok){ _evToast("success", ok + " música" + (ok > 1 ? "s" : "") + " na biblioteca"); if(onEnviou) onEnviou(); }
+    if(!falhas) setEnvio(null);          // tudo certo: fecha a janela (com erro, fica aberta mostrando qual falhou)
+  };
+  const soltar = function(e){ e.preventDefault(); setSobre(false); if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) escolherArquivos(e.dataTransfer.files); };
   return (
     <div>
-      <datalist id="evp-generos">{_EVP_GENEROS.concat(generos).filter(function(g, i, a){ return a.indexOf(g) === i; }).map(function(g){ return <option key={g} value={g}/>; })}</datalist>
-      <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="musica"/></span>Música</div>
-      <div style={_EVP_TIT}>Objetivo deste vídeo (monta o rank)</div>
-      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-        {_EVP_OBJETIVOS.map(function(o){ const on = objetivo === o.id;
-          return <button key={o.id} onClick={function(){ mudar(function(np){ np.objetivo = on ? "" : o.id; }); }} style={Object.assign(_evpChip(on), {padding:"4px 8px",fontSize:11})}>{o.label}</button>; })}
-      </div>
-      {p.musica && (
-        <div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:10,background:_EVP_COR.faixa,marginTop:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700}}><_EvpIco n="batida" s={16}/>Ritmo
-            <span style={{marginLeft:"auto",fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.sub}}>{musInfo && musInfo.bpm ? Math.round(musInfo.bpm) + " BPM" : "BPM ?"}</span></div>
-          <div style={{fontSize:11,color:_EVP_COR.fraco,margin:"4px 0 6px"}}>{(q.batidas || []).length ? (q.batidas || []).length + " batidas marcadas na faixa Música." : musInfo && musInfo.bpm ? "Lendo onde caem as batidas…" : "Esta música está sem BPM. Edite os dados dela (lápis) e informe o BPM."}</div>
-          <button onClick={q.encaixarBatida} disabled={!(q.batidas || []).length} style={Object.assign(_evpBtn((q.batidas || []).length ? "suave" : null, !!(q.batidas || []).length), {width:"100%",justifyContent:"center"})}><_EvpIco n="batida" s={15}/>Encaixar os cortes na batida</button>
+      <datalist id="evp-generos-envio">{_EVP_GENEROS.concat(generos || []).filter(function(g, i, a){ return a.indexOf(g) === i; }).map(function(g){ return <option key={g} value={g}/>; })}</datalist>
+      {modo === "area" && !envio && (
+        <div onClick={function(){ if(inp.current) inp.current.click(); }} onDragOver={function(e){ e.preventDefault(); setSobre(true); }} onDragLeave={function(){ setSobre(false); }} onDrop={soltar}
+          role="button" tabIndex={0} onKeyDown={function(e){ if(e.key === "Enter" && inp.current) inp.current.click(); }}
+          style={{border:"2px dashed " + (sobre ? _EV.roxo : _EV.linha),borderRadius:14,padding:"22px 16px",textAlign:"center",cursor:"pointer",background:sobre ? _EV.roxoClaro : "#fff",transition:"background .15s"}}>
+          <div style={{fontWeight:800,fontSize:15,color:_EV.roxo}}>Arraste as músicas aqui ou clique para escolher</div>
+          <div style={{fontSize:12.5,color:_EV.sub,marginTop:4}}>Várias de uma vez (até 40) · MP3, M4A ou WAV · até 40 MB cada. Duração, BPM e volume são lidos do arquivo.</div>
         </div>
       )}
-
-      {!envio && (
+      {!envio && modo !== "area" && (
         <button onClick={function(){ if(inp.current) inp.current.click(); }} style={Object.assign(_evpBtn("primario"), {width:"100%",justifyContent:"center",marginTop:12})}><_EvpIco n="enviar" s={16}/>Enviar músicas</button>
       )}
       <input ref={inp} type="file" multiple accept=".mp3,.m4a,.aac,.wav,audio/*" style={{display:"none"}} onChange={function(e){ escolherArquivos(e.target.files); e.target.value = ""; }}/>
@@ -118057,7 +118126,7 @@ function _EvpMusicas(q){
           <div style={Object.assign({}, _EVP_PAINEL, {background:_EVP_COR.campo,width:"min(760px, 100%)",maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",userSelect:"text"})}>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:"1px solid " + _EVP_COR.linha}}>
               <span style={{width:30,height:30,borderRadius:9,display:"grid",placeItems:"center",color:"#fff",background:"linear-gradient(135deg," + _EVP_COR.roxo + "," + _EVP_COR.roxo2 + ")"}}><_EvpIco n="enviar" s={16}/></span>
-              <div><b style={{fontSize:15}}>Enviar {envio.length} música{envio.length > 1 ? "s" : ""}</b><div style={{fontSize:11.5,color:_EVP_COR.sub}}>Duração e BPM são lidos do próprio arquivo. O clima é obrigatório.</div></div>
+              <div><b style={{fontSize:15}}>Enviar {envio.length} música{envio.length > 1 ? "s" : ""}</b><div style={{fontSize:11.5,color:_EVP_COR.sub}}>Duração, BPM e volume são lidos do próprio arquivo. O clima é obrigatório.</div></div>
               <button onClick={function(){ setEnvio(null); }} aria-label="Fechar" style={Object.assign(_evpBtn("icone"), {marginLeft:"auto"})}><_EvpIco n="fechar" s={16}/></button>
             </div>
             {envio.length > 1 && (
@@ -118065,7 +118134,7 @@ function _EvpMusicas(q){
                 <span style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.sub}}>Em todas:</span>
                 <select aria-label="Clima em todas" value="" onChange={function(e){ if(e.target.value) aplicarTodos("clima", e.target.value); }} style={Object.assign({}, campo, {width:"auto"})}><option value="">Clima…</option>{_EV_CLIMAS.map(function(c){ return <option key={c.id} value={c.id}>{c.label}</option>; })}</select>
                 <select value="" onChange={function(e){ if(e.target.value) aplicarTodos("fonte", e.target.value); }} style={Object.assign({}, campo, {width:"auto"})}><option value="">Fonte…</option>{_EVP_FONTES.map(function(f){ return <option key={f} value={f}>{f}</option>; })}</select>
-                <input list="evp-generos" placeholder="Pegada…" onKeyDown={function(e){ if(e.key === "Enter"){ aplicarTodos("genero", e.target.value); } }} onBlur={function(e){ if(e.target.value) aplicarTodos("genero", e.target.value); }} style={Object.assign({}, campo, {width:170})}/>
+                <input list="evp-generos-envio" placeholder="Pegada…" onKeyDown={function(e){ if(e.key === "Enter"){ aplicarTodos("genero", e.target.value); } }} onBlur={function(e){ if(e.target.value) aplicarTodos("genero", e.target.value); }} style={Object.assign({}, campo, {width:170})}/>
               </div>
             )}
             <div style={{overflow:"auto",padding:"4px 16px 12px"}}>
@@ -118091,6 +118160,60 @@ function _EvpMusicas(q){
         </div>
       )}
 
+    </div>
+  );
+}
+
+function _EvpMusicas(q){
+  const { p, calc, mudar, musicas, musInfo, setMusica, onMusicasMudou } = q;
+  const [busca, setBusca] = useState(""); const [genero, setGenero] = useState(""); const [tocandoId, setTocandoId] = useState(null);
+  const [editando, setEditando] = useState(null);
+  useEffect(function(){ return function(){ if(_evpPlayer){ try{ _evpPlayer.pause(); }catch(_){} } }; }, []);
+  const objetivo = p.objetivo || "";
+  const lista = useMemo(function(){
+    const b = _evNorm(busca);
+    return (musicas||[]).filter(function(m){ return (!genero || m.genero === genero) && (!b || _evNorm(m.nome + " " + (m.genero||"") + " " + (m.clima||"")).indexOf(b) >= 0); })
+      .map(function(m){ return Object.assign({}, m, { nota:objetivo ? _evpNotaMusica(m, objetivo, calc.total) : null }); })
+      .sort(function(a, b2){ return (b2.nota == null ? -1 : b2.nota) - (a.nota == null ? -1 : a.nota) || String(b2.criado_em||"").localeCompare(String(a.criado_em||"")); });
+  }, [musicas, busca, genero, objetivo, calc.total]);
+  const generos = useMemo(function(){ const s = {}; (musicas||[]).forEach(function(m){ if(m.genero) s[m.genero] = 1; }); return Object.keys(s).sort(); }, [musicas]);
+  const ouvir = function(m){
+    try{
+      if(tocandoId === m.id && _evpPlayer){ _evpPlayer.pause(); setTocandoId(null); return; }
+      if(!_evpPlayer) _evpPlayer = new Audio();
+      _evpPlayer.pause(); _evpPlayer.src = m.url; _evpPlayer.currentTime = 0; _evpPlayer.volume = 0.8;
+      _evpPlayer.onended = function(){ setTocandoId(null); };
+      const pr = _evpPlayer.play(); if(pr && pr.catch) pr.catch(function(){ setTocandoId(null); });
+      setTocandoId(m.id);
+    }catch(_){ setTocandoId(null); }
+  };
+  const salvarEdicao = async function(){
+    const m = editando; if(!m) return;
+    const r = await window._sb.rpc("criacao_musica_editar", { p_id:m.id, p_dados:{ nome:m.nome, clima:m.clima, genero:m.genero, objetivos:m.objetivos || [], bpm:m.bpm, energia:m.energia, fonte:m.fonte, licenca:m.licenca } });
+    if(r.error){ _evToast("error", "Não salvou: " + r.error.message); return; }
+    _evToast("success", "Música atualizada"); setEditando(null); if(onMusicasMudou) onMusicasMudou();
+  };
+  const campo = _EVP_CAMPO_MUS;
+  const fichaCampos = _evpFichaMusica;
+  return (
+    <div>
+      <datalist id="evp-generos">{_EVP_GENEROS.concat(generos).filter(function(g, i, a){ return a.indexOf(g) === i; }).map(function(g){ return <option key={g} value={g}/>; })}</datalist>
+      <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="musica"/></span>Música</div>
+      <div style={_EVP_TIT}>Objetivo deste vídeo (monta o rank)</div>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+        {_EVP_OBJETIVOS.map(function(o){ const on = objetivo === o.id;
+          return <button key={o.id} onClick={function(){ mudar(function(np){ np.objetivo = on ? "" : o.id; }); }} style={Object.assign(_evpChip(on), {padding:"4px 8px",fontSize:11})}>{o.label}</button>; })}
+      </div>
+      {p.musica && (
+        <div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:10,background:_EVP_COR.faixa,marginTop:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700}}><_EvpIco n="batida" s={16}/>Ritmo
+            <span style={{marginLeft:"auto",fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.sub}}>{musInfo && musInfo.bpm ? Math.round(musInfo.bpm) + " BPM" : "BPM ?"}</span></div>
+          <div style={{fontSize:11,color:_EVP_COR.fraco,margin:"4px 0 6px"}}>{(q.batidas || []).length ? (q.batidas || []).length + " batidas marcadas na faixa Música." : musInfo && musInfo.bpm ? "Lendo onde caem as batidas…" : "Esta música está sem BPM. Edite os dados dela (lápis) e informe o BPM."}</div>
+          <button onClick={q.encaixarBatida} disabled={!(q.batidas || []).length} style={Object.assign(_evpBtn((q.batidas || []).length ? "suave" : null, !!(q.batidas || []).length), {width:"100%",justifyContent:"center"})}><_EvpIco n="batida" s={15}/>Encaixar os cortes na batida</button>
+        </div>
+      )}
+
+      <_EvpEnvioMusicas objetivo={objetivo} onEnviou={onMusicasMudou} generos={generos}/>
       <div style={{display:"flex",gap:6,marginTop:12}}>
         <div style={{position:"relative",flex:1}}>
           <span style={{position:"absolute",left:8,top:7,color:_EVP_COR.fraco}}><_EvpIco n="busca" s={15}/></span>
@@ -118125,6 +118248,22 @@ function _EvpMusicas(q){
   );
 }
 
+/* v10e: quanto a música fica abaixo da voz (voz nivelada a −18 dB) — a IA e o Estúdio usam a mesma conta */
+function _EvpNivelMusica({ mu, nivel, aplicarVol }){
+  const nf = _evpMusNaFala(mu, nivel), ideal = _evpVolIdeal(mu, nivel);
+  const st = !nf ? null : nf.fala < -36 ? ["baixa", "Baixa demais: some no celular", _EV.amarelo, _EVP_COR.aviso] : nf.fala > -25 ? ["alta", "Alta: pode cobrir a voz", _EV.verm, _EV.vermClaro] : ["ok", "No ponto: presente sem cobrir a voz", _EV.verde, _EVP_COR.ok];
+  return (
+    <div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:10,padding:"8px 10px",margin:"2px 0 10px",background:_EVP_COR.faixa,fontSize:11.5}}>
+      {nf ? (<div>
+        <div style={{display:"flex",gap:6,alignItems:"center",fontWeight:800,color:st[2]}}><span style={{width:8,height:8,borderRadius:9,background:st[2]}}/>{st[1]}</div>
+        <div style={{color:_EVP_COR.sub,marginTop:3,fontFamily:_EVP_MONO,fontSize:10.5}}>música na fala {nf.fala} dB · sem fala {nf.solta} dB · voz −18 dB</div>
+      </div>) : <div style={{color:_EVP_COR.sub}}>Medindo o volume desta música…</div>}
+      {nf && Math.abs(ideal - _evpNum(mu.vol, 0.15)) >= 0.02 && (
+        <button onClick={function(){ aplicarVol(ideal); }} style={Object.assign(_evpBtn(st && st[0] !== "ok" ? "primario" : "suave"), {width:"100%",justifyContent:"center",marginTop:7})}>Acertar volume ({Math.round(ideal * 100)}%): uns 13 dB abaixo da voz</button>)}
+    </div>
+  );
+}
+
 /* estilo da legenda (menu Legenda e painel da direita) */
 function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
   const lg = p.legenda || {};
@@ -118135,8 +118274,33 @@ function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
   const mudarArea = function(v){ setAreaSegura(v); try{ localStorage.setItem("pxev-area-segura", v ? "1" : "0"); }catch(_){} try{ window.dispatchEvent(new Event("pxev-area-segura")); }catch(_){} };
   const sel = {font:"inherit",padding:"6px 8px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo};
   const tit = function(x){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:_EVP_COR.sub,margin:"8px 0 4px"}}>{x}</div>; };
+  // v10e: cores livres — bolinhas prontas + qualquer cor
+  const corKit = /^#[0-9a-fA-F]{6}$/.test(String(kit.cor_principal || "")) ? kit.cor_principal : "#7c3aed";
+  const paleta = [["#ffffff","Branco"],["#facc15","Amarelo"],[corKit,"Cor do cliente"],["#22c55e","Verde"],["#f97316","Laranja"],["#ef4444","Vermelho"],["#3b82f6","Azul"],["#111111","Preto"]];
+  const linhaCores = function(campo, atual, padraoRot){
+    return (
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+        <button onClick={function(){ mudar(function(np){ np.legenda[campo] = ""; }); }} title={padraoRot} aria-label={padraoRot}
+          style={Object.assign(_evpChip(!atual), {padding:"3px 8px",fontSize:10.5})}>Padrão</button>
+        {paleta.map(function(c){ const on = String(atual || "").toLowerCase() === c[0].toLowerCase();
+          return <button key={c[0] + c[1]} onClick={function(){ mudar(function(np){ np.legenda[campo] = c[0]; }); }} title={c[1]} aria-label={c[1]}
+            style={{width:24,height:24,borderRadius:99,border:"2px solid " + (on ? _EVP_COR.roxo : "rgba(15,23,42,.18)"),background:c[0],cursor:"pointer",padding:0,boxShadow:on ? "0 0 0 2px rgba(124,58,237,.25)" : "none"}}/>; })}
+        <input type="color" value={atual || "#ffffff"} aria-label="Outra cor" title="Outra cor"
+          onChange={function(e){ const v = e.target.value; ctl.vivo(function(np){ np.legenda[campo] = v; }); }} onBlur={ctl.fim}
+          style={{width:30,height:26,border:0,padding:0,background:"none",cursor:"pointer"}}/>
+      </div>);
+  };
   return (
     <div>
+      {tit("Linhas")}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
+        {[[1,"Uma linha"],[2,"Até 2 linhas"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(function(np){ np.legenda.linhas = o[0]; }); }} style={_evpChip(_evpNum(lg.linhas, 1) === o[0])}>{o[1]}</button>; })}
+      </div>
+      {tit("Cor da letra")}
+      {linhaCores("corTexto", lg.corTexto, "Branco (padrão)")}
+      {tit("Cor do destaque")}
+      {linhaCores("corDestaque", lg.corDestaque, "Cor escolhida abaixo (padrão)")}
+      <div style={{fontSize:11,color:_EVP_COR.sub,margin:"-2px 0 6px"}}>Para mover a legenda: arraste ela no vídeo.</div>
       {tit("Modelo")}
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
         {_EVP_LEG_ESTILOS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.estilo = o.id; }); }} style={_evpChip(est === o.id)}>{o.label}</button>; })}
@@ -118147,7 +118311,7 @@ function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
       </div>
       {tit("Posição")}
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
-        {_EVP_LEG_POS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.posicao = o.id; np.legenda.y = null; }); }} style={_evpChip(lg.y == null && pos === o.id)}>{o.label}</button>; })}
+        {_EVP_LEG_POS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.posicao = o.id; np.legenda.y = null; np.legenda.dx = 0; }); }} style={_evpChip(lg.y == null && pos === o.id)}>{o.label}</button>; })}
       </div>
       <_EvpSlider ctl={ctl} rotulo="Altura na tela" v={lg.y != null ? _evpNum(lg.y, 0.72) : (pos === "centro" ? 0.52 : pos === "baixo" ? 0.75 : pos === "anuncio" ? 0.61 : 0.755)} min={0.15} max={0.9} step={0.005} fmt={function(v){ return Math.round(v*100) + "%"; }} aplicar={function(np, v){ np.legenda.y = v; }}/>
       <div style={{fontSize:11,color:_EVP_COR.sub,margin:"-4px 0 8px"}}>Área segura: fora dos 14% de cima e dos 20% de baixo que o Instagram cobre (35% em anúncio). O tamanho da letra nunca muda sozinho: a linha quebra por palavra.</div>
@@ -118157,7 +118321,7 @@ function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
         <select value={lg.fonte || ""} aria-label="Fonte da legenda" onChange={function(e){ const v = e.target.value; try{ if(v) _evCarregarFonte(v); }catch(_){} mudar(function(np){ np.legenda.fonte = v; }); }} style={sel}>
           <option value="">Fonte do kit</option>{_EV_FONTES.map(function(f){ return <option key={f} value={f}>{f}</option>; })}</select>
-        <select value={lg.cor || "principal"} aria-label="Cor de destaque da legenda" onChange={function(e){ const v = e.target.value; mudar(function(np){ np.legenda.cor = v; }); }} style={sel}>
+        <select value={lg.cor || "principal"} aria-label="Cor de destaque da legenda" onChange={function(e){ const v = e.target.value; mudar(function(np){ np.legenda.cor = v; np.legenda.corDestaque = ""; }); }} style={sel}>
           <option value="principal">Destaque: cor do cliente</option><option value="amarelo">Destaque: amarelo</option><option value="branco">Destaque: branco</option></select>
       </div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
@@ -118972,8 +119136,12 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
           {/envato/i.test(info.fonte || "") && <div style={{marginTop:10,display:"flex",gap:6,fontSize:11.5,color:_EV.amarelo,fontWeight:700}}><_EvpIco n="licenca" s={14}/>Música do Envato: registre no projeto deste vídeo antes de publicar.</div>}
         </div>)}
         {ferr === "volume" && (<div>
-          <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(mu.vol, 0.15)} min={0} max={1} step={0.01} fmt={pct} padrao={0.15} aplicar={nm(function(o, v){ o.vol = v; })}/>
+          <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(mu.vol, 0.15)} min={0} max={1} step={0.01} fmt={pct} padrao={0.3} aplicar={nm(function(o, v){ o.vol = v; })}/>
+          <_EvpNivelMusica mu={mu} nivel={info.nivel_db != null ? Number(info.nivel_db) : null} aplicarVol={function(v){ mudar(nm(function(o){ o.vol = v; })); }}/>
           <_EvpInterruptor on={mu.duck !== false} onChange={function(v){ mudar(nm(function(o){ o.duck = v; })); }} label="Abaixar quando tem fala"/>
+          {mu.duck !== false && (<div style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
+            {[[0.63,"Pouco (−4 dB)"],[0.45,"Médio (−7 dB)"],[0.3,"Muito (−10 dB)"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(nm(function(x){ x.abaixa = o[0]; })); }} style={_evpChip(_evpNum(mu.abaixa, 0.45) === o[0])}>{o[1]}</button>; })}
+          </div>)}
           <_EvpInterruptor on={!!mu.mudo} onChange={function(v){ mudar(nm(function(o){ o.mudo = v; })); }} label="Música muda"/>
         </div>)}
         {ferr === "suave" && (<div>
@@ -119119,9 +119287,28 @@ function _evpConferir(p, calc, o){
     else if(pico > 1.15) add("aviso", "A fala passa do limite em algum trecho", "O limitador segura, mas vale abaixar o volume do clipe mais alto.");
     else add("ok", "Volume da fala no ponto (" + Math.round(db) + " dB)"); }
   if(mudosComFala) add("aviso", mudosComFala + " clipe" + (mudosComFala > 1 ? "s" : "") + " com fala está mudo", "Confira se foi de propósito.");
+  // v10e: palavra cortada — um clipe de fala não pode terminar (nem começar) com a voz no meio do som
+  const cortadas = [];
+  calc.clips.forEach(function(c, i){
+    if(!_evpClipeFalaNormal(c) || c.mudo || fv.mudo) return; const b = vozes[c.clipe]; if(!b || c.fim - c.ini < 0.5) return;
+    const d = b.getChannelData(0), sr = b.sampleRate;
+    const db = function(t0, t1){ const a = Math.max(0, Math.floor(t0 * sr)), z = Math.min(d.length, Math.floor(t1 * sr)); let s2 = 0, n = 0; for(let k=a;k<z;k+=2){ s2 += d[k]*d[k]; n++; } return n ? 10 * Math.log10(s2 / n + 1e-12) : -120; };
+    const med = db(c.ini, c.fim), fim = db(c.fim - 0.04, c.fim), ini = db(c.ini, c.ini + 0.04);
+    if(fim > -40 && fim > med - 4) cortadas.push({ c:c, t:c.t1 });
+    else if(i > 0 && ini > -40 && ini > med - 4) cortadas.push({ c:c, t:c.t0 });
+  });
+  if(cortadas.length) add("aviso", cortadas.length + " corte" + (cortadas.length > 1 ? "s" : "") + " no meio da fala", "A palavra pode estar cortada em " + cortadas.slice(0, 4).map(function(x){ return _evTempo(x.t); }).join(", ") + ". Estique o clipe até o silêncio.", { id:"clip", alvo:cortadas[0].c.id, label:"Ver o 1º" });
+  else if(peso) add("ok", "Nenhuma fala cortada no meio da palavra");
   // música
   if(p.musica && !p.musica.mudo){
     if(_evpNum(p.musica.vol, 0.15) > 0.35 && p.musica.duck === false) add("aviso", "Música alta e sem abaixar na fala", "Pode cobrir a voz.", { id:"duck", label:"Abaixar na fala" });
+    // v10e: volume real da música na fala (medido)
+    const nf = _evpMusNaFala(p.musica, o.musInfo && o.musInfo.nivel_db != null ? Number(o.musInfo.nivel_db) : null);
+    if(nf && peso){
+      if(nf.fala < -36) add("aviso", "Música baixa demais (" + Math.round(nf.fala) + " dB na fala)", "A voz fica em −18 dB e a música some no celular. O ideal é uns −31 dB.", { id:"musvol", label:"Acertar volume" });
+      else if(nf.fala > -25) add("aviso", "Música alta na fala (" + Math.round(nf.fala) + " dB)", "Pode cobrir a voz. O ideal é uns −31 dB.", { id:"musvol", label:"Acertar volume" });
+      else add("ok", "Volume da música no ponto (" + Math.round(nf.fala) + " dB na fala)");
+    }
     if(o.musInfo && /envato/i.test(o.musInfo.fonte || "") && !p.musica.licenca_ok) add("erro", "Música do Envato sem registro neste vídeo", "Registre no Envato e marque a caixa abaixo.");
     else add("ok", "Música: " + ((o.musInfo && o.musInfo.nome) || "escolhida"));
   } else add("aviso", "Vídeo sem música", "Escolha uma no menu Música (tem rank pelo objetivo).");
@@ -119177,6 +119364,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     if(!a) return;
     if(a.id === "nivelar") mudar(function(np){ np.audio.nivelar = true; });
     else if(a.id === "duck") mudar(function(np){ if(np.musica) np.musica.duck = true; });
+    else if(a.id === "musvol") mudar(function(np){ if(np.musica) np.musica.vol = _evpVolIdeal(np.musica, musInfo && musInfo.nivel_db != null ? Number(musInfo.nivel_db) : null); });
     else if(a.id === "legenda") mudar(function(np){ np.legenda.ativa = true; });
     else if(a.id === "silencio") tirarTrechos(a.lista, "Silêncios tirados");
     else if(a.id === "texto"){ const x = (projeto.textos || []).find(function(q){ return q.id === a.alvo; }); if(x){ setSel({ tipo:"texto", id:x.id }); irPara(x.t0 + 0.05); } }
