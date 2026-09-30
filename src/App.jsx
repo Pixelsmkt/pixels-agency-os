@@ -113740,6 +113740,8 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v10d (30/09/2026) — APOIO COM VELOCIDADE: vídeo por cima com "vel" (0,5 a 2×; a IA acelera processo e deixa lento o que é beleza/emoção),
+     slider "Velocidade do apoio" e o motivo da cena ("Por que esta cena") no painel.
    v10c (30/09/2026) — MÚSICA E EFEITOS VOLTARAM: "musica, sfx, audio" tinham ficado dentro de um comentário no cálculo do vídeo
      (desde a mudança da legenda na área segura) — a música de fundo e os efeitos sonoros não tocavam nem no navegador nem no PC.
    v10b (30/09/2026) — SOM NO PC: o Exportar automático do PC começava antes de carregar o áudio da fala (tratandoAudio nascia "false")
@@ -115267,7 +115269,9 @@ function _evpNormalizar(p, clipes){
     const o = Object.assign({ id:_evpId(), camada:"imagem", t0:0, t1:3, x:0.5, y:0.3, escala:0.35, rot:0, anim:"pop", nome:"" }, x);
     o.t0 = Math.max(0, _evpNum(o.t0,0)); o.t1 = Math.max(o.t0 + 0.2, _evpNum(o.t1, o.t0 + 3));
     if(o.camada === "video"){                  // vídeo sobre vídeo: toca o bruto a partir de "ini" (1x)
-      const d = dur[o.clipe] || 9999; o.ini = Math.max(0, Math.min(d - 0.2, _evpNum(o.ini, 0))); o.t1 = Math.min(o.t1, o.t0 + (d - o.ini));
+      const d = dur[o.clipe] || 9999; o.ini = Math.max(0, Math.min(d - 0.2, _evpNum(o.ini, 0)));
+      o.vel = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1)));                 // v10d: velocidade do vídeo por cima (apoio acelerado ou lento)
+      o.t1 = Math.min(o.t1, o.t0 + (d - o.ini) / o.vel);
       o.vol = Math.max(0, Math.min(2, _evpNum(o.vol, 1))); o.mudo = o.mudo !== false; o.borda = o.borda !== false; o.cantos = Math.max(0, Math.min(0.5, _evpNum(o.cantos, 0.08)));
       o.anim = o.anim === "pop" ? "aparecer" : o.anim;
     }
@@ -116230,7 +116234,9 @@ function _evpMotor(canvas, o){
       if(x.camada !== "video") return;
       const perto = t >= x.t0 - 1.5 && t <= x.t1 + 0.2;
       if(!perto){ const v = els2[x.id]; if(v){ try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} delete els2[x.id]; } return; }
-      const v = el2(x), alvo = _evpNum(x.ini, 0) + Math.max(0, Math.min(t, x.t1) - x.t0);
+      const vx = _evpNum(x.vel, 1) || 1;
+      const v = el2(x), alvo = _evpNum(x.ini, 0) + Math.max(0, Math.min(t, x.t1) - x.t0) * vx;
+      if(v.playbackRate !== vx){ try{ v.playbackRate = vx; }catch(_){} }
       const dentro = t >= x.t0 && t < x.t1;
       if(tocando && dentro && !segurando){ if(v.paused && v.readyState >= 2){ const pr = v.play(); if(pr && pr.catch) pr.catch(function(){}); } if(v.readyState >= 1 && !v.seeking && Math.abs(v.currentTime - alvo) > 0.3){ try{ v.currentTime = alvo; }catch(_){} } }
       else { if(!v.paused) v.pause(); if(v.readyState >= 1 && !v.seeking && Math.abs(v.currentTime - alvo) > 0.05){ try{ v.currentTime = alvo; }catch(_){} } }
@@ -118543,7 +118549,7 @@ function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, se
                   {x.camada === "video" ? (function(){ const u = _evpThumbEm(x.clipe, _evpNum(x.ini, 0) + 0.5); return u ? <span style={{height:14,width:14,flexShrink:0,borderRadius:3,background:"#000 url(" + u + ") center/cover"}}/> : <_EvpIco n="camadas" s={12}/>; })()
                     : x.camada === "desfoque" ? <_EvpIco n="desfocar" s={12}/>
                     : <img src={x.url} alt="" style={{height:14,width:14,objectFit:"contain",flexShrink:0}}/>}
-                  {x.cheia ? "Apoio · " : x.camada === "video" ? "Por cima · " : x.camada === "desfoque" ? "Desfoque" : ""}{x.camada === "desfoque" ? "" : (x.nome || "Imagem")}
+                  {x.cheia ? (/^Apoio/.test(String(x.nome || "")) ? "" : "Apoio · ") : x.camada === "video" ? "Por cima · " : x.camada === "desfoque" ? "Desfoque" : ""}{x.camada === "desfoque" ? "" : (x.nome || "Imagem")}
                   <div onPointerDown={function(e){ moverImagem(e, x, "fim"); }} style={alca("right")}/>
                 </div>; })}
             </div>
@@ -119038,6 +119044,8 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
         {(x.camada || "imagem") !== "desfoque" && ferr === "tamanho" && (<div style={{marginBottom:6}}>
           <_EvpInterruptor on={!!x.cheia} onChange={function(v){ mudar(ni(function(o){ if(v){ o.cheia = true; o.x = 0.5; o.y = 0.5; o.escala = 1; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; o.mudo = true; } } else { delete o.cheia; o.escala = 0.35; o.y = 0.3; } })); }}
             label="Apoio em tela cheia" dica="Imagem de apoio (B-roll): cobre a tela toda por cima do vídeo principal; a fala continua por baixo"/>
+          {x.cheia && x.camada === "video" && <_EvpSlider ctl={ctl} rotulo="Velocidade do apoio" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} fmt={function(v){ return (Math.round(v * 100) / 100) + "×"; }} padrao={1} aplicar={ni(function(o, v){ o.vel = v; })}/>}
+          {x.cheia && x.motivo && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:4}}>Por que esta cena: {x.motivo}</div>}
           {x.cheia && x.t1 - x.t0 < 2 && <div style={{fontSize:11.5,color:_EV.amarelo,fontWeight:700,marginTop:4}}>Imagem de apoio com menos de 2 s — o ideal é 2 s ou mais.</div>}
         </div>)}
         {x.camada === "video" && ferr === "tamanho" && !x.cheia && (<div style={{marginBottom:6}}>
