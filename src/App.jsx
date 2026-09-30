@@ -49647,13 +49647,13 @@ function _cardPodeSerResp(u){
             {/* (30/09/2026, Gustavo) "feios, tão diferentes": os botões de ação agora são UMA família — lado a lado, altura 36
                 (a mesma dos ícones do topo), raio 10, Inter 13/650, ícone à esquerda. Estilo em _pxBtnAcaoSt (fim do arquivo). */}
             <div style={{display:"flex",flexDirection:"row",gap:8,alignItems:"center",flex:isMobile?"1 1 100%":undefined,flexWrap:"wrap"}}>
-              {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={_pxBtnAcaoSt("#0f172a","15,23,42",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Salvar</button>}
+              {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={_pxBtnAcaoSt("#0f172a","15,23,42",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span style={{display:"block",lineHeight:1}}>Salvar</span></button>}
               {/* Concluir p/ avaliação — designer/editor envia card de execução/ajustes pra aprovação interna */}
               {canEdit&&_bl("acao.concluir")&&(task.status==="execucao"||task.status==="ajustes")&&<button
                 onClick={()=>setConclusionStep(1)}
                 style={_pxBtnAcaoSt("#16a34a","22,163,74",isMobile)}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                Concluir p/ avaliação
+                <span style={{display:"block",lineHeight:1}}>Enviar para avaliação</span>
               </button>}
               {/* Enviar p/ aprovação — só pra cards em "Alteração de copy"; volta pra Copys (demanda) e entra na fila de Avaliação. */}
               {canEdit&&_bl("acao.enviar")&&task.status==="alteracao_copy"&&<button
@@ -49686,7 +49686,7 @@ function _cardPodeSerResp(u){
                   onClose();
                 }}
                 style={_pxBtnAcaoSt("#a140ff","161,64,255",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                Enviar p/ aprovação
+                <span style={{display:"block",lineHeight:1}}>Enviar para aprovação</span>
               </button>}
               {/* PREENCHER MATERIAL → DEMANDA (14/09/2026).
                   Etapa nova: a copy já está aprovada, o card só está esperando alguém
@@ -49709,7 +49709,7 @@ function _cardPodeSerResp(u){
                   }}
                   title={_temMaterial?("Material anexado ("+_mats.length+"). Vira demanda pro freelancer."):"Ainda não tem nenhum arquivo anexado neste card."}
                   style={_pxBtnAcaoSt("#f97316","249,115,22",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                  Material pronto: Demanda
+                  <span style={{display:"block",lineHeight:1}}>Material pronto: Demanda</span>
                 </button>;
               })()}
               {/* Drive folder — shown when approved */}
@@ -53169,7 +53169,7 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
 function _pxBtnAcaoSt(bg,rgb,isMobile){
   return {height:36,boxSizing:"border-box",background:bg,color:"#fff",border:"none",borderRadius:10,padding:"0 16px",
     fontFamily:"'Inter',system-ui,sans-serif",fontWeight:650,fontSize:13,letterSpacing:-.15,cursor:"pointer",whiteSpace:"nowrap",
-    display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,flex:isMobile?1:undefined,
+    display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,lineHeight:1,flex:isMobile?1:undefined,
     boxShadow:"0 1px 2px rgba("+rgb+",0.20), 0 4px 12px rgba("+rgb+",0.22)",transition:"transform .12s, box-shadow .12s"};
 }
 
