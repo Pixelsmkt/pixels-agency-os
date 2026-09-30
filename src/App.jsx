@@ -102085,28 +102085,48 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               const _fone=function(t){ const d=_dig(t).replace(/^55(?=\d{10,11}$)/,""); if(d.length===11) return "("+d.slice(0,2)+") "+d.slice(2,7)+"-"+d.slice(7); if(d.length===10) return "("+d.slice(0,2)+") "+d.slice(2,6)+"-"+d.slice(6); return String(t||"").trim(); };
               /* (30/09, Gustavo) mensagem pronta mais profissional, em linhas: cumprimento, quem atende
                  (e pra qual região), número e link separados. Contato genérico vira "nosso time comercial". */
+              /* (30/09, Gustavo) direct termina com "a <empresa> agradece o contato" e existe um padrão de COMENTÁRIO
+                 ("respondi no direct") pra colar no post. Paraguay sai em espanhol. */
+              const _es=_isBioter&&_unitTab==="paraguay";
+              const _empresa=String((cl&&cl.name)||"").trim()||"Nossa equipe";
               const _resposta=function(c){
                 const f=String(c.funcao||"").trim();
                 const n=String(c.nome||"").trim(), gen=/telefone|fone|whats|comercial|vendas|atendimento|central|escrit[óo]rio/i.test(n)&&!f;
-                const quem=gen?"nosso time comercial":(n+(f?(" ("+f+")"):""));
+                const quem=gen?(_es?"nuestro equipo comercial":"nosso time comercial"):(n+(f?(" ("+f+")"):""));
                 const reg=String(c.regiao||"").trim(), temReg=reg&&!/^(todas|todo|geral|demais)/i.test(reg);
-                const linhas=["Olá! Obrigado pelo interesse 😊",
-                  temReg?("Para orçamentos e mais informações na sua região ("+reg+"), fale com "+quem+":")
-                        :("Para orçamentos e mais informações, fale com "+quem+":"),
-                  "📱 WhatsApp: "+_fone(c.whatsapp)];
+                const linhas=_es
+                  ? ["¡Hola! Gracias por su interés 😊",
+                     temReg?("Para presupuestos y más información en su región ("+reg+"), hable con "+quem+":"):("Para presupuestos y más información, hable con "+quem+":"),
+                     "📱 WhatsApp: "+_fone(c.whatsapp)]
+                  : ["Olá! Obrigado pelo interesse 😊",
+                     temReg?("Para orçamentos e mais informações na sua região ("+reg+"), fale com "+quem+":"):("Para orçamentos e mais informações, fale com "+quem+":"),
+                     "📱 WhatsApp: "+_fone(c.whatsapp)];
                 if(_wa(c.whatsapp)) linhas.push("👉 "+_wa(c.whatsapp));
+                linhas.push("");
+                linhas.push(_es?(_empresa+" agradece su contacto y queda a su disposición. 🤝"):("A "+_empresa+" agradece o seu contato e fica à disposição. 🤝"));
                 return linhas.join("\n");
               };
+              const _comentario=_es
+                ? "¡Hola! Gracias por su comentario 😊 Le enviamos los detalles por mensaje directo para seguir la conversación. ¡Revise su bandeja de entrada! 🤝"
+                : "Olá! Obrigado pelo comentário 😊 Enviamos os detalhes no seu direct para continuarmos a conversa por lá. Confira sua caixa de mensagens! 🤝";
               const _copiar=function(t,msg){ try{ navigator.clipboard.writeText(t); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado",1800); }catch(_){} };
               const _uAtual=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(function(x){return x.id===_unitTab;}):null;
               const _chip=_isBioter?<div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
                 <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800}}>{(_uAtual&&(_uAtual.pickerLabel||_uAtual.label))||(_unitTab||"Grupo Bioter")}</span>
                 <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unitTab?"contatos desta unidade — troque no seletor do topo":"contatos do grupo — escolha uma unidade no topo pra ver os dela"}</span></div>:null;
+              const _comentBox=<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"color-mix(in srgb, var(--pb-cor) 7%, #fff)",border:"1px solid color-mix(in srgb, var(--pb-cor) 20%, #fff)",borderRadius:11,padding:"9px 12px",marginBottom:12}}>
+                <div style={{flex:1,minWidth:220}}>
+                  <div style={{color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:3}}>{_es?"Respuesta en el comentario":"Resposta no comentário do post"}</div>
+                  <div style={{color:"#334155",fontSize:12.5,lineHeight:1.5}}>{_comentario}</div>
+                </div>
+                <button type="button" onClick={function(){ _copiar(_comentario,"Comentário copiado — cole como resposta no post"); }}
+                  style={{background:"var(--pb-cor)",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER,flexShrink:0}}>Copiar comentário</button>
+              </div>;
               const _inp={background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER,boxSizing:"border-box"};
               if(!editMode){
                 const vis=_cc.filter(function(c){ return c&&(c.nome||c.whatsapp); });
                 if(!vis.length) return <React.Fragment>{_chip}<_PbEmpty icon="phone" text="Nenhum contato comercial cadastrado." sub={isAdmin?"Ative o modo edição pra cadastrar quem atende orçamento (comercial, vendedor, representante).":"Peça pra estratégia cadastrar quem atende orçamento."}/></React.Fragment>;
-                return <React.Fragment>{_chip}<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+                return <React.Fragment>{_chip}{_comentBox}<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
                   {vis.map(function(c,i){
                     return <div key={i} style={{background:"#fff",border:"1px solid color-mix(in srgb, var(--pb-cor) 20%, #fff)",borderRadius:14,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -102131,6 +102151,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               const _set=function(i,campo,v){ _upd(_cc.map(function(x,j){ return j===i?Object.assign({},x,{[campo]:v}):x; })); };
               return <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {_chip}
+                {_cc.some(function(c){ return c&&c.whatsapp; })&&_comentBox}
                 {_cc.map(function(c,i){
                   return <div key={"cc"+cl.id+"-"+(_porUnid?_unitTab:"")+i} style={{display:"flex",flexDirection:"column",gap:8,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"9px 11px"}}>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
@@ -114248,6 +114269,19 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v12 (30/09/2026) — GALERIA DO KIT (pedido do sócio: "a tela final de cada cliente, o GC de cada cliente… elementos, caixas de texto
+     padrão para depois a IA escrever dentro… sugerir mudar o elemento… a IA inteligente e consciente sem fazer cagada"):
+     · Kit do cliente › Galeria: Telas finais (PNG ou vídeo MP4), GC (PNG com as áreas do nome e da linha 2 marcadas) e Elementos
+       (caixas de texto: arte do cliente com a área do texto marcada, ou forma desenhada com as cores do kit), cada um com
+       "quando usar", limite de letras/linhas e "padrão". Modelos Pixels (valem para todos, pegam as cores do cliente) — só sócio muda.
+       Tabela video_galeria (nunca apaga: arquivar/restaurar; histórico de cada mudança) · rpc criacao_galeria · criacao_galeria_salvar ·
+       criacao_galeria_arquivar.
+     · Um desenho só (_evgDesenhar / _evgTelaFinal) para a prévia do Kit, o Estúdio, o Exportar e o PC: o texto NUNCA sai da caixa
+       (a letra diminui até caber; se nem assim, aparece aviso na Conferência). Letra que sumiria no fundo troca sozinha por preto/branco.
+     · Padrão automático = só o que o CLIENTE marcou como padrão (tarja sem escolha usa o GC padrão; tela final usa a tela padrão).
+       textos[].modelo = id do item | "app" (desenho antigo). tela_final.modelo = id | "app".
+     · Estúdio: ferramenta "Elemento" no texto (trocar à mão), elementos da galeria no menu Texto, escolha da tela final,
+       SUGESTÕES da IA (aceitar / recusar — a IA não troca elemento sozinha nos ajustes; a decisão fica em projeto.sugestoes_decididas).
    v11 (30/09/2026) — pedidos do sócio:
      · NOMES NUNCA ERRADOS: legenda.nomes (dicionário do cliente + nome da empresa) corrige a fala por SOM
        ("construções clemi" → "Construções Clem"), a mesma conta do servidor (video-editar/nomes.ts). Troca de frase inteira
@@ -114765,6 +114799,8 @@ function _EvKit({ isMob }){
                 </span>
               </div>
             )}
+            {/* v12: GALERIA — tela final, GC e elementos (cada item salva sozinho) */}
+            <_EvgGaleria cliente={cliente} unidade={unidade} kit={f} base={base} isMob={isMob} soVer={soVer}/>
           </div>
 
           <div style={{width:isMob?"100%":260,flexShrink:0,position:isMob?"static":"sticky",top:16}}>
@@ -114772,6 +114808,323 @@ function _EvKit({ isMob }){
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ═══ v12: GALERIA DO KIT — telas finais, GC e elementos (caixas de texto) de cada cliente + Modelos Pixels ═══
+   Cada item salva sozinho (rpc criacao_galeria_salvar) e guarda o "antes" no histórico. Nada se apaga: arquivar / restaurar. */
+const _EVG_NOVO = {
+  gc:function(){ return { v:1, midia:"forma", forma:{ tipo:"caixa", cor:"principal", raio:0.02, sombra:true }, pos:{ x:0.42, y:0.6, larg:0.78 }, anim:"deslizar", pad:0.03,
+    campos:[ { id:"nome", tam:0.05, peso:800, cor:"texto", caixa:"normal", alinhar:"esquerda", max_letras:30, max_linhas:1 }, { id:"linha2", tam:0.034, peso:600, cor:"texto", caixa:"normal", alinhar:"esquerda", max_letras:36, max_linhas:1 } ],
+    quando_usar:"Nome e cargo/cidade de quem fala, na primeira vez que a pessoa aparece.", exemplo:{} }; },
+  elemento:function(){ return { v:1, midia:"forma", forma:{ tipo:"caixa", cor:"principal", raio:0.028, sombra:true }, pos:{ x:0.5, y:0.24, larg:0.86 }, anim:"pop", pad:0.036,
+    campos:[ { id:"texto", tam:0.075, peso:900, cor:"texto", caixa:"alta", alinhar:"centro", max_letras:32, max_linhas:2 } ], quando_usar:"", exemplo:{ texto:"TEXTO DE EXEMPLO" } }; },
+};
+/* campos padrão quando a arte é enviada (a pessoa só ajusta o retângulo) */
+function _evgCamposArte(tipo){
+  if(tipo === "gc") return [ { id:"nome", x:0.05, y:0.12, w:0.9, h:0.42, peso:800, cor:"branco", caixa:"normal", alinhar:"esquerda", max_letras:30, max_linhas:1 },
+                            { id:"linha2", x:0.05, y:0.6, w:0.9, h:0.28, peso:600, cor:"branco", caixa:"normal", alinhar:"esquerda", max_letras:36, max_linhas:1 } ];
+  if(tipo === "tela_final") return [ { id:"cta", x:0.08, y:0.62, w:0.84, h:0.07, peso:900, cor:"branco", caixa:"alta", alinhar:"centro", max_linhas:2 },
+                                     { id:"whatsapp", x:0.12, y:0.71, w:0.76, h:0.05, peso:800, cor:"branco", caixa:"normal", alinhar:"centro", max_linhas:1 } ];
+  return [ { id:"texto", x:0.08, y:0.18, w:0.84, h:0.64, peso:900, cor:"branco", caixa:"alta", alinhar:"centro", max_letras:32, max_linhas:2 } ];
+}
+function _evgMedirArquivo(fl){
+  return new Promise(function(ok){
+    const u = URL.createObjectURL(fl);
+    if(/^video\//.test(fl.type || "")){ const v = document.createElement("video"); v.preload = "metadata"; v.muted = true;
+      v.onloadedmetadata = function(){ ok({ w:v.videoWidth, h:v.videoHeight, dur:Math.round((v.duration || 0) * 10) / 10 }); URL.revokeObjectURL(u); }; v.onerror = function(){ ok({}); }; v.src = u; return; }
+    const im = new Image(); im.onload = function(){ ok({ w:im.naturalWidth, h:im.naturalHeight }); URL.revokeObjectURL(u); }; im.onerror = function(){ ok({}); }; im.src = u;
+  });
+}
+
+function _EvgGaleria({ cliente, unidade, kit, base, isMob, soVer }){
+  const [lista, setLista] = useState(null);
+  const [aba, setAba] = useState("tela_final");
+  const [verArq, setVerArq] = useState(false);
+  const [editando, setEditando] = useState(null);      // { item (ou null = novo), tipo, dados, nome, padrao, pixels }
+  const [subindo, setSubindo] = useState(null);
+  const [rec, setRec] = useState(0);
+  const inp = useRef(null);
+  useEffect(function(){
+    if(!window._sb || !cliente) return; let vivo = true; setLista(null);
+    window._sb.rpc("criacao_galeria", { p_client:cliente, p_unidade:unidade || "", p_arquivados:true }).then(function(r){
+      if(!vivo) return; setLista(r.error ? { erro:/function|does not exist/i.test(r.error.message || "") ? "A galeria ainda não foi ligada no banco." : (r.error.message || "erro") } : (Array.isArray(r.data) ? r.data : []));
+    }).catch(function(){ if(vivo) setLista({ erro:"Não consegui carregar a galeria." }); });
+    return function(){ vivo = false; };
+  }, [cliente, unidade, rec]);
+  const itens = Array.isArray(lista) ? lista : [];
+  const doTipo = itens.filter(function(x){ return x.tipo === aba && (verArq ? x.ativo === false : x.ativo !== false); });
+  const kitG = Object.assign({}, kit, { _galeria:itens });
+  const toast = function(tp, m){ try{ pixelsToast[tp](m); }catch(_){} };
+  const arquivar = function(it, ativo){
+    window._sb.rpc("criacao_galeria_arquivar", { p_id:it.id, p_ativo:ativo }).then(function(r){
+      if(r.error){ toast("error", "Não mudou: " + r.error.message); return; } toast("success", ativo ? "Voltou para a galeria" : "Arquivado (dá para voltar em \"Ver arquivados\")"); setRec(function(n){ return n + 1; }); });
+  };
+  const marcarPadrao = function(it){
+    window._sb.rpc("criacao_galeria_salvar", { p_id:it.id, p_client:it.origem === "pixels" ? null : cliente, p_unidade:it.unidade || "", p_tipo:it.tipo, p_nome:it.nome, p_dados:it.dados, p_padrao:!it.padrao }).then(function(r){
+      if(r.error){ toast("error", "Não salvou: " + r.error.message); return; } toast("success", !it.padrao ? "Agora é o padrão" : "Não é mais o padrão"); setRec(function(n){ return n + 1; }); });
+  };
+  const enviar = async function(fl){
+    if(!fl) return;
+    const video = /^video\/(mp4|webm|quicktime)$/.test(fl.type || ""), imagem = /^image\/(png|jpeg|webp|svg\+xml)$/.test(fl.type || "");
+    if(!imagem && !(video && aba === "tela_final")){ toast("error", aba === "tela_final" ? "Use PNG, JPG, WEBP ou vídeo MP4." : "Use PNG (sem fundo fica melhor), WEBP ou SVG. PSD: exporte em PNG no Photoshop."); return; }
+    if(fl.size > (video ? 200 : 15) * 1024 * 1024){ toast("error", video ? "Vídeo acima de 200 MB." : "Imagem acima de 15 MB."); return; }
+    setSubindo(0);
+    try{
+      const med = await _evgMedirArquivo(fl);
+      const ext = (fl.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+      const path = "kits/" + String(cliente).replace(/[^A-Za-z0-9_-]/g, "") + "/galeria/" + aba + "-" + Date.now() + "." + ext;
+      await pxUploadResumable(fl, path, function(pc){ setSubindo(pc); });
+      const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+      const d = { v:1, midia:video ? "video" : "imagem", url:url, w:med.w || 0, h:med.h || 0, anim:aba === "gc" ? "deslizar" : "pop", campos:_evgCamposArte(aba), exemplo:{} };
+      if(aba === "tela_final"){ d.dur = video ? Math.min(10, med.dur || 3) : 3; if(video) d.campos = []; }
+      else { const larg = aba === "gc" ? 0.8 : 0.84; d.pos = { x:aba === "gc" ? 0.45 : 0.5, y:aba === "gc" ? 0.6 : 0.26, larg:larg }; d.quando_usar = ""; }
+      setEditando({ item:null, tipo:aba, dados:d, nome:fl.name.replace(/\.[^.]+$/, "").slice(0, 60), padrao:!itens.some(function(x){ return x.tipo === aba && x.padrao && x.origem !== "pixels" && x.ativo !== false; }), pixels:false });
+    }catch(e){ toast("error", "Não subiu: " + ((e && e.message) || e)); }
+    setSubindo(null);
+  };
+  const rot = function(t){ return <div style={{fontSize:_evF(11.5,isMob),color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:5}}>{t}</div>; };
+  const bt = function(on){ return { font:"inherit", padding:"7px 12px", borderRadius:99, border:"1px solid " + (on ? _EV.roxo : _EV.linha), background:on ? _EV.roxoClaro : "#fff", color:on ? _EV.roxo : _EV.sub, fontWeight:700, fontSize:_evF(12.5,isMob), cursor:"pointer" }; };
+  const bt2 = { font:"inherit", padding:"5px 9px", borderRadius:8, border:"1px solid " + _EV.linha, background:"#fff", color:_EV.sub, fontWeight:700, fontSize:11.5, cursor:"pointer" };
+  return (
+    <div style={{background:"#fff",border:"1px solid " + _EV.linha,borderRadius:14,padding:isMob?12:16,marginTop:14}}>
+      <div style={{display:"flex",gap:10,alignItems:"baseline",flexWrap:"wrap"}}>
+        <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Galeria da identidade visual</div>
+        <div style={{fontSize:_evF(12,isMob),color:_EV.sub}}>A IA só usa o que está aqui. Cada item salva sozinho.</div>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"12px 0"}}>
+        {_EVG_TIPOS.map(function(tp){ const n = itens.filter(function(x){ return x.tipo === tp.id && x.ativo !== false; }).length;
+          return <button key={tp.id} onClick={function(){ setAba(tp.id); }} style={bt(aba === tp.id)}>{tp.label} ({n})</button>; })}
+        <label style={{display:"flex",gap:6,alignItems:"center",fontSize:12,color:_EV.sub,marginLeft:"auto",cursor:"pointer"}}>
+          <input type="checkbox" checked={verArq} onChange={function(e){ setVerArq(e.target.checked); }}/>Ver arquivados</label>
+      </div>
+      <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginBottom:10,lineHeight:1.5}}>
+        {aba === "tela_final" ? "A tela do fim do vídeo. Envie a arte pronta (PNG 1080×1920) ou um vídeo animado (MP4, sem som). Dá para marcar onde entram a chamada e o WhatsApp — os dados vêm do cadastro, a IA não escreve aqui."
+          : aba === "gc" ? "A tarja com o nome de quem fala. Envie o PNG sem fundo e marque onde vai o nome e a segunda linha — ou monte com as cores do kit."
+          : "Caixas de texto que a IA preenche (destaque, pergunta, preço…). Diga QUANDO USAR e o limite de letras: a IA escolhe pelo \"quando usar\" e nunca passa do limite."}
+      </div>
+      {lista && lista.erro && <div style={{padding:12,borderRadius:10,background:_EV.amareloClaro,color:_EV.amarelo,fontSize:13,fontWeight:600}}>{lista.erro}</div>}
+      {!lista && <div style={{fontSize:13,color:_EV.sub,padding:10}}>Carregando…</div>}
+      {Array.isArray(lista) && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(" + (aba === "tela_final" ? 120 : 170) + "px, 1fr))",gap:10}}>
+          {doTipo.map(function(it){
+            const pix = it.origem === "pixels";
+            return <div key={it.id} style={{border:"1px solid " + (it.padrao ? _EV.roxo : _EV.linha),borderRadius:12,padding:8,display:"flex",flexDirection:"column",gap:6,background:it.ativo === false ? _EV.fundo : "#fff",minWidth:0}}>
+              <div style={{display:"flex",justifyContent:"center"}}><_EvgMini it={it} kit={kitG} base={base} w={aba === "tela_final" ? 90 : 150} h={aba === "tela_final" ? 160 : 64} fundo="#64748b"/></div>
+              <div style={{fontSize:12.5,fontWeight:800,color:_EV.texto,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.nome}</div>
+              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                {it.padrao && <span style={{fontSize:10.5,fontWeight:800,color:_EV.roxo,background:_EV.roxoClaro,borderRadius:99,padding:"1px 7px"}}>Padrão</span>}
+                {pix && <span style={{fontSize:10.5,fontWeight:800,color:"#0f766e",background:"#f0fdfa",borderRadius:99,padding:"1px 7px"}}>Modelo Pixels</span>}
+                {it.origem === "unidade" && <span style={{fontSize:10.5,fontWeight:800,color:_EV.amarelo,background:_EV.amareloClaro,borderRadius:99,padding:"1px 7px"}}>{_evNomeUnidade(it.unidade)}</span>}
+                {it.dados && it.dados.midia === "video" && <span style={{fontSize:10.5,fontWeight:700,color:_EV.sub}}>vídeo · {String(it.dados.dur || "?").replace(".", ",")} s</span>}
+              </div>
+              {it.dados && it.dados.quando_usar && <div style={{fontSize:11,color:_EV.sub,lineHeight:1.35,maxHeight:44,overflow:"hidden"}}>{it.dados.quando_usar}</div>}
+              {!soVer && <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:"auto"}}>
+                {it.ativo !== false && <button style={bt2} onClick={function(){ setEditando({ item:it, tipo:it.tipo, dados:JSON.parse(JSON.stringify(it.dados || {})), nome:it.nome, padrao:!!it.padrao, pixels:pix }); }}>Editar</button>}
+                {it.ativo !== false && pix && <button style={bt2} title="Cria uma cópia só deste cliente para personalizar" onClick={function(){ setEditando({ item:null, tipo:it.tipo, dados:JSON.parse(JSON.stringify(it.dados || {})), nome:it.nome, padrao:false, pixels:false }); }}>Copiar p/ cliente</button>}
+                {it.ativo !== false && !pix && <button style={bt2} onClick={function(){ marcarPadrao(it); }}>{it.padrao ? "Tirar padrão" : "Tornar padrão"}</button>}
+                {it.ativo !== false ? <button style={bt2} onClick={function(){ arquivar(it, false); }}>Arquivar</button> : <button style={bt2} onClick={function(){ arquivar(it, true); }}>Restaurar</button>}
+              </div>}
+            </div>; })}
+          {!doTipo.length && <div style={{fontSize:13,color:_EV.fraco,padding:"8px 2px"}}>{verArq ? "Nada arquivado aqui." : "Nada cadastrado ainda."}</div>}
+        </div>
+      )}
+      {!soVer && Array.isArray(lista) && !verArq && (
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+          <label style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:"1px solid " + _EV.roxo,background:_EV.roxo,color:"#fff",fontWeight:800,fontSize:_evF(13,isMob),cursor:subindo != null ? "wait" : "pointer"}}>
+            {subindo != null ? "Enviando… " + subindo + "%" : aba === "tela_final" ? "+ Enviar tela final (PNG ou MP4)" : "+ Enviar arte (PNG)"}
+            <input ref={inp} type="file" accept={aba === "tela_final" ? "image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime" : "image/png,image/webp,image/svg+xml,image/jpeg"} style={{display:"none"}} disabled={subindo != null}
+              onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; enviar(fl); }}/>
+          </label>
+          {aba !== "tela_final" && <button onClick={function(){ setEditando({ item:null, tipo:aba, dados:_EVG_NOVO[aba](), nome:aba === "gc" ? "GC" : "Novo elemento", padrao:false, pixels:false }); }}
+            style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:"1px solid " + _EV.roxoBorda,background:_EV.roxoClaro,color:_EV.roxo,fontWeight:800,fontSize:_evF(13,isMob),cursor:"pointer"}}>+ Montar com as cores do kit</button>}
+          {aba !== "tela_final" && <button onClick={function(){ setEditando({ item:null, tipo:aba, dados:_EVG_NOVO[aba](), nome:"Modelo Pixels", padrao:false, pixels:true }); }}
+            style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.sub,fontWeight:700,fontSize:_evF(12.5,isMob),cursor:"pointer"}} title="Vale para TODOS os clientes (só sócio)">+ Modelo Pixels (todos)</button>}
+        </div>
+      )}
+      {editando && <_EvgEditor ed={editando} cliente={cliente} unidade={unidade} kit={kitG} base={base}
+        onFechar={function(){ setEditando(null); }} onSalvo={function(){ setEditando(null); setRec(function(n){ return n + 1; }); }}/>}
+    </div>
+  );
+}
+
+function _EvgEditor({ ed, cliente, unidade, kit, base, onFechar, onSalvo }){
+  const [d, setD] = useState(ed.dados);
+  const [nome, setNome] = useState(ed.nome || "");
+  const [padrao, setPadrao] = useState(!!ed.padrao);
+  const [campoSel, setCampoSel] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [subFonte, setSubFonte] = useState(null);
+  const tipo = ed.tipo, imagemArte = d.midia === "imagem" || d.midia === "video";
+  const PW = 270, PH = 480, W = 1080, H = 1920, esc = PW / W;
+  const cvRef = useRef(null), boxRef = useRef(null), cache = useRef({});
+  const [, setN] = useState(0);
+  const img = function(u){ if(!cache.current[u]){ const im = new Image(); im.crossOrigin = "anonymous"; im.onload = function(){ setN(function(n){ return n + 1; }); }; im.src = u; cache.current[u] = im; } return cache.current[u]; };
+  const item = { id:"edit", tipo:tipo, nome:nome, dados:d };
+  const ex = d.exemplo || {};
+  const vals = tipo === "tela_final" ? _evgValores(item, null, kit, base)
+    : tipo === "gc" ? { nome:ex.nome || base.nome || "Nome da pessoa", linha2:ex.linha2 != null ? ex.linha2 : (base.cidade || "Cidade/UF") }
+    : { texto:ex.texto || "Texto de exemplo", linha2:ex.linha2 || "" };
+  const listaCampos = _EVG_CAMPOS[tipo] || [];
+  const campos = Array.isArray(d.campos) ? d.campos : [];
+  const set = function(fn){ setD(function(a){ const b = JSON.parse(JSON.stringify(a)); fn(b); return b; }); };
+  const setCampo = function(id, fn){ set(function(b){ const c = (b.campos || []).find(function(q){ return q.id === id; }); if(c) fn(c); }); };
+  // prévia: fundo cinza + o item no lugar
+  const [vidPrev, setVidPrev] = useState(null);
+  useEffect(function(){
+    if(!(tipo === "tela_final" && d.midia === "video" && d.url)){ setVidPrev(null); return; }
+    const v = document.createElement("video"); v.muted = true; v.crossOrigin = "anonymous"; v.preload = "auto"; v.src = d.url; v.playsInline = true;
+    v.onloadeddata = function(){ try{ v.currentTime = Math.min(1, (v.duration || 1) / 2); }catch(_){} }; v.onseeked = function(){ setVidPrev(v); setN(function(n){ return n + 1; }); };
+    return function(){ try{ v.removeAttribute("src"); v.load(); }catch(_){} };
+  }, [d.url, d.midia]);
+  let caixa = null, R = { x:0, y:0, w:W, h:H };
+  useEffect(function(){ const f = function(){ setN(function(n){ return n + 1; }); }; try{ document.fonts && document.fonts.ready.then(f); }catch(_){} const tm = setTimeout(f, 1500); return function(){ clearTimeout(tm); }; }, [JSON.stringify(campos.map(function(c){ return [c.fonte, c.fonte_url]; }))]);
+  useEffect(function(){
+    const cv = cvRef.current; if(!cv) return; const cx = cv.getContext("2d");
+    const g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#9aaec4"); g.addColorStop(1, "#3b4b60"); cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+    cx.fillStyle = "rgba(255,255,255,.18)"; cx.beginPath(); cx.arc(W/2, H*0.42, 190, 0, Math.PI*2); cx.fill(); cx.fillRect(W/2 - 300, H*0.55, 600, 700);
+    if(tipo === "tela_final") _evgTelaFinal(cx, W, H, item, vals, { kit:kit, img:img, video:vidPrev });
+    else _evgDesenhar(cx, W, H, item, vals, { kit:kit, img:img, x:{}, anim:{ pin:1, pout:1 } });
+    // área segura do Instagram
+    cx.save(); cx.fillStyle = "rgba(239,68,68,.16)"; cx.fillRect(0, 0, W, H*0.12); cx.fillRect(0, H*0.82, W, H*0.18); cx.restore();
+  });
+  // caixa do item (para arrastar) e retângulo de cada campo (para marcar a área do texto)
+  if(tipo !== "tela_final"){ const c0 = document.createElement("canvas").getContext("2d"); caixa = _evgDesenhar(c0, W, H, item, vals, { kit:kit, img:img, x:{}, sem:true }); }
+  else { const fw = Number(d.w) || W, fh = Number(d.h) || H, s = Math.max(W / fw, H / fh); R = { x:(W - fw*s)/2, y:(H - fh*s)/2, w:fw*s, h:fh*s }; }
+  const areaDe = function(c){ const B = tipo === "tela_final" ? R : caixa; if(!B) return null; return { x:B.x + (Number(c.x) || 0) * B.w, y:B.y + (Number(c.y) || 0) * B.h, w:(Number(c.w) || 1) * B.w, h:(Number(c.h) || 0.1) * B.h }; };
+  const arrastar = function(e, modo, id){
+    e.preventDefault(); e.stopPropagation();
+    const x0 = e.clientX, y0 = e.clientY, d0 = JSON.parse(JSON.stringify(d)), B = tipo === "tela_final" ? R : caixa;
+    const mv = function(ev){ const dx = (ev.clientX - x0) / esc, dy = (ev.clientY - y0) / esc;
+      setD(function(){ const b = JSON.parse(JSON.stringify(d0));
+        if(modo === "item"){ b.pos = Object.assign({ x:0.5, y:0.3, larg:0.8 }, b.pos); b.pos.x = Math.round(_evClamp(Number(b.pos.x) + dx / W, 0.05, 0.95) * 1000) / 1000; b.pos.y = Math.round(_evClamp(Number(b.pos.y) + dy / H, 0.05, 0.95) * 1000) / 1000; return b; }
+        const c = (b.campos || []).find(function(q){ return q.id === id; }); if(!c || !B) return b;
+        if(modo === "mover"){ c.x = Math.round(_evClamp(Number(c.x) + dx / B.w, 0, 1 - Number(c.w)) * 1000) / 1000; c.y = Math.round(_evClamp(Number(c.y) + dy / B.h, 0, 1 - Number(c.h)) * 1000) / 1000; }
+        else { c.w = Math.round(_evClamp(Number(c.w) + dx / B.w, 0.03, 1 - Number(c.x)) * 1000) / 1000; c.h = Math.round(_evClamp(Number(c.h) + dy / B.h, 0.02, 1 - Number(c.y)) * 1000) / 1000; }
+        return b; }); };
+    const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  };
+  const enviarFonte = async function(id, fl){
+    if(!fl) return;
+    if(!/\.(ttf|otf|woff2?)$/i.test(fl.name || "")){ try{ pixelsToast.error("Use .ttf, .otf, .woff ou .woff2."); }catch(_){} return; }
+    if(fl.size > 8*1024*1024){ try{ pixelsToast.error("Fonte acima de 8 MB."); }catch(_){} return; }
+    setSubFonte(0);
+    try{ const ext = fl.name.split(".").pop().toLowerCase(); const path = "kits/" + (ed.pixels ? "pixels" : String(cliente).replace(/[^A-Za-z0-9_-]/g, "")) + "/fontes/" + Date.now() + "." + ext;
+      await pxUploadResumable(fl, path, function(pc){ setSubFonte(pc); });
+      const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+      setCampo(id, function(c){ c.fonte_url = url; c.fonte_nome = fl.name.replace(/\.[^.]+$/, "").slice(0, 40); delete c.fonte; });
+    }catch(e){ try{ pixelsToast.error("Não subiu a fonte: " + ((e && e.message) || e)); }catch(_){} }
+    setSubFonte(null);
+  };
+  const salvar = function(){
+    if(!nome.trim()){ try{ pixelsToast.error("Dê um nome."); }catch(_){} return; }
+    if(tipo !== "tela_final" && !campos.length){ try{ pixelsToast.error("Ligue pelo menos um campo de texto."); }catch(_){} return; }
+    setSalvando(true);
+    window._sb.rpc("criacao_galeria_salvar", { p_id:ed.item ? ed.item.id : null, p_client:ed.pixels ? null : cliente, p_unidade:ed.pixels ? "" : (ed.item ? (ed.item.unidade || "") : (unidade || "")),
+      p_tipo:tipo, p_nome:nome.trim(), p_dados:d, p_padrao:ed.pixels ? false : padrao }).then(function(r){
+      setSalvando(false);
+      if(r.error){ try{ pixelsToast.error("Não salvou: " + r.error.message); }catch(_){} return; }
+      try{ pixelsToast.success("Salvo na galeria"); }catch(_){} onSalvo();
+    }).catch(function(){ setSalvando(false); try{ pixelsToast.error("Não salvou. Tente de novo."); }catch(_){} });
+  };
+  const rot = function(t){ return <div style={{fontSize:11,color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",margin:"12px 0 5px"}}>{t}</div>; };
+  const inp = { font:"inherit", padding:"7px 9px", borderRadius:8, border:"1px solid " + _EV.linha, background:"#fff", fontSize:13, width:"100%", boxSizing:"border-box" };
+  const chip = function(on){ return { font:"inherit", padding:"5px 10px", borderRadius:99, border:"1px solid " + (on ? _EV.roxo : _EV.linha), background:on ? _EV.roxoClaro : "#fff", color:on ? _EV.roxo : _EV.sub, fontWeight:700, fontSize:12, cursor:"pointer" }; };
+  const sel = function(v, opts, onCh){ return <select value={v} onChange={function(e){ onCh(e.target.value); }} style={inp}>{opts.map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</select>; };
+  const corSel = function(v, onCh){ const hex = /^#[0-9a-fA-F]{6}$/.test(String(v || ""));
+    return <div style={{display:"flex",gap:6,alignItems:"center"}}>{sel(hex ? "custom" : (v || "texto"), _EVG_CORES.map(function(c){ return [c.id, c.label]; }).concat([["custom","Outra cor…"]]), function(x){ onCh(x === "custom" ? _evgCor(v || "texto", kit) : x); })}
+      {hex && <input type="color" value={v} onChange={function(e){ onCh(e.target.value); }} style={{width:40,height:34,border:"1px solid " + _EV.linha,borderRadius:8,padding:2}}/>}</div>; };
+  const pos = d.pos || { x:0.5, y:0.3, larg:0.8 };
+  return (
+    <div role="dialog" aria-modal="true" style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onPointerDown={function(e){ if(e.target === e.currentTarget) onFechar(); }}>
+      <div style={{background:"#fff",borderRadius:16,maxWidth:880,width:"100%",maxHeight:"92vh",overflow:"auto",padding:18,display:"flex",gap:18,flexWrap:"wrap"}}>
+        <div style={{flex:"0 0 " + PW + "px"}}>
+          <div ref={boxRef} style={{position:"relative",width:PW,height:PH,borderRadius:12,overflow:"hidden",background:"#000"}}>
+            <canvas ref={cvRef} width={W} height={H} style={{width:PW,height:PH,display:"block"}}/>
+            {tipo !== "tela_final" && caixa && <div onPointerDown={function(e){ arrastar(e, "item"); }} title="Arraste para mudar o lugar no vídeo"
+              style={{position:"absolute",left:caixa.x*esc,top:caixa.y*esc,width:caixa.w*esc,height:caixa.h*esc,border:"1.5px dashed rgba(255,255,255,.9)",borderRadius:6,cursor:"move"}}/>}
+            {imagemArte && campos.map(function(c){ const a = areaDe(c); if(!a) return null; const on = campoSel === c.id;
+              return <div key={c.id} onPointerDown={function(e){ setCampoSel(c.id); arrastar(e, "mover", c.id); }}
+                style={{position:"absolute",left:a.x*esc,top:a.y*esc,width:a.w*esc,height:a.h*esc,border:"2px solid " + (on ? "#facc15" : "rgba(124,58,237,.9)"),background:on ? "rgba(250,204,21,.18)" : "rgba(124,58,237,.12)",cursor:"move",boxSizing:"border-box"}}>
+                <span style={{position:"absolute",left:2,top:-16,fontSize:9.5,fontWeight:800,color:"#fff",background:on ? "#a16207" : "#7c3aed",borderRadius:4,padding:"0 4px",whiteSpace:"nowrap"}}>{(listaCampos.find(function(q){ return q.id === c.id; }) || {}).label || c.id}</span>
+                <span onPointerDown={function(e){ setCampoSel(c.id); arrastar(e, "tamanho", c.id); }} style={{position:"absolute",right:-6,bottom:-6,width:12,height:12,borderRadius:3,background:on ? "#facc15" : "#7c3aed",cursor:"nwse-resize"}}/>
+              </div>; })}
+          </div>
+          <div style={{fontSize:11,color:_EV.sub,marginTop:6,lineHeight:1.4}}>{imagemArte ? "Arraste os retângulos para marcar onde vai cada texto (o quadradinho muda o tamanho)." : "Arraste a caixa para mudar o lugar."} Vermelho = área que o Instagram cobre.</div>
+        </div>
+        <div style={{flex:"1 1 320px",minWidth:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+            <div style={{fontSize:16,fontWeight:800}}>{ed.item ? "Editar" : "Novo"} · {(_EVG_TIPOS.find(function(t){ return t.id === tipo; }) || {}).label}{ed.pixels ? " · Modelo Pixels (todos os clientes)" : ""}</div>
+            <button onClick={onFechar} aria-label="Fechar" style={{font:"inherit",border:0,background:"transparent",fontSize:20,cursor:"pointer",color:_EV.sub}}>×</button>
+          </div>
+          {rot("Nome")}<input value={nome} maxLength={60} onChange={function(e){ setNome(e.target.value); }} style={inp}/>
+          {!ed.pixels && <label style={{display:"flex",gap:8,alignItems:"center",fontSize:13,fontWeight:700,marginTop:10,cursor:"pointer"}}>
+            <input type="checkbox" checked={padrao} onChange={function(e){ setPadrao(e.target.checked); }}/>Padrão deste cliente{unidade && !ed.item ? " (" + _evNomeUnidade(unidade) + ")" : ""}
+            <span style={{fontWeight:500,color:_EV.sub,fontSize:12}}>— entra sozinho em todo vídeo</span></label>}
+          {tipo !== "tela_final" && <div>{rot("Quando usar (a IA escolhe por isto)")}
+            <textarea value={d.quando_usar || ""} maxLength={300} rows={2} onChange={function(e){ const v = e.target.value; set(function(b){ b.quando_usar = v; }); }} style={Object.assign({}, inp, {resize:"vertical"})}
+              placeholder={tipo === "gc" ? "Ex.: nome de quem fala na primeira vez que aparece" : "Ex.: quando a fala diz um preço ou prazo"}/></div>}
+          {tipo === "tela_final" && <div>{rot("Duração (segundos)")}
+            <input type="number" min={1} max={10} step={0.5} value={d.dur || 3} onChange={function(e){ const v = Math.max(1, Math.min(10, Number(e.target.value) || 3)); set(function(b){ b.dur = v; }); }} style={Object.assign({}, inp, {width:110})}/>
+            {d.midia === "video" && <span style={{fontSize:12,color:_EV.sub,marginLeft:8}}>O vídeo toca sem som (a música do vídeo continua).</span>}</div>}
+          {tipo !== "tela_final" && <div>
+            {rot("Lugar e tamanho no vídeo")}
+            <div style={{display:"flex",gap:8,alignItems:"center",fontSize:12,color:_EV.sub}}>Largura <input type="range" min={0.2} max={1} step={0.01} value={pos.larg || 0.8} onChange={function(e){ const v = Number(e.target.value); set(function(b){ b.pos = Object.assign({}, b.pos, { larg:v }); }); }} style={{flex:1}}/>{Math.round((pos.larg || 0.8) * 100)}%</div>
+            <div style={{display:"flex",gap:8,alignItems:"center",fontSize:12,color:_EV.sub}}>Altura <input type="range" min={0.05} max={0.95} step={0.005} value={pos.y || 0.3} onChange={function(e){ const v = Number(e.target.value); set(function(b){ b.pos = Object.assign({}, b.pos, { y:v }); }); }} style={{flex:1}}/>{Math.round((pos.y || 0.3) * 100)}%</div>
+            {rot("Animação")}
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{_EVG_ANIMS.map(function(a){ return <button key={a.id} onClick={function(){ set(function(b){ b.anim = a.id; }); }} style={chip((d.anim || "pop") === a.id)}>{a.label}</button>; })}</div>
+          </div>}
+          {d.midia === "forma" && <div>
+            {rot("Fundo")}
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{_EVG_FORMAS.map(function(f){ return <button key={f.id} onClick={function(){ set(function(b){ b.forma = Object.assign({}, b.forma, { tipo:f.id }); }); }} style={chip(((d.forma || {}).tipo || "caixa") === f.id)}>{f.label}</button>; })}</div>
+            {((d.forma || {}).tipo || "caixa") !== "nenhum" && <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+              <div><div style={{fontSize:11.5,color:_EV.sub,marginBottom:3}}>Cor do fundo</div>{corSel((d.forma || {}).cor || "principal", function(v){ set(function(b){ b.forma = Object.assign({}, b.forma, { cor:v }); }); })}</div>
+              <div><div style={{fontSize:11.5,color:_EV.sub,marginBottom:3}}>Borda</div>{sel((d.forma || {}).borda || "", [["","Sem borda"]].concat(_EVG_CORES.map(function(c){ return [c.id, c.label]; })), function(v){ set(function(b){ b.forma = Object.assign({}, b.forma); if(v) b.forma.borda = v; else delete b.forma.borda; }); })}</div>
+              <label style={{fontSize:12,display:"flex",gap:6,alignItems:"center"}}><input type="checkbox" checked={(d.forma || {}).sombra !== false} onChange={function(e){ const v = e.target.checked; set(function(b){ b.forma = Object.assign({}, b.forma, { sombra:v }); }); }}/>Sombra</label>
+              <label style={{fontSize:12,display:"flex",gap:6,alignItems:"center"}}><input type="checkbox" checked={!!(d.forma || {}).largura_fixa} onChange={function(e){ const v = e.target.checked; set(function(b){ b.forma = Object.assign({}, b.forma, { largura_fixa:v }); }); }}/>Largura fixa</label>
+            </div>}
+          </div>}
+          {rot("Textos")}
+          {listaCampos.map(function(lc){
+            const c = campos.find(function(q){ return q.id === lc.id; }), on = !!c;
+            return <div key={lc.id} style={{border:"1px solid " + (campoSel === lc.id ? "#facc15" : _EV.linha),borderRadius:10,padding:8,marginBottom:6}}>
+              <label style={{display:"flex",gap:8,alignItems:"center",fontWeight:800,fontSize:13,cursor:"pointer"}}>
+                <input type="checkbox" checked={on} onChange={function(e){ const v = e.target.checked; set(function(b){ b.campos = (b.campos || []).filter(function(q){ return q.id !== lc.id; });
+                  if(v){ const base0 = imagemArte ? { x:0.1, y:0.1 + 0.3 * b.campos.length, w:0.8, h:0.25 } : { tam:lc.id === "linha2" ? 0.036 : 0.07 };
+                    b.campos.push(Object.assign({ id:lc.id, peso:lc.id === "linha2" ? 600 : 800, cor:"texto", caixa:"normal", alinhar:imagemArte ? "esquerda" : "centro", max_linhas:lc.id === "texto" ? 2 : 1, max_letras:lc.id === "linha2" ? 36 : 32 }, base0)); } }); setCampoSel(v ? lc.id : null); }}/>
+                {lc.label}{on && imagemArte && <button onClick={function(){ setCampoSel(lc.id); }} style={Object.assign(chip(campoSel === lc.id), {marginLeft:"auto",padding:"2px 8px",fontSize:11})}>Marcar área</button>}</label>
+              {on && <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:6}}>
+                {tipo !== "tela_final" && <div style={{gridColumn:"1 / -1"}}><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Texto de exemplo (só para ver aqui)</div>
+                  <input value={ex[lc.id] || ""} maxLength={120} onChange={function(e){ const v = e.target.value; set(function(b){ b.exemplo = Object.assign({}, b.exemplo, { [lc.id]:v }); }); }} style={inp}/></div>}
+                <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Cor da letra</div>{corSel(c.cor || "texto", function(v){ setCampo(lc.id, function(q){ q.cor = v; }); })}</div>
+                <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Fonte</div>
+                  {sel(c.fonte_url ? "__marca" : (c.fonte || ""), [["","Fonte do kit (" + (kit.fonte || "Montserrat") + ")"]].concat(_EV_FONTES.map(function(f){ return [f, f]; })).concat(c.fonte_url ? [["__marca", "Da marca: " + (c.fonte_nome || "enviada")]] : []),
+                    function(v){ if(v === "__marca") return; setCampo(lc.id, function(q){ q.fonte = v; delete q.fonte_url; delete q.fonte_nome; }); })}
+                  <label style={{fontSize:11,color:_EV.roxo,fontWeight:700,cursor:"pointer",display:"inline-block",marginTop:3}}>{subFonte != null ? "Enviando… " + subFonte + "%" : "Enviar fonte da marca"}
+                    <input type="file" accept=".ttf,.otf,.woff,.woff2" style={{display:"none"}} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; enviarFonte(lc.id, fl); }}/></label></div>
+                <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Peso</div>{sel(String(c.peso || 800), [["600","Normal"],["800","Negrito"],["900","Extra negrito"]], function(v){ setCampo(lc.id, function(q){ q.peso = Number(v); }); })}</div>
+                <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Alinhar</div>{sel(c.alinhar || "centro", [["esquerda","Esquerda"],["centro","Centro"],["direita","Direita"]], function(v){ setCampo(lc.id, function(q){ q.alinhar = v; }); })}</div>
+                <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Letras</div>{sel(c.caixa || "normal", [["normal","Como escrito"],["alta","MAIÚSCULAS"]], function(v){ setCampo(lc.id, function(q){ q.caixa = v; }); })}</div>
+                {tipo !== "tela_final" && <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Limite de letras</div>
+                  <input type="number" min={3} max={200} value={c.max_letras || ""} onChange={function(e){ const v = Math.max(3, Math.min(200, Number(e.target.value) || 0)); setCampo(lc.id, function(q){ q.max_letras = v; }); }} style={inp}/></div>}
+                <div><div style={{fontSize:11,color:_EV.sub,marginBottom:3}}>Máx. de linhas</div>
+                  <input type="number" min={1} max={6} value={c.max_linhas || 1} onChange={function(e){ const v = Math.max(1, Math.min(6, Number(e.target.value) || 1)); setCampo(lc.id, function(q){ q.max_linhas = v; }); }} style={inp}/></div>
+                {!imagemArte && <div style={{gridColumn:"1 / -1",display:"flex",gap:8,alignItems:"center",fontSize:12,color:_EV.sub}}>Tamanho da letra
+                  <input type="range" min={0.025} max={0.14} step={0.002} value={c.tam || 0.07} onChange={function(e){ const v = Number(e.target.value); setCampo(lc.id, function(q){ q.tam = v; }); }} style={{flex:1}}/></div>}
+                <label style={{fontSize:12,display:"flex",gap:6,alignItems:"center"}}><input type="checkbox" checked={!!c.contorno} onChange={function(e){ const v = e.target.checked; setCampo(lc.id, function(q){ q.contorno = v; }); }}/>Contorno</label>
+                <label style={{fontSize:12,display:"flex",gap:6,alignItems:"center"}}><input type="checkbox" checked={!!c.sombra} onChange={function(e){ const v = e.target.checked; setCampo(lc.id, function(q){ q.sombra = v; }); }}/>Sombra</label>
+                {tipo === "elemento" && lc.id === "texto" && <label style={{fontSize:12,display:"flex",gap:6,alignItems:"center",gridColumn:"1 / -1"}}><input type="checkbox" checked={!!c.lista} onChange={function(e){ const v = e.target.checked; setCampo(lc.id, function(q){ q.lista = v; }); }}/>Lista (itens separados por ; viram linhas com ✓)</label>}
+              </div>}
+            </div>; })}
+          <div style={{display:"flex",gap:8,marginTop:14,alignItems:"center"}}>
+            <button onClick={salvar} disabled={salvando} style={{font:"inherit",padding:"10px 18px",borderRadius:10,border:0,background:_EV.roxo,color:"#fff",fontWeight:800,fontSize:14,cursor:salvando ? "wait" : "pointer",opacity:salvando ? 0.7 : 1}}>{salvando ? "Salvando…" : "Salvar na galeria"}</button>
+            <button onClick={onFechar} style={{font:"inherit",padding:"10px 14px",borderRadius:10,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.sub,fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+            {ed.item && <span style={{fontSize:11.5,color:_EV.fraco}}>A versão anterior fica guardada.</span>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -115304,10 +115657,12 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     if(!window._sb || !t || !t.client) return; let vivo = true;
     const un = t.bioterUnit || "";
     const pega = function(u){ return window._sb.rpc("criacao_kit", { p_client:t.client, p_unidade:u }); };
+    // v12: a GALERIA do kit (tela final, GC, elementos) vem junto — sem ela (função ainda não existe / erro), segue o desenho do app
+    const galP = window._sb.rpc("criacao_galeria", { p_client:t.client, p_unidade:un }).then(function(r){ return r.error ? [] : (Array.isArray(r.data) ? r.data : []); }).catch(function(){ return []; });
     pega(un).then(function(r){
       if(!vivo || r.error) return; const d = r.data || {};
-      if(un && !d.versoes){ return pega("").then(function(g){ if(!vivo) return; const gd = (g && g.data) || {}; setBase(d.base||{}); setKit(Object.assign({}, _evKitPadrao(d.base||{}), gd.kit||{})); }); }
-      setBase(d.base||{}); setKit(Object.assign({}, _evKitPadrao(d.base||{}), d.kit||{}));
+      if(un && !d.versoes){ return Promise.all([pega(""), galP]).then(function(a){ if(!vivo) return; const gd = (a[0] && a[0].data) || {}; setBase(d.base||{}); setKit(Object.assign({}, _evKitPadrao(d.base||{}), gd.kit||{}, { _galeria:a[1] })); }); }
+      return galP.then(function(g){ if(!vivo) return; setBase(d.base||{}); setKit(Object.assign({}, _evKitPadrao(d.base||{}), d.kit||{}, { _galeria:g })); });
     }).catch(function(){});
     return function(){ vivo = false; };
   }, [t && t.id]);
@@ -115740,11 +116095,11 @@ function _evpProjetoDeReceita(receita, clipes){
   const textos = [];
   (Array.isArray(r.destaques) ? r.destaques : []).forEach(function(d){
     const a = mapa(d.clipe, _evpNum(d.t, 0)); if(a==null) return;
-    textos.push({ id:_evpId(), tipo:"destaque", t0:a, t1:Math.min(a + (_evpNum(d.dur,2.2)), t), texto:String(d.texto||""), linha2:"", pos:d.pos==="meio" ? "meio" : "topo", tam:1, anim:"pop", cor:"principal" });
+    textos.push(Object.assign({ id:_evpId(), tipo:"destaque", t0:a, t1:Math.min(a + (_evpNum(d.dur,2.2)), t), texto:String(d.texto||""), linha2:String(d.linha2||""), pos:d.pos==="meio" ? "meio" : "topo", tam:1, anim:"pop", cor:"principal" }, d.modelo ? { modelo:String(d.modelo) } : {}));
   });
   if(r.tarja && r.tarja.nome){
     const a = mapa(r.tarja.clipe, _evpNum(r.tarja.t, 0));
-    if(a!=null) textos.push({ id:_evpId(), tipo:"tarja", t0:a, t1:Math.min(a + _evpNum(r.tarja.dur,4), t), texto:String(r.tarja.nome||""), linha2:String(r.tarja.linha2||""), pos:"baixo", tam:1, anim:"deslizar", cor:"principal" });
+    if(a!=null) textos.push(Object.assign({ id:_evpId(), tipo:"tarja", t0:a, t1:Math.min(a + _evpNum(r.tarja.dur,4), t), texto:String(r.tarja.nome||""), linha2:String(r.tarja.linha2||""), pos:"baixo", tam:1, anim:"deslizar", cor:"principal" }, r.tarja.modelo ? { modelo:String(r.tarja.modelo) } : {}));
   }
   const edits = {};
   const p = {
@@ -115752,7 +116107,7 @@ function _evpProjetoDeReceita(receita, clipes){
     legenda:{ ativa:true, estilo:"", posicao:"", edits:edits, correcoes:(Array.isArray(r.correcoes) ? r.correcoes : []) },
     musica: r.musica && r.musica.id ? { id:r.musica.id, vol:_evpNum(r.musica.volume, 0.15), t0:0, ini:0, duck:true, fadeIn:0.5, fadeOut:1.5 } : null,
     sfx:[], audio:{ ruido:true, voz:true, nivelar:true }, estab:{},
-    tela_final:{ dur:_evpNum(r.tela_final && r.tela_final.dur, 3) },
+    tela_final:Object.assign({ dur:_evpNum(r.tela_final && r.tela_final.dur, 3) }, r.tela_final && r.tela_final.modelo ? { modelo:String(r.tela_final.modelo) } : {}),
   };
   return _evpNormalizar(p, clipes);
 }
@@ -115972,7 +116327,7 @@ function _evpCalcular(p, fala, kit){
            posLegenda:(p.legenda && p.legenda.posicao) || ((kit && kit.legenda_posicao) === "centro" ? "centro" : "segura"),   // v10: padrão = área segura do Reels
            musica:p.musica, sfx:p.sfx, audio:p.audio,   // v10c (30/09): estas 3 estavam presas no comentário da linha de cima — a música e os efeitos não tocavam
            faixas:p.faixas || { textos:{}, video:{ vol:1 }, sfx:{ vol:1 } }, imagens:p.imagens || [], abertura:p.abertura || {}, legenda:p.legenda || {},
-           narracoes:p.narracoes || [], formato:p.formato || "9x16", logo:p.logo || {}, canais:p.canais || {} };
+           narracoes:p.narracoes || [], formato:p.formato || "9x16", logo:p.logo || {}, canais:p.canais || {}, tela_final:p.tela_final || {} };
 }
 function _evpClipEm(calc, t){ const cs = calc.clips; for(let i=0;i<cs.length;i++){ if(t < cs[i].t1) return i; } return cs.length - 1; }
 
@@ -116501,6 +116856,252 @@ function _evpComentariosVideo(t){
 /* ─── MOTOR DO ESTÚDIO PROFISSIONAL: o mesmo desenho e o mesmo som na prévia e no Exportar ───
    Relógio = o áudio (AudioContext). O vídeo segue o relógio (corrige quando escorrega mais de 0,2 s).
    O som de cada clipe vem do áudio tratado (ruído/voz/nível), não do elemento de vídeo (que fica mudo). */
+/* ─── v12 (30/09/2026): GALERIA do Kit do cliente — tela final, GC (tarja) e elementos (caixas de texto) prontos.
+   A arte vem do cliente (PNG/MP4 enviado no Kit, com as áreas de texto marcadas) ou dos Modelos Pixels (forma desenhada com as cores do cliente).
+   Um desenho só serve para tudo: a prévia do Kit, o Estúdio, o Exportar do navegador e o PC do escritório.
+   O texto NUNCA sai da caixa: a letra diminui até caber (no máximo até a metade); se nem assim couber, avisa (caberTudo = false). ─── */
+const _EVG_TIPOS = [ { id:"tela_final", label:"Telas finais" }, { id:"gc", label:"GC (tarja)" }, { id:"elemento", label:"Elementos (caixas de texto)" } ];
+const _EVG_CAMPOS = {
+  gc:[ { id:"nome", label:"Nome" }, { id:"linha2", label:"Linha 2 (cargo, cidade)" } ],
+  elemento:[ { id:"texto", label:"Texto" }, { id:"linha2", label:"Texto menor" } ],
+  tela_final:[ { id:"cta", label:"Frase de chamada" }, { id:"whatsapp", label:"WhatsApp" }, { id:"instagram", label:"@Instagram" }, { id:"site", label:"Site" }, { id:"endereco", label:"Endereço" }, { id:"nome", label:"Nome da empresa" } ]
+};
+const _EVG_CORES = [ { id:"principal", label:"Cor principal" }, { id:"apoio", label:"Cor de apoio" }, { id:"texto", label:"Cor do texto" }, { id:"branco", label:"Branco" }, { id:"preto", label:"Preto" } ];
+const _EVG_FORMAS = [ { id:"caixa", label:"Caixa arredondada" }, { id:"pilula", label:"Pílula" }, { id:"barra", label:"Faixa de ponta a ponta" }, { id:"nenhum", label:"Sem fundo (só o texto)" } ];
+const _EVG_ANIMS = [ { id:"pop", label:"Pop" }, { id:"deslizar", label:"Deslizar" }, { id:"aparecer", label:"Aparecer" }, { id:"nenhuma", label:"Sem animação" } ];
+
+function _evgItens(kit, tipo){ return ((kit && kit._galeria) || []).filter(function(x){ return x && x.tipo === tipo && x.ativo !== false; }); }
+function _evgAchar(kit, id){ if(!id || id === "app") return null; return ((kit && kit._galeria) || []).find(function(x){ return x && x.id === id && x.ativo !== false; }) || null; }
+/* padrão automático: só o que o CLIENTE marcou (unidade primeiro). Modelo Pixels nunca entra sozinho. */
+function _evgPadrao(kit, tipo){ const l = _evgItens(kit, tipo);
+  return l.find(function(x){ return x.padrao && x.origem === "unidade"; }) || l.find(function(x){ return x.padrao && x.origem === "cliente"; }) || null; }
+/* qual item desenha este texto / esta tela final ("app" = o desenho antigo do app) */
+function _evgDoTexto(kit, x){
+  if(!x) return null;
+  if(x.modelo === "app") return null;
+  if(x.modelo) return _evgAchar(kit, x.modelo);
+  if(x.tipo === "tarja") return _evgPadrao(kit, "gc");
+  if(x.tipo === "destaque") return _evgPadrao(kit, "elemento");
+  return null;                     // "Texto na tela" solto só usa elemento se alguém escolher
+}
+function _evgDaTela(kit, tf){ const m = tf && tf.modelo; if(m === "app") return null; return m ? _evgAchar(kit, m) : _evgPadrao(kit, "tela_final"); }
+function _evgValores(it, x, kit, base){
+  if(!it) return {};
+  if(it.tipo === "gc") return { nome:String((x && x.texto) || ""), linha2:String((x && x.linha2) || "") };
+  if(it.tipo === "elemento") return { texto:String((x && x.texto) || ""), linha2:String((x && x.linha2) || "") };
+  const b = base || {};
+  return { cta:String((kit && kit.cta_final) || ""), whatsapp:b.whatsapp ? String(b.whatsapp) : "", instagram:b.instagram ? "@" + String(b.instagram).replace(/^@/, "") : "",
+           site:String(b.site || ""), endereco:String(b.endereco || ""), nome:String(b.nome || "") };
+}
+function _evgCor(c, kit){
+  const k = kit || {};
+  if(c === "principal") return k.cor_principal || "#7c3aed";
+  if(c === "apoio") return k.cor_secundaria || "#ffffff";
+  if(c === "texto") return k.cor_texto || "#ffffff";
+  if(c === "branco") return "#ffffff";
+  if(c === "preto") return "#0b1020";
+  return /^#[0-9a-fA-F]{6}$/.test(String(c || "")) ? c : (k.cor_texto || "#ffffff");
+}
+function _evgLuz(hex){ const h = String(hex || "").replace("#", ""); if(h.length !== 6) return 1; const c = [0, 2, 4].map(function(i){ const v = parseInt(h.substr(i, 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2]; }
+function _evgContraste(a, b){ const x = _evgLuz(a), y = _evgLuz(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+/* letra sobre fundo de forma: se a cor escolhida some no fundo (ex.: branco no branco), troca por preto ou branco — nunca texto invisível */
+function _evgLegivel(fg, bg){ if(!bg || _evgContraste(fg, bg) >= 2.2) return fg; return _evgContraste("#ffffff", bg) >= _evgContraste("#0b1020", bg) ? "#ffffff" : "#0b1020"; }
+
+/* fonte enviada da marca (.ttf/.otf/.woff/.woff2) → carrega uma vez e devolve o nome da família */
+const _evgFontes = {};
+function _evgFonteUrl(url){
+  if(!url || typeof FontFace === "undefined" || typeof document === "undefined") return "";
+  if(_evgFontes[url]) return _evgFontes[url].fam;
+  let h = 0; for(let i=0;i<url.length;i++){ h = ((h << 5) - h + url.charCodeAt(i)) | 0; }
+  const fam = "evg" + Math.abs(h).toString(36);
+  const o = { fam:fam, pronto:false, prom:null }; _evgFontes[url] = o;
+  try{ const ff = new FontFace(fam, "url(" + JSON.stringify(url) + ")"); o.prom = ff.load().then(function(f){ document.fonts.add(f); o.pronto = true; }).catch(function(){ o.erro = true; }); }catch(_){ o.erro = true; }
+  return fam;
+}
+function _evgFamilia(campo, kit){
+  const base = "\"" + ((kit && kit.fonte) || "Montserrat") + "\", Montserrat, system-ui, sans-serif";
+  if(campo && campo.fonte_url){ const f = _evgFonteUrl(campo.fonte_url); if(f) return "\"" + f + "\", " + base; }
+  if(campo && campo.fonte){ try{ _evCarregarFonte(campo.fonte); }catch(_){} return "\"" + campo.fonte + "\", " + base; }
+  return base;
+}
+
+/* quebra o texto em linhas que cabem em maxW (null = uma palavra sozinha já não cabe) */
+function _evgQuebrar(cx, texto, maxW, lista){
+  const linhas = [];
+  const partes = lista ? String(texto).split(/\s*[;\n]\s*/).filter(Boolean).map(function(s){ return "✓ " + s; }) : [String(texto).replace(/\s*\n\s*/g, " ")];
+  for(let k=0;k<partes.length;k++){
+    const ws = partes[k].split(/\s+/).filter(Boolean); let l = "";
+    for(let i=0;i<ws.length;i++){
+      const tst = l ? l + " " + ws[i] : ws[i];
+      if(cx.measureText(tst).width <= maxW){ l = tst; continue; }
+      if(!l) return null;
+      linhas.push(l); l = ws[i];
+      if(cx.measureText(l).width > maxW) return null;
+    }
+    if(l) linhas.push(l);
+  }
+  return linhas;
+}
+/* acha o maior tamanho de letra (de fs0 até fs0/2) em que o texto cabe em maxW × maxH com no máximo maxL linhas */
+function _evgCaber(cx, texto, campo, fam, maxW, maxH, fs0){
+  const peso = campo.peso || 800, maxL = Math.max(1, Math.min(8, Number(campo.max_linhas) || 2)), lh = 1.14;
+  const txt = campo.caixa === "alta" ? String(texto).toUpperCase() : String(texto);
+  let fs = fs0, ult = null;
+  for(let n=0;n<16;n++){
+    cx.font = peso + " " + Math.round(fs) + "px " + fam;
+    const ls = _evgQuebrar(cx, txt, maxW, !!campo.lista);
+    if(ls && ls.length <= maxL && (!maxH || ls.length * fs * lh <= maxH + 1)) return { linhas:ls, fs:Math.round(fs), lh:lh, cabe:true };
+    ult = ls;
+    if(fs <= fs0 * 0.5) break;
+    fs = Math.max(fs0 * 0.5, fs * 0.93);
+  }
+  cx.font = peso + " " + Math.round(fs) + "px " + fam;
+  const ls = _evgQuebrar(cx, txt, maxW * 3, !!campo.lista) || [txt];
+  return { linhas:ls.slice(0, maxL), fs:Math.round(fs), lh:lh, cabe:false };
+}
+function _evgEscrever(cx, lay, campo, cor, x, y, w, alinhar, fam){
+  const peso = campo.peso || 800;
+  cx.font = peso + " " + lay.fs + "px " + fam; cx.textBaseline = "top";
+  cx.textAlign = alinhar === "esquerda" ? "left" : alinhar === "direita" ? "right" : "center";
+  const ax = alinhar === "esquerda" ? x : alinhar === "direita" ? x + w : x + w / 2;
+  lay.linhas.forEach(function(l, i){
+    const yy = y + i * lay.fs * lay.lh + lay.fs * (lay.lh - 1) / 2;
+    cx.save();
+    if(campo.sombra){ cx.shadowColor = "rgba(0,0,0,.55)"; cx.shadowBlur = lay.fs * 0.25; cx.shadowOffsetY = lay.fs * 0.05; }
+    if(campo.contorno){ cx.strokeStyle = "rgba(0,0,0,.88)"; cx.lineWidth = Math.max(4, lay.fs * 0.14); cx.lineJoin = "round"; cx.strokeText(l, ax, yy); cx.shadowBlur = 0; }
+    cx.fillStyle = cor; cx.fillText(l, ax, yy); cx.restore();
+  });
+}
+function _evgUnidade(W, H){ return Math.min(W, H * 0.5625); }
+
+/* mede e desenha um GC / elemento. o = { kit, img(url) → Image, anim:{pin,pout}, x: objeto de texto (y, dx, tam), sem:true só mede }.
+   Devolve { x, y, w, h, cabe } (a caixa, para clicar e arrastar no Estúdio). */
+function _evgDesenhar(cx, W, H, it, vals, o){
+  o = o || {}; const kit = o.kit || {}, d = (it && it.dados) || {}, U = _evgUnidade(W, H), obj = o.x || {};
+  const pos = d.pos || {}, esc = Math.max(0.3, Math.min(3, Number(obj.tam) || 1));
+  const cxX = W * (Number(pos.x) >= 0 ? Number(pos.x) : 0.5) + (Number(obj.dx) || 0) * W;
+  const cyY = obj.y != null && isFinite(Number(obj.y)) ? H * Number(obj.y) : H * (Number(pos.y) >= 0 ? Number(pos.y) : 0.3);
+  const larg = U * Math.max(0.1, Math.min(1, Number(pos.larg) || 0.8)) * esc;
+  const campos = (Array.isArray(d.campos) ? d.campos : []).filter(function(c){ return c && String(vals[c.id] || "").trim(); });
+  let box, lays = [], cabe = true, im = null;
+  if(d.midia === "imagem" && d.url){
+    im = o.img ? o.img(d.url) : null;
+    const pr = Number(d.h) > 0 && Number(d.w) > 0 ? Number(d.h) / Number(d.w) : (im && im.naturalWidth ? im.naturalHeight / im.naturalWidth : 0.3);
+    const w = larg, h = w * pr;
+    box = { x:cxX - w/2, y:cyY - h/2, w:w, h:h };
+    campos.forEach(function(c){
+      const r = { x:box.x + (Number(c.x) || 0) * w, y:box.y + (Number(c.y) || 0) * h, w:Math.max(4, (Number(c.w) || 1) * w), h:Math.max(4, (Number(c.h) || 1) * h) };
+      const fam = _evgFamilia(c, kit), maxL = Math.max(1, Number(c.max_linhas) || 1);
+      const lay = _evgCaber(cx, vals[c.id], c, fam, r.w, r.h, Math.min(r.h / maxL / 1.14, U * 0.2));
+      if(!lay.cabe) cabe = false;
+      lays.push({ c:c, lay:lay, r:r, fam:fam, fundo:null });
+    });
+  } else {
+    // forma desenhada: a caixa abraça o texto (os campos um embaixo do outro)
+    const fm = d.forma || {}, pad = U * (Number(d.pad) >= 0 ? Number(d.pad) : 0.035) * esc;
+    const barra = fm.tipo === "barra", maxW = (barra ? W - pad * 2 : larg - pad * 2);
+    const fundo = fm.tipo === "nenhum" ? null : _evgCor(fm.cor || "principal", kit);
+    let hT = 0, wT = 0; const gap = U * 0.008 * esc;
+    campos.forEach(function(c, i){
+      const fam = _evgFamilia(c, kit);
+      const lay = _evgCaber(cx, vals[c.id], c, fam, maxW, 0, U * (Number(c.tam) || 0.07) * esc);
+      if(!lay.cabe) cabe = false;
+      cx.font = (c.peso || 800) + " " + lay.fs + "px " + fam;
+      lay.linhas.forEach(function(l){ wT = Math.max(wT, cx.measureText(l).width); });
+      lays.push({ c:c, lay:lay, fam:fam, fundo:fundo, hh:lay.linhas.length * lay.fs * lay.lh });
+      hT += lay.linhas.length * lay.fs * lay.lh + (i ? gap : 0);
+    });
+    const w = barra ? W : (fm.largura_fixa ? larg : Math.min(larg, wT + pad * 2)), h = hT + pad * 1.4;
+    box = { x:barra ? 0 : cxX - w/2, y:cyY - h/2, w:w, h:h };
+    let yy = box.y + pad * 0.7;
+    lays.forEach(function(q, i){ if(i) yy += gap; q.r = { x:barra ? pad : box.x + pad, y:yy, w:barra ? W - pad*2 : w - pad*2, h:q.hh }; yy += q.hh; });
+  }
+  // nunca sai da tela para os lados
+  if(box.w < W){ const m = W * 0.02; const sh = Math.max(m - box.x, 0) - Math.max(box.x + box.w - (W - m), 0); if(sh){ box.x += sh; lays.forEach(function(q){ q.r.x += sh; }); } }
+  if(o.sem) return { x:box.x, y:box.y, w:box.w, h:box.h, cabe:cabe };
+  // animação
+  const k = o.anim || { pin:1, pout:1 }, an = obj.anim || d.anim || "pop";
+  let sc = 1, al = Math.min(1, k.pout), dx = 0, dy = 0;
+  const e = 1 - Math.pow(1 - k.pin, 3);
+  if(an === "pop") sc = 0.6 + 0.4 * (typeof _evEaseBack === "function" ? _evEaseBack(k.pin) : e);
+  else if(an === "deslizar"){ if(it.tipo === "gc") dx = -(1 - e) * W * 0.6; else dy = (1 - e) * H * 0.08; al *= Math.min(1, k.pin * 1.4); }
+  else if(an === "aparecer") al *= k.pin;
+  cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, al));
+  const ccx = box.x + box.w / 2, ccy = box.y + box.h / 2;
+  cx.translate(ccx + dx, ccy + dy); cx.scale(sc, sc); cx.translate(-ccx, -ccy);
+  if(im){ if(im.complete && im.naturalWidth) cx.drawImage(im, box.x, box.y, box.w, box.h); }
+  else {
+    const fm = d.forma || {};
+    if(fm.tipo !== "nenhum"){
+      const r = fm.tipo === "pilula" ? box.h / 2 : fm.tipo === "barra" ? 0 : Math.min(box.h / 2, U * (Number(fm.raio) >= 0 ? Number(fm.raio) : 0.025) * esc);
+      cx.save();
+      if(fm.sombra !== false){ cx.shadowColor = "rgba(0,0,0,.35)"; cx.shadowBlur = U * 0.022; cx.shadowOffsetY = U * 0.004; }
+      cx.globalAlpha *= Math.max(0.1, Math.min(1, Number(fm.alfa) || 1));
+      cx.fillStyle = _evgCor(fm.cor || "principal", kit); _evRet(cx, box.x, box.y, box.w, box.h, r); cx.fill();
+      cx.restore();
+      if(fm.borda){ cx.save(); cx.strokeStyle = _evgCor(fm.borda, kit); cx.lineWidth = Math.max(3, U * 0.006 * esc); _evRet(cx, box.x, box.y, box.w, box.h, r); cx.stroke(); cx.restore(); }
+    }
+  }
+  lays.forEach(function(q){
+    const cor = q.fundo ? _evgLegivel(_evgCor(q.c.cor || "texto", kit), q.fundo) : _evgCor(q.c.cor || "texto", kit);
+    const hL = q.lay.linhas.length * q.lay.fs * q.lay.lh;
+    const y0 = q.r.y + Math.max(0, (q.r.h - hL) / 2);
+    _evgEscrever(cx, q.lay, q.c, cor, q.r.x, y0, q.r.w, q.c.alinhar || (d.midia === "imagem" ? "esquerda" : "centro"), q.fam);
+  });
+  cx.restore();
+  return { x:box.x, y:box.y, w:box.w, h:box.h, cabe:cabe };
+}
+
+/* tela final da galeria: a arte (imagem ou quadro do vídeo) cobre a tela; os campos (chamada, WhatsApp…) vêm do Kit/cadastro — a IA não escreve nada aqui */
+function _evgTelaFinal(cx, W, H, it, vals, o){
+  o = o || {}; const d = (it && it.dados) || {}, kit = o.kit || {};
+  const fonte = d.midia === "video" ? o.video : (o.img ? o.img(d.url) : null);
+  const fw = fonte ? (fonte.videoWidth || fonte.naturalWidth || 0) : 0, fh = fonte ? (fonte.videoHeight || fonte.naturalHeight || 0) : 0;
+  cx.save(); cx.globalAlpha = o.alfa == null ? 1 : o.alfa;
+  cx.fillStyle = _evgCor("principal", kit); cx.fillRect(0, 0, W, H);
+  let R = { x:0, y:0, w:W, h:H };
+  if(fw && fh && (d.midia !== "video" || fonte.readyState >= 2)){
+    const s = Math.max(W / fw, H / fh); R = { x:(W - fw * s) / 2, y:(H - fh * s) / 2, w:fw * s, h:fh * s };
+    cx.drawImage(fonte, R.x, R.y, R.w, R.h);
+  }
+  (Array.isArray(d.campos) ? d.campos : []).forEach(function(c){
+    const v = String(vals[c.id] || "").trim(); if(!v) return;
+    const r = { x:R.x + (Number(c.x) || 0) * R.w, y:R.y + (Number(c.y) || 0) * R.h, w:Math.max(4, (Number(c.w) || 1) * R.w), h:Math.max(4, (Number(c.h) || 0.1) * R.h) };
+    const fam = _evgFamilia(c, kit), maxL = Math.max(1, Number(c.max_linhas) || 1);
+    const lay = _evgCaber(cx, v, c, fam, r.w, r.h, r.h / maxL / 1.14);
+    const hL = lay.linhas.length * lay.fs * lay.lh;
+    _evgEscrever(cx, lay, c, _evgCor(c.cor || "texto", kit), r.x, r.y + Math.max(0, (r.h - hL) / 2), r.w, c.alinhar || "centro", fam);
+  });
+  cx.restore();
+}
+
+/* antes de gravar (navegador e PC): carrega as artes e fontes da galeria que o vídeo usa (até 15 s) */
+function _evgPreparar(kit){
+  const ps = [];
+  ((kit && kit._galeria) || []).forEach(function(it){
+    const d = (it && it.dados) || {};
+    if(d.url && d.midia === "imagem"){ ps.push(new Promise(function(ok){ const im = new Image(); im.crossOrigin = "anonymous"; im.onload = ok; im.onerror = ok; im.src = d.url; })); }
+    (Array.isArray(d.campos) ? d.campos : []).forEach(function(c){ if(c && c.fonte_url){ _evgFonteUrl(c.fonte_url); const f = _evgFontes[c.fonte_url]; if(f && f.prom) ps.push(f.prom); } if(c && c.fonte){ try{ _evCarregarFonte(c.fonte); }catch(_){} } });
+  });
+  try{ if(document.fonts && document.fonts.ready) ps.push(document.fonts.ready); }catch(_){}
+  return Promise.race([Promise.all(ps), new Promise(function(ok){ setTimeout(ok, 15000); })]);
+}
+/* confere se os textos cabem nas caixas escolhidas (Estúdio: aviso na hora) */
+function _evgConferir(p, kit, W, H){
+  const out = []; if(typeof document === "undefined") return out;
+  const cv = document.createElement("canvas"); cv.width = 8; cv.height = 8; const cx = cv.getContext("2d");
+  (p.textos || []).forEach(function(x){
+    const it = _evgDoTexto(kit, x); if(!it) return;
+    const r = _evgDesenhar(cx, W || 1080, H || 1920, it, _evgValores(it, x, kit), { kit:kit, x:x, sem:true });
+    const lim = []; (it.dados && it.dados.campos || []).forEach(function(c){ const v = String(_evgValores(it, x, kit)[c.id] || ""); if(c.max_letras && v.length > Number(c.max_letras)) lim.push(c.id + " " + v.length + "/" + c.max_letras); });
+    if(!r.cabe || lim.length) out.push({ id:x.id, texto:String(x.texto || "").slice(0, 40), modelo:it.nome, cabe:r.cabe, limite:lim });
+    const U = _evgUnidade(W || 1080, H || 1920), HH = H || 1920;
+    if(r.y < HH * 0.12 || r.y + r.h > HH * 0.82) out.push({ id:x.id, texto:String(x.texto || "").slice(0, 40), modelo:it.nome, zona:true });
+    void U;
+  });
+  return out;
+}
+
 function _evpMotor(canvas, o){
   const DIM = _evpDim(o.projeto && o.projeto.formato), W = DIM.w, H = DIM.h;
   if(canvas.width !== W) canvas.width = W; if(canvas.height !== H) canvas.height = H;
@@ -116784,6 +117385,12 @@ function _evpMotor(canvas, o){
     cx.drawImage(logo, pos[0] + (S-w)/2, pos[1] + (S-h)/2, w, h); cx.restore();
   }
   function animK(x, tt){ const pin = _evClamp((tt - x.t0)/0.3, 0, 1), pout = _evClamp((x.t1 - tt)/0.25, 0, 1); return { pin:pin, pout:pout }; }
+  /* v12: GC / elemento da GALERIA do Kit (arte do cliente ou Modelo Pixels) — a caixa guarda o centro (yRef) para arrastar */
+  function desenharModelo(x, it){
+    const r = _evgDesenhar(cx, W, H, it, _evgValores(it, x, kit, base), { kit:kit, img:imagem, x:x, anim:animK(x, t) });
+    const pos = (it.dados && it.dados.pos) || {};
+    caixas.push({ id:x.id, x:r.x, y:r.y, w:r.w, h:r.h, yRef:x.y != null ? Number(x.y) : (Number(pos.y) >= 0 ? Number(pos.y) : 0.3), modelo:it.id });
+  }
   function desenharTarja(x){
     const k0 = animK(x, t), k = Math.min(1 - Math.pow(1 - k0.pin, 3), k0.pout);
     const y = x.y!=null ? H * x.y : H*0.62, dx = (x.anim === "nenhuma" ? 0 : -(1-k)*W*0.6) + _evpNum(x.dx, 0) * W, modelo = kit.tarja_modelo || "barra";
@@ -117014,7 +117621,27 @@ function _evpMotor(canvas, o){
       if(base.cidade){ cx.font = "600 42px " + F; cx.globalAlpha = al * 0.85; cx.fillText(String(base.cidade), 0, S/2 + 140); } }
     cx.restore();
   }
+  /* v12: tela final da GALERIA (imagem ou vídeo do cliente) — o vídeo toca mudo, no tempo da tela final */
+  let vFinal = null;
+  function elFinal(it){
+    const d = (it && it.dados) || {}; if(d.midia !== "video" || !d.url) return null;
+    if(vFinal && vFinal._src === d.url) return vFinal;
+    if(vFinal){ try{ vFinal.pause(); vFinal.removeAttribute("src"); vFinal.load(); }catch(_){} }
+    const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true; v._src = d.url; v.src = d.url; vFinal = v; return v;
+  }
+  function sincronizarFinal(){     // devolve true se a gravação precisa esperar o vídeo da tela final carregar
+    const it = calc.total > calc.fimCortes ? _evgDaTela(kit, calc.tela_final) : null;
+    const v = elFinal(it); if(!v) return false;
+    const alvo = Math.max(0, t - calc.fimCortes), dentro = t >= calc.fimCortes && t < calc.total;
+    if(tocando && dentro && !segurando){
+      if(v.paused && v.readyState >= 2){ const pr = v.play(); if(pr && pr.catch) pr.catch(function(){}); }
+      if(v.readyState >= 1 && !v.seeking && Math.abs(v.currentTime - alvo) > 0.3){ try{ v.currentTime = alvo; }catch(_){} }
+    } else { if(!v.paused) v.pause(); if(v.readyState >= 1 && !v.seeking && Math.abs(v.currentTime - alvo) > 0.05){ try{ v.currentTime = Math.min(alvo, Math.max(0, (v.duration || 99) - 0.05)); }catch(_){} } }
+    return dentro && (v.readyState < 2 || v.seeking);
+  }
   function desenharFinal(al){
+    const itF = _evgDaTela(kit, calc.tela_final);
+    if(itF){ _evgTelaFinal(cx, W, H, itF, _evgValores(itF, null, kit, base), { kit:kit, img:imagem, video:elFinal(itF), alfa:al }); return; }
     cx.save(); cx.globalAlpha = al;
     cx.fillStyle = pri; cx.fillRect(0, 0, W, H);
     const g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgba(255,255,255,0.10)"); g.addColorStop(1, "rgba(0,0,0,0.22)"); cx.fillStyle = g; cx.fillRect(0, 0, W, H);
@@ -117062,7 +117689,7 @@ function _evpMotor(canvas, o){
       desenharLogo();
       const ocultos = calc.faixas && calc.faixas.textos && calc.faixas.textos.oculta;
       desenharImagens();
-      if(!ocultos) (calc.textos||[]).forEach(function(x){ if(t < x.t0 || t > x.t1) return; if(x.tipo === "tarja") desenharTarja(x); else desenharTexto(x); });
+      if(!ocultos) (calc.textos||[]).forEach(function(x){ if(t < x.t0 || t > x.t1) return; const itG = _evgDoTexto(kit, x); if(itG){ desenharModelo(x, itG); return; } if(x.tipo === "tarja") desenharTarja(x); else desenharTexto(x); });
       if(atras && !ocultos && recortarPessoa()) cx.drawImage(pessoa, 0, 0);     // a pessoa passa na frente do texto
       if(!o.semLegenda) desenharLegenda();       // exportar sem a legenda gravada (para subir o .srt separado)
       desenharAbertura();
@@ -117113,8 +117740,8 @@ function _evpMotor(canvas, o){
         }
       } else { if(!v.paused) v.pause(); if(v.readyState >= 1 && Math.abs(v.currentTime - alvo) > 0.04 && !v.seeking){ try{ v.currentTime = alvo; }catch(_){} } }
       const nx = calc.clips[cur+1]; if(nx){ const vn = el(nx); if(vn.readyState >= 1 && vn.paused && Math.abs(vn.currentTime - nx.ini) > 0.05 && !vn.seeking){ try{ vn.currentTime = nx.ini; }catch(_){} } }
-    } else if(tocando) segurar(!!document.hidden);
-    sincronizarSobre();
+    } else if(tocando){ const espF = sincronizarFinal(); if(o.pausarAoEsperar && espF){ esperando = true; segurar(true); } else segurar(!!document.hidden); }
+    sincronizarSobre(); if(!tocando || t < calc.fimCortes) sincronizarFinal();     // antes do fim: já deixa o vídeo da tela final carregado
     const agora = performance.now();
     const vAt = c && els[c.id], mexendo = !!(vAt && (vAt.seeking || vAt.readyState < 2)) || Object.keys(els2).some(function(k){ return els2[k].seeking; });
     if(tocando || o.pausarAoEsperar || sujo > 0 || mexendo || t !== ultTempo || agora - ultDesenho > 250){
@@ -117136,6 +117763,7 @@ function _evpMotor(canvas, o){
     setTratados: function(tr){ o.tratados = tr; marcar(); },
     volumeGeral: function(v){ try{ master.gain.setValueAtTime(v, ac.currentTime); }catch(_){ master.gain.value = v; } },   // 0 = mudo (gravando narração)
     destruir: function(){ vivo = false; cancelAnimationFrame(raf); pararAudio(); document.removeEventListener("visibilitychange", aoSumir);
+      if(vFinal){ try{ vFinal.pause(); vFinal.removeAttribute("src"); vFinal.load(); }catch(_){} vFinal = null; }
       Object.keys(els).forEach(function(k){ const v = els[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
       Object.keys(els2).forEach(function(k){ const v = els2[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
       try{ master.disconnect(); lim.disconnect(); }catch(_){} if(!o.ctx) try{ ac.close(); }catch(_){} },
@@ -117174,7 +117802,7 @@ const _EVP_FERR = {
          { id:"mov", label:"Movimento", icone:"movimento" }, { id:"congelar", label:"Congelar", icone:"congelar", acao:true }, { id:"fundo", label:"Fundo", icone:"pessoa" },
          { id:"estab", label:"Qualidade", icone:"estab" }, { id:"cor", label:"Cor", icone:"cor" }, { id:"trans", label:"Transição", icone:"transicao" },
          { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
-  texto:[ { id:"editar", label:"Texto", icone:"lapis" }, { id:"estilo", label:"Estilo", icone:"estilo" }, { id:"anim", label:"Animação", icone:"animacao" },
+  texto:[ { id:"editar", label:"Texto", icone:"lapis" }, { id:"elemento", label:"Elemento", icone:"camadas" }, { id:"estilo", label:"Estilo", icone:"estilo" }, { id:"anim", label:"Animação", icone:"animacao" },
           { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   musica:[ { id:"trocar", label:"Trocar", icone:"musica" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"suave", label:"Suave", icone:"audio" },
            { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"apagar", label:"Tirar", icone:"apagar", acao:true } ],
@@ -117666,11 +118294,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     mudar(function(np){ const i = np.clips.length ? _evpClipEm(calc, tempo) : -1;
       np.clips.splice(i + 1, 0, { id:_evpId(), clipe:cid, ini:0, fim:_evpNum(c.duracao, 3), vel:1, vol:1, mudo:false, zoom:1, x:0, y:0, rot:0, modo:"auto", estab:false, cor:{ bri:0, con:0, sat:0, temp:0 }, trans:"corte" }); });
   };
-  const addTexto = function(tipo){
-    const id = _evpId(), t0 = Math.min(tempo, Math.max(0, calc.fimCortes - 0.5));
-    mudar(function(np){ np.textos.push({ id:id, tipo:tipo, t0:t0, t1:Math.min(t0 + (tipo === "tarja" ? 4 : 2.5), Math.max(t0 + 0.5, calc.fimCortes)),
-      texto: tipo === "tarja" ? (base.nome || "Nome") : tipo === "destaque" ? "DESTAQUE" : "Seu texto aqui", linha2: tipo === "tarja" ? (base.cidade || "") : "",
-      pos: tipo === "tarja" ? "baixo" : "meio", tam:1, anim: tipo === "tarja" ? "deslizar" : "pop", cor:"principal" }); });
+  const addTexto = function(tipo, it){          // v12: it = elemento/GC da galeria (já entra com o texto de exemplo dele)
+    const id = _evpId(), t0 = Math.min(tempo, Math.max(0, calc.fimCortes - 0.5)), ex = (it && it.dados && it.dados.exemplo) || null;
+    mudar(function(np){ np.textos.push(Object.assign({ id:id, tipo:tipo, t0:t0, t1:Math.min(t0 + (tipo === "tarja" ? 4 : 2.5), Math.max(t0 + 0.5, calc.fimCortes)),
+      texto: ex && ex.texto ? ex.texto : tipo === "tarja" ? (base.nome || "Nome") : tipo === "destaque" ? "DESTAQUE" : "Seu texto aqui", linha2: ex && ex.linha2 ? ex.linha2 : tipo === "tarja" ? (base.cidade || "") : "",
+      pos: tipo === "tarja" ? "baixo" : "meio", tam:1, anim: it && it.dados && it.dados.anim ? it.dados.anim : tipo === "tarja" ? "deslizar" : "pop", cor:"principal" }, it ? { modelo:it.id } : {})); });
     setSel({ tipo:"texto", id:id }); setFerr(function(f){ return Object.assign({}, f, { texto:"editar" }); });
   };
   const addImagem = function(url, nome){
@@ -118177,7 +118805,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
               <_EvpIco n={m.icone} s={20}/>{m.label}</button>; })}
         </div>
         <_EvpPainelMenu menu={menu} p={p} calc={calc} sel={sel} setSel={setSel} mudar={mudar} irPara={irPara} tempo={tempo} infoClipe={infoClipe} clipes={clipes}
-          musicas={musicas} musInfo={musInfoN} setMusica={setMusica} addClipe={addClipe} addTexto={addTexto} addSfx={addSfx} kit={kit}
+          musicas={musicas} musInfo={musInfoN} setMusica={setMusica} addClipe={addClipe} addTexto={addTexto} addSfx={addSfx} kit={kit} base={base}
           cortar={cortar} duplicar={duplicar} apagar={apagar} metodoRuido={metodoRuido} tratandoAudio={tratandoAudio} pedirEstab={pedirEstab}
           onMusicasMudou={onMusicasMudou} setFerr={setFerr} pRef={pRef} setP={setP} confirmar={confirmar}
           addImagem={addImagem} addMarca={addMarca} tirarTrechos={tirarTrechos} fala={ed.fala} modelos={modelos} salvarModelo={salvarModelo} aplicarModelo={aplicarModelo}
@@ -118233,6 +118861,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             </div>
           )}
         </div>
+        <div style={{minWidth:0,minHeight:0,display:"flex",flexDirection:"column"}}>
+        <_EvpSugestoes ed={ed} p={p} mudar={mudar} kit={kit}/>
+        <div style={{flex:1,minHeight:0}}>
         {sel && selObj ? (
           <_EvpInspetor prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
@@ -118240,6 +118871,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         ) : (
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}/>
         )}
+        </div></div>
       </div>
 
       {/* ── linha do tempo (grafite; a borda de cima muda a altura) ── */}
@@ -118398,7 +119030,7 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
     }
     onSelTexto(hit.id);
     const x0 = e.clientX, y0 = e.clientY, anterior = pRef.current, o0 = anterior.textos.find(function(q){ return q.id === hit.id; }); if(!o0) return;
-    const yBase = o0.y != null ? o0.y : (o0.tipo === "tarja" ? 0.62 : o0.pos === "meio" ? 0.45 : o0.pos === "baixo" ? 0.72 : 0.2);
+    const yBase = o0.y != null ? o0.y : hit.yRef != null ? hit.yRef : (o0.tipo === "tarja" ? 0.62 : o0.pos === "meio" ? 0.45 : o0.pos === "baixo" ? 0.72 : 0.2);
     let movido = false, ultimo = null;
     const mv = function(ev){ const dx = ev.clientX - x0, dy = ev.clientY - y0; if(!movido && Math.abs(dx) + Math.abs(dy) < 4) return; movido = true;
       const np = _evpCopia(anterior), o = np.textos.find(function(q){ return q.id === hit.id; });
@@ -118652,6 +119284,11 @@ function _EvpPainelMenu(q){
         {[["destaque","Destaque","Texto grande, com fundo"],["texto","Texto na tela","Frase curta"],["tarja","Tarja","Nome e cidade"]].map(function(a){
           return <button key={a[0]} onClick={function(){ addTexto(a[0]); }} style={linhaBtn}><span style={{color:_EVP_COR.roxo}}><_EvpIco n={a[0] === "tarja" ? "legenda" : "texto"}/></span>
             <span style={{flex:1}}>{a[1]}<div style={{fontSize:11,color:_EVP_COR.fraco,fontWeight:600}}>{a[2]}</div></span><_EvpIco n="mais" s={15}/></button>; })}
+        {(_evgItens(kit, "elemento").length + _evgItens(kit, "gc").length) > 0 && <div style={_EVP_TIT}>Da galeria do cliente</div>}
+        {_evgItens(kit, "gc").concat(_evgItens(kit, "elemento")).map(function(it){
+          return <button key={it.id} onClick={function(){ addTexto(it.tipo === "gc" ? "tarja" : "destaque", it); }} title={(it.dados && it.dados.quando_usar) || ""} style={Object.assign({}, linhaBtn, {alignItems:"center"})}>
+            <_EvgMini it={it} kit={kit} base={q.base} w={64} h={30}/>
+            <span style={{flex:1,minWidth:0}}>{it.nome}<div style={{fontSize:10.5,color:_EVP_COR.fraco,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.tipo === "gc" ? "GC" : it.origem === "pixels" ? "Modelo Pixels" : "Elemento do cliente"}{it.dados && it.dados.quando_usar ? " · " + it.dados.quando_usar : ""}</div></span><_EvpIco n="mais" s={15}/></button>; })}
         <div style={_EVP_TIT}>Textos do vídeo ({(p.textos||[]).length})</div>
         {(p.textos||[]).slice().sort(function(a, b){ return a.t0 - b.t0; }).map(function(x){ const on = sel && sel.tipo === "texto" && sel.id === x.id;
           return <button key={x.id} onClick={function(){ setSel({ tipo:"texto", id:x.id }); irPara(x.t0 + 0.05); }} style={Object.assign({}, linhaBtn, on ? { borderColor:_EVP_COR.roxo, background:_EVP_COR.roxoSoft } : {})}>
@@ -118706,6 +119343,7 @@ function _EvpPainelMenu(q){
         <button onClick={function(){ q.gerarCapa(tituloCapa); }} style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center"})}><_EvpIco n="capa" s={16}/>Usar o quadro da agulha como capa</button>
         {q.capaUrl && <a href={q.capaUrl} target="_blank" rel="noreferrer" style={{display:"block",marginTop:8,width:96,borderRadius:10,overflow:"hidden",border:"1px solid "+_EVP_COR.linha}}><img src={q.capaUrl} alt="Capa" style={{width:"100%",display:"block"}}/></a>}
         <div style={_EVP_TIT}>Tela final</div>
+        <_EvpTelaFinalSel p={p} kit={kit} base={q.base} mudar={mudar}/>
         <_EvpSlider ctl={ctl} rotulo="Duração" v={_evpNum(p.tela_final && p.tela_final.dur, 3)} min={0} max={10} step={0.5} padrao={3}
           fmt={function(v){ return v ? String(v).replace(".", ",") + " s" : "sem tela final"; }} aplicar={function(np, v){ np.tela_final = Object.assign({}, np.tela_final, { dur:v }); }}/>
       </div>)}
@@ -119951,6 +120589,12 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
           <div style={{..._EVP_TIT, marginTop:0}}>{x.tipo === "tarja" ? "Nome" : "Texto"}</div>
           <textarea value={x.texto} rows={3} maxLength={160} onFocus={function(){ ctl.antRef.current = pRef.current; }} onBlur={ctl.fim}
             onChange={function(e){ const v = e.target.value; ctl.vivo(nt(function(o){ o.texto = v; })); }} style={Object.assign({}, campo, {resize:"vertical"})}/>
+          {(function(){ const itE = _evgDoTexto(kit, x); if(!itE || x.tipo === "tarja") return null; const tem2 = ((itE.dados && itE.dados.campos) || []).some(function(c){ return c.id === "linha2"; }); if(!tem2) return null;
+            return <div><div style={_EVP_TIT}>Texto menor ({itE.nome})</div>
+              <input value={x.linha2 || ""} maxLength={80} onFocus={function(){ ctl.antRef.current = pRef.current; }} onBlur={ctl.fim}
+                onChange={function(e){ const v = e.target.value; ctl.vivo(nt(function(o){ o.linha2 = v; })); }} style={campo}/></div>; })()}
+          {(function(){ const itE = _evgDoTexto(kit, x); if(!itE) return null; const lim = _evgLimiteTxt(itE, _evgValores(itE, x, kit)); if(!lim.length) return null;
+            return <div style={{fontSize:11.5,marginTop:6,color:lim.some(function(l){ return l.passou; }) ? "#b45309" : _EVP_COR.fraco}}>Elemento "{itE.nome}": {lim.map(function(l){ return l.n + "/" + l.max + " letras"; }).join(" · ")}{lim.some(function(l){ return l.passou; }) ? " — passou do limite, encurte" : ""}</div>; })()}
           {x.tipo === "tarja" && (<div>
             <div style={_EVP_TIT}>Segunda linha</div>
             <input value={x.linha2 || ""} maxLength={80} onFocus={function(){ ctl.antRef.current = pRef.current; }} onBlur={ctl.fim}
@@ -119958,7 +120602,9 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
           </div>)}
           <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:10}}>Também dá para dar duplo clique no texto dentro do vídeo.</div>
         </div>)}
+        {ferr === "elemento" && <_EvpElementoSel x={x} kit={kit} base={base} mudar={mudar} nt={nt}/>}
         {ferr === "estilo" && (<div>
+          {_evgDoTexto(kit, x) && <div style={{fontSize:11.5,color:_EVP_COR.fraco,background:_EVP_COR.roxoSoft,borderRadius:8,padding:"6px 8px",marginBottom:8}}>Este texto usa o elemento "{_evgDoTexto(kit, x).nome}" da galeria: cor, fonte e fundo vêm dele. Aqui vale o tamanho e o lugar.</div>}
           <div style={{..._EVP_TIT, marginTop:0}}>Tipo</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
             {[["destaque","Destaque"],["texto","Texto"],["tarja","Tarja"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(nt(function(q){ q.tipo = o[0]; })); }} style={_evpChip(x.tipo === o[0])}>{o[1]}</button>; })}
@@ -120156,11 +120802,119 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
   /* ─── TELA FINAL ─── */
   return (
     <div style={caixa}>{cab}
+      <_EvpTelaFinalSel p={p} kit={kit} base={base} mudar={mudar}/>
       <_EvpSlider ctl={ctl} rotulo="Duração" v={_evpNum(p.tela_final && p.tela_final.dur, 3)} min={0} max={10} step={0.5} fmt={function(v){ return v ? seg(v) : "sem tela final"; }} padrao={3}
         aplicar={function(np, x){ np.tela_final = Object.assign({}, np.tela_final, { dur:x }); }}/>
-      <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>Logo, chamada e contatos vêm do Kit do cliente ({kit.cta_final || "—"}).</div>
+      <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>{_evgDaTela(kit, p.tela_final) ? "Chamada e contatos vêm do Kit do cliente (a IA não escreve na tela final)." : "Logo, chamada e contatos vêm do Kit do cliente (" + (kit.cta_final || "—") + ")."}</div>
     </div>
   );
+}
+
+
+/* ─── v12: GALERIA no Estúdio — miniatura, trocar o elemento, escolher a tela final e as SUGESTÕES da IA ─── */
+function _EvgMini({ it, kit, base, vals, w, h, fundo }){
+  const ref = useRef(null);
+  const W0 = w || 150, H0 = h || 70, d = (it && it.dados) || {};
+  useEffect(function(){
+    const cv = ref.current; if(!cv || !it || (it.tipo === "tela_final" && d.midia === "video")) return; let vivo = true;
+    const cache = {};
+    const img = function(u){ if(!cache[u]){ const im = new Image(); im.crossOrigin = "anonymous"; im.onload = function(){ if(vivo) desenhar(); }; im.src = u; cache[u] = im; } return cache[u]; };
+    const desenhar = function(){
+      if(!vivo) return;
+      const W = 1080, H = 1920, off = document.createElement("canvas"); off.width = W; off.height = H; const c = off.getContext("2d");
+      const v = vals || _evgValores(it, (d.exemplo ? { texto:d.exemplo.texto || "", linha2:d.exemplo.linha2 || "" } : { texto:it.tipo === "gc" ? ((base && base.nome) || "Nome da pessoa") : "Seu texto aqui", linha2:it.tipo === "gc" ? ((base && base.cidade) || "Cidade") : "" }), kit, base);
+      const cx = cv.getContext("2d"); cx.clearRect(0, 0, cv.width, cv.height);
+      cx.fillStyle = fundo || "#475569"; cx.fillRect(0, 0, cv.width, cv.height);
+      if(it.tipo === "tela_final"){ _evgTelaFinal(c, W, H, it, v, { kit:kit, img:img }); cx.drawImage(off, 0, 0, W, H, 0, 0, cv.width, cv.height); return; }
+      const r = _evgDesenhar(c, W, H, it, v, { kit:kit, img:img, x:{ y:0.5 }, anim:{ pin:1, pout:1 } });
+      const m = 24, sx = Math.max(0, r.x - m), sy = Math.max(0, r.y - m), sw = Math.min(W - sx, r.w + m*2), sh = Math.min(H - sy, r.h + m*2);
+      const k = Math.min(cv.width / sw, cv.height / sh), dw = sw * k, dh = sh * k;
+      cx.drawImage(off, sx, sy, sw, sh, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
+    };
+    desenhar();
+    try{ if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ if(vivo) desenhar(); }); }catch(_){}
+    const tm = setTimeout(desenhar, 1200);
+    return function(){ vivo = false; clearTimeout(tm); };
+  }, [it && it.id, it && JSON.stringify(it.dados), kit && kit.cor_principal, kit && kit.cor_secundaria, kit && kit.cor_texto, kit && kit.fonte, JSON.stringify(vals || null)]);
+  if(it && it.tipo === "tela_final" && d.midia === "video")
+    return <video src={d.url + "#t=0.5"} muted playsInline preload="metadata" style={{width:W0,height:H0,objectFit:"cover",borderRadius:8,background:"#0f172a",display:"block"}}/>;
+  return <canvas ref={ref} width={W0 * 2} height={H0 * 2} style={{width:W0,height:H0,borderRadius:8,display:"block"}}/>;
+}
+function _evgLimiteTxt(it, vals){
+  return ((it && it.dados && it.dados.campos) || []).filter(function(c){ return c.max_letras; }).map(function(c){
+    const n = String((vals || {})[c.id] || "").length; return { id:c.id, n:n, max:Number(c.max_letras), passou:n > Number(c.max_letras) }; });
+}
+function _EvpElementoSel({ x, kit, base, mudar, nt }){
+  const tipoG = x.tipo === "tarja" ? "gc" : "elemento";
+  const itens = _evgItens(kit, tipoG), atual = _evgDoTexto(kit, x), pad = _evgPadrao(kit, tipoG);
+  const escolher = function(id){ mudar(nt(function(o){ if(id == null) delete o.modelo; else o.modelo = id; o.y = null; o.dx = 0;
+    const it = _evgAchar(kit, id); if(it && it.dados && it.dados.anim) o.anim = it.dados.anim; })); };
+  const doCli = itens.filter(function(i){ return i.origem !== "pixels"; }), pix = itens.filter(function(i){ return i.origem === "pixels"; });
+  const lim = atual ? _evgLimiteTxt(atual, _evgValores(atual, x, kit)) : [];
+  const cartao = function(it){ const on = !!x.modelo && x.modelo === it.id;
+    return <button key={it.id} onClick={function(){ escolher(it.id); }} title={(it.dados && it.dados.quando_usar) || ""}
+      style={{font:"inherit",textAlign:"left",padding:6,borderRadius:10,border:"1.5px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),background:on ? _EVP_COR.roxoSoft : _EVP_COR.campo,cursor:"pointer",display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
+      <_EvgMini it={it} kit={kit} base={base} vals={_evgValores(it, x, kit)} w={132} h={56}/>
+      <span style={{fontSize:11.5,fontWeight:800,color:_EVP_COR.ink}}>{(on ? "✓ " : "") + it.nome}{it.padrao ? " · padrão" : ""}</span>
+      {it.dados && it.dados.quando_usar && <span style={{fontSize:10.5,color:_EVP_COR.fraco,lineHeight:1.3,maxHeight:40,overflow:"hidden"}}>{it.dados.quando_usar}</span>}
+    </button>; };
+  return (<div>
+    <div style={{..._EVP_TIT, marginTop:0}}>{tipoG === "gc" ? "GC da tarja" : "Caixa do texto"}</div>
+    <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Agora: <b>{atual ? atual.nome : "desenho do app"}</b>{!x.modelo ? " (automático)" : ""}</div>
+    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
+      <button onClick={function(){ escolher(null); }} style={_evpChip(!x.modelo)} title="Usa o padrão do cliente; sem padrão, o desenho do app">Automático{pad ? " (" + pad.nome + ")" : ""}</button>
+      <button onClick={function(){ escolher("app"); }} style={_evpChip(x.modelo === "app")}>Desenho do app</button>
+    </div>
+    {lim.filter(function(l){ return l.passou; }).map(function(l){ return <div key={l.id} style={{fontSize:11.5,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"6px 8px",marginBottom:8}}>
+      {l.n} de {l.max} letras — passou do limite deste elemento. A letra diminui para caber; o melhor é encurtar.</div>; })}
+    {doCli.length > 0 && <div style={_EVP_TIT}>Do cliente</div>}
+    {doCli.length > 0 && <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:6}}>{doCli.map(cartao)}</div>}
+    {pix.length > 0 && <div style={_EVP_TIT}>Modelos Pixels (cores do cliente)</div>}
+    {pix.length > 0 && <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:6}}>{pix.map(cartao)}</div>}
+    {!itens.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Nenhum {tipoG === "gc" ? "GC" : "elemento"} na galeria deste cliente. Cadastre em Kit do cliente › Galeria.</div>}
+  </div>);
+}
+function _EvpTelaFinalSel({ p, kit, base, mudar }){
+  const itens = _evgItens(kit, "tela_final"), tf = p.tela_final || {}, atual = _evgDaTela(kit, tf), pad = _evgPadrao(kit, "tela_final");
+  const escolher = function(id){ mudar(function(np){ np.tela_final = Object.assign({}, np.tela_final); if(id == null) delete np.tela_final.modelo; else np.tela_final.modelo = id;
+    const it = _evgAchar(kit, id) || (id == null ? pad : null); const dd = it && it.dados && Number(it.dados.dur);
+    if(dd > 0) np.tela_final.dur = Math.min(10, Math.round(dd * 10) / 10); }); };
+  return (<div style={{marginBottom:8}}>
+    <div style={{fontSize:12,color:_EVP_COR.sub,margin:"4px 0 8px"}}>Agora: <b>{atual ? atual.nome : "tela do app (cor, logo, chamada e contatos do kit)"}</b>{!tf.modelo ? " (automático)" : ""}</div>
+    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+      <button onClick={function(){ escolher(null); }} style={_evpChip(!tf.modelo)}>Automático{pad ? " (" + pad.nome + ")" : ""}</button>
+      <button onClick={function(){ escolher("app"); }} style={_evpChip(tf.modelo === "app")}>Tela do app</button>
+    </div>
+    {itens.length > 0 && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{itens.map(function(it){ const on = tf.modelo === it.id;
+      return <button key={it.id} onClick={function(){ escolher(it.id); }} style={{font:"inherit",padding:5,borderRadius:10,border:"1.5px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),background:on ? _EVP_COR.roxoSoft : _EVP_COR.campo,cursor:"pointer",display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
+        <_EvgMini it={it} kit={kit} base={base} w={54} h={96}/><span style={{fontSize:10.5,fontWeight:800,maxWidth:70,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(on ? "✓ " : "") + it.nome}</span>
+        {it.dados && it.dados.midia === "video" && <span style={{fontSize:9.5,color:_EVP_COR.fraco}}>vídeo · {String(it.dados.dur || "?").replace(".", ",")} s</span>}</button>; })}</div>}
+    {!itens.length && <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>Nenhuma tela final na galeria deste cliente (Kit do cliente › Galeria).</div>}
+  </div>);
+}
+/* sugestões que a IA deixou no último ajuste (ela não troca elemento sozinha): aceitar aplica; recusar ensina */
+function _EvpSugestoes({ ed, p, mudar, kit }){
+  const dec = p.sugestoes_decididas || {};
+  const lista = (((ed && ed.receita && ed.receita.sugestoes) || []).filter(function(sg){ return sg && sg.id && !dec[sg.id]; })).slice(0, 6);
+  if(!lista.length) return null;
+  const decidir = function(sg, st){ mudar(function(np){
+    np.sugestoes_decididas = Object.assign({}, np.sugestoes_decididas || {}); np.sugestoes_decididas[sg.id] = st;
+    if(st !== "aceita") return;
+    if(sg.tipo === "tela_final"){ np.tela_final = Object.assign({}, np.tela_final, { modelo:sg.modelo }); const it = _evgAchar(kit, sg.modelo); const dd = it && it.dados && Number(it.dados.dur); if(dd > 0) np.tela_final.dur = Math.min(10, dd); return; }
+    const o = (np.textos || []).find(function(q){ return q.id === sg.texto_id; }); if(!o) return;
+    o.modelo = sg.modelo; o.y = null; o.dx = 0; if(sg.texto) o.texto = sg.texto; if(sg.linha2 != null) o.linha2 = sg.linha2;
+  }); _evToast("success", st === "aceita" ? "Sugestão aplicada" : "Sugestão recusada — a IA aprende com isso"); };
+  return (<div style={{background:_EVP_COR.painel,border:"1px solid " + _EVP_COR.linha,borderRadius:14,padding:10,marginBottom:8,maxHeight:"45%",overflow:"auto",flexShrink:0}}>
+    <div style={{fontSize:12,fontWeight:800,color:_EVP_COR.roxo,marginBottom:6}}>Sugestões da IA</div>
+    {lista.map(function(sg){ const it = _evgAchar(kit, sg.modelo), existe = sg.tipo === "tela_final" || (p.textos || []).some(function(q){ return q.id === sg.texto_id; });
+      return <div key={sg.id} style={{borderTop:"1px solid " + _EVP_COR.linha,padding:"8px 0 2px"}}>
+        <div style={{fontSize:12,color:_EVP_COR.ink,lineHeight:1.4}}>{sg.tipo === "tela_final" ? "Tela final" : "\"" + String(sg.trecho || "").slice(0, 40) + "\""} → <b>{(it && it.nome) || sg.modelo_nome || "outro elemento"}</b></div>
+        {sg.motivo && <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:2}}>{sg.motivo}</div>}
+        <div style={{display:"flex",gap:6,marginTop:6}}>
+          {existe && it && <button onClick={function(){ decidir(sg, "aceita"); }} style={Object.assign(_evpBtn("primario", true), {padding:"5px 10px",fontSize:11.5})}>Aceitar</button>}
+          <button onClick={function(){ decidir(sg, existe && it ? "recusada" : "dispensada"); }} style={Object.assign(_evpBtn("suave"), {padding:"5px 10px",fontSize:11.5})}>{existe && it ? "Recusar" : "Dispensar"}</button>
+        </div></div>; })}
+  </div>);
 }
 
 /* ─── EXPORTAR: grava o mesmo motor da prévia com os brutos ORIGINAIS (ou os estabilizados do PC) ───
@@ -120231,7 +120985,9 @@ function _evpConferir(p, calc, o){
   if(narrFora.length) add("aviso", narrFora.length + " narração depois do fim do vídeo", "Ela não vai tocar. Arraste para dentro.");
   // textos por cima da legenda
   const yLeg = _evpLegCentro(calc.posLegenda, (p.legenda || {}).y, 2, 91/1920, 1);   // v10: centro aproximado (2 linhas) da legenda, em fração da altura
+  // v12: elementos da galeria são conferidos pela caixa de verdade (abaixo); aqui só os textos com o desenho do app
   const choque = (p.textos || []).filter(function(x){
+    if(o.kit && _evgDoTexto(o.kit, x)) return false;
     const y = x.y != null ? x.y + (x.tipo === "tarja" ? 0.03 : 0) : (x.tipo === "tarja" ? 0.65 : x.pos === "meio" ? 0.45 : x.pos === "baixo" ? 0.72 : 0.2);
     return Math.abs(y - yLeg) < 0.07 && calc.blocos.some(function(b){ return b.a < x.t1 && b.b > x.t0; }); });
   if(choque.length) add("aviso", choque.length + " texto" + (choque.length > 1 ? "s" : "") + " em cima da legenda", "\"" + String(choque[0].texto).slice(0, 30) + "\" — mova para cima.", { id:"texto", label:"Ver", alvo:choque[0].id });
@@ -120247,6 +121003,26 @@ function _evpConferir(p, calc, o){
   if(o.pendPC && o.pendPC.length) add("aviso", "O PC do escritório ainda está trabalhando", "Estabilizar, melhorar a imagem ou voz de estúdio: espere terminar para a qualidade máxima.");
   // tela final
   if(!(calc.total > calc.fimCortes)) add("aviso", "Sem tela final", "Sem chamada para o WhatsApp no fim.");
+  // v12: GALERIA — o texto cabe na caixa? passou do limite de letras? ficou fora da área segura ou em cima da legenda?
+  if(o.kit && typeof document !== "undefined"){
+    const D = _evpDim(p.formato), cv0 = document.createElement("canvas"); cv0.width = 8; cv0.height = 8; const c0 = cv0.getContext("2d");
+    const legA = yLeg * D.h - 100, legB = yLeg * D.h + 100; let nOk = 0;
+    (p.textos || []).forEach(function(x){
+      const it = _evgDoTexto(o.kit, x); if(!it) return;
+      const vals = _evgValores(it, x, o.kit), r = _evgDesenhar(c0, D.w, D.h, it, vals, { kit:o.kit, x:x, sem:true }), nome = "\"" + String(x.texto || "").slice(0, 28) + "\"";
+      const lim = ((it.dados && it.dados.campos) || []).filter(function(c){ return c.max_letras && String(vals[c.id] || "").length > Number(c.max_letras); });
+      let bom = true;
+      if(!r.cabe){ bom = false; add("aviso", "Texto maior que a caixa \"" + it.nome + "\"", nome + " — a letra já diminuiu até a metade. Encurte o texto ou troque o elemento.", { id:"texto", label:"Ver", alvo:x.id }); }
+      else if(lim.length){ bom = false; add("aviso", "Passou do limite do elemento \"" + it.nome + "\"", nome + ": " + lim.map(function(c){ return String(vals[c.id]).length + " de " + c.max_letras + " letras"; }).join(", ") + ". A letra diminui para caber.", { id:"texto", label:"Ver", alvo:x.id }); }
+      if(D.h > D.w && (r.y < D.h * 0.12 || r.y + r.h > D.h * 0.82)){ bom = false; add("aviso", "Elemento fora da área segura", nome + " (" + it.nome + ") fica embaixo da interface do Instagram. Arraste para dentro.", { id:"texto", label:"Ver", alvo:x.id }); }
+      if(r.y < legB && r.y + r.h > legA && calc.blocos.some(function(b){ return b.a < x.t1 && b.b > x.t0; })){ bom = false; add("aviso", "Elemento em cima da legenda", nome + " (" + it.nome + ") — mova para cima.", { id:"texto", label:"Ver", alvo:x.id }); }
+      if(bom) nOk++;
+    });
+    if(nOk) add("ok", nOk + " elemento" + (nOk > 1 ? "s" : "") + " da galeria no lugar e dentro da caixa");
+    const itF = calc.total > calc.fimCortes ? _evgDaTela(o.kit, p.tela_final) : null;
+    if(itF && itF.dados && itF.dados.midia === "video" && Number(itF.dados.dur) > 0 && calc.total - calc.fimCortes + 0.05 < Number(itF.dados.dur))
+      add("aviso", "Tela final cortada", "O vídeo \"" + itF.nome + "\" tem " + String(itF.dados.dur).replace(".", ",") + " s e a tela final está com " + String(Math.round((calc.total - calc.fimCortes) * 10) / 10).replace(".", ",") + " s.");
+  }
   return out;
 }
 
@@ -120264,7 +121040,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     .filter(function(v, i, a){ return a.indexOf(v) === i; });
   const envato = !!(projeto.musica && !projeto.musica.mudo && musInfo && /envato/i.test(musInfo.fonte || ""));
   const faltaLicenca = envato && !projeto.musica.licenca_ok;
-  const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length]);
+  const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit]);
   const nErro = conf.filter(function(x){ return x.nivel === "erro"; }).length, nAviso = conf.filter(function(x){ return x.nivel === "aviso"; }).length;
   const [verConf, setVerConf] = useState(false);
   const agir = function(a){
@@ -120290,6 +121066,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       const ok = await salvar(); if(!ok){ setExp({ fase:"erro", msg:"Não consegui salvar a edição. Tente salvar e exporte de novo." }); return; }
     }
     setExp({ fase:"preparando", pct:0, msg:"Abrindo os vídeos originais…" });
+    try{ await _evgPreparar(kit); }catch(_){}                // v12: artes e fontes da galeria do kit prontas antes de gravar
     await new Promise(function(r){ setTimeout(r, 60); });
     const cv = cvRef.current; if(!cv){ setExp({ fase:"erro", msg:"Não consegui abrir a tela de gravação." }); return; }
     let motor = null, ac = null, rec = null;
@@ -120798,8 +121575,11 @@ function _EvExportarNoPC({ trabalho, onEstado }){
         let d = k1.data || {}, kk = d.kit || {};
         if(un && !d.versoes){ const k2 = await window._sb.rpc("criacao_kit", { p_client:t.client, p_unidade:"" }); if(!k2.error) kk = ((k2.data || {}).kit) || {}; }
         const m = await window._sb.rpc("criacao_musicas");
+        // v12: galeria do kit (tela final, GC, elementos) — as artes e fontes já carregadas antes de gravar
+        let gal = []; try{ const gq = await window._sb.rpc("criacao_galeria", { p_client:t.client, p_unidade:un }); if(!gq.error && Array.isArray(gq.data)) gal = gq.data; }catch(_){}
+        try{ await _evgPreparar({ _galeria:gal }); }catch(_){}
         if(!vivo) return;
-        setBase(d.base || {}); setKit(Object.assign({}, _evKitPadrao(d.base || {}), kk)); setMusicas(Array.isArray(m.data) ? m.data : []);
+        setBase(d.base || {}); setKit(Object.assign({}, _evKitPadrao(d.base || {}), kk, { _galeria:gal })); setMusicas(Array.isArray(m.data) ? m.data : []);
         // v11: teste "A ou B?" — o PC grava a OPÇÃO B (receita.variantes) sem mexer na edição
         const vr = (trabalho.opcoes || {}).variante;
         let e2 = e;
