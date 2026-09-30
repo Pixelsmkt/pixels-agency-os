@@ -121131,6 +121131,9 @@ function PxBotaoLinkEnvio({task}){
      • IA que aprende — regras de estilo por cliente (só valem depois que um sócio aprova).
    Backend: tabelas arte_projetos · arte_versoes · arte_modelos · arte_regras · arte_ia_uso (só pelas funções arte_*,
      trava _arte_pode = nível 1 ou chave criacao.edicao_arte) · Edge Function arte-ia (pedir, variacoes, transcrever, aprender).
+   v2 (30/09/2026): PSD ENTRA PELO BOTÃO "IMAGEM" TAMBÉM — antes o botão Imagem (e o arrastar) só aceitava imagem comum;
+     agora PSD/PSB entra com as camadas NA PÁGINA ABERTA (encaixado no tamanho da arte), e SVG/PDF/AI também.
+     Arquivo › "Do card": abre ou acrescenta os PSD/PDF/SVG/AI/imagens que estão no card ligado. PSD acima de 250 MB avisa; acima de 700 MB não abre.
    Bibliotecas (carregadas só quando o editor abre, do jsDelivr): fabric 7.4.0 (MIT) · ag-psd 31.0.2 (MIT) ·
      pdfjs-dist 6.3.289 (Apache-2.0) · jspdf 4.2.1 (MIT) · svg2pdf.js 2.8.1 (MIT) · MediaPipe selfie segmentation (Apache-2.0).
    ══════════════════════════════════════════════════════════════════ */
@@ -122001,14 +122004,14 @@ function _EaEditor({ isMob, tasks, projetoId, preencherAoAbrir, onAbrirCard, onF
         <div style={{display:"flex",flexDirection:"column",gap:4,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:12,padding:6,alignItems:"center"}}>
           {ferramenta("selecionar","selecionar","Selecionar e mover")}
           {ferramenta("texto","texto","Texto", novoTexto)}
-          {ferramenta("imagem","imagem","Imagem do computador", function(){ const i = document.getElementById(inpFile); if(i) i.click(); })}
+          {ferramenta("imagem","imagem","Imagem ou PSD do computador", function(){ const i = document.getElementById(inpFile); if(i) i.click(); })}
           {ferramenta("retangulo","retangulo","Retângulo", function(){ novaForma("retangulo"); })}
           {ferramenta("circulo","circulo","Círculo", function(){ novaForma("circulo"); })}
           {ferramenta("linha","linha","Linha", function(){ novaForma("linha"); })}
           <span style={{height:1,width:26,background:_EA.linha,margin:"4px 0"}}/>
           {ferramenta("ia","ia","Pedir à IA", function(){ setPainel("ia"); setFerr("selecionar"); })}
           {ferramenta("espaco","espaco","Espaços do modelo", function(){ setPainel("espacos"); setFerr("selecionar"); })}
-          <input id={inpFile} type="file" accept="image/*" multiple style={{display:"none"}} onChange={function(e){ subirImagem(e.target.files); e.target.value = ""; setFerr("selecionar"); }}/>
+          <input id={inpFile} type="file" accept=".psd,.psb,.svg,.pdf,.ai,image/*" multiple style={{display:"none"}} onChange={function(e){ const f = Array.from(e.target.files || []); e.target.value = ""; setFerr("selecionar"); _eaAcrescentar(api(), f); }}/>
         </div>
 
         {/* palco */}
@@ -122024,7 +122027,7 @@ function _EaEditor({ isMob, tasks, projetoId, preencherAoAbrir, onAbrirCard, onF
             {avisos.slice(-6).map(function(a, i){ return <div key={i}>⚠️ {a}</div>; })}
             <button onClick={function(){ setAvisos([]); }} style={{font:"inherit",border:0,background:"none",color:_EA.amarelo,fontWeight:800,cursor:"pointer",padding:0,marginTop:4}}>Entendi</button>
           </div>}
-          <div ref={palcoRef} onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ e.preventDefault(); if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){ if(typeof _eaAbrirArquivos === "function") _eaAbrirArquivos(api(), e.dataTransfer.files); } }}
+          <div ref={palcoRef} onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ e.preventDefault(); if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){ if(typeof _eaAcrescentar === "function") _eaAcrescentar(api(), e.dataTransfer.files); } }}
             style={{flex:1,minHeight:0,overflow:"auto",background:_EA.palco,borderRadius:12,border:"1px solid "+_EA.linha,display:"flex",alignItems:"safe center",justifyContent:"safe center",padding:24}}>
             <div style={{boxShadow:"0 6px 30px rgba(15,23,42,.14)",background:"#fff",lineHeight:0}}><canvas ref={elRef}/></div>
           </div>
@@ -122605,6 +122608,26 @@ async function _eaTamanhoReal(fc, W, H, fn){
 function _eaCanvasBlob(cv, tipo, q){ return new Promise(function(ok){ cv.toBlob(function(b){ ok(b); }, tipo || "image/png", q || 0.92); }); }
 function _eaExt(nome){ return (String(nome||"").match(/\.([a-z0-9]+)$/i) || [])[1] ? String(nome).match(/\.([a-z0-9]+)$/i)[1].toLowerCase() : ""; }
 
+/* v2: ACRESCENTAR na página aberta — PSD/PSB entra com as camadas (encaixado no tamanho da arte); imagem vira imagem; SVG/PDF/AI como no Abrir */
+async function _eaAcrescentar(a, arquivos){
+  for(const f of Array.from(arquivos || [])){
+    const ext = _eaExt(f.name);
+    try{
+      if(ext === "psd" || ext === "psb") await _eaAbrirPsd(a, f, { naPagina:true });
+      else if(/^image\//.test(f.type || "") && !/svg/.test(f.type || "")) await a.subirImagem([f]);
+      else if(/^(png|jpe?g|webp|gif)$/.test(ext)) await a.subirImagem([new File([f], f.name, { type:"image/" + (ext === "jpg" ? "jpeg" : ext) })]);
+      else await _eaAbrirArquivos(a, [f]);
+    }catch(e){ _eaToast("error", "Não acrescentei " + f.name + ": " + _eaErro(e)); }
+  }
+}
+/* v2: arquivo que está no CARD (PSD, PDF, SVG, AI, imagem) → vira um arquivo para abrir/acrescentar */
+async function _eaArquivoDoCard(f){
+  const r = await fetch(f.url); if(!r.ok) throw new Error("não baixei " + (f.name || "o arquivo") + " (HTTP " + r.status + ")");
+  const b = await r.blob();
+  return new File([b], String(f.name || "arquivo"), { type:String(f.type || b.type || "") });
+}
+function _eaEhArquivoArte(f){ return !!(f && f.url && /\.(psd|psb|pdf|ai|svg|png|jpe?g|webp|gif)(\?|#|$)/i.test(String(f.name || f.url))); }
+
 async function _eaAbrirArquivos(a, arquivos){
   for(const f of Array.from(arquivos || [])){
     const ext = _eaExt(f.name);
@@ -122733,7 +122756,10 @@ function _eaFontePsd(nome){
 }
 const _EA_MISTURA = { "multiply":"multiply", "screen":"screen", "overlay":"overlay", "darken":"darken", "lighten":"lighten", "color dodge":"color-dodge", "color burn":"color-burn",
   "hard light":"hard-light", "soft light":"soft-light", "difference":"difference", "exclusion":"exclusion", "hue":"hue", "saturation":"saturation", "color":"color", "luminosity":"luminosity" };
-async function _eaAbrirPsd(a, arquivo){
+async function _eaAbrirPsd(a, arquivo, op){
+  const mb = Math.round((arquivo.size || 0) / 1048576);
+  if(mb > 700) throw new Error("PSD de " + mb + " MB é grande demais para abrir no navegador. No Photoshop: Arquivo › Salvar uma cópia com menos camadas ou menor, e mande de novo.");
+  if(mb > 250) _eaToast("warning", arquivo.name + " tem " + mb + " MB: pode levar alguns minutos e o navegador fica lento enquanto abre.");
   const ag = await _eaAgPsd();
   _eaToast("info", "Abrindo " + arquivo.name + "…");
   const buf = await arquivo.arrayBuffer();
@@ -122754,22 +122780,28 @@ async function _eaAbrirPsd(a, arquivo){
     const base = { nome:c.nome.slice(0,80), visible:!c.escondido, opacity:l.opacity === undefined ? 1 : l.opacity, origem:"psd" };
     if(l.blendMode && l.blendMode !== "normal" && l.blendMode !== "pass through"){ const gco = _EA_MISTURA[l.blendMode]; if(gco) base.globalCompositeOperation = gco; else avisos.push(c.nome + ": modo de mistura \"" + l.blendMode + "\" virou normal."); }
     const temEfeito = !!(l.effects && Object.keys(l.effects).some(function(k){ const v = l.effects[k]; return v && (Array.isArray(v) ? v.some(function(x){ return x && x.enabled !== false; }) : v.enabled !== false); }));
-    // camada de texto → texto editável (se a fonte existir)
+    // camada de texto → texto editável (se a fonte existir). v2: fonte que não temos → texto editável com fonte parecida
+    //   (se o PSD tem o desenho do texto, ele entra como imagem igual ao PSD e a cópia editável fica escondida logo acima)
     if(l.text && l.text.text && !temEfeito){
       const st = (l.text.style || {}), fo = _eaFontePsd(st.font && st.font.name);
       const ok = await _eaCarregarFonte(fo.familia);
-      if(ok){
-        const tr = l.text.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
-        const cor = st.fillColor ? "#" + [st.fillColor.r, st.fillColor.g, st.fillColor.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : "#000000";
-        const al = { left:"left", center:"center", right:"right", justifyLeft:"justify", justifyCenter:"justify", justifyRight:"justify", justifyAll:"justify" }[(l.text.paragraphStyle && l.text.paragraphStyle.justification) || "left"] || "left";
-        const larg = Math.max(20, ((l.right||0) - (l.left||0)) * 1.08);
-        const t = new lib.Textbox(String(l.text.text).replace(/\r/g, "\n").replace(/\u0003/g, "\n"), Object.assign({}, base, { left:l.left||0, top:l.top||0, width:larg,
-          fontFamily:fo.familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
-          lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() }));
-        objs.push(t);
-        continue;
-      }
-      avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — a camada ficou como imagem (envie a fonte do cliente ou troque por outra).");
+      const tr = l.text.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
+      const cor = st.fillColor ? "#" + [st.fillColor.r, st.fillColor.g, st.fillColor.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : "#000000";
+      const al = { left:"left", center:"center", right:"right", justifyLeft:"justify", justifyCenter:"justify", justifyRight:"justify", justifyAll:"justify" }[(l.text.paragraphStyle && l.text.paragraphStyle.justification) || "left"] || "left";
+      const larg = Math.max(20, ((l.right||0) - (l.left||0)) * 1.08);
+      const temDesenho = !!(l.canvas && l.canvas.width && l.canvas.height);
+      const familia = ok ? fo.familia : "Montserrat";
+      if(!ok) await _eaCarregarFonte("Montserrat");
+      const t = new lib.Textbox(String(l.text.text).replace(/\r/g, "\n").replace(/\u0003/g, "\n"), Object.assign({}, base, { left:l.left||0, top:l.top||0, width:larg,
+        fontFamily:familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
+        lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },
+        ok ? {} : { nome:(c.nome + (temDesenho ? " (texto editável, fonte trocada)" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
+      if(ok){ objs.push(t); continue; }
+      avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (temDesenho
+        ? "entrou como imagem (igual ao PSD) e tem uma cópia em TEXTO EDITÁVEL escondida logo acima, com fonte parecida (ligue o olho em Camadas para editar)."
+        : "entrou como texto editável com fonte parecida (Montserrat). Para ficar igual, envie a fonte do cliente."));
+      if(!temDesenho){ objs.push(t); continue; }
+      l.__textoEditavel = t;          // entra logo acima da imagem
     }
     if(!l.canvas || !l.canvas.width || !l.canvas.height) { if(l.adjustment) avisos.push(c.nome + ": camada de ajuste do Photoshop não existe aqui (ficou de fora)."); continue; }
     let cv = l.canvas;
@@ -122786,6 +122818,17 @@ async function _eaAbrirPsd(a, arquivo){
     if(l.clipping) avisos.push(c.nome + ": usava máscara de recorte do Photoshop — confira o resultado.");
     const img = await _eaImagemDeUrl(lib, up.url, extra);
     objs.push(img);
+    if(l.__textoEditavel) objs.push(l.__textoEditavel);
+  }
+  // v2: ACRESCENTAR na página aberta — encaixa o PSD no tamanho da arte (sem esticar) e centraliza; cada camada continua separada
+  if(op && op.naPagina && a.fc){
+    const k = Math.min(1, (a.W || W) / Math.max(1, W), (a.H || H) / Math.max(1, H)), dx = ((a.W || W) - W * k) / 2, dy = ((a.H || H) - H * k) / 2;
+    a.pausar(true);
+    objs.forEach(function(o){ o.set({ left:(o.left || 0) * k + dx, top:(o.top || 0) * k + dy, scaleX:(o.scaleX || 1) * k, scaleY:(o.scaleY || 1) * k }); if(o.setCoords) o.setCoords(); a.fc.add(o); });
+    a.pausar(false); a.mudou();
+    if(avisos.length) a.setAvisos(avisos);
+    _eaToast("success", arquivo.name + ": " + objs.length + " camada(s) acrescentadas nesta página" + (k < 1 ? " (encaixado no tamanho da arte)" : "") + (avisos.length ? " — veja os avisos" : ""));
+    return;
   }
   const d = a.doc();
   const pag = { id:_eaUid(), nome:arquivo.name.replace(/\.[^.]+$/,"").slice(0,40), largura:W, altura:H, fabric:{ objects:[], background:"#ffffff" } };
@@ -123013,9 +123056,24 @@ function _EaPainelArquivo({ a, onAbrirCard }){
   const tit = function(t){ return <div style={{fontWeight:800,fontSize:14,margin:"4px 0 6px"}}>{t}</div>; };
   return <div>
     {tit("Abrir arquivo")}
-    <div style={{fontSize:12,color:_EA.sub,marginBottom:8}}>PSD (camadas), SVG, PDF, AI (salvo "compatível com PDF") ou imagens. Também dá para arrastar para a arte.</div>
+    <div style={{fontSize:12,color:_EA.sub,marginBottom:8}}>PSD (camadas), SVG, PDF, AI (salvo "compatível com PDF") ou imagens. <b>Abrir</b> = página nova · <b>Acrescentar</b> = entra na página aberta. Também dá para arrastar para a arte (acrescenta).</div>
     <button onClick={function(){ const i = document.getElementById(idAbrir); if(i) i.click(); }} style={bt}><_EaIc n="abrir" s={16}/> Escolher arquivo</button>
-    <input id={idAbrir} type="file" multiple accept=".psd,.svg,.pdf,.ai,image/*" style={{display:"none"}} onChange={function(e){ const f = e.target.files; _eaAbrirArquivos(a, f); e.target.value = ""; }}/>
+    <input id={idAbrir} type="file" multiple accept=".psd,.psb,.svg,.pdf,.ai,image/*" style={{display:"none"}} onChange={function(e){ const f = e.target.files; _eaAbrirArquivos(a, f); e.target.value = ""; }}/>
+    <button onClick={function(){ const i = document.getElementById(idAbrir + "-mais"); if(i) i.click(); }} style={Object.assign({}, bt, {marginLeft:6})} title="PSD entra com as camadas na página aberta"><_EaIc n="imagem" s={16}/> Acrescentar nesta página</button>
+    <input id={idAbrir + "-mais"} type="file" multiple accept=".psd,.psb,.svg,.pdf,.ai,image/*" style={{display:"none"}} onChange={function(e){ const f = Array.from(e.target.files || []); e.target.value = ""; _eaAcrescentar(a, f); }}/>
+    {(function(){ const doCard = tarefa ? (Array.isArray(tarefa.files) ? tarefa.files : []).filter(_eaEhArquivoArte).slice(0, 40) : [];
+      if(!doCard.length) return null;
+      const usar = function(f, mais){ setOcupado("card"); _eaToast("info", "Baixando " + (f.name || "arquivo") + " do card…");
+        _eaArquivoDoCard(f).then(function(arq){ return mais ? _eaAcrescentar(a, [arq]) : _eaAbrirArquivos(a, [arq]); })
+          .catch(function(e){ _eaToast("error", _eaErro(e)); }).then(function(){ setOcupado(""); }); };
+      return <div style={{marginTop:10}}>
+        <div style={{fontWeight:800,fontSize:12.5,marginBottom:4}}>Do card ({doCard.length})</div>
+        {doCard.map(function(f){ return <div key={f.id || f.url} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,padding:"4px 0",borderBottom:"1px solid " + _EA.linha2}}>
+          <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={f.name}>{f.name || "arquivo"}</span>
+          <button disabled={!!ocupado} onClick={function(){ usar(f, false); }} style={Object.assign({}, bt, {padding:"4px 8px",fontSize:11.5})}>Abrir</button>
+          <button disabled={!!ocupado} onClick={function(){ usar(f, true); }} style={Object.assign({}, bt, {padding:"4px 8px",fontSize:11.5})}>Acrescentar</button>
+        </div>; })}
+      </div>; })()}
     <div style={{marginTop:12,padding:10,borderRadius:10,background:_EA.fundo,border:"1px solid "+_EA.linha2}}>
       <div style={{fontWeight:800,fontSize:12.5}}>AI / PDF com tudo editável (PC do escritório)</div>
       <div style={{fontSize:11.5,color:_EA.sub,margin:"3px 0 8px"}}>O PC converte com o Inkscape: textos continuam texto e as formas viram objetos. Leva 1 a 3 minutos.</div>
