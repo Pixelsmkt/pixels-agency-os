@@ -102024,7 +102024,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               de quem pede orçamento: "fala com Fulano no WhatsApp tal". É a MESMA lista de Contatos
               (data.contatos / contatos_by_unit na Bioter) que o card mostra e que fecha a legenda quando
               não há Fone/WhatsApp nos Dados cadastrais — agora com função e "quando indicar". */}
-          <PlaybookBlock id="pb-contatos-com" title="Contatos comerciais" subtitle="Pra quem encaminhar quem pede orçamento nos comentários e no direct — copie a resposta pronta" icon="phone" color="#16a34a">
+          <PlaybookBlock id="pb-contatos-com" title="Contatos comerciais" subtitle="Pra quem encaminhar quem pede orçamento nos comentários e no direct — copie a resposta pronta" icon="phone" color="var(--pb-cor)">
             {(function(){
               const _norm=function(raw){ if(!raw) return []; if(Array.isArray(raw)) return raw.filter(Boolean);
                 if(typeof raw==="object"){ const w=raw.whatsapp||raw.telefone; return (raw.nome||w)?[{nome:raw.nome||"",whatsapp:w||"",email:raw.email||""}]:[]; } return []; };
@@ -102067,20 +102067,20 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 if(!vis.length) return <React.Fragment>{_chip}<_PbEmpty icon="phone" text="Nenhum contato comercial cadastrado." sub={isAdmin?"Ative o modo edição pra cadastrar quem atende orçamento (comercial, vendedor, representante).":"Peça pra estratégia cadastrar quem atende orçamento."}/></React.Fragment>;
                 return <React.Fragment>{_chip}<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
                   {vis.map(function(c,i){
-                    return <div key={i} style={{background:"#fff",border:"1px solid #dcfce7",borderRadius:14,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+                    return <div key={i} style={{background:"#fff",border:"1px solid color-mix(in srgb, var(--pb-cor) 20%, #fff)",borderRadius:14,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <span style={{width:36,height:36,borderRadius:99,background:"#dcfce7",color:"#15803d",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,flexShrink:0}}>{String(c.nome||"?").trim().charAt(0).toUpperCase()}</span>
+                        <span style={{width:36,height:36,borderRadius:99,background:"color-mix(in srgb, var(--pb-cor) 20%, #fff)",color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,flexShrink:0}}>{String(c.nome||"?").trim().charAt(0).toUpperCase()}</span>
                         <div style={{minWidth:0}}>
                           <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{c.nome||"—"}</div>
-                          {(c.funcao||c.regiao)&&<div style={{color:"#15803d",fontSize:11.5,fontWeight:700}}>{[c.funcao,c.regiao].filter(function(x){return String(x||"").trim();}).join(" · ")}</div>}
+                          {(c.funcao||c.regiao)&&<div style={{color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",fontSize:11.5,fontWeight:700}}>{[c.funcao,c.regiao].filter(function(x){return String(x||"").trim();}).join(" · ")}</div>}
                         </div>
                       </div>
                       {c.quando&&<div style={{color:"#475569",fontSize:12,lineHeight:1.45,background:"#f8fafc",borderRadius:9,padding:"6px 9px"}}><b style={{color:"#334155"}}>Indicar quando:</b> {c.quando}</div>}
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                         {c.whatsapp&&<button type="button" onClick={function(){ _copiar(String(c.whatsapp).trim(),"Número copiado"); }} title="Copiar o número"
-                          style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9,padding:"6px 10px",fontSize:12.5,fontWeight:800,color:"#15803d",cursor:"pointer",fontFamily:PB_INTER}}>{c.whatsapp}</button>}
+                          style={{background:"color-mix(in srgb, var(--pb-cor) 7%, #fff)",border:"1px solid color-mix(in srgb, var(--pb-cor) 30%, #fff)",borderRadius:9,padding:"6px 10px",fontSize:12.5,fontWeight:800,color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",cursor:"pointer",fontFamily:PB_INTER}}>{c.whatsapp}</button>}
                         {c.whatsapp&&<button type="button" onClick={function(){ _copiar(_resposta(c),"Resposta copiada — é só colar no comentário/direct"); }}
-                          style={{background:"#16a34a",border:"none",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER}}>Copiar resposta pronta</button>}
+                          style={{background:"var(--pb-cor)",border:"none",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER}}>Copiar resposta pronta</button>}
                         {c.email&&<button type="button" onClick={function(){ _copiar(c.email,"E-mail copiado"); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 10px",fontSize:12,fontWeight:700,color:"#334155",cursor:"pointer",fontFamily:PB_INTER}}>{c.email}</button>}
                       </div>
                     </div>;
@@ -102091,7 +102091,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               return <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {_chip}
                 {_cc.map(function(c,i){
-                  return <div key={"cc"+(_porUnid?_unitTab:"")+i} style={{display:"flex",flexDirection:"column",gap:8,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"9px 11px"}}>
+                  return <div key={"cc"+cl.id+"-"+(_porUnid?_unitTab:"")+i} style={{display:"flex",flexDirection:"column",gap:8,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"9px 11px"}}>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                     <input defaultValue={c.nome||""} placeholder="Nome — ex: Cristiano" onBlur={function(e){ if(e.target.value!==(c.nome||"")) _set(i,"nome",e.target.value); }} style={Object.assign({},_inp,{width:170,fontWeight:700})}/>
                     <input defaultValue={c.funcao||""} placeholder="Função — ex: Comercial, Vendedor" onBlur={function(e){ if(e.target.value!==(c.funcao||"")) _set(i,"funcao",e.target.value); }} style={Object.assign({},_inp,{width:170})}/>
@@ -102108,15 +102108,15 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                   </div>
                   {/* (30/09) a mensagem pronta aparece também no modo edição (a Estratégia vive nele) */}
-                  {c.whatsapp&&String(c.nome||"").trim()&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:"#f0fdf4",border:"1px solid #dcfce7",borderRadius:9,padding:"7px 10px"}}>
-                    <span style={{flex:1,minWidth:220,color:"#166534",fontSize:12,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{_resposta(c)}</span>
+                  {c.whatsapp&&String(c.nome||"").trim()&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:"color-mix(in srgb, var(--pb-cor) 7%, #fff)",border:"1px solid color-mix(in srgb, var(--pb-cor) 20%, #fff)",borderRadius:9,padding:"7px 10px"}}>
+                    <span style={{flex:1,minWidth:220,color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",fontSize:12,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{_resposta(c)}</span>
                     <button type="button" onClick={function(){ _copiar(_resposta(c),"Resposta copiada — é só colar no comentário/direct"); }}
-                      style={{background:"#16a34a",border:"none",borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER,flexShrink:0}}>Copiar resposta pronta</button>
+                      style={{background:"var(--pb-cor)",border:"none",borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",fontFamily:PB_INTER,flexShrink:0}}>Copiar resposta pronta</button>
                   </div>}
                   </div>;
                 })}
                 <button type="button" onClick={function(){ _upd(_cc.concat([{nome:"",regiao:"",funcao:"",whatsapp:"",email:"",quando:""}])); }}
-                  style={{background:"#16a34a0d",border:"1px dashed #16a34a55",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#15803d",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar contato</button>
+                  style={{background:"color-mix(in srgb, var(--pb-cor) 6%, #fff)",border:"1px dashed color-mix(in srgb, var(--pb-cor) 45%, #fff)",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"color-mix(in srgb, var(--pb-cor) 78%, #000)",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar contato</button>
               </div>;
             })()}
           </PlaybookBlock>
@@ -104308,7 +104308,7 @@ function PlaybookBlock({id, title, subtitle, icon, color, fixo, children}){
   if(!_visivel) return null;
   /* (23/09/2026, Vinicius) `fixo` = cor fixa deste bloco (Materiais amarelo vivo, Feedbacks laranja vivo) */
   const _c = fixo || ((typeof _pxCorSequencial==="function") ? _pxCorSequencial(_pos.i, _pos.n) : (color || "#7c3aed"));
-  return <div id={id} ref={_ref} data-pb-block="1" style={{background:"#fff",border:"1px solid #e6eaf0",borderRadius:18,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 1px 2px rgba(15,23,42,.03), 0 8px 24px -12px rgba(15,23,42,.10)",scrollMarginTop:80}}>
+  return <div id={id} ref={_ref} data-pb-block="1" style={{"--pb-cor":_c,background:"#fff",border:"1px solid #e6eaf0",borderRadius:18,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 1px 2px rgba(15,23,42,.03), 0 8px 24px -12px rgba(15,23,42,.10)",scrollMarginTop:80}}>
     <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px 12px 14px",background:"linear-gradient(120deg,"+_c+" 0%,"+_pbDarken(_c)+" 100%)"}}>
       <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.16)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.22)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
         <Ico n={icon} size={17} color="#fff" strokeWidth={2.3}/>
