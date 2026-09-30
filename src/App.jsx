@@ -4904,8 +4904,22 @@ function pxCtxRegrasTxt(regras){
    num card desses. Conta como short o tipo video_short, o card vindo do Drive, o id
    "short-…" e o título começando com "Short". Mesma régua do alerta "sem produtor"
    (03_clientes2) e do contador de material. */
+/* (30/09/2026, Vinicius) REGRA: card de EDIÇÃO DE VÍDEO nunca fica escondido. É pedido de edição de verdade (a IA ou o editor
+   junta e edita vários vídeos), não o short pronto do Drive. Vale para o card criado pelo Guvi no WhatsApp (id "guvi-…",
+   origem whatsapp), para a etiqueta "Edição pela IA" e para qualquer card que já teve vídeo editado no Estúdio.
+   Esses cards aparecem na Linha de produção como qualquer outro, mesmo se o tipo estiver como "video_short". */
+function pxEhEdicaoVideo(t){
+  if(!t) return false;
+  const tags=Array.isArray(t.tags)?t.tags:[];
+  if(tags.some(function(x){return /edi[çc][ãa]o\s+pela\s+ia/i.test(String(x||""));})) return true;
+  if(/^guvi-/i.test(String(t.id||""))) return true;
+  if(String(t.origem||"").toLowerCase()==="whatsapp") return true;
+  const tl=Array.isArray(t.timeline)?t.timeline:[];
+  return tl.some(function(e){return /v[íi]deo editado no est[úu]dio/i.test(String((e&&e.label)||""));});
+}
 function pxEhShort(t){
   if(!t) return false;
+  if(pxEhEdicaoVideo(t)) return false;   // (30/09/2026) edição de vídeo nunca é short
   const ct=String(t.contentType||t.content_type||t.tipo||"").toLowerCase();
   if(ct==="video_short"||ct==="short") return true;
   if(t.fromDrive||t.from_drive) return true;
@@ -20457,6 +20471,7 @@ function _pxCasFixo(t){
 }
 function _pxCasGrupo(t){
   const ct=String((t&&(t.content_type||t.contentType))||"");
+  if(t&&typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t)) return false;   // (30/09) edição de vídeo não é short
   if(ct==="video_short"||(t&&(t.fromDrive||t.from_drive))) return true;
   return /foto de obra|\bshort\b/i.test(String((t&&t.title)||""));
 }
@@ -25119,6 +25134,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         const _ehFotoObraCal=function(t){return /foto\s*de\s*obra/i.test(String(t.title||""));};
         const _ehShortCal=function(t){
           const _ct=String(t.contentType||t.tipo||"");
+          if((typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t))) return false;   // (30/09) edição de vídeo não é short
           return _ct==="video_short"||_ct==="short"||!!t.fromDrive||/^short-/i.test(String(t.id||""))||/^\s*short\b/i.test(String(t.title||""));
         };
         const _temMaterialCal=function(t){
@@ -25466,7 +25482,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                       const stIsDone=t.status==="aprovado"||t.status==="aprovacao_final";
                       const stIsPub=t.status==="publicado"||t.status==="agendado";
                       const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
-                      const isShortFromDrive=t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short";
+                      const isShortFromDrive=(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")&&!(typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t));
                       return(
                         <div key={t.id} onClick={function(e){e.stopPropagation();setOpenCard(t);}}
                           draggable={true}
@@ -26880,7 +26896,7 @@ function ScanModal({tasks,onClose,onFilter}){
   const [scanStep,setScanStep]=useState(0);
 
   // Esconder cards-fantasma de video short do scan (vem do Drive, nao sao demandas)
-  const all=tasks.filter(t=>!t.deletedAt && !t.fromDrive && t.contentType!=="video_short" && t.tipo!=="video_short");
+  const all=tasks.filter(t=>!t.deletedAt && ((typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t)) || (!t.fromDrive && t.contentType!=="video_short" && t.tipo!=="video_short")));   // (30/09) edição de vídeo sempre conta
   const urgent   = all.filter(t=>taskUrgencyLevel(t)===0);
   const late     = all.filter(t=>taskUrgencyLevel(t)===1);
   const attention= all.filter(t=>taskUrgencyLevel(t)===2);
@@ -27760,7 +27776,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    // (30/09/2026, Vinicius) REGRA: card de EDIÇÃO DE VÍDEO nunca fica escondido — só o short pronto do Drive sai do quadro
+    if((t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")&&!(typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t)))return false;
     // Esconder cards do PORTAL que NAO sao arte/video/foto/carrossel/corte — sao demandas nao-fluxo
     // (Material, Trafego pago, Operacional, Folder, Feira, Comercial, Outro) — soh aparecem
     // no Portal>Demandas do cliente e no Radar/DashSocio, nao no Kanban do Fluxo.
@@ -28563,7 +28580,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     // de vídeo marcado — ninguém vai executar. Produção = quem é pagamentoPorDemanda no TEAM.
                     // Short fica de fora (17/09/2026): a Hellen preenche, não passa por edição.
                     // A maioria nasce sem contentType, então vale o título "Short…" também.
-                    const _ehShort = t.contentType==="video_short" || t.tipo==="video_short" || /^\s*shorts?\b/i.test(String(t.title||""));
+                    const _ehShort = (t.contentType==="video_short" || t.tipo==="video_short" || /^\s*shorts?\b/i.test(String(t.title||""))) && !(typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t));
                     const _semProdutor = t.status==="recebida" && !_ehShort && !_demTemProducao(t);
                     if(!_semPagamento && !_semTipo && !_semProdutor) return null;
                     const _dot=function(title,children){
