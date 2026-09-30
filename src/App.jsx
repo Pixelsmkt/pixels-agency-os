@@ -110245,7 +110245,9 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
     if(!sb||!cid){ setProps([]); return; }
     try{
       /* v5 (30/09): _v2 traz a resposta do cliente; se não existir ainda, cai na v1 */
-      let r=await sb.rpc("portal_pauta_propostas_v2",{p_client:cid});
+      let r=await sb.rpc("portal_pauta_propostas_v4",{p_client:cid});
+      if(r.error) r=await sb.rpc("portal_pauta_propostas_v3",{p_client:cid});
+      if(r.error) r=await sb.rpc("portal_pauta_propostas_v2",{p_client:cid});
       if(r.error) r=await sb.rpc("portal_pauta_propostas",{p_client:cid});
       setProps(r.error?[]:(r.data||[]));
     }catch(_){ setProps([]); }
@@ -110283,8 +110285,78 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra responder: "+((e&&e.message)||e),6000); }
     setRespondendo("");
   };
+  /* v6 (30/09, Gustavo): o cliente também EDITA a sugestão ("acha bom mas quer alterar algo").
+     rpc portal_proposta_editar guarda a versão anterior em cliente_edicoes (nada se perde). */
+  const [editandoP,setEditandoP]=useState(null);   // {p, titulo, briefing, legenda}
+  const _salvarEdicaoP=async function(){
+    const e=editandoP; if(!e||!sb||respondendo) return;
+    if(!String(e.titulo||"").trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("A sugestão precisa de um título."); return; }
+    setRespondendo(e.p.id);
+    try{
+      const r=await sb.rpc("portal_proposta_editar",{p_id:e.p.id,p_titulo:String(e.titulo).trim(),p_briefing:String(e.briefing||"").trim(),p_legenda:String(e.legenda||"").trim(),p_quem:_quemP});
+      if(r.error) throw r.error;
+      setProps(function(l){ return (l||[]).map(function(x){ return x.id===e.p.id?Object.assign({},x,{titulo:String(e.titulo).trim(),briefing:String(e.briefing||"").trim(),legenda:String(e.legenda||"").trim(),cliente_editado_em:new Date().toISOString()}):x; }); });
+      setEditandoP(null);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Alteração salva. A Pixels já vê a sua versão.",3000);
+    }catch(err){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((err&&err.message)||err),6000); }
+    setRespondendo("");
+  };
+  /* v7 (30/09, Gustavo): "Refazer essa" também no portal — o cliente diz o que quer mudar, a IA reescreve
+     mantendo o assunto e a nova entra no lugar (a antiga fica guardada). Sincroniza com Estratégia › Conteúdos
+     e o pedido vai pro cérebro do cliente (memoria:ajuste). rpc portal_proposta_refazer. */
+  const [refazendoP,setRefazendoP]=useState(null);   // {p, pedido}
+  const _refazerP=async function(){
+    const e=refazendoP; if(!e||!sb||respondendo) return;
+    if(typeof pxPropostasDaSolicitacao!=="function"){ if(typeof pixelsToast!=="undefined") pixelsToast.error("A IA não está disponível agora."); return; }
+    setRespondendo(e.p.id);
+    try{
+      const r=await pxPropostasDaSolicitacao({client:cid,unit:(cid==="bioter")?String(e.p.unidade||""):"",clienteNome:(cl&&cl.name)||cid,
+        refazer:{proposta:e.p,pedido:String(e.pedido||"").trim()}});
+      const nova=r&&r[0];
+      if(!nova||!String(nova.briefing||"").trim()) throw new Error("a IA não devolveu a nova versão");
+      const rr=await sb.rpc("portal_proposta_refazer",{p_id:e.p.id,p_titulo:nova.titulo,p_briefing:nova.briefing,p_legenda:nova.legenda||"",
+        p_de_onde_veio:nova.de_onde_veio||"",p_pedido:String(e.pedido||"").trim(),p_quem:_quemP});
+      if(rr.error) throw rr.error;
+      setRefazendoP(null); _carregarProps();
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Pronto! A nova versão já está no lugar.",3000);
+    }catch(err){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra refazer: "+((err&&err.message)||err),6000); }
+    setRespondendo("");
+  };
+  const _quandoP=function(iso){ try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } };
   const _MOTIVOS_RAPIDOS=["Não tem a ver com a gente","Já fizemos algo assim","O tom não combina com a marca","Não é prioridade agora","Informação errada"];
+  const _inpP={width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",fontSize:13.5,fontFamily:_RT_FF,resize:"vertical",outline:"none",lineHeight:1.5,color:"#0f172a"};
+  const _lblP={color:"#64748b",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginBottom:5};
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF}}>
+    {editandoP&&<div onClick={function(){ if(!respondendo) setEditandoP(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:620,maxHeight:"90vh",overflowY:"auto",padding:isMob?18:22,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 24px 60px rgba(15,23,42,.3)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Editar sugestão</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5}}>Mude o que quiser. A Pixels recebe a sua versão (a original fica guardada).</div>
+        </div>
+        <div><div style={_lblP}>Título</div><input value={editandoP.titulo} onChange={function(e){ setEditandoP(Object.assign({},editandoP,{titulo:e.target.value})); }} style={Object.assign({},_inpP,{fontWeight:700})}/></div>
+        <div><div style={_lblP}>Conteúdo</div><textarea value={editandoP.briefing} onChange={function(e){ setEditandoP(Object.assign({},editandoP,{briefing:e.target.value})); }} rows={12} style={_inpP}/>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Dica: mantenha as marcações (Lâmina, • TÍTULO, Cena…) pra continuar organizado.</div></div>
+        <div><div style={_lblP}>Legenda do post</div><textarea value={editandoP.legenda} onChange={function(e){ setEditandoP(Object.assign({},editandoP,{legenda:e.target.value})); }} rows={7} style={_inpP}/></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+          <button type="button" disabled={!!respondendo} onClick={function(){setEditandoP(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 16px",color:"#475569",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Cancelar</button>
+          <button type="button" disabled={!!respondendo} onClick={_salvarEdicaoP} style={{background:"#0f172a",border:"none",borderRadius:11,padding:"10px 18px",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF}}>{respondendo?"Salvando…":"Salvar alteração"}</button>
+        </div>
+      </div>
+    </div>}
+    {refazendoP&&<div onClick={function(){ if(!respondendo) setRefazendoP(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,padding:isMob?18:22,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 24px 60px rgba(15,23,42,.3)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Refazer essa sugestão</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5}}>O assunto continua o mesmo ("{refazendoP.p.titulo}"). Conta o que você quer diferente e a IA escreve de novo.</div>
+        </div>
+        <textarea autoFocus value={refazendoP.pedido||""} onChange={function(e){ setRefazendoP(Object.assign({},refazendoP,{pedido:e.target.value})); }} rows={4} placeholder="Ex.: mais curto, falar do produtor de leite, tom mais direto… (em branco, a IA muda o ângulo)"
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",fontSize:13.5,fontFamily:_RT_FF,resize:"vertical",outline:"none"}}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+          <button type="button" disabled={!!respondendo} onClick={function(){setRefazendoP(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 16px",color:"#475569",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Voltar</button>
+          <button type="button" disabled={!!respondendo} onClick={_refazerP} style={{background:"#7c3aed",border:"none",borderRadius:11,padding:"10px 18px",color:"#fff",fontSize:13,fontWeight:800,cursor:respondendo?"default":"pointer",fontFamily:_RT_FF}}>{respondendo?"Refazendo… (uns 30 segundos)":"Refazer"}</button>
+        </div>
+      </div>
+    </div>}
     {recusando&&<div onClick={function(){ if(!respondendo) setRecusando(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,padding:isMob?18:22,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 24px 60px rgba(15,23,42,.3)"}}>
         <div>
@@ -110341,7 +110413,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
             const ab=!!abertoP[p.id];
             const _copiar=function(){ const t=p.titulo+"\n\n"+String(p.briefing||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim()+(String(p.legenda||"").trim()?("\n\nLegenda:\n"+p.legenda):""); if(typeof _rtCopiar==="function") _rtCopiar(t,"Copiado — é só colar no WhatsApp"); };
             return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_swTipoLabel(p.content_type)}</span></div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{_swTipoLabel(p.content_type)}</span>{p.cliente_editado_em&&<span title={(p.cliente_editado_por?("Por "+p.cliente_editado_por+" · "):"")+_quandoP(p.cliente_editado_em)} style={{background:"#fef3c7",color:"#92400e",borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{p.cliente_alteracao==="refez"?"↻ Refeita":"✎ Alterada"} por você · {_quandoP(p.cliente_editado_em)}</span>}</div>
               {p.status==="aceita"
                 ?<div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:12,padding:"9px 12px",color:"#065f46",fontSize:12.5,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><Ico n="check" size={15} color="#059669"/> Você aceitou — a Pixels já está produzindo</div>
                 :<div style={{display:"flex",flexDirection:"column",gap:5}}>
@@ -110363,6 +110435,10 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
               <div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
                 <button type="button" onClick={function(){ setAbertoP(function(o){ return Object.assign({},o,{[p.id]:!ab}); }); }} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{ab?"Ver menos":"Ver tudo"}</button>
                 <button type="button" onClick={_copiar} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Copiar</button>
+                {p.status!=="aceita"&&!viewerIsPixels&&<button type="button" disabled={!!respondendo} onClick={function(){ setEditandoP({p:p,titulo:p.titulo||"",briefing:_semPrecP(p.briefing),legenda:p.legenda||""}); }} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>Editar</button>}
+                {p.status!=="aceita"&&!viewerIsPixels&&<button type="button" disabled={!!respondendo} onClick={function(){ setRefazendoP({p:p,pedido:""}); }} style={{background:"#fff",color:"#6d28d9",border:"1px solid #ddd6fe",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>{respondendo===p.id&&refazendoP?"Refazendo…":"Refazer essa"}</button>}
               </div>
             </div>;
           })}
@@ -110930,8 +111006,10 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       const r=await pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:aberta.contexto,
         transcricao:pedido.transcricao,fichas:pedido.fichas,refazer:{proposta:p,pedido:pedidoTxt}});
       const nova=Object.assign({},r[0],{origem:p.origem||"cliente"});
-      await _gravarPropostas(aberta,[nova],Number(p.rodada)||1,(Number(p.ordem)||1)-1);
-      await _upd("pauta_propostas",p.id,{status:"descartada"});
+      const gravou=await _gravarPropostas(aberta,[nova],Number(p.rodada)||1,(Number(p.ordem)||1)-1);
+      /* (30/09) se a antiga estava no portal, a refeita entra no portal no lugar dela */
+      if(p.visivel_portal&&gravou&&gravou.length){ try{ await sb.from("pauta_propostas").update({visivel_portal:true}).in("id",gravou.map(function(x){return x.id;})); }catch(_){} }
+      await _upd("pauta_propostas",p.id,{status:"descartada",visivel_portal:false});
       setRefazendo(null);
       _toast("success","Proposta refeita. A anterior ficou guardada nas descartadas.",3000);
     }catch(e){ _toast("error","Não deu pra refazer: "+((e&&e.message)||e),7000); }
@@ -110949,6 +111027,21 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
   const _descartar=async function(p){
     try{ await _upd("pauta_propostas",p.id,{status:"descartada",visivel_portal:false}); setSel(function(s){ const n=Object.assign({},s); delete n[p.id]; return n; }); _carregarAberta(aberta.id); }
     catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+  };
+  /* v9 (30/09, Gustavo): "Descartar" vira "Trocar" — sempre precisa de outra no lugar. Gera 1 nova do
+     mesmo formato (sem repetir nenhuma que já existiu) e só depois descarta a antiga (fica guardada). */
+  const _trocar=async function(p){
+    if(!aberta||ocupado) return;
+    setOcupado(p.id);
+    try{
+      const pedido=await _pedidoDoBanco(aberta);
+      const novas=await _gerarPara(aberta,pedido,Number(p.rodada)||1,[_swGrupoDe(p.content_type)],1);
+      await _upd("pauta_propostas",p.id,{status:"descartada",visivel_portal:false});
+      if(p.visivel_portal&&novas.length){ try{ await sb.from("pauta_propostas").update({visivel_portal:true,updated_at:new Date().toISOString()}).in("id",novas.map(function(x){return x.id;})); }catch(_){} }
+      setSel(function(s){ const n=Object.assign({},s); delete n[p.id]; return n; });
+      _toast("success","Trocada: ideia nova no lugar"+(p.visivel_portal?" (já no portal)":"")+". A anterior ficou nas descartadas.",3500);
+    }catch(e){ _toast("error","Não deu pra trocar: "+((e&&e.message)||e),7000); }
+    setPasso(""); setOcupado(""); _carregarPautas(); _carregarAberta(aberta.id);
   };
   const _voltar=async function(p){
     try{ await _upd("pauta_propostas",p.id,{status:"proposta"}); _carregarAberta(aberta.id); }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
@@ -111017,11 +111110,12 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
 
   /* ACEITAR → card em Copys. Hellen (gestora) em todos; vídeo leva o editor; design, o designer. */
   const _semPrecisamos=function(t){ return String(t||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim(); };
-  const _aceitar=async function(){
-    const ids=Object.keys(sel).filter(function(k){return sel[k];});
+  /* v9 (30/09, Gustavo): sem checkbox — cada card tem o seu "Virar card" (quando o cliente aprovou por fora do portal). */
+  const _aceitar=async function(lista){
+    const ids=Array.isArray(lista)?lista.map(function(p){return p.id;}):Object.keys(sel).filter(function(k){return sel[k];});
     const alvo=propostas.filter(function(p){ return ids.indexOf(p.id)>=0&&p.status==="proposta"&&!p.task_id; });
-    if(!alvo.length){ _toast("warning","Marque pelo menos uma proposta."); return; }
-    setOcupado("aceitar");
+    if(!alvo.length){ _toast("warning","Essa proposta já foi respondida."); return; }
+    setOcupado(Array.isArray(lista)&&lista.length===1?lista[0].id:"aceitar");
     let padrao=_SW_PADRAO_FALLBACK;
     try{ const r=await sb.from("team_data").select("dados").eq("tipo","pautas_padrao").maybeSingle(); if(r.data&&r.data.dados) padrao=Object.assign({},_SW_PADRAO_FALLBACK,r.data.dados); }catch(_){}
     const u=_swUser(); const quem=(u&&u.name)||"Pixels";
@@ -111077,13 +111171,15 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     const corOrig=_g.cor;
     return <div key={p.id} style={{background:"#fff",border:"1px solid "+(sel[p.id]?corOrig:"#e8ebf0"),borderTop:"4px solid "+(desc?"#cbd5e1":corOrig),borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,opacity:desc?.65:1,boxShadow:sel[p.id]?("0 0 0 2px "+corOrig+"33"):"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-        {!aceita&&!desc&&_bl("solic.aceitar")&&<input type="checkbox" checked={!!sel[p.id]} onChange={function(e){ const v=e.target.checked; setSel(function(s){ return Object.assign({},s,{[p.id]:v}); }); }} style={{width:18,height:18,marginTop:2,accentColor:corOrig,cursor:"pointer",flexShrink:0}}/>}
+        {/* v9: checkbox saiu — "Virar card" fica nos botões de cada proposta */}
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:5}}>
-            <span style={{background:corOrig+"14",color:corOrig,borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{_swTipoLabel(p.content_type)}</span>
+            <span style={{background:corOrig+"14",color:corOrig,borderRadius:99,padding:"3px 9px",fontSize:pxFonte(9.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{_swTipoLabel(p.content_type)}</span>
             {aceita&&<span style={{background:"#dcfce7",color:"#166534",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_resposta==="aceita"?"✓ o cliente aceitou no portal — virou card em Copys":"✓ virou card em Copys"}</span>}
-            {desc&&<span style={{background:p.cliente_resposta==="recusada"?"#fef2f2":"#f1f5f9",color:p.cliente_resposta==="recusada"?"#b91c1c":"#64748b",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_resposta==="recusada"?"recusada pelo cliente":"descartada"}</span>}
+            {!desc&&p.cliente_editado_em&&<span style={{background:"#fef3c7",color:"#92400e",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_alteracao==="refez"?"↻ refeita pelo cliente":"✎ alterada pelo cliente"} · {(function(){ const d=new Date(p.cliente_editado_em); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); })()}{p.cliente_editado_por?(" · "+p.cliente_editado_por):""}</span>}
+            {desc&&<span style={{background:p.cliente_resposta==="recusada"?"#fef2f2":"#f1f5f9",color:p.cliente_resposta==="recusada"?"#b91c1c":"#64748b",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.cliente_resposta==="recusada"?"recusada pelo cliente":p.cliente_resposta==="refeita"?"substituída (o cliente refez)":"descartada"}</span>}
           </div>
+          {!desc&&p.cliente_alteracao==="refez"&&p.cliente_pedido&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:9,padding:"6px 9px",color:"#92400e",fontSize:pxFonte(11.5,isMob),lineHeight:1.45,marginBottom:6}}><b>O cliente pediu:</b> {p.cliente_pedido}</div>}
           {desc&&p.cliente_resposta==="recusada"&&p.cliente_motivo&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"6px 9px",color:"#991b1b",fontSize:pxFonte(11.5,isMob),lineHeight:1.45,marginBottom:6}}><b>Motivo{p.cliente_respondido_por?(" ("+p.cliente_respondido_por+")"):""}:</b> {p.cliente_motivo}</div>}
           {ed?<input value={ed.titulo} onChange={function(e){ setEditando(Object.assign({},ed,{titulo:e.target.value})); }} style={Object.assign({},_inp,{fontWeight:800})}/>
              :<div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>}
@@ -111127,9 +111223,11 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
             style={Object.assign({},_mini,{display:"inline-flex",alignItems:"center",gap:5,marginRight:"auto",background:p.visivel_portal?corOrig:"#fff",color:p.visivel_portal?"#fff":"#475569",borderColor:p.visivel_portal?corOrig:"#e2e8f0"})}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             {p.visivel_portal?"No portal":"Portal"}</button>}
+          {_bl("solic.aceitar")&&<button type="button" disabled={!!ocupado} onClick={function(){ _aceitar([p]); }} title="O cliente aprovou por fora do portal? Vira card em Copys agora" style={Object.assign({},_mini,{background:"#16a34a",color:"#fff",borderColor:"#16a34a"})}>{busy?"Criando…":"✓ Virar card"}</button>}
           <button type="button" disabled={!!ocupado} onClick={function(){ setEditando({id:p.id,titulo:p.titulo,content_type:p.content_type||"arte",briefing:p.briefing||"",legenda:p.legenda||""}); }} style={_mini}>Editar</button>
-          <button type="button" disabled={!!ocupado} onClick={function(){ setRefazendo({id:p.id,pedido:""}); }} style={_mini}>{busy?"Refazendo…":"Refazer essa"}</button>
-          <button type="button" disabled={!!ocupado} onClick={function(){ _descartar(p); }} style={Object.assign({},_mini,{color:"#b91c1c"})}>Descartar</button>
+          <button type="button" disabled={!!ocupado} onClick={function(){ setRefazendo({id:p.id,pedido:""}); }} style={_mini}>Refazer essa</button>
+          {_bl("solic.nova")?<button type="button" disabled={!!ocupado} onClick={function(){ _trocar(p); }} title="Descarta esta e a IA escreve outra ideia do mesmo formato no lugar" style={Object.assign({},_mini,{color:"#b91c1c"})}>{busy?"Trocando…":"Trocar"}</button>
+            :<button type="button" disabled={!!ocupado} onClick={function(){ _descartar(p); }} style={Object.assign({},_mini,{color:"#b91c1c"})}>Descartar</button>}
         </>}
       </div>}
     </div>;
@@ -111261,7 +111359,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           </div>
 
           {vivas.length>0&&<div style={Object.assign({},_card,{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",position:isMob?"sticky":undefined,top:isMob?0:undefined,zIndex:2})}>
-            <div style={{flex:1,minWidth:isMob?"100%":0,color:"#334155",fontSize:13,fontWeight:700}}>{nSel?(nSel+(nSel===1?" marcada":" marcadas")):"Marque as que viram card"}</div>
+            <div style={{flex:1,minWidth:isMob?"100%":0,color:"#334155",fontSize:13,fontWeight:700}}>{(function(){ const nA=vivas.filter(function(p){return p.status==="aceita";}).length; return nA?(nA+" de "+vivas.length+(nA===1?" já virou card":" já viraram card")):(vivas.length+(vivas.length===1?" proposta":" propostas")); })()}</div>
             {_bl("solic.nova")&&vivas.some(function(p){return p.status==="proposta";})&&(confLimpar
               ?<span style={{display:"inline-flex",alignItems:"center",gap:6,flexWrap:"wrap",width:isMob?"100%":undefined}}>
                 <span style={{color:"#b91c1c",fontSize:12.5,fontWeight:700}}>Limpar as {vivas.filter(function(p){return p.status==="proposta";}).length} que não viraram card?</span>
@@ -111278,7 +111376,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
                 {ocupado==="portal"?<Spin/>:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
                 {todasNo?"Todas no portal":(nNo?("Portal: "+nNo+" de "+vivas.length+" · enviar todas"):"Enviar todas pro portal")}
               </button>; })()}
-            {_bl("solic.aceitar")&&<button type="button" disabled={!nSel||!!ocupado} onClick={_aceitar} style={Object.assign({},_btn(!nSel||!!ocupado),{flex:isMob?1:undefined})}>{ocupado==="aceitar"?<><Spin/> Criando cards…</>:"Aceitar selecionadas"}</button>}
+            {/* v9: "Aceitar selecionadas" saiu — cada card tem o seu "Virar card" */}
           </div>}
 
           {!vivas.length&&!trabalhando&&aberta.status!=="erro"&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Sem propostas ainda.{_bl("solic.nova")?<> <button type="button" onClick={function(){ _gerarDeNovo(""); }} style={_mini}>Gerar propostas</button></>:null}</div>}
