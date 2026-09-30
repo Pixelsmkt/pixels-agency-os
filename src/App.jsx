@@ -28463,6 +28463,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               const da=a.deadline?new Date(a.deadline).getTime():Infinity;
               const db=b.deadline?new Date(b.deadline).getTime():Infinity;
               if(da!==db)return da-db;
+              { const pa=String(a.publishDate||a.publish_date||"9999"), pb=String(b.publishDate||b.publish_date||"9999"); if(pa!==pb) return pa.localeCompare(pb); }
               return String(a.id).localeCompare(String(b.id));
             }
             // Recentes: createdAt DESC (mais novos primeiro)
@@ -28478,6 +28479,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             const da=a.deadline?new Date(a.deadline).getTime():Infinity;
             const db=b.deadline?new Date(b.deadline).getTime():Infinity;
             if(da!==db)return da-db;
+            /* (30/09/2026, Gustavo) entrega empatada (ex.: várias "pra hoje") → quem PUBLICA antes fica em cima */
+            { const pa=String(a.publishDate||a.publish_date||"9999"), pb=String(b.publishDate||b.publish_date||"9999"); if(pa!==pb) return pa.localeCompare(pb); }
             return String(a.id).localeCompare(String(b.id));
           });
           const isDraggingOver=over===col.id;
@@ -35688,12 +35691,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             const _story=!!(current&&(current.somenteStory||current.somente_story));
             const _linha1=[_CT[_ct]||"",_nLam>1?(_nLam+" lâminas"):"",_story?"somente story":"",_cli].filter(Boolean).join(" · ");
             const _cab=[];
-            if(tit) _cab.push("*"+tit+"*");
+            if(tit) _cab.push("📌 *"+tit+"*");
             if(_linha1) _cab.push(_linha1);
             const _meta=[];
-            if(_ent) _meta.push("*Entrega prevista:* "+_ent);
-            if(_pub) _meta.push("*Publicação:* "+_pub+(_hr?(", às "+_hr):""));
-            if(_resp) _meta.push("*Responsáveis:* "+_resp);
+            /* (30/09, 16h13) Gustavo: sem "Responsáveis"; poucos emojis, sóbrios — só no título e nas datas. */
+            if(_ent) _meta.push("⏳ *Entrega prevista:* "+_ent);
+            if(_pub) _meta.push("📅 *Publicação:* "+_pub+(_hr?(", às "+_hr):""));
             return _cab.join("\n")+(_meta.length?("\n\n"+_meta.join("\n")):"")+"\n\n——————————\n\n"+corpo;
           };
           const _copiarBriefWhats=async ()=>{
@@ -58380,9 +58383,10 @@ export default function AgencyOS(){
   const [themeKey,setThemeKey]     = useState(_themeKey);
   // ═══ PÁGINA ATUAL — persiste em localStorage para sobreviver F5 ═══
   const [page,setPage]             = useState(()=>{
-    /* (30/09/2026, Gustavo) "sempre que qualquer um abrir o app abre em Dashboard". Abrir o app (aba nova, navegador
-       reaberto) → Dashboard. O F5 continua na mesma tela: a página fica em sessionStorage, que só vive na aba. */
-    try{const s=sessionStorage.getItem("pixels-current-page");const _off=!s||s==="chat"||s==="analises"||s==="ia"||s.slice(0,3)==="ia_";return _off?"meudash":s;}catch{return "meudash";}
+    /* (30/09/2026, Gustavo) Voltou ao comportamento antigo: "quando atualiza não tem que voltar pro dashboard, tem
+       que ir pra última página que a pessoa usou". Lê a página da aba (sessionStorage) e, se não houver, a última
+       usada (localStorage). Dashboard só quando não há nenhuma. */
+    try{const s=sessionStorage.getItem("pixels-current-page")||localStorage.getItem("pixels-current-page");const _off=!s||s==="chat"||s==="analises"||s==="ia"||s.slice(0,3)==="ia_";return _off?"meudash":s;}catch{return "meudash";}
   });
   useEffect(()=>{try{sessionStorage.setItem("pixels-current-page",page);localStorage.setItem("pixels-current-page",page);}catch(e){}},[page]);
   const [expanded,setExpanded]     = useState({});
@@ -92529,7 +92533,7 @@ function DashColabV2(props){
   const atrasadas = my.filter(function(t){
     if(_DC_DONE_STATUSES.indexOf(t.status)>=0) return false;
     if(_DC_ACT_STATUSES.indexOf(t.status)<0) return false;
-    const ref = t.publishDate||t.deadline;
+    const ref = t.deadline||t.publishDate;   // (30/09) prazo do colaborador é a ENTREGA (7 dias antes da publicação)
     if(!ref) return false;
     return new Date(ref+"T00:00:00") < today0;
   });
@@ -92573,23 +92577,28 @@ function DashColabV2(props){
   const prioridades = (function(){
     const list = [];
     atrasadas.forEach(function(t){
-      const dias = _dcDiasAteSomething(t.publishDate||t.deadline);
+      const dias = _dcDiasAteSomething(t.deadline||t.publishDate);
       list.push({task:t, reason:"Atrasada", dias:dias, color:"#dc2626"});
     });
     my.forEach(function(t){
       if(_DC_DONE_STATUSES.indexOf(t.status)>=0) return;
       if(_DC_ACT_STATUSES.indexOf(t.status)<0) return;
-      const ref = t.publishDate||t.deadline;
+      const ref = t.deadline||t.publishDate;
       if(!ref) return;
       const dias = _dcDiasAteSomething(ref);
-      if(dias===0 && !list.find(function(x){return x.task.id===t.id;})) list.push({task:t, reason:"Vence hoje", dias:0, color:"#a16207"});
-      else if(dias>0 && dias<=2 && !list.find(function(x){return x.task.id===t.id;})) list.push({task:t, reason:"Vence em "+dias+"d", dias:dias, color:"#a16207"});
+      if(dias===0 && !list.find(function(x){return x.task.id===t.id;})) list.push({task:t, reason:"Entrega hoje", dias:0, color:"#a16207"});
+      else if(dias>0 && dias<=3 && !list.find(function(x){return x.task.id===t.id;})) list.push({task:t, reason:dias===1?"Entrega amanhã":("Entrega em "+dias+" dias"), dias:dias, color:"#a16207"});
     });
     ajustesList.forEach(function(t){
       if(list.find(function(x){return x.task.id===t.id;})) return;
       list.push({task:t, reason:"Em ajuste", dias:null, color:"#7c3aed"});
     });
-    return list.slice(0, 8);
+    /* (30/09/2026, Gustavo) mais próximo primeiro: entrega mais cedo em cima; empate → publicação mais cedo
+       (publica hoje vem antes de publica amanhã). Em ajuste sem data vai pro fim. */
+    const _k=function(x){ return String(x.task.deadline||x.task.publishDate||"9999-99-99").slice(0,10); };
+    const _kp=function(x){ return String(x.task.publishDate||"9999-99-99").slice(0,10); };
+    list.sort(function(a,b){ return _k(a).localeCompare(_k(b))||_kp(a).localeCompare(_kp(b)); });
+    return list.slice(0, 10);
   })();
 
   // ── Evolução 6 meses ──
@@ -92816,6 +92825,10 @@ function DashColabV2(props){
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.task.title||"(Sem título)"}</div>
                   <div style={{color:"#64748b",fontSize:11,marginTop:2,fontWeight:500}}>{cl?cl.name:p.task.client} · {_dcTipoLabel(p.task)}</div>
+                  {(p.task.deadline||p.task.publishDate)&&<div style={{display:"flex",gap:10,marginTop:4,fontSize:11.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+                    {p.task.deadline&&<span style={{color:p.color}}>Entrega {String(p.task.deadline).slice(8,10)+"/"+String(p.task.deadline).slice(5,7)}</span>}
+                    {p.task.publishDate&&<span style={{color:"#94a3b8"}}>Publica {String(p.task.publishDate).slice(8,10)+"/"+String(p.task.publishDate).slice(5,7)}</span>}
+                  </div>}
                 </div>
                 <span style={{background:p.color+"15",color:p.color,fontSize:10.5,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.3,flexShrink:0,whiteSpace:"nowrap"}}>{p.reason}</span>
               </div>;
