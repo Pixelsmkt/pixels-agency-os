@@ -29010,7 +29010,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         Esquerda: logo cliente (pequena) + prazo (cor segue urgência).
                         Direita: contagens (📎 💬) + stack de avatares. */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,rowGap:4,minWidth:0,flex:1,flexWrap:"wrap"}}>
                         {cl&&(CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
                           ?<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:4,padding:"1px 5px",height:18,display:"inline-flex",alignItems:"center",flexShrink:0}}>
                             <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} loading="lazy" style={{maxHeight:12,maxWidth:50,objectFit:"contain",display:"block"}}/>
@@ -29033,7 +29033,17 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                             return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>;
                           });
                         })()}
-                        {days!==null&&["avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"].indexOf(t.status)===-1&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:pxFonte(10,isMob),whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
+                        {/* (01/10/2026, Gustavo) designer/editor não entendiam o reloginho "10d" — na visão deles vira
+                            uma barrinha por extenso: "PRAZO: 10 DIAS", "PRAZO: HOJE", "ATRASADO 2 DIAS". */}
+                        {days!==null&&["avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"].indexOf(t.status)===-1&&pxVeSeloPub(activeUser)&&(function(){
+                          const _txt=days<0?("Atrasado "+Math.abs(days)+(Math.abs(days)===1?" dia":" dias")):days===0?"Prazo: hoje":days===1?"Prazo: amanhã":("Prazo: "+days+" dias");
+                          const _c=days<0?{bg:"#dc2626",fg:"#fff",bd:"#dc2626"}:days===0?{bg:"#fee2e2",fg:"#b91c1c",bd:"#fecaca"}:days<=2?{bg:"#fef3c7",fg:"#92400e",bd:"#fde68a"}:{bg:"#f1f5f9",fg:"#334155",bd:"#e2e8f0"};
+                          return <span title={"Prazo de entrega: "+(t.deadline?new Date(t.deadline).toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"}):"")}
+                            style={{display:"inline-flex",alignItems:"center",gap:4,background:_c.bg,color:_c.fg,border:"1px solid "+_c.bd,borderRadius:6,padding:"2px 7px",fontSize:pxFonte(9.5,isMob),fontWeight:800,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0,lineHeight:1.4}}>
+                            <Ico n="alarmClock" size={11}/>{_txt}
+                          </span>;
+                        })()}
+                        {days!==null&&["avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"].indexOf(t.status)===-1&&!pxVeSeloPub(activeUser)&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:pxFonte(10,isMob),whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
                           <Ico n="alarmClock" size={11}/>
                           {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
                         </span>}
