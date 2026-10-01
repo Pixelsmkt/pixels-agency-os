@@ -25623,35 +25623,40 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
             {_bl("resumo.contadores")&&_kpiMat("short","Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
           </div>
           {_bl("resumo.contadores")&&_painelMat()}
-          {/* (23/09/2026) PAUTA DO MÊS — um cliente (e uma unidade, na Bioter) de cada vez */}
-          {_bl("pauta")&&(function(){
-            /* (24/09/2026, Rodrigo) "cadê aquele botão de gerar plano do mês e o botão de voltar atrás?"
-               Só aparecia com um cliente filtrado (Bioter: uma unidade) — em "Todos" sumia sem aviso.
-               Agora aparece sempre; sem cliente escolhido fica apagado e o clique explica. */
-            /* (24/09/2026, Rodrigo) "se é pra criar de todos os clientes quando tiver aberto" — em Todos
-               (ou Bioter sem unidade) abre a fila de todos (_PxPlanoDoMesTodos). */
-            const _planoPode=true;
-            const _planoTodos=_isAll||(filterClient==="bioter"&&filterBioterUnit==="todos");
-            const _planoAviso=_planoTodos?("Roda o plano de "+(_isAll?"todos os clientes":"todas as unidades da Bioter")+" em fila, com prévia consolidada antes de aplicar."):"";
-            return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <button type="button" title={_planoPode?"":_planoAviso} onClick={function(){ if(_planoPode) setPautaAberta(true); else if(typeof pixelsToast!=="undefined") pixelsToast.info(_planoAviso,5000); }}
-              style={{background:_planoPode?"linear-gradient(135deg,#7c3aed,#9F43F6)":"#e2e8f0",border:"none",color:_planoPode?"#fff":"#64748b",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:_planoPode?"0 4px 14px rgba(124,58,237,.3)":"none"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
-              Gerar plano do mês
-            </button>
-            {_planoUltimo&&<button type="button" disabled={_planoDesfazendo} onClick={_desfazerPlanoMes} title={"Desfaz a última passada: "+(_planoUltimo.descricao||"")}
-              style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:99,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:_planoDesfazendo?"default":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:_planoDesfazendo?.6:1}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9 9 9 0 00-6.4 2.6L3 13"/></svg>
-              {_planoDesfazendo?"Desfazendo…":"Desfazer plano do mês"}
-            </button>}
-            <span style={{color:"#94a3b8",fontSize:11.5}}>{_planoTodos?_planoAviso:("Puxa o que está sem data, cria o que falta pra cadência de "+_mesLabel+" e escreve pauta + copy pelo peso dos produtos. Com prévia antes de aplicar.")}</span>
-          </div>;
-          })()}
+          {/* (01/10/2026, Gustavo) "Gerar plano do mês" foi pra linha do seletor de mês (PX_MESNAV_CENTRO), no canto. */}
         </div>;
       })()}
       {/* PX_MESNAV_CENTRO — 30/09/2026 (Gustavo): seletor de mês centralizado, abaixo do "Gerar plano do mês" */}
-      <div style={{display:"flex",justifyContent:"center",margin:"6px 0 4px"}}>
-        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr auto 1fr",alignItems:"center",gap:10,margin:"6px 0 4px"}}>
+        {/* (23/09/2026) PAUTA DO MÊS — (01/10) mudou pra cá: canto esquerdo da linha do seletor, sem a explicação ao lado */}
+        {_bl("pauta")&&(function(){
+          /* (24/09/2026, Rodrigo) "cadê aquele botão de gerar plano do mês e o botão de voltar atrás?"
+             Só aparecia com um cliente filtrado (Bioter: uma unidade) — em "Todos" sumia sem aviso.
+             Agora aparece sempre; sem cliente escolhido fica apagado e o clique explica. */
+          /* (24/09/2026, Rodrigo) "se é pra criar de todos os clientes quando tiver aberto" — em Todos
+             (ou Bioter sem unidade) abre a fila de todos (_PxPlanoDoMesTodos). */
+          const _planoPode=true;
+          const _isAll=filterClient==="todos";
+          const _planoTodos=_isAll||(filterClient==="bioter"&&filterBioterUnit==="todos");
+          const _planoAviso=_planoTodos?("Roda o plano de "+(_isAll?"todos os clientes":"todas as unidades da Bioter")+" em fila, com prévia consolidada antes de aplicar."):"";
+          return <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifySelf:"start"}}>
+          <button type="button" title={_planoTodos?_planoAviso:"Puxa o que está sem data, cria o que falta pra cadência do mês e escreve pauta + copy pelo peso dos produtos. Com prévia antes de aplicar."} onClick={function(){ if(_planoPode) setPautaAberta(true); else if(typeof pixelsToast!=="undefined") pixelsToast.info(_planoAviso,5000); }}
+            style={{background:_planoPode?"linear-gradient(135deg,#7c3aed,#9F43F6)":"#e2e8f0",border:"none",color:_planoPode?"#fff":"#64748b",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:_planoPode?"0 4px 14px rgba(124,58,237,.3)":"none"}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
+            Gerar plano do mês
+          </button>
+          {_planoUltimo&&<button type="button" disabled={_planoDesfazendo} onClick={_desfazerPlanoMes} title={"Desfaz a última passada: "+(_planoUltimo.descricao||"")}
+            style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:99,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:_planoDesfazendo?"default":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:_planoDesfazendo?.6:1}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9 9 9 0 00-6.4 2.6L3 13"/></svg>
+            {_planoDesfazendo?"Desfazendo…":"Desfazer plano do mês"}
+          </button>}
+        </div>;
+        })()}
+        {!_bl("pauta")&&<span/>}
+        <div style={{display:"flex",justifyContent:"center"}}>
+          <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
+        </div>
+        <span/>
       </div>
       {pautaAberta&&(filterClient==="todos"||(filterClient==="bioter"&&filterBioterUnit==="todos"))&&<_PxPlanoDoMesTodos soBioter={filterClient==="bioter"} mes={calMonth} tasks={tasks} setTasks={setTasks}
         onClose={function(){ setPautaAberta(false); _carregarPlanoUltimo(); }} onOpenCard={function(t){ setOpenCard(t); }}/>}
