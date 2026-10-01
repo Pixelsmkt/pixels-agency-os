@@ -114483,6 +114483,14 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v16 (01/10/2026) — FASE A do checklist "Estúdio completo" (pedido do sócio: brutos deitados de 600 MB+, Reels vertical):
+     • ORIGINAL NO DRIVE: vídeo grande que vem pelo "Link do Drive" entra no card como CÓPIA LEVE (proxy 720p) + driveOriginal {id, nome, w, h…};
+       o Estúdio edita com a cópia; a GRAVAÇÃO no PC troca pelo original (_evTroca: window.__CFG.trocas, servido pelo exportar_pc v8 depois de
+       CONFERIR duração, formato e 3 quadros). Gravar no navegador não é permitido nesses vídeos (iria com a cópia leve) → vai para o PC.
+     • VÍDEO DEITADO JÁ PREENCHE O 9:16: projeto.deitado = "preencher" (novos projetos; antigos continuam "encaixar") e o quadro já entra na
+       PESSOA (projeto.foco[clipe] = 0–1, achado pelo MediaPipe em 6 quadros; −1 = não achou/não é deitado). Botões "Preencher a tela" /
+       "Inteiro (fundo desfocado)" no Recortar. O enquadramento é guardado em PROPORÇÃO → igual na cópia leve e no original.
+     • AVISO DE NITIDEZ: original deitado com pouca altura (ex.: 1080p) fica com ~600 px de largura no vertical → aviso no clipe e na Conferência.
    v15 (30/09/2026) — BIBLIOTECA DE VOZES (guia "Vozes"): vozes da OpenAI com nome, jeito de falar (estilo, idade, energia, sotaque), gênero,
      estilo, clientes e AMOSTRA para ouvir antes (edge video-editar acao "voz_amostra"). Tabela video_vozes (nada se apaga; histórico) ·
      rpc criacao_vozes · criacao_voz_salvar · criacao_voz_arquivar. Kit do cliente: voz padrão e PRONÚNCIAS (como a voz deve falar nomes
@@ -116656,7 +116664,7 @@ function _evpProjetoDeReceita(receita, clipes){
     v:1, clips:clips, textos:textos,
     legenda:{ ativa:true, estilo:"", posicao:"", edits:edits, correcoes:(Array.isArray(r.correcoes) ? r.correcoes : []) },
     musica: r.musica && r.musica.id ? { id:r.musica.id, vol:_evpNum(r.musica.volume, 0.15), t0:0, ini:0, duck:true, fadeIn:0.5, fadeOut:1.5 } : null,
-    sfx:[], audio:{ ruido:true, voz:true, nivelar:true }, estab:{},
+    sfx:[], audio:{ ruido:true, voz:true, nivelar:true }, estab:{}, deitado:"preencher", foco:{},
     tela_final:Object.assign({ dur:_evpNum(r.tela_final && r.tela_final.dur, 3) }, r.tela_final && r.tela_final.modelo ? { modelo:String(r.tela_final.modelo) } : {}),
   };
   return _evpNormalizar(p, clipes);
@@ -116732,6 +116740,8 @@ function _evpNormalizar(p, clipes){
     o.canal = Math.max(3, Math.min(10, Math.round(_evpNum(o.canal, o.musica ? 5 : 3)))); return o; });
   p.abertura = Object.assign({ ativa:false, dur:2, estilo:"logo" }, p.abertura||{});
   p.reenq = p.reenq || {};
+  p.foco = (p.foco && typeof p.foco === "object") ? p.foco : {};                                       // v16
+  if(p.deitado !== "preencher" && p.deitado !== "encaixar") delete p.deitado;
   p.sfx = (p.sfx||[]).filter(Boolean).map(function(s){ const o = Object.assign({ id:_evpId(), tipo:"whoosh", t0:0, vol:0.8 }, s); o.canal = Math.max(3, Math.min(10, Math.round(_evpNum(o.canal, 4)))); return o; });
   // v11: MIXER — canais A1–A10 (A1 fala · A2 música · A3 narração · A4 efeitos · A5–A10 livres) e V1–V10 (V1 principal)
   const cs0 = p.canais || {}, cs = {};
@@ -116887,6 +116897,48 @@ const _evpOuvintes = new Set();
 function _evpAvisar(){ _evpOuvintes.forEach(function(f){ try{ f(); }catch(_){} }); }
 function _evpUsarMidia(){ const [, setN] = useState(0); useEffect(function(){ const f = function(){ setN(function(n){ return n+1; }); }; _evpOuvintes.add(f); return function(){ _evpOuvintes.delete(f); }; }, []); }
 function _evpM(id){ if(!_evpMidia[id]) _evpMidia[id] = { thumbs:[], tratado:{} }; return _evpMidia[id]; }
+/* v16: na GRAVAÇÃO do PC, a cópia leve (Drive) vira o ORIGINAL servido pelo próprio PC. No navegador não muda nada. */
+function _evTroca(u){ try{ const t = window.__CFG && window.__CFG.trocas; return (u && t && t[u]) || u; }catch(_){ return u; } }
+/* v16: dados do original no Drive de cada vídeo do card (id do arquivo → {id, nome, bytes, w, h, dur…}) */
+function _evDriveDe(files){ const m = {}; (Array.isArray(files) ? files : []).forEach(function(f){ if(f && f.id && f.driveOriginal && typeof f.driveOriginal === "object") m[f.id] = f.driveOriginal; }); return m; }
+/* v16: tamanho REAL do original (para o aviso de nitidez): do Drive; ou o próprio vídeo quando não tem cópia leve */
+function _evDimsOriginal(id, info, driveDe){ const d = driveDe && driveDe[id]; if(d && d.w && d.h) return { w:Number(d.w), h:Number(d.h), drive:true };
+  const m = _evpMidia[id]; if(info && !info.preview_url && m && m.w && m.h) return { w:m.w, h:m.h, drive:false }; return null; }
+/* v16: largura do pedaço do original que aparece no vertical (px) — abaixo de ~900 perde nitidez no Reels (1080) */
+function _evLarguraNoVertical(dims, zoom, formato){ if(!dims || !(dims.w > dims.h * 1.05)) return null; const D = _evpDim(formato || "9x16");
+  if(D.w >= D.h) return null; return Math.round(dims.h * (D.w / D.h) / Math.max(0.5, Number(zoom) || 1)); }
+/* v16: ONDE ESTÁ A PESSOA no vídeo deitado (0 = esquerda, 1 = direita), para o 9:16 já entrar enquadrado nela.
+   MediaPipe (o mesmo do recorte da pessoa), 6 quadros espalhados, mediana. null = não é deitado ou não achou pessoa. */
+async function _evpFocoPessoa(url){
+  _evpSegCarregar();
+  for(let k=0;k<60 && _evpSegEstado === "carregando";k++) await new Promise(function(r){ setTimeout(r, 250); });
+  if(!_evpSegPronto()) return null;
+  const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.crossOrigin = "anonymous"; v.playsInline = true; v.src = url;
+  try{
+    await _evEsperar(v, "loadedmetadata", 30000);
+    const d = v.duration; if(!isFinite(d) || d <= 0 || !(v.videoWidth > v.videoHeight * 1.05)) return null;
+    const W = 256, H = Math.max(16, Math.round(W * v.videoHeight / v.videoWidth));
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const cx = cv.getContext("2d");
+    const mw = 64, mh = Math.max(8, Math.round(64 * H / W));
+    const mk = document.createElement("canvas"); mk.width = mw; mk.height = mh; const mx = mk.getContext("2d", { willReadFrequently:true });
+    const xs = [];
+    for(let k=0;k<6;k++){
+      v.currentTime = Math.min(d - 0.05, (k + 0.5) * d / 6); await _evEsperar(v, "seeked", 15000);
+      cx.drawImage(v, 0, 0, W, H);
+      const m = await _evpSegmentar(cv); if(!m) continue;
+      mx.clearRect(0, 0, mw, mh); mx.drawImage(m, 0, 0, mw, mh);
+      const px = mx.getImageData(0, 0, mw, mh).data;
+      let usaAlfa = false; for(let j=3;j<px.length;j+=4){ if(px[j] < 250){ usaAlfa = true; break; } }
+      let s = 0, sx = 0;
+      for(let i=0, j=0; j<px.length; i++, j+=4){ const a = (usaAlfa ? px[j+3] : px[j]) / 255; if(a > 0.5){ s += a; sx += a * (i % mw + 0.5); } }
+      if(s > mw * mh * 0.02) xs.push(sx / s / mw);
+    }
+    if(xs.length < 2) return null;
+    xs.sort(function(a, b){ return a - b; });
+    return Math.round(xs[Math.floor(xs.length / 2)] * 1000) / 1000;
+  }catch(_){ return null; }
+  finally{ try{ v.removeAttribute("src"); v.load(); }catch(_){} }
+}
 
 async function _evpMiniaturas(clipe, url){
   const m = _evpM(clipe);
@@ -116896,7 +116948,7 @@ async function _evpMiniaturas(clipe, url){
     try{
       await _evEsperar(v, "loadedmetadata", 30000);
       const d = v.duration; if(!isFinite(d) || d <= 0) return;
-      m.dur = d;
+      m.dur = d; m.w = v.videoWidth; m.h = v.videoHeight;
       const n = Math.max(6, Math.min(60, Math.ceil(d / 1.0)));
       const cv = document.createElement("canvas"); const H = 96, W = Math.max(40, Math.round(H * (v.videoWidth || 9) / (v.videoHeight || 16)));
       cv.width = W; cv.height = H; const cx = cv.getContext("2d");
@@ -117717,8 +117769,8 @@ function _evpMotor(canvas, o){
   }
 
   function urlClipe(id){ const c = (o.clipes||[]).find(function(x){ return x.id===id; }) || {};
-    if(o.tratados && o.tratados[id]) return o.tratados[id];
-    return o.original ? c.url : (c.preview_url || c.url); }
+    if(o.tratados && o.tratados[id]) return _evTroca(o.tratados[id]);
+    return _evTroca(o.original ? c.url : (c.preview_url || c.url)); }
   function el(c){
     if(els[c.id] && els[c.id]._src === urlClipe(c.clipe)) return els[c.id];
     const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true;
@@ -117889,7 +117941,7 @@ function _evpMotor(canvas, o){
     const VW = v.videoWidth || v.width, VH = v.videoHeight || v.height; if(!VW || !VH) return;
     const k = c.corte || {}, rx = VW * _evpNum(k.l, 0), ry = VH * _evpNum(k.t, 0);
     const vw = Math.max(8, VW * (1 - _evpNum(k.l, 0) - _evpNum(k.r, 0))), vh = Math.max(8, VH * (1 - _evpNum(k.t, 0) - _evpNum(k.b, 0)));   // recorte
-    const horiz = vw > vh * 1.05, modo = c.modo === "auto" ? (horiz ? "encaixar" : "preencher") : c.modo;
+    const horiz = vw > vh * 1.05, modo = c.modo === "auto" ? (horiz ? (proj.deitado === "preencher" ? "preencher" : "encaixar") : "preencher") : c.modo;   // v16: deitado pode já preencher
     const tr = !(o.tratados && o.tratados[c.clipe]) && c.estab && proj.estab && proj.estab[c.clipe];
     let sdx = 0, sdy = 0, sz = 1;
     if(tr){ const e = _evpTremidoEm(tr, srcT(c, tt)); sdx = e[0]; sdy = e[1]; sz = c._zt || (c._zt = _evpZoomTremido(tr, c.ini, c.fim)); }
@@ -117913,6 +117965,8 @@ function _evpMotor(canvas, o){
     let ax = 0;
     const rq = c.seguir && proj.reenq && proj.reenq[c.clipe];
     if(rq && dw > W){ const alvo = _evpAcaoEm(rq, srcT(c, tt)); ax = _evClamp((0.5 - alvo) * dw, -(dw - W)/2, (dw - W)/2); }
+    else if(modo === "preencher" && horiz && dw > W && !c.x && proj.foco && _evpNum(proj.foco[c.clipe], -1) >= 0){      // v16: já entra na pessoa
+      ax = _evClamp((0.5 - _evpNum(proj.foco[c.clipe], 0.5)) * dw, -(dw - W)/2, (dw - W)/2); }
     ctx.translate(W/2 + (c.x || 0) * W + sdx * dw + ax + mx * W + (extra && extra.dx || 0), H/2 + (c.y || 0) * H + sdy * dh + my * H);
     if(c.rot) ctx.rotate(c.rot * Math.PI / 180);
     if(c.espelho) ctx.scale(-1, 1);
@@ -118112,7 +118166,7 @@ function _evpMotor(canvas, o){
   /* imagens e figurinhas por cima do vídeo */
   function imagem(url){ if(!imgs[url]){ const im = new Image(); if(!/^data:/.test(url)) im.crossOrigin = "anonymous"; im.src = url; imgs[url] = im; } return imgs[url]; }
   function el2(x){
-    const url = (o.tratados && o.tratados[x.clipe]) || (function(){ const c = (o.clipes||[]).find(function(q){ return q.id === x.clipe; }) || {}; return o.original ? c.url : (c.preview_url || c.url); })();
+    const url = _evTroca((o.tratados && o.tratados[x.clipe]) || (function(){ const c = (o.clipes||[]).find(function(q){ return q.id === x.clipe; }) || {}; return o.original ? c.url : (c.preview_url || c.url); })());
     if(els2[x.id] && els2[x.id]._src === url) return els2[x.id];
     const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true; v._src = url; v.src = url;
     els2[x.id] = v; return v;
@@ -118726,6 +118780,26 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         .finally(function(){ setPrepRev(function(a){ const n = Object.assign({}, a); delete n[k]; return n; }); });
     });
   }, [chaveRev]);
+
+  /* v16: VÍDEO DEITADO JÁ ENTRA NA PESSOA — mede uma vez por bruto (fica salvo no projeto: foco[clipe] 0–1, −1 = não achou) */
+  const driveDe = useMemo(function(){ return _evDriveDe(t.files); }, [t.files]);
+  const precisaFoco = useMemo(function(){
+    if(p.deitado !== "preencher") return [];
+    const s = {}; p.clips.forEach(function(c){ if((c.modo || "auto") === "auto" && !c.seguir && !(p.foco && p.foco[c.clipe] !== undefined)) s[c.clipe] = 1; });
+    return Object.keys(s); }, [p.clips, p.deitado, p.foco]);
+  const [medindoFoco, setMedindoFoco] = useState({});
+  useEffect(function(){
+    precisaFoco.forEach(function(cid){
+      if(medindoFoco[cid]) return;
+      const c = infoClipe[cid]; if(!c) return;
+      setMedindoFoco(function(a){ const n = Object.assign({}, a); n[cid] = 1; return n; });
+      const u = pcAuto ? _evTroca(c.url) : (c.preview_url || c.url);        // no PC: o original (local), sem baixar nada
+      Promise.race([_evpFocoPessoa(u), new Promise(function(r){ setTimeout(function(){ r(null); }, 60000); })])
+        .then(function(x){ setP(function(pp){ const np = _evpCopia(pp); np.foco = Object.assign({}, np.foco || {}); np.foco[cid] = x == null ? -1 : x; return np; }); })
+        .catch(function(){ setP(function(pp){ const np = _evpCopia(pp); np.foco = Object.assign({}, np.foco || {}); np.foco[cid] = -1; return np; }); })
+        .finally(function(){ setMedindoFoco(function(a){ const n = Object.assign({}, a); delete n[cid]; return n; }); });
+    });
+  }, [precisaFoco.join(",")]);
 
   /* reenquadrar seguindo a ação: mede o movimento do bruto uma vez (fica salvo no projeto) */
   const [medindoAcao, setMedindoAcao] = useState({});
@@ -119416,7 +119490,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
                 background:on ? _EVP_COR.roxoSoft : "transparent",color:on ? _EVP_COR.roxo : _EVP_COR.sub,boxShadow:on ? "inset 0 0 0 1px rgba(139,92,246,.3)" : "none"}}>
               <_EvpIco n={m.icone} s={20}/>{m.label}</button>; })}
         </div>
-        <_EvpPainelMenu menu={menu} p={p} calc={calc} sel={sel} setSel={setSel} mudar={mudar} irPara={irPara} tempo={tempo} infoClipe={infoClipe} clipes={clipes}
+        <_EvpPainelMenu menu={menu} p={p} calc={calc} sel={sel} setSel={setSel} mudar={mudar} irPara={irPara} tempo={tempo} infoClipe={infoClipe} clipes={clipes} driveDe={driveDe}
           musicas={musicas} musInfo={musInfoN} setMusica={setMusica} addClipe={addClipe} addTexto={addTexto} addSfx={addSfx} kit={kit} base={base}
           motivos={(ed.receita && ed.receita.motivos_corte) || []} comentarios={comentarios} cliente={t.client} tagNarr={_evTagNarracao(t)} roteiroNarr={_evRoteiroNarracao(t)} enviarAudioPronto={enviarAudioPronto} aplicarCorrecoes={aplicarCorrecoes} ajustando={ajustando}
           marcaCorr={marcaCorr} marcarCorrecao={marcarCorrecao} marcarPontoCorr={marcarPontoCorr} focoCorr={focoCorr} setFocoCorr={setFocoCorr}
@@ -119506,7 +119580,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
             vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
             onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
-            prontoPC={!!pcAuto && dicPronto && !tratandoAudio && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)}/>
+            prontoPC={!!pcAuto && dicPronto && !tratandoAudio && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)
+              && !precisaFoco.length && !Object.keys(medindoFoco).length}/>
         </div>
       </div>
     </div>
@@ -119788,6 +119863,8 @@ function _EvpPainelMenu(q){
                 {usadosB[c.id] ? <span title={"Está no vídeo " + usadosB[c.id] + "×"} style={{position:"absolute",left:8,bottom:24,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"0 6px",fontSize:10,fontWeight:800}}>✓ {usadosB[c.id] > 1 ? usadosB[c.id] + "×" : "no vídeo"}</span> : null}
                 <span style={{position:"absolute",left:8,bottom:6,right:6,color:"#fff",fontSize:10.5,fontWeight:700,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{inf.n}. {c.nome}</span>
                 <span style={{position:"absolute",left:8,top:6,color:"#fff",fontSize:10,fontFamily:_EVP_MONO,background:"rgba(11,16,32,.55)",borderRadius:5,padding:"1px 5px"}}>{_evTempo(c.duracao).replace(/\.\d$/,"")}</span>
+                {q.driveDe && q.driveDe[c.id] && <span title={"Cópia leve para editar. O original (" + q.driveDe[c.id].w + "×" + q.driveDe[c.id].h + ", " + Math.round(Number(q.driveDe[c.id].bytes || 0) / 1048576) + " MB) fica no Drive e é ele que vai para a gravação no PC."}
+                  style={{position:"absolute",left:8,bottom:42,background:"rgba(21,128,61,.92)",color:"#fff",borderRadius:6,padding:"0 6px",fontSize:9.5,fontWeight:800}}>Drive · {Number(q.driveDe[c.id].h) >= 2000 || Number(q.driveDe[c.id].w) >= 3800 ? "4K" : q.driveDe[c.id].h + "p"}</span>}
                 <span style={{position:"absolute",right:6,top:6,width:22,height:22,borderRadius:7,background:"rgba(255,255,255,.95)",color:_EVP_COR.roxo,display:"grid",placeItems:"center"}}><_EvpIco n="mais" s={14} w={2.2}/></span>
               </button>
               <button onClick={function(){ q.addSobre(c.id); }} title="Colocar por cima do vídeo (vídeo sobre vídeo), na agulha" aria-label={"Colocar " + (c.nome||"") + " por cima"}
@@ -121151,6 +121228,23 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           </div>
         </div>)}
         {ferr === "recortar" && (<div>
+          {(function(){ // v16: vídeo deitado no vertical — preencher (com zoom, na pessoa) ou inteiro com fundo desfocado (vale para o vídeo todo)
+            const dD = _evDriveDe(tCard && tCard.files), dims = _evDimsOriginal(c.clipe, infoClipe && infoClipe[c.clipe], dD);
+            const larg = _evLarguraNoVertical(dims, c.zoom, p.formato), dv = dD[c.clipe], ehDeitado = dims ? dims.w > dims.h * 1.05 : null;
+            return <div>
+              {ehDeitado !== false && <div>
+                <div style={_EVP_TIT}>Vídeo deitado no vertical</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                  {[["preencher","Preencher a tela"],["encaixar","Inteiro (fundo desfocado)"]].map(function(o){ const on = (p.deitado || "encaixar") === o[0];
+                    return <button key={o[0]} onClick={function(){ mudar(function(np){ np.deitado = o[0]; }); }} style={_evpChip(on)}>{o[1]}</button>; })}
+                </div>
+                <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:4,lineHeight:1.45}}>Vale para todos os clipes deitados no "Automático". "Preencher" já entra com zoom, enquadrado na pessoa.</div>
+              </div>}
+              {larg != null && larg < 900 && <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:_EVP_COR.aviso,color:_EV.amarelo,fontSize:12,fontWeight:700,lineHeight:1.45}}>
+                ⚠ Vai perder nitidez: o original tem {dims.h} px de altura, então no vertical a imagem fica com uns {larg} px de largura (o Reels usa 1080). Peça o vídeo em 4K ou use "Inteiro (fundo desfocado)".</div>}
+              {dv && <div style={{marginTop:8,fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.45}}>Editando a cópia leve. O original ({dv.w}×{dv.h}) fica no Drive e vai para a gravação no PC, com o mesmo enquadramento.{" "}
+                <a href={"https://drive.google.com/file/d/" + dv.id + "/view" + (dv.rk ? "?resourcekey=" + dv.rk : "")} target="_blank" rel="noopener noreferrer" style={{color:_EVP_COR.roxo,fontWeight:700}}>Abrir no Drive</a></div>}
+            </div>; })()}
           <div style={_EVP_TIT}>Modo</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
             {[["auto","Automático"],["preencher","Preencher"],["encaixar","Encaixar"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(nc(function(x){ x.modo = o[0]; })); }} style={_evpChip((c.modo || "auto") === o[0])}>{o[1]}</button>; })}
@@ -121700,6 +121794,18 @@ function _EvpSugestoes({ ed, p, mudar, kit }){
 /* ─── CONFERÊNCIA antes de exportar (a mesma lista que a IA vai usar na automação pelo WhatsApp) ─── */
 function _evpConferir(p, calc, o){
   const out = [], add = function(nivel, titulo, detalhe, acao){ out.push({ nivel:nivel, titulo:titulo, detalhe:detalhe || "", acao:acao || null }); };
+  // v16: originais no Drive e nitidez do vídeo deitado no vertical
+  (function(){
+    const dD = o.driveDe || {}, usados = {}; calc.clips.forEach(function(c){ if(!usados[c.clipe]) usados[c.clipe] = c; });
+    const nDrive = Object.keys(usados).filter(function(id){ return !!dD[id]; }).length;
+    if(nDrive) add("ok", nDrive + (nDrive > 1 ? " vídeos vão" : " vídeo vai") + " com o original do Drive", "A gravação é no PC: ele confere duração, formato e 3 quadros de cada original antes de gravar.");
+    const info = {}; (o.clipes || []).forEach(function(c){ info[c.id] = c; });
+    Object.keys(usados).forEach(function(id){
+      const c = usados[id], modo = (c.modo || "auto") === "auto" ? (p.deitado === "preencher" ? "preencher" : "encaixar") : c.modo; if(modo !== "preencher") return;
+      const dims = _evDimsOriginal(id, info[id], dD), larg = _evLarguraNoVertical(dims, c.zoom, p.formato);
+      if(larg != null && larg < 900) add("aviso", "Pouca nitidez em \"" + ((info[id] && info[id].nome) || "vídeo") + "\"", "Deitado com " + dims.h + " px de altura: no vertical fica com uns " + larg + " px de largura (o Reels usa 1080). Peça em 4K ou use \"Inteiro (fundo desfocado)\".", { id:"clip", label:"Ver clipe", alvo:c.id });
+    });
+  })();
   const fala = o.fala || {}, vozes = o.vozes || {};
   // duração
   if(calc.total > 90) add("aviso", "Vídeo com " + _evTempo(calc.total), "Reels acima de 90 s perdem alcance. Pense em cortar.");
@@ -121831,9 +121937,12 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
   const usadosIds = []; (projeto.clips || []).forEach(function(c){ if(usadosIds.indexOf(c.clipe) < 0) usadosIds.push(c.clipe); });
   const pendPC = ((trat && trat.itens) || []).filter(function(x){ return usadosIds.indexOf(x.clipe_id) >= 0 && (x.status === "fila" || x.status === "processando"); }).map(function(x){ return x.clipe_id; })
     .filter(function(v, i, a){ return a.indexOf(v) === i; });
+  const driveUsados = useMemo(function(){ const dD = _evDriveDe(t && t.files); return usadosIds.filter(function(id){ return !!dD[id]; }); }, [t && t.files, usadosIds.join(",")]);
+  const soNoPC = !pcAuto && driveUsados.length > 0;      // v16: originais no Drive → a gravação é no PC (o navegador só tem a cópia leve)
   const envato = !!(projeto.musica && !projeto.musica.mudo && musInfo && /envato/i.test(musInfo.fonte || ""));
   const faltaLicenca = envato && !projeto.musica.licenca_ok;
-  const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit, motivos:(ed.receita && ed.receita.motivos_corte) || [] }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit]);
+  const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit, motivos:(ed.receita && ed.receita.motivos_corte) || [],
+    driveDe:_evDriveDe(t && t.files), clipes:ed.clipes || [] }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit, t && t.files]);
   const nErro = conf.filter(function(x){ return x.nivel === "erro"; }).length, nAviso = conf.filter(function(x){ return x.nivel === "aviso"; }).length;
   const [verConf, setVerConf] = useState(false);
   const agir = function(a){
@@ -121852,6 +121961,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     const qual = o.qualidade || qualidade, leg = o.legenda != null ? !!o.legenda : comLegenda, audioSo = o.qualidade ? false : soAudio;
     if(exp && exp.fase && exp.fase !== "feito" && exp.fase !== "erro") return;
     if(faltaLicenca){ _evToast("warning", "Marque que a música do Envato foi registrada neste projeto."); return; }
+    if(soNoPC && !audioSo){ _evToast("info", "Os originais estão no Drive: a gravação é no PC do escritório, com qualidade máxima."); exportarNoPC(); return; }
     const mimeAudio = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find(function(x){ try{ return window.MediaRecorder && MediaRecorder.isTypeSupported(x); }catch(_){ return false; } });
     const mime = audioSo ? mimeAudio : _evMimeGravacao();
     if(!mime || !HTMLCanvasElement.prototype.captureStream){ setExp({ fase:"erro", msg:"Este navegador não grava vídeo. Use o Google Chrome no computador." }); return; }
@@ -122011,7 +122121,8 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
         </div>
       </div>
       {!ativo && <button onClick={function(){ exportar(); }} disabled={faltaLicenca || nErro > 0} title={nErro ? "Corrija o que está em vermelho na Conferência" : ""} style={Object.assign(_evpBtn("verde", !faltaLicenca && !nErro), {marginTop:10,padding:"10px 16px",fontSize:13.5})}>
-        <_EvpIco n="baixar" s={16}/>{soAudio ? "Gravar e baixar o áudio" : alterado ? "Salvar, exportar e anexar no card" : ed.final ? "Exportar de novo e anexar no card" : "Aprovar, exportar e anexar no card"}</button>}
+        <_EvpIco n={soNoPC && !soAudio ? "pc" : "baixar"} s={16}/>{soAudio ? "Gravar e baixar o áudio" : soNoPC ? "Exportar no PC com os originais do Drive" : alterado ? "Salvar, exportar e anexar no card" : ed.final ? "Exportar de novo e anexar no card" : "Aprovar, exportar e anexar no card"}</button>}
+      {!ativo && soNoPC && !soAudio && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.45}}>{driveUsados.length === 1 ? "1 vídeo tem" : driveUsados.length + " vídeos têm"} o original no Drive. O PC do escritório confere cada original com a cópia leve e grava em qualidade máxima — você pode fechar o navegador.</div>}
       {!ativo && !soAudio && !isMob && !pcAuto && (
         <div style={{marginTop:10,padding:"9px 11px",borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo}}>
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
