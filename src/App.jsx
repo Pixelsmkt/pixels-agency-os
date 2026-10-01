@@ -114483,6 +114483,15 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v17 (01/10/2026) — FASE B do checklist "Estúdio completo": ANIMAR (botão "Animar" no lugar de "Movimento").
+     • PONTOS ◆ (keyframes) por clipe: zoom, posição, girar, opacidade e desfoque; entre dois pontos o vídeo anda sozinho na CURVA escolhida
+       (Constante, Devagar → rápido, Rápido → devagar, Suave nas pontas, Impacto, Passa e volta ou curva própria arrastando as alças, como no After Effects).
+       Pontos aparecem na linha do tempo (◆ amarelo: arrastar muda o tempo, duplo clique abre o Animar). Com pontos, mexer no Recortar ou arrastar
+       no vídeo grava no ponto da agulha (cria se não tiver).
+     • PRONTOS: zoom de impacto, aproximar lento, afastar e revelar, do rosto ao produto, respirar, seguir a pessoa, batida da música, tremor suave/forte
+       e os Ken Burns antigos (agora viram pontos). DESFOQUE DE MOVIMENTO automático quando o zoom/posição anda rápido. Copiar a animação para outros clipes.
+     • CURVA DE VELOCIDADE: Montagem, Herói, Bala, Pulo, Flash entrando/saindo e curva própria (0,1x–10x, arrastando os pontos).
+     • Mesmo motor na prévia, no navegador e no PC (a gravação fica igual).
    v16 (01/10/2026) — FASE A do checklist "Estúdio completo" (pedido do sócio: brutos deitados de 600 MB+, Reels vertical):
      • ORIGINAL NO DRIVE: vídeo grande que vem pelo "Link do Drive" entra no card como CÓPIA LEVE (proxy 720p) + driveOriginal {id, nome, w, h…};
        o Estúdio edita com a cópia; a GRAVAÇÃO no PC troca pelo original (_evTroca: window.__CFG.trocas, servido pelo exportar_pc v8 depois de
@@ -116594,7 +116603,9 @@ function _evpDim(formato){ const f = _EVP_FORMATOS.find(function(x){ return x.id
 /* RAMPA DE VELOCIDADE: velocidade ao longo do trecho (u = 0..1 do trecho no bruto) */
 const _EVP_RAMPAS = [ { id:"nenhuma", label:"Sem rampa" }, { id:"acelera", label:"Acelera" }, { id:"desacelera", label:"Desacelera" },
                       { id:"montanha", label:"Rápido no meio" }, { id:"lento_meio", label:"Câmera lenta no meio" } ];
-function _evpVelRampa(tipo, u){
+function _evpVelRampa(tipo, u, pts){
+  if(tipo === "curva") return _evpVelPts(pts, u);                         // v17: curva própria
+  if(_EVP_VELPTS[tipo]) return _evpVelPts(_EVP_VELPTS[tipo], u);           // v17: curvas prontas (montagem, herói, bala…)
   if(tipo === "acelera") return 1 + 2.5 * u * u;
   if(tipo === "desacelera") return 1 + 2.5 * (1 - u) * (1 - u);
   if(tipo === "montanha") return 1 + 2.5 * Math.sin(Math.PI * u);
@@ -116603,8 +116614,8 @@ function _evpVelRampa(tipo, u){
 }
 /* tabela tempo de saída → segundo do bruto (integra a velocidade) */
 function _evpTabelaRampa(c){
-  const n = 60, fonte = c.fim - c.ini, ts = [0]; let acc = 0;
-  for(let k=0;k<n;k++){ const u = (k + 0.5) / n; acc += (fonte / n) / (_evpVelRampa(c.rampa, u) * (c.vel || 1)); ts.push(acc); }
+  const n = ["acelera","desacelera","montanha","lento_meio"].indexOf(c.rampa) >= 0 ? 60 : 120, fonte = c.fim - c.ini, ts = [0]; let acc = 0;   // v17: curvas novas com 120 passos
+  for(let k=0;k<n;k++){ const u = (k + 0.5) / n; acc += (fonte / n) / (_evpVelRampa(c.rampa, u, c.velPts) * (c.vel || 1)); ts.push(acc); }
   return ts;                               // ts[k] = tempo de saída quando o bruto está em ini + k/n do trecho
 }
 function _evpDurClip(c){
@@ -116629,11 +116640,207 @@ function _evpSrcT(c, tt){
 /* velocidade real naquele instante (para o elemento de vídeo acompanhar) */
 function _evpVelEm(c, tt){
   if(_evpNum(c.congelar, 0) > 0) return 0;
-  if(c.rampa && c.rampa !== "nenhuma"){ const u = _evClamp((_evpSrcT(c, tt) - c.ini) / Math.max(0.05, c.fim - c.ini), 0, 1); return (c.vel || 1) * _evpVelRampa(c.rampa, u); }
+  if(c.rampa && c.rampa !== "nenhuma"){ const u = _evClamp((_evpSrcT(c, tt) - c.ini) / Math.max(0.05, c.fim - c.ini), 0, 1); return (c.vel || 1) * _evpVelRampa(c.rampa, u, c.velPts); }
   return c.vel || 1;
 }
 /* clipe com som "normal" (a fala acompanha)? rampa, congelado e ao contrário ficam sem a fala original */
 function _evpClipeFalaNormal(c){ return !(_evpNum(c.congelar, 0) > 0) && !c.reverso && !(c.rampa && c.rampa !== "nenhuma"); }
+
+/* ══ v17 (01/10/2026) ANIMAR — FASE B do checklist "Estúdio completo" ══
+   c.anim = { pts:[{ t, z, x, y, r, o, b, e }], mblur }   (pontos ◆, como os keyframes do CapCut / Premiere)
+     t = segundo do BRUTO (o ponto anda junto com a imagem se o clipe for aparado ou mudar de velocidade);
+         no quadro parado conta a partir do "ini" (segundos parados)
+     z zoom · x / y deslocamento (−1 a 1) · r girar (graus) · o opacidade (0–1) · b desfoque (0–40)
+     e = curva do trecho ATÉ o próximo ponto: "lin" | "in" | "out" | "io" | "imp" | "volta" | [x1, y1, x2, y2] (bezier, como no After Effects)
+     mblur = desfoque de movimento automático quando o zoom/posição anda rápido (padrão: ligado)
+   Com pontos, zoom / posição / girar do clipe vêm dos pontos — mexer no Recortar ou arrastar no vídeo grava no ponto da agulha.
+   c.tremor = { tipo:"suave"|"forte", forca 0–1 } · c.batida = { forca 0–1, cada 1|2 } (o zoom pulsa na batida da música)
+   c.rampa: além das 4 antigas, curvas de velocidade prontas (montagem, heroi, bala, pulo, flash_in, flash_out) e "curva" (c.velPts = [[u, vel]…], 0,1x–10x) */
+const _EVP_CURVAS = [
+  { id:"lin", label:"Constante", bz:[0, 0, 1, 1] },
+  { id:"in", label:"Devagar → rápido", bz:[0.55, 0, 1, 0.45] },
+  { id:"out", label:"Rápido → devagar", bz:[0, 0.55, 0.45, 1] },
+  { id:"io", label:"Suave nas pontas", bz:[0.65, 0, 0.35, 1] },
+  { id:"imp", label:"Impacto", bz:[0.12, 0.9, 0.2, 1] },
+  { id:"volta", label:"Passa e volta", bz:[0.34, 1.45, 0.64, 1] },
+];
+function _evpBz(e){ if(Array.isArray(e) && e.length === 4) return e; const q = _EVP_CURVAS.find(function(x){ return x.id === e; }); return q ? q.bz : _EVP_CURVAS[3].bz; }
+function _evpCurvaNome(e){ if(Array.isArray(e)) return "Personalizada"; const q = _EVP_CURVAS.find(function(x){ return x.id === e; }); return q ? q.label : "Suave nas pontas"; }
+/* curva bezier (x1, y1, x2, y2) em u (0–1) → quanto do caminho já andou */
+function _evpEase(e, u){
+  if(!(u > 0)) return 0; if(u >= 1) return 1;
+  const b = _evpBz(e), x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3];
+  if(x1 === y1 && x2 === y2) return u;
+  const bx = function(s){ return 3*(1-s)*(1-s)*s*x1 + 3*(1-s)*s*s*x2 + s*s*s; };
+  const by = function(s){ return 3*(1-s)*(1-s)*s*y1 + 3*(1-s)*s*s*y2 + s*s*s; };
+  let s = u;
+  for(let k=0;k<8;k++){ const er = bx(s) - u; if(Math.abs(er) < 1e-6) return by(s);
+    const d = 3*(1-s)*(1-s)*x1 + 6*(1-s)*s*(x2-x1) + 3*s*s*(1-x2); if(Math.abs(d) < 1e-6) break; s -= er / d; if(s < 0 || s > 1) break; }
+  let lo = 0, hi = 1; s = u;
+  for(let k=0;k<40;k++){ const v = bx(s); if(Math.abs(v - u) < 1e-6) break; if(v < u) lo = s; else hi = s; s = (lo + hi) / 2; }
+  return by(s);
+}
+/* "tempo do clipe" onde os pontos ficam: segundo do bruto andando para frente (quadro parado: segundos desde o começo) */
+function _evpTau(c, tt){
+  const cg = _evpNum(c.congelar, 0);
+  if(cg > 0) return c.ini + _evClamp(tt - c.t0, 0, cg);
+  const s = _evpSrcT(c, tt); return c.reverso ? c.ini + c.fim - s : s;
+}
+function _evpTauFim(c){ const cg = _evpNum(c.congelar, 0); return cg > 0 ? c.ini + cg : c.fim; }
+/* o contrário: segundo do ponto → tempo na linha do tempo (c precisa do t0 do calc) */
+function _evpTdeTau(c, tau){
+  const cg = _evpNum(c.congelar, 0);
+  if(cg > 0) return c.t0 + _evClamp(tau - c.ini, 0, cg);
+  const L = Math.max(0.05, c.fim - c.ini), f = _evClamp((tau - c.ini) / L, 0, 1);
+  if(c.rampa && c.rampa !== "nenhuma"){ const ts = c._rt || (c._rt = _evpTabelaRampa(c)), n = ts.length - 1, k = f * n, i = Math.min(n - 1, Math.floor(k)); return c.t0 + ts[i] + (ts[i+1] - ts[i]) * (k - i); }
+  return c.t0 + f * L / (c.vel || 1);
+}
+function _evpAnimTem(c){ return !!(c && c.anim && Array.isArray(c.anim.pts) && c.anim.pts.length); }
+function _evpAnimBase(c){ return { z:_evpNum(c.zoom, 1), x:_evpNum(c.x, 0), y:_evpNum(c.y, 0), r:_evpNum(c.rot, 0), o:1, b:0 }; }
+function _evpPtVal(p){ return { z:_evpNum(p.z, 1), x:_evpNum(p.x, 0), y:_evpNum(p.y, 0), r:_evpNum(p.r, 0), o:_evpNum(p.o, 1), b:_evpNum(p.b, 0) }; }
+/* valores (zoom, x, y, girar, opacidade, desfoque) no tempo tau do clipe — o zoom anda em escala (log): "Constante" parece constante de verdade */
+function _evpAnimEm(c, tau){
+  if(!_evpAnimTem(c)) return _evpAnimBase(c);
+  const P = c.anim.pts, n = P.length;
+  if(n === 1 || tau <= P[0].t) return _evpPtVal(P[0]);
+  if(tau >= P[n-1].t) return _evpPtVal(P[n-1]);
+  let i = 0; while(i < n - 2 && tau >= P[i+1].t) i++;
+  const a = _evpPtVal(P[i]), b = _evpPtVal(P[i+1]), k = _evpEase(P[i].e || "io", (tau - P[i].t) / Math.max(1e-4, P[i+1].t - P[i].t));
+  return _evpAnimMistura(a, b, k);
+}
+function _evpAnimMistura(a, b, k){
+  const za = Math.log(Math.max(0.05, a.z)), zb = Math.log(Math.max(0.05, b.z));
+  return { z:Math.exp(za + (zb - za) * k), x:a.x + (b.x - a.x) * k, y:a.y + (b.y - a.y) * k, r:a.r + (b.r - a.r) * k,
+           o:_evClamp(a.o + (b.o - a.o) * k, 0, 1), b:Math.max(0, a.b + (b.b - a.b) * k) };
+}
+const _evpR4 = function(v){ return Math.round(v * 10000) / 10000; };
+/* ponto da agulha: acha (a menos de 1 quadro) ou cria com os valores daquele instante. o = clipe do projeto (muda), cc = o mesmo clipe no calc */
+function _evpAnimPonto(o, cc, tt){
+  const tau = _evpTau(cc, tt), tol = 0.04 * Math.max(1, cc.vel || 1);
+  const atual = _evpAnimEm(o, tau);
+  o.anim = Object.assign({ mblur:true }, o.anim || {}); o.anim.pts = (o.anim.pts || []).slice();
+  let p = o.anim.pts.find(function(q){ return Math.abs(q.t - tau) <= tol; });
+  if(p) return p;
+  p = { t:_evpR4(tau), z:_evpR4(atual.z), x:_evpR4(atual.x), y:_evpR4(atual.y), r:_evpR4(atual.r), o:_evpR4(atual.o), b:_evpR4(atual.b), e:"io" };
+  // o novo ponto herda a curva do trecho em que caiu
+  const ant = o.anim.pts.filter(function(q){ return q.t < tau; }).pop(); if(ant && ant.e) p.e = Array.isArray(ant.e) ? ant.e.slice() : ant.e;
+  o.anim.pts.push(p); o.anim.pts.sort(function(a, b){ return a.t - b.t; });
+  return p;
+}
+/* tremor (procedural) e pulso na batida da música — devolve o que soma no quadro */
+function _evpEfeitosEm(c, tt, proj){
+  const o = { dx:0, dy:0, dr:0, dz:1 };
+  const tr = c.tremor;
+  if(tr && (tr.tipo === "suave" || tr.tipo === "forte")){
+    const f = _evClamp(_evpNum(tr.forca, 0.5), 0, 1), s = tt;
+    if(tr.tipo === "forte"){ const a = 0.008 + 0.022 * f, ra = 0.3 + 1.2 * f;
+      o.dx = a * (Math.sin(s * 47.1) * 0.6 + Math.sin(s * 29.3 + 1.3) * 0.4); o.dy = a * (Math.sin(s * 39.7 + 0.7) * 0.6 + Math.sin(s * 23.9 + 2.1) * 0.4);
+      o.dr = ra * Math.sin(s * 31.7 + 0.4); o.dz = 1 + 2.2 * a + ra * Math.PI / 180 * 1.9; }
+    else { const a = 0.003 + 0.01 * f, ra = 0.1 + 0.5 * f;
+      o.dx = a * (Math.sin(s * 1.9) * 0.6 + Math.sin(s * 3.7 + 1.1) * 0.4); o.dy = a * (Math.sin(s * 2.3 + 0.5) * 0.6 + Math.sin(s * 4.1 + 2.3) * 0.4);
+      o.dr = ra * Math.sin(s * 1.3 + 0.8); o.dz = 1 + 2.2 * a + ra * Math.PI / 180 * 1.9; }
+  }
+  const bt = c.batida, mu = proj && proj.musica;
+  if(bt && _evpNum(bt.forca, 0) > 0 && mu && !mu.mudo && mu.beat && _evpNum(mu.beat.bpm, 0) > 0){
+    const P1 = 60 / mu.beat.bpm, P = P1 * (bt.cada === 2 ? 2 : 1), ini = _evpNum(mu.ini, 0);
+    let m = _evpNum(mu.beat.fase, 0); while(m < ini) m += P1;
+    const T1 = _evpNum(mu.t0, 0) + (m - ini);
+    if(tt >= T1){ const d = (tt - T1) % P, k = d < 0.04 ? d / 0.04 : Math.exp(-(d - 0.04) / 0.13); o.dz *= 1 + _evClamp(_evpNum(bt.forca, 0.5), 0, 1) * 0.09 * k; }
+  }
+  return o;
+}
+/* PRONTOS do Animar: devolvem os pontos novos (tempo do clipe), relativos ao enquadramento atual */
+const _EVP_PRONTOS = [
+  { id:"impacto", label:"Zoom de impacto", dica:"Entra rápido no ponto da agulha e segura" },
+  { id:"aproximar_lento", label:"Aproximar lento", dica:"Vai chegando perto devagar, o clipe todo" },
+  { id:"afastar_revelar", label:"Afastar e revelar", dica:"Começa perto e abre mostrando tudo" },
+  { id:"rosto_produto", label:"Do rosto ao produto", dica:"Sai do alto (rosto) e desce até o produto — ajuste os 2 pontos" },
+  { id:"respirar", label:"Respirar", dica:"Zoom bem leve indo e voltando" },
+  { id:"seguir", label:"Seguir a pessoa", dica:"Vídeo deitado: o quadro acompanha a ação" },
+  { id:"batida", label:"Batida da música", dica:"O zoom pulsa em cada batida" },
+  { id:"tremor_suave", label:"Tremor suave", dica:"Câmera na mão, bem leve" },
+  { id:"tremor_forte", label:"Tremor forte", dica:"Impacto, explosão, porrada" },
+];
+const _EVP_KB = [ { id:"aproximar", label:"Aproximar" }, { id:"afastar", label:"Afastar" }, { id:"esq_dir", label:"Esquerda → direita" },
+                  { id:"dir_esq", label:"Direita → esquerda" }, { id:"sobe", label:"Subir" }, { id:"desce", label:"Descer" } ];
+function _evpProntoPts(id, c, tauAgulha){
+  const a = c.ini, b = _evpTauFim(c), L = Math.max(0.1, b - a), v = _evpNum(c.congelar, 0) > 0 ? 1 : (c.vel || 1);
+  const ancora = tauAgulha != null && tauAgulha >= a && tauAgulha < b - 0.05 ? tauAgulha : a;
+  const A = _evpAnimEm(c, ancora), z0 = A.z;
+  const P = function(t, mud, e){ const q = Object.assign({ t:_evpR4(_evClamp(t, a, b)), z:z0, x:A.x, y:A.y, r:A.r, o:A.o, b:A.b, e:e || "io" }, mud || {}); q.z = _evpR4(q.z); return q; };
+  if(id === "impacto") return [P(ancora, null, "imp"), P(ancora + Math.min(0.22 * v, (b - ancora) * 0.6), { z:z0 * 1.3 })];
+  if(id === "aproximar_lento") return [P(a, null, "io"), P(b, { z:z0 * 1.16 })];
+  if(id === "afastar_revelar") return [P(a, { z:z0 * 1.5 }, "out"), P(a + Math.min(1.4 * v, L * 0.7), null)];
+  if(id === "rosto_produto") return [P(a, { z:z0 * 1.45, y:A.y + 0.14 }, "io"), P(a + Math.min(2.2 * v, L * 0.75), { z:z0 * 1.3, y:A.y - 0.12 })];
+  if(id === "respirar"){ const out = [], passo = 1.6 * v; let k = 0; for(let t = a; t <= b + 0.001 && out.length < 40; t += passo, k++) out.push(P(t, { z:k % 2 ? z0 * 1.045 : z0 }, "io")); return out.length > 1 ? out : [P(a), P(b, { z:z0 * 1.045 })]; }
+  // Ken Burns (o "Movimento" antigo, agora em pontos)
+  const fz = 0.18;
+  if(id === "aproximar") return [P(a, null, "io"), P(b, { z:z0 * (1 + fz) })];
+  if(id === "afastar") return [P(a, { z:z0 * (1 + fz) }, "io"), P(b, null)];
+  if(id === "esq_dir") return [P(a, { z:z0 * (1 + fz), x:A.x - 0.5 * fz * 0.9 }, "io"), P(b, { z:z0 * (1 + fz), x:A.x + 0.5 * fz * 0.9 })];
+  if(id === "dir_esq") return [P(a, { z:z0 * (1 + fz), x:A.x + 0.5 * fz * 0.9 }, "io"), P(b, { z:z0 * (1 + fz), x:A.x - 0.5 * fz * 0.9 })];
+  if(id === "sobe") return [P(a, { z:z0 * (1 + fz), y:A.y + 0.5 * fz * 0.9 }, "io"), P(b, { z:z0 * (1 + fz), y:A.y - 0.5 * fz * 0.9 })];
+  if(id === "desce") return [P(a, { z:z0 * (1 + fz), y:A.y - 0.5 * fz * 0.9 }, "io"), P(b, { z:z0 * (1 + fz), y:A.y + 0.5 * fz * 0.9 })];
+  return null;
+}
+/* copia a animação de um clipe para outro: mesma distância do começo (se não couber, encolhe) */
+function _evpAnimCopiar(de, para){
+  if(_evpAnimTem(de)){
+    const offs = de.anim.pts.map(function(q){ return q.t - de.ini; }), mx = Math.max.apply(null, offs.concat([0.001]));
+    const L1 = _evpTauFim(para) - para.ini, k = mx > L1 ? L1 / mx : 1;
+    para.anim = { mblur:de.anim.mblur !== false, pts:de.anim.pts.map(function(q, i){ return Object.assign(_evpCopia(q), { t:_evpR4(para.ini + offs[i] * k) }); }) };
+  } else delete para.anim;
+  if(de.tremor) para.tremor = Object.assign({}, de.tremor); else delete para.tremor;
+  if(de.batida) para.batida = Object.assign({}, de.batida); else delete para.batida;
+  para.mov = { tipo:"nenhum", forca:0.5 };
+}
+/* limpeza (mesma regra do servidor, projeto.ts) */
+function _evpAnimLimpa(a){
+  if(!a || !Array.isArray(a.pts)) return null;
+  const okE = function(e){ if(Array.isArray(e) && e.length === 4 && e.every(function(n){ return isFinite(Number(n)); })) return [_evClamp(+e[0], 0, 1), _evClamp(+e[1], -1, 2), _evClamp(+e[2], 0, 1), _evClamp(+e[3], -1, 2)].map(_evpR4);
+    return _EVP_CURVAS.some(function(q){ return q.id === e; }) ? e : "io"; };
+  const pts = a.pts.filter(function(p){ return p && isFinite(Number(p.t)); }).map(function(p){ return { t:_evpR4(Math.max(0, +p.t)), z:_evpR4(_evClamp(_evpNum(p.z, 1), 0.3, 6)), x:_evpR4(_evClamp(_evpNum(p.x, 0), -1.5, 1.5)),
+    y:_evpR4(_evClamp(_evpNum(p.y, 0), -1.5, 1.5)), r:_evpR4(_evClamp(_evpNum(p.r, 0), -360, 360)), o:_evpR4(_evClamp(_evpNum(p.o, 1), 0, 1)), b:_evpR4(_evClamp(_evpNum(p.b, 0), 0, 40)), e:okE(p.e) }; })
+    .sort(function(x, y){ return x.t - y.t; }).filter(function(p, i, arr){ return !i || p.t - arr[i-1].t > 0.0005; }).slice(0, 80);
+  return pts.length ? { pts:pts, mblur:a.mblur !== false } : null;
+}
+/* CURVAS DE VELOCIDADE prontas (como no CapCut) — pontos [u do trecho, velocidade] */
+const _EVP_VELPTS = {
+  montagem:[[0, 1], [0.22, 3.2], [0.45, 0.5], [0.7, 3.2], [1, 1]],
+  heroi:[[0, 1.6], [0.32, 2], [0.5, 0.3], [0.68, 2], [1, 1.6]],
+  bala:[[0, 1.3], [0.28, 3.5], [0.42, 0.25], [0.72, 0.25], [0.86, 3.5], [1, 1.3]],
+  pulo:[[0, 1], [0.38, 1], [0.5, 5], [0.62, 1], [1, 1]],
+  flash_in:[[0, 5], [0.3, 3], [0.6, 1], [1, 1]],
+  flash_out:[[0, 1], [0.4, 1], [0.7, 3], [1, 5]],
+};
+const _EVP_RAMPAS_NOVAS = [ { id:"montagem", label:"Montagem" }, { id:"heroi", label:"Herói" }, { id:"bala", label:"Bala" }, { id:"pulo", label:"Pulo" },
+                            { id:"flash_in", label:"Flash entrando" }, { id:"flash_out", label:"Flash saindo" } ];
+const _EVP_RAMPAS_IDS = ["acelera", "desacelera", "montanha", "lento_meio", "montagem", "heroi", "bala", "pulo", "flash_in", "flash_out", "curva"];
+function _evpVelPts(pts, u){
+  if(!pts || pts.length < 2) return 1;
+  if(u <= pts[0][0]) return pts[0][1];
+  const n = pts.length; if(u >= pts[n-1][0]) return pts[n-1][1];
+  let i = 0; while(i < n - 2 && u >= pts[i+1][0]) i++;
+  const a = pts[i], b = pts[i+1], f = _evClamp((u - a[0]) / Math.max(1e-4, b[0] - a[0]), 0, 1), s = f * f * (3 - 2 * f);
+  return Math.exp(Math.log(a[1]) + (Math.log(b[1]) - Math.log(a[1])) * s);
+}
+function _evpVelPtsLimpos(v){
+  if(!Array.isArray(v)) return null;
+  const pts = v.filter(function(q){ return Array.isArray(q) && isFinite(Number(q[0])) && isFinite(Number(q[1])); })
+    .map(function(q){ return [_evpR4(_evClamp(+q[0], 0, 1)), _evpR4(_evClamp(+q[1], 0.1, 10))]; }).sort(function(a, b){ return a[0] - b[0]; }).slice(0, 12);
+  if(pts.length < 2) return null;
+  pts[0][0] = 0; pts[pts.length - 1][0] = 1;
+  return pts;
+}
+/* pontos da curva de velocidade de um clipe (para editar a partir do que está escolhido) */
+function _evpVelPtsBase(c){
+  if(c.rampa === "curva" && Array.isArray(c.velPts) && c.velPts.length >= 2) return c.velPts.map(function(q){ return q.slice(); });
+  if(_EVP_VELPTS[c.rampa]) return _EVP_VELPTS[c.rampa].map(function(q){ return q.slice(); });
+  if(c.rampa && c.rampa !== "nenhuma") return [0, 0.25, 0.5, 0.75, 1].map(function(u){ return [u, _evpR4(_evClamp(_evpVelRampa(c.rampa, u), 0.1, 10))]; });
+  return [[0, 1], [0.5, 1], [1, 1]];
+}
+/* maior zoom do clipe (com pontos ◆, o maior ponto) — para o aviso de nitidez */
+function _evpZoomMax(c){ return _evpAnimTem(c) ? Math.max.apply(null, c.anim.pts.map(function(q){ return _evpNum(q.z, 1); })) : _evpNum(c.zoom, 1); }
 
 /* receita da IA → projeto da linha do tempo */
 function _evpProjetoDeReceita(receita, clipes){
@@ -116699,7 +116906,12 @@ function _evpNormalizar(p, clipes){
     o.mov = Object.assign({ tipo:"nenhum", forca:0.5 }, o.mov || {});
     o.congelar = Math.max(0, Math.min(10, _evpNum(o.congelar, 0)));
     o.reverso = !!o.reverso && (o.fim - o.ini) <= 6.05;
-    o.rampa = ["acelera","desacelera","montanha","lento_meio"].indexOf(o.rampa) >= 0 ? o.rampa : "nenhuma";
+    o.rampa = _EVP_RAMPAS_IDS.indexOf(o.rampa) >= 0 ? o.rampa : "nenhuma";                                   // v17: curvas novas
+    if(o.rampa === "curva"){ o.velPts = _evpVelPtsLimpos(o.velPts); if(!o.velPts) o.rampa = "nenhuma"; }
+    if(o.rampa !== "curva") delete o.velPts;
+    const an17 = _evpAnimLimpa(o.anim); if(an17) o.anim = an17; else delete o.anim;                         // v17: pontos ◆
+    if(o.tremor && (o.tremor.tipo === "suave" || o.tremor.tipo === "forte")) o.tremor = { tipo:o.tremor.tipo, forca:_evClamp(_evpNum(o.tremor.forca, 0.5), 0, 1) }; else delete o.tremor;
+    if(o.batida && _evpNum(o.batida.forca, 0) > 0) o.batida = { forca:_evClamp(_evpNum(o.batida.forca, 0.5), 0, 1), cada:o.batida.cada === 2 ? 2 : 1 }; else delete o.batida;
     o.curva = Object.assign({ s:0, m:0, a:0, r:0, g:0, b:0 }, o.curva || {});
     ["s","m","a","r","g","b"].forEach(function(q){ o.curva[q] = Math.max(-1, Math.min(1, _evpNum(o.curva[q], 0))); });
     o.fundo = Object.assign({ modo:"nenhum", cor:"#0f172a", url:"" }, o.fundo || {});
@@ -117754,6 +117966,7 @@ function _evpMotor(canvas, o){
   const els2 = {};            // vídeos por cima (vídeo sobre vídeo)
   const pessoa = document.createElement("canvas"); pessoa.width = W; pessoa.height = H; const px2 = pessoa.getContext("2d");   // recorte da pessoa (fundo / texto atrás)
   let mascara = null, mascaraDe = -1, segOcupado = false;
+  let ofsC = null, ofsX = null;   // v17: camada do clipe com desfoque / opacidade (Animar)
   /* DESEMPENHO (29/09): parado, só redesenha quando algo muda (e 4×/s de reserva para imagens/fontes que chegam);
      o fundo desfocado e os desfoques são feitos numa cópia pequena (o blur em 1080×1920 era o que travava a aba) */
   let sujo = 30, ultDesenho = 0, ultTempo = -1, ultToc = null, ultEsp = null;
@@ -117959,18 +118172,43 @@ function _evpMotor(canvas, o){
     if(mv.tipo === "aproximar") mz = 1 + fz * ue; else if(mv.tipo === "afastar") mz = 1 + fz * (1 - ue);
     else if(mv.tipo === "esq_dir"){ mz = 1 + fz; mx = (ue - 0.5) * fz * 0.9; } else if(mv.tipo === "dir_esq"){ mz = 1 + fz; mx = (0.5 - ue) * fz * 0.9; }
     else if(mv.tipo === "sobe"){ mz = 1 + fz; my = (0.5 - ue) * fz * 0.9; } else if(mv.tipo === "desce"){ mz = 1 + fz; my = (ue - 0.5) * fz * 0.9; }
-    const z = (c.zoom || 1) * sz * mz * (extra && extra.zoom || 1);
-    const dw = vw * s0 * z, dh = vh * s0 * z;
+    // v17: ANIMAR — pontos ◆ (zoom, posição, girar, opacidade, desfoque), tremor e pulso na batida
+    const A = _evpAnimEm(c, _evpTau(c, tt)), fxA = _evpEfeitosEm(c, tt, proj), temAnim = _evpAnimTem(c);
+    const xFixo = temAnim ? c.anim.pts.some(function(q){ return _evpNum(q.x, 0) !== 0; }) : !!c.x;
+    const ez = (extra && extra.zoom) || 1, edx = (extra && extra.dx) || 0;
     // reenquadrar seguindo a ação (vídeo deitado preenchendo o 9:16)
-    let ax = 0;
-    const rq = c.seguir && proj.reenq && proj.reenq[c.clipe];
-    if(rq && dw > W){ const alvo = _evpAcaoEm(rq, srcT(c, tt)); ax = _evClamp((0.5 - alvo) * dw, -(dw - W)/2, (dw - W)/2); }
-    else if(modo === "preencher" && horiz && dw > W && !c.x && proj.foco && _evpNum(proj.foco[c.clipe], -1) >= 0){      // v16: já entra na pessoa
-      ax = _evClamp((0.5 - _evpNum(proj.foco[c.clipe], 0.5)) * dw, -(dw - W)/2, (dw - W)/2); }
-    ctx.translate(W/2 + (c.x || 0) * W + sdx * dw + ax + mx * W + (extra && extra.dx || 0), H/2 + (c.y || 0) * H + sdy * dh + my * H);
-    if(c.rot) ctx.rotate(c.rot * Math.PI / 180);
-    if(c.espelho) ctx.scale(-1, 1);
-    ctx.drawImage(v, rx, ry, vw, vh, -dw/2, -dh/2, dw, dh);
+    const rq = c.seguir && proj.reenq && proj.reenq[c.clipe], alvoRq = rq ? _evpAcaoEm(rq, srcT(c, tt)) : 0;
+    const geo = function(V){
+      const z = V.z * sz * mz * fxA.dz * ez, dw = vw * s0 * z, dh = vh * s0 * z;
+      let ax = 0;
+      if(rq && dw > W){ ax = _evClamp((0.5 - alvoRq) * dw, -(dw - W)/2, (dw - W)/2); }
+      else if(modo === "preencher" && horiz && dw > W && !xFixo && proj.foco && _evpNum(proj.foco[c.clipe], -1) >= 0){      // v16: já entra na pessoa
+        ax = _evClamp((0.5 - _evpNum(proj.foco[c.clipe], 0.5)) * dw, -(dw - W)/2, (dw - W)/2); }
+      return { dw:dw, dh:dh, tx:W/2 + V.x * W + sdx * dw + ax + mx * W + fxA.dx * W + edx, ty:H/2 + V.y * H + sdy * dh + my * H + fxA.dy * H, r:V.r + fxA.dr };
+    };
+    // desfoque de movimento: quando o zoom/posição anda rápido, mistura 2–7 quadros intermediários (obturador de 270°)
+    let amostras = [A];
+    if(temAnim && c.anim.mblur !== false){
+      const A0 = _evpAnimEm(c, _evpTau(c, Math.max(c.t0, tt - 1/30)));
+      const m = Math.max(Math.abs(Math.log(Math.max(0.05, A.z) / Math.max(0.05, A0.z))) * H / 2, Math.hypot((A.x - A0.x) * W, (A.y - A0.y) * H), Math.abs(A.r - A0.r) * Math.PI / 180 * H / 2);
+      if(m > 6){ const n = Math.min(7, Math.max(2, Math.ceil(m / 6))); amostras = []; for(let i=0;i<n;i++) amostras.push(_evpAnimMistura(A, A0, (i / (n - 1)) * 0.75)); }
+    }
+    const pinta = function(cx2, V, alfa){ const g = geo(V); cx2.save(); cx2.globalAlpha = alfa; cx2.translate(g.tx, g.ty); if(g.r) cx2.rotate(g.r * Math.PI / 180);
+      if(c.espelho) cx2.scale(-1, 1); cx2.drawImage(v, rx, ry, vw, vh, -g.dw/2, -g.dh/2, g.dw, g.dh); cx2.restore(); };
+    if(A.b > 0.4 || A.o < 0.995){
+      // desfoque: desenha pequeno e amplia (barato, mesmo truque do fundo desfocado) · opacidade: a camada entra com transparência
+      const k = A.b > 0.4 ? Math.max(1, A.b * (W / 1080) / 3) : 1, ow = Math.max(4, Math.round(W / k)), oh = Math.max(4, Math.round(H / k));
+      if(!ofsC){ ofsC = document.createElement("canvas"); ofsX = ofsC.getContext("2d"); }
+      if(ofsC.width !== ow) ofsC.width = ow; if(ofsC.height !== oh) ofsC.height = oh;
+      ofsX.setTransform(1, 0, 0, 1, 0, 0); ofsX.clearRect(0, 0, ow, oh); ofsX.imageSmoothingEnabled = true; ofsX.imageSmoothingQuality = "high";
+      const fc = filtroCor(c), fb = A.b > 0.4 ? "blur(" + Math.min(3, 0.6 + A.b / k * 0.4).toFixed(2) + "px)" : "";
+      ofsX.filter = fb ? (fc === "none" ? fb : fc + " " + fb) : fc;
+      ofsX.setTransform(ow / W, 0, 0, oh / H, 0, 0);
+      amostras.forEach(function(V, i){ pinta(ofsX, V, 1 / (i + 1)); });
+      ofsX.setTransform(1, 0, 0, 1, 0, 0); ofsX.filter = "none";
+      ctx.filter = "none"; ctx.globalAlpha = A.o; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(ofsC, 0, 0, ow, oh, 0, 0, W, H);
+    } else amostras.forEach(function(V, i){ pinta(ctx, V, 1 / (i + 1)); });
     ctx.restore();
     const temp = c.cor && c.cor.temp;
     if(temp){ ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.fillStyle = temp > 0 ? "rgba(255,150,40," + Math.min(0.5, temp*0.5) + ")" : "rgba(40,120,255," + Math.min(0.5, -temp*0.5) + ")"; ctx.fillRect(0,0,W,H); ctx.restore(); }
@@ -118428,7 +118666,7 @@ const _EVP_MENUS = [ { id:"midia", label:"Mídia", icone:"midia" }, { id:"editar
 const _EVP_FERR = {
   clip:[ { id:"fala", label:"Fala", icone:"fala2", acao:true }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
          { id:"volume", label:"Volume", icone:"volume" }, { id:"vel", label:"Velocidade", icone:"velocidade" }, { id:"recortar", label:"Recortar", icone:"recortar" },
-         { id:"mov", label:"Movimento", icone:"movimento" }, { id:"congelar", label:"Congelar", icone:"congelar", acao:true }, { id:"fundo", label:"Fundo", icone:"pessoa" },
+         { id:"mov", label:"Animar", icone:"movimento" }, { id:"congelar", label:"Congelar", icone:"congelar", acao:true }, { id:"fundo", label:"Fundo", icone:"pessoa" },
          { id:"estab", label:"Qualidade", icone:"estab" }, { id:"cor", label:"Cor", icone:"cor" }, { id:"trans", label:"Transição", icone:"transicao" },
          { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   texto:[ { id:"editar", label:"Texto", icone:"lapis" }, { id:"elemento", label:"Elemento", icone:"camadas" }, { id:"estilo", label:"Estilo", icone:"estilo" }, { id:"anim", label:"Animação", icone:"animacao" },
@@ -119511,6 +119749,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
               const c = sel && sel.tipo === "clip" && p.clips.find(function(x){ return x.id === sel.id; }); if(!c) return;
               if(fim){ confirmar(fim.anterior, pRef.current); return; }
               setP(function(pp){ const np = _evpCopia(pp); const o = np.clips.find(function(x){ return x.id === sel.id; }); if(!o) return pp;
+                const cc = calc.clips.find(function(x){ return x.id === sel.id; });
+                if(_evpAnimTem(o) && cc){            // v17: clipe com pontos ◆ → mexe no ponto da agulha (cria se não tiver)
+                  if(tempo < cc.t0 - 0.001 || tempo >= cc.t1){ return pp; }
+                  const pt = _evpAnimPonto(o, cc, tempo); pt.x = _evpR4(_evClamp(pt.x + dx, -1.5, 1.5)); pt.y = _evpR4(_evClamp(pt.y + dy, -1.5, 1.5)); pt.z = _evpR4(_evClamp(pt.z * dz, 0.3, 6)); return np; }
                 o.x = _evClamp(o.x + dx, -1, 1); o.y = _evClamp(o.y + dy, -1, 1); o.zoom = _evClamp(o.zoom * dz, 0.5, 4); return np; });
             }}/>
           {/* transporte */}
@@ -119556,7 +119798,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpInspetor fotosCard={(Array.isArray(t.files) ? t.files : []).filter(function(f){ return f && !f.isAnnotation && typeof f.url === "string" && (/^image\//.test(String(f.type || "")) || /\.(png|jpe?g|webp)(\?|#|$)/i.test(f.url)); }).map(function(f){ return { url:f.url, nome:f.name || "" }; })}
             tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
-            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala}/>
+            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara}/>
         ) : (
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}/>
         )}
@@ -119565,7 +119807,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
 
       {/* ── linha do tempo (grafite; a borda de cima muda a altura) ── */}
       <div style={{flexShrink:0}}>
-        <_EvpTimeline p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
+        <_EvpTimeline abrirAnimar={function(id){ setSel({ tipo:"clip", id:id }); setFerr(function(f){ return Object.assign({}, f, { clip:"mov" }); }); }}
+          p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
           setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
           alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}
           fala={ed.fala} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }}/>
@@ -119630,7 +119873,7 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
     };
     recVoz.current = rec; rec.start(); setVoz("gravando");
   };
-  const rap = [["dividir","Dividir","dividir"],["volume","Volume","volume"],["vel","Velocidade","velocidade"],["recortar","Recorte","recortar"],
+  const rap = [["dividir","Dividir","dividir"],["volume","Volume","volume"],["vel","Velocidade","velocidade"],["recortar","Recorte","recortar"],["mov","Animar","movimento"],
                ["estab","Qualidade","estab"],["cor","Cor","cor"],["trans","Transição","transicao"],["fundo","Fundo","pessoa"]];
   const inf = clipAg ? (infoClipe[clipAg.clipe] || {}) : null;
   return (
@@ -120721,7 +120964,7 @@ function _EvpOnda({ clipe, ini, fim, w, h, cor, mudo, vol }){
   return <canvas ref={ref} style={{width:w, height:h, display:"block"}}/>;
 }
 
-function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef, fala, marcaCorr, onCorrecao }){
+function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef, fala, marcaCorr, onCorrecao, abrirAnimar }){
   _evpUsarMidia();
   const scRef = useRef(null), inRef = useRef(null), ancora = useRef(null);
   const [ima, setIma] = useState(true);
@@ -120804,6 +121047,18 @@ function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, se
       }
       return np;
     });
+  };
+  /* v17: ponto ◆ — arrastar muda o tempo (não passa dos vizinhos); clique leva a agulha até ele */
+  const moverPonto = function(e, c, k){
+    if(e.button !== 0) return;
+    setSel({ tipo:"clip", id:c.id });
+    const q0 = c.anim.pts[k], tq0 = _evpTdeTau(c, q0.t);
+    arrastar(e, function(ds, ant){
+      const np = _evpCopia(ant), o = np.clips.find(function(x){ return x.id === c.id; }); if(!o || !_evpAnimTem(o) || !o.anim.pts[k]) return null;
+      const P = o.anim.pts, tauN = _evpTau(c, _evClamp(tq0 + ds, c.t0, c.t1 - 0.001));
+      const a = k > 0 ? P[k-1].t + 0.01 : -1e9, b = k < P.length - 1 ? P[k+1].t - 0.01 : 1e9;
+      P[k].t = _evpR4(_evClamp(tauN, a, b)); return np;
+    }, function(){ irPara(tq0 + 0.001); });
   };
   const moverClipe = function(e, c){
     if(e.shiftKey){ e.preventDefault(); e.stopPropagation(); selecionar("clip", c.id, e); return; }
@@ -121033,13 +121288,20 @@ function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, se
                 const n = Math.min(160, Math.ceil(w / tw)), thumbs = [];
                 for(let k=0; k<n; k++){ const u = _evpThumbEm(c.clipe, c.ini + (k * tw + tw/2) / pxs * c.vel); thumbs.push(<div key={k} style={{position:"absolute",left:k*tw,top:0,width:tw,bottom:0,background:u ? "#000 url(" + u + ") center/cover" : "#2a3150",borderRight:"1px solid rgba(0,0,0,.25)"}}/>); }
                 const moveu = arr && arr.id === c.id, vol = c.mudo ? 0 : (c.vol == null ? 1 : c.vol);
-                const marcas2 = [c.vel !== 1 ? String(c.vel).replace(".", ",") + "x" : null, c.estab ? "estab." : null, (c.corte && (c.corte.l || c.corte.r || c.corte.t || c.corte.b)) ? "recorte" : null].filter(Boolean);
+                const marcas2 = [c.vel !== 1 ? String(c.vel).replace(".", ",") + "x" : null, c.rampa && c.rampa !== "nenhuma" ? "curva vel." : null, c.tremor ? "tremor" : null, c.batida ? "batida" : null, c.estab ? "estab." : null, (c.corte && (c.corte.l || c.corte.r || c.corte.t || c.corte.b)) ? "recorte" : null].filter(Boolean);
                 const falaC = ((fala && fala[c.clipe]) || []).filter(function(q){ return Number(q.i) >= c.ini - 0.05 && Number(q.i) < c.fim - 0.05; }).map(function(q){ return q.p; }).join(" ");
                 return <div key={c.id} onPointerDown={function(e){ moverClipe(e, c); }} onDoubleClick={function(e){ e.stopPropagation(); window.dispatchEvent(new CustomEvent("evp-cola", { detail:{ cid:c.clipe, clipId:c.id } })); }}
                   title={(falaC ? "Fala: \u201c" + falaC.slice(0, 400) + "\u201d" : "Sem fala neste trecho") + "\n(duplo clique: a fala inteira deste vídeo e o que foi cortado)"}
                   style={Object.assign(bloco(inf.cor || _EVP_COR.roxo, on), { left:c.t0*pxs, width:w - 1, padding:0, border:"2px solid " + (inf.cor || _EVP_COR.roxo),
                     transform: moveu ? "translateX(" + arr.dx + "px)" : "none", opacity: moveu ? 0.75 : 1, zIndex: moveu ? 6 : on ? 3 : 1 })}>
                   {thumbs}
+                  {_evpAnimTem(c) && c.anim.pts.map(function(q, k){       /* v17: pontos ◆ do Animar */
+                    if(q.t < c.ini - 0.001 || q.t > _evpTauFim(c) + 0.001) return null;
+                    const tq = _evpTdeTau(c, q.t);
+                    return <div key={"kf" + k} title={"Ponto ◆ " + (k + 1) + " · zoom " + Math.round(_evpNum(q.z, 1) * 100) + "% · " + _evpCurvaNome(q.e) + "\n(arraste para mudar o tempo · duplo clique abre o Animar)"}
+                      onPointerDown={function(e){ moverPonto(e, c, k); }} onDoubleClick={function(e){ e.stopPropagation(); if(abrirAnimar) abrirAnimar(c.id); }}
+                      style={{position:"absolute",left:Math.max(1, (tq - c.t0) * pxs - 6),bottom:5,width:11,height:11,transform:"rotate(45deg)",background:"#fde047",border:"2px solid #0b1020",borderRadius:2,
+                        zIndex:6,cursor:"ew-resize",boxShadow:"0 0 0 1px rgba(253,224,71,.55)"}}/>; })}
                   <span style={{position:"absolute",left:10,top:3,background:"rgba(11,16,32,.72)",borderRadius:5,padding:"1px 6px",fontSize:10,maxWidth:"calc(100% - 20px)",overflow:"hidden",textOverflow:"ellipsis"}}>
                     {inf.n}. {inf.nome} · {_evTempo(c.dur).replace(/\.\d$/, "")}{marcas2.length ? " · " + marcas2.join(" · ") : ""}</span>
                   {(vol !== 1) && <span style={{position:"absolute",right:10,bottom:3,display:"flex",alignItems:"center",gap:3,background:vol === 0 ? "#b42318" : "#fde047",color:vol === 0 ? "#fff" : "#713f12",borderRadius:5,padding:"1px 5px",fontSize:10,fontWeight:800}}>
@@ -121144,9 +121406,221 @@ function _EvpSlider(q){
   );
 }
 
+/* ─── v17: ANIMAR — painel do clipe (prontos, pontos ◆ na agulha, curva, lista, tremor, batida, copiar) ─── */
+function _EvpAnimar({ c, p, calc, ctl, mudar, tempo, irPara, ga, agDentro, tauAg, Vag }){
+  const pts = _evpAnimTem(c) ? c.anim.pts : [], n = pts.length;
+  const tol = 0.04 * Math.max(1, c.vel || 1);
+  const ptAg = tauAg == null ? -1 : pts.findIndex(function(q){ return Math.abs(q.t - tauAg) <= tol; });
+  const pct = function(v){ return Math.round(v * 100) + "%"; };
+  const sinal = function(v){ return (v > 0 ? "+" : "") + Math.round(v * 100); };
+  const seg1 = function(v){ return (Math.round(v * 10) / 10).toString().replace(".", ",") + " s"; };
+  const acha = function(np){ return np.clips.find(function(q){ return q.id === c.id; }); };
+  // trecho (entre dois pontos) onde a agulha está — a curva escolhida vale dele até o próximo ponto
+  let seg = -1;
+  if(n > 1){ const tq = tauAg != null ? tauAg : pts[0].t;
+    if(ptAg >= 0) seg = Math.min(ptAg, n - 2);
+    else { seg = 0; for(let i=0;i<n-1;i++){ if(tq >= pts[i].t) seg = i; } } }
+  const temBatida = !!(p.musica && p.musica.beat && _evpNum(p.musica.beat.bpm, 0) > 0);
+  const irPonto = function(k){ irPara(_evpTdeTau(c, pts[k].t) + 0.001); };
+  const marcar = function(){
+    if(!agDentro){ _evToast("warning", "Leve a agulha para dentro deste clipe."); return; }
+    if(ptAg >= 0){
+      mudar(function(np){ const o = acha(np); if(!o || !_evpAnimTem(o)) return;
+        const q = o.anim.pts[ptAg]; o.anim.pts = o.anim.pts.filter(function(_, i){ return i !== ptAg; });
+        if(!o.anim.pts.length){ o.zoom = _evClamp(_evpNum(q.z, 1), 0.5, 4); o.x = _evClamp(_evpNum(q.x, 0), -1, 1); o.y = _evClamp(_evpNum(q.y, 0), -1, 1); o.rot = _evClamp(_evpNum(q.r, 0), -180, 180); delete o.anim; } });
+      return;
+    }
+    mudar(function(np){ const o = acha(np); if(o) _evpAnimPonto(o, c, tempo); });
+  };
+  const pronto = function(id){
+    if(id === "seguir"){ const on = !c.seguir; mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe === c.clipe){ o.seguir = on; if(on) o.modo = "preencher"; } }); });
+      _evToast("success", on ? "Seguindo a ação (vale para este vídeo inteiro)" : "Parou de seguir a ação"); return; }
+    if(id === "batida"){ if(!temBatida && !c.batida){ _evToast("warning", "Ponha uma música (com o ritmo medido) para o zoom pulsar na batida."); return; }
+      mudar(function(np){ const o = acha(np); if(!o) return; if(o.batida) delete o.batida; else o.batida = { forca:0.5, cada:1 }; }); return; }
+    if(id === "tremor_suave" || id === "tremor_forte"){ const tp = id === "tremor_forte" ? "forte" : "suave";
+      mudar(function(np){ const o = acha(np); if(!o) return; if(o.tremor && o.tremor.tipo === tp) delete o.tremor; else o.tremor = { tipo:tp, forca:0.5 }; }); return; }
+    const novos = _evpProntoPts(id, c, tauAg); if(!novos) return;
+    mudar(function(np){ const o = acha(np); if(!o) return; o.anim = { mblur:!(o.anim && o.anim.mblur === false), pts:novos }; o.mov = { tipo:"nenhum", forca:0.5 }; });
+    _evToast("success", novos.length + " pontos ◆ no clipe — arraste na linha do tempo para ajustar o tempo");
+  };
+  const ativo = function(id){ return (id === "seguir" && !!c.seguir) || (id === "batida" && !!c.batida) || (id === "tremor_suave" && c.tremor && c.tremor.tipo === "suave") || (id === "tremor_forte" && c.tremor && c.tremor.tipo === "forte"); };
+  const copiar = function(qual){
+    let k = 0;
+    mudar(function(np){ const de = acha(np); if(!de) return; const i = np.clips.indexOf(de);
+      np.clips.forEach(function(o, j){ if(o === de) return; if(qual === "prox" && j !== i + 1) return; if(qual === "bruto" && o.clipe !== de.clipe) return; _evpAnimCopiar(de, o); k++; }); });
+    _evToast(k ? "success" : "warning", k ? "Animação copiada para " + k + " clipe" + (k > 1 ? "s" : "") : "Não tem outro clipe para receber");
+  };
+  const caixaPt = { display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:9, border:"1px solid " + _EVP_COR.linha, background:_EVP_COR.campo, fontSize:12, cursor:"pointer" };
+  const mvAntigo = c.mov && c.mov.tipo && c.mov.tipo !== "nenhum";
+  return (
+    <div>
+      <div style={{fontSize:12,color:_EVP_COR.sub,lineHeight:1.5,marginBottom:4}}>Marque pontos ◆ com zoom, posição, giro, opacidade e desfoque. Entre dois pontos o vídeo anda sozinho, na curva que você escolher.</div>
+
+      <div style={_EVP_TIT}>Prontos</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(132px,1fr))",gap:6}}>
+        {_EVP_PRONTOS.map(function(o){ return <button key={o.id} title={o.dica} onClick={function(){ pronto(o.id); }} style={Object.assign(_evpChip(ativo(o.id)), { justifyContent:"flex-start", textAlign:"left" })}>{o.label}</button>; })}
+      </div>
+      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Zoom de impacto entra no ponto da agulha. Os outros valem para o clipe todo.</div>
+      <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,margin:"10px 0 6px"}}>Movimento lento (Ken Burns)</div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        {_EVP_KB.map(function(o){ return <button key={o.id} onClick={function(){ pronto(o.id); }} style={_evpChip(false)}>{o.label}</button>; })}
+      </div>
+      {mvAntigo && <div style={{marginTop:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.aviso,fontSize:11.5,color:_EV.amarelo,fontWeight:700,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        Movimento antigo: {(_EVP_MOVS.find(function(m){ return m.id === c.mov.tipo; }) || {}).label}
+        <button onClick={function(){ const tp = c.mov.tipo; mudar(function(np){ const o = acha(np); if(!o) return; o.mov = { tipo:"nenhum", forca:0.5 }; const cc = Object.assign({}, c, { mov:o.mov, anim:o.anim }); const nv = _evpProntoPts(tp, cc, null); if(nv) o.anim = { mblur:true, pts:nv }; }); }} style={_evpBtn("suave")}>Virar pontos ◆</button>
+        <button onClick={function(){ mudar(function(np){ const o = acha(np); if(o) o.mov = { tipo:"nenhum", forca:0.5 }; }); }} style={_evpBtn()}>Tirar</button></div>}
+
+      <div style={_EVP_TIT}>Na agulha</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <button aria-label="Ponto anterior" title="Ponto anterior" disabled={!n} onClick={function(){ const tq = tauAg != null ? tauAg : 1e9; let k = -1; pts.forEach(function(q, i){ if(q.t < tq - tol) k = i; }); if(k >= 0) irPonto(k); }} style={_evpBtn("icone", n > 0)}>◀◆</button>
+        <button onClick={marcar} style={Object.assign(_evpBtn(ptAg >= 0 ? null : "primario", agDentro), { flex:1, justifyContent:"center" })}>{ptAg >= 0 ? "Tirar o ponto ◆ " + (ptAg + 1) : "◆ Marcar ponto na agulha"}</button>
+        <button aria-label="Próximo ponto" title="Próximo ponto" disabled={!n} onClick={function(){ const tq = tauAg != null ? tauAg : -1e9; const k = pts.findIndex(function(q){ return q.t > tq + tol; }); if(k >= 0) irPonto(k); }} style={_evpBtn("icone", n > 0)}>◆▶</button>
+      </div>
+      {!agDentro && <div style={{fontSize:11.5,color:_EV.amarelo,fontWeight:700,marginTop:6}}>A agulha está fora deste clipe — leve ela para dentro para marcar ou mexer nos pontos.</div>}
+      <div style={{marginTop:10,opacity:agDentro || !n ? 1 : 0.5,pointerEvents:agDentro || !n ? "auto" : "none"}}>
+        <_EvpSlider ctl={ctl} rotulo={"Zoom" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.z)} min={0.5} max={4} step={0.01} fmt={pct} padrao={1} aplicar={ga("z")}/>
+        <_EvpSlider ctl={ctl} rotulo={"Horizontal" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.x)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("x")}/>
+        <_EvpSlider ctl={ctl} rotulo={"Vertical" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.y)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("y")}/>
+        <_EvpSlider ctl={ctl} rotulo={"Girar" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.r)} min={-180} max={180} step={0.5} fmt={function(v){ return Math.round(v * 10) / 10 + "°"; }} padrao={0} aplicar={ga("r")}/>
+        <div style={{opacity:agDentro ? 1 : 0.5,pointerEvents:agDentro ? "auto" : "none"}}>
+          <_EvpSlider ctl={ctl} rotulo={"Opacidade" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.o)} min={0} max={1} step={0.01} fmt={pct} padrao={1} aplicar={ga("o")}/>
+          <_EvpSlider ctl={ctl} rotulo={"Desfoque" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.b)} min={0} max={40} step={0.5} fmt={function(v){ return Math.round(v); }} padrao={0} aplicar={ga("b")}/>
+        </div>
+        {!n && <div style={{fontSize:11,color:_EVP_COR.fraco}}>Sem pontos, zoom/posição/girar valem para o clipe inteiro. Opacidade e desfoque já criam um ponto ◆.</div>}
+      </div>
+
+      {n > 1 && seg >= 0 && (<div>
+        <div style={_EVP_TIT}>Curva do ponto ◆ {seg + 1} até o ◆ {seg + 2}</div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+          {_EVP_CURVAS.map(function(q){ const on = !Array.isArray(pts[seg].e) && (pts[seg].e || "io") === q.id;
+            return <button key={q.id} onClick={function(){ mudar(function(np){ const o = acha(np); if(o && _evpAnimTem(o) && o.anim.pts[seg]) o.anim.pts[seg].e = q.id; }); }} style={_evpChip(on)}>{q.label}</button>; })}
+          <span style={Object.assign(_evpChip(Array.isArray(pts[seg].e)), { cursor:"default" })}>Personalizada</span>
+        </div>
+        <_EvpCurvaBz e={pts[seg].e || "io"} onVivo={function(bz){ ctl.vivo(function(np){ const o = acha(np); if(o && _evpAnimTem(o) && o.anim.pts[seg]) o.anim.pts[seg].e = bz; }); }} onFim={ctl.fim}/>
+        <button onClick={function(){ const e = pts[seg].e || "io"; mudar(function(np){ const o = acha(np); if(o && _evpAnimTem(o)) o.anim.pts.forEach(function(q){ q.e = Array.isArray(e) ? e.slice() : e; }); }); _evToast("success", "Curva usada em todos os trechos deste clipe"); }}
+          style={Object.assign(_evpBtn(), { marginTop:8 })}>Usar esta curva em todos os trechos</button>
+      </div>)}
+
+      {n > 0 && (<div>
+        <div style={_EVP_TIT}>Pontos ◆ deste clipe ({n})</div>
+        <div style={{display:"grid",gap:5}}>
+          {pts.map(function(q, k){ const tq = _evpTdeTau(c, q.t) - c.t0, fora = q.t < c.ini - 0.001 || q.t > _evpTauFim(c) + 0.001;
+            return <div key={k} onClick={function(){ if(!fora) irPonto(k); }} style={Object.assign({}, caixaPt, { borderColor:k === ptAg ? _EVP_COR.roxo : _EVP_COR.linha, opacity:fora ? 0.5 : 1 })}>
+              <span style={{width:10,height:10,transform:"rotate(45deg)",background:"#fde047",border:"2px solid #0b1020",borderRadius:2,flexShrink:0}}/>
+              <b style={{fontFamily:_EVP_MONO,fontSize:11.5,minWidth:44}}>{fora ? "fora" : seg1(tq)}</b>
+              <span style={{color:_EVP_COR.sub,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>zoom {pct(_evpNum(q.z, 1))}{_evpNum(q.o, 1) < 1 ? " · opac. " + pct(q.o) : ""}{_evpNum(q.b, 0) > 0 ? " · desf. " + Math.round(q.b) : ""}{k < n - 1 ? " · " + _evpCurvaNome(q.e) : ""}</span>
+              <button aria-label={"Tirar o ponto " + (k + 1)} title="Tirar este ponto" onClick={function(e){ e.stopPropagation(); mudar(function(np){ const o = acha(np); if(!o || !_evpAnimTem(o)) return; const qq = o.anim.pts[k];
+                o.anim.pts = o.anim.pts.filter(function(_, i){ return i !== k; });
+                if(!o.anim.pts.length){ o.zoom = _evClamp(_evpNum(qq.z, 1), 0.5, 4); o.x = _evClamp(_evpNum(qq.x, 0), -1, 1); o.y = _evClamp(_evpNum(qq.y, 0), -1, 1); o.rot = _evClamp(_evpNum(qq.r, 0), -180, 180); delete o.anim; } }); }}
+                style={Object.assign(_evpBtn("icone"), { padding:4 })}><_EvpIco n="apagar" s={13}/></button>
+            </div>; })}
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+          <button onClick={function(){ mudar(function(np){ const o = acha(np); if(!o || !_evpAnimTem(o)) return; const q = o.anim.pts[0];
+            o.zoom = _evClamp(_evpNum(q.z, 1), 0.5, 4); o.x = _evClamp(_evpNum(q.x, 0), -1, 1); o.y = _evClamp(_evpNum(q.y, 0), -1, 1); o.rot = _evClamp(_evpNum(q.r, 0), -180, 180); delete o.anim; }); }} style={_evpBtn()}>Tirar todos os pontos</button>
+        </div>
+        <div style={{marginTop:10}}>
+          <_EvpInterruptor on={c.anim.mblur !== false} onChange={function(v){ mudar(function(np){ const o = acha(np); if(o && o.anim) o.anim.mblur = v; }); }}
+            label="Desfoque de movimento automático" dica="Quando o zoom ou a posição andam rápido, a imagem borra no sentido do movimento (fica natural)"/>
+        </div>
+      </div>)}
+
+      {c.tremor && (<div>
+        <div style={_EVP_TIT}>Tremor {c.tremor.tipo === "forte" ? "forte" : "suave"}</div>
+        <_EvpSlider ctl={ctl} rotulo="Intensidade" v={_evpNum(c.tremor.forca, 0.5)} min={0} max={1} step={0.05} fmt={pct} padrao={0.5} aplicar={function(np, v){ const o = acha(np); if(o && o.tremor) o.tremor.forca = v; }}/>
+      </div>)}
+      {c.batida && (<div>
+        <div style={_EVP_TIT}>Batida da música</div>
+        {!temBatida && <div style={{fontSize:11.5,color:_EV.amarelo,fontWeight:700,marginBottom:6}}>Sem música com ritmo medido: o pulso volta quando tiver música.</div>}
+        <_EvpSlider ctl={ctl} rotulo="Força do pulso" v={_evpNum(c.batida.forca, 0.5)} min={0.05} max={1} step={0.05} fmt={pct} padrao={0.5} aplicar={function(np, v){ const o = acha(np); if(o && o.batida) o.batida.forca = v; }}/>
+        <div style={{display:"flex",gap:5}}>
+          {[[1, "Toda batida"], [2, "Uma sim, uma não"]].map(function(q){ return <button key={q[0]} onClick={function(){ mudar(function(np){ const o = acha(np); if(o && o.batida) o.batida.cada = q[0]; }); }} style={_evpChip((c.batida.cada || 1) === q[0])}>{q[1]}</button>; })}
+        </div>
+      </div>)}
+
+      {(n > 0 || c.tremor || c.batida) && (<div>
+        <div style={_EVP_TIT}>Copiar a animação</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={function(){ copiar("prox"); }} style={_evpBtn()}>No próximo clipe</button>
+          <button onClick={function(){ copiar("bruto"); }} style={_evpBtn()}>Nos trechos deste vídeo</button>
+          <button onClick={function(){ copiar("todos"); }} style={_evpBtn()}>Em todos os clipes</button>
+        </div>
+        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Os pontos ficam à mesma distância do começo de cada clipe (encolhem se o clipe for menor).</div>
+      </div>)}
+    </div>
+  );
+}
+
+/* curva bezier com 2 alças amarelas (arrastar) — eixo de baixo = tempo, eixo do lado = quanto já andou */
+function _EvpCurvaBz({ e, onVivo, onFim }){
+  const W = 240, H = 170, P = 22, bz = _evpBz(e).slice();
+  const X = function(x){ return P + x * (W - 2 * P); }, Y = function(y){ return P + (1.25 - y) / 1.5 * (H - 2 * P); };
+  const svgRef = useRef(null);
+  const arrastar = function(qual, ev){
+    ev.preventDefault(); ev.stopPropagation();
+    const svg = svgRef.current; if(!svg) return;
+    const mv = function(m){ const r = svg.getBoundingClientRect(), sx = W / r.width, sy = H / r.height;
+      const x = _evClamp(((m.clientX - r.left) * sx - P) / (W - 2 * P), 0, 1), y = _evClamp(1.25 - ((m.clientY - r.top) * sy - P) / (H - 2 * P) * 1.5, -0.25, 1.25);
+      const b = bz.slice(); if(qual === 1){ b[0] = Math.round(x * 100) / 100; b[1] = Math.round(y * 100) / 100; } else { b[2] = Math.round(x * 100) / 100; b[3] = Math.round(y * 100) / 100; }
+      onVivo(b); };
+    const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); if(onFim) onFim(); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  };
+  const caminho = "M" + X(0) + " " + Y(0) + " C" + X(bz[0]) + " " + Y(bz[1]) + " " + X(bz[2]) + " " + Y(bz[3]) + " " + X(1) + " " + Y(1);
+  return (
+    <svg ref={svgRef} viewBox={"0 0 " + W + " " + H} style={{width:"100%",maxWidth:320,display:"block",background:"#0b1020",borderRadius:12,touchAction:"none",userSelect:"none"}} role="img" aria-label="Curva do movimento">
+      <rect x={X(0)} y={Y(1)} width={X(1) - X(0)} height={Y(0) - Y(1)} fill="none" stroke="#252b42"/>
+      {[0.25, 0.5, 0.75].map(function(g){ return <g key={g}><line x1={X(g)} x2={X(g)} y1={Y(1)} y2={Y(0)} stroke="#1a2036"/><line x1={X(0)} x2={X(1)} y1={Y(g)} y2={Y(g)} stroke="#1a2036"/></g>; })}
+      <line x1={X(0)} y1={Y(0)} x2={X(bz[0])} y2={Y(bz[1])} stroke="#fde047" strokeWidth="1.5" strokeDasharray="3 3"/>
+      <line x1={X(1)} y1={Y(1)} x2={X(bz[2])} y2={Y(bz[3])} stroke="#fde047" strokeWidth="1.5" strokeDasharray="3 3"/>
+      <path d={caminho} fill="none" stroke="#a78bfa" strokeWidth="3" strokeLinecap="round"/>
+      <circle cx={X(0)} cy={Y(0)} r="4" fill="#a78bfa"/><circle cx={X(1)} cy={Y(1)} r="4" fill="#a78bfa"/>
+      <circle cx={X(bz[0])} cy={Y(bz[1])} r="8" fill="#fde047" stroke="#0b1020" strokeWidth="2" style={{cursor:"grab"}} onPointerDown={function(ev){ arrastar(1, ev); }}/>
+      <circle cx={X(bz[2])} cy={Y(bz[3])} r="8" fill="#fde047" stroke="#0b1020" strokeWidth="2" style={{cursor:"grab"}} onPointerDown={function(ev){ arrastar(2, ev); }}/>
+      <text x={X(1)} y={H - 5} fill="#8b92ad" fontSize="10" textAnchor="end">tempo →</text>
+      <text x={6} y={Y(1) - 6} fill="#8b92ad" fontSize="10">movimento ↑</text>
+    </svg>
+  );
+}
+
+/* curva de velocidade (0,1x a 10x, escala log): arrastar os pontos; duplo clique no fundo cria, duplo clique num ponto do meio tira */
+function _EvpVelGrafico({ c, ctl, mudar }){
+  const W = 280, H = 150, P = 22, pts = _evpVelPtsBase(c);
+  const X = function(u){ return P + u * (W - 2 * P); }, Y = function(v){ return P + (1 - (Math.log10(_evClamp(v, 0.1, 10)) + 1) / 2) * (H - 2 * P); };
+  const svgRef = useRef(null);
+  const ponto = function(m){ const svg = svgRef.current, r = svg.getBoundingClientRect(), sx = W / r.width, sy = H / r.height;
+    const u = _evClamp(((m.clientX - r.left) * sx - P) / (W - 2 * P), 0, 1), lv = (1 - ((m.clientY - r.top) * sy - P) / (H - 2 * P)) * 2 - 1;
+    return [Math.round(u * 1000) / 1000, Math.round(_evClamp(Math.pow(10, lv), 0.1, 10) * 100) / 100]; };
+  const gravar = function(np, novos){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return; o.rampa = "curva"; o.velPts = novos; };
+  const arrastar = function(k, ev){
+    ev.preventDefault(); ev.stopPropagation(); const base = pts.map(function(q){ return q.slice(); });
+    const mv = function(m){ const q = ponto(m), novos = base.map(function(x){ return x.slice(); });
+      const a = k > 0 ? novos[k-1][0] + 0.02 : 0, b = k < novos.length - 1 ? novos[k+1][0] - 0.02 : 1;
+      novos[k] = [k === 0 ? 0 : k === novos.length - 1 ? 1 : _evClamp(q[0], a, b), q[1]];
+      ctl.vivo(function(np){ gravar(np, novos); }); };
+    const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); ctl.fim(); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  };
+  let d = ""; for(let i=0;i<=60;i++){ const u = i / 60; d += (i ? " L" : "M") + X(u).toFixed(1) + " " + Y(_evpVelRampa(c.rampa === "curva" || _EVP_VELPTS[c.rampa] ? "curva" : c.rampa, u, pts)).toFixed(1); }
+  return (
+    <div style={{marginTop:10}}>
+      <svg ref={svgRef} viewBox={"0 0 " + W + " " + H} onDoubleClick={function(m){ if(m.target.tagName === "circle") return; const q = ponto(m); if(q[0] <= 0.01 || q[0] >= 0.99) return;
+          const novos = pts.concat([q]).sort(function(a, b){ return a[0] - b[0]; }).slice(0, 12); mudar(function(np){ gravar(np, novos); }); }}
+        style={{width:"100%",maxWidth:340,display:"block",background:"#0b1020",borderRadius:12,touchAction:"none",userSelect:"none"}} role="img" aria-label="Curva de velocidade">
+        {[0.1, 0.5, 1, 2, 5, 10].map(function(v){ return <g key={v}><line x1={X(0)} x2={X(1)} y1={Y(v)} y2={Y(v)} stroke={v === 1 ? "#3b4366" : "#1a2036"} strokeDasharray={v === 1 ? "4 3" : ""}/>
+          <text x={4} y={Y(v) + 3} fill="#8b92ad" fontSize="9">{String(v).replace(".", ",")}x</text></g>; })}
+        <path d={d} fill="none" stroke="#fb923c" strokeWidth="3" strokeLinecap="round"/>
+        {pts.map(function(q, k){ return <circle key={k} cx={X(q[0])} cy={Y(q[1])} r="7" fill="#fde047" stroke="#0b1020" strokeWidth="2" style={{cursor:"grab"}}
+          onPointerDown={function(ev){ arrastar(k, ev); }}
+          onDoubleClick={function(ev){ ev.stopPropagation(); if(k === 0 || k === pts.length - 1 || pts.length <= 2) return; const novos = pts.filter(function(_, i){ return i !== k; }); mudar(function(np){ gravar(np, novos); }); }}><title>{String(q[1]).replace(".", ",") + "x"}</title></circle>; })}
+      </svg>
+      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5,lineHeight:1.45}}>Arraste os pontos amarelos (para cima = mais rápido). Duplo clique no fundo cria um ponto; num ponto do meio, tira. Mexer vira "Personalizada".</div>
+    </div>
+  );
+}
 /* ─── PAINEL DA DIREITA: mostra só a ferramenta escolhida na barra embaixo do vídeo ─── */
 function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef, confirmar, kit, base, infoClipe, musicas, musInfo, setMusica, enquadrar, setEnquadrar,
-                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev }){
+                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara }){
   const ctl = _evpUsarCtl(pRef, setP, confirmar, mudar);
   const caixa = Object.assign({}, _EVP_PAINEL, { padding:14, overflow:"auto", height:"100%", boxSizing:"border-box", minWidth:0 });
   const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:10, border:"1px solid "+_EVP_COR.linha, fontSize:13, userSelect:"text" };
@@ -121162,7 +121636,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           Clique num item — na linha do tempo ou direto no vídeo. A barra embaixo do vídeo mostra as ferramentas dele e aqui aparecem os ajustes.
         </div>
         <div style={{marginTop:14,display:"grid",gap:8}}>
-          {[["editar","Clipe","volume, velocidade, recorte, estabilizar, cor, transição"],["texto","Texto","escrever, estilo, animação, tempo"],["musica","Música","trocar, volume, entrada e saída suave"],["legenda","Legenda","corrigir palavras, estilo"]].map(function(a){
+          {[["editar","Clipe","volume, velocidade, recorte, animar (zoom com pontos ◆), cor, transição"],["texto","Texto","escrever, estilo, animação, tempo"],["musica","Música","trocar, volume, entrada e saída suave"],["legenda","Legenda","corrigir palavras, estilo"]].map(function(a){
             return <div key={a[0]} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 10px",borderRadius:10,background:_EVP_COR.faixa,border:"1px solid "+_EVP_COR.linha2}}>
               <span style={{color:_EVP_COR.roxo,marginTop:1}}><_EvpIco n={a[0]} s={16}/></span><div><b style={{fontSize:12.5}}>{a[1]}</b><div style={{fontSize:11.5,color:_EVP_COR.sub}}>{a[2]}</div></div></div>; })}
         </div>
@@ -121180,6 +121654,13 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
   if(sel.tipo === "clip"){
     const c = selObj, cor = c.cor || {}, k = c.corte || {};
     const nc = function(fn){ return function(np, x){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(o) fn(o, x); }; };
+    // v17: valores na agulha (com pontos ◆ o Recortar e o Animar gravam no ponto da agulha)
+    const agDentro = tempo != null && tempo >= c.t0 - 0.001 && tempo < c.t1 - 0.001, temAn = _evpAnimTem(c);
+    const tauAg = agDentro ? _evpTau(c, tempo) : null, Vag = _evpAnimEm(c, tauAg != null ? tauAg : (temAn ? c.anim.pts[0].t : c.ini));
+    const ga = function(prop){ return function(np, v){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return;
+      if(!_evpAnimTem(o) && (prop === "z" || prop === "x" || prop === "y" || prop === "r")){ o[{ z:"zoom", x:"x", y:"y", r:"rot" }[prop]] = v; return; }
+      if(!agDentro) return;
+      const pt = _evpAnimPonto(o, c, tempo); pt[prop] = _evpR4(v); }; };
     // pedido de vídeo ao PC deste bruto que corresponde ao que está ligado agora (estabilizar e/ou melhorar)
     const quer = { estabilizar:p.clips.some(function(o){ return o.clipe === c.clipe && o.estab; }), imagem:p.clips.some(function(o){ return o.clipe === c.clipe && o.melhorar; }) };
     const itens = ((trat && trat.itens) || []).filter(function(x){ const o = x.opcoes || {}; return x.clipe_id === c.clipe && !o.voz && !!o.estabilizar === quer.estabilizar && !!o.imagem === quer.imagem; }), it = itens[itens.length - 1];
@@ -121216,8 +121697,14 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           </div>
           <div style={_EVP_TIT}>Rampa (velocidade que muda no trecho)</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {_EVP_RAMPAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.rampa = o.id; })); }} style={_evpChip((c.rampa || "nenhuma") === o.id)}>{o.label}</button>; })}
+            {_EVP_RAMPAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.rampa = o.id; delete x.velPts; })); }} style={_evpChip((c.rampa || "nenhuma") === o.id)}>{o.label}</button>; })}
           </div>
+          <div style={_EVP_TIT}>Curva de velocidade (como no CapCut)</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {_EVP_RAMPAS_NOVAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.rampa = o.id; delete x.velPts; })); }} style={_evpChip(c.rampa === o.id)}>{o.label}</button>; })}
+            <button onClick={function(){ mudar(nc(function(x){ x.velPts = _evpVelPtsBase(x); x.rampa = "curva"; })); }} style={_evpChip(c.rampa === "curva")}>Personalizada</button>
+          </div>
+          {c.rampa && c.rampa !== "nenhuma" && <_EvpVelGrafico c={c} ctl={ctl} mudar={mudar}/>}
           <div style={_EVP_TIT}>Ao contrário</div>
           <_EvpInterruptor on={!!c.reverso} onChange={function(v){ if(v && c.fim - c.ini > 6.05){ _evToast("warning", "Ao contrário funciona em trechos de até 6 s. Divida o clipe antes."); return; } mudar(nc(function(o){ o.reverso = v; })); }}
             label="Tocar de trás para frente" dica="Trechos de até 6 s"/>
@@ -121230,7 +121717,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {ferr === "recortar" && (<div>
           {(function(){ // v16: vídeo deitado no vertical — preencher (com zoom, na pessoa) ou inteiro com fundo desfocado (vale para o vídeo todo)
             const dD = _evDriveDe(tCard && tCard.files), dims = _evDimsOriginal(c.clipe, infoClipe && infoClipe[c.clipe], dD);
-            const larg = _evLarguraNoVertical(dims, c.zoom, p.formato), dv = dD[c.clipe], ehDeitado = dims ? dims.w > dims.h * 1.05 : null;
+            const larg = _evLarguraNoVertical(dims, _evpZoomMax(c), p.formato), dv = dD[c.clipe], ehDeitado = dims ? dims.w > dims.h * 1.05 : null;
             return <div>
               {ehDeitado !== false && <div>
                 <div style={_EVP_TIT}>Vídeo deitado no vertical</div>
@@ -121250,14 +121737,16 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
             {[["auto","Automático"],["preencher","Preencher"],["encaixar","Encaixar"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(nc(function(x){ x.modo = o[0]; })); }} style={_evpChip((c.modo || "auto") === o[0])}>{o[1]}</button>; })}
           </div>
           <div style={_EVP_TIT}>Enquadrar</div>
-          <_EvpSlider ctl={ctl} rotulo="Zoom" v={c.zoom || 1} min={0.5} max={4} step={0.01} fmt={pct} padrao={1} aplicar={nc(function(x, v){ x.zoom = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Horizontal" v={c.x || 0} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={nc(function(x, v){ x.x = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Vertical" v={c.y || 0} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={nc(function(x, v){ x.y = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Girar" v={c.rot || 0} min={-180} max={180} step={0.5} fmt={function(v){ return v + "°"; }} padrao={0} aplicar={nc(function(x, v){ x.rot = v; })}/>
+          {temAn && <div style={{marginBottom:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,fontSize:11.5,fontWeight:700,lineHeight:1.45}}>
+            Este clipe tem animação ◆: zoom, posição e girar mexem no ponto da agulha{agDentro ? "" : " — leve a agulha para dentro do clipe"}.</div>}
+          <_EvpSlider ctl={ctl} rotulo={"Zoom" + (temAn ? " ◆" : "")} v={_evpR4(Vag.z)} min={0.5} max={4} step={0.01} fmt={pct} padrao={1} aplicar={ga("z")}/>
+          <_EvpSlider ctl={ctl} rotulo={"Horizontal" + (temAn ? " ◆" : "")} v={_evpR4(Vag.x)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("x")}/>
+          <_EvpSlider ctl={ctl} rotulo={"Vertical" + (temAn ? " ◆" : "")} v={_evpR4(Vag.y)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("y")}/>
+          <_EvpSlider ctl={ctl} rotulo={"Girar" + (temAn ? " ◆" : "")} v={_evpR4(Vag.r)} min={-180} max={180} step={0.5} fmt={function(v){ return Math.round(v * 10) / 10 + "°"; }} padrao={0} aplicar={ga("r")}/>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <button onClick={function(){ setEnquadrar(!enquadrar); }} style={_evpChip(enquadrar)}><_EvpIco n="mover" s={14}/>{enquadrar ? "Arrastando no vídeo" : "Arrastar no vídeo"}</button>
             <button onClick={function(){ mudar(nc(function(x){ x.espelho = !x.espelho; })); }} style={_evpChip(!!c.espelho)}><_EvpIco n="espelhar" s={14}/>Espelhar</button>
-            <button onClick={function(){ mudar(nc(function(x){ x.zoom = 1; x.x = 0; x.y = 0; x.rot = 0; })); }} style={_evpChip(false)}><_EvpIco n="centro" s={14}/>Centralizar</button>
+            <button onClick={function(){ mudar(nc(function(x){ if(_evpAnimTem(x) && agDentro){ const pt = _evpAnimPonto(x, c, tempo); pt.z = 1; pt.x = 0; pt.y = 0; pt.r = 0; } else { x.zoom = 1; x.x = 0; x.y = 0; x.rot = 0; } })); }} style={_evpChip(false)}><_EvpIco n="centro" s={14}/>Centralizar</button>
           </div>
           <div style={_EVP_TIT}>Reenquadrar automático</div>
           <_EvpInterruptor on={!!c.seguir} onChange={function(v){ mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe === c.clipe){ o.seguir = v; if(v) o.modo = "preencher"; } }); }); }}
@@ -121271,14 +121760,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           <_EvpSlider ctl={ctl} rotulo="Embaixo" v={_evpNum(k.b, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { b:v }); })}/>
           <button onClick={function(){ mudar(nc(function(x){ x.corte = { l:0, t:0, r:0, b:0 }; })); }} style={_evpBtn()}>Tirar o recorte</button>
         </div>)}
-        {ferr === "mov" && (<div>
-          <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>A imagem anda devagar durante o clipe (efeito Ken Burns).</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
-            {_EVP_MOVS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.mov = Object.assign({ forca:0.5 }, x.mov, { tipo:o.id }); })); }} style={_evpChip(((c.mov || {}).tipo || "nenhum") === o.id)}>{o.label}</button>; })}
-          </div>
-          {(c.mov || {}).tipo && c.mov.tipo !== "nenhum" && <_EvpSlider ctl={ctl} rotulo="Intensidade" v={_evpNum((c.mov || {}).forca, 0.5)} min={0} max={1} step={0.05} fmt={pct} padrao={0.5} aplicar={nc(function(x, v){ x.mov = Object.assign({}, x.mov, { forca:v }); })}/>}
-          <button onClick={function(){ const m = Object.assign({}, c.mov); mudar(function(np){ np.clips.forEach(function(o){ o.mov = Object.assign({}, m); }); }); _evToast("success", "Movimento aplicado em todos os clipes"); }} style={_evpBtn()}>Usar em todos os clipes</button>
-        </div>)}
+        {ferr === "mov" && <_EvpAnimar c={c} p={p} calc={calc} ctl={ctl} mudar={mudar} tempo={tempo} irPara={irPara} ga={ga} agDentro={agDentro} tauAg={tauAg} Vag={Vag}/>}
         {ferr === "estab" && (<div>
           <_EvpInterruptor on={!!c.estab} onChange={function(liga){ mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe === c.clipe) o.estab = liga; }); }); }}
             label="Estabilizar (tirar o tremido)" dica="Primeiro o PC do escritório; se ele não responder, o navegador faz."/>
@@ -121802,7 +122284,7 @@ function _evpConferir(p, calc, o){
     const info = {}; (o.clipes || []).forEach(function(c){ info[c.id] = c; });
     Object.keys(usados).forEach(function(id){
       const c = usados[id], modo = (c.modo || "auto") === "auto" ? (p.deitado === "preencher" ? "preencher" : "encaixar") : c.modo; if(modo !== "preencher") return;
-      const dims = _evDimsOriginal(id, info[id], dD), larg = _evLarguraNoVertical(dims, c.zoom, p.formato);
+      const dims = _evDimsOriginal(id, info[id], dD), larg = _evLarguraNoVertical(dims, _evpZoomMax(c), p.formato);
       if(larg != null && larg < 900) add("aviso", "Pouca nitidez em \"" + ((info[id] && info[id].nome) || "vídeo") + "\"", "Deitado com " + dims.h + " px de altura: no vertical fica com uns " + larg + " px de largura (o Reels usa 1080). Peça em 4K ou use \"Inteiro (fundo desfocado)\".", { id:"clip", label:"Ver clipe", alvo:c.id });
     });
   })();
