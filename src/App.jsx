@@ -104657,6 +104657,35 @@ function _pbSepararArquivos(arquivos){
   return {docs:docs, midias:midias, ignorados:ignorados};
 }
 function _pbTamTotal(arr){ return (arr||[]).reduce(function(s,f){ return s+(f.size||0); },0); }
+/* (01/10/2026, Gustavo) "ignora arquivos totalmente leves que não tenham nada — tipo um Word que só tem
+   título". Vale no Playbook e no Plano de Crescimento (é a mesma caixa). O peso não basta (Word vazio já
+   pesa ~10 KB), então abre o arquivo e conta o texto de verdade. Na dúvida (erro ao abrir) o arquivo SOBE.
+   - Word/PowerPoint/Excel/texto: menos de PB_MIN_TEXTO letras/números → vazio.
+   - PDF: 1 página, quase sem texto e leve (<60 KB) → vazio. PDF de imagem (catálogo) tem páginas/peso e passa.
+   - Imagem solta com menos de 4 KB → vazio. Vídeo/áudio não passa por aqui (vai pela confirmação). */
+const PB_MIN_TEXTO=150;
+async function _pbArquivoVazio(file){
+  try{
+    const nome=String(file.name||"");
+    if(/^image\//.test(file.type||"")) return file.size<4096;
+    if(/\.pdf$/i.test(nome)){
+      if(file.size<3072) return true;
+      if(file.size>60*1024) return false;
+      const pdfjs=await _pbPdfJs();
+      const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+      if(pdf.numPages>1) return false;
+      const tc=await (await pdf.getPage(1)).getTextContent();
+      const t=(tc.items||[]).map(function(x){return x.str||"";}).join(" ");
+      return t.replace(/[^\p{L}\p{N}]/gu,"").length<PB_MIN_TEXTO;
+    }
+    const tipo=_pbTipoOffice(file,"");
+    if(tipo==="docx"||tipo==="pptx"||tipo==="xlsx"||tipo==="texto"){
+      const t=await _pbTextoDoOffice(file,"",tipo);
+      return String(t||"").replace(/[^\p{L}\p{N}]/gu,"").length<PB_MIN_TEXTO;
+    }
+    return false;
+  }catch(_){ return false; }
+}
 function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNegocio}){
   /* (01/10/2026, Gustavo) modoNegocio = caixa usada no Gestão › Plano de Crescimento. "Não misturar esses
      materiais com coisas de copy.. são duas coisas diferentes.. aqui é um raio-x de gargalos e oportunidades".
@@ -104796,7 +104825,22 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNe
         if(ok) fila=fila.concat(sep.midias);
       }
     }
+    /* tira os arquivos "sem nada dentro" (Word só com título, planilha vazia…) antes de subir */
+    let vazios=[];
+    const _docs=fila.filter(function(f){ return !_PB_PASTA_MIDIA.test(String(f.name||"")); });
+    if(_docs.length){
+      for(let k=0;k<_docs.length;k++){
+        setSubindo("conferindo se tem conteúdo ("+(k+1)+"/"+_docs.length+") "+_docs[k].name);
+        if(await _pbArquivoVazio(_docs[k])) vazios.push(_docs[k]);
+      }
+      setSubindo("");
+      if(vazios.length){
+        fila=fila.filter(function(f){ return vazios.indexOf(f)<0; });
+        if(typeof pixelsToast!=="undefined") pixelsToast.info(vazios.length+" arquivo"+(vazios.length>1?"s":"")+" sem conteúdo ficou de fora (praticamente vazio"+(vazios.length>1?"s":"")+"): "+vazios.slice(0,4).map(function(f){return f.name;}).join(", ")+(vazios.length>4?(" e mais "+(vazios.length-4)):""),8000);
+      }
+    }
     if(!fila.length){
+      if(vazios.length) return;
       if(typeof pixelsToast!=="undefined") pixelsToast.warning(dePasta?"Não achei documento nessas pastas (PDF, Word, PowerPoint, Excel, texto)"+(sep.midias.length?" — só vídeos.":"."):"Nenhum arquivo pra subir.",6000);
       return;
     }
