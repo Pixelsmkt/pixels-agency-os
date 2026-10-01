@@ -104611,6 +104611,52 @@ async function pxFichaDaReuniao(transcricao,titulo,clienteNome){
   return String(txt||"").replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim();
 }
 
+/* ═══ PASTAS NA CAIXA DE MATERIAIS (01/10/2026, Gustavo) ═══
+   "tentei subir essas pastas e deu isso (Failed to fetch)". Soltar uma PASTA no navegador entrega um
+   "arquivo" vazio — a caixa tentava subir isso e falhava. Agora abre a pasta (e as subpastas) e pega os
+   arquivos de dentro. Documentos entram direto; vídeo/áudio só se a pessoa confirmar (sai o áudio no PC e
+   transcreve — demora e custa por minuto). Arquivo de sistema, oculto e vazio fica de fora.
+   O título do material leva a pasta na frente: "Tráfego 10x › Aula 3". */
+const _PB_PASTA_DOC=/\.(pdf|docx|pptx|xlsx|txt|md|csv|json)$/i;
+const _PB_PASTA_MIDIA=/\.(mp4|mov|mkv|webm|avi|m4v|mp3|m4a|wav|ogg|aac)$/i;
+function _pbLerEntrada(entry, caminho, saida){
+  return new Promise(function(resolve){
+    try{
+      if(!entry){ resolve(); return; }
+      if(entry.isFile){
+        entry.file(function(f){ try{ f._pxPasta=caminho; }catch(_){} saida.push(f); resolve(); }, function(){ resolve(); });
+      } else if(entry.isDirectory){
+        const leitor=entry.createReader(); const filhos=[];
+        const lote=function(){
+          leitor.readEntries(function(ents){
+            if(!ents.length){
+              Promise.all(filhos.map(function(c){ return _pbLerEntrada(c,(caminho?caminho+" › ":"")+entry.name,saida); })).then(function(){ resolve(); });
+              return;
+            }
+            Array.prototype.push.apply(filhos,ents); lote();   // readEntries devolve em lotes de ~100
+          }, function(){ resolve(); });
+        };
+        lote();
+      } else resolve();
+    }catch(_){ resolve(); }
+  });
+}
+/* files de um drop (com pastas abertas) ou de um <input webkitdirectory>. Devolve {docs, midias, ignorados}. */
+function _pbSepararArquivos(arquivos){
+  const docs=[], midias=[]; let ignorados=0;
+  (arquivos||[]).forEach(function(f){
+    const nome=String((f&&f.name)||"");
+    if(!f||!nome||nome.charAt(0)==="."||/^(thumbs\.db|desktop\.ini)$/i.test(nome)||!(f.size>0)){ ignorados++; return; }
+    const rel=String(f.webkitRelativePath||"");
+    if(!f._pxPasta&&rel.indexOf("/")>0){ try{ f._pxPasta=rel.split("/").slice(0,-1).join(" › "); }catch(_){} }
+    if(_PB_PASTA_DOC.test(nome)) docs.push(f);
+    else if(_PB_PASTA_MIDIA.test(nome)) midias.push(f);
+    else if(!f._pxPasta&&/^image\//.test(f.type||"")) docs.push(f);   // imagem solta (fora de pasta) continua valendo
+    else ignorados++;
+  });
+  return {docs:docs, midias:midias, ignorados:ignorados};
+}
+function _pbTamTotal(arr){ return (arr||[]).reduce(function(s,f){ return s+(f.size||0); },0); }
 function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNegocio}){
   /* (01/10/2026, Gustavo) modoNegocio = caixa usada no Gestão › Plano de Crescimento. "Não misturar esses
      materiais com coisas de copy.. são duas coisas diferentes.. aqui é um raio-x de gargalos e oportunidades".
@@ -104735,6 +104781,28 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNe
      sido guardados. Agora GUARDA TODOS primeiro — a parte que não pode falhar — e só depois
      lê um por um. Leitura que falha deixa o material marcado "não deu pra ler" e o botão de
      reler conserta; arquivo perdido não tem conserto. */
+  /* (01/10/2026) Entrada única pra drop/seletor: separa documentos e vídeos; vídeo de pasta só com confirmação. */
+  const _subirDeLista=async function(arquivos, dePasta){
+    const sep=_pbSepararArquivos(arquivos);
+    let fila=sep.docs.slice();
+    if(sep.midias.length){
+      if(!dePasta){ fila=fila.concat(sep.midias); }
+      else {
+        const gb=_pbTamTotal(sep.midias)/1024/1024/1024;
+        const ok=(typeof pixelsConfirm==="function")?await pixelsConfirm(
+          "Encontrei "+sep.docs.length+" documento"+(sep.docs.length===1?"":"s")+" e "+sep.midias.length+" vídeo"+(sep.midias.length===1?"":"s")+"/áudio"+(sep.midias.length===1?"":"s")+" ("+(gb>=1?gb.toFixed(1)+" GB":Math.round(gb*1024)+" MB")+") nessas pastas.\n\n"+
+          "Os documentos sobem de qualquer jeito. Os vídeos: o seu PC tira o áudio de cada um e a IA transcreve — demora (o computador precisa ficar com a aba aberta) e tem custo por minuto de vídeo.\n\nIncluir os vídeos também?",
+          {title:"Incluir os vídeos?",okText:"Incluir vídeos",cancelText:"Só documentos"}):false;
+        if(ok) fila=fila.concat(sep.midias);
+      }
+    }
+    if(!fila.length){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning(dePasta?"Não achei documento nessas pastas (PDF, Word, PowerPoint, Excel, texto)"+(sep.midias.length?" — só vídeos.":"."):"Nenhum arquivo pra subir.",6000);
+      return;
+    }
+    if(dePasta&&typeof pixelsToast!=="undefined") pixelsToast.info("Subindo "+fila.length+" arquivo"+(fila.length>1?"s":"")+" das pastas"+(sep.ignorados?(" · "+sep.ignorados+" ignorado"+(sep.ignorados>1?"s":"")+" (sistema, vazio ou formato que a IA não lê)"):"")+". Pode deixar rodando.",7000);
+    return _subir(fila);
+  };
   const _subir=async function(files){
     const sb=window._sb; if(!sb||!files||!files.length) return;
     const lista=Array.prototype.slice.call(files);
@@ -104769,7 +104837,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNe
         }
         const {data:pub}=sb.storage.from("agency-files").getPublicUrl(path);
         const row={client_id:clientId,unidade:isBioter?String(unitTab||""):"",
-          titulo:String(file.name).replace(/\.[^.]+$/,"").slice(0,120),
+          titulo:((lista[i]&&lista[i]._pxPasta)?(lista[i]._pxPasta+" › "):"").concat(String(file.name).replace(/\.[^.]+$/,"")).slice(0,160),
           arquivo_url:(pub&&pub.publicUrl)||"",arquivo_nome:file.name,arquivo_tipo:file.type||"",
           arquivo_tamanho:file.size||0,ficha:"",ficha_status:"pendente",ativo:true,
           created_by:(_u&&_u.name)||""};
@@ -104822,8 +104890,13 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNe
         e.preventDefault(); setArrastando(false);
         if(subindo) return;
         const dt=e.dataTransfer;
-        const f=Array.prototype.slice.call((dt&&dt.files)||[]);
-        if(f.length) _subir(f);
+        // (01/10/2026) as entradas têm que ser pegas AGORA (o navegador apaga depois do evento)
+        const ents=Array.prototype.slice.call((dt&&dt.items)||[]).map(function(it){ return (it&&it.kind==="file"&&typeof it.webkitGetAsEntry==="function")?it.webkitGetAsEntry():null; });
+        const temPasta=ents.some(function(x){ return x&&x.isDirectory; });
+        if(!temPasta){ const f=Array.prototype.slice.call((dt&&dt.files)||[]); if(f.length) _subirDeLista(f,false); return; }
+        setSubindo("abrindo as pastas…");
+        const saida=[];
+        Promise.all(ents.filter(Boolean).map(function(en){ return _pbLerEntrada(en,"",saida); })).then(function(){ setSubindo(""); _subirDeLista(saida,true); });
       }}
       style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:7,textAlign:"center",
         background:arrastando?"#ecfdf5":"#fafbfc",border:"1.5px dashed "+(arrastando?"#f5b301":"#cbd5e1"),
@@ -104850,8 +104923,15 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNe
         {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF, Word, PowerPoint, Excel, imagem, texto · <b>Gravação de reunião</b> (mp4, mkv, mov, mp3…): só o áudio sobe, a IA transcreve e vira ficha, PowerPoint, Excel, texto e imagem viram ficha · até 1 GB por arquivo · catálogo grande é lido página a página
       </span>
       <input type="file" multiple accept=".pdf,image/*,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,video/*,audio/*,.mkv,.mp4,.mov,.webm,.avi,.mp3,.m4a,.wav,.ogg,.aac" disabled={!!subindo} style={{display:"none"}}
-        onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
+        onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subirDeLista(f,false); }}/>
     </label>}
+    {isAdmin && !subindo && <div style={{textAlign:"center",marginTop:-8,marginBottom:14}}>
+      <label style={{color:"#b45309",fontSize:11.5,fontWeight:700,cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2}}>
+        ou escolher uma pasta inteira
+        <input type="file" webkitdirectory="" directory="" multiple style={{display:"none"}}
+          onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; if(f.length) _subirDeLista(f,true); }}/>
+      </label>
+    </div>}
 
     {itens===null && <div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
     {itens!==null && _vis.length===0 && !isAdmin && typeof _PbEmpty==="function" &&
