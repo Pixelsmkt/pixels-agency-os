@@ -20018,6 +20018,52 @@ function _demTemProducao(t){
     return al.some(function(id){var m=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===id;});return !!(m&&m.pagamentoPorDemanda);});
   }catch(_){return false;}
 }
+/* ═══ DATA DE PUBLICAÇÃO NA CAPA — designers e edição de vídeo (01/10/2026, Gustavo) ═══
+   "Na capa dos cards de demanda dos Designers e edição de vídeo coloca a data de publicação,
+   pra eles saberem facilmente que tipo: é pra hoje".
+   pxPubRelativo(t) → {txt, cor, bg, borda, forte, title} ou null (sem data).
+   Hoje = "É pra hoje" · amanhã = "Pra amanhã" · até 6 dias = "Pra quinta · 02/10" ·
+   depois = "Publica 15/10" · passou e ainda não saiu = "Passou · era 28/09".
+   Card já agendado/publicado/aprovado: só a data, neutra (não é mais urgência de produção). */
+function pxPubRelativo(t){
+  try{
+    if(!t||!t.publishDate) return null;
+    var d=new Date(String(t.publishDate).slice(0,10)+"T12:00:00");
+    if(isNaN(d.getTime())) return null;
+    var h=new Date(); h.setHours(12,0,0,0);
+    var dias=Math.round((d-h)/86400000);
+    var dm=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    var semana=["domingo","segunda","terça","quarta","quinta","sexta","sábado"][d.getDay()];
+    var title="Publicação: "+d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
+    var feito=["agendado","publicado","aprovado","aprovacao_final"].indexOf(t.status)!==-1;
+    if(feito) return {txt:"Publica "+dm,cor:"#0369a1",bg:"#e0f2fe",borda:"#bae6fd",forte:false,title:title};
+    if(dias<0)  return {txt:"Passou · era "+dm,cor:"#fff",bg:"#991b1b",borda:"#991b1b",forte:true,title:title+" — a data já passou"};
+    if(dias===0)return {txt:"É pra hoje",cor:"#fff",bg:"#dc2626",borda:"#dc2626",forte:true,title:title};
+    if(dias===1)return {txt:"Pra amanhã",cor:"#fff",bg:"#ea580c",borda:"#ea580c",forte:true,title:title};
+    if(dias<=6) return {txt:"Pra "+semana+" · "+dm,cor:"#92400e",bg:"#fef3c7",borda:"#fcd34d",forte:false,title:title};
+    return {txt:"Publica "+dm,cor:"#0369a1",bg:"#e0f2fe",borda:"#bae6fd",forte:false,title:title};
+  }catch(_){ return null; }
+}
+/* Card de quem produz (designer/editor freela) ou de vídeo → mostra a data grande na capa. */
+function pxCapaMostraPub(t){
+  if(!t||!t.publishDate) return false;
+  try{
+    if(_demTemProducao(t)) return true;
+    if(typeof pxIsVideoTask==="function"&&pxIsVideoTask(t)) return true;
+    if(typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t)) return true;
+  }catch(_){}
+  return false;
+}
+function PxSeloPublicacao({task,grande}){
+  var p=pxPubRelativo(task);
+  if(!p) return null;
+  return <span title={p.title} style={{display:"inline-flex",alignItems:"center",gap:grande?6:4,background:p.bg,color:p.cor,border:"1px solid "+p.borda,
+    borderRadius:99,padding:grande?"4px 11px":"2px 9px",fontSize:grande?12:10.5,fontWeight:800,letterSpacing:-.1,whiteSpace:"nowrap",lineHeight:1.3,
+    boxShadow:p.forte?"0 2px 8px "+p.bg+"55":"none",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <svg width={grande?13:11} height={grande?13:11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    {p.txt}
+  </span>;
+}
 function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
   /* 30/09/2026 (Gustavo): "super feio… ângulos mais arredondados, mais minimalista".
      O modo big (Calendário de publicações) virou uma pílula clara e redonda: setas redondas,
@@ -28794,7 +28840,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   })()}
                   <style>{`@keyframes pixelsPulseAlert{0%,100%{transform:scale(1);box-shadow:0 2px 8px rgba(220,38,38,0.55),0 0 0 2px #fff}50%{transform:scale(1.08);box-shadow:0 3px 12px rgba(220,38,38,0.75),0 0 0 3px #fff}}`}</style>
                   {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
-                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t)))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t))||pxCapaMostraPub(t))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                    {/* (01/10/2026, Gustavo) Data de publicação na capa — designer/editor bate o olho e sabe se "é pra hoje" */}
+                    {pxCapaMostraPub(t)&&<PxSeloPublicacao task={t}/>}
                     {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
                     {t.contentType&&(function(){
                       const types={
@@ -28842,7 +28890,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const hasTopChips=!!(t.contentType||t.referenceMonth);
+                    const hasTopChips=!!(t.contentType||t.referenceMonth||pxCapaMostraPub(t));
                     // Respiro entre chips (Arte única / Mai/26) e capa: 8px.
                     // Sem chips em cima a capa cola no topo (visual sem espaço morto).
                     const mt=hasVisibleTagStripe?5:(hasTopChips?8:0);
@@ -28902,8 +28950,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         </span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                        {/* Data de publicação — badge moderno com calendário */}
-                        {t.publishDate&&(function(){
+                        {/* Data de publicação — badge moderno com calendário (card de designer/editor já mostra grande no topo) */}
+                        {t.publishDate&&!pxCapaMostraPub(t)&&(function(){
                           const d=new Date(t.publishDate+"T12:00:00");
                           const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
                           const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
@@ -54680,6 +54728,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                 <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,fontWeight:600,padding:"2px 8px",borderRadius:3}}>{mainCl.abbr}</span>
                 <span style={{fontSize:11,color:"#94a3b8"}}>{dlLabel}</span>
               </div>}
+              {main.publishDate&&<div style={{marginBottom:10}}><PxSeloPublicacao task={main} grande/></div>}
               <div style={{color:"#0f172a",fontWeight:600,fontSize:20,lineHeight:1.3,marginBottom:8}}>{main.title}</div>
               {desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6,marginBottom:14,flex:1}}>
                 {desc.length>200?desc.slice(0,200)+"…":desc}
@@ -54730,9 +54779,10 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                   <span style={{fontSize:9,color:"#94a3b8"}}>{dlLabel}</span>
                 </div>
                 <div style={{fontSize:12,color:"#0f172a",fontWeight:500,lineHeight:1.3,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
-                {cl&&<div style={{display:"flex",gap:4,alignItems:"center"}}>
-                  <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:8,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{cl.abbr}</span>
-                  {t.sector&&<span style={{fontSize:9,color:"#94a3b8"}}>{t.sector}</span>}
+                {(cl||t.publishDate)&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+                  {cl&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:8,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{cl.abbr}</span>}
+                  {cl&&t.sector&&<span style={{fontSize:9,color:"#94a3b8"}}>{t.sector}</span>}
+                  {t.publishDate&&<span style={{marginLeft:"auto"}}><PxSeloPublicacao task={t}/></span>}
                 </div>}
               </div>;
             })}
