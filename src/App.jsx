@@ -87502,7 +87502,6 @@ function OnboardingChecklist(props){
   </div>;
 }
 
-// ======= 22_portfolio.jsx =======
 // Gestão > Portfólio Comercial — versão clean
 // Header reduzido, tabs internas, cards enxutos, detalhes em modal.
 // Identidade: roxo #9F43F6, Inter, ícones modernos.
@@ -88631,6 +88630,232 @@ function _PortfDrawer(props){
    Módulos empilhados: Gestão de Redes Sociais → Criativos → Tráfego
    → Projetos Pontuais → Resumo. Resumo sticky à direita no desktop.
 ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   _CalcExportarProposta — EXPORTAR PROPOSTA da calculadora (01/10/2026, Gustavo)
+   "Na calculadora tem que ter um botão de exportar, que exporta a proposta e
+   deixa claro qual é o desconto de cada item selecionado — ex.: 5 redes
+   sociais — com a opção de descrever qual será o desconto de cada item."
+   Cada linha selecionada vira um item com: valor cheio, desconto (% ou R$),
+   descrição do desconto e valor final. Sai em PDF (janela de impressão →
+   "Salvar como PDF") ou texto pra WhatsApp/e-mail. Nada é salvo no banco.
+═══════════════════════════════════════════════════════════════ */
+/* Parceria por comissionamento (01/10/2026, Gustavo): alternativa ao fee mensal, sugerida
+   depois dos projetos de estruturação (CRM, processo de vendas do digital). Aparece no resumo
+   da calculadora e na proposta exportada. */
+const _CALC_PARCERIA = {
+  titulo: "Outro modelo de trabalho: parceria comercial por comissionamento",
+  texto: "Além do fee mensal, a Pixels também trabalha em parceria comercial do digital: depois dos projetos de estruturação (CRM e processo de vendas do digital), parte da remuneração passa a vir de comissão sobre as vendas geradas pelo digital. Uma sugestão de modelo pra conversarmos.",
+};
+function _calcDescValor(it, d){
+  if(!d || !(Number(d.valor)>0)) return 0;
+  const v = Number(d.valor)||0;
+  const bruto = Number(it.total)||0;
+  const r = d.tipo==="pct" ? Math.round(bruto * Math.min(100,v) / 100) : Math.min(bruto, Math.round(v));
+  return Math.max(0, r);
+}
+function _CalcExportarProposta({itens, bonus, onClose, isMob}){
+  const fmt = _calcFmtBRL;
+  const PX = "#9F43F6", INK="#0f172a", MUTE="#64748b", BORD="#e5e0f2";
+  const FF = (typeof _PORTF_FF!=="undefined") ? _PORTF_FF : "Inter, system-ui, sans-serif";
+  const [cliente,setCliente] = useState("");
+  const [validade,setValidade] = useState(15);
+  const [obs,setObs] = useState("");
+  const [desc,setDesc] = useState({});   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
+  function _d(id){ return desc[id] || {tipo:"pct", valor:"", motivo:""}; }
+  function _set(id, patch){ setDesc(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, _d(id), patch); return n; }); }
+
+  const linhas = itens.map(function(it){
+    const d = _d(it.id);
+    const dv = _calcDescValor(it, d);
+    return Object.assign({}, it, {desc:d, descValor:dv, final:Math.max(0,(Number(it.total)||0)-dv)});
+  });
+  const rec = linhas.filter(function(l){ return l.recorrente; });
+  const pon = linhas.filter(function(l){ return !l.recorrente; });
+  function _soma(arr,k){ return arr.reduce(function(s,l){ return s+(Number(l[k])||0); },0); }
+  const T = {
+    recCheio:_soma(rec,"total"), recDesc:_soma(rec,"descValor"), recFinal:_soma(rec,"final"),
+    ponCheio:_soma(pon,"total"), ponDesc:_soma(pon,"descValor"), ponFinal:_soma(pon,"final"),
+  };
+  const ponAPartir = pon.some(function(l){ return l.aPartir; });
+  const semMotivo = linhas.filter(function(l){ return l.descValor>0 && !String(l.desc.motivo||"").trim(); });
+  function _descLabel(l){
+    if(!(l.descValor>0)) return "";
+    return (l.desc.tipo==="pct" ? (Number(l.desc.valor)+"%") : fmt(l.descValor)) ;
+  }
+  function _hoje(){ try{ return new Date().toLocaleDateString("pt-BR"); }catch(_){ return ""; } }
+  function _valido(){ try{ const d=new Date(); d.setDate(d.getDate()+(Number(validade)||15)); return d.toLocaleDateString("pt-BR"); }catch(_){ return ""; } }
+  function _esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function _aviso(){
+    if(semMotivo.length===0) return true;
+    if(typeof pixelsToast!=="undefined") pixelsToast.warning("Descreva o desconto de: "+semMotivo.map(function(l){return l.nome;}).join(", "),5000);
+    return false;
+  }
+
+  // ── Texto (WhatsApp / e-mail) ──
+  function _texto(){
+    const L = ["Proposta Comercial — Pixels Marketing Digital"];
+    if(String(cliente).trim()) L.push("Para: "+String(cliente).trim());
+    L.push("Data: "+_hoje()+" · Válida até "+_valido(), "");
+    function _bloco(titulo, arr, unid){
+      if(!arr.length) return;
+      L.push(titulo, "");
+      arr.forEach(function(l){
+        L.push("• "+l.nome+(l.detalhe?(" — "+l.detalhe):""));
+        if(l.descValor>0){
+          L.push("  De "+fmt(l.total)+unid+" por "+fmt(l.final)+unid+" (desconto de "+_descLabel(l)+(l.desc.tipo==="pct"?(" = "+fmt(l.descValor)):"")+")");
+          L.push("  Desconto: "+String(l.desc.motivo||"").trim());
+        } else {
+          L.push("  "+(l.aPartir?"A partir de ":"")+fmt(l.total)+unid);
+        }
+      });
+      L.push("");
+    }
+    _bloco("SERVIÇOS MENSAIS", rec, "/mês");
+    _bloco("PROJETOS PONTUAIS", pon, "");
+    if(bonus && bonus.length){
+      L.push("BÔNUS INCLUSOS — cortesia Pixels:");
+      bonus.forEach(function(b){ L.push("• "+b.nome+(b.tagline?(" ("+b.tagline+")"):"")); });
+      L.push("");
+    }
+    L.push("RESUMO");
+    if(rec.length){
+      if(T.recDesc>0) L.push("Mensal: de "+fmt(T.recCheio)+" por "+fmt(T.recFinal)+"/mês (economia de "+fmt(T.recDesc)+"/mês)");
+      else L.push("Mensal: "+fmt(T.recFinal)+"/mês");
+    }
+    if(pon.length){
+      if(T.ponDesc>0) L.push("Pontual: de "+(ponAPartir?"a partir de ":"")+fmt(T.ponCheio)+" por "+fmt(T.ponFinal)+" (economia de "+fmt(T.ponDesc)+")");
+      else L.push("Pontual: "+(ponAPartir?"a partir de ":"")+fmt(T.ponFinal));
+    }
+    if(String(obs).trim()){ L.push("", "Observações: "+String(obs).trim()); }
+    L.push("", _CALC_PARCERIA.titulo, _CALC_PARCERIA.texto);
+    return L.join("\n");
+  }
+  function copiar(){
+    if(!_aviso()) return;
+    try{ navigator.clipboard.writeText(_texto()); if(typeof pixelsToast!=="undefined") pixelsToast.success("Proposta copiada — é só colar no WhatsApp ou e-mail."); }
+    catch(_){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar."); }
+  }
+
+  // ── PDF (janela de impressão → Salvar como PDF) ──
+  function exportarPDF(){
+    if(!_aviso()) return;
+    const logo = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS && CLIENT_LOGOS.pixels) ? CLIENT_LOGOS.pixels : "";
+    function _linhaHtml(l, unid){
+      const temD = l.descValor>0;
+      return '<tr>'
+        +'<td class="it"><div class="nm">'+_esc(l.nome)+'</div>'+(l.detalhe?'<div class="dt">'+_esc(l.detalhe)+'</div>':'')
+          +(temD?'<div class="ds"><b>Desconto de '+_esc(_descLabel(l))+':</b> '+_esc(l.desc.motivo)+'</div>':'')+'</td>'
+        +'<td class="vl">'+(temD?'<s>'+_esc(fmt(l.total))+'</s>':'')+'</td>'
+        +'<td class="vl dsv">'+(temD?('− '+_esc(fmt(l.descValor))):'—')+'</td>'
+        +'<td class="vl fn">'+(l.aPartir?'<span class="ap">a partir de </span>':'')+_esc(fmt(l.final))+'<span class="un">'+unid+'</span></td>'
+        +'</tr>';
+    }
+    function _tabela(titulo, arr, unid){
+      if(!arr.length) return "";
+      return '<h2>'+titulo+'</h2><table><thead><tr><th>Item</th><th class="vl">Valor cheio</th><th class="vl">Desconto</th><th class="vl">Valor final</th></tr></thead><tbody>'
+        + arr.map(function(l){ return _linhaHtml(l,unid); }).join("") + '</tbody></table>';
+    }
+    function _tot(rot, cheio, dsc, fin, unid, ap){
+      return '<div class="tot"><div class="tl">'+rot+'</div><div class="tv">'
+        +(dsc>0?'<s>'+_esc(fmt(cheio))+'</s> ':'')+(ap?'<span class="ap">a partir de </span>':'')
+        +'<b>'+_esc(fmt(fin))+unid+'</b>'+(dsc>0?'<div class="ec">Economia de '+_esc(fmt(dsc))+unid+'</div>':'')+'</div></div>';
+    }
+    const html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta Pixels'+(String(cliente).trim()?(' - '+_esc(String(cliente).trim())):'')+'</title>'
+      +'<style>@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}body{font-family:Inter,Segoe UI,Arial,sans-serif;color:#0f172a;margin:0;font-size:12.5px}'
+      +'.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+PX+';padding-bottom:14px;margin-bottom:18px}'
+      +'.hd img{height:34px}.hd .wm{font-weight:900;font-size:24px;color:'+PX+'}.hd .mt{text-align:right;color:#64748b;font-size:11.5px;line-height:1.6}'
+      +'h1{font-size:22px;margin:0 0 4px;letter-spacing:-.4px}.para{color:#475569;font-size:13px;margin-bottom:18px}'
+      +'h2{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:'+PX+';margin:22px 0 8px}'
+      +'table{width:100%;border-collapse:collapse}th{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;text-align:left;border-bottom:1px solid #e2e8f0;padding:6px 8px}'
+      +'td{border-bottom:1px solid #f1f5f9;padding:10px 8px;vertical-align:top}.vl{text-align:right;white-space:nowrap}'
+      +'.nm{font-weight:800;font-size:13px}.dt{color:#64748b;font-size:11.5px;margin-top:2px}.ds{margin-top:6px;background:#f5f0ff;border-left:3px solid '+PX+';padding:5px 8px;font-size:11.5px;color:#4c1d95;border-radius:4px}'
+      +'s{color:#94a3b8}.dsv{color:#16a34a;font-weight:700}.fn{font-weight:900;font-size:13.5px}.un{font-weight:600;color:#64748b;font-size:11px}.ap{color:#94a3b8;font-size:11px}'
+      +'.tots{margin-top:22px;border:1px solid #e9d8fe;border-radius:12px;overflow:hidden}.tot{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fbfaff}.tot+.tot{border-top:1px solid #e9d8fe}'
+      +'.tl{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#475569}.tv{text-align:right;font-size:17px}.tv b{color:'+PX+'}.ec{color:#16a34a;font-size:11.5px;font-weight:700;margin-top:2px}'
+      +'.bn{margin-top:18px;background:#fffaf0;border:1px solid #f2e2bd;border-radius:10px;padding:10px 14px;font-size:12px}.bn b{color:#a16207}'
+      +'.pc{margin-top:14px;background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;color:#1e3a8a}.pc b{color:#1d4ed8}'
+      +'.ob{margin-top:16px;color:#475569;font-size:12px;white-space:pre-wrap}.ft{margin-top:26px;color:#94a3b8;font-size:10.5px;text-align:center}'
+      +'</style></head><body>'
+      +'<div class="hd">'+(logo?'<img src="'+logo+'" alt="Pixels">':'<div class="wm">pixels</div>')
+        +'<div class="mt">Proposta comercial<br>Emitida em '+_esc(_hoje())+'<br>Válida até '+_esc(_valido())+'</div></div>'
+      +'<h1>Proposta de serviços</h1>'+(String(cliente).trim()?'<div class="para">Para: <b>'+_esc(String(cliente).trim())+'</b></div>':'')
+      +_tabela("Serviços mensais", rec, "/mês")
+      +_tabela("Projetos pontuais", pon, "")
+      +(bonus&&bonus.length?'<div class="bn"><b>Bônus inclusos — cortesia Pixels:</b> '+bonus.map(function(b){return _esc(b.nome);}).join(" · ")+'</div>':'')
+      +'<div class="tots">'+(rec.length?_tot("Investimento mensal",T.recCheio,T.recDesc,T.recFinal,"/mês",false):"")
+        +(pon.length?_tot("Investimento pontual",T.ponCheio,T.ponDesc,T.ponFinal,"",ponAPartir):"")+'</div>'
+      +'<div class="pc"><b>'+_esc(_CALC_PARCERIA.titulo)+'</b><br>'+_esc(_CALC_PARCERIA.texto)+'</div>'
+      +(String(obs).trim()?'<div class="ob"><b>Observações:</b> '+_esc(String(obs).trim())+'</div>':'')
+      +'<div class="ft">Pixels Marketing Digital · pixelsmarketing.com.br · Verba de anúncios não inclusa nos valores de tráfego pago.</div>'
+      +'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
+    const w = window.open("", "_blank");
+    if(!w){ if(typeof pixelsToast!=="undefined") pixelsToast.error("O navegador bloqueou a janela. Libere pop-ups pro app e tente de novo.",5000); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  }
+
+  const _inp = {border:"1px solid "+BORD,borderRadius:9,padding:"7px 9px",fontSize:12.5,fontFamily:FF,outline:"none",color:INK,background:"#fff",boxSizing:"border-box"};
+  function _Linha(l){
+    const d = l.desc;
+    return <div key={l.id} style={{border:"1px solid #eef0f5",borderRadius:12,padding:"12px 14px",background:l.descValor>0?"#fbfaff":"#fff",display:"flex",flexDirection:"column",gap:9}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap"}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:INK,fontWeight:800,fontSize:13.5}}>{l.nome}</div>
+          {l.detalhe&&<div style={{color:MUTE,fontSize:11.5,marginTop:2}}>{l.detalhe}</div>}
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          {l.descValor>0&&<div style={{color:"#94a3b8",fontSize:11.5,textDecoration:"line-through"}}>{fmt(l.total)}</div>}
+          <div style={{color:INK,fontWeight:900,fontSize:15,fontFeatureSettings:"'tnum'"}}>{l.aPartir?<span style={{color:MUTE,fontSize:11,fontWeight:600}}>a partir de </span>:null}{fmt(l.final)}<span style={{color:MUTE,fontSize:11,fontWeight:600}}>{l.recorrente?"/mês":""}</span></div>
+          {l.descValor>0&&<div style={{color:"#16a34a",fontSize:11.5,fontWeight:800}}>− {fmt(l.descValor)}</div>}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{color:MUTE,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Desconto</span>
+        <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:8,padding:2}}>
+          {[{k:"pct",t:"%"},{k:"brl",t:"R$"}].map(function(o){ const on=d.tipo===o.k; return <button key={o.k} type="button" onClick={function(){_set(l.id,{tipo:o.k});}}
+            style={{border:"none",background:on?"#fff":"transparent",color:on?PX:MUTE,fontWeight:800,fontSize:12,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:FF,boxShadow:on?"0 1px 2px rgba(15,23,42,.08)":"none"}}>{o.t}</button>; })}
+        </div>
+        <input type="number" min="0" value={d.valor} placeholder="0" onChange={function(e){_set(l.id,{valor:e.target.value});}} style={Object.assign({},_inp,{width:90})}/>
+        <input type="text" value={d.motivo} onChange={function(e){_set(l.id,{motivo:e.target.value});}}
+          placeholder={l.qtd>1?("Ex.: desconto por volume — "+l.qtd+" contas"):"Descreva o desconto (ex.: fechamento anual, cliente parceiro…)"}
+          style={Object.assign({},_inp,{flex:1,minWidth:200,borderColor:(l.descValor>0&&!String(d.motivo||"").trim())?"#f59e0b":BORD})}/>
+      </div>
+    </div>;
+  }
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:isMob?8:20,fontFamily:FF}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:820,maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(15,23,42,.3)",overflow:"hidden"}}>
+      <div style={{padding:"18px 22px",borderBottom:"1px solid #eef0f5",display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{flex:1}}>
+          <div style={{color:INK,fontWeight:800,fontSize:18,letterSpacing:-.3}}>Exportar proposta</div>
+          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Aplique o desconto de cada item e descreva qual é. A proposta sai mostrando o valor cheio, o desconto e o valor final de cada um.</div>
+        </div>
+        <button type="button" onClick={onClose} title="Fechar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 22px",display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <input type="text" value={cliente} onChange={function(e){setCliente(e.target.value);}} placeholder="Nome do cliente (aparece na proposta)" style={Object.assign({},_inp,{flex:1,minWidth:220,padding:"9px 11px",fontSize:13})}/>
+          <label style={{display:"inline-flex",alignItems:"center",gap:7,color:MUTE,fontSize:12,fontWeight:700}}>Válida por
+            <input type="number" min="1" value={validade} onChange={function(e){setValidade(e.target.value);}} style={Object.assign({},_inp,{width:64})}/> dias</label>
+        </div>
+        {rec.length>0&&<div style={{color:PX,fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginTop:6}}>Serviços mensais</div>}
+        {rec.map(_Linha)}
+        {pon.length>0&&<div style={{color:PX,fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginTop:6}}>Projetos pontuais</div>}
+        {pon.map(_Linha)}
+        <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={2} placeholder="Observações gerais (opcional)" style={Object.assign({},_inp,{width:"100%",resize:"vertical",padding:"9px 11px",fontSize:13,marginTop:4})}/>
+      </div>
+      <div style={{padding:"14px 22px",borderTop:"1px solid #eef0f5",background:"#fafbfc",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:2}}>
+          {rec.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Mensal: {T.recDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.recCheio)}</s>} <b style={{color:PX,fontSize:16}}>{fmt(T.recFinal)}</b>/mês{T.recDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.recDesc)}</span>}</div>}
+          {pon.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Pontual: {T.ponDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.ponCheio)}</s>} <b style={{color:PX,fontSize:16}}>{ponAPartir?"a partir de ":""}{fmt(T.ponFinal)}</b>{T.ponDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.ponDesc)}</span>}</div>}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button type="button" onClick={copiar} style={{background:"#fff",border:"1px solid "+BORD,borderRadius:10,padding:"10px 15px",color:"#475569",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Copiar texto</button>
+          <button type="button" onClick={exportarPDF} style={{background:PX,border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)"}}>Exportar PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function _CalculadoraModular({isMob, persistClientId}){
   const PX = "#9F43F6";
   const PX_DK = "#7c3aed";
@@ -88667,6 +88892,7 @@ function _CalculadoraModular({isMob, persistClientId}){
   const [packOpen,setPackOpen] = useState(false);
   const [confete,setConfete]   = useState(false);
   const [copiado,setCopiado]   = useState(false);
+  const [exportOpen,setExportOpen] = useState(false);   // 01/10/2026: Exportar proposta
   const _prevUnlocked = useRef(0);
   // Peças do confete — geradas uma única vez pra não recalcular a cada render.
   const _confPecas = useMemo(function(){
@@ -90240,6 +90466,45 @@ function _CalculadoraModular({isMob, persistClientId}){
     </button>;
   }
 
+  /* ═══ Exportar proposta (01/10/2026, Gustavo) — itens selecionados, cada um com seu desconto ═══ */
+  function _itensProposta(){
+    const out = [];
+    const sc = cfg.socialManagement;
+    const _posts = Math.max(sc.minPostsPerWeek, Math.min(sc.maxPostsPerWeek, Number(socialPosts)||sc.basePostsPerWeek));
+    const _extra = Math.max(0, _posts - sc.basePostsPerWeek) * sc.additionalPostPrice;
+    let _primeiro = true;
+    Object.keys(sc.channels).forEach(function(k){
+      const q = socialChannelQty(socialChannels, k);
+      if(q<=0) return;
+      const ch = sc.channels[k];
+      const unit = ch.price + (sc.multiplyPostsPerChannel ? _extra : 0);
+      const tot = unit*q + (!sc.multiplyPostsPerChannel && _primeiro ? _extra : 0);
+      _primeiro = false;
+      out.push({id:"social-"+k, recorrente:true, qtd:q, total:tot,
+        nome:"Gestão de Redes Sociais — "+ch.label+(q>1?(" · "+q+" contas"):""),
+        detalhe:(_posts*4)+" publicações/mês por conta"+(q>1?(" · "+fmt(unit)+" por conta"):"")});
+    });
+    const cr = cfg.creatives;
+    if(creatives.staticCreatives>0) out.push({id:"cr-est",recorrente:true,qtd:creatives.staticCreatives,total:creatives.staticCreatives*cr.staticCreative,nome:"Criativos estáticos extras",detalhe:creatives.staticCreatives+" por mês · "+fmt(cr.staticCreative)+" cada"});
+    if(creatives.editedVideos>0) out.push({id:"cr-vid",recorrente:true,qtd:creatives.editedVideos,total:creatives.editedVideos*cr.editedVideo,nome:"Vídeos editados extras",detalhe:creatives.editedVideos+" por mês · "+fmt(cr.editedVideo)+" cada"});
+    if(creatives.videoVariations>0) out.push({id:"cr-var",recorrente:true,qtd:creatives.videoVariations,total:creatives.videoVariations*cr.videoVariation,nome:"Variações de vídeo",detalhe:creatives.videoVariations+" por mês · "+fmt(cr.videoVariation)+" cada"});
+    const tr = cfg.traffic[trafficKey];
+    if(tr && tr.price>0) out.push({id:"trafego",recorrente:true,qtd:1,total:tr.price,nome:"Tráfego Pago — "+tr.label,detalhe:"Gestão de campanhas · verba de anúncios não inclusa"});
+    if(growthActive) out.push({id:"growth",recorrente:true,qtd:1,total:growthPrice,nome:"Growth",detalhe:"Crescimento orientado a dados"});
+    if(graficosKey==="recorrente") out.push({id:"graficos",recorrente:true,qtd:1,total:graficosPrice,nome:"Materiais gráficos — plano mensal",detalhe:"Até "+cfg.graficos.recorrente.novos+" novos ou "+cfg.graficos.recorrente.ajustes+" ajustes por mês"});
+    if(captureActive) out.push({id:"captacao",recorrente:true,qtd:captureDailies,total:capturePrice,nome:"Captação audiovisual",detalhe:captureDesc});
+    _oneTimeSel.forEach(function(p){ out.push({id:"pt-"+p.id,recorrente:false,qtd:1,total:p.price,aPartir:!p.fixo,nome:p.label,detalhe:p.short||""}); });
+    return out;
+  }
+  function _ExportButton(){
+    return <button type="button" onClick={function(){ if(hasAnySelection) setExportOpen(true); }} disabled={!hasAnySelection}
+      title="Exporta a proposta (PDF ou texto) com o desconto de cada item"
+      style={{background:hasAnySelection?PX:"#fff",color:hasAnySelection?"#fff":"#cbd5e1",border:"1px solid "+(hasAnySelection?PX:BORD),borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:800,cursor:hasAnySelection?"pointer":"not-allowed",display:"inline-flex",alignItems:"center",gap:7,flexShrink:0,fontFamily:_PORTF_FF,boxShadow:hasAnySelection?"0 5px 14px rgba(159,67,246,.25)":"none"}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exportar proposta
+    </button>;
+  }
+
   /* ═══ Botão de modo foco ═══ */
   function _FocusButton(){
     return <button type="button" onClick={function(){setFocusMode(!focusMode);}}
@@ -90443,12 +90708,14 @@ function _CalculadoraModular({isMob, persistClientId}){
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingTop:4}}>
         <_ResetButton/>
         {!isMob&&<_CopyButton/>}
+        {!isMob&&!persistClientId&&<_ExportButton/>}
         {!isMob&&<_FocusButton/>}
       </div>
     </div>
 
     {/* ═══ TRILHA DE ETAPAS ═══ */}
     <_StepRail/>
+    {exportOpen&&<_CalcExportarProposta itens={_itensProposta()} bonus={calculateUnlockedBonuses(monthlyRecurring)} isMob={isMob} onClose={function(){setExportOpen(false);}}/>}
 
     {/* ═══ CORPO — etapa atual + resumo lateral ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 340px",gap:18,alignItems:"start",marginTop:16}}>
@@ -90583,6 +90850,15 @@ function _ResumoBox(p){
       </div>
       {oneTimeIds.some(function(id){const x=cfg.oneTimeProjects.find(function(y){return y.id===id;}); return x&&!x.fixo;})&&
         <div style={{color:SOFT,fontSize:10.5,marginTop:4,fontStyle:"italic"}}>valor de entrada — escopo final pode variar</div>}
+    </div>}
+
+    {/* Parceria por comissionamento (01/10/2026) — alternativa ao fee mensal */}
+    {hasAny && <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderLeft:"4px solid #2563eb",borderRadius:14,padding:"12px 14px",marginTop:10,display:"flex",gap:10,alignItems:"flex-start"}}>
+      <svg style={{flexShrink:0,marginTop:1}} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div style={{minWidth:0}}>
+        <div style={{color:"#1d4ed8",fontSize:12,fontWeight:800,lineHeight:1.35}}>{_CALC_PARCERIA.titulo}</div>
+        <div style={{color:"#1e3a8a",fontSize:11.5,lineHeight:1.5,marginTop:3}}>{_CALC_PARCERIA.texto}</div>
+      </div>
     </div>}
 
     {/* Modulos contratados */}
