@@ -24442,16 +24442,30 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       window.scrollBy(0,d);
     }catch(_){}
   }
+  /* (01/10, 3ª versão) O mês atual termina de carregar coisa DEPOIS (avisos de lacuna, plano, fotos)
+     e a altura muda de novo depois de 1s. Agora o seletor fica ANCORADO: um ResizeObserver corrige a
+     posição toda vez que a página mudar de tamanho, até a pessoa rolar (roda/toque/teclado) ou 8s. */
+  const _ancoraRef=useRef(null);
+  function _pxAncorarRodape(){
+    const el=_rodapeNavRef.current; if(!el) return;
+    if(_ancoraRef.current) _ancoraRef.current.parar();
+    const alvo=el.getBoundingClientRect().top; _rodapeTopRef.current=alvo;
+    let raf=0;
+    const corrige=function(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(function(){ if(_rodapeNavRef.current) _pxRolarAte(_rodapeNavRef.current,alvo); }); };
+    let ro=null; try{ ro=new ResizeObserver(corrige); ro.observe(document.body); let p=el.parentElement; if(p) ro.observe(p); }catch(_){}
+    const parar=function(){ try{ ro&&ro.disconnect(); }catch(_){} cancelAnimationFrame(raf); clearTimeout(tm);
+      window.removeEventListener("wheel",parar,true); window.removeEventListener("touchstart",parar,true); window.removeEventListener("keydown",parar,true);
+      _rodapeTopRef.current=null; _ancoraRef.current=null; };
+    const tm=setTimeout(parar,8000);
+    window.addEventListener("wheel",parar,true); window.addEventListener("touchstart",parar,true); window.addEventListener("keydown",parar,true);
+    _ancoraRef.current={parar:parar,corrige:corrige};
+  }
   React.useLayoutEffect(function(){
-    const alvo=_rodapeTopRef.current, el=_rodapeNavRef.current;
-    if(!el) return undefined;
-    if(alvo==null){ el.style.paddingTop="0px"; return undefined; }   // trocou pelo seletor de cima: sem espaço extra
-    _pxRolarAte(el,alvo);
-    // imagens dos cards terminam de carregar depois — reajusta mais algumas vezes
-    const ts=[60,200,500,1000].map(function(ms){ return setTimeout(function(){ if(_rodapeNavRef.current) _pxRolarAte(_rodapeNavRef.current,alvo); },ms); });
-    const fim=setTimeout(function(){ _rodapeTopRef.current=null; },1100);
-    return function(){ ts.forEach(clearTimeout); clearTimeout(fim); };
+    const el=_rodapeNavRef.current; if(!el) return;
+    if(_ancoraRef.current){ _pxRolarAte(el,_rodapeTopRef.current); }   // corrige já, antes de pintar
+    else el.style.paddingTop="0px";                                    // trocou pelo seletor de cima
   },[calMonth]);
+  React.useEffect(function(){ return function(){ if(_ancoraRef.current) _ancoraRef.current.parar(); }; },[]);
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
@@ -26058,7 +26072,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       )}
 
       {/* 01/10/2026 (Gustavo): mesmo seletor de mês no rodapé, pra não precisar subir até o topo */}
-      <div ref={_rodapeNavRef} onClickCapture={function(){ if(_rodapeNavRef.current) _rodapeTopRef.current=_rodapeNavRef.current.getBoundingClientRect().top; }}
+      <div ref={_rodapeNavRef} onClickCapture={function(){ _pxAncorarRodape(); }}
         style={{display:"flex",justifyContent:"center",margin:"28px 0 30px"}}>
         <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
       </div>
