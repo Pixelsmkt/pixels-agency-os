@@ -20151,7 +20151,7 @@ function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
      O modo big (Calendário de publicações) virou uma pílula clara e redonda: setas redondas,
      mês em destaque, ano apagadinho, "Hoje" só aparece fora do mês atual.
      01/10/2026 (Gustavo): "quando clica pra direita ele muda a posição… tem que deixar fixo".
-     Mês com largura fixa e o "Hoje" abre embaixo da pílula (absoluto) — as setas não andam mais. O modo compacto
+     Mês com largura fixa e o "Hoje" fica em cima da pílula (absoluto) — as setas não andam mais. O modo compacto
      (Calendário interno) continua o de antes, em _CalendarMonthNavCompacto. */
   if(!big) return <_CalendarMonthNavCompacto calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>;
   const _n=new Date();
@@ -20164,7 +20164,7 @@ function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
   };
   return(
     <div className="px-mesnav">
-      <style>{".px-mesnav{position:relative;display:inline-flex;align-items:center;gap:4px;padding:5px;background:#fff;border:1px solid #e9edf3;border-radius:999px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05);font-family:'Inter',system-ui,sans-serif}.px-mesnav-seta{width:34px;height:34px;border-radius:999px;border:none;background:transparent;color:#64748b;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,color .15s}.px-mesnav-seta:hover{background:#f1f5f9;color:#0f172a}.px-mesnav-mes{width:172px;flex-shrink:0;text-align:center;white-space:nowrap;font-size:15px;font-weight:700;color:#0f172a;letter-spacing:-.2px;text-transform:capitalize;user-select:none}.px-mesnav-mes span{color:#94a3b8;font-weight:500;margin-left:6px}.px-mesnav-hoje{position:absolute;top:calc(100% + 5px);left:50%;transform:translateX(-50%);z-index:3;height:24px;padding:0 12px;border-radius:999px;box-shadow:0 4px 12px rgba(15,23,42,.08);border:1px solid #e9edf3;background:#f8fafc;color:#334155;font:600 12px/1 'Inter',system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s}.px-mesnav-hoje:hover{background:#f1f5f9;border-color:#cbd5e1}"}</style>
+      <style>{".px-mesnav{position:relative;display:inline-flex;align-items:center;gap:4px;padding:5px;background:#fff;border:1px solid #e9edf3;border-radius:999px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05);font-family:'Inter',system-ui,sans-serif}.px-mesnav-seta{width:34px;height:34px;border-radius:999px;border:none;background:transparent;color:#64748b;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,color .15s}.px-mesnav-seta:hover{background:#f1f5f9;color:#0f172a}.px-mesnav-mes{width:172px;flex-shrink:0;text-align:center;white-space:nowrap;font-size:15px;font-weight:700;color:#0f172a;letter-spacing:-.2px;text-transform:capitalize;user-select:none}.px-mesnav-mes span{color:#94a3b8;font-weight:500;margin-left:6px}.px-mesnav-hoje{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);z-index:3;height:24px;padding:0 12px;border-radius:999px;box-shadow:0 4px 12px rgba(15,23,42,.08);border:1px solid #e9edf3;background:#f8fafc;color:#334155;font:600 12px/1 'Inter',system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s}.px-mesnav-hoje:hover{background:#f1f5f9;border-color:#cbd5e1}"}</style>
       {_seta(-1)}
       <div className="px-mesnav-mes">{MONTHS[calMonth.getMonth()]}<span>{calMonth.getFullYear()}</span></div>
       {_seta(1)}
@@ -25599,7 +25599,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         </div>;
       })()}
       {/* PX_MESNAV_CENTRO — 30/09/2026 (Gustavo): seletor de mês centralizado, abaixo do "Gerar plano do mês" */}
-      <div style={{display:"flex",justifyContent:"center",margin:"2px 0 10px"}}>
+      <div style={{display:"flex",justifyContent:"center",margin:"28px 0 4px"}}>
         <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
       </div>
       {pautaAberta&&(filterClient==="todos"||(filterClient==="bioter"&&filterBioterUnit==="todos"))&&<_PxPlanoDoMesTodos soBioter={filterClient==="bioter"} mes={calMonth} tasks={tasks} setTasks={setTasks}
@@ -26023,7 +26023,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       )}
 
       {/* 01/10/2026 (Gustavo): mesmo seletor de mês no rodapé, pra não precisar subir até o topo */}
-      <div style={{display:"flex",justifyContent:"center",margin:"18px 0 34px"}}>
+      <div style={{display:"flex",justifyContent:"center",margin:"46px 0 30px"}}>
         <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
       </div>
 
