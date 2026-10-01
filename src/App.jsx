@@ -2330,6 +2330,77 @@ function _pxRestauraSiglas(original, formatado){
     });
   }catch(_){ return formatado; }
 }
+/* ═══ NOMES PRÓPRIOS COM MAIÚSCULA NO TÍTULO (01/10/2026, Gustavo) ═══
+   "quando for nome próprio, tipo de data comemorativa ou nome de pessoa… a pessoa escreve,
+   quando salva já é corrigido". Ex.: "Dia do vendedor" → "Dia do Vendedor".
+   Só troca a CAIXA da primeira letra — nunca muda letra, acento ou ordem. Roda no fim do
+   smartFormatTitle (todo salvar de card) e no taskToRow (tudo que vai pro Supabase).
+   1) "dia/semana (mundial|nacional|internacional…) do/da/de/dos/das X" → cada palavra de X
+      maiúscula (preposição interna fica minúscula), até pontuação ou palavra de ligação.
+      "dia da entrega", "dia da gravação" etc. não contam (não são data comemorativa).
+   2) Lista fixa: Natal, Páscoa, Black Friday, Outubro Rosa, Corpus Christi, São João…
+   3) Nomes de pessoa: nomes da equipe/clientes do app + nomes comuns brasileiros
+      (fora os que também são palavra comum: clara, rosa, luz, lima, vitória…). */
+const _PX_NP_LIG=new Set(["de","do","da","dos","das","e","di","du","von","van"]);
+const _PX_NP_STOP=new Set(["com","para","pra","no","na","nos","nas","em","sobre","que","ao","aos","à","às","pelo","pela","pelos","pelas","por","sem","um","uma","até","post","arte","vídeo","video","carrossel","story","stories","reels","reel","feed","card","foto","fotos","campanha","promoção","promocao","sorteio","live"]);
+const _PX_NP_NAO_DATA=new Set(["semana","entrega","publicação","publicacao","gravação","gravacao","postagem","visita","reunião","reuniao","folga","pagamento","chuva","sol","evento","feira","aula","prova","inauguração","inauguracao","mês","mes","ano","hoje","aniversário","aniversario","obra","montagem","instalação","instalacao","coleta","viagem","semana."]);
+const _PX_NP_FRASES=["black friday","cyber monday","ano novo","outubro rosa","novembro azul","setembro amarelo","agosto lilás","janeiro branco","maio amarelo","abril verde","dezembro laranja","junho vermelho","julho amarelo","corpus christi","sexta-feira santa","quarta-feira de cinzas","proclamação da república","consciência negra","independência do brasil","nossa senhora aparecida","são joão","são pedro","são paulo","são miguel","santo antônio","santa catarina","rio grande do sul","natal","páscoa","pascoa","carnaval","réveillon","reveillon","finados","tiradentes","halloween","expointer","agrishow","itaipu"];
+const _PX_NP_NOMES_COMUNS=["ana","maria","joão","josé","antônio","antonio","francisco","carlos","paulo","pedro","lucas","luiz","luís","luis","marcos","gabriel","rafael","daniel","marcelo","bruno","eduardo","felipe","rodrigo","gustavo","vinicius","vinícius","andré","andre","guilherme","fernando","fábio","fabio","leonardo","diego","thiago","tiago","ricardo","alexandre","sérgio","sergio","jorge","roberto","mateus","matheus","juliana","mariana","fernanda","patrícia","patricia","aline","camila","amanda","bruna","jéssica","jessica","letícia","leticia","larissa","gabriela","adriana","daniela","beatriz","débora","debora","carla","sandra","márcia","marcia","simone","renata","vanessa","cristina","tatiana","raquel","priscila","natália","natalia","isabela","isabel","laura","júlia","julia","sofia","helena","alice","manuela","valentina","heloísa","heloisa","lorena","eduarda","hellen","ellen","erick","eric","jonas","davi","miguel","arthur","heitor","bernardo","enzo","lorenzo","samuel","benjamin","murilo","otávio","otavio","joaquim","caio","vitor","victor","henrique","rogério","rogerio","cláudio","claudio","márcio","marcio","célio","celio","mauro","nelson","valdir","valmir","ademir","adilson","edson","gilmar","jair","neusa","ivone","lúcia","lucia","sônia","sonia","regina","rita","teresa","tereza","fátima","fatima","elisa","elaine","silvia","sílvia","jaqueline","franciele","francieli","tainá","taina","schneider","vedovatto"];
+let _pxNpNomesCache=null, _pxNpNomesN=-1;
+function _pxNpNomes(){
+  const nT=(typeof TEAM!=="undefined"&&Array.isArray(TEAM))?TEAM.length:0;
+  if(_pxNpNomesCache&&_pxNpNomesN===nT) return _pxNpNomesCache;
+  const NAO=new Set(["clara","rosa","luz","lima","vitória","vitoria","glória","gloria","graça","graca","aurora","flor","mel","paz","cruz","branca","celeste","serena","estrela","bela","sol","mar","neve","íris","iris","pérola","perola","dora","alegria","prado","campos","costa","santos","rocha","pinto","leão","leao","pires","nunes","moura","bento","cândido","candido","ramos","machado","martins","souza"]);
+  const s=new Set();
+  _PX_NP_NOMES_COMUNS.forEach(function(n){ s.add(n); });
+  try{ (typeof TEAM!=="undefined"?TEAM:[]).forEach(function(u){ String((u&&u.name)||"").split(/\s+/).forEach(function(w){ w=w.toLocaleLowerCase("pt-BR"); if(w.length>=3&&!_PX_NP_LIG.has(w)) s.add(w); }); }); }catch(_){}
+  NAO.forEach(function(n){ s.delete(n); });
+  _pxNpNomesCache=s; _pxNpNomesN=nT; return s;
+}
+function _pxNpCap(w){ return w?w.charAt(0).toLocaleUpperCase("pt-BR")+w.slice(1):w; }
+function pxNomesProprios(input){
+  if(!input||typeof input!=="string") return input||"";
+  try{
+    let s=input;
+    const L="A-Za-zÀ-ÿ0-9";
+    // 1) Datas comemorativas "dia do X"
+    s=s.replace(new RegExp("(^|[^"+L+"])(dia|semana)(\\s+(?:mundial|nacional|internacional|estadual|municipal|oficial))?(\\s+)(de|d[oa]s?)(\\s+)([^,;:()\\[\\]|!?.–—]+)","gi"),
+      function(m,pre,dia,adj,sp1,prep,sp2,resto){
+        const ws=resto.split(/(\s+)/);
+        const prim=(ws[0]||"").toLocaleLowerCase("pt-BR");
+        if(!prim||_PX_NP_NAO_DATA.has(prim)||/^\d/.test(prim)||(prim.length===1&&prep.toLowerCase()==="")) return m;
+        if(prim==="d") return m; // "dia D"
+        let conteudo=0, parar=false;
+        const out=ws.map(function(w,i){
+          if(parar||/^\s+$/.test(w)||!w) return w;
+          const lw=w.toLocaleLowerCase("pt-BR");
+          if(w==="-"||_PX_NP_STOP.has(lw)||/^\d/.test(w)){ parar=true; return w; }
+          if(_PX_NP_LIG.has(lw)){
+            // "e" só continua se vier outra preposição depois ("do Agricultor e do Pecuarista")
+            if(lw==="e"){ const prox=(ws[i+2]||"").toLocaleLowerCase("pt-BR"); if(!/^d[oae]s?$/.test(prox)){ parar=true; return w; } }
+            return lw;
+          }
+          if(conteudo>=4){ parar=true; return w; }
+          conteudo++;
+          return /^[a-zà-ÿ]/.test(w)?_pxNpCap(w):w;
+        }).join("");
+        return pre+_pxNpCap(dia)+(adj?adj.replace(/\S+/,function(a){return _pxNpCap(a);}):"")+sp1+prep.toLocaleLowerCase("pt-BR")+sp2+out;
+      });
+    // 2) Frases fixas (feriados, campanhas de mês, santos, estados)
+    _PX_NP_FRASES.forEach(function(f){
+      const pat=f.split(" ").map(function(p){return p.replace(/[-]/g,"\\-");}).join("\\s+");
+      s=s.replace(new RegExp("(^|[^"+L+"])("+pat+")(?=$|[^"+L+"])","gi"),function(m,pre,fr){
+        return pre+fr.split(/(\s+|-)/).map(function(w){ const lw=w.toLocaleLowerCase("pt-BR"); return (_PX_NP_LIG.has(lw)||/^(\s+|-)$/.test(w))?(/^\s+$/.test(w)||w==="-"?w:lw):_pxNpCap(w); }).join("");
+      });
+    });
+    // 3) Nomes de pessoa (palavra inteira, minúscula → primeira letra maiúscula)
+    const nomes=_pxNpNomes();
+    s=s.replace(new RegExp("(^|[^"+L+"])([a-zà-ÿ]["+L+"]*)(?=$|[^"+L+"])","g"),function(m,pre,w){
+      return nomes.has(w)?pre+_pxNpCap(w):m;
+    });
+    return s;
+  }catch(_){ return input; }
+}
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
   let s=stripEmojis(input);
@@ -2488,7 +2559,7 @@ function smartFormatTitle(input){
       result=result.slice(0,wordStart)+firstAlphaMatch[0].toLocaleUpperCase("pt-BR")+result.slice(wordStart+1);
     }
   }
-  return _pxRestauraSiglas(input, result);
+  return pxNomesProprios(_pxRestauraSiglas(input, result));
 }
 
 /* ─── DESIGNER PAYMENTS ─── */
@@ -57939,7 +58010,7 @@ const rowToTask = (r) => ({
 
 const taskToRow = (t) => ({
   id:             String(t.id),
-  title:          t.title        || "Nova Demanda",
+  title:          (typeof pxNomesProprios==="function"?pxNomesProprios(t.title):t.title) || "Nova Demanda",
   status:         t.status       || "demanda",
   assignee:       t.assignee     || "",
   sector:         t.sector       || "design",
