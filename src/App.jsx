@@ -114483,6 +114483,15 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v18 (01/10/2026) — FASES D + E + F do checklist "Estúdio completo":
+     • LEGENDA: "Altura" bem à vista (↑ Subir / ↓ Descer, altura na tela, lugares prontos, guia da área segura); DIVIDIR a legenda na agulha
+       (tecla S com a legenda escolhida → legenda.cortes); "Cor do pedaço": cor da letra / destaque, modelo e tamanho só daquele pedaço
+       (legenda.trechos com estilo e tam) e PALAVRAS soltas com outra cor (legenda.pintadas {clipe@segundo: cor}).
+     • ASSISTIR (tecla F): só o vídeo em tela cheia, com espaço/K, ←/→, J/L, , e ., volume, M e Esc. "Ver como no Instagram": moldura do Reels
+       por cima da prévia (só para conferir; não vai para o vídeo).
+     • TRANSIÇÕES NOVAS: luz (flash suave até 70%, brilho, vazamento de luz, exposição, lente), movimento (zoom com desfoque entrando/saindo,
+       giro, empurrar) e desfoque/glitch leve; duração curta/média/longa (c.transDur), curva (c.transCurva) e prévia ao passar o mouse.
+       "Nas trocas de cena" aplica só quando o clipe vem de outro vídeo. Tudo feito com conta, no mesmo motor (navegador e PC).
    v17 (01/10/2026) — FASE B do checklist "Estúdio completo": ANIMAR (botão "Animar" no lugar de "Movimento").
      • PONTOS ◆ (keyframes) por clipe: zoom, posição, girar, opacidade e desfoque; entre dois pontos o vídeo anda sozinho na CURVA escolhida
        (Constante, Devagar → rápido, Rápido → devagar, Suave nas pontas, Impacto, Passa e volta ou curva própria arrastando as alças, como no After Effects).
@@ -116591,6 +116600,128 @@ const _EVP_SFX = [ { id:"whoosh", label:"Whoosh" }, { id:"swish", label:"Passage
                    { id:"caixa", label:"Caixa registradora" }, { id:"camera", label:"Foto (câmera)" }, { id:"glitch", label:"Glitch" } ];
 const _EVP_VEL = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const _EVP_TRANS_DUR = 0.35;
+
+/* ══ v18 (01/10/2026) TRANSIÇÕES NOVAS (estilo CapCut, feitas com conta — sem arquivo de vídeo) ══
+   c.trans = id · c.transDur 0.2 | 0.35 | 0.6 (curta / média / longa) · c.transCurva = id de _EVP_CURVAS (padrão "io")
+   Proteção para os olhos: nenhum flash passa de 70% de branco; brilho e luz somam no máximo ~0,75. */
+const _EVP_TRANS_GRUPOS = [
+  { id:"basicas", label:"Básicas", ids:["corte", "fade", "preto", "zoom", "deslizar", "whip"] },
+  { id:"luz", label:"Luz", ids:["flash", "brilho", "vazamento", "exposicao", "lente"] },
+  { id:"mov", label:"Movimento", ids:["zoom_entra", "zoom_sai", "giro", "empurrar"] },
+  { id:"outras", label:"Desfoque e glitch", ids:["desfoque", "glitch"] },
+];
+const _EVP_TRANS_NOVAS = [
+  { id:"flash", label:"Flash suave" }, { id:"brilho", label:"Brilho" }, { id:"vazamento", label:"Vazamento de luz" }, { id:"exposicao", label:"Exposição" },
+  { id:"lente", label:"Lente (flare)" }, { id:"zoom_entra", label:"Zoom com desfoque" }, { id:"zoom_sai", label:"Zoom saindo" }, { id:"giro", label:"Giro" },
+  { id:"empurrar", label:"Empurrar para cima" }, { id:"desfoque", label:"Desfoque" }, { id:"glitch", label:"Glitch leve" },
+];
+_EVP_TRANS_NOVAS.forEach(function(o){ if(!_EVP_TRANS.some(function(q){ return q.id === o.id; })) _EVP_TRANS.push(o); });
+const _EVP_TRANS_LUZ = ["flash", "brilho", "vazamento", "exposicao", "lente"];
+const _EVP_TRANS_DURS = [ { v:0.2, label:"Curta" }, { v:0.35, label:"Média" }, { v:0.6, label:"Longa" } ];
+function _evpTransDur(c){ const d = _evpNum(c && c.transDur, 0.35); return d === 0.2 || d === 0.6 ? d : 0.35; }
+function _evpTransNova(id){ return _EVP_TRANS_NOVAS.some(function(o){ return o.id === id; }); }
+/* telas de apoio (reaproveitadas) */
+const _evpTrAux = {};
+function _evpTrTela(nome0, w, h){ const nome = nome0 + w + "x" + h; let c = _evpTrAux[nome]; if(!c){ c = _evpTrAux[nome] = document.createElement("canvas"); }
+  if(c.width !== w) c.width = w; if(c.height !== h) c.height = h; return c; }
+/* desfoque barato: reduz, borra pouco e amplia */
+function _evpTrBorrado(ctx, src, W, H, r){
+  if(r < 0.6){ ctx.drawImage(src, 0, 0, W, H); return; }
+  const k = Math.max(1, r / 2), w = Math.max(4, Math.round(W / k)), h = Math.max(4, Math.round(H / k));
+  const m = _evpTrTela("blur", w, h), mx = m.getContext("2d"); mx.clearRect(0, 0, w, h); mx.filter = "blur(1.4px)"; mx.drawImage(src, 0, 0, w, h); mx.filter = "none";
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(m, 0, 0, w, h, 0, 0, W, H); ctx.restore();
+}
+/* imagem com escala/giro/deslocamento e borrão de movimento (várias amostras somadas) */
+function _evpTrDesenho(ctx, src, W, H, s0, s1, a0, a1, dy0, dy1, n){
+  n = Math.max(1, n || 1);
+  for(let i=0;i<n;i++){ const f = n === 1 ? 0 : i / (n - 1), s = s0 + (s1 - s0) * f, a = a0 + (a1 - a0) * f, dy = dy0 + (dy1 - dy0) * f;
+    ctx.save(); ctx.globalAlpha = ctx.globalAlpha * (1 / (i + 1)); ctx.translate(W / 2, H / 2 + dy); if(a) ctx.rotate(a * Math.PI / 180); ctx.scale(s, s); ctx.drawImage(src, -W / 2, -H / 2, W, H); ctx.restore(); }
+}
+/* desenha a transição: A = último quadro do clipe anterior, B = quadro do clipe novo (os dois do tamanho da tela), p = 0..1 */
+function _evpTransPinta(ctx, W, H, tipo, p0, A, B, curva){
+  const e = _evpEase(curva || "io", _evClamp(p0, 0, 1)), m = Math.sin(Math.PI * e), sm = function(a, b, x){ const k = _evClamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
+  ctx.save(); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1; ctx.filter = "none"; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  const mistura = function(a, b){ ctx.globalAlpha = 1; ctx.drawImage(A, 0, 0, W, H); const k = sm(a, b, e); if(k > 0){ ctx.globalAlpha = k; ctx.drawImage(B, 0, 0, W, H); ctx.globalAlpha = 1; } };
+  if(tipo === "fade"){ mistura(0, 1); }
+  else if(tipo === "preto"){ ctx.drawImage(e < 0.5 ? A : B, 0, 0, W, H); ctx.fillStyle = "rgba(0,0,0," + (1 - Math.abs(2 * e - 1)).toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); }
+  else if(tipo === "zoom"){ ctx.drawImage(A, 0, 0, W, H); ctx.globalAlpha = sm(0, 0.35, e); _evpTrDesenho(ctx, B, W, H, 1 + 0.16 * (1 - e) * (1 - e), 1 + 0.16 * (1 - e) * (1 - e), 0, 0, 0, 0, 1); }
+  else if(tipo === "deslizar" || tipo === "whip" || tipo === "empurrar"){
+    const k = 1 - Math.pow(1 - e, 3), vert = tipo === "empurrar";
+    const borra = tipo === "whip" ? 24 * (1 - e) : tipo === "empurrar" ? 18 * m : 0;
+    const um = function(src, off){ ctx.save(); if(vert) ctx.translate(0, off * H); else ctx.translate(off * W, 0);
+      if(borra > 1){ const t2 = _evpTrTela("emp", W, H), tx = t2.getContext("2d"); tx.clearRect(0, 0, W, H); _evpTrBorrado(tx, src, W, H, borra); ctx.drawImage(t2, 0, 0); } else ctx.drawImage(src, 0, 0, W, H); ctx.restore(); };
+    um(A, -k); um(B, 1 - k);
+  }
+  else if(tipo === "flash"){
+    mistura(0.42, 0.58);
+    const a = Math.min(0.7, 0.7 * Math.pow(m, 1.4));                       // nunca branco puro
+    if(a > 0.005){ ctx.fillStyle = "rgba(255,250,240," + a.toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); }
+  }
+  else if(tipo === "brilho"){
+    mistura(0.3, 0.7);
+    const g = _evpTrTela("glow", W, H), gx = g.getContext("2d"); gx.clearRect(0, 0, W, H); gx.drawImage(ctx.canvas, 0, 0, ctx.canvas.width, ctx.canvas.height, 0, 0, W, H);
+    const s2 = _evpTrTela("glow2", W, H), sx2 = s2.getContext("2d"); sx2.clearRect(0, 0, W, H); sx2.filter = "brightness(1.6)"; _evpTrBorrado(sx2, g, W, H, Math.max(8, W / 40)); sx2.filter = "none";
+    ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.65 * m; ctx.drawImage(s2, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+  else if(tipo === "vazamento"){
+    mistura(0.25, 0.75);
+    const cxL = -0.4 * W + 1.8 * W * e, gr = ctx.createLinearGradient(cxL - W * 0.6, 0, cxL + W * 0.6, H * 0.35), a = 0.75 * m;
+    gr.addColorStop(0, "rgba(255,120,40,0)"); gr.addColorStop(0.35, "rgba(255,150,60," + (a * 0.8).toFixed(3) + ")"); gr.addColorStop(0.5, "rgba(255,214,150," + a.toFixed(3) + ")");
+    gr.addColorStop(0.65, "rgba(255,95,110," + (a * 0.6).toFixed(3) + ")"); gr.addColorStop(1, "rgba(255,80,120,0)");
+    ctx.globalCompositeOperation = "screen"; ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = "source-over";
+  }
+  else if(tipo === "exposicao"){
+    const k = e < 0.5 ? e / 0.5 : (1 - e) / 0.5;
+    ctx.filter = "brightness(" + (1 + 0.75 * k).toFixed(3) + ") contrast(" + (1 - 0.15 * k).toFixed(3) + ")";
+    ctx.drawImage(e < 0.5 ? A : B, 0, 0, W, H);
+    const x = sm(0.42, 0.58, e); if(x > 0 && x < 1){ ctx.globalAlpha = e < 0.5 ? x : 1 - x; ctx.drawImage(e < 0.5 ? B : A, 0, 0, W, H); ctx.globalAlpha = 1; }
+    ctx.filter = "none";
+  }
+  else if(tipo === "lente"){
+    mistura(0.35, 0.65);
+    const a = 0.75 * m, fx = W * (0.15 + 0.7 * e), fy = H * 0.34;
+    ctx.globalCompositeOperation = "screen";
+    const rg = ctx.createRadialGradient(fx, fy, 0, fx, fy, W * 0.45); rg.addColorStop(0, "rgba(255,245,220," + a.toFixed(3) + ")"); rg.addColorStop(0.25, "rgba(255,190,120," + (a * 0.45).toFixed(3) + ")"); rg.addColorStop(1, "rgba(255,160,90,0)");
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.translate(fx, fy); ctx.scale(1, 0.035); const st = ctx.createRadialGradient(0, 0, 0, 0, 0, W * 0.9);
+    st.addColorStop(0, "rgba(200,225,255," + (a * 0.9).toFixed(3) + ")"); st.addColorStop(1, "rgba(150,190,255,0)"); ctx.fillStyle = st; ctx.fillRect(-W, -W, 2 * W, 2 * W); ctx.restore();
+    [[0.55, 0.06, "120,200,255"], [0.85, 0.035, "255,140,220"], [1.15, 0.05, "180,255,170"]].forEach(function(q){ const gx2 = W / 2 + (W / 2 - fx) * q[0], gy2 = H / 2 + (H / 2 - fy) * q[0], r = W * q[1];
+      const g2 = ctx.createRadialGradient(gx2, gy2, 0, gx2, gy2, r); g2.addColorStop(0, "rgba(" + q[2] + "," + (a * 0.35).toFixed(3) + ")"); g2.addColorStop(1, "rgba(" + q[2] + ",0)"); ctx.fillStyle = g2; ctx.fillRect(gx2 - r, gy2 - r, 2 * r, 2 * r); });
+    ctx.globalCompositeOperation = "source-over";
+  }
+  else if(tipo === "zoom_entra"){
+    if(e < 0.5){ const k = e / 0.5; _evpTrDesenho(ctx, A, W, H, 1 + 0.55 * k * k, 1 + 0.55 * k * k + 0.25 * k, 0, 0, 0, 0, k > 0.05 ? 6 : 1); }
+    else { const k = (1 - e) / 0.5; _evpTrDesenho(ctx, B, W, H, 1 + 0.55 * k * k, 1 + 0.55 * k * k + 0.25 * k, 0, 0, 0, 0, k > 0.05 ? 6 : 1); }
+  }
+  else if(tipo === "zoom_sai"){
+    _evpTrDesenho(ctx, B, W, H, 1 + 0.3 * (1 - e), 1 + 0.3 * (1 - e) + 0.12 * m, 0, 0, 0, 0, m > 0.1 ? 4 : 1);
+    ctx.globalAlpha = 1 - sm(0.2, 0.8, e); _evpTrDesenho(ctx, A, W, H, 1 - 0.3 * e, 1 - 0.3 * e + 0.12 * m, 0, 0, 0, 0, m > 0.1 ? 5 : 1); ctx.globalAlpha = 1;
+  }
+  else if(tipo === "giro"){
+    const ang = 12, n = m > 0.1 ? 6 : 1;
+    if(e < 0.5){ const k = e / 0.5, s = 1 + 0.35 * k; _evpTrDesenho(ctx, A, W, H, s, s, ang * k * k, ang * k * k - 6 * k, 0, 0, n); }
+    else { const k = (1 - e) / 0.5, s = 1 + 0.35 * k; _evpTrDesenho(ctx, B, W, H, s, s, -ang * k * k, -ang * k * k + 6 * k, 0, 0, n); }
+  }
+  else if(tipo === "desfoque"){
+    const r = 34 * m * (W / 1080);
+    const t1 = _evpTrTela("df1", W, H), x1 = t1.getContext("2d"); x1.clearRect(0, 0, W, H); _evpTrBorrado(x1, A, W, H, r);
+    const t2 = _evpTrTela("df2", W, H), x2 = t2.getContext("2d"); x2.clearRect(0, 0, W, H); _evpTrBorrado(x2, B, W, H, r);
+    ctx.drawImage(t1, 0, 0); const k = sm(0.3, 0.7, e); if(k > 0){ ctx.globalAlpha = k; ctx.drawImage(t2, 0, 0); ctx.globalAlpha = 1; }
+  }
+  else if(tipo === "glitch"){
+    const base = e < 0.5 ? A : B; ctx.drawImage(base, 0, 0, W, H);
+    if(m > 0.15){
+      let sd = Math.floor(e * 14) * 9301 + 49297; const rnd = function(){ sd = (sd * 9301 + 49297) % 233280; return sd / 233280; };
+      const n = 7, amp = 0.045 * W * m;
+      for(let i=0;i<n;i++){ const y = rnd() * H, h = H * (0.015 + rnd() * 0.06), dx = (rnd() - 0.5) * 2 * amp; ctx.drawImage(base, 0, y, W, h, dx, y, W, h); }
+      ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.22 * m;
+      ctx.fillStyle = "rgb(255,0,90)"; ctx.fillRect(0, rnd() * H, W, H * 0.04); ctx.fillStyle = "rgb(0,220,255)"; ctx.fillRect(0, rnd() * H, W, H * 0.03);
+      ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+    }
+  }
+  else ctx.drawImage(B, 0, 0, W, H);
+  ctx.restore();
+}
 const _EVP_RNNOISE = "https://cdn.jsdelivr.net/npm/@shiguredo/rnnoise-wasm@2025.1.5/dist/rnnoise.js";
 
 function _evpId(){ return Math.random().toString(36).slice(2, 10); }
@@ -116916,6 +117047,8 @@ function _evpNormalizar(p, clipes){
     ["s","m","a","r","g","b"].forEach(function(q){ o.curva[q] = Math.max(-1, Math.min(1, _evpNum(o.curva[q], 0))); });
     o.fundo = Object.assign({ modo:"nenhum", cor:"#0f172a", url:"" }, o.fundo || {});
     delete o._rt;
+    if(o.transDur != null){ const td = Number(o.transDur); if(td === 0.2 || td === 0.6) o.transDur = td; else delete o.transDur; }          // v18
+    if(o.transCurva != null && !_EVP_CURVAS.some(function(q){ return q.id === o.transCurva; })) delete o.transCurva;
     return o;
   });
   p.formato = ["9x16","4x5","1x1","16x9"].indexOf(p.formato) >= 0 ? p.formato : "9x16";
@@ -116927,6 +117060,9 @@ function _evpNormalizar(p, clipes){
   if(!/^#[0-9a-fA-F]{6}$/.test(String(p.legenda.corTexto || ""))) p.legenda.corTexto = "";
   if(!/^#[0-9a-fA-F]{6}$/.test(String(p.legenda.corDestaque || ""))) p.legenda.corDestaque = "";
   p.legenda.dx = Math.max(-0.4, Math.min(0.4, _evpNum(p.legenda.dx, 0)));
+  // v18: legenda dividida na agulha (cortes) e palavras soltas com outra cor (pintadas)
+  p.legenda.cortes = (Array.isArray(p.legenda.cortes) ? p.legenda.cortes : []).filter(function(k){ return /^[A-Za-z0-9_-]{1,80}@\d+(\.\d+)?$/.test(String(k)); }).slice(-300);
+  p.legenda.pintadas = (function(o){ const r = {}; Object.keys(o && typeof o === "object" ? o : {}).slice(0, 400).forEach(function(k){ if(/^[A-Za-z0-9_-]{1,80}@\d+(\.\d+)?$/.test(k) && /^#[0-9a-fA-F]{6}$/.test(String(o[k]))) r[k] = o[k]; }); return r; })(p.legenda.pintadas);
   p.logo = Object.assign({ mostrar:null, pos:"" }, p.logo || {});           // v10e: logo no canto — null = segue o kit (padrão: escondida)
   if(!p.legenda.caixa && p.legenda.caixaAlta) p.legenda.caixa = "alta";     // v10: "caixa" (normal | alta | baixa) substitui o interruptor antigo
   p.marcas = (p.marcas||[]).filter(Boolean).map(function(m){ return Object.assign({ id:_evpId(), t:0, nota:"" }, m); });
@@ -117075,6 +117211,8 @@ function _evpCalcular(p, fala, kit){
   const edits = (p.legenda && p.legenda.edits) || {};
   const lgN = Object.assign({}, p.legenda || {}, { _nomesKit:(kit && kit._nomes) || [] });      // v11: nomes do dicionário
   const trs = (p.legenda && p.legenda.trechos) || [];                                                // v11: cor por trecho
+  const cortesL = {}; ((p.legenda && p.legenda.cortes) || []).forEach(function(k){ cortesL[k] = 1; });   // v18: legenda dividida na agulha
+  const pint = (p.legenda && p.legenda.pintadas) || {};                                              // v18: palavras com outra cor
   const porBloco = estilo==="frase" ? 7 : estilo==="caixa" ? 5 : estilo==="karaoke" ? 4 : 3;
   const blocos = [];
   if(p.legenda && p.legenda.ativa!==false && estilo!=="sem"){
@@ -117089,8 +117227,9 @@ function _evpCalcular(p, fala, kit){
         const a = c.t0 + Math.max(0, Number(w.i) - c.ini)/c.vel, b = c.t0 + (Math.min(c.fim, Number(w.f)) - c.ini)/c.vel;
         const ult = atual && atual.words[atual.words.length-1];
         const tr = trs.length ? _evpTrechoCor(trs, c.clipe, Number(w.i)) : null, trId = tr ? tr.clipe + "@" + tr.ini : "";
-        if(!atual || atual.words.length >= porBloco || (ult && a - ult.b > 0.35) || (ult && /[.!?]$/.test(ult.p)) || (ult && ult.trId !== trId)){ atual = { words:[], a:a, b:b, clipe:c.clipe, cid:c.id }; blocos.push(atual); }
-        atual.words.push({ p:txt, a:a, b:Math.max(a + 0.05, b), chave:chave, orig:w.p, trId:trId, corT:tr ? tr.corTexto : "", corD:tr ? tr.corDestaque : "" }); atual.b = Math.max(atual.b, b);
+        if(!atual || atual.words.length >= porBloco || (ult && a - ult.b > 0.35) || (ult && /[.!?]$/.test(ult.p)) || (ult && ult.trId !== trId) || cortesL[chave]){
+          atual = { words:[], a:a, b:b, clipe:c.clipe, cid:c.id, est:(tr && tr.estilo) || "", tam:(tr && _evpNum(tr.tam, 0)) || 0 }; blocos.push(atual); }
+        atual.words.push({ p:txt, a:a, b:Math.max(a + 0.05, b), chave:chave, orig:w.p, trId:trId, corT:pint[chave] || (tr ? tr.corTexto : ""), corD:tr ? tr.corDestaque : "" }); atual.b = Math.max(atual.b, b);
       });
     });
     for(let k=0;k<blocos.length-1;k++){ if(blocos[k+1].a - blocos[k].b < 0.3) blocos[k].b = blocos[k+1].a; }
@@ -117954,6 +118093,7 @@ function _evpMotor(canvas, o){
   const vl = document.createElement("canvas"); vl.width = W; vl.height = H; const vx = vl.getContext("2d");          // camada do vídeo
   const snap = document.createElement("canvas"); snap.width = W; snap.height = H; const sx = snap.getContext("2d"); // último quadro do clipe anterior (transições)
   let snapDe = -1;
+  const trB = document.createElement("canvas"); trB.width = W; trB.height = H; const tbx = trB.getContext("2d");   // v18: quadro do clipe novo (transições novas)
   const els = {}; let vivo = true, tocando = false, t = 0, raf = 0, cur = 0, logo = null;
   const ac = o.ctx || new (window.AudioContext || window.webkitAudioContext)({ sampleRate:48000 });
   const saida = o.saida || ac.destination;
@@ -118216,24 +118356,29 @@ function _evpMotor(canvas, o){
   function desenharVideo(){
     const i = _evpClipEm(calc, t), c = calc.clips[i]; if(!c) return;
     const v = els[c.id];
-    const p = Math.min(1, (t - c.t0) / _EVP_TRANS_DUR), emTrans = c.trans && c.trans !== "corte" && i > 0 && p < 1;
+    const dT = _evpTransDur(c), p = Math.min(1, (t - c.t0) / dT), emTrans = c.trans && c.trans !== "corte" && i > 0 && p < 1;   // v18: duração por clipe
+    const novaT = emTrans && _evpTransNova(c.trans);
     vx.save(); vx.fillStyle = "#000"; vx.fillRect(0, 0, W, H);
     let extra = null;
     if(emTrans && c.trans === "zoom") extra = { zoom:1 + 0.16 * (1 - p) * (1 - p) };
     if(emTrans && (c.trans === "deslizar" || c.trans === "whip")) extra = { dx:W * (1 - (1 - Math.pow(1 - p, 3))) };
     if(v && v.readyState >= 2){
       if(emTrans && c.trans === "whip"){ vx.filter = "blur(" + Math.round(24 * (1 - p)) + "px)"; }
-      desenharClipe(vx, v, c, t, extra);
+      desenharClipe(vx, v, c, t, novaT ? null : extra);
       vx.filter = "none";
     }
-    if(emTrans && snapDe === i - 1){
+    if(novaT && snapDe === i - 1){       // v18: transição nova — A = último quadro do anterior, B = quadro do clipe novo
+      tbx.clearRect(0, 0, W, H); tbx.drawImage(vl, 0, 0);
+      _evpTransPinta(vx, W, H, c.trans, p, snap, trB, c.transCurva || "io");
+    }
+    if(emTrans && !novaT && snapDe === i - 1){
       if(c.trans === "fade"){ vx.globalAlpha = 1 - p; vx.drawImage(snap, 0, 0); vx.globalAlpha = 1; }
       if(c.trans === "deslizar" || c.trans === "whip"){ const k = 1 - Math.pow(1 - p, 3); if(c.trans === "whip") vx.filter = "blur(" + Math.round(24*(1-p)) + "px)"; vx.drawImage(snap, -W * k, 0); vx.filter = "none"; }
     }
     if(emTrans && c.trans === "preto"){ const a = p < 0.5 ? 1 - p*2 : 0; if(a > 0){ vx.fillStyle = "rgba(0,0,0," + a.toFixed(3) + ")"; vx.fillRect(0,0,W,H); } }
     // fim do clipe com "escurecer" no próximo: escurece a saída também
     const nx = calc.clips[i+1];
-    if(nx && nx.trans === "preto" && c.t1 - t < _EVP_TRANS_DUR/2){ const a = 1 - (c.t1 - t) / (_EVP_TRANS_DUR/2); vx.fillStyle = "rgba(0,0,0," + Math.min(1,a).toFixed(3) + ")"; vx.fillRect(0,0,W,H); }
+    if(nx && nx.trans === "preto" && c.t1 - t < _evpTransDur(nx)/2){ const a = 1 - (c.t1 - t) / (_evpTransDur(nx)/2); vx.fillStyle = "rgba(0,0,0," + Math.min(1,a).toFixed(3) + ")"; vx.fillRect(0,0,W,H); }
     vx.restore();
     // guarda o último quadro deste clipe para a transição do próximo
     if(c.t1 - t < 0.08 && v && v.readyState >= 2){ sx.clearRect(0,0,W,H); sx.drawImage(vl, 0, 0); snapDe = i; }
@@ -118318,8 +118463,8 @@ function _evpMotor(canvas, o){
   function desenharLegenda(){
     let b = null; for(let k=0;k<calc.blocos.length;k++){ const x = calc.blocos[k]; if(t >= x.a && t < x.b){ b = x; break; } }
     if(!b) return;
-    const lg = calc.legenda || {}, tam = _evpNum(lg.tam, 1) || 1;
-    let est = calc.estiloLegenda;
+    const lg = calc.legenda || {}, tam = b.tam > 0 ? b.tam : (_evpNum(lg.tam, 1) || 1);                  // v18: pedaço pode ter tamanho próprio
+    let est = (b.est && _EVP_LEG_ESTILOS.some(function(q){ return q.id === b.est; })) ? b.est : calc.estiloLegenda;   // v18: e modelo próprio
     const trd = lg.traducao && lg.traducao.blocos && lg.traducao.blocos[b.words[0].chave];
     if(trd){      // legenda traduzida: a frase inteira do bloco no outro idioma (sem destacar palavra por palavra)
       const pal = String(trd).split(/\s+/).filter(Boolean);
@@ -118675,7 +118820,8 @@ const _EVP_FERR = {
            { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"apagar", label:"Tirar", icone:"apagar", acao:true } ],
   sfx:[ { id:"som", label:"Som", icone:"efeitos" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
         { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
-  legenda:[ { id:"corrigir", label:"Corrigir", icone:"lapis" }, { id:"estilo", label:"Estilo", icone:"estilo" } ],
+  legenda:[ { id:"altura", label:"Altura", icone:"mover" }, { id:"pintar", label:"Cor do pedaço", icone:"cor" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true },
+            { id:"corrigir", label:"Corrigir", icone:"lapis" }, { id:"estilo", label:"Estilo", icone:"estilo" } ],
   imagem:[ { id:"tamanho", label:"Tamanho", icone:"encaixar" }, { id:"anim", label:"Animação", icone:"animacao" }, { id:"tempo", label:"Tempo", icone:"tempo" },
            { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   final:[ { id:"duracao", label:"Duração", icone:"tempo" } ],
@@ -119104,7 +119250,19 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const irPara = function(x){ const tt = _evClamp(x, 0, calc.total); if(motorRef.current) motorRef.current.seek(tt); setTempo(tt); };
   const tocar = function(){ const m = motorRef.current; if(!m) return; if(m.tocando){ m.pause(); setTocando(false); } else { m.play(); setTocando(true); } };
 
+  /* v18: DIVIDIR A LEGENDA na agulha — a próxima palavra começa um pedaço novo (cada pedaço com cor e estilo próprios) */
+  const dividirLegenda = function(){
+    const k = calc.blocos.findIndex(function(b){ return tempo >= b.a - 0.001 && tempo < b.b; }), b = calc.blocos[k];
+    if(!b){ _evToast("warning", "Leve a agulha para cima de uma frase da legenda."); return; }
+    const j = b.words.findIndex(function(w){ return w.a >= tempo - 0.001; });
+    if(j <= 0){ _evToast("warning", j === 0 ? "A agulha está no começo da frase: leve para o meio (entre as palavras)." : "A agulha está na última palavra: leve para antes dela."); return; }
+    const ch = b.words[j].chave;
+    mudar(function(np){ np.legenda = Object.assign({}, np.legenda); np.legenda.cortes = (np.legenda.cortes || []).filter(function(x){ return x !== ch; }).concat([ch]); });
+    setSel({ tipo:"legenda", id:k + 1 }); setFerr(function(f){ return Object.assign({}, f, { legenda:"pintar" }); });
+    _evToast("success", "Legenda dividida: escolha a cor deste pedaço");
+  };
   const cortar = function(){
+    if(sel && sel.tipo === "legenda") return dividirLegenda();
     const tt = tempo, i = _evpClipEm(calc, tt), c = calc.clips[i]; if(!c || tt <= c.t0 + 0.1 || tt >= c.t1 - 0.1) { _evToast("warning", "Leve a agulha para o meio de um clipe para dividir."); return; }
     mudar(function(np){
       const o = np.clips[i];
@@ -119532,6 +119690,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       else if(ctl && (k === "d" || k === "D")){ e.preventDefault(); duplicar(); }
       else if(!ctl && (k === "s" || k === "S")){ e.preventDefault(); cortar(); }
       else if(!ctl && (k === "m" || k === "M")){ e.preventDefault(); addMarca(); }
+      else if(!ctl && (k === "f" || k === "F")){ e.preventDefault(); setAssistir(true); }
       else if(!ctl && (k === "c" || k === "C")){ e.preventDefault(); marcarCorrecao(); }
       else if(k === "Delete" || k === "Backspace"){ e.preventDefault(); apagar(); }
       else if(k === "ArrowLeft"){ e.preventDefault(); irPara(tempo - (e.shiftKey ? 1 : 1/30)); }
@@ -119600,6 +119759,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [tema, setTema] = useState(function(){ return lerLS("pxev-tema", "claro") === "escuro" ? "escuro" : "claro"; });
   const trocarTema = function(){ const n = tema === "escuro" ? "claro" : "escuro"; setTema(n); gravarLS("pxev-tema", n); };
   const [cheia, setCheia] = useState(function(){ return lerLS("pxev-cheia", "1") !== "0"; });
+  const [assistir, setAssistir] = useState(false);          // v18: só o vídeo, em tela cheia (tecla F)
   const trocarCheia = function(){ const n = !cheia; setCheia(n); gravarLS("pxev-cheia", n ? "1" : "0"); };
   const [tlAlt, setTlAlt] = useState(function(){ const v = Number(lerLS("pxev-tl-alt", "0")); if(v >= 200) return v;
     const h = typeof window !== "undefined" ? window.innerHeight : 900; return Math.round(Math.min(420, Math.max(260, h * 0.35))); });
@@ -119636,11 +119796,13 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   if(isMob){
     return (
       <div style={{marginTop:14}}>
-        <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} sel={null} enquadrar={false} soVer={true}/>
+        {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
+        <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} sel={null} enquadrar={false} soVer={true} nome={(base && base.nome) || ""}/>
         <div style={{display:"flex",gap:10,alignItems:"center",marginTop:10}}>
           <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} style={_evpBtn("primario")}><_EvpIco n={tocando ? "pause" : "play"}/></button>
           <input type="range" min={0} max={calc.total} step={0.05} value={Math.min(tempo, calc.total)} onChange={function(e){ irPara(Number(e.target.value)); }} style={{flex:1,accentColor:_EVP_COR.roxo}}/>
           <span style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub,fontFamily:_EVP_MONO}}>{_evTempo(tempo)} / {_evTempo(calc.total)}</span>
+          <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" title="Assistir em tela cheia" style={_evpBtn("icone")}><_EvpIco n="expandir" s={16}/></button>
         </div>
         <div style={{marginTop:10,fontSize:12.5,color:_EVP_COR.sub}}>Para editar, use o computador.</div>
       </div>
@@ -119669,6 +119831,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
 
   return (
     <div style={raiz} data-tema={tema}>
+      {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
       {/* ── barra de cima ── */}
       <div style={Object.assign({}, _EVP_PAINEL, {display:"flex",gap:8,alignItems:"center",padding:"7px 10px",flexShrink:0,position:"relative"})}>
         {cheia && <button onClick={trocarCheia} title="Sair da tela cheia" aria-label="Sair da tela cheia" style={bTopo(false)}><_EvpIco n="voltar" s={17}/></button>}
@@ -119742,7 +119905,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <div ref={palcoRef} style={Object.assign({}, _EVP_PAINEL, {background:"radial-gradient(900px 380px at 50% -10%, rgba(139,92,246,.10), transparent 62%), " + _EVP_COR.palco,
             padding:"14px 12px 10px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minWidth:0,minHeight:0,overflow:"hidden"})}>
           <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando}
-            sel={sel} selObj={selObj} enquadrar={enquadrar && sel && sel.tipo === "clip"} pRef={pRef} setP={setP} confirmar={confirmar} tempo={tempo}
+            sel={sel} selObj={selObj} enquadrar={enquadrar && sel && sel.tipo === "clip"} pRef={pRef} setP={setP} confirmar={confirmar} tempo={tempo} nome={(base && base.nome) || ""}
             onSelTexto={function(id, tipo){ if(tipo === "legenda"){ let k = calc.blocos.findIndex(function(b){ return tempo >= b.a && tempo < b.b; }); if(k < 0) k = 0; if(calc.blocos.length) setSel({ tipo:"legenda", id:k }); return; } setSel({ tipo:tipo || "texto", id:id }); }}
             onSemTexto={function(){ if(sel && (sel.tipo === "texto" || sel.tipo === "imagem" || sel.tipo === "legenda")){ setSel(null); return true; } return false; }}
             onMover={function(dx, dy, dz, fim){
@@ -119767,6 +119930,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
               return <button onClick={function(){ if(!temLogo){ _evToast("warning", "Este cliente não tem logo. Envie no Kit do cliente."); return; } mudar(function(np){ np.logo = Object.assign({}, np.logo, { mostrar:!on }); }); }}
                 aria-pressed={on} title={temLogo ? (on ? "Esconder a logo do canto neste vídeo" : "Mostrar a logo no canto neste vídeo") : "Envie a logo no Kit do cliente"}
                 style={Object.assign(_evpBtn(on ? "suave" : null), {marginLeft:6,opacity:temLogo ? 1 : 0.55})}><_EvpIco n={on ? "olho" : "olhoFechado"} s={15}/>Logo</button>; })()}
+            <button onClick={function(){ setAssistir(true); }} title="Assistir: só o vídeo, em tela cheia (F)" style={Object.assign(_evpBtn(), {marginLeft:2})}><_EvpIco n="expandir" s={15}/>Assistir</button>
+            <_EvpBotaoInsta/>
           </div>
           {/* barra do item selecionado */}
           <div style={{marginTop:10,width:"100%",maxWidth:880,flexShrink:0}}>
@@ -119906,7 +120071,8 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
 }
 
 /* ─── visualizador 9:16: clicar num texto seleciona, arrastar move, duplo clique escreve; modo Recortar: arrastar move a imagem, roda = zoom ─── */
-function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel, selObj, enquadrar, onMover, pRef, setP, confirmar, tempo, onSelTexto, onSemTexto, soVer }){
+function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel, selObj, enquadrar, onMover, pRef, setP, confirmar, tempo, onSelTexto, onSemTexto, soVer, nome }){
+  const [insta] = _evpUsarLS("pxev-insta");     // v18: ver como no Instagram
   const arr = useRef(null), boxRef = useRef(null), rodaRef = useRef(null), rodaAnt = useRef(null), rodaTm = useRef(0);
   const [caixa, setCaixa] = useState(null);         // caixa do texto selecionado (px do canvas 1080×1920)
   const [escrevendo, setEscrevendo] = useState(null);
@@ -120027,6 +120193,7 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
           <span style={{position:"absolute",left:6,top:"14.5%",fontSize:9,fontWeight:800,color:"#fff",textShadow:"0 1px 2px #000"}}>área segura</span>
         </div>
       )}
+      {insta && !enquadrar && <_EvpMolduraReels w={w} nome={nome}/>}
       {enquadrar && sel && (
         <div style={{position:"absolute",inset:8,border:"1.5px dashed rgba(255,255,255,.85)",borderRadius:10,pointerEvents:"none"}}>
           {["33.3%","66.6%"].map(function(q){ return <div key={"v"+q} style={{position:"absolute",left:q,top:0,bottom:0,borderLeft:"1px solid rgba(255,255,255,.3)"}}/>; })}
@@ -120309,6 +120476,13 @@ function _EvpPainelMenu(q){
         <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
           {_EVP_TRANS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.clips.forEach(function(c, i){ c.trans = i ? o.id : "corte"; }); }); _evToast("success", "Transição: " + o.label); }} style={_evpChip(false)}>{o.label}</button>; })}
         </div>
+        <div style={_EVP_TIT}>Luz só nas trocas de cena</div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {_EVP_TRANS_LUZ.map(function(id){ const o = _EVP_TRANS.find(function(q){ return q.id === id; }) || { label:id };
+            return <button key={id} onClick={function(){ let n = 0; mudar(function(np){ np.clips.forEach(function(c, i){ if(i && np.clips[i-1].clipe !== c.clipe && !(_evpNum(c.congelar, 0) > 0)){ c.trans = id; n++; } }); });
+              _evToast(n ? "success" : "warning", n ? o.label + " em " + n + " troca" + (n > 1 ? "s" : "") + " de cena" : "Não tem troca de cena (todos os clipes são do mesmo vídeo)"); }} style={_evpChip(false)}>{o.label}</button>; })}
+        </div>
+        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Troca de cena = o clipe vem de outro vídeo. Os outros cortes continuam como estão.</div>
       </div>)}
 
       {menu === "legenda" && (<div>
@@ -121368,7 +121542,7 @@ function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, se
               {/* transições entre os clipes (clique = abre o clipe) */}
               {calc.clips.filter(function(c){ return c.i > 0 && c.trans && c.trans !== "corte"; }).map(function(c){ const lb = ((_EVP_TRANS.find(function(q){ return q.id === c.trans; }) || {}).label || c.trans);
                 return <div key={"tr" + c.id} title={"Transição: " + lb} onPointerDown={function(e){ e.stopPropagation(); if(e.button !== 0) return; setSel({ tipo:"clip", id:c.id }); irPara(c.t0 + 0.01); }}
-                  style={Object.assign(bloco("#0d9488", false), { left:Math.max(0, c.t0*pxs - 10), width:Math.max(20, _EVP_TRANS_DUR*pxs + 10), top:5, bottom:5, padding:"0 5px", cursor:"pointer", opacity:.9, zIndex:0 })}><_EvpIco n="transicao" s={11}/>{_EVP_TRANS_DUR*pxs > 40 ? lb : ""}</div>; })}
+                  style={Object.assign(bloco("#0d9488", false), { left:Math.max(0, c.t0*pxs - 10), width:Math.max(20, _evpTransDur(c)*pxs + 10), top:5, bottom:5, padding:"0 5px", cursor:"pointer", opacity:.9, zIndex:0 })}><_EvpIco n="transicao" s={11}/>{_evpTransDur(c)*pxs > 40 ? lb : ""}</div>; })}
             </div>
 
             {/* agulha */}
@@ -121618,6 +121792,290 @@ function _EvpVelGrafico({ c, ctl, mudar }){
     </div>
   );
 }
+/* ─── v18: TRANSIÇÃO — grupos, prévia ao passar o mouse, duração e curva ─── */
+function _EvpTransPrevia({ tipo, dur, curva, cA, cB, w }){
+  const cvRef = useRef(null);
+  const W = w || 120, H = Math.round(W * 16 / 9);
+  useEffect(function(){
+    const mk = function(cor1, cor2, rot){ const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
+      const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, cor1); g.addColorStop(1, cor2); x.fillStyle = g; x.fillRect(0, 0, W, H);
+      x.fillStyle = "rgba(255,255,255,.85)"; x.font = "800 " + Math.round(W * 0.3) + "px system-ui"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(rot, W / 2, H / 2); return c; };
+    const A = mk("#4c1d95", "#0ea5e9", "A"), B = mk("#f97316", "#db2777", "B");
+    const carregar = function(alvo, url){ if(!url) return; const im = new Image(); im.onload = function(){ const x = alvo.getContext("2d"); const s = Math.max(W / im.width, H / im.height);
+      x.drawImage(im, (W - im.width * s) / 2, (H - im.height * s) / 2, im.width * s, im.height * s); }; im.src = url; };
+    if(cA) carregar(A, _evpThumbEm(cA.clipe, Math.max(cA.ini, cA.fim - 0.1)));
+    if(cB) carregar(B, _evpThumbEm(cB.clipe, cB.ini + 0.1));
+    let raf = 0; const t0 = performance.now(), ciclo = 0.5 + dur + 0.7;
+    const passo = function(){ const cv = cvRef.current; if(!cv) return; const x = cv.getContext("2d"); const s = ((performance.now() - t0) / 1000) % ciclo;
+      const p = _evClamp((s - 0.5) / dur, 0, 1);
+      if(s < 0.5) x.drawImage(A, 0, 0); else if(p >= 1) x.drawImage(B, 0, 0); else _evpTransPinta(x, W, H, tipo, p, A, B, curva);
+      raf = requestAnimationFrame(passo); };
+    raf = requestAnimationFrame(passo);
+    return function(){ cancelAnimationFrame(raf); };
+  }, [tipo, dur, curva, cA && cA.id, cB && cB.id]);
+  return <canvas ref={cvRef} width={W} height={H} aria-label="Prévia da transição" style={{width:W,height:H,borderRadius:10,background:"#000",display:"block"}}/>;
+}
+function _EvpTransPainel({ c, calc, p, mudar }){
+  const [hover, setHover] = useState(null);
+  const nc = function(fn){ return function(np){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(o) fn(o); }; };
+  const atual = c.trans || "corte", dur = _evpTransDur(c), curva = c.transCurva || "io";
+  const cAnt = calc.clips[c.i - 1], mostra = hover || atual;
+  const rot = function(id){ return (_EVP_TRANS.find(function(q){ return q.id === id; }) || {}).label || id; };
+  return (
+    <div>
+      <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Como este clipe entra depois do anterior. Passe o mouse para ver antes de escolher.</div>
+      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+        <div style={{flexShrink:0,textAlign:"center"}}>
+          {mostra !== "corte" ? <_EvpTransPrevia tipo={mostra} dur={dur} curva={curva} cA={cAnt} cB={c} w={96}/> : <div style={{width:96,height:171,borderRadius:10,background:"#0b1020",color:"#8b92ad",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>Corte seco</div>}
+          <div style={{fontSize:10.5,fontWeight:700,color:hover ? _EVP_COR.roxo : _EVP_COR.sub,marginTop:4,maxWidth:96}}>{rot(mostra)}</div>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          {_EVP_TRANS_GRUPOS.map(function(g){ return <div key={g.id} style={{marginBottom:8}}>
+            <div style={{fontSize:10.5,fontWeight:800,color:_EVP_COR.fraco,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4}}>{g.label}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {g.ids.map(function(id){ return <button key={id} onMouseEnter={function(){ setHover(id); }} onMouseLeave={function(){ setHover(null); }} onFocus={function(){ setHover(id); }} onBlur={function(){ setHover(null); }}
+                onClick={function(){ mudar(nc(function(x){ x.trans = id; })); }} style={Object.assign(_evpChip(atual === id), { padding:"5px 8px", fontSize:11.5 })}>{rot(id)}</button>; })}
+            </div></div>; })}
+        </div>
+      </div>
+      {atual !== "corte" && (<div>
+        <div style={_EVP_TIT}>Duração</div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {_EVP_TRANS_DURS.map(function(d){ return <button key={d.v} onClick={function(){ mudar(nc(function(x){ x.transDur = d.v; })); }} style={_evpChip(dur === d.v)}>{d.label} · {String(d.v).replace(".", ",")} s</button>; })}
+        </div>
+        <div style={_EVP_TIT}>Curva</div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {_EVP_CURVAS.filter(function(q){ return q.id !== "volta"; }).map(function(q){ return <button key={q.id} onClick={function(){ mudar(nc(function(x){ x.transCurva = q.id; })); }} style={_evpChip(curva === q.id)}>{q.label}</button>; })}
+        </div>
+        {_EVP_TRANS_LUZ.indexOf(atual) >= 0 && <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>Luz com limite: nunca fica branco puro (no máximo 70%).</div>}
+      </div>)}
+      <div style={_EVP_TIT}>Usar esta transição</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <button onClick={function(){ const tr = { trans:atual, transDur:dur, transCurva:curva }; let n = 0;
+          mudar(function(np){ np.clips.forEach(function(o, i){ if(i && np.clips[i-1].clipe !== o.clipe && !(_evpNum(o.congelar, 0) > 0)){ Object.assign(o, tr); n++; } }); });
+          _evToast(n ? "success" : "warning", n ? rot(atual) + " em " + n + " troca" + (n > 1 ? "s" : "") + " de cena" : "Não tem troca de cena (todos os clipes são do mesmo vídeo)"); }} style={_evpBtn()}>Nas trocas de cena</button>
+        <button onClick={function(){ const tr = { trans:atual, transDur:dur, transCurva:curva };
+          mudar(function(np){ np.clips.forEach(function(o, i){ if(i) Object.assign(o, tr); else o.trans = "corte"; }); }); _evToast("success", rot(atual) + " em todos os cortes"); }} style={_evpBtn()}>Em todos os cortes</button>
+      </div>
+      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Troca de cena = o clipe vem de outro vídeo. Transição de luz em todo corte cansa; nas trocas de cena fica bonito.</div>
+    </div>
+  );
+}
+
+/* ─── v18: LEGENDA — cor e estilo do PEDAÇO (bloco) e de PALAVRAS soltas ─── */
+function _evpTrechoDoBloco(b){
+  const seg = function(ch){ const s = String(ch); return Number(s.slice(s.lastIndexOf("@") + 1)); };
+  return { clipe:b.clipe, ini:Math.round(seg(b.words[0].chave) * 100) / 100, fim:Math.round((seg(b.words[b.words.length - 1].chave) + 0.02) * 100) / 100 };
+}
+function _evpPaletaLeg(kit){ const corKit = /^#[0-9a-fA-F]{6}$/.test(String((kit && kit.cor_principal) || "")) ? kit.cor_principal : "#7c3aed";
+  return [["#ffffff","Branco"],["#facc15","Amarelo"],[corKit,"Cor do cliente"],["#22c55e","Verde"],["#f97316","Laranja"],["#ef4444","Vermelho"],["#3b82f6","Azul"],["#111111","Preto"]]; }
+function _EvpBolinhas({ kit, atual, onCor, onPadrao, rotPadrao }){
+  return (
+    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+      {onPadrao && <button onClick={onPadrao} style={Object.assign(_evpChip(!atual), {padding:"3px 8px",fontSize:10.5})}>{rotPadrao || "Igual ao resto"}</button>}
+      {_evpPaletaLeg(kit).map(function(c){ const on = String(atual || "").toLowerCase() === c[0].toLowerCase();
+        return <button key={c[0] + c[1]} onClick={function(){ onCor(c[0]); }} title={c[1]} aria-label={c[1]}
+          style={{width:24,height:24,borderRadius:99,border:"2px solid " + (on ? _EVP_COR.roxo : "rgba(15,23,42,.18)"),background:c[0],cursor:"pointer",padding:0,boxShadow:on ? "0 0 0 2px rgba(124,58,237,.25)" : "none"}}/>; })}
+      <input type="color" value={atual || "#ffffff"} aria-label="Outra cor" title="Outra cor" onChange={function(e){ onCor(e.target.value); }} style={{width:30,height:26,border:0,padding:0,background:"none",cursor:"pointer"}}/>
+    </div>);
+}
+function _EvpPintarLegenda({ b, k, p, kit, mudar, irPara }){
+  const [escolhidas, setEscolhidas] = useState([]);
+  useEffect(function(){ setEscolhidas([]); }, [k]);
+  if(!b) return null;
+  const lg = p.legenda || {}, pint = lg.pintadas || {}, faixa = _evpTrechoDoBloco(b);
+  const igual = function(x){ return x && x.clipe === faixa.clipe && Math.abs(Number(x.ini) - faixa.ini) < 0.006 && Math.abs(Number(x.fim) - faixa.fim) < 0.006; };
+  const meu = ((lg.trechos || []).filter(igual).pop()) || null;
+  const doBloco = function(fn){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda); const trs = (np.legenda.trechos || []).slice();
+    let x = trs.filter(igual).pop(); if(!x){ x = Object.assign({ nome:"Pedaço" }, faixa); trs.push(x); } else { const i = trs.lastIndexOf(x); trs[i] = x = Object.assign({}, x); }
+    fn(x); np.legenda.trechos = trs.filter(function(q){ return q.corTexto || q.corDestaque || q.estilo || _evpNum(q.tam, 0) > 0; }).slice(-120); }); };
+  const pintar = function(cor){ const ch = escolhidas.slice(); if(!ch.length) return;
+    mudar(function(np){ np.legenda = Object.assign({}, np.legenda); const pp = Object.assign({}, np.legenda.pintadas || {}); ch.forEach(function(c2){ if(cor) pp[c2] = cor; else delete pp[c2]; }); np.legenda.pintadas = pp; }); };
+  const cortado = (lg.cortes || []).indexOf(b.words[0].chave) >= 0;
+  const est = (meu && meu.estilo) || "";
+  return (
+    <div>
+      <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:8}}>{_evTempo(b.a)} → {_evTempo(b.b)} · para separar uma parte, leve a agulha e aperte <b>S</b> (ou "Dividir").</div>
+      <div style={_EVP_TIT}>Palavras (clique para escolher)</div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        {b.words.map(function(w){ const on = escolhidas.indexOf(w.chave) >= 0, cor = pint[w.chave];
+          return <button key={w.chave} onClick={function(){ setEscolhidas(function(a){ return on ? a.filter(function(x){ return x !== w.chave; }) : a.concat([w.chave]); }); }}
+            style={Object.assign(_evpChip(on), { background:on ? _EVP_COR.roxoSoft : "#0b1020", color:cor || (on ? _EVP_COR.roxo : "#fff"), fontWeight:800 })}>{w.p}</button>; })}
+      </div>
+      <div style={{display:"flex",gap:6,margin:"6px 0 4px"}}>
+        <button onClick={function(){ setEscolhidas(b.words.map(function(w){ return w.chave; })); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>Todas</button>
+        <button onClick={function(){ setEscolhidas([]); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>Nenhuma</button>
+      </div>
+      {escolhidas.length > 0 ? (<div>
+        <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.ink,margin:"6px 0 4px"}}>Pintar {escolhidas.length} palavra{escolhidas.length > 1 ? "s" : ""}</div>
+        <_EvpBolinhas kit={kit} atual={pint[escolhidas[0]] || ""} onCor={pintar} onPadrao={function(){ pintar(""); }} rotPadrao="Tirar a cor"/>
+      </div>) : <div style={{fontSize:11,color:_EVP_COR.fraco}}>Escolha palavras para pintar só elas (meia frase com outra cor).</div>}
+
+      <div style={_EVP_TIT}>Este pedaço inteiro</div>
+      <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.ink,marginBottom:4}}>Cor da letra</div>
+      <_EvpBolinhas kit={kit} atual={(meu && meu.corTexto) || ""} onCor={function(v){ doBloco(function(x){ x.corTexto = v; }); }} onPadrao={function(){ doBloco(function(x){ x.corTexto = ""; }); }}/>
+      <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.ink,marginBottom:4}}>Cor do destaque</div>
+      <_EvpBolinhas kit={kit} atual={(meu && meu.corDestaque) || ""} onCor={function(v){ doBloco(function(x){ x.corDestaque = v; }); }} onPadrao={function(){ doBloco(function(x){ x.corDestaque = ""; }); }}/>
+      <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.ink,margin:"6px 0 4px"}}>Modelo</div>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+        <button onClick={function(){ doBloco(function(x){ x.estilo = ""; }); }} style={_evpChip(!est)}>Igual ao resto</button>
+        {_EVP_LEG_ESTILOS.map(function(o){ return <button key={o.id} onClick={function(){ doBloco(function(x){ x.estilo = o.id; }); }} style={_evpChip(est === o.id)}>{o.label}</button>; })}
+      </div>
+      <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.ink,margin:"8px 0 4px"}}>Tamanho</div>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+        {[[0,"Igual ao resto"],[0.8,"Menor"],[1.2,"Maior"],[1.45,"Bem maior"]].map(function(o){ const on = (_evpNum(meu && meu.tam, 0) || 0) === o[0];
+          return <button key={o[0]} onClick={function(){ doBloco(function(x){ x.tam = o[0]; }); }} style={_evpChip(on)}>{o[1]}</button>; })}
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
+        {(meu || b.words.some(function(w){ return pint[w.chave]; })) && <button onClick={function(){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda);
+            np.legenda.trechos = (np.legenda.trechos || []).filter(function(q){ return !igual(q); });
+            const pp = Object.assign({}, np.legenda.pintadas || {}); b.words.forEach(function(w){ delete pp[w.chave]; }); np.legenda.pintadas = pp; }); }} style={_evpBtn()}>Voltar este pedaço ao normal</button>}
+        {cortado && <button onClick={function(){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda); np.legenda.cortes = (np.legenda.cortes || []).filter(function(x){ return x !== b.words[0].chave; }); }); }} style={_evpBtn()}>Juntar com o pedaço anterior</button>}
+      </div>
+    </div>
+  );
+}
+/* ─── v18: ALTURA da legenda (bem à vista) + guia da área segura + ver como no Instagram ─── */
+function _evpLerLS(k){ try{ return localStorage.getItem(k) === "1"; }catch(_){ return false; } }
+function _evpGravarLS(k, v){ try{ localStorage.setItem(k, v ? "1" : "0"); }catch(_){} try{ window.dispatchEvent(new Event(k)); }catch(_){} }
+function _evpUsarLS(k){ const [v, setV] = useState(function(){ return _evpLerLS(k); });
+  useEffect(function(){ const f = function(){ setV(_evpLerLS(k)); }; window.addEventListener(k, f); return function(){ window.removeEventListener(k, f); }; }, [k]);
+  return [v, function(n){ setV(n); _evpGravarLS(k, n); }]; }
+function _EvpAlturaLegenda({ p, kit, mudar, ctl }){
+  const lg = p.legenda || {}, pos = lg.posicao || ((kit && kit.legenda_posicao) === "centro" ? "centro" : "segura");
+  const yAt = lg.y != null ? _evpNum(lg.y, 0.72) : (pos === "centro" ? 0.52 : pos === "baixo" ? 0.75 : pos === "anuncio" ? 0.61 : 0.755);
+  const [area, setArea] = _evpUsarLS("pxev-area-segura"), [insta, setInsta] = _evpUsarLS("pxev-insta");
+  const mover = function(d){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda); np.legenda.y = Math.round(_evClamp(yAt + d, 0.15, 0.9) * 1000) / 1000; }); };
+  const fora = yAt < 0.14 || yAt > 0.8;
+  return (
+    <div>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={function(){ mover(-0.02); }} style={Object.assign(_evpBtn("primario"), { flex:1, justifyContent:"center" })}>↑ Subir</button>
+        <button onClick={function(){ mover(0.02); }} style={Object.assign(_evpBtn("primario"), { flex:1, justifyContent:"center" })}>↓ Descer</button>
+      </div>
+      <div style={{marginTop:10}}>
+        <_EvpSlider ctl={ctl} rotulo="Altura na tela (vale para o vídeo todo)" v={yAt} min={0.15} max={0.9} step={0.005} fmt={function(v){ return Math.round(v * 100) + "%"; }}
+          aplicar={function(np, v){ np.legenda = Object.assign({}, np.legenda); np.legenda.y = v; }}/>
+      </div>
+      {fora && <div style={{padding:"7px 9px",borderRadius:9,background:_EVP_COR.aviso,color:_EV.amarelo,fontSize:11.5,fontWeight:700,marginBottom:8}}>⚠ Fora da área segura: o Instagram cobre esta parte.</div>}
+      <div style={_EVP_TIT}>Lugares prontos</div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+        {_EVP_LEG_POS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda); np.legenda.posicao = o.id; np.legenda.y = null; np.legenda.dx = 0; }); }} style={_evpChip(lg.y == null && pos === o.id)}>{o.label}</button>; })}
+      </div>
+      <_EvpInterruptor on={area} onChange={setArea} label="Guia da área segura do Reels" dica="Faixas vermelhas = o que o Instagram cobre (14% em cima, 20% embaixo, 35% em anúncio)"/>
+      <_EvpInterruptor on={insta} onChange={setInsta} label="Ver como no Instagram" dica="Põe os botões e o texto do Reels por cima da prévia"/>
+      <div style={{fontSize:11,color:_EVP_COR.fraco}}>Também dá para arrastar a legenda direto no vídeo.</div>
+    </div>
+  );
+}
+
+/* ─── v18: moldura do Reels por cima da prévia (só para conferir; não vai para o vídeo) ─── */
+function _EvpMolduraReels({ w, nome }){
+  const f = Math.max(7, w * 0.032), ic = Math.round(w * 0.075), sh = { textShadow:"0 1px 3px rgba(0,0,0,.6)" };
+  const ico = function(d, rot){ return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+    <svg width={ic} height={ic} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{filter:"drop-shadow(0 1px 2px rgba(0,0,0,.5))"}} dangerouslySetInnerHTML={{__html:d}}/>
+    {rot && <span style={Object.assign({ fontSize:f * 0.85, fontWeight:700 }, sh)}>{rot}</span>}</div>; };
+  const ini = String(nome || "P").trim().charAt(0).toUpperCase() || "P";
+  return (
+    <div aria-label="Como fica no Instagram" style={{position:"absolute",inset:0,pointerEvents:"none",color:"#fff",fontFamily:"system-ui, -apple-system, sans-serif"}}>
+      <div style={{position:"absolute",left:0,right:0,top:0,height:"12%",background:"linear-gradient(rgba(0,0,0,.35), transparent)"}}/>
+      <div style={{position:"absolute",left:0,right:0,bottom:0,height:"30%",background:"linear-gradient(transparent, rgba(0,0,0,.55))"}}/>
+      <div style={Object.assign({ position:"absolute", left:"4%", top:"3.2%", fontSize:f * 1.5, fontWeight:800 }, sh)}>Reels</div>
+      <div style={{position:"absolute",right:"4%",top:"3%"}}>{ico('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>')}</div>
+      <div style={{position:"absolute",right:"3%",bottom:"13%",display:"flex",flexDirection:"column",alignItems:"center",gap:w * 0.04}}>
+        {ico('<path d="M12 20s-7-4.4-9-8.6C1.6 8.3 3.6 5 6.8 5c2 0 3.4 1.1 5.2 3 1.8-1.9 3.2-3 5.2-3 3.2 0 5.2 3.3 3.8 6.4-2 4.2-9 8.6-9 8.6z"/>', "1.234")}
+        {ico('<path d="M20 12a8 8 0 1 1-3.3-6.5L21 4l-1 4.5A8 8 0 0 1 20 12z"/>', "56")}
+        {ico('<path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="m10 13 11-10"/>', "")}
+        {ico('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', "")}
+        <div style={{width:ic * 0.9,height:ic * 0.9,borderRadius:6,border:"2px solid #fff",background:"linear-gradient(135deg,#7c3aed,#db2777)"}}/>
+      </div>
+      <div style={{position:"absolute",left:"4%",right:"18%",bottom:"3.5%"}}>
+        <div style={{display:"flex",alignItems:"center",gap:w * 0.02,marginBottom:w * 0.02}}>
+          <div style={{width:w * 0.075,height:w * 0.075,borderRadius:"50%",background:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:f,border:"1.5px solid #fff"}}>{ini}</div>
+          <span style={Object.assign({ fontWeight:800, fontSize:f }, sh)}>{String(nome || "cliente").toLowerCase().replace(/\s+/g, "")}</span>
+          <span style={{border:"1.2px solid #fff",borderRadius:6,padding:"1px 6px",fontSize:f * 0.85,fontWeight:700}}>Seguir</span>
+        </div>
+        <div style={Object.assign({ fontSize:f, lineHeight:1.3 }, sh)}>Aqui aparece o texto do post… <b>mais</b></div>
+        <div style={Object.assign({ fontSize:f * 0.9, marginTop:w * 0.015, opacity:.95 }, sh)}>♫ Áudio original</div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── v18: ASSISTIR — só o vídeo, em tela cheia (tecla F). Espaço/K toca e pausa, ←/→ 1 s (Shift 5 s), J/L 5 s, , e . 1 quadro, ↑/↓ volume, M mudo, I Instagram, Esc volta ─── */
+function _EvpAssistir({ cvRef, motorRef, tocar, tocando, tempo, total, irPara, onFechar, nome }){
+  const boxRef = useRef(null), cv2 = useRef(null), entrou = useRef(false), escondeTm = useRef(0);
+  const [insta, setInsta] = _evpUsarLS("pxev-insta");
+  const [vol, setVol] = useState(1), [ctlVisivel, setCtlVisivel] = useState(true);
+  const [tam, setTam] = useState({ w:window.innerWidth, h:window.innerHeight });
+  const r = useRef({}); r.current = { tocar:tocar, tempo:tempo, total:total, irPara:irPara, onFechar:onFechar, vol:vol, insta:insta, setInsta:setInsta };
+  const mostrarCtl = function(){ setCtlVisivel(true); clearTimeout(escondeTm.current); escondeTm.current = setTimeout(function(){ setCtlVisivel(false); }, 2600); };
+  useEffect(function(){ const m = motorRef.current; if(m) m.volumeGeral(vol); }, [vol]);
+  useEffect(function(){
+    let raf = 0; const f = function(){ const s = cvRef.current, d = cv2.current; if(s && d){ if(d.width !== s.width) d.width = s.width; if(d.height !== s.height) d.height = s.height; d.getContext("2d").drawImage(s, 0, 0); } raf = requestAnimationFrame(f); };
+    raf = requestAnimationFrame(f);
+    const rs = function(){ setTam({ w:window.innerWidth, h:window.innerHeight }); }; window.addEventListener("resize", rs);
+    const el = boxRef.current; try{ if(el && el.requestFullscreen){ const pr = el.requestFullscreen(); if(pr && pr.catch) pr.catch(function(){}); } }catch(_){}
+    const fc = function(){ if(document.fullscreenElement) entrou.current = true; else if(entrou.current) r.current.onFechar(); };
+    document.addEventListener("fullscreenchange", fc);
+    const tecla = function(e){
+      const k = e.key, q = r.current; let usado = true;
+      if(k === "Escape" || k === "f" || k === "F") q.onFechar();
+      else if(k === " " || k === "k" || k === "K") q.tocar();
+      else if(k === "ArrowLeft") q.irPara(q.tempo - (e.shiftKey ? 5 : 1));
+      else if(k === "ArrowRight") q.irPara(q.tempo + (e.shiftKey ? 5 : 1));
+      else if(k === "j" || k === "J") q.irPara(q.tempo - 5);
+      else if(k === "l" || k === "L") q.irPara(q.tempo + 5);
+      else if(k === ",") q.irPara(q.tempo - 1/30);
+      else if(k === ".") q.irPara(q.tempo + 1/30);
+      else if(k === "ArrowUp") setVol(function(v){ return Math.min(1, Math.round((v + 0.1) * 10) / 10); });
+      else if(k === "ArrowDown") setVol(function(v){ return Math.max(0, Math.round((v - 0.1) * 10) / 10); });
+      else if(k === "m" || k === "M") setVol(function(v){ return v > 0 ? 0 : 1; });
+      else if(k === "i" || k === "I") q.setInsta(!q.insta);
+      else if(k === "Home") q.irPara(0);
+      else usado = false;
+      if(usado){ e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); }
+      mostrarCtl();
+    };
+    window.addEventListener("keydown", tecla, true);
+    mostrarCtl();
+    return function(){ cancelAnimationFrame(raf); window.removeEventListener("resize", rs); document.removeEventListener("fullscreenchange", fc); window.removeEventListener("keydown", tecla, true);
+      clearTimeout(escondeTm.current); try{ if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); }catch(_){} const m = motorRef.current; if(m) m.volumeGeral(1); };
+  }, []);
+  const cw = (cvRef.current && cvRef.current.width) || 1080, ch = (cvRef.current && cvRef.current.height) || 1920;
+  const esc = Math.min(tam.w / cw, (tam.h - 8) / ch), vw = Math.round(cw * esc), vh = Math.round(ch * esc);
+  const fmt = function(s){ return _evTempo(Math.max(0, s)).replace(/\.\d$/, ""); };
+  const vis = ctlVisivel || !tocando;
+  return (
+    <div ref={boxRef} role="dialog" aria-label="Assistir o vídeo" onMouseMove={mostrarCtl} onClick={function(e){ if(e.target === e.currentTarget || e.target === cv2.current) tocar(); }}
+      style={{position:"fixed",inset:0,zIndex:2147483000,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",cursor:vis ? "default" : "none"}}>
+      <div style={{position:"relative",width:vw,height:vh}}>
+        <canvas ref={cv2} style={{width:vw,height:vh,display:"block"}}/>
+        {insta && <_EvpMolduraReels w={vw} nome={nome}/>}
+      </div>
+      <button onClick={function(e){ e.stopPropagation(); onFechar(); }} aria-label="Voltar ao Estúdio" title="Voltar (Esc)"
+        style={{position:"fixed",top:16,right:16,font:"inherit",display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:10,border:"1px solid rgba(255,255,255,.25)",
+          background:"rgba(11,16,32,.7)",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:vis ? 1 : 0,transition:"opacity .25s"}}><_EvpIco n="fechar" s={15}/>Voltar (Esc)</button>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{position:"fixed",left:"50%",bottom:18,transform:"translateX(-50%)",width:"min(760px, calc(100vw - 32px))",display:"flex",alignItems:"center",gap:10,
+          padding:"10px 14px",borderRadius:14,background:"rgba(11,16,32,.78)",backdropFilter:"blur(8px)",color:"#fff",opacity:vis ? 1 : 0,transition:"opacity .25s",boxSizing:"border-box"}}>
+        <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} style={{font:"inherit",width:40,height:40,borderRadius:12,border:0,cursor:"pointer",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <_EvpIco n={tocando ? "pause" : "play"} s={18}/></button>
+        <span style={{fontFamily:_EVP_MONO,fontSize:12.5,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{fmt(tempo)} / {fmt(total)}</span>
+        <input type="range" min={0} max={total} step={0.01} value={Math.min(tempo, total)} aria-label="Posição no vídeo" onChange={function(e){ irPara(Number(e.target.value)); }} style={{flex:1,accentColor:"#a78bfa",minWidth:60}}/>
+        <button onClick={function(){ setVol(vol > 0 ? 0 : 1); }} aria-label={vol > 0 ? "Tirar o som" : "Ligar o som"} style={{font:"inherit",background:"none",border:0,color:"#fff",cursor:"pointer",padding:4,display:"flex"}}><_EvpIco n={vol > 0 ? "volume" : "mudo"} s={18}/></button>
+        <input type="range" min={0} max={1} step={0.05} value={vol} aria-label="Volume" onChange={function(e){ setVol(Number(e.target.value)); }} style={{width:80,accentColor:"#a78bfa"}}/>
+        <button onClick={function(){ setInsta(!insta); }} aria-pressed={insta} title="Ver como no Instagram (I)"
+          style={{font:"inherit",fontSize:12,fontWeight:700,padding:"6px 10px",borderRadius:9,border:"1px solid " + (insta ? "#a78bfa" : "rgba(255,255,255,.3)"),background:insta ? "rgba(167,139,250,.2)" : "transparent",color:"#fff",cursor:"pointer",whiteSpace:"nowrap"}}>Instagram</button>
+      </div>
+    </div>
+  );
+}
+
+function _EvpBotaoInsta(){
+  const [insta, setInsta] = _evpUsarLS("pxev-insta");
+  return <button onClick={function(){ setInsta(!insta); }} aria-pressed={insta} title="Ver como no Instagram: botões e texto do Reels por cima (só para conferir)"
+    style={Object.assign(_evpBtn(insta ? "suave" : null), {marginLeft:2})}><_EvpIco n="olho" s={15}/>Instagram</button>;
+}
 /* ─── PAINEL DA DIREITA: mostra só a ferramenta escolhida na barra embaixo do vídeo ─── */
 function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef, confirmar, kit, base, infoClipe, musicas, musInfo, setMusica, enquadrar, setEnquadrar,
                         trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara }){
@@ -121817,12 +122275,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
             {_evpSegEstado === "pronto" ? "IA de recorte pronta" : _evpSegEstado === "erro" ? "A IA de recorte não carregou (precisa de internet)" : _evpSegEstado === "carregando" ? "Carregando a IA de recorte…" : "A IA de recorte carrega quando você escolher um fundo"}</div>
         </div>)}
         {ferr === "trans" && (<div>
-          {c.i > 0 ? (<div>
-            <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Como este clipe entra depois do anterior.</div>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {_EVP_TRANS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.trans = o.id; })); }} style={_evpChip((c.trans || "corte") === o.id)}>{o.label}</button>; })}
-            </div>
-          </div>) : <div style={{fontSize:12.5,color:_EVP_COR.sub}}>É o primeiro clipe: não tem transição de entrada.</div>}
+          {c.i > 0 ? <_EvpTransPainel c={c} calc={calc} p={p} mudar={mudar}/> : <div style={{fontSize:12.5,color:_EVP_COR.sub}}>É o primeiro clipe: não tem transição de entrada.</div>}
         </div>)}
       </div>
     );
@@ -121912,6 +122365,8 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
               </div>; })}
           </div>
         </div>)}
+        {ferr === "altura" && <_EvpAlturaLegenda p={p} kit={kit} mudar={mudar} ctl={ctl}/>}
+        {ferr === "pintar" && <_EvpPintarLegenda b={b} k={sel.id} p={p} kit={kit} mudar={mudar}/>}
         {ferr === "estilo" && (<div>
           <_EvpInterruptor on={p.legenda.ativa !== false} onChange={function(v){ mudar(function(np){ np.legenda.ativa = v; }); }} label="Mostrar legenda"/>
           <_EvpEstiloLegenda p={p} kit={kit} mudar={mudar} ctl={ctl}/>
