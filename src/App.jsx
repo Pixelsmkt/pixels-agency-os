@@ -51764,8 +51764,12 @@ function _cardPodeSerResp(u){
                       Adicionar
                     </label>}
                   </div>
-                  {edtItems.length===0&&(<div style={{background:"#fff7ed",border:"1.5px dashed #fed7aa",borderRadius:12,padding:"20px",textAlign:"center",marginBottom:6}}>
-                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginBottom:4}}>{_edtCanEdit?"Nenhum arquivo editável ainda":"Sem arquivo editável nesse cartão"}</div>
+                  {edtItems.length===0&&(<div style={{background:"#fff7ed",border:"1.5px dashed #fed7aa",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
+                    {/* (01/10) mesmo tamanho das outras seções: ícone 44px + título + texto */}
+                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #fed7aa",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fb923c",marginBottom:10,boxShadow:"0 1px 3px rgba(234,88,12,0.06)"}}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                    </div>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{_edtCanEdit?"Nenhum arquivo editável ainda":"Sem arquivo editável nesse cartão"}</div>
                     <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5}}>{_edtCanEdit?"Arraste o .psd ou o .prproj aqui, ou clique em Adicionar (até 2 GB)":"Quem produziu ainda não subiu o arquivo aberto."}</div>
                   </div>)}
                   {edtItems.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
