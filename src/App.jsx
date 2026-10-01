@@ -88682,10 +88682,15 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
   function _d(id){ return desc[id] || {tipo:"pct", valor:"", motivo:""}; }
   function _set(id, patch){ setDesc(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, _d(id), patch); return n; }); }
 
+  /* (01/10 16:12, Gustavo) nome e detalhe de cada item editáveis — ex.: "… · Lero Agro" no lugar de "Conta 1" */
+  const [txt,setTxt] = useState({});   // { [itemId]: {nome, detalhe} }
+  function _setTxt(id, patch){ setTxt(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, o[id]||{}, patch); return n; }); }
   const linhas = itens.map(function(it){
     const d = _d(it.id);
     const dv = _calcDescValor(it, d);
-    return Object.assign({}, it, {desc:d, descValor:dv, final:Math.max(0,(Number(it.total)||0)-dv)});
+    const tx = txt[it.id] || {};
+    return Object.assign({}, it, {nome:(tx.nome!=null?tx.nome:it.nome), detalhe:(tx.detalhe!=null?tx.detalhe:it.detalhe),
+      desc:d, descValor:dv, final:Math.max(0,(Number(it.total)||0)-dv)});
   });
   const rec = linhas.filter(function(l){ return l.recorrente; });
   const pon = linhas.filter(function(l){ return !l.recorrente; });
@@ -88923,8 +88928,14 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
     return <div key={l.id} style={{border:"1px solid #eef0f5",borderRadius:12,padding:"12px 14px",background:l.descValor>0?"#fbfaff":"#fff",display:"flex",flexDirection:"column",gap:9}}>
       <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start",flexWrap:"wrap"}}>
         <div style={{minWidth:0,flex:1}}>
-          <div style={{color:INK,fontWeight:800,fontSize:13.5}}>{l.nome}</div>
-          {l.detalhe&&<div style={{color:MUTE,fontSize:11.5,marginTop:2}}>{l.detalhe}</div>}
+          <input type="text" value={l.nome} onChange={function(e){_setTxt(l.id,{nome:e.target.value});}} title="Clique pra editar o nome do item"
+            style={{width:"100%",boxSizing:"border-box",border:"1px dashed transparent",borderRadius:7,padding:"3px 6px",marginLeft:-6,background:"transparent",color:INK,fontWeight:800,fontSize:13.5,fontFamily:FF,outline:"none"}}
+            onFocus={function(e){e.target.style.borderColor=PX;e.target.style.background="#fff";}} onBlur={function(e){e.target.style.borderColor="transparent";e.target.style.background="transparent";}}
+            onMouseEnter={function(e){ if(document.activeElement!==e.target) e.target.style.borderColor="#d8c8f5"; }} onMouseLeave={function(e){ if(document.activeElement!==e.target) e.target.style.borderColor="transparent"; }}/>
+          <input type="text" value={l.detalhe||""} placeholder="Detalhe (opcional)" onChange={function(e){_setTxt(l.id,{detalhe:e.target.value});}} title="Clique pra editar o detalhe"
+            style={{width:"100%",boxSizing:"border-box",border:"1px dashed transparent",borderRadius:7,padding:"2px 6px",marginLeft:-6,background:"transparent",color:MUTE,fontSize:11.5,fontFamily:FF,outline:"none"}}
+            onFocus={function(e){e.target.style.borderColor=PX;e.target.style.background="#fff";}} onBlur={function(e){e.target.style.borderColor="transparent";e.target.style.background="transparent";}}
+            onMouseEnter={function(e){ if(document.activeElement!==e.target) e.target.style.borderColor="#d8c8f5"; }} onMouseLeave={function(e){ if(document.activeElement!==e.target) e.target.style.borderColor="transparent"; }}/>
         </div>
         <div style={{textAlign:"right",flexShrink:0}}>
           {l.descValor>0&&<div style={{color:"#94a3b8",fontSize:11.5,textDecoration:"line-through"}}>{fmt(l.total)}</div>}
@@ -88950,7 +88961,7 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
       <div style={{padding:"18px 22px",borderBottom:"1px solid #eef0f5",display:"flex",alignItems:"flex-start",gap:12}}>
         <div style={{flex:1}}>
           <div style={{color:INK,fontWeight:800,fontSize:18,letterSpacing:-.3}}>Exportar proposta</div>
-          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Página 1: apresentação, serviços com tudo que está incluso e bônus. Página 2: o orçamento, com desconto em cada item e, se quiser, um desconto geral em %.</div>
+          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Página 1: apresentação, serviços com tudo que está incluso e bônus. Página 2: o orçamento. Clique no nome de qualquer item pra editar (ex.: trocar "Conta 1" por "Lero Agro") e coloque o desconto de cada um.</div>
         </div>
         <button type="button" onClick={onClose} title="Fechar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
       </div>
