@@ -104611,7 +104611,12 @@ async function pxFichaDaReuniao(transcricao,titulo,clienteNome){
   return String(txt||"").replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim();
 }
 
-function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
+function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin, modoNegocio}){
+  /* (01/10/2026, Gustavo) modoNegocio = caixa usada no Gestão › Plano de Crescimento. "Não misturar esses
+     materiais com coisas de copy.. são duas coisas diferentes.. aqui é um raio-x de gargalos e oportunidades".
+     Os materiais ficam com client_id "pixels-negocio" — nenhuma copy/briefing/roteiro lê esse id (a leitura de
+     copy é claude_contexto_copy_base, que filtra client_id exato). Aqui só muda o TEXTO da caixa. */
+  const _dest=modoNegocio?"diagnóstico":"cérebro";
   const [itens,setItens]=useState(null);
   const [erro,setErro]=useState("");
   const [subindo,setSubindo]=useState("");        // nome do arquivo em andamento
@@ -104800,8 +104805,8 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const _STATUS={pendente:{t:"sem ficha",c:"#94a3b8",b:"#f1f5f9"},lendo:{t:"lendo…",c:"#b45309",b:"#fffbeb"},
                  pronta:{t:"ficha pronta",c:"#047857",b:"#ecfdf5"},manual:{t:"ficha escrita à mão",c:"#047857",b:"#ecfdf5"},
                  erro:{t:"não deu pra ler",c:"#b91c1c",b:"#fef2f2"}};
-  return <PlaybookBlock id="pb-materiais" title="Materiais do cliente"
-    subtitle="Folder, manual, catálogo — a IA lê uma vez e guarda os fatos; é isso que entra em toda copy, briefing e roteiro deste cliente"
+  return <PlaybookBlock id="pb-materiais" title={modoNegocio?"Materiais do negócio":"Materiais do cliente"}
+    subtitle={modoNegocio?"Planejamento, metas, DRE, processos, reuniões — a IA lê e usa SÓ no diagnóstico de gargalos e oportunidades. Nunca entra em copy, briefing ou roteiro de cliente.":"Folder, manual, catálogo — a IA lê uma vez e guarda os fatos; é isso que entra em toda copy, briefing e roteiro deste cliente"}
     icon="fileText" color="#f5b301" fixo="#f5b301">
 
     {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler os materiais: {erro}</div>}
@@ -104874,7 +104879,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
             <span style={{background:_corExt+"14",color:_corExt,border:"1px solid "+_corExt+"33",borderRadius:7,padding:"2px 7px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>{_ext}</span>
             {isBioter && <span title={m.unidade?"Só esta unidade lê":"Todas as unidades leem (Paraguay traduzido)"} style={{background:m.unidade?"#f1f5f9":"#ecfdf5",color:m.unidade?"#475569":"#047857",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,flexShrink:0}}>{m.unidade?_uniLabel(m.unidade):"Grupo · todas"}</span>}
             <span style={{flex:1}}/>
-            {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"}
+            {isAdmin && <button type="button" title={on?("Tirar do "+_dest+" (guarda o arquivo e a ficha)"):("Voltar pro "+_dest)}
               onClick={function(e){ e.stopPropagation(); _patch(m,{ativo:!m.ativo}); }}
               style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex",flexShrink:0}}>
               <span style={{width:32,height:18,borderRadius:99,background:on?"#f5b301":"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
@@ -104909,14 +104914,14 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
           <div style={{background:"#fff",borderRadius:_isMobM?0:20,width:"100%",maxWidth:960,maxHeight:_isMobM?"100%":"94vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.45)"}}>
             <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobM?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#f5b301 0%,#fbbf24 100%)",color:"#fff",flexShrink:0}}>
               <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
-                <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Material do cliente · {st.t}{isBioter?(" · "+(m.unidade?_uniLabel(m.unidade):"Grupo, todas as unidades")):""}</span>
+                <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>{modoNegocio?"Material do negócio":"Material do cliente"} · {st.t}{isBioter?(" · "+(m.unidade?_uniLabel(m.unidade):"Grupo, todas as unidades")):""}</span>
                 <span style={{fontWeight:800,fontSize:_isMobM?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.titulo||m.arquivo_nome||"Material"}</span>
                 <span style={{opacity:.85,fontSize:11,fontWeight:600,marginTop:2}}>{m.arquivo_nome||""}{m.arquivo_tamanho?(" · "+_pbMatTamanho(m.arquivo_tamanho)):""}{m.created_by?(" · "+m.created_by):""}</span>
               </span>
-              {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"} onClick={function(){ _patch(m,{ativo:!m.ativo}); }}
+              {isAdmin && <button type="button" title={on?("Tirar do "+_dest+" (guarda o arquivo e a ficha)"):("Voltar pro "+_dest)} onClick={function(){ _patch(m,{ativo:!m.ativo}); }}
                 style={{background:"rgba(255,255,255,.16)",border:"none",borderRadius:99,padding:"6px 12px",color:"#fff",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8}}>
                 <span style={{width:32,height:18,borderRadius:99,background:on?"#fff":"rgba(255,255,255,.35)",display:"inline-block",position:"relative"}}><span style={{position:"absolute",top:2,left:on?16:2,width:14,height:14,borderRadius:"50%",background:on?"#f5b301":"#fff",transition:"left .16s"}}/></span>
-                {on?"No cérebro":"Fora do cérebro"}
+                {on?("No "+_dest):("Fora do "+_dest)}
               </button>}
               <button type="button" onClick={_fechar} title="Fechar (Esc)" style={{background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -104961,7 +104966,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         </div>;
       })()}
       <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
-        {_ativos} de {_vis.length} {_vis.length===1?"material":"materiais"} indo pro cérebro{(isBioter&&unitTab&&itens&&itens.length>_vis.length)?(" · mostrando só "+_uniLabel(unitTab)+" + Grupo ("+(itens.length-_vis.length)+" de outras unidades escondidos)"):""}. O interruptor tira do prompt sem apagar o arquivo.
+        {_ativos} de {_vis.length} {_vis.length===1?"material":"materiais"} {modoNegocio?"entrando no diagnóstico":"indo pro cérebro"}{(isBioter&&unitTab&&itens&&itens.length>_vis.length)?(" · mostrando só "+_uniLabel(unitTab)+" + Grupo ("+(itens.length-_vis.length)+" de outras unidades escondidos)"):""}. O interruptor tira do prompt sem apagar o arquivo.
       </div>
     </div>}
   </PlaybookBlock>;
@@ -131227,8 +131232,10 @@ function _EaAprende({ isMob }){
    nosso negócio, a partir desses materiais". Nome escolhido por ele: Plano de Crescimento.
    Só sócios (bloco gestao.crescimento, padrão _pxSocio).
 
-   1) Materiais do negócio — a MESMA caixa dos Materiais do cliente (_PbMateriais), guardada à parte
-      com client_id "pixels-negocio" (não mistura com o cérebro de copy de nenhum cliente).
+   1) Materiais do negócio — a MESMA caixa dos Materiais do cliente (_PbMateriais, modoNegocio), guardada à
+      parte com client_id "pixels-negocio". REGRA DO GUSTAVO (01/10): esses materiais NUNCA entram em copy,
+      briefing ou roteiro de ninguém — Playbook é pra copy, Plano de Crescimento é raio-x do negócio.
+      Garantia: a leitura de copy (claude_contexto_copy_base) filtra client_id exato do cliente.
    2) Retrato da operação — números que o app já tem: demandas (abertas, atrasadas, paradas, no prazo,
       retrabalho, carga por pessoa), receita recorrente (client_contracts) e concentração, vendas pontuais, funil comercial
       e o placar de eficiência (efic_placar). Lê só colunas leves (nada de timeline/arquivos).
@@ -131432,13 +131439,13 @@ function PagePlanoCrescimento({isMob}){
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1180,margin:"0 auto",fontFamily:FF}}>
     <div>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?21:26,letterSpacing:-.6}}>Plano de Crescimento</div>
-      <div style={{color:"#64748b",fontSize:13,marginTop:4,maxWidth:760,lineHeight:1.55}}>Suba os materiais do negócio (planejamento, metas, processos, reuniões). A IA cruza com os números reais do app e aponta onde a Pixels trava e o que fazer primeiro.</div>
+      <div style={{color:"#64748b",fontSize:13,marginTop:4,maxWidth:760,lineHeight:1.55}}>Raio-x de gargalos e oportunidades da Pixels. Suba os materiais do negócio; a IA cruza com os números reais do app e aponta onde a Pixels trava e o que fazer primeiro. <b style={{color:"#334155"}}>Nada daqui vai pra copy, briefing ou roteiro de cliente</b> — isso continua só no Playbook.</div>
     </div>
 
     {/* 1) Materiais do negócio */}
     <div style={{display:"flex",flexDirection:"column",gap:0}}>
       {typeof _PbMateriais==="function"
-        ? <_PbMateriais clientId={PC_CLIENT} clienteNome="Pixels (negócio)" isBioter={false} unitTab={null} isAdmin={true}/>
+        ? <_PbMateriais clientId={PC_CLIENT} clienteNome="Pixels (negócio)" isBioter={false} unitTab={null} isAdmin={true} modoNegocio={true}/>
         : <div style={card}>Caixa de materiais indisponível.</div>}
     </div>
 
