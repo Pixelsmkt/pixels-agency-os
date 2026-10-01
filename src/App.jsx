@@ -24417,6 +24417,28 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
     return function(){ clearTimeout(_t); };
   },[]);
   const [calMonth,setCalMonth]=useState(new Date());
+  /* (01/10/2026, Gustavo) Seletor do rodapé não pode "pular": cada mês tem altura diferente
+     (5 ou 6 semanas, mais ou menos cards). Ao clicar nele, guarda onde estava na tela e, depois
+     de trocar o mês, rola a página pra ele ficar no MESMO lugar, embaixo do mouse. */
+  const _rodapeNavRef=useRef(null);
+  const _rodapeTopRef=useRef(null);
+  function _pxRolarAte(el, alvoTop){
+    try{
+      const atual=el.getBoundingClientRect().top; const d=atual-alvoTop; if(Math.abs(d)<1) return;
+      let p=el.parentElement;
+      while(p&&p!==document.body){ const cs=getComputedStyle(p); if(/(auto|scroll)/.test(cs.overflowY)&&p.scrollHeight>p.clientHeight){ p.scrollTop+=d; return; } p=p.parentElement; }
+      window.scrollBy(0,d);
+    }catch(_){}
+  }
+  React.useLayoutEffect(function(){
+    const alvo=_rodapeTopRef.current, el=_rodapeNavRef.current;
+    if(alvo==null||!el) return undefined;
+    _pxRolarAte(el,alvo);
+    // imagens dos cards terminam de carregar depois — reajusta mais algumas vezes
+    const ts=[60,200,500,1000].map(function(ms){ return setTimeout(function(){ if(_rodapeNavRef.current) _pxRolarAte(_rodapeNavRef.current,alvo); },ms); });
+    const fim=setTimeout(function(){ _rodapeTopRef.current=null; },1100);
+    return function(){ ts.forEach(clearTimeout); clearTimeout(fim); };
+  },[calMonth]);
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
@@ -26023,7 +26045,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       )}
 
       {/* 01/10/2026 (Gustavo): mesmo seletor de mês no rodapé, pra não precisar subir até o topo */}
-      <div style={{display:"flex",justifyContent:"center",margin:"46px 0 30px"}}>
+      <div ref={_rodapeNavRef} onClickCapture={function(){ if(_rodapeNavRef.current) _rodapeTopRef.current=_rodapeNavRef.current.getBoundingClientRect().top; }}
+        style={{display:"flex",justifyContent:"center",margin:"46px 0 30px"}}>
         <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
       </div>
 
