@@ -20126,9 +20126,15 @@ function pxVeSeloPub(u){
     return !!((m&&m.pagamentoPorDemanda)||u.pagamentoPorDemanda);
   }catch(_){ return false; }
 }
+/* (01/10/2026, Gustavo) Reprovado, publicado, agendado, aprovado, pausado, em avaliação: o card já
+   saiu da mão de quem produz — não precisa da tag de data de publicação (mesma lista do prazo). */
+function pxStatusSemSeloPub(t){
+  return ["avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"].indexOf(String((t&&t.status)||""))!==-1;
+}
 function pxCapaMostraPub(t, viewer){
   if(!t||!t.publishDate) return false;
   if(!pxVeSeloPub(viewer)) return false;
+  if(pxStatusSemSeloPub(t)) return false;
   try{
     if(_demTemProducao(t)) return true;
     if(typeof pxIsVideoTask==="function"&&pxIsVideoTask(t)) return true;
@@ -29120,7 +29126,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
                         {/* Data de publicação — badge moderno com calendário (card de designer/editor já mostra grande no topo) */}
-                        {t.publishDate&&!pxCapaMostraPub(t,activeUser)&&(function(){
+                        {t.publishDate&&!pxCapaMostraPub(t,activeUser)&&!(pxVeSeloPub(activeUser)&&pxStatusSemSeloPub(t))&&(function(){
                           const d=new Date(t.publishDate+"T12:00:00");
                           const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
                           const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
