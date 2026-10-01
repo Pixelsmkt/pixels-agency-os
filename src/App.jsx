@@ -20117,8 +20117,18 @@ function pxPubRelativo(t){
   }catch(_){ return null; }
 }
 /* Card de quem produz (designer/editor freela) ou de vídeo → mostra a data grande na capa. */
-function pxCapaMostraPub(t){
+/* (01/10/2026, Gustavo) "deve aparecer somente na visão dos colaboradores… editores de vídeo ou designers,
+   não pros sócios nem estrategista". Quem vê: designer/editor (ou quem é pago por demanda). */
+function pxVeSeloPub(u){
+  try{ u=u||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null); if(!u) return false;
+    if(u.dash==="designer"||u.dash==="editor"||u.dash==="video") return true;
+    const m=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===u.id;});
+    return !!((m&&m.pagamentoPorDemanda)||u.pagamentoPorDemanda);
+  }catch(_){ return false; }
+}
+function pxCapaMostraPub(t, viewer){
   if(!t||!t.publishDate) return false;
+  if(!pxVeSeloPub(viewer)) return false;
   try{
     if(_demTemProducao(t)) return true;
     if(typeof pxIsVideoTask==="function"&&pxIsVideoTask(t)) return true;
@@ -28919,9 +28929,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   })()}
                   <style>{`@keyframes pixelsPulseAlert{0%,100%{transform:scale(1);box-shadow:0 2px 8px rgba(220,38,38,0.55),0 0 0 2px #fff}50%{transform:scale(1.08);box-shadow:0 3px 12px rgba(220,38,38,0.75),0 0 0 3px #fff}}`}</style>
                   {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
-                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t))||pxCapaMostraPub(t))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t))||pxCapaMostraPub(t,activeUser))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
                     {/* (01/10/2026, Gustavo) Data de publicação na capa — designer/editor bate o olho e sabe se "é pra hoje" */}
-                    {pxCapaMostraPub(t)&&<PxSeloPublicacao task={t}/>}
+                    {pxCapaMostraPub(t,activeUser)&&<PxSeloPublicacao task={t}/>}
                     {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
                     {t.contentType&&(function(){
                       const types={
@@ -28969,7 +28979,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const hasTopChips=!!(t.contentType||t.referenceMonth||pxCapaMostraPub(t));
+                    const hasTopChips=!!(t.contentType||t.referenceMonth||pxCapaMostraPub(t,activeUser));
                     // Respiro entre chips (Arte única / Mai/26) e capa: 8px.
                     // Sem chips em cima a capa cola no topo (visual sem espaço morto).
                     const mt=hasVisibleTagStripe?5:(hasTopChips?8:0);
@@ -29030,7 +29040,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
                         {/* Data de publicação — badge moderno com calendário (card de designer/editor já mostra grande no topo) */}
-                        {t.publishDate&&!pxCapaMostraPub(t)&&(function(){
+                        {t.publishDate&&!pxCapaMostraPub(t,activeUser)&&(function(){
                           const d=new Date(t.publishDate+"T12:00:00");
                           const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
                           const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
@@ -54871,7 +54881,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                 <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,fontWeight:600,padding:"2px 8px",borderRadius:3}}>{mainCl.abbr}</span>
                 <span style={{fontSize:11,color:"#94a3b8"}}>{dlLabel}</span>
               </div>}
-              {main.publishDate&&<div style={{marginBottom:10}}><PxSeloPublicacao task={main} grande/></div>}
+              {main.publishDate&&pxVeSeloPub(user)&&<div style={{marginBottom:10}}><PxSeloPublicacao task={main} grande/></div>}
               <div style={{color:"#0f172a",fontWeight:600,fontSize:20,lineHeight:1.3,marginBottom:8}}>{main.title}</div>
               {desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6,marginBottom:14,flex:1}}>
                 {desc.length>200?desc.slice(0,200)+"…":desc}
@@ -54925,7 +54935,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                 {(cl||t.publishDate)&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
                   {cl&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:8,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{cl.abbr}</span>}
                   {cl&&t.sector&&<span style={{fontSize:9,color:"#94a3b8"}}>{t.sector}</span>}
-                  {t.publishDate&&<span style={{marginLeft:"auto"}}><PxSeloPublicacao task={t}/></span>}
+                  {t.publishDate&&pxVeSeloPub(user)&&<span style={{marginLeft:"auto"}}><PxSeloPublicacao task={t}/></span>}
                 </div>}
               </div>;
             })}
