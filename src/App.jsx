@@ -88774,17 +88774,20 @@ function _calcDescValor(it, d){
   const r = d.tipo==="pct" ? Math.round(bruto * Math.min(100,v) / 100) : Math.min(bruto, Math.round(v));
   return Math.max(0, r);
 }
-function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
+function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob, inicial, propostaId, onSalvar}){
+  /* (01/10/2026, Gustavo) Salvar proposta: "inicial" traz os campos de uma proposta salva
+     (cliente, validade, intro, descontos, nomes editados…) pra editar sem refazer tudo. */
+  const _ini = (inicial && typeof inicial==="object") ? inicial : {};
   const fmt = _calcFmtBRL;
   const PX = "#9F43F6", INK="#0f172a", MUTE="#64748b", BORD="#e5e0f2", SOFT2="#94a3b8";
   const FF = (typeof _PORTF_FF!=="undefined") ? _PORTF_FF : "Inter, system-ui, sans-serif";
-  const [cliente,setCliente] = useState("");
-  const [validade,setValidade] = useState(15);
-  const [obs,setObs] = useState("");
-  const [logoCli,setLogoCli] = useState("");   // data-url ou logo de cliente cadastrado
+  const [cliente,setCliente] = useState(_ini.cliente||"");
+  const [validade,setValidade] = useState(_ini.validade!=null?_ini.validade:15);
+  const [obs,setObs] = useState(_ini.obs||"");
+  const [logoCli,setLogoCli] = useState(_ini.logoCli||"");   // data-url ou logo de cliente cadastrado
   const _introPadrao = function(nome){ return (nome?nome+", p":"P")+"reparamos esta proposta a partir do que conversamos sobre o momento da sua empresa.\n\nA Pixels é uma assessoria de marketing e growth. Não fazemos só arte e postagem: cuidamos da estratégia, do planejamento, da produção, da análise dos resultados e do acompanhamento da marca, pra que o digital gere demanda e apoie o comercial.\n\nNesta primeira página está tudo o que o trabalho inclui, serviço por serviço, e os bônus que o pacote libera. Na página seguinte, o investimento item a item."; };
-  const [intro,setIntro] = useState(_introPadrao(""));
-  const [introMexido,setIntroMexido] = useState(false);
+  const [intro,setIntro] = useState(_ini.intro!=null?_ini.intro:_introPadrao(_ini.cliente||""));
+  const [introMexido,setIntroMexido] = useState(!!_ini.introMexido);
   useEffect(function(){ if(!introMexido) setIntro(_introPadrao(String(cliente).trim())); },[cliente]);
   const _clientesComLogo = (function(){
     try{
@@ -88798,13 +88801,24 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
     if(!/^image\//.test(f.type)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolha uma imagem (PNG, JPG ou SVG)."); return; }
     const r=new FileReader(); r.onload=function(){ setLogoCli(String(r.result||"")); }; r.readAsDataURL(f);
   }
-  const [desc,setDesc] = useState({});
-  const [geral,setGeral] = useState({valor:"", motivo:""});   // desconto geral em %, depois dos descontos por item   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
+  const [desc,setDesc] = useState(_ini.desc&&typeof _ini.desc==="object"?_ini.desc:{});
+  const [geral,setGeral] = useState(_ini.geral&&typeof _ini.geral==="object"?_ini.geral:{valor:"", motivo:""});   // desconto geral em %, depois dos descontos por item   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
   function _d(id){ return desc[id] || {tipo:"pct", valor:"", motivo:""}; }
   function _set(id, patch){ setDesc(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, _d(id), patch); return n; }); }
 
   /* (01/10 16:12, Gustavo) nome e detalhe de cada item editáveis — ex.: "… · Lero Agro" no lugar de "Conta 1" */
-  const [txt,setTxt] = useState({});   // { [itemId]: {nome, detalhe} }
+  const [txt,setTxt] = useState(_ini.txt&&typeof _ini.txt==="object"?_ini.txt:{});   // { [itemId]: {nome, detalhe} }
+  const [salvando,setSalvando] = useState(false);
+  const [salvoEm,setSalvoEm] = useState(null);
+  function _salvar(comoNova){
+    if(typeof onSalvar!=="function"||salvando) return;
+    if(!String(cliente).trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Coloque o nome do cliente pra salvar a proposta."); return; }
+    setSalvando(true);
+    const dados={cliente:String(cliente).trim(),validade:validade,obs:obs,logoCli:logoCli,intro:intro,introMexido:introMexido,desc:desc,geral:geral,txt:txt};
+    Promise.resolve(onSalvar(dados,{comoNova:!!comoNova,totalMensal:T.recFinal,totalPontual:T.ponFinal}))
+      .then(function(ok){ setSalvando(false); if(ok) setSalvoEm(new Date()); })
+      .catch(function(){ setSalvando(false); });
+  }
   function _setTxt(id, patch){ setTxt(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, o[id]||{}, patch); return n; }); }
   const linhas = itens.map(function(it){
     const d = _d(it.id);
@@ -89135,7 +89149,17 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
           {rec.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Mensal: {T.recDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.recCheio)}</s>} <b style={{color:PX,fontSize:16}}>{fmt(T.recFinal)}</b>/mês{T.recDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.recDesc)}</span>}</div>}
           {pon.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Pontual: {T.ponDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.ponCheio)}</s>} <b style={{color:PX,fontSize:16}}>{ponAPartir?"a partir de ":""}{fmt(T.ponFinal)}</b>{T.ponDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.ponDesc)}</span>}</div>}
         </div>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {typeof onSalvar==="function"&&<>
+            {salvoEm&&<span style={{color:"#16a34a",fontSize:11.5,fontWeight:700}}>Salva às {salvoEm.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span>}
+            {propostaId&&<button type="button" onClick={function(){_salvar(true);}} disabled={salvando} title="Cria uma cópia nova e mantém a original como está"
+              style={{background:"#fff",border:"1px solid "+BORD,borderRadius:10,padding:"10px 13px",color:"#475569",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Salvar como nova</button>}
+            <button type="button" onClick={function(){_salvar(false);}} disabled={salvando} title={propostaId?"Atualiza esta proposta (a versão anterior fica guardada no histórico)":"Guarda a proposta em Propostas salvas pra editar depois"}
+              style={{background:"#0f172a",border:"none",borderRadius:10,padding:"10px 15px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:salvando?"wait":"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:6}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              {salvando?"Salvando…":(propostaId?"Salvar alterações":"Salvar proposta")}
+            </button>
+          </>}
           <button type="button" onClick={copiar} style={{background:"#fff",border:"1px solid "+BORD,borderRadius:10,padding:"10px 15px",color:"#475569",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Copiar texto</button>
           <button type="button" onClick={exportarPDF} style={{background:PX,border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)"}}>Exportar PDF</button>
         </div>
@@ -89144,6 +89168,70 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
   </div>;
 }
 
+/* ═══ PROPOSTAS SALVAS da calculadora (01/10/2026, Gustavo) ═══
+   "deveria ter um botão Salvar pra não precisar criar a proposta toda vez, e dar pra editar…
+   um arquivo das propostas produzidas… poder alterar as já criadas por ali mesmo".
+   Tabela propostas_comerciais: calc (seleção da calculadora) + export (campos do Exportar:
+   cliente, intro, descontos, nomes editados…). Editar guarda a versão anterior em
+   "historico" (últimas 20) — nada é perdido. Não tem excluir. */
+function _calcFmtData(iso){ try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } }
+function _CalcPropostasSalvas({onAbrir, onDuplicar, onClose, isMob, atualId}){
+  const PX="#9F43F6", INK="#0f172a", MUTE="#64748b", BORD="#e5e0f2";
+  const FF=(typeof _PORTF_FF!=="undefined")?_PORTF_FF:"Inter, system-ui, sans-serif";
+  const fmt=_calcFmtBRL;
+  const [lista,setLista]=useState(null);
+  const [erro,setErro]=useState("");
+  const [busca,setBusca]=useState("");
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb){ setErro("Sem conexão com o banco."); setLista([]); return; }
+    window._sb.from("propostas_comerciais").select("id,cliente,total_mensal,total_pontual,created_by,created_at,updated_by,updated_at,calc,export")
+      .is("arquivada_at",null).order("updated_at",{ascending:false}).limit(300)
+      .then(function(r){
+        if(r&&r.error){ setErro(/relation|does not exist|schema cache/i.test(r.error.message||"")?"O arquivo de propostas ainda não foi ativado no banco.":"Não consegui carregar: "+r.error.message); setLista([]); return; }
+        setLista((r&&r.data)||[]);
+      }).catch(function(e){ setErro("Não consegui carregar."); setLista([]); });
+  },[]);
+  const q=String(busca).trim().toLocaleLowerCase("pt-BR");
+  const vis=(lista||[]).filter(function(p){ return !q||String(p.cliente||"").toLocaleLowerCase("pt-BR").indexOf(q)>=0; });
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:isMob?8:20,fontFamily:FF}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:760,maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(15,23,42,.3)",overflow:"hidden"}}>
+      <div style={{padding:"18px 22px",borderBottom:"1px solid #eef0f5",display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{flex:1}}>
+          <div style={{color:INK,fontWeight:800,fontSize:18,letterSpacing:-.3}}>Propostas salvas</div>
+          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Abra pra editar os itens e os descontos, ou duplique pra usar de base numa proposta nova.</div>
+        </div>
+        <button type="button" onClick={onClose} title="Fechar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
+      </div>
+      <div style={{padding:"12px 22px 0"}}>
+        <input type="text" value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar pelo cliente…"
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid "+BORD,borderRadius:10,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none"}}/>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"12px 22px 18px",display:"flex",flexDirection:"column",gap:8}}>
+        {lista===null&&<div style={{color:MUTE,fontSize:13,padding:"20px 0",textAlign:"center"}}>Carregando…</div>}
+        {erro&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:10,padding:"10px 12px",fontSize:12.5,fontWeight:600}}>{erro}</div>}
+        {lista&&!erro&&vis.length===0&&<div style={{color:MUTE,fontSize:13,padding:"24px 0",textAlign:"center"}}>{q?"Nenhuma proposta com esse nome.":"Nenhuma proposta salva ainda. Monte na calculadora, clique em Exportar proposta e depois em Salvar proposta."}</div>}
+        {vis.map(function(p){
+          const atual=atualId&&p.id===atualId;
+          return <div key={p.id} style={{border:"1px solid "+(atual?PX:"#eef0f5"),background:atual?"#faf5ff":"#fff",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{color:INK,fontSize:14,fontWeight:800}}>{p.cliente||"Sem nome"}{atual&&<span style={{color:PX,fontSize:11,fontWeight:800,marginLeft:8}}>aberta agora</span>}</div>
+              <div style={{color:MUTE,fontSize:11.5,marginTop:3}}>
+                {Number(p.total_mensal)>0&&<b style={{color:INK}}>{fmt(Number(p.total_mensal))}/mês</b>}
+                {Number(p.total_mensal)>0&&Number(p.total_pontual)>0&&" · "}
+                {Number(p.total_pontual)>0&&<b style={{color:INK}}>{fmt(Number(p.total_pontual))} pontual</b>}
+                {" · "}alterada {_calcFmtData(p.updated_at)}{p.updated_by?" por "+p.updated_by:""}
+              </div>
+            </div>
+            <button type="button" onClick={function(){ onDuplicar(p); }} title="Abre uma cópia — a original fica como está"
+              style={{background:"#fff",border:"1px solid "+BORD,borderRadius:9,padding:"8px 12px",color:"#475569",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Duplicar</button>
+            <button type="button" onClick={function(){ onAbrir(p); }}
+              style={{background:PX,border:"none",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Abrir e editar</button>
+          </div>;
+        })}
+      </div>
+    </div>
+  </div>;
+}
 function _CalculadoraModular({isMob, persistClientId}){
   const PX = "#9F43F6";
   const PX_DK = "#7c3aed";
@@ -89181,6 +89269,8 @@ function _CalculadoraModular({isMob, persistClientId}){
   const [confete,setConfete]   = useState(false);
   const [copiado,setCopiado]   = useState(false);
   const [exportOpen,setExportOpen] = useState(false);   // 01/10/2026: Exportar proposta
+  const [arquivoOpen,setArquivoOpen] = useState(false);  // 01/10/2026: Propostas salvas
+  const [propAtual,setPropAtual] = useState(null);       // {id, cliente, export} — proposta salva aberta na calculadora
   const _prevUnlocked = useRef(0);
   // Peças do confete — geradas uma única vez pra não recalcular a cada render.
   const _confPecas = useMemo(function(){
@@ -89310,6 +89400,69 @@ function _CalculadoraModular({isMob, persistClientId}){
     };
     if(extra) for(const k in extra) base[k]=extra[k];
     return base;
+  }
+  /* ═══ Propostas salvas (01/10/2026, Gustavo) ═══ */
+  function _aplicarCalc(pl){
+    if(!pl||typeof pl!=="object") return;
+    try{
+      setSocialChannels(pl.socialChannels&&typeof pl.socialChannels==="object"?pl.socialChannels:{fbInsta:0,tiktok:0,linkedin:0});
+      setSocialPosts(typeof pl.socialPosts==="number"?pl.socialPosts:cfg.socialManagement.basePostsPerWeek);
+      setCreatives(pl.creatives&&typeof pl.creatives==="object"?pl.creatives:{staticCreatives:0,editedVideos:0,videoVariations:0});
+      setTrafficKey(typeof pl.trafficKey==="string"?pl.trafficKey:"none");
+      setGrowthOn(!!pl.growthOn);
+      setGraficosKey(typeof pl.graficosKey==="string"?pl.graficosKey:"none");
+      setCaptureDailies(typeof pl.captureDailies==="number"?pl.captureDailies:0);
+      setOneTimeIds(Array.isArray(pl.oneTimeIds)?pl.oneTimeIds:[]);
+    }catch(_){}
+  }
+  function _abrirProposta(row, duplicar){
+    _aplicarCalc(row.calc);
+    const ex=Object.assign({}, row.export||{});
+    if(duplicar) ex.cliente=(ex.cliente||row.cliente||"")+" (cópia)";
+    setPropAtual(duplicar?{id:null,cliente:ex.cliente,export:ex}:{id:row.id,cliente:row.cliente,export:ex});
+    setArquivoOpen(false);
+    setExportOpen(false);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(duplicar?"Cópia aberta — ajuste e salve como proposta nova.":"Proposta aberta: "+(row.cliente||"")+". Mexa nos itens e clique em Exportar pra salvar.",4200);
+  }
+  async function _salvarProposta(dados, info){
+    const sb=(typeof window!=="undefined")&&window._sb;
+    if(!sb){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexão com o banco."); return false; }
+    const quem=(typeof _pxQuem==="function"?_pxQuem():"")||"";
+    const agora=new Date().toISOString();
+    const base={cliente:dados.cliente, calc:_calcPayload(), export:dados,
+      total_mensal:Number(info&&info.totalMensal)||0, total_pontual:Number(info&&info.totalPontual)||0,
+      updated_by:quem, updated_at:agora};
+    try{
+      if(propAtual&&propAtual.id&&!(info&&info.comoNova)){
+        const cur=await sb.from("propostas_comerciais").select("calc,export,total_mensal,total_pontual,updated_at,updated_by,historico").eq("id",propAtual.id).maybeSingle();
+        if(cur&&cur.error) throw cur.error;
+        const h=Array.isArray(cur&&cur.data&&cur.data.historico)?cur.data.historico.slice(0):[];
+        if(cur&&cur.data) h.push({calc:cur.data.calc,export:cur.data.export,total_mensal:cur.data.total_mensal,total_pontual:cur.data.total_pontual,updated_at:cur.data.updated_at,updated_by:cur.data.updated_by});
+        const r=await sb.from("propostas_comerciais").update(Object.assign({},base,{historico:h.slice(-20)})).eq("id",propAtual.id);
+        if(r&&r.error) throw r.error;
+        setPropAtual({id:propAtual.id,cliente:dados.cliente,export:dados});
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Proposta atualizada.");
+      } else {
+        const r=await sb.from("propostas_comerciais").insert(Object.assign({},base,{created_by:quem,created_at:agora,historico:[]})).select("id").single();
+        if(r&&r.error) throw r.error;
+        setPropAtual({id:r.data.id,cliente:dados.cliente,export:dados});
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Proposta salva em Propostas salvas.");
+      }
+      return true;
+    }catch(e){
+      const m=String((e&&e.message)||e||"");
+      if(typeof pixelsToast!=="undefined") pixelsToast.error(/relation|does not exist|schema cache/i.test(m)?"O arquivo de propostas ainda não foi ativado no banco.":"Não consegui salvar: "+m,6000);
+      return false;
+    }
+  }
+  function _PropostasButton(){
+    return <button type="button" onClick={function(){ setArquivoOpen(true); }} title="Propostas já criadas — abrir, editar ou duplicar"
+      style={{background:"#fff",color:"#475569",border:"1px solid "+BORD,borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=PX;e.currentTarget.style.color=PX_DK;}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor=BORD;e.currentTarget.style.color="#475569";}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      Propostas salvas
+    </button>;
   }
   // Salvar o orcamento (botao da ultima etapa, no portal do cliente)
   const [orcSalvando,setOrcSalvando] = useState(false);
@@ -91019,6 +91172,7 @@ function _CalculadoraModular({isMob, persistClientId}){
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingTop:4}}>
         <_ResetButton/>
         {!isMob&&<_CopyButton/>}
+        {!persistClientId&&<_PropostasButton/>}
         {!isMob&&!persistClientId&&<_ExportButton/>}
         {!isMob&&<_FocusButton/>}
       </div>
@@ -91026,7 +91180,16 @@ function _CalculadoraModular({isMob, persistClientId}){
 
     {/* ═══ TRILHA DE ETAPAS ═══ */}
     <_StepRail/>
-    {exportOpen&&<_CalcExportarProposta itens={_itensProposta()} servicos={_servicosProposta()} bonus={calculateUnlockedBonuses(monthlyRecurring)} isMob={isMob} onClose={function(){setExportOpen(false);}}/>}
+    {/* Proposta salva aberta — faixa pra saber o que está editando */}
+    {!persistClientId&&propAtual&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#faf5ff",border:"1px solid "+PX_BD,borderRadius:12,padding:"9px 14px",marginTop:12}}>
+      <span style={{color:PX_DK,fontSize:12.5,fontWeight:800,flex:1,minWidth:180}}>{propAtual.id?"Editando a proposta salva: ":"Cópia (ainda não salva): "}<span style={{color:INK}}>{propAtual.cliente||"sem nome"}</span></span>
+      <button type="button" onClick={function(){ if(hasAnySelection) setExportOpen(true); }} style={{background:PX,color:"#fff",border:"none",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:800,cursor:"pointer"}}>Abrir proposta</button>
+      <button type="button" onClick={function(){ setPropAtual(null); }} title="Para de editar esta proposta (ela continua salva)" style={{background:"#fff",color:MUTE,border:"1px solid "+BORD,borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sair da edição</button>
+    </div>}
+    {arquivoOpen&&<_CalcPropostasSalvas isMob={isMob} atualId={propAtual&&propAtual.id} onClose={function(){setArquivoOpen(false);}}
+      onAbrir={function(r){ _abrirProposta(r,false); }} onDuplicar={function(r){ _abrirProposta(r,true); }}/>}
+    {exportOpen&&<_CalcExportarProposta key={(propAtual&&(propAtual.id||"copia"))||"nova"} itens={_itensProposta()} servicos={_servicosProposta()} bonus={calculateUnlockedBonuses(monthlyRecurring)} isMob={isMob} onClose={function(){setExportOpen(false);}}
+      inicial={propAtual&&propAtual.export} propostaId={propAtual&&propAtual.id} onSalvar={persistClientId?null:_salvarProposta}/>}
 
     {/* ═══ CORPO — etapa atual + resumo lateral ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 340px",gap:18,alignItems:"start",marginTop:16}}>
