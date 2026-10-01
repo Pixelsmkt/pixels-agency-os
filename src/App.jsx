@@ -28913,7 +28913,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     // Short fica de fora (17/09/2026): a Hellen preenche, não passa por edição.
                     // A maioria nasce sem contentType, então vale o título "Short…" também.
                     const _ehShort = (t.contentType==="video_short" || t.tipo==="video_short" || /^\s*shorts?\b/i.test(String(t.title||""))) && !(typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t));
-                    const _semProdutor = t.status==="recebida" && !_ehShort && !_demTemProducao(t);
+                    // (01/10/2026, Gustavo) "Somente story" é o Vinicius quem faz — não vai pra designer/editor, então não alerta.
+                    const _soStory = !!(t.somenteStory||t.somente_story);
+                    const _semProdutor = t.status==="recebida" && !_ehShort && !_soStory && !_demTemProducao(t);
                     if(!_semPagamento && !_semTipo && !_semProdutor) return null;
                     const _dot=function(title,children){
                       return <div title={title} style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#ef4444,#dc2626)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(220,38,38,0.55), 0 0 0 2px #fff",cursor:"help",animation:"pixelsPulseAlert 1.8s ease-in-out infinite"}}>{children}</div>;
