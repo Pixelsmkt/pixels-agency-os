@@ -88660,7 +88660,8 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
   const [cliente,setCliente] = useState("");
   const [validade,setValidade] = useState(15);
   const [obs,setObs] = useState("");
-  const [desc,setDesc] = useState({});   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
+  const [desc,setDesc] = useState({});
+  const [geral,setGeral] = useState({valor:"", motivo:""});   // desconto geral em %, depois dos descontos por item   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
   function _d(id){ return desc[id] || {tipo:"pct", valor:"", motivo:""}; }
   function _set(id, patch){ setDesc(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, _d(id), patch); return n; }); }
 
@@ -88672,12 +88673,16 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
   const rec = linhas.filter(function(l){ return l.recorrente; });
   const pon = linhas.filter(function(l){ return !l.recorrente; });
   function _soma(arr,k){ return arr.reduce(function(s,l){ return s+(Number(l[k])||0); },0); }
-  const T = {
-    recCheio:_soma(rec,"total"), recDesc:_soma(rec,"descValor"), recFinal:_soma(rec,"final"),
-    ponCheio:_soma(pon,"total"), ponDesc:_soma(pon,"descValor"), ponFinal:_soma(pon,"final"),
-  };
+  /* Desconto geral (%): aplicado sobre o total que sobra depois dos descontos por item. */
+  const gPct = Math.max(0, Math.min(100, Number(geral.valor)||0));
+  const T = (function(){
+    const rc=_soma(rec,"total"), ri=_soma(rec,"descValor"), rs=rc-ri, rg=Math.round(rs*gPct/100);
+    const pc=_soma(pon,"total"), pi=_soma(pon,"descValor"), ps=pc-pi, pg=Math.round(ps*gPct/100);
+    return { recCheio:rc, recItens:ri, recSub:rs, recGeral:rg, recDesc:ri+rg, recFinal:rs-rg,
+             ponCheio:pc, ponItens:pi, ponSub:ps, ponGeral:pg, ponDesc:pi+pg, ponFinal:ps-pg };
+  })();
   const ponAPartir = pon.some(function(l){ return l.aPartir; });
-  const semMotivo = linhas.filter(function(l){ return l.descValor>0 && !String(l.desc.motivo||"").trim(); });
+  const semMotivo = [];   // (01/10 15:40) descrição do desconto é opcional — basta o valor
   function _descLabel(l){
     if(!(l.descValor>0)) return "";
     return (l.desc.tipo==="pct" ? (Number(l.desc.valor)+"%") : fmt(l.descValor)) ;
@@ -88703,7 +88708,7 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
         L.push("• "+l.nome+(l.detalhe?(" — "+l.detalhe):""));
         if(l.descValor>0){
           L.push("  De "+fmt(l.total)+unid+" por "+fmt(l.final)+unid+" (desconto de "+_descLabel(l)+(l.desc.tipo==="pct"?(" = "+fmt(l.descValor)):"")+")");
-          L.push("  Desconto: "+String(l.desc.motivo||"").trim());
+          if(String(l.desc.motivo||"").trim()) L.push("  Desconto: "+String(l.desc.motivo||"").trim());
         } else {
           L.push("  "+(l.aPartir?"A partir de ":"")+fmt(l.total)+unid);
         }
@@ -88718,13 +88723,21 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
       L.push("");
     }
     L.push("RESUMO");
+    function _quebra(itens, g, unid){
+      const q=[];
+      if(itens>0) q.push("desconto nos itens: "+fmt(itens)+unid);
+      if(g>0) q.push("desconto geral de "+gPct+"%: "+fmt(g)+unid+(String(geral.motivo).trim()?(" ("+String(geral.motivo).trim()+")"):""));
+      return q.length?("  ("+q.join(" · ")+")"):"";
+    }
     if(rec.length){
       if(T.recDesc>0) L.push("Mensal: de "+fmt(T.recCheio)+" por "+fmt(T.recFinal)+"/mês (economia de "+fmt(T.recDesc)+"/mês)");
       else L.push("Mensal: "+fmt(T.recFinal)+"/mês");
+      if(T.recGeral>0) L.push(_quebra(T.recItens,T.recGeral,"/mês"));
     }
     if(pon.length){
       if(T.ponDesc>0) L.push("Pontual: de "+(ponAPartir?"a partir de ":"")+fmt(T.ponCheio)+" por "+fmt(T.ponFinal)+" (economia de "+fmt(T.ponDesc)+")");
       else L.push("Pontual: "+(ponAPartir?"a partir de ":"")+fmt(T.ponFinal));
+      if(T.ponGeral>0) L.push(_quebra(T.ponItens,T.ponGeral,""));
     }
     if(String(obs).trim()){ L.push("", "Observações: "+String(obs).trim()); }
     L.push("", _CALC_PARCERIA.titulo, _CALC_PARCERIA.texto);
@@ -88744,7 +88757,7 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
       const temD = l.descValor>0;
       return '<tr>'
         +'<td class="it"><div class="nm">'+_esc(l.nome)+'</div>'+(l.detalhe?'<div class="dt">'+_esc(l.detalhe)+'</div>':'')
-          +(temD?'<div class="ds"><b>Desconto de '+_esc(_descLabel(l))+':</b> '+_esc(l.desc.motivo)+'</div>':'')+'</td>'
+          +(temD?'<div class="ds"><b>Desconto de '+_esc(_descLabel(l))+(String(l.desc.motivo||"").trim()?':</b> '+_esc(l.desc.motivo):'</b>')+'</div>':'')+'</td>'
         +'<td class="vl">'+(temD?'<s>'+_esc(fmt(l.total))+'</s>':'')+'</td>'
         +'<td class="vl dsv">'+(temD?('− '+_esc(fmt(l.descValor))):'—')+'</td>'
         +'<td class="vl fn">'+(l.aPartir?'<span class="ap">a partir de </span>':'')+_esc(fmt(l.final))+'<span class="un">'+unid+'</span></td>'
@@ -88755,8 +88768,10 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
       return '<h2>'+titulo+'</h2><table><thead><tr><th>Item</th><th class="vl">Valor cheio</th><th class="vl">Desconto</th><th class="vl">Valor final</th></tr></thead><tbody>'
         + arr.map(function(l){ return _linhaHtml(l,unid); }).join("") + '</tbody></table>';
     }
-    function _tot(rot, cheio, dsc, fin, unid, ap){
-      return '<div class="tot"><div class="tl">'+rot+'</div><div class="tv">'
+    function _tot(rot, cheio, dsc, fin, unid, ap, itens, g){
+      const qb = g>0 ? ('<div class="qb">'+(itens>0?('Desconto nos itens: − '+_esc(fmt(itens))+unid+'<br>'):'')
+        +'Desconto geral de '+gPct+'%'+(String(geral.motivo).trim()?(' ('+_esc(String(geral.motivo).trim())+')'):'')+': − '+_esc(fmt(g))+unid+'</div>') : '';
+      return '<div class="tot"><div class="tl">'+rot+qb+'</div><div class="tv">'
         +(dsc>0?'<s>'+_esc(fmt(cheio))+'</s> ':'')+(ap?'<span class="ap">a partir de </span>':'')
         +'<b>'+_esc(fmt(fin))+unid+'</b>'+(dsc>0?'<div class="ec">Economia de '+_esc(fmt(dsc))+unid+'</div>':'')+'</div></div>';
     }
@@ -88772,6 +88787,7 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
       +'s{color:#94a3b8}.dsv{color:#16a34a;font-weight:700}.fn{font-weight:900;font-size:13.5px}.un{font-weight:600;color:#64748b;font-size:11px}.ap{color:#94a3b8;font-size:11px}'
       +'.tots{margin-top:22px;border:1px solid #e9d8fe;border-radius:12px;overflow:hidden}.tot{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fbfaff}.tot+.tot{border-top:1px solid #e9d8fe}'
       +'.tl{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#475569}.tv{text-align:right;font-size:17px}.tv b{color:'+PX+'}.ec{color:#16a34a;font-size:11.5px;font-weight:700;margin-top:2px}'
+      +'.qb{font-weight:600;text-transform:none;letter-spacing:0;color:#16a34a;font-size:11.5px;margin-top:4px;line-height:1.5}'
       +'.bn{margin-top:18px;background:#fffaf0;border:1px solid #f2e2bd;border-radius:10px;padding:10px 14px;font-size:12px}.bn b{color:#a16207}'
       +'.pc{margin-top:14px;background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;color:#1e3a8a}.pc b{color:#1d4ed8}'
       +'.ob{margin-top:16px;color:#475569;font-size:12px;white-space:pre-wrap}.ft{margin-top:26px;color:#94a3b8;font-size:10.5px;text-align:center}'
@@ -88782,8 +88798,8 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
       +_tabela("Serviços mensais", rec, "/mês")
       +_tabela("Projetos pontuais", pon, "")
       +(bonus&&bonus.length?'<div class="bn"><b>Bônus inclusos — cortesia Pixels:</b> '+bonus.map(function(b){return _esc(b.nome);}).join(" · ")+'</div>':'')
-      +'<div class="tots">'+(rec.length?_tot("Investimento mensal",T.recCheio,T.recDesc,T.recFinal,"/mês",false):"")
-        +(pon.length?_tot("Investimento pontual",T.ponCheio,T.ponDesc,T.ponFinal,"",ponAPartir):"")+'</div>'
+      +'<div class="tots">'+(rec.length?_tot("Investimento mensal",T.recCheio,T.recDesc,T.recFinal,"/mês",false,T.recItens,T.recGeral):"")
+        +(pon.length?_tot("Investimento pontual",T.ponCheio,T.ponDesc,T.ponFinal,"",ponAPartir,T.ponItens,T.ponGeral):"")+'</div>'
       +'<div class="pc"><b>'+_esc(_CALC_PARCERIA.titulo)+'</b><br>'+_esc(_CALC_PARCERIA.texto)+'</div>'
       +(String(obs).trim()?'<div class="ob"><b>Observações:</b> '+_esc(String(obs).trim())+'</div>':'')
       +'<div class="ft">Pixels Marketing Digital · pixelsmarketing.com.br · Verba de anúncios não inclusa nos valores de tráfego pago.</div>'
@@ -88809,15 +88825,15 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
         </div>
       </div>
       <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
-        <span style={{color:MUTE,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Desconto</span>
+        <span style={{color:MUTE,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Desconto no item</span>
         <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:8,padding:2}}>
           {[{k:"pct",t:"%"},{k:"brl",t:"R$"}].map(function(o){ const on=d.tipo===o.k; return <button key={o.k} type="button" onClick={function(){_set(l.id,{tipo:o.k});}}
             style={{border:"none",background:on?"#fff":"transparent",color:on?PX:MUTE,fontWeight:800,fontSize:12,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:FF,boxShadow:on?"0 1px 2px rgba(15,23,42,.08)":"none"}}>{o.t}</button>; })}
         </div>
         <input type="number" min="0" value={d.valor} placeholder="0" onChange={function(e){_set(l.id,{valor:e.target.value});}} style={Object.assign({},_inp,{width:90})}/>
         <input type="text" value={d.motivo} onChange={function(e){_set(l.id,{motivo:e.target.value});}}
-          placeholder={l.qtd>1?("Ex.: desconto por volume — "+l.qtd+" contas"):"Descreva o desconto (ex.: fechamento anual, cliente parceiro…)"}
-          style={Object.assign({},_inp,{flex:1,minWidth:200,borderColor:(l.descValor>0&&!String(d.motivo||"").trim())?"#f59e0b":BORD})}/>
+          placeholder={l.qtd>1?("Motivo (opcional) — ex.: desconto por volume, "+l.qtd+" contas"):"Motivo (opcional) — ex.: fechamento anual, cliente parceiro…"}
+          style={Object.assign({},_inp,{flex:1,minWidth:200})}/>
       </div>
     </div>;
   }
@@ -88826,7 +88842,7 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
       <div style={{padding:"18px 22px",borderBottom:"1px solid #eef0f5",display:"flex",alignItems:"flex-start",gap:12}}>
         <div style={{flex:1}}>
           <div style={{color:INK,fontWeight:800,fontSize:18,letterSpacing:-.3}}>Exportar proposta</div>
-          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Aplique o desconto de cada item e descreva qual é. A proposta sai mostrando o valor cheio, o desconto e o valor final de cada um.</div>
+          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Coloque o desconto em cada item e, se quiser, um desconto geral em % no final. A proposta sai com o valor cheio, os descontos e o valor final.</div>
         </div>
         <button type="button" onClick={onClose} title="Fechar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
       </div>
@@ -88840,10 +88856,27 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
         {rec.map(_Linha)}
         {pon.length>0&&<div style={{color:PX,fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginTop:6}}>Projetos pontuais</div>}
         {pon.map(_Linha)}
+        <div style={{border:"1.5px solid "+(gPct>0?PX:"#eef0f5"),borderRadius:12,padding:"12px 14px",background:gPct>0?"#f5f0ff":"#fff",display:"flex",flexDirection:"column",gap:8,marginTop:6}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <div>
+              <div style={{color:INK,fontWeight:800,fontSize:13.5}}>Desconto geral</div>
+              <div style={{color:MUTE,fontSize:11.5,marginTop:2}}>Em % sobre o total, depois dos descontos nos itens</div>
+            </div>
+            {gPct>0&&<div style={{color:"#16a34a",fontSize:12.5,fontWeight:800,textAlign:"right"}}>{T.recGeral>0&&<div>− {fmt(T.recGeral)}/mês</div>}{T.ponGeral>0&&<div>− {fmt(T.ponGeral)} pontual</div>}</div>}
+          </div>
+          <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{position:"relative"}}>
+              <input type="number" min="0" max="100" value={geral.valor} placeholder="0" onChange={function(e){setGeral(Object.assign({},geral,{valor:e.target.value}));}} style={Object.assign({},_inp,{width:90,paddingRight:26})}/>
+              <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:MUTE,fontWeight:800,fontSize:12}}>%</span>
+            </div>
+            <input type="text" value={geral.motivo} onChange={function(e){setGeral(Object.assign({},geral,{motivo:e.target.value}));}} placeholder="Motivo (opcional) — ex.: fechamento do pacote completo" style={Object.assign({},_inp,{flex:1,minWidth:200})}/>
+          </div>
+        </div>
         <textarea value={obs} onChange={function(e){setObs(e.target.value);}} rows={2} placeholder="Observações gerais (opcional)" style={Object.assign({},_inp,{width:"100%",resize:"vertical",padding:"9px 11px",fontSize:13,marginTop:4})}/>
       </div>
       <div style={{padding:"14px 22px",borderTop:"1px solid #eef0f5",background:"#fafbfc",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
         <div style={{display:"flex",flexDirection:"column",gap:2}}>
+          {(T.recDesc+T.ponDesc)>0&&<div style={{color:MUTE,fontSize:11.5,fontWeight:700}}>Desconto nos itens: {fmt(T.recItens+T.ponItens)} · Desconto geral{gPct>0?(" ("+gPct+"%)"):""}: {fmt(T.recGeral+T.ponGeral)}</div>}
           {rec.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Mensal: {T.recDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.recCheio)}</s>} <b style={{color:PX,fontSize:16}}>{fmt(T.recFinal)}</b>/mês{T.recDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.recDesc)}</span>}</div>}
           {pon.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Pontual: {T.ponDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.ponCheio)}</s>} <b style={{color:PX,fontSize:16}}>{ponAPartir?"a partir de ":""}{fmt(T.ponFinal)}</b>{T.ponDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.ponDesc)}</span>}</div>}
         </div>
