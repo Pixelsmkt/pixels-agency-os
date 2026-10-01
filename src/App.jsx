@@ -88653,13 +88653,30 @@ function _calcDescValor(it, d){
   const r = d.tipo==="pct" ? Math.round(bruto * Math.min(100,v) / 100) : Math.min(bruto, Math.round(v));
   return Math.max(0, r);
 }
-function _CalcExportarProposta({itens, bonus, onClose, isMob}){
+function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
   const fmt = _calcFmtBRL;
-  const PX = "#9F43F6", INK="#0f172a", MUTE="#64748b", BORD="#e5e0f2";
+  const PX = "#9F43F6", INK="#0f172a", MUTE="#64748b", BORD="#e5e0f2", SOFT2="#94a3b8";
   const FF = (typeof _PORTF_FF!=="undefined") ? _PORTF_FF : "Inter, system-ui, sans-serif";
   const [cliente,setCliente] = useState("");
   const [validade,setValidade] = useState(15);
   const [obs,setObs] = useState("");
+  const [logoCli,setLogoCli] = useState("");   // data-url ou logo de cliente cadastrado
+  const _introPadrao = function(nome){ return (nome?nome+", p":"P")+"reparamos esta proposta a partir do que conversamos sobre o momento da sua empresa.\n\nA Pixels é uma assessoria de marketing e growth. Não fazemos só arte e postagem: cuidamos da estratégia, do planejamento, da produção, da análise dos resultados e do acompanhamento da marca, pra que o digital gere demanda e apoie o comercial.\n\nNesta primeira página está tudo o que o trabalho inclui, serviço por serviço, e os bônus que o pacote libera. Na página seguinte, o investimento item a item."; };
+  const [intro,setIntro] = useState(_introPadrao(""));
+  const [introMexido,setIntroMexido] = useState(false);
+  useEffect(function(){ if(!introMexido) setIntro(_introPadrao(String(cliente).trim())); },[cliente]);
+  const _clientesComLogo = (function(){
+    try{
+      if(typeof CLIENT_LOGOS==="undefined"||!CLIENT_LOGOS) return [];
+      const nomes={}; if(typeof CLIENTS!=="undefined"&&Array.isArray(CLIENTS)) CLIENTS.forEach(function(x){ if(x&&x.id) nomes[x.id]=x.name; });
+      return Object.keys(CLIENT_LOGOS).filter(function(k){ return k!=="pixels"&&CLIENT_LOGOS[k]; }).map(function(k){ return {id:k,nome:nomes[k]||k}; });
+    }catch(_){ return []; }
+  })();
+  function _subirLogo(e){
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    if(!/^image\//.test(f.type)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolha uma imagem (PNG, JPG ou SVG)."); return; }
+    const r=new FileReader(); r.onload=function(){ setLogoCli(String(r.result||"")); }; r.readAsDataURL(f);
+  }
   const [desc,setDesc] = useState({});
   const [geral,setGeral] = useState({valor:"", motivo:""});   // desconto geral em %, depois dos descontos por item   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
   function _d(id){ return desc[id] || {tipo:"pct", valor:"", motivo:""}; }
@@ -88750,9 +88767,32 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
   }
 
   // ── PDF (janela de impressão → Salvar como PDF) ──
+  /* v3 (01/10 15:57, Gustavo): cara de ORÇAMENTO. Página 1 = capa + apresentação + serviços com
+     entregáveis + bônus conquistados (evidentes, organizados). Página 2 = investimento item a item
+     com descontos, totais, condições e próximos passos. Logo da Pixels + logo do cliente. */
   function exportarPDF(){
     if(!_aviso()) return;
-    const logo = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS && CLIENT_LOGOS.pixels) ? CLIENT_LOGOS.pixels : "";
+    const logoPx = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS && CLIENT_LOGOS.pixels) ? CLIENT_LOGOS.pixels : "";
+    const nomeCli = String(cliente).trim();
+    const numero = (function(){ const d=new Date(); const p=function(n){return String(n).padStart(2,"0");}; return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes()); })();
+    const CK = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const introTxt = _esc(String(intro||"").trim()).replace(/\n/g,"<br>");
+
+    function _servHtml(s){
+      return '<div class="sv">'
+        +'<div class="svh"><div class="svn">'+_esc(s.titulo)+'</div>'
+          +(s.config?'<div class="svc">'+_esc(s.config)+'</div>':'')+'</div>'
+        +((s.grupos&&s.grupos.length)
+          ? '<div class="svg">'+s.grupos.map(function(g){ return '<div class="gp"><div class="gpt">'+_esc(g.titulo)+'</div>'+(g.itens||[]).map(function(t){ return '<div class="li"><span class="ck">'+CK+'</span><span>'+_esc(t)+'</span></div>'; }).join("")+'</div>'; }).join("")+'</div>'
+          : '<div class="svl">'+(s.itens||[]).map(function(t){ return '<div class="li"><span class="ck">'+CK+'</span><span>'+_esc(t)+'</span></div>'; }).join("")+'</div>')
+        +'</div>';
+    }
+    function _bonHtml(b){
+      return '<div class="bo">'
+        +'<div class="boh"><div><div class="bon">'+_esc(b.nome)+'</div>'+(b.tagline?'<div class="bot">'+_esc(b.tagline)+'</div>':'')+'</div><span class="gr">Grátis</span></div>'
+        +'<div class="bol">'+(b.itens||[]).map(function(it){ return '<div class="li"><span class="ck ckg">'+CK+'</span><span><b>'+_esc(it.label)+'</b>'+(it.detalhe?'<i class="dd"> · '+_esc(it.detalhe)+'</i>':'')+'</span></div>'; }).join("")+'</div>'
+        +'</div>';
+    }
     function _linhaHtml(l, unid){
       const temD = l.descValor>0;
       return '<tr>'
@@ -88765,45 +88805,113 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
     }
     function _tabela(titulo, arr, unid){
       if(!arr.length) return "";
-      return '<h2>'+titulo+'</h2><table><thead><tr><th>Item</th><th class="vl">Valor cheio</th><th class="vl">Desconto</th><th class="vl">Valor final</th></tr></thead><tbody>'
+      return '<div class="tbt">'+titulo+'</div><table><thead><tr><th>Item</th><th class="vl">Valor cheio</th><th class="vl">Desconto</th><th class="vl">Valor final</th></tr></thead><tbody>'
         + arr.map(function(l){ return _linhaHtml(l,unid); }).join("") + '</tbody></table>';
     }
     function _tot(rot, cheio, dsc, fin, unid, ap, itens, g){
-      const qb = g>0 ? ('<div class="qb">'+(itens>0?('Desconto nos itens: − '+_esc(fmt(itens))+unid+'<br>'):'')
-        +'Desconto geral de '+gPct+'%'+(String(geral.motivo).trim()?(' ('+_esc(String(geral.motivo).trim())+')'):'')+': − '+_esc(fmt(g))+unid+'</div>') : '';
+      const qb = (itens>0||g>0) ? ('<div class="qb">'+(itens>0?('Desconto nos itens: − '+_esc(fmt(itens))+unid):'')
+        +(itens>0&&g>0?'<br>':'')
+        +(g>0?('Desconto geral de '+gPct+'%'+(String(geral.motivo).trim()?(' ('+_esc(String(geral.motivo).trim())+')'):'')+': − '+_esc(fmt(g))+unid):'')+'</div>') : '';
       return '<div class="tot"><div class="tl">'+rot+qb+'</div><div class="tv">'
         +(dsc>0?'<s>'+_esc(fmt(cheio))+'</s> ':'')+(ap?'<span class="ap">a partir de </span>':'')
-        +'<b>'+_esc(fmt(fin))+unid+'</b>'+(dsc>0?'<div class="ec">Economia de '+_esc(fmt(dsc))+unid+'</div>':'')+'</div></div>';
+        +'<b>'+_esc(fmt(fin))+'</b><span class="un2">'+unid+'</span>'+(dsc>0?'<div class="ec">Economia de '+_esc(fmt(dsc))+unid+'</div>':'')+'</div></div>';
     }
-    const html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta Pixels'+(String(cliente).trim()?(' - '+_esc(String(cliente).trim())):'')+'</title>'
-      +'<style>@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}body{font-family:Inter,Segoe UI,Arial,sans-serif;color:#0f172a;margin:0;font-size:12.5px}'
-      +'.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+PX+';padding-bottom:14px;margin-bottom:18px}'
-      +'.hd img{height:34px}.hd .wm{font-weight:900;font-size:24px;color:'+PX+'}.hd .mt{text-align:right;color:#64748b;font-size:11.5px;line-height:1.6}'
-      +'h1{font-size:22px;margin:0 0 4px;letter-spacing:-.4px}.para{color:#475569;font-size:13px;margin-bottom:18px}'
-      +'h2{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:'+PX+';margin:22px 0 8px}'
-      +'table{width:100%;border-collapse:collapse}th{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;text-align:left;border-bottom:1px solid #e2e8f0;padding:6px 8px}'
-      +'td{border-bottom:1px solid #f1f5f9;padding:10px 8px;vertical-align:top}.vl{text-align:right;white-space:nowrap}'
-      +'.nm{font-weight:800;font-size:13px}.dt{color:#64748b;font-size:11.5px;margin-top:2px}.ds{margin-top:6px;background:#f5f0ff;border-left:3px solid '+PX+';padding:5px 8px;font-size:11.5px;color:#4c1d95;border-radius:4px}'
-      +'s{color:#94a3b8}.dsv{color:#16a34a;font-weight:700}.fn{font-weight:900;font-size:13.5px}.un{font-weight:600;color:#64748b;font-size:11px}.ap{color:#94a3b8;font-size:11px}'
-      +'.tots{margin-top:22px;border:1px solid #e9d8fe;border-radius:12px;overflow:hidden}.tot{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fbfaff}.tot+.tot{border-top:1px solid #e9d8fe}'
-      +'.tl{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#475569}.tv{text-align:right;font-size:17px}.tv b{color:'+PX+'}.ec{color:#16a34a;font-size:11.5px;font-weight:700;margin-top:2px}'
-      +'.qb{font-weight:600;text-transform:none;letter-spacing:0;color:#16a34a;font-size:11.5px;margin-top:4px;line-height:1.5}'
-      +'.bn{margin-top:18px;background:#fffaf0;border:1px solid #f2e2bd;border-radius:10px;padding:10px 14px;font-size:12px}.bn b{color:#a16207}'
-      +'.pc{margin-top:14px;background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.55;color:#1e3a8a}.pc b{color:#1d4ed8}'
-      +'.ob{margin-top:16px;color:#475569;font-size:12px;white-space:pre-wrap}.ft{margin-top:26px;color:#94a3b8;font-size:10.5px;text-align:center}'
-      +'</style></head><body>'
-      +'<div class="hd">'+(logo?'<img src="'+logo+'" alt="Pixels">':'<div class="wm">pixels</div>')
-        +'<div class="mt">Proposta comercial<br>Emitida em '+_esc(_hoje())+'<br>Válida até '+_esc(_valido())+'</div></div>'
-      +'<h1>Proposta de serviços</h1>'+(String(cliente).trim()?'<div class="para">Para: <b>'+_esc(String(cliente).trim())+'</b></div>':'')
-      +_tabela("Serviços mensais", rec, "/mês")
-      +_tabela("Projetos pontuais", pon, "")
-      +(bonus&&bonus.length?'<div class="bn"><b>Bônus inclusos — cortesia Pixels:</b> '+bonus.map(function(b){return _esc(b.nome);}).join(" · ")+'</div>':'')
-      +'<div class="tots">'+(rec.length?_tot("Investimento mensal",T.recCheio,T.recDesc,T.recFinal,"/mês",false,T.recItens,T.recGeral):"")
-        +(pon.length?_tot("Investimento pontual",T.ponCheio,T.ponDesc,T.ponFinal,"",ponAPartir,T.ponItens,T.ponGeral):"")+'</div>'
-      +'<div class="pc"><b>'+_esc(_CALC_PARCERIA.titulo)+'</b><br>'+_esc(_CALC_PARCERIA.texto)+'</div>'
-      +(String(obs).trim()?'<div class="ob"><b>Observações:</b> '+_esc(String(obs).trim())+'</div>':'')
-      +'<div class="ft">Pixels Marketing Digital · pixelsmarketing.com.br · Verba de anúncios não inclusa nos valores de tráfego pago.</div>'
-      +'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
+    const servRec = (servicos||[]).filter(function(s){ return !s.pontual; });
+    const servPon = (servicos||[]).filter(function(s){ return s.pontual; });
+    const temBonus = bonus && bonus.length>0;
+
+    const css = '@page{size:A4;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+      +'body{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#0f172a;margin:0;font-size:12px;background:#fff}'
+      +'.pg{width:210mm;min-height:297mm;padding:0 0 11mm;position:relative;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}'
+      +'.in{padding:0 14mm}'
+      /* faixa do topo */
+      +'.hero{background:linear-gradient(135deg,#1a0b33 0%,#2d1058 55%,#5b21b6 100%);color:#fff;padding:8mm 14mm 7mm;position:relative;overflow:hidden}'
+      +'.hero:after{content:"";position:absolute;right:-40mm;top:-40mm;width:110mm;height:110mm;border-radius:50%;background:radial-gradient(circle,rgba(159,67,246,.45),transparent 70%)}'
+      +'.lg{display:flex;align-items:center;gap:12px;position:relative;z-index:1}.lg img.px{height:30px}.lg .wm{font-weight:900;font-size:26px;letter-spacing:-.5px}'
+      +'.lg .x{color:rgba(255,255,255,.45);font-size:16px;font-weight:300}.lg .cl{background:#fff;border-radius:10px;padding:6px 10px;display:flex;align-items:center;height:42px}.lg .cl img{max-height:30px;max-width:120px}'
+      +'.tag{display:inline-block;margin-top:5mm;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);border-radius:99px;padding:4px 11px;font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;position:relative;z-index:1}'
+      +'.h1{font-size:25px;font-weight:900;letter-spacing:-.8px;margin-top:8px;line-height:1.15;position:relative;z-index:1}.h1 span{color:#d8b4fe}'
+      +'.meta{display:flex;gap:22px;margin-top:9px;font-size:11px;color:rgba(255,255,255,.75);position:relative;z-index:1}.meta b{color:#fff;font-weight:700}'
+      /* apresentação */
+      +'.intro{margin:6mm 0 1mm;font-size:11.5px;line-height:1.6;color:#334155;border-left:3px solid #9F43F6;padding:2px 0 2px 12px}'
+      +'.st{display:flex;align-items:center;gap:10px;margin:5mm 0 3mm}.st .n{width:22px;height:22px;border-radius:7px;background:#9F43F6;color:#fff;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center}'
+      +'.st .t{font-size:14px;font-weight:900;letter-spacing:-.3px}.st .l{flex:1;height:1px;background:#ede9fe}'
+      +'.stg .n{background:linear-gradient(135deg,#ffd868,#f0b429);color:#2d1058}.stg .l{background:#f4e8ce}'
+      /* serviços */
+      +'.sv{border:1px solid #ede9fe;border-radius:12px;margin-bottom:3.5mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid}'
+      +'.svh{background:linear-gradient(90deg,#f8f4ff,#fff);padding:9px 13px;border-bottom:1px solid #f1ecfd}.svn{font-size:13px;font-weight:900;letter-spacing:-.2px;color:#2d1058}.svc{color:#64748b;font-size:10.5px;margin-top:2px}'
+      +'.svl{padding:9px 13px 10px;display:grid;grid-template-columns:1fr 1fr;gap:5px 14px}'
+      +'.svg{padding:9px 13px 10px;display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}.gp{display:flex;flex-direction:column;gap:4px}.gpt{font-size:9.5px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:#7c3aed;margin-bottom:1px}'
+      +'.li{display:flex;gap:7px;align-items:flex-start;font-size:10.8px;line-height:1.4;color:#334155}.li em{display:block;font-style:normal;color:#94a3b8;font-size:9.8px;margin-top:1px}.li b{font-weight:700;color:#1e293b}'
+      +'.ck{width:14px;height:14px;border-radius:4px;background:#f3e8ff;color:#9F43F6;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}.ckg{background:rgba(240,180,41,.2);color:#b7791f}'
+      /* bônus */
+      +'.bg{display:flex;flex-wrap:wrap;gap:3mm}.bg .bo{width:calc((100% - 6mm) / 3)}'
+      +'.bo{background:linear-gradient(135deg,#fffaf0,#fffdf8);border:1px solid #f2e2bd;border-radius:12px;padding:8px 10px}'
+      +'.boh{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding-bottom:7px;border-bottom:1px solid #f4e8ce;margin-bottom:7px}.bon{font-weight:900;font-size:11.5px}.bot{color:#a3812a;font-size:9.5px;margin-top:1px}.bo .li{font-size:9.8px;line-height:1.35}.dd{font-style:normal;color:#94a3b8}.bo .li em{font-size:9px}.bol{gap:4px!important}'
+      +'.gr{background:linear-gradient(135deg,#ffd868,#f0b429);color:#2d1058;font-size:8px;font-weight:900;padding:3px 8px;border-radius:99px;letter-spacing:.6px;text-transform:uppercase;flex-shrink:0}'
+      +'.bol{display:flex;flex-direction:column;gap:5px}'
+      /* investimento */
+      +'.hero2{background:linear-gradient(135deg,#1a0b33,#2d1058);color:#fff;padding:6mm 14mm;display:flex;justify-content:space-between;align-items:center}'
+      +'.hero2 .t{font-size:20px;font-weight:900;letter-spacing:-.5px}.hero2 .s{font-size:10.5px;color:rgba(255,255,255,.7);margin-top:2px}.hero2 img{height:22px}'
+      +'.tbt{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:#9F43F6;font-weight:900;margin:5mm 0 1mm}'
+      +'table{width:100%;border-collapse:collapse}th{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;text-align:left;border-bottom:1.5px solid #e2e8f0;padding:6px 8px}'
+      +'td{border-bottom:1px solid #f1f5f9;padding:5px 8px;vertical-align:top}tr{break-inside:avoid;page-break-inside:avoid}.vl{text-align:right;white-space:nowrap}'
+      +'.nm{font-weight:800;font-size:11px}.dt{color:#64748b;font-size:9.5px;margin-top:1px}.ds{margin-top:3px;display:inline-block;background:#f5f0ff;border-left:3px solid #9F43F6;padding:2px 7px;font-size:9.5px;color:#4c1d95;border-radius:4px}'
+      +'s{color:#94a3b8}.dsv{color:#16a34a;font-weight:800}.fn{font-weight:900;font-size:11.5px}.un{font-weight:600;color:#64748b;font-size:10px}.ap{color:#94a3b8;font-size:10px;font-weight:600}'
+      +'.tots{margin-top:4mm;border-radius:14px;overflow:hidden;border:1.5px solid #e9d8fe;break-inside:avoid}.tot{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;background:linear-gradient(90deg,#faf5ff,#fff)}.tot+.tot{border-top:1px solid #e9d8fe}'
+      +'.tl{font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#475569}.qb{font-weight:600;text-transform:none;letter-spacing:0;color:#16a34a;font-size:10.5px;margin-top:4px;line-height:1.5}'
+      +'.tv{text-align:right;font-size:15px}.tv b{color:#7c3aed;font-size:19px;letter-spacing:-.6px}.un2{color:#64748b;font-size:11px;font-weight:700;margin-left:2px}.ec{color:#16a34a;font-size:10.5px;font-weight:800;margin-top:2px}'
+      +'.bx{margin-top:3.5mm;border-radius:10px;padding:8px 12px;font-size:10px;line-height:1.6;break-inside:avoid}.bx b{display:block;font-size:10.5px;margin-bottom:1px}.duo{display:grid;grid-template-columns:1fr 1fr;gap:3.5mm}.duo .bx{margin-top:3.5mm}'
+      +'.pc{background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #2563eb;color:#1e3a8a}.pc b{color:#1d4ed8}'
+      +'.cd{background:#f8fafc;border:1px solid #e2e8f0;color:#475569}.cd ul{margin:2px 0 0;padding-left:16px}'
+      +'.ps{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-top:3mm}.ps div{background:#fff;border:1px solid #ede9fe;border-radius:10px;padding:7px 9px;font-size:9.5px;color:#475569}.ps i{display:block;font-style:normal;color:#9F43F6;font-weight:900;font-size:11px;margin-bottom:2px}'
+      +'.ob{margin-top:3mm;color:#475569;font-size:10px;white-space:pre-wrap}'
+      +'.ac{display:grid;grid-template-columns:1fr 1fr;gap:12mm;margin-top:12mm}.ac div{border-top:1px solid #94a3b8;padding-top:4px;font-size:9.5px;color:#64748b;text-align:center}.ac b{display:block;color:#0f172a;font-size:10.5px}'
+      +'.ft{position:absolute;left:14mm;right:14mm;bottom:6mm;display:flex;justify-content:space-between;color:#94a3b8;font-size:9px;border-top:1px solid #f1f5f9;padding-top:3mm}'
+      +'@media screen{body{background:#e2e8f0}.pg{margin:10px auto;box-shadow:0 6px 24px rgba(15,23,42,.15);background:#fff}}';
+
+    const logosHtml = '<div class="lg">'+(logoPx?'<img class="px" src="'+logoPx+'" alt="Pixels">':'<div class="wm">pixels</div>')
+      +(logoCli?'<span class="x">×</span><div class="cl"><img src="'+logoCli+'" alt="'+_esc(nomeCli||"Cliente")+'"></div>':'')+'</div>';
+    const rodape = function(n){ return '<div class="ft"><span>Pixels Marketing Digital · Assessoria de marketing e growth · pixelsmarketing.com.br</span><span>Proposta nº '+numero+' · página '+n+'</span></div>'; };
+
+    const pag1 = '<div class="pg">'
+      +'<div class="hero">'+logosHtml
+        +'<div class="tag">Proposta comercial</div>'
+        +'<div class="h1">'+(nomeCli?('Plano de crescimento digital<br>para <span>'+_esc(nomeCli)+'</span>'):'Plano de crescimento digital')+'</div>'
+        +'<div class="meta"><span>Emitida em <b>'+_esc(_hoje())+'</b></span><span>Válida até <b>'+_esc(_valido())+'</b></span><span>Nº <b>'+numero+'</b></span></div>'
+      +'</div>'
+      +'<div class="in">'
+        +(introTxt?'<div class="intro">'+introTxt+'</div>':'')
+        +'<div class="st"><span class="n">1</span><span class="t">Serviços e entregáveis</span><span class="l"></span></div>'
+        +servRec.map(_servHtml).join("")
+        +(servPon.length?('<div class="st"><span class="n">2</span><span class="t">Projetos pontuais</span><span class="l"></span></div>'+servPon.map(_servHtml).join("")):'')
+        +(temBonus?('<div class="st stg"><span class="n">'+(servPon.length?3:2)+'</span><span class="t">Bônus conquistados — cortesia Pixels</span><span class="l"></span></div>'
+          +'<div class="bg">'+bonus.map(_bonHtml).join("")+'</div>'):'')
+      +'</div>'+rodape(1)+'</div>';
+
+    const pag2 = '<div class="pg">'
+      +'<div class="hero2"><div><div class="t">Investimento</div><div class="s">'+(nomeCli?_esc(nomeCli)+' · ':'')+'Valores por item, descontos e total</div></div>'+(logoPx?'<img src="'+logoPx+'" alt="Pixels">':'')+'</div>'
+      +'<div class="in">'
+        +_tabela("Serviços mensais", rec, "/mês")
+        +_tabela("Projetos pontuais", pon, "")
+        +'<div class="tots">'+(rec.length?_tot("Investimento mensal",T.recCheio,T.recDesc,T.recFinal,"/mês",false,T.recItens,T.recGeral):"")
+          +(pon.length?_tot("Investimento pontual",T.ponCheio,T.ponDesc,T.ponFinal,"",ponAPartir,T.ponItens,T.ponGeral):"")+'</div>'
+        +'<div class="duo"><div class="bx pc"><b>'+_esc(_CALC_PARCERIA.titulo)+'</b>'+_esc(_CALC_PARCERIA.texto)+'</div>'
+        +'<div class="bx cd"><b>Condições</b><ul>'
+          +'<li>Proposta válida até '+_esc(_valido())+'.</li>'
+          +(rec.length?'<li>Serviços mensais cobrados como fee mensal recorrente.</li>':'')
+          +(pon.length?'<li>Projetos pontuais com pagamento único'+(ponAPartir?'; itens "a partir de" têm o valor final confirmado após o escopo detalhado':'')+'.</li>':'')
+          +'<li>Verba de anúncios (Meta e Google) não está inclusa nos valores de tráfego pago.</li>'
+        +'</ul></div></div>'
+        +(String(obs).trim()?'<div class="ob"><b>Observações:</b> '+_esc(String(obs).trim())+'</div>':'')
+        +'<div class="st"><span class="n">→</span><span class="t" style="font-size:12.5px">Próximos passos</span><span class="l"></span></div>'
+        +'<div class="ps"><div><i>1. Aprovação</i>Você confirma o escopo e a forma de pagamento.</div><div><i>2. Onboarding</i>Reunião de imersão pra alinhar marca, metas e acessos.</div><div><i>3. Execução</i>Planejamento no ar e primeiras entregas já no primeiro mês.</div></div>'
+        +'<div class="ac"><div><b>'+_esc(nomeCli||"Cliente")+'</b>Aceite da proposta · data ___/___/______</div><div><b>Pixels Marketing Digital</b>Assessoria de marketing e growth</div></div>'
+      +'</div>'+rodape(2)+'</div>';
+
+    const html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta Pixels'+(nomeCli?(' - '+_esc(nomeCli)):'')+'</title>'
+      +'<style>'+css+'</style></head><body>'+pag1+pag2
+      +'<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script></body></html>';
     const w = window.open("", "_blank");
     if(!w){ if(typeof pixelsToast!=="undefined") pixelsToast.error("O navegador bloqueou a janela. Libere pop-ups pro app e tente de novo.",5000); return; }
     w.document.open(); w.document.write(html); w.document.close();
@@ -88842,7 +88950,7 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
       <div style={{padding:"18px 22px",borderBottom:"1px solid #eef0f5",display:"flex",alignItems:"flex-start",gap:12}}>
         <div style={{flex:1}}>
           <div style={{color:INK,fontWeight:800,fontSize:18,letterSpacing:-.3}}>Exportar proposta</div>
-          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Coloque o desconto em cada item e, se quiser, um desconto geral em % no final. A proposta sai com o valor cheio, os descontos e o valor final.</div>
+          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Página 1: apresentação, serviços com tudo que está incluso e bônus. Página 2: o orçamento, com desconto em cada item e, se quiser, um desconto geral em %.</div>
         </div>
         <button type="button" onClick={onClose} title="Fechar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
       </div>
@@ -88851,6 +88959,21 @@ function _CalcExportarProposta({itens, bonus, onClose, isMob}){
           <input type="text" value={cliente} onChange={function(e){setCliente(e.target.value);}} placeholder="Nome do cliente (aparece na proposta)" style={Object.assign({},_inp,{flex:1,minWidth:220,padding:"9px 11px",fontSize:13})}/>
           <label style={{display:"inline-flex",alignItems:"center",gap:7,color:MUTE,fontSize:12,fontWeight:700}}>Válida por
             <input type="number" min="1" value={validade} onChange={function(e){setValidade(e.target.value);}} style={Object.assign({},_inp,{width:64})}/> dias</label>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",border:"1px solid #eef0f5",borderRadius:12,padding:"10px 12px"}}>
+          <span style={{color:MUTE,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Logo do cliente</span>
+          {logoCli?<img src={logoCli} alt="" style={{height:30,maxWidth:120,objectFit:"contain",border:"1px solid #eef0f5",borderRadius:6,padding:3,background:"#fff"}}/>:<span style={{color:SOFT2,fontSize:12}}>sem logo</span>}
+          {_clientesComLogo.length>0&&<select value="" onChange={function(e){ const k=e.target.value; if(k&&CLIENT_LOGOS[k]){ setLogoCli(CLIENT_LOGOS[k]); const n=_clientesComLogo.find(function(x){return x.id===k;}); if(n&&!String(cliente).trim()) setCliente(n.nome); } }} style={Object.assign({},_inp,{width:200})}>
+            <option value="">Usar logo de um cliente…</option>
+            {_clientesComLogo.map(function(x){ return <option key={x.id} value={x.id}>{x.nome}</option>; })}
+          </select>}
+          <label style={{background:"#fff",border:"1px solid "+BORD,borderRadius:9,padding:"7px 11px",fontSize:12,fontWeight:800,color:"#475569",cursor:"pointer"}}>Enviar logo
+            <input type="file" accept="image/*" onChange={_subirLogo} style={{display:"none"}}/></label>
+          {logoCli&&<button type="button" onClick={function(){setLogoCli("");}} style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:12,fontWeight:700,cursor:"pointer"}}>remover</button>}
+        </div>
+        <div>
+          <div style={{color:MUTE,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Apresentação (página 1)</div>
+          <textarea value={intro} onChange={function(e){ setIntro(e.target.value); setIntroMexido(true); }} rows={5} style={Object.assign({},_inp,{width:"100%",resize:"vertical",padding:"9px 11px",fontSize:12.5,lineHeight:1.5})}/>
         </div>
         {rec.length>0&&<div style={{color:PX,fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginTop:6}}>Serviços mensais</div>}
         {rec.map(_Linha)}
@@ -90532,6 +90655,26 @@ function _CalculadoraModular({isMob, persistClientId}){
     _oneTimeSel.forEach(function(p){ out.push({id:"pt-"+p.id,recorrente:false,qtd:1,total:p.price,aPartir:!p.fixo,nome:p.label,detalhe:p.short||""}); });
     return out;
   }
+  /* Página 1 da proposta: cada serviço com o que está incluso (frentes de trabalho quando houver) */
+  function _servicosProposta(){
+    const out = [];
+    const tr = cfg.traffic[trafficKey];
+    if(socialActive) out.push({titulo:"Gestão de Redes Sociais", config:_selectedSocialLabels().join(" · ")+" · "+(socialPosts*4)+" publicações/mês por conta",
+      grupos:SOCIAL_BLOCOS.map(function(g){ return {titulo:g.titulo, itens:g.itens}; })});
+    if(creativesActive) out.push({titulo:"Criativos Extras", config:[
+        creatives.staticCreatives>0&&(creatives.staticCreatives+" criativos estáticos"),
+        creatives.editedVideos>0&&(creatives.editedVideos+" vídeos editados"),
+        creatives.videoVariations>0&&(creatives.videoVariations+" variações de vídeo")].filter(Boolean).join(" · ")+" por mês",
+      itens:CREATIVES_INCLUSOS});
+    if(tr && tr.price>0) out.push({titulo:"Tráfego Pago — "+tr.label, config:"Gestão de campanhas · verba de anúncios não inclusa",
+      grupos:TRAFFIC_BLOCOS.map(function(g){ return {titulo:g.titulo, itens:g.itens}; }).concat(tr.edicaoCriativos>0?[{titulo:"Criativos", itens:["Edição de até "+tr.edicaoCriativos+" criativos/mês inclusa"]}]:[])});
+    if(growthActive) out.push({titulo:"Growth", config:GROWTH_PITCH, grupos:GROWTH_BLOCOS.map(function(g){ return {titulo:g.titulo, itens:g.itens}; })});
+    if(graficosRec) out.push({titulo:"Materiais Gráficos — plano mensal", config:"Até "+cfg.graficos.recorrente.novos+" materiais novos ou "+cfg.graficos.recorrente.ajustes+" ajustes por mês (1 novo = 2 ajustes)",
+      itens:["Franquia mensal combinável de novos e ajustes","Folders, banners, cartazes, catálogos e materiais de feira","Excedente na tabela avulsa (R$ 400 novo · R$ 200 ajuste)"]});
+    if(captureActive) out.push({titulo:"Captação Audiovisual", config:captureDesc, itens:CAPTURE_INCLUSOS});
+    _oneTimeSel.forEach(function(p){ out.push({pontual:true, titulo:p.label, config:p.short||"", itens:p.entregas||[]}); });
+    return out;
+  }
   function _ExportButton(){
     return <button type="button" onClick={function(){ if(hasAnySelection) setExportOpen(true); }} disabled={!hasAnySelection}
       title="Exporta a proposta (PDF ou texto) com o desconto de cada item"
@@ -90751,7 +90894,7 @@ function _CalculadoraModular({isMob, persistClientId}){
 
     {/* ═══ TRILHA DE ETAPAS ═══ */}
     <_StepRail/>
-    {exportOpen&&<_CalcExportarProposta itens={_itensProposta()} bonus={calculateUnlockedBonuses(monthlyRecurring)} isMob={isMob} onClose={function(){setExportOpen(false);}}/>}
+    {exportOpen&&<_CalcExportarProposta itens={_itensProposta()} servicos={_servicosProposta()} bonus={calculateUnlockedBonuses(monthlyRecurring)} isMob={isMob} onClose={function(){setExportOpen(false);}}/>}
 
     {/* ═══ CORPO — etapa atual + resumo lateral ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 340px",gap:18,alignItems:"start",marginTop:16}}>
