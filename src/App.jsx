@@ -20131,7 +20131,12 @@ function pxVeSeloPub(u){
 function pxStatusSemSeloPub(t){
   return ["avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"].indexOf(String((t&&t.status)||""))!==-1;
 }
+/* (01/10/2026 18:33, Gustavo) "na verdade não tem que ter isso de data de publicação que criamos hoje..
+   só aquele prazo". Selo grande desligado: a capa volta a ter só a data pequena de antes, pra todos,
+   e o prazo por extenso (PRAZO: 5 DIAS) continua na visão de designer/editor. */
+const PX_SELO_PUB_LIGADO=false;
 function pxCapaMostraPub(t, viewer){
+  if(!PX_SELO_PUB_LIGADO) return false;
   if(!t||!t.publishDate) return false;
   if(!pxVeSeloPub(viewer)) return false;
   if(pxStatusSemSeloPub(t)) return false;
@@ -29126,7 +29131,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
                         {/* Data de publicação — badge moderno com calendário (card de designer/editor já mostra grande no topo) */}
-                        {t.publishDate&&!pxCapaMostraPub(t,activeUser)&&!(pxVeSeloPub(activeUser)&&pxStatusSemSeloPub(t))&&(function(){
+                        {t.publishDate&&!pxCapaMostraPub(t,activeUser)&&(function(){
                           const d=new Date(t.publishDate+"T12:00:00");
                           const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
                           const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
@@ -54983,7 +54988,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                 <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,fontWeight:600,padding:"2px 8px",borderRadius:3}}>{mainCl.abbr}</span>
                 <span style={{fontSize:11,color:"#94a3b8"}}>{dlLabel}</span>
               </div>}
-              {main.publishDate&&pxVeSeloPub(user)&&<div style={{marginBottom:10}}><PxSeloPublicacao task={main} grande/></div>}
+              {main.publishDate&&PX_SELO_PUB_LIGADO&&pxVeSeloPub(user)&&<div style={{marginBottom:10}}><PxSeloPublicacao task={main} grande/></div>}
               <div style={{color:"#0f172a",fontWeight:600,fontSize:20,lineHeight:1.3,marginBottom:8}}>{main.title}</div>
               {desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6,marginBottom:14,flex:1}}>
                 {desc.length>200?desc.slice(0,200)+"…":desc}
@@ -55037,7 +55042,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                 {(cl||t.publishDate)&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
                   {cl&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:8,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{cl.abbr}</span>}
                   {cl&&t.sector&&<span style={{fontSize:9,color:"#94a3b8"}}>{t.sector}</span>}
-                  {t.publishDate&&pxVeSeloPub(user)&&<span style={{marginLeft:"auto"}}><PxSeloPublicacao task={t}/></span>}
+                  {t.publishDate&&PX_SELO_PUB_LIGADO&&pxVeSeloPub(user)&&<span style={{marginLeft:"auto"}}><PxSeloPublicacao task={t}/></span>}
                 </div>}
               </div>;
             })}
