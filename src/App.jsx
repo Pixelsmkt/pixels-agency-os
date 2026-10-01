@@ -25827,8 +25827,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                     });
                   })()}
 
-                  {/* Ghost card — wireframe que aparece no hover, posicionado APÓS os cards reais */}
-                  {_canCreateFromCal&&<div data-ghost-card aria-hidden="true"
+                  {/* Ghost card — wireframe que aparece no hover, posicionado APÓS os cards reais.
+                      (01/10/2026, Gustavo) Dia com aviso de conteúdo faltante (tracejado "Criar card") não mostra
+                      o "+ Nova publicação": ele ficava por cima do aviso e o clique não fazia nada. */}
+                  {_canCreateFromCal&&!((_lacunasPorDia[fmtDay(day)]||[]).length)&&<div data-ghost-card aria-hidden="true"
                     style={{position:"absolute",left:6,right:6,bottom:6,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",padding:"5px 8px 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,opacity:0,transform:"scale(0.98)",transformOrigin:"bottom center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box",color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,minHeight:26}}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     <span>Nova publicação</span>
