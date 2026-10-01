@@ -1755,6 +1755,7 @@ const PX_BLOCOS={
     {id:"card_arquivos", label:"Card aberto › arquivos", itens:[
       {key:"demandas.card.arq.referencias", label:"Imagens de referência",  desc:"Ver, baixar e enviar"},
       {key:"demandas.card.arq.materiais",   label:"Materiais",              desc:"Fotos/vídeos brutos enviados pela Hellen"},
+      {key:"demandas.card.arq.editavel",    label:"Arquivo editável",       desc:"PSD do designer / projeto Premiere (.prproj) do editor — ver, baixar e enviar (01/10/2026)"},
       {key:"demandas.card.arq.finais",      label:"Arquivos finais",        desc:"Entrega do designer/editor"},
       {key:"demandas.card.arq.ajustes",     label:"Anexos de ajuste",       desc:"Enviados junto com o pedido de ajuste"},
       {key:"demandas.card.arq.remover",     label:"Remover arquivos",       desc:"Botão de excluir anexo (padrão: sócio, criador do card, designer/editor/coordenação)",
@@ -20138,7 +20139,9 @@ function PxSeloPublicacao({task,grande}){
 function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
   /* 30/09/2026 (Gustavo): "super feio… ângulos mais arredondados, mais minimalista".
      O modo big (Calendário de publicações) virou uma pílula clara e redonda: setas redondas,
-     mês em destaque, ano apagadinho, "Hoje" só aparece fora do mês atual. O modo compacto
+     mês em destaque, ano apagadinho, "Hoje" só aparece fora do mês atual.
+     01/10/2026 (Gustavo): "quando clica pra direita ele muda a posição… tem que deixar fixo".
+     Mês com largura fixa e o "Hoje" abre embaixo da pílula (absoluto) — as setas não andam mais. O modo compacto
      (Calendário interno) continua o de antes, em _CalendarMonthNavCompacto. */
   if(!big) return <_CalendarMonthNavCompacto calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>;
   const _n=new Date();
@@ -20151,7 +20154,7 @@ function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
   };
   return(
     <div className="px-mesnav">
-      <style>{".px-mesnav{display:inline-flex;align-items:center;gap:4px;padding:5px;background:#fff;border:1px solid #e9edf3;border-radius:999px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05);font-family:'Inter',system-ui,sans-serif}.px-mesnav-seta{width:34px;height:34px;border-radius:999px;border:none;background:transparent;color:#64748b;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,color .15s}.px-mesnav-seta:hover{background:#f1f5f9;color:#0f172a}.px-mesnav-mes{min-width:150px;text-align:center;font-size:15px;font-weight:700;color:#0f172a;letter-spacing:-.2px;text-transform:capitalize;user-select:none}.px-mesnav-mes span{color:#94a3b8;font-weight:500;margin-left:6px}.px-mesnav-hoje{height:30px;padding:0 13px;margin-left:2px;border-radius:999px;border:1px solid #e9edf3;background:#f8fafc;color:#334155;font:600 12px/1 'Inter',system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s}.px-mesnav-hoje:hover{background:#f1f5f9;border-color:#cbd5e1}"}</style>
+      <style>{".px-mesnav{position:relative;display:inline-flex;align-items:center;gap:4px;padding:5px;background:#fff;border:1px solid #e9edf3;border-radius:999px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05);font-family:'Inter',system-ui,sans-serif}.px-mesnav-seta{width:34px;height:34px;border-radius:999px;border:none;background:transparent;color:#64748b;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,color .15s}.px-mesnav-seta:hover{background:#f1f5f9;color:#0f172a}.px-mesnav-mes{width:172px;flex-shrink:0;text-align:center;white-space:nowrap;font-size:15px;font-weight:700;color:#0f172a;letter-spacing:-.2px;text-transform:capitalize;user-select:none}.px-mesnav-mes span{color:#94a3b8;font-weight:500;margin-left:6px}.px-mesnav-hoje{position:absolute;top:calc(100% + 5px);left:50%;transform:translateX(-50%);z-index:3;height:24px;padding:0 12px;border-radius:999px;box-shadow:0 4px 12px rgba(15,23,42,.08);border:1px solid #e9edf3;background:#f8fafc;color:#334155;font:600 12px/1 'Inter',system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s}.px-mesnav-hoje:hover{background:#f1f5f9;border-color:#cbd5e1}"}</style>
       {_seta(-1)}
       <div className="px-mesnav-mes">{MONTHS[calMonth.getMonth()]}<span>{calMonth.getFullYear()}</span></div>
       {_seta(1)}
@@ -25586,7 +25589,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         </div>;
       })()}
       {/* PX_MESNAV_CENTRO — 30/09/2026 (Gustavo): seletor de mês centralizado, abaixo do "Gerar plano do mês" */}
-      <div style={{display:"flex",justifyContent:"center",margin:"2px 0 -2px"}}>
+      <div style={{display:"flex",justifyContent:"center",margin:"2px 0 10px"}}>
         <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
       </div>
       {pautaAberta&&(filterClient==="todos"||(filterClient==="bioter"&&filterBioterUnit==="todos"))&&<_PxPlanoDoMesTodos soBioter={filterClient==="bioter"} mes={calMonth} tasks={tasks} setTasks={setTasks}
@@ -26008,6 +26011,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
           </div>
         </div>
       )}
+
+      {/* 01/10/2026 (Gustavo): mesmo seletor de mês no rodapé, pra não precisar subir até o topo */}
+      <div style={{display:"flex",justifyContent:"center",margin:"18px 0 34px"}}>
+        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={true}/>
+      </div>
 
       {/* ── Context Menu (botao direito) ── */}
       {ctxMenu&&<PxCtxMenu x={ctxMenu.x} y={ctxMenu.y} title={ctxMenu.task&&ctxMenu.task.title} onClose={function(){setCtxMenu(null);}}
@@ -48770,13 +48778,15 @@ function _cardPodeSerResp(u){
     if(files.length===0)return;
 
     // ── VALIDA LIMITE DE IMAGENS (total geral + por seção) ──
-    const _isImgFile = f => { const m=detectMime(f); return m&&m.startsWith("image/"); };
+    // (01/10/2026) Arquivo editável (.psd, .prproj, .ai, .aep…): aceita qualquer extensão e não conta como imagem
+    const _ehEdt = tipo==="editavel";
+    const _isImgFile = f => { if(_ehEdt) return false; const m=detectMime(f); return m&&m.startsWith("image/"); };
     const currentImgs=attachments.filter(a=>isImg(a)&&!a.isAnnotation).length;
     const currentImgsTipo=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&(a.tipo||"final")===tipo).length;
     const newImgs=files.filter(_isImgFile).length;
     const remainingTotal=MAX_IMAGES_PER_CARD-currentImgs;
     const remainingTipo=MAX_IMAGES_PER_TIPO-currentImgsTipo;
-    const _secLabel = tipo==="referencia" ? "referências" : tipo==="material" ? "materiais" : "arquivos finais";
+    const _secLabel = tipo==="referencia" ? "referências" : tipo==="material" ? "materiais" : tipo==="editavel" ? "arquivos editáveis" : "arquivos finais";
     if(newImgs>0 && remainingTipo<=0){
       pixelsToast.warning(`Limite de ${MAX_IMAGES_PER_TIPO} ${_secLabel} atingido. Remova alguma antes de adicionar mais.`,5000);
       return;
@@ -48797,12 +48807,12 @@ function _cardPodeSerResp(u){
     // ── PRÉ-VALIDAÇÃO (tamanho + MIME) ──
     const validFiles=[];
     for(const file of files){
-      const mime=detectMime(file);
+      const mime=_ehEdt?"application/octet-stream":detectMime(file);
       if(file.size>MAX_UPLOAD_SIZE){
         pixelsToast.error(`${file.name}: arquivo muito grande (máx ${Math.round(MAX_UPLOAD_SIZE/1024/1024)} MB).`);
         continue;
       }
-      if(!isMimeAllowed(mime)){
+      if(!_ehEdt&&!isMimeAllowed(mime)){
         pixelsToast.error(`${file.name}: tipo não permitido (${mime}).`);
         continue;
       }
@@ -49215,6 +49225,7 @@ function _cardPodeSerResp(u){
     let tipo=explicitTipo;
     if(tipo==="referencia"&&!canEditRef){pixelsToast.warning("Sem permissão pra subir referências.");return;}
     if(tipo==="material"&&!canEditRef&&!canEdit){pixelsToast.warning("Sem permissão pra subir materiais.");return;}
+    if(tipo==="editavel"&&!canEditRef&&!canEdit){pixelsToast.warning("Sem permissão pra subir arquivo editável.");return;}
     if(tipo==="final"&&!canEdit){pixelsToast.warning("Sem permissão pra subir arquivo final.");return;}
     if(!tipo){
       // Fallback: decide pelo cargo (caso a soltura aconteça na área neutra)
@@ -49299,6 +49310,7 @@ function _cardPodeSerResp(u){
   // Default pra dados antigos sem `tipo`: vira "final" (preserva fluxo atual)
   const isRef=(a)=>a.tipo==="referencia";
   const isMat=(a)=>a.tipo==="material";
+  const isEdt=(a)=>a.tipo==="editavel";   // (01/10/2026) PSD / .prproj — seção "Arquivo editável"
   // Anexos de "Solicitar ajuste" — flag isRef:true (nao confundir com tipo:"referencia" do briefing)
   const isAdj=(a)=>!!a.isRef && a.tipo!=="referencia" && a.tipo!=="material";
   const isFin=(a)=>(!a.tipo||a.tipo==="final") && !isAdj(a);
@@ -49321,7 +49333,8 @@ function _cardPodeSerResp(u){
   const imgAttachments=[...imgRef,...imgFin];
   const vidAttachments=[...vidRef,...vidFin];
   const audAttachments=attachments.filter(a=>isAud(a)&&!a.uploading&&a.url);
-  const otherAttachments=attachments.filter(a=>!isImg(a)&&!isVid(a)&&!isAud(a)&&!a.isAnnotation&&!a.uploading&&a.url);
+  const otherAttachments=attachments.filter(a=>!isEdt(a)&&!isImg(a)&&!isVid(a)&&!isAud(a)&&!a.isAnnotation&&!a.uploading&&a.url);
+  const edtItems=attachments.filter(a=>isEdt(a)&&!a.isAnnotation&&(a.url||a.uploading));
   const filesCount=attachments.filter(a=>!a.isAnnotation).length; // don't count annotated corrections in badge
 
   // ═══ CHECKLIST DE AJUSTES — persistido em localStorage por task.id ═══
@@ -51634,6 +51647,64 @@ function _cardPodeSerResp(u){
                 </div>);
               })()}
 
+              {/* ── SEÇÃO 2b: ARQUIVO EDITÁVEL (01/10/2026, Gustavo) — PSD do designer, .prproj do editor ──
+                  "Vamos ter mais uma seção… Arquivo editável… tanto pra edição de vídeo quanto pra designers
+                  eles podem subir o .psd ou .prproj… abaixo da seção materiais". Aceita qualquer extensão. */}
+              {_bl("arq.editavel")&&(edtItems.length>0||canEditRef||canEdit)&&(()=>{
+                const _edtCanEdit=canEditRef||canEdit;
+                const _edtActive=dragOverSection==="edt";
+                const _ok=edtItems.filter(function(a){return a.url&&!a.uploading;});
+                const _ext=function(n){ return String((n||"").split(".").pop()||"").toUpperCase().slice(0,6); };
+                const _mb=function(b){ if(!b) return ""; const m=b/1024/1024; return m>=1024?(m/1024).toFixed(1)+" GB":(m>=10?Math.round(m):m.toFixed(1))+" MB"; };
+                return(<div
+                  onDragEnter={e=>{e.preventDefault();e.stopPropagation();if(_edtCanEdit&&dragOverSection!=="edt")setDragOverSection("edt");}}
+                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(_edtCanEdit)e.dataTransfer.dropEffect="copy";}}
+                  onDragLeave={e=>{e.preventDefault();e.stopPropagation();if(!e.currentTarget.contains(e.relatedTarget))setDragOverSection(function(cur){return cur==="edt"?null:cur;});}}
+                  onDrop={e=>{handleFilesDrop(e,"editavel");}}
+                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_edtActive?"2px dashed #ea580c":"2px dashed transparent",background:_edtActive?"#fff7ed":"transparent",padding:_edtActive?12:0,transition:"border .12s, background .12s"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:_ok.length>0?12:10}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#fff7ed,#ffedd5)",color:"#ea580c",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #fed7aa"}}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Arquivo editável {_ok.length>0&&<span style={{background:"#ffedd5",color:"#c2410c",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700}}>{_ok.length}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivo aberto pra editar depois — designer sobe o .psd, edição de vídeo sobe o .prproj</div>
+                    </div>
+                    {_ok.length>1&&<button onClick={function(){downloadAll(_ok,"Arquivos editáveis");}} title="Baixa todos os arquivos editáveis"
+                      style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Baixar tudo</button>}
+                    {_edtCanEdit&&<label htmlFor={"pixels-pick-edt-"+task.id}
+                      style={{background:"#ea580c",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,boxShadow:"0 1px 2px rgba(234,88,12,0.15)"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#c2410c";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="#ea580c";}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Adicionar
+                    </label>}
+                  </div>
+                  {edtItems.length===0&&(<div style={{background:"#fff7ed",border:"1.5px dashed #fed7aa",borderRadius:12,padding:"20px",textAlign:"center",marginBottom:6}}>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginBottom:4}}>{_edtCanEdit?"Nenhum arquivo editável ainda":"Sem arquivo editável nesse cartão"}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5}}>{_edtCanEdit?"Arraste o .psd ou o .prproj aqui, ou clique em Adicionar (até 2 GB)":"Quem produziu ainda não subiu o arquivo aberto."}</div>
+                  </div>)}
+                  {edtItems.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {edtItems.map(function(a){
+                      return <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",background:"#fff",border:"1px solid #fed7aa",borderRadius:10}}>
+                        <span style={{minWidth:44,height:30,borderRadius:7,background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,letterSpacing:.3,padding:"0 6px"}}>{_ext(a.name)||"ARQ"}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{color:"#334155",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
+                          <div style={{color:"#94a3b8",fontSize:10.5}}>{a.uploading?("Enviando… "+(a.progress||0)+"%"):[_mb(a.size),a.addedBy,a.addedAt].filter(Boolean).join(" · ")}</div>
+                        </div>
+                        {!a.uploading&&a.url&&<button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar"
+                          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:11.5,fontWeight:700,color:"#475569",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          Baixar
+                        </button>}
+                        {!a.uploading&&_edtCanEdit&&_bl("arq.remover")&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
+                          style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:15,padding:"0 4px"}}>×</button>}
+                      </div>;
+                    })}
+                  </div>}
+                </div>);
+              })()}
+
               {/* ── SEÇÃO 1: REFERÊNCIAS — só quem cria cartão sobe ── */}
               {_bl("arq.referencias")&&(imgRef.length>0||vidRef.length>0||canEditRef)&&(()=>{
                 const totalRef=imgRef.length+vidRef.length;
@@ -51663,7 +51734,7 @@ function _cardPodeSerResp(u){
                     _dragCountRefRef.current=0;
                     handleFilesDrop(e,"referencia");
                   }}
-                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_refActive?"2px dashed #a140ff":"2px dashed transparent",background:_refActive?"#faf5ff":"transparent",padding:_refActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_refActive?"2px dashed #475569":"2px dashed transparent",background:_refActive?"#f8fafc":"transparent",padding:_refActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
                   {_refActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
                     <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="pin" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Imagens de referência</span></div>
                   </div>}
@@ -51675,36 +51746,36 @@ function _cardPodeSerResp(u){
                     </div>
                     {totalRef>0&&<button onClick={function(){downloadAll([].concat(imgRef,vidRef),"Referências");}} title="Baixa todos os arquivos de referência"
                       style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#ddd6fe";e.currentTarget.style.color="#7c3aed";}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#334155";}}
                       onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Baixar tudo
                     </button>}
                     {canEditRef&&<label htmlFor={"pixels-pick-ref-"+task.id}
-                      style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(124,58,237,0.15)"}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#6d28d9";e.currentTarget.style.boxShadow="0 3px 10px rgba(124,58,237,0.35)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.boxShadow="0 1px 2px rgba(124,58,237,0.15)";}}>
+                      style={{background:"#334155",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(51,65,85,0.15)"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#1e293b";e.currentTarget.style.boxShadow="0 3px 10px rgba(51,65,85,0.35)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="#334155";e.currentTarget.style.boxShadow="0 1px 2px rgba(51,65,85,0.15)";}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                       Adicionar
                     </label>}
                   </div>
-                  {totalRef===0&&(<div style={{background:"#faf5ff",border:"1.5px dashed #ddd6fe",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
-                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #ede9fe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#a78bfa",marginBottom:10,boxShadow:"0 1px 3px rgba(124,58,237,0.06)"}}><Ico n="pin" size={20}/></div>
+                  {totalRef===0&&(<div style={{background:"#f8fafc",border:"1.5px dashed #cbd5e1",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
+                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #e2e8f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",marginBottom:10,boxShadow:"0 1px 3px rgba(51,65,85,0.06)"}}><Ico n="pin" size={20}/></div>
                     <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{canEditRef?"Nenhuma referência ainda":"Sem referências pra esse cartão"}</div>
                     <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{canEditRef?"Arraste imagens aqui ou clique em Adicionar":"O criador do cartão ainda não subiu exemplos."}</div>
                   </div>)}
                   {imgRef.length>0&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8,marginBottom:vidRef.length>0?12:0}}>
                     {imgRef.map((a,i)=>(
-                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
+                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
                         <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
                           onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
                           onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                           style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#faf5ff,#f3e8ff)",color:"#7c3aed",textAlign:"center"}}>
-                          <Ico n="image" size={22} color="#a140ff"/>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#f8fafc,#f1f5f9)",color:"#334155",textAlign:"center"}}>
+                          <Ico n="image" size={22} color="#475569"/>
                           <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
                           <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                            style={{background:"#a140ff",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                            style={{background:"#475569",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
                             Abrir <Ico n="external" size={9} color="#fff"/>
                           </a>
                         </div>
@@ -51715,12 +51786,12 @@ function _cardPodeSerResp(u){
                               onBlur={function(){_saveRenameRef();}}
                               placeholder={"ref #"+(i+1)}
                               maxLength={40}
-                              style={{position:"absolute",top:5,left:6,background:"#fff",color:"#0f172a",border:"1.5px solid #a140ff",borderRadius:99,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:.1,outline:"none",width:150,boxShadow:"0 2px 8px rgba(124,58,237,0.35)",fontFamily:"inherit",zIndex:3}}/>
+                              style={{position:"absolute",top:5,left:6,background:"#fff",color:"#0f172a",border:"1.5px solid #475569",borderRadius:99,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:.1,outline:"none",width:150,boxShadow:"0 2px 8px rgba(51,65,85,0.35)",fontFamily:"inherit",zIndex:3}}/>
                           : <div onClick={function(e){e.stopPropagation();_startRenameRef(a);}}
                               title={canEditRef?"Clique pra renomear":undefined}
-                              style={{position:"absolute",top:6,left:6,background:a.label?"#0f172a":"#a140ff",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px "+(a.label?"rgba(15,23,42,0.4)":"rgba(124,58,237,0.4)"),cursor:canEditRef?"pointer":"default",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",transition:"background .12s",display:"inline-flex",alignItems:"center",gap:5}}
-                              onMouseEnter={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#334155":"#7c3aed";}}
-                              onMouseLeave={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#0f172a":"#a140ff";}}>
+                              style={{position:"absolute",top:6,left:6,background:a.label?"#0f172a":"#475569",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px "+(a.label?"rgba(15,23,42,0.4)":"rgba(51,65,85,0.4)"),cursor:canEditRef?"pointer":"default",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",transition:"background .12s",display:"inline-flex",alignItems:"center",gap:5}}
+                              onMouseEnter={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#334155":"#334155";}}
+                              onMouseLeave={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#0f172a":"#475569";}}>
                               <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? a.label : ("ref #"+(i+1))}</span>
                               {canEditRef && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.85}}>
                                 <path d="M12 20h9"/>
@@ -51731,13 +51802,13 @@ function _cardPodeSerResp(u){
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
                           {canEditRef&&<button onClick={(e)=>{e.stopPropagation();_startRenameRef(a);}} title="Renomear referência"
                             style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
-                            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(51,65,85,0.85)"}
                             onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                           </button>}
                           <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar referência"
                             style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
-                            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(51,65,85,0.85)"}
                             onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                           </button>
@@ -51750,9 +51821,9 @@ function _cardPodeSerResp(u){
                   </div>}
                   {vidRef.length>0&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>{vidRef.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",background:"#0f172a",transition:"all .15s",aspectRatio:"1"}}
-                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.18)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";e.currentTarget.style.boxShadow="none";}}>
+                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",background:"#0f172a",transition:"all .15s",aspectRatio:"1"}}
+                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.boxShadow="0 6px 16px rgba(51,65,85,0.18)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
                       {/* Player nativo — mostra primeiro frame + controls pra play inline */}
                       <PxVideo src={a.url} file={a} controls playsInline
                         onClick={function(e){e.stopPropagation();}}
@@ -51765,12 +51836,12 @@ function _cardPodeSerResp(u){
                             onBlur={function(){_saveRenameRef();}}
                             placeholder="ref · vídeo"
                             maxLength={40}
-                            style={{position:"absolute",top:5,left:6,background:"#fff",color:"#0f172a",border:"1.5px solid #a140ff",borderRadius:99,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:.1,outline:"none",width:160,boxShadow:"0 2px 8px rgba(124,58,237,0.35)",fontFamily:"inherit",zIndex:3}}/>
+                            style={{position:"absolute",top:5,left:6,background:"#fff",color:"#0f172a",border:"1.5px solid #475569",borderRadius:99,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:.1,outline:"none",width:160,boxShadow:"0 2px 8px rgba(51,65,85,0.35)",fontFamily:"inherit",zIndex:3}}/>
                         : <div onClick={function(e){e.stopPropagation();_startRenameRef(a);}}
                             title={canEditRef?"Clique pra renomear":undefined}
-                            style={{position:"absolute",top:6,left:6,background:a.label?"#0f172a":"#a140ff",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px "+(a.label?"rgba(15,23,42,0.4)":"rgba(124,58,237,0.4)"),cursor:canEditRef?"pointer":"default",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}
-                            onMouseEnter={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#334155":"#7c3aed";}}
-                            onMouseLeave={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#0f172a":"#a140ff";}}>
+                            style={{position:"absolute",top:6,left:6,background:a.label?"#0f172a":"#475569",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px "+(a.label?"rgba(15,23,42,0.4)":"rgba(51,65,85,0.4)"),cursor:canEditRef?"pointer":"default",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}
+                            onMouseEnter={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#334155":"#334155";}}
+                            onMouseLeave={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#0f172a":"#475569";}}>
                             <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? ("Referência · "+a.label) : ("Referência · "+(a.name?a.name.slice(0,14):"vídeo"))}</span>
                             {canEditRef && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.85}}>
                               <path d="M12 20h9"/>
@@ -51782,7 +51853,7 @@ function _cardPodeSerResp(u){
                       <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
                         <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
                           style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(124,58,237,0.85)";}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(51,65,85,0.85)";}}
                           onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         </button>
@@ -51832,6 +51903,7 @@ function _cardPodeSerResp(u){
             <input id={"pixels-pick-final-"+task.id} type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
             <input id={"pixels-pick-ref-"+task.id} type="file" ref={fileInputRefRef} onChange={e=>handleFileUpload(e,"referencia")} multiple style={{display:"none"}} accept="image/*,video/*"/>
             <input id={"pixels-pick-mat-"+task.id} type="file" ref={matFileInputRef} onChange={e=>handleFileUpload(e,"material")} multiple style={{display:"none"}} accept="image/*,video/*"/>
+            <input id={"pixels-pick-edt-"+task.id} type="file" onChange={e=>handleFileUpload(e,"editavel")} multiple style={{display:"none"}}/>
           </div>}
 
           {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado.
