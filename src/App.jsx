@@ -114483,6 +114483,12 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v21 (01/10/2026) — FASE H: COR II (R$ 0, tudo neste computador / na placa de vídeo):
+     • Auto: nota técnica do take + "Corrigir automaticamente" (exposição + branco), só exposição, só branco, recuperar escuro, melhorar; em todos os clipes
+     • LUT .cube (importar, intensidade, usar em todos, guardar como LUT da marca) · Balanço de branco automático e por conta-gotas · Desbotar (fade)
+     • Curvas de matiz (Matiz×Matiz, ×Saturação, ×Luz, Luz×Saturação) · Cor secundária (pega uma cor no vídeo e muda só ela, com "ver a máscara")
+     • Roda Offset · Intensidade do filtro · Favoritos ★ · Filtros de retrato · Força da cor animada (◆ no Animar) · Tirar o piscar (flicker)
+     • Scopes: forma de onda, RGB parade, vetorscópio (linha da pele), histograma · Melhorias sugeridas no painel da IA (escuro, estourado, sem contraste, cor puxada, pouco nítido, tremido) com "Aplicar todas"
    v20 (01/10/2026) — FASE G: O CLAUDE JUNTO NA EDIÇÃO (video-editar v32):
      • Modelo da IA: Sonnet 5.5 · Opus 5.5 · Fable 5.1 · Sonnet 5 (cada pessoa escolhe; "padrão da agência" vale para o Guvi e o PC) + "Testar os modelos"
      • Conversa: cada pedido, o que a IA respondeu, O QUE MUDOU de verdade (duração, cortes, cor, textos, legenda, música…), modelo e custo; desfazer com 1 clique
@@ -116469,7 +116475,7 @@ function _EvExportarV2({ t, ed, linha, kit, base, musica, logoUrl, exp, setExp, 
       const AC = window.AudioContext || window.webkitAudioContext; ac = new AC(); const dest = ac.createMediaStreamDestination();
       motor = _evMotor(cv, { linha:linha, kit:kit, base:base, clipes:ed.clipes||[], musica:musica, logoUrl:logoUrl, original:true, audio:{ ctx:ac, dest:dest },
         onTempo:function(tt){ const p = Math.round(tt/Math.max(0.1,linha.total)*100); setExp(function(x){ return (x && x.fase==="gravando" && x.pct!==p) ? Object.assign({}, x, { pct:p }) : x; }); } });
-      await motor.pronto;
+      await motor.pronto; await _evpLutsEsperar();          // v21: LUT carregada antes do 1º quadro
       await ac.resume();
       const stream = new MediaStream([].concat(cv.captureStream(30).getVideoTracks(), dest.stream.getAudioTracks()));
       const rec = new MediaRecorder(stream, { mimeType:mime, videoBitsPerSecond:9000000, audioBitsPerSecond:160000 });
@@ -116758,6 +116764,7 @@ function _evpCorAvancada(k){
   if(k.rodas && ["s","m","a"].some(function(q){ const v = k.rodas[q]; return Array.isArray(v) && (_evpNum(v[1], 0) > 0.0005 || Math.abs(_evpNum(v[2], 0)) > 0.0005); })) return true;
   if(k.curvas && ["l","r","g","b"].some(function(q){ return !_evpCurvaIdent(k.curvas[q]); })) return true;
   if(k.ig && _evpNum(k.ig.f, 0) > 0) return true;
+  if(_evpCorExtraTem(k)) return true;                                        // v21
   return false;
 }
 /* limpeza (mesma regra do servidor) */
@@ -116765,7 +116772,7 @@ function _evpCorLimpa(k0){
   const k = Object.assign({ bri:0, con:0, sat:0, temp:0 }, k0 || {}), o = { bri:_evClamp(_evpNum(k.bri, 0), -0.5, 0.5), con:_evClamp(_evpNum(k.con, 0), -0.5, 0.5), sat:_evClamp(_evpNum(k.sat, 0), -1, 1), temp:_evClamp(_evpNum(k.temp, 0), -1, 1) };
   _EVP_COR_NUM.forEach(function(q){ const lim = q === "exp" ? 2 : 1, mn = (q === "nit" || q === "grao") ? 0 : -lim, v = _evClamp(_evpNum(k[q], 0), mn, lim); if(Math.abs(v) > 0.0005) o[q] = Math.round(v * 1000) / 1000; });
   if(k.hsl && typeof k.hsl === "object"){ const h = {}; _EVP_HSL_CORES.forEach(function(c){ const v = k.hsl[c.id]; if(Array.isArray(v)){ const t = [0,1,2].map(function(i){ return Math.round(_evClamp(_evpNum(v[i], 0), -1, 1) * 1000) / 1000; }); if(t.some(function(x){ return x; })) h[c.id] = t; } }); if(Object.keys(h).length) o.hsl = h; }
-  if(k.rodas && typeof k.rodas === "object"){ const r = {}; ["s","m","a"].forEach(function(q){ const v = k.rodas[q]; if(Array.isArray(v)){ const t = [Math.round(((_evpNum(v[0], 0) % 360) + 360) % 360), Math.round(_evClamp(_evpNum(v[1], 0), 0, 1) * 1000) / 1000, Math.round(_evClamp(_evpNum(v[2], 0), -1, 1) * 1000) / 1000];
+  if(k.rodas && typeof k.rodas === "object"){ const r = {}; ["s","m","a","o"].forEach(function(q){ const v = k.rodas[q]; if(Array.isArray(v)){ const t = [Math.round(((_evpNum(v[0], 0) % 360) + 360) % 360), Math.round(_evClamp(_evpNum(v[1], 0), 0, 1) * 1000) / 1000, Math.round(_evClamp(_evpNum(v[2], 0), -1, 1) * 1000) / 1000];
     if(t[1] || t[2]) r[q] = t; } }); if(Object.keys(r).length) o.rodas = r; }
   if(k.curvas && typeof k.curvas === "object"){ const cv = {}; ["l","r","g","b"].forEach(function(q){ const v = k.curvas[q]; if(!Array.isArray(v)) return;
     const pts = v.filter(function(p){ return Array.isArray(p) && isFinite(Number(p[0])) && isFinite(Number(p[1])); }).map(function(p){ return [Math.round(_evClamp(+p[0], 0, 1) * 1000) / 1000, Math.round(_evClamp(+p[1], 0, 1) * 1000) / 1000]; })
@@ -116775,6 +116782,7 @@ function _evpCorLimpa(k0){
     o.ig = { f:Math.round(_evClamp(_evpNum(k.ig.f, 1), 0, 1) * 100) / 100, m:k.ig.m.map(function(x){ return Math.round(_evClamp(+x || 0, 0, 1) * 1000) / 1000; }),
              k:k.ig.k.map(function(x){ return Math.round(_evClamp(+x || 1, 0.5, 2) * 1000) / 1000; }), r:k.ig.r.map(function(x){ return Math.round(_evClamp(+x || 0, 0, 1) * 1000) / 1000; }) }; }
   if(typeof k.look === "string" && /^[a-z0-9_:-]{1,40}$/i.test(k.look)) o.look = k.look;
+  _evpCorLimpaExtra(k, o);                                                   // v21
   return o;
 }
 /* curva suave que passa pelos pontos (sem "ondular": Fritsch–Carlson) → tabela de 256 valores */
@@ -116801,10 +116809,12 @@ function _evpRodaRGB(r){
 /* MOTOR DE COR (WebGL) — um só para a página inteira; devolve um canvas com o quadro já com a cor */
 const _evpCorGL = (function(){
   let cv = null, gl = null, prog = null, tex = null, lut = null, lutChave = "", U = {}, falhou = false, maxLado = 4096;
+  let hlut = null, hChave = "", l3 = null, l3Chave = "", maxTex = 4096;            // v21
   const VS = "attribute vec2 p; varying vec2 v; void main(){ v = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }";
   const FS = [
     "#ifdef GL_FRAGMENT_PRECISION_HIGH", "precision highp float;", "#else", "precision mediump float;", "#endif",
-    "varying vec2 v; uniform sampler2D u_t; uniform sampler2D u_lut; uniform vec2 u_px;",
+    "varying vec2 v; uniform sampler2D u_t; uniform sampler2D u_lut; uniform sampler2D u_hlut; uniform sampler2D u_l3; uniform vec2 u_px;",
+    "uniform float u_fade, u_hOn, u_secOn, u_l3On, u_l3N, u_l3F, u_ganho; uniform vec3 u_bal, u_off, u_secD; uniform vec4 u_sec; uniform vec2 u_secL;",
     "uniform float u_exp, u_real, u_somb, u_bran, u_pret, u_tint, u_vib, u_nit, u_lutOn, u_igF, u_hslOn;",
     "uniform vec3 u_igM, u_igK, u_igR, u_ws, u_wm, u_wh; uniform vec4 u_hsl[8];",
     "float luma(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }",
@@ -116814,11 +116824,11 @@ const _evpCorGL = (function(){
     "vec3 hsv2rgb(vec3 c){ vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0); vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y); }",
     "float lut(float x, float k){ vec4 t = texture2D(u_lut, vec2(clamp(x, 0.0, 1.0) * (255.0/256.0) + 0.5/256.0, 0.5)); return k < 0.5 ? t.r : k < 1.5 ? t.g : k < 2.5 ? t.b : t.a; }",
     "void main(){",
-    "  vec3 c = texture2D(u_t, v).rgb;",
+    "  vec3 c = texture2D(u_t, v).rgb * u_ganho;",
     "  if(u_nit > 0.0){ vec3 n = texture2D(u_t, v + vec2(u_px.x, 0.0)).rgb + texture2D(u_t, v - vec2(u_px.x, 0.0)).rgb + texture2D(u_t, v + vec2(0.0, u_px.y)).rgb + texture2D(u_t, v - vec2(0.0, u_px.y)).rgb;",
     "    c = c + u_nit * 1.5 * (c - n * 0.25); }",
     "  if(u_igF > 0.0){ c = mix(c, (c - u_igM) * u_igK + u_igR, u_igF); }",
-    "  if(u_exp != 0.0){ vec3 l = pow(max(c, 0.0), vec3(2.2)) * exp2(u_exp); c = pow(l, vec3(1.0/2.2)); }",
+    "  if(u_exp != 0.0 || u_bal != vec3(1.0)){ vec3 l = pow(max(c, 0.0), vec3(2.2)) * exp2(u_exp) * u_bal; c = pow(l, vec3(1.0/2.2)); }",
     "  float bp = -0.10 * u_pret, wp = 1.0 - 0.10 * u_bran; c = (c - bp) / max(0.05, wp - bp);",
     "  float L = luma(clamp(c, 0.0, 1.0)); float ms = 1.0 - smoothstep(0.0, 0.55, L), mh = smoothstep(0.45, 1.0, L);",
     "  c += vec3(u_somb * 0.28 * ms + u_real * 0.28 * mh);",
@@ -116829,9 +116839,21 @@ const _evpCorGL = (function(){
     "      hs += w * u_hsl[i].x; ss += w * u_hsl[i].y; ls += w * u_hsl[i].z; }",
     "    float g = smoothstep(0.04, 0.22, h.y); h.x = fract(h.x + hs * g * (30.0/360.0)); h.y = clamp(h.y * (1.0 + ss * g), 0.0, 1.0); h.z = clamp(h.z * (1.0 + ls * g * 0.45), 0.0, 1.0);",
     "    c = hsv2rgb(h); }",
+    "  if(u_hOn > 0.5){ vec3 h = rgb2hsv(clamp(c, 0.0, 1.0)); vec4 q = texture2D(u_hlut, vec2(h.x * (255.0/256.0) + 0.5/256.0, 0.5)); float g = smoothstep(0.04, 0.22, h.y);",
+    "    float ls = texture2D(u_hlut, vec2(luma(clamp(c, 0.0, 1.0)) * (255.0/256.0) + 0.5/256.0, 0.5)).a;",
+    "    h.x = fract(h.x + (q.r - 0.50196) * 2.0 * (60.0/360.0) * g); h.y = clamp(h.y * (1.0 + (q.g - 0.50196) * 2.0 * g) * (1.0 + (ls - 0.50196) * 2.0), 0.0, 1.0);",
+    "    h.z = clamp(h.z * (1.0 + (q.b - 0.50196) * 1.2 * g), 0.0, 1.0); c = hsv2rgb(h); }",
+    "  if(u_secOn > 0.5){ vec3 h = rgb2hsv(clamp(c, 0.0, 1.0)); float dh = abs(fract(h.x - u_sec.x + 0.5) - 0.5); float mh = 1.0 - smoothstep(u_sec.y * 0.6, u_sec.y, dh);",
+    "    float ms = smoothstep(u_sec.z * 0.6, u_sec.z + 0.05, h.y); float Ls = luma(clamp(c, 0.0, 1.0)); float ml = smoothstep(u_secL.x - 0.08, u_secL.x, Ls) * (1.0 - smoothstep(u_secL.y, u_secL.y + 0.08, Ls)); float m = mh * ms * ml;",
+    "    if(u_sec.w > 0.5){ gl_FragColor = vec4(vec3(m), 1.0); return; }",
+    "    h.x = fract(h.x + u_secD.x * (60.0/360.0) * m); h.y = clamp(h.y * (1.0 + u_secD.y * m), 0.0, 1.0); h.z = clamp(h.z * (1.0 + u_secD.z * 0.6 * m), 0.0, 1.0); c = hsv2rgb(h); }",
     "  float L2 = luma(clamp(c, 0.0, 1.0)); float wS = (1.0 - L2) * (1.0 - L2), wH = L2 * L2, wM = 1.0 - wS - wH;",
-    "  c += u_ws * wS + u_wm * wM + u_wh * wH;",
+    "  c += u_ws * wS + u_wm * wM + u_wh * wH + u_off;",
     "  if(u_lutOn > 0.5){ c = clamp(c, 0.0, 1.0); c = vec3(lut(c.r, 0.0), lut(c.g, 1.0), lut(c.b, 2.0)); c = vec3(lut(c.r, 3.0), lut(c.g, 3.0), lut(c.b, 3.0)); }",
+    "  if(u_fade > 0.0){ c = clamp(c, 0.0, 1.0) * (1.0 - 0.16 * u_fade) + 0.08 * u_fade; }",
+    "  if(u_l3On > 0.5){ c = clamp(c, 0.0, 1.0); float N = u_l3N; float bz = c.b * (N - 1.0); float z0 = floor(bz); float z1 = min(z0 + 1.0, N - 1.0); float fz = bz - z0;",
+    "    float xr = c.r * (N - 1.0) + 0.5; float yg = (c.g * (N - 1.0) + 0.5) / N;",
+    "    vec3 la = texture2D(u_l3, vec2((z0 * N + xr) / (N * N), yg)).rgb; vec3 lb = texture2D(u_l3, vec2((z1 * N + xr) / (N * N), yg)).rgb; c = mix(c, mix(la, lb, fz), u_l3F); }",
     "  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);",
     "}" ].join("\n");
   function iniciar(){
@@ -116846,12 +116868,14 @@ const _evpCorGL = (function(){
       gl.useProgram(prog);
       const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
       const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-      ["u_t","u_lut","u_px","u_exp","u_real","u_somb","u_bran","u_pret","u_tint","u_vib","u_nit","u_lutOn","u_igF","u_hslOn","u_igM","u_igK","u_igR","u_ws","u_wm","u_wh","u_hsl"].forEach(function(n){ U[n] = gl.getUniformLocation(prog, n); });
+      ["u_t","u_lut","u_px","u_exp","u_real","u_somb","u_bran","u_pret","u_tint","u_vib","u_nit","u_lutOn","u_igF","u_hslOn","u_igM","u_igK","u_igR","u_ws","u_wm","u_wh","u_hsl",
+       "u_hlut","u_l3","u_fade","u_hOn","u_secOn","u_l3On","u_l3N","u_l3F","u_ganho","u_bal","u_off","u_secD","u_sec","u_secL"].forEach(function(n){ U[n] = gl.getUniformLocation(prog, n); });
       const tx = function(){ const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; };
-      tex = tx(); lut = tx();
-      gl.uniform1i(U.u_t, 0); gl.uniform1i(U.u_lut, 1);
-      maxLado = Math.min(4096, gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096);
+      tex = tx(); lut = tx(); hlut = tx(); l3 = tx();
+      gl.uniform1i(U.u_t, 0); gl.uniform1i(U.u_lut, 1); gl.uniform1i(U.u_hlut, 2); gl.uniform1i(U.u_l3, 3);
+      maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+      maxLado = Math.min(4096, maxTex);
       return true;
     }catch(e){ falhou = true; gl = null; try{ console.warn("[cor] WebGL indisponível:", e && e.message); }catch(_){} return false; }
   }
@@ -116880,6 +116904,29 @@ const _evpCorGL = (function(){
     const hsl = k.hsl || {}, arr = new Float32Array(32); let on = false;
     _EVP_HSL_CORES.forEach(function(c, i){ const v = hsl[c.id] || [0,0,0]; arr[i*4] = _evpNum(v[0], 0); arr[i*4+1] = _evpNum(v[1], 0); arr[i*4+2] = _evpNum(v[2], 0); arr[i*4+3] = c.h / 360; if(v[0] || v[1] || v[2]) on = true; });
     gl.uniform4fv(U.u_hsl, arr); gl.uniform1f(U.u_hslOn, on ? 1 : 0);
+    // v21: piscar, balanço de branco, offset, desbotar
+    gl.uniform1f(U.u_ganho, _evpNum(k._ganho, 1)); gl.uniform3fv(U.u_bal, Array.isArray(k.bal) ? k.bal.map(function(x){ return _evpNum(x, 1); }) : [1, 1, 1]);
+    gl.uniform3fv(U.u_off, rd.o ? _evpRodaRGB(rd.o) : [0, 0, 0]); gl.uniform1f(U.u_fade, _evClamp(_evpNum(k.fade, 0), 0, 1));
+    // v21: curvas de matiz (textura 256×1: R matiz×matiz, G matiz×saturação, B matiz×luz, A luz×saturação)
+    const hc = k.hcv || {}, temH = ["hh","hs","hl","ls"].some(function(q){ return !_evpCurvaPlana(hc[q]); });
+    if(temH){ const ch = JSON.stringify(hc); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, hlut);
+      if(ch !== hChave){ const pl = [[0, 0.5], [1, 0.5]], t1 = _evpCurvaTabela(hc.hh || pl), t2 = _evpCurvaTabela(hc.hs || pl), t3 = _evpCurvaTabela(hc.hl || pl), t4 = _evpCurvaTabela(hc.ls || pl), px = new Uint8Array(256 * 4);
+        for(let i=0;i<256;i++){ px[i*4] = t1[i]; px[i*4+1] = t2[i]; px[i*4+2] = t3[i]; px[i*4+3] = t4[i]; }
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); hChave = ch; }
+      gl.activeTexture(gl.TEXTURE0); }
+    gl.uniform1f(U.u_hOn, temH ? 1 : 0);
+    // v21: cor secundária
+    const sc = k.sec, temS = !!(sc && (_evpNum(sc.dh, 0) || _evpNum(sc.ds, 0) || _evpNum(sc.dl, 0) || _evpVerMascara));
+    gl.uniform1f(U.u_secOn, temS ? 1 : 0);
+    if(temS){ gl.uniform4f(U.u_sec, _evpNum(sc.h, 0) / 360, _evClamp(_evpNum(sc.w, 25), 5, 90) / 360, _evpNum(sc.s0, 0.15), _evpVerMascara ? 1 : 0);
+      gl.uniform2f(U.u_secL, _evpNum(sc.l0, 0), _evpNum(sc.l1, 1)); gl.uniform3f(U.u_secD, _evpNum(sc.dh, 0), _evpNum(sc.ds, 0), _evpNum(sc.dl, 0)); }
+    // v21: LUT 3D (.cube) — carrega uma vez; enquanto não chega, o quadro sai sem a LUT
+    const L3 = k.lut && k.lut.url ? k.lut : null; let temL = false;
+    if(L3){ const it = _evpLuts[L3.url]; if(!it) _evpLutCarregar(L3.url);
+      else if(it.estado === "ok" && it.N * it.N <= maxTex){ gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, l3);
+        if(l3Chave !== L3.url){ gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, it.N * it.N, it.N, 0, gl.RGBA, gl.UNSIGNED_BYTE, it.px); l3Chave = L3.url; }
+        gl.activeTexture(gl.TEXTURE0); temL = true; gl.uniform1f(U.u_l3N, it.N); gl.uniform1f(U.u_l3F, _evClamp(_evpNum(L3.f, 1), 0, 1)); } }
+    gl.uniform1f(U.u_l3On, temL ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return cv;
   }
@@ -116945,6 +116992,9 @@ const _EVP_LOOKS2 = [
   { id:"vintage", label:"Vintage", cor:{ temp:0.25, tint:0.05, sat:-0.2, pret:0.5, grao:0.3, vin:0.3, curvas:{ l:[[0, 0.06], [0.5, 0.52], [1, 0.93]] } } },
   { id:"pb", label:"P&B", cor:{ bri:0.02, con:0.15, sat:-1, temp:0 } },
   { id:"pb_forte", label:"P&B forte", cor:{ sat:-1, con:0.3, pret:-0.2, bran:0.2, grao:0.25 } },
+  { id:"retrato", label:"Retrato natural", cor:{ somb:0.15, real:-0.12, vib:0.1, hsl:{ lar:[0, -0.05, 0.08], ver:[0, -0.08, 0] } } },          // v21: retrato
+  { id:"retrato_quente", label:"Pele quente", cor:{ temp:0.15, somb:0.1, hsl:{ lar:[0, 0.05, 0.1], ver:[0, -0.05, 0] } } },
+  { id:"retrato_suave", label:"Retrato suave", cor:{ con:-0.06, real:-0.18, fade:0.18, vib:0.08, hsl:{ lar:[0, -0.08, 0.1] } } },
 ];
 
 /* ═══ v20 — FASE G: o Claude junto na edição — escolher o modelo, conversa com "o que mudei", prévia antes de aplicar, revisor ═══ */
@@ -117054,6 +117104,252 @@ function _evpBuscarFala(palavras, q){
   return out;
 }
 
+/* ══ v21 (01/10/2026) COR II — FASE H: LUT (.cube), correção automática, conta-gotas, balanço de branco, desbotar (fade), roda Offset,
+   curvas por matiz (Matiz×Matiz, Matiz×Saturação, Matiz×Luz, Luz×Saturação), cor secundária (HSL Secondary), intensidade do filtro,
+   força da cor animada (◆), tirar o piscar (flicker), scopes (forma de onda, vetorscópio, RGB parade, histograma), análise dos takes.
+   c.cor ganha: fade 0–1 · bal [r,g,b] 0.5–2 (balanço de branco) · rodas.o (offset) · hcv { hh, hs, hl, ls: [[x,y]…] (0.5 = sem mudança) }
+                sec { h 0–360, w 5–90, s0 0–1, l0, l1 0–1, dh, ds, dl −1 a 1 } · lut { url, nome, f 0–1 } · forca 0–1 · flick (true) */
+function _evpCurvaPlana(pts){ return !Array.isArray(pts) || pts.length < 2 || pts.every(function(q){ return Math.abs(q[1] - 0.5) < 0.004; }); }
+function _evpPtsLimpos(v){
+  if(!Array.isArray(v)) return null;
+  return v.filter(function(p){ return Array.isArray(p) && isFinite(Number(p[0])) && isFinite(Number(p[1])); })
+    .map(function(p){ return [Math.round(_evClamp(+p[0], 0, 1) * 1000) / 1000, Math.round(_evClamp(+p[1], 0, 1) * 1000) / 1000]; })
+    .sort(function(a, b){ return a[0] - b[0]; }).filter(function(p, i, a){ return !i || p[0] - a[i-1][0] > 0.01; }).slice(0, 12);
+}
+/* limpeza dos campos novos (mesma regra do servidor: projeto.ts corLimpa) */
+function _evpCorLimpaExtra(k, o){
+  const r3 = function(x){ return Math.round(x * 1000) / 1000; };
+  const fade = _evClamp(_evpNum(k.fade, 0), 0, 1); if(fade > 0.0005) o.fade = r3(fade);
+  if(Array.isArray(k.bal) && k.bal.length === 3){ const b = k.bal.map(function(x){ return r3(_evClamp(_evpNum(x, 1), 0.5, 2)); }); if(b.some(function(x){ return Math.abs(x - 1) > 0.002; })) o.bal = b; }
+  if(k.hcv && typeof k.hcv === "object"){ const h = {}; ["hh","hs","hl","ls"].forEach(function(q){ const pts = _evpPtsLimpos(k.hcv[q]); if(pts && pts.length >= 2 && !_evpCurvaPlana(pts)) h[q] = pts; }); if(Object.keys(h).length) o.hcv = h; }
+  const s = k.sec;
+  if(s && typeof s === "object"){
+    const t = { h:Math.round(((_evpNum(s.h, 0) % 360) + 360) % 360), w:Math.round(_evClamp(_evpNum(s.w, 25), 5, 90)), s0:r3(_evClamp(_evpNum(s.s0, 0.15), 0, 1)),
+                l0:r3(_evClamp(_evpNum(s.l0, 0), 0, 1)), l1:r3(_evClamp(_evpNum(s.l1, 1), 0, 1)), dh:r3(_evClamp(_evpNum(s.dh, 0), -1, 1)), ds:r3(_evClamp(_evpNum(s.ds, 0), -1, 1)), dl:r3(_evClamp(_evpNum(s.dl, 0), -1, 1)) };
+    if(t.l1 < t.l0){ const x = t.l0; t.l0 = t.l1; t.l1 = x; }
+    if(t.dh || t.ds || t.dl) o.sec = t;
+  }
+  const L = k.lut;
+  if(L && typeof L === "object" && typeof L.url === "string" && /^(https?:\/\/|\/)[^\s"'<>]{1,500}$/.test(L.url)){ const f = _evClamp(_evpNum(L.f, 1), 0, 1); if(f > 0.0005) o.lut = { url:L.url, nome:String(L.nome || "LUT").slice(0, 60), f:r3(f) }; }
+  if(k.forca != null){ const f = _evClamp(_evpNum(k.forca, 1), 0, 1); if(f < 0.999) o.forca = r3(f); }
+  if(k.flick === true) o.flick = true;
+  return o;
+}
+function _evpCorExtraTem(k){
+  if(!k) return false;
+  if(_evpNum(k.fade, 0) > 0.0005 || k.flick === true) return true;
+  if(Array.isArray(k.bal) && k.bal.some(function(x){ return Math.abs(_evpNum(x, 1) - 1) > 0.002; })) return true;
+  if(k.rodas && Array.isArray(k.rodas.o) && (_evpNum(k.rodas.o[1], 0) > 0.0005 || Math.abs(_evpNum(k.rodas.o[2], 0)) > 0.0005)) return true;
+  if(k.hcv && ["hh","hs","hl","ls"].some(function(q){ return !_evpCurvaPlana(k.hcv[q]); })) return true;
+  if(k.sec && (_evpNum(k.sec.dh, 0) || _evpNum(k.sec.ds, 0) || _evpNum(k.sec.dl, 0))) return true;
+  if(k.lut && k.lut.url && _evpNum(k.lut.f, 1) > 0.0005) return true;
+  return false;
+}
+/* INTENSIDADE (do filtro, ou animada com ◆): leva cada ajuste para o "sem mudança" na mesma proporção */
+function _evpCorEscala(k, f){
+  if(!k || f >= 0.999) return k;
+  f = _evClamp(f, 0, 1);
+  const o = Object.assign({}, k), ln = function(a, b){ return a + (b - a) * f; };
+  ["bri","con","sat","temp","exp","real","somb","bran","pret","tint","vib","nit","vin","grao","fade"].forEach(function(q){ if(o[q] != null) o[q] = _evpNum(o[q], 0) * f; });
+  if(k.hsl){ o.hsl = {}; Object.keys(k.hsl).forEach(function(q){ o.hsl[q] = (k.hsl[q] || []).map(function(x){ return _evpNum(x, 0) * f; }); }); }
+  if(k.rodas){ o.rodas = {}; Object.keys(k.rodas).forEach(function(q){ const v = k.rodas[q] || []; o.rodas[q] = [v[0], _evpNum(v[1], 0) * f, _evpNum(v[2], 0) * f]; }); }
+  if(k.curvas){ o.curvas = {}; Object.keys(k.curvas).forEach(function(q){ o.curvas[q] = (k.curvas[q] || []).map(function(p){ return [p[0], ln(p[0], p[1])]; }); }); }
+  if(k.hcv){ o.hcv = {}; Object.keys(k.hcv).forEach(function(q){ o.hcv[q] = (k.hcv[q] || []).map(function(p){ return [p[0], ln(0.5, p[1])]; }); }); }
+  if(Array.isArray(k.bal)) o.bal = k.bal.map(function(x){ return ln(1, _evpNum(x, 1)); });
+  if(k.sec) o.sec = Object.assign({}, k.sec, { dh:_evpNum(k.sec.dh, 0) * f, ds:_evpNum(k.sec.ds, 0) * f, dl:_evpNum(k.sec.dl, 0) * f });
+  if(k.lut) o.lut = Object.assign({}, k.lut, { f:_evpNum(k.lut.f, 1) * f });
+  if(k.ig) o.ig = Object.assign({}, k.ig, { f:_evpNum(k.ig.f, 1) * f });
+  delete o.forca;
+  return o;
+}
+/* a cor que vale NESTE quadro: intensidade do filtro × força da cor animada (◆) */
+function _evpCorEfetiva(c, tt){
+  const k = c && c.cor; if(!k) return k;
+  let f = k.forca == null ? 1 : _evClamp(_evpNum(k.forca, 1), 0, 1);
+  if(_evpAnimTem(c) && c.anim.pts.some(function(p){ return p.k != null && _evpNum(p.k, 1) < 0.999; })) f *= _evClamp(_evpAnimEm(c, _evpTau(c, tt)).k, 0, 1);
+  return f >= 0.999 ? k : _evpCorEscala(k, f);
+}
+/* TIRAR O PISCAR (flicker): mede a luz média do quadro e compensa devagar (a média andando segue a cena; o pisca-pisca some) */
+let _evpFlkCx = null;
+function _evpFlickerGanho(c, v){
+  try{
+    if(!_evpFlkCx){ const cv = document.createElement("canvas"); cv.width = 8; cv.height = 8; _evpFlkCx = cv.getContext("2d", { willReadFrequently:true }); }
+    _evpFlkCx.drawImage(v, 0, 0, 8, 8); const d = _evpFlkCx.getImageData(0, 0, 8, 8).data; let s = 0;
+    for(let i=0;i<d.length;i+=4) s += 0.2126 * d[i] + 0.7152 * d[i+1] + 0.0722 * d[i+2];
+    const m = s / 64 / 255, st = c._flk || (c._flk = { ema:m });
+    if(Math.abs(m - st.ema) > 0.22) st.ema = m;               // troca de cena: recomeça
+    else st.ema += (m - st.ema) * 0.08;
+    return _evClamp(st.ema / Math.max(0.03, m), 0.8, 1.25);
+  }catch(_){ return 1; }
+}
+
+/* ── LUT 3D (.cube): lê o arquivo, guarda em memória, vira textura na placa de vídeo ── */
+const _evpLuts = {};          // url → { estado:"carregando"|"ok"|"erro", N, px (Uint8Array RGBA, largura N*N, altura N), erro }
+function _evpLerCube(txt){
+  const ls = String(txt || "").split(/\r?\n/); let N = 0, dmin = [0, 0, 0], dmax = [1, 1, 1]; const vals = [];
+  for(const l0 of ls){
+    const l = l0.trim(); if(!l || l[0] === "#") continue;
+    if(/^LUT_1D_SIZE/i.test(l)) throw new Error("é uma LUT 1D (use uma LUT 3D .cube)");
+    let m = l.match(/^LUT_3D_SIZE\s+(\d+)/i); if(m){ N = +m[1]; continue; }
+    m = l.match(/^DOMAIN_MIN\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/i); if(m){ dmin = [+m[1], +m[2], +m[3]]; continue; }
+    m = l.match(/^DOMAIN_MAX\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/i); if(m){ dmax = [+m[1], +m[2], +m[3]]; continue; }
+    if(/^[A-Za-z_]/.test(l)) continue;                    // TITLE e outras chaves
+    const p = l.split(/\s+/); if(p.length >= 3){ vals.push(+p[0], +p[1], +p[2]); }
+  }
+  if(!(N >= 2 && N <= 129)) throw new Error("arquivo sem LUT_3D_SIZE válido");
+  if(vals.length < N * N * N * 3) throw new Error("faltam valores na LUT (" + (vals.length / 3) + " de " + (N * N * N) + ")");
+  // grade final até 33 ou 64 pontos (cabe na placa de vídeo: largura N×N)
+  const M = N > 64 ? 64 : N, px = new Uint8Array(M * M * M * 4);
+  const pega = function(r, g, b, j){ const i = (r + g * N + b * N * N) * 3 + j; return (vals[i] - dmin[j]) / Math.max(1e-6, dmax[j] - dmin[j]); };
+  for(let b=0;b<M;b++) for(let g=0;g<M;g++) for(let r=0;r<M;r++){
+    const sr = Math.round(r * (N - 1) / (M - 1)), sg = Math.round(g * (N - 1) / (M - 1)), sb = Math.round(b * (N - 1) / (M - 1));
+    const o = ((g * M * M) + b * M + r) * 4;
+    for(let j=0;j<3;j++) px[o + j] = Math.round(_evClamp(pega(sr, sg, sb, j), 0, 1) * 255);
+    px[o + 3] = 255;
+  }
+  return { N:M, px:px };
+}
+function _evpLutCarregar(url){
+  if(!url) return Promise.resolve(null);
+  const x = _evpLuts[url];
+  if(x && x.prom) return x.prom;
+  const it = _evpLuts[url] = { estado:"carregando" };
+  it.prom = fetch(url).then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+    .then(function(t){ const d = _evpLerCube(t); it.estado = "ok"; it.N = d.N; it.px = d.px; return it; })
+    .catch(function(e){ it.estado = "erro"; it.erro = String((e && e.message) || e); return it; });
+  return it.prom;
+}
+/* antes de gravar: espera as LUTs do projeto (o primeiro quadro já sai com a LUT) */
+async function _evpLutsPreparar(proj){
+  const us = []; ((proj && proj.clips) || []).forEach(function(c){ const u = c && c.cor && c.cor.lut && c.cor.lut.url; if(u && us.indexOf(u) < 0) us.push(u); });
+  await Promise.all(us.map(function(u){ return _evpLutCarregar(u); }));
+  return us.filter(function(u){ return _evpLuts[u] && _evpLuts[u].estado === "erro"; });
+}
+
+/* ── ANÁLISE DO TAKE (nas miniaturas, R$ 0): luz, contraste, estouro, cor puxada, nitidez ── */
+async function _evpAnalisarClipe(clipe){
+  const md = _evpMidia[clipe] || {}, th = md.thumbs || [];
+  if(!th.length) return null;
+  if(md._anal && md._anal.n === th.length) return md._anal;
+  const S = 64, cv = document.createElement("canvas"); cv.width = S; cv.height = S; const cx = cv.getContext("2d", { willReadFrequently:true });
+  const hist = new Float64Array(256); let n = 0, sr = 0, sg = 0, sb = 0, lap = 0, nl = 0, clipA = 0, clipB = 0, satS = 0;
+  for(const x of th.slice(0, 12)){
+    const im = new Image(); im.src = x.url; await new Promise(function(ok){ im.onload = ok; im.onerror = ok; }); if(!im.width) continue;
+    cx.drawImage(im, 0, 0, S, S); const d = cx.getImageData(0, 0, S, S).data, Lm = new Float32Array(S * S);
+    for(let i=0, j=0;i<d.length;i+=4, j++){
+      const r = d[i] / 255, g = d[i+1] / 255, b = d[i+2] / 255, L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      Lm[j] = L; hist[Math.min(255, Math.round(L * 255))]++; n++; sr += r; sg += g; sb += b; satS += Math.max(r, g, b) - Math.min(r, g, b);
+      if(L > 0.985) clipA++; if(L < 0.015) clipB++;
+    }
+    for(let y=1;y<S-1;y++) for(let x2=1;x2<S-1;x2++){ const j = y * S + x2; const v = 4 * Lm[j] - Lm[j-1] - Lm[j+1] - Lm[j-S] - Lm[j+S]; lap += v * v; nl++; }
+  }
+  if(!n) return null;
+  const pct = function(p){ let a = 0; const alvo = p * n; for(let i=0;i<256;i++){ a += hist[i]; if(a >= alvo) return i / 255; } return 1; };
+  const r = { n:th.length, p2:pct(0.02), p10:pct(0.1), p50:pct(0.5), p98:pct(0.98), m:[sr / n, sg / n, sb / n], sat:satS / n, estouro:clipA / n, preto:clipB / n,
+              nitidez:Math.sqrt(lap / Math.max(1, nl)) };
+  // nota técnica 0–10 (luz, contraste, estouro, nitidez, cor puxada)
+  const cast = Math.max(Math.abs(r.m[0] - r.m[1]), Math.abs(r.m[2] - r.m[1]), Math.abs(r.m[0] - r.m[2]));
+  r.problemas = [];
+  if(r.p50 < 0.22) r.problemas.push({ id:"escuro", txt:"escuro" }); else if(r.p50 > 0.78 || r.estouro > 0.12) r.problemas.push({ id:"claro", txt:r.estouro > 0.12 ? "estourado" : "claro demais" });
+  if(r.p98 - r.p2 < 0.45) r.problemas.push({ id:"lavado", txt:"sem contraste" });
+  if(cast > 0.09) r.problemas.push({ id:"cor", txt:r.m[2] > r.m[0] ? "puxado para o azul" : r.m[0] > r.m[2] + 0.09 ? "puxado para o amarelo" : "cor puxada" });
+  if(r.nitidez < 0.035) r.problemas.push({ id:"desfocado", txt:"pouco nítido" });
+  r.nota = Math.max(0, Math.min(10, Math.round(10 - r.problemas.length * 2 - (r.estouro > 0.2 ? 1 : 0))));
+  md._anal = r; _evpMidia[clipe] = md;
+  return r;
+}
+/* CORREÇÃO AUTOMÁTICA a partir da análise: exposição, balanço de branco, pretos/brancos, sombras, vibração. f = intensidade (0–1) */
+function _evpAutoCor(a, f, modo){
+  f = _evClamp(f == null ? 1 : f, 0, 1);
+  const o = {};
+  if(!a) return o;
+  const lin = function(x){ return Math.pow(Math.max(0.01, x), 2.2); };
+  if(modo !== "bal"){
+    const alvo = modo === "escuro" ? 0.46 : 0.43;
+    let exp = Math.log2(lin(alvo) / lin(Math.max(0.03, a.p50))); exp = _evClamp(exp, -1.2, modo === "escuro" ? 2 : 1.4);
+    if(Math.abs(exp) > 0.06) o.exp = Math.round(exp * f * 100) / 100;
+    const bp = _evClamp(a.p2 - 0.01, -0.05, 0.12), wp = _evClamp(a.p98 + 0.015, 0.85, 1);
+    const pret = _evClamp(-bp / 0.10, -1, 1) * 0.8, bran = _evClamp((1 - wp) / 0.10, -1, 1) * 0.8;
+    if(Math.abs(pret) > 0.05) o.pret = Math.round(pret * f * 100) / 100; if(Math.abs(bran) > 0.05) o.bran = Math.round(bran * f * 100) / 100;
+    if(a.p10 < 0.08 || modo === "escuro") o.somb = Math.round((modo === "escuro" ? 0.35 : 0.15) * f * 100) / 100;
+    if(a.estouro > 0.05) o.real = Math.round(-0.3 * f * 100) / 100;
+    if(a.sat < 0.12) o.vib = Math.round(0.2 * f * 100) / 100;
+  }
+  if(modo !== "luz"){
+    const g = (a.m[0] + a.m[1] + a.m[2]) / 3;
+    const bal = a.m.map(function(x){ return _evClamp(Math.pow(g / Math.max(0.02, x), 1.0), 0.75, 1.35); });
+    const k = bal[1]; const bn = bal.map(function(x){ return Math.round((1 + (x / k - 1) * f * 0.85) * 1000) / 1000; });
+    if(bn.some(function(x){ return Math.abs(x - 1) > 0.01; })) o.bal = bn;
+  }
+  return o;
+}
+/* conta-gotas: o que estava neste ponto vira cinza (balanço de branco) — mantém o balanço que já tinha */
+function _evpBalDoPixel(rgb, balAtual){
+  const b0 = Array.isArray(balAtual) ? balAtual : [1, 1, 1];
+  const lin = rgb.map(function(x){ return Math.pow(Math.max(0.02, x / 255), 2.2); }), g = lin[1];
+  return b0.map(function(b, j){ return Math.round(_evClamp(b * g / lin[j], 0.5, 2) * 1000) / 1000; });
+}
+function _evpHslMaisPerto(rgb){
+  const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0; if(d > 1e-6){ h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if(h < 0) h += 360; }
+  let best = _EVP_HSL_CORES[0], bd = 999;
+  _EVP_HSL_CORES.forEach(function(c){ const dd = Math.abs(((h - c.h + 540) % 360) - 180); if(dd < bd){ bd = dd; best = c; } });
+  return { h:Math.round(h), s:mx > 0 ? d / mx : 0, l:mx, faixa:best.id };
+}
+
+/* ── SCOPES: forma de onda, RGB parade, vetorscópio e histograma do quadro que está na tela ── */
+function _evpScopes(src, tipo, out){
+  const W = out.width, H = out.height, x = out.getContext("2d");
+  const sw = 160, sh = Math.max(40, Math.round(160 * (src.height || 1) / Math.max(1, src.width || 1)));
+  const t = _evpScopes.cv || (_evpScopes.cv = document.createElement("canvas")); t.width = sw; t.height = sh;
+  const tx = t.getContext("2d", { willReadFrequently:true }); tx.drawImage(src, 0, 0, sw, sh);
+  const d = tx.getImageData(0, 0, sw, sh).data;
+  x.fillStyle = "#0b0f19"; x.fillRect(0, 0, W, H);
+  const img = x.createImageData(W, H), o = img.data, soma = new Float32Array(W * H * 3);
+  const add = function(px, py, r, g, b){ px = px | 0; py = py | 0; if(px < 0 || py < 0 || px >= W || py >= H) return; const i = (py * W + px) * 3; soma[i] += r; soma[i+1] += g; soma[i+2] += b; };
+  if(tipo === "onda" || tipo === "parade"){
+    for(let yy=0;yy<sh;yy++) for(let xx=0;xx<sw;xx++){
+      const i = (yy * sw + xx) * 4, r = d[i] / 255, g = d[i+1] / 255, b = d[i+2] / 255;
+      if(tipo === "onda"){ const L = 0.2126 * r + 0.7152 * g + 0.0722 * b; add(xx * W / sw, (1 - L) * (H - 1), 0.6, 0.9, 0.6); }
+      else { const w3 = W / 3; add(xx * w3 / sw, (1 - r) * (H - 1), 1, 0.15, 0.15); add(w3 + xx * w3 / sw, (1 - g) * (H - 1), 0.15, 1, 0.15); add(2 * w3 + xx * w3 / sw, (1 - b) * (H - 1), 0.2, 0.35, 1); }
+    }
+  } else if(tipo === "vetor"){
+    const R = Math.min(W, H) * 0.46, cx0 = W / 2, cy0 = H / 2;
+    for(let i=0;i<d.length;i+=4){ const r = d[i] / 255, g = d[i+1] / 255, b = d[i+2] / 255;
+      const cb = -0.1146 * r - 0.3854 * g + 0.5 * b, cr = 0.5 * r - 0.4542 * g - 0.0458 * b;
+      add(cx0 + cb * 2 * R, cy0 - cr * 2 * R, 0.4 + r * 0.6, 0.4 + g * 0.6, 0.4 + b * 0.6); }
+  }
+  if(tipo === "hist"){
+    const hr = new Float32Array(256), hg = new Float32Array(256), hb = new Float32Array(256);
+    for(let i=0;i<d.length;i+=4){ hr[d[i]]++; hg[d[i+1]]++; hb[d[i+2]]++; }
+    let mx = 1; for(let i=2;i<254;i++) mx = Math.max(mx, hr[i], hg[i], hb[i]);
+    x.globalCompositeOperation = "lighter";
+    [[hr, "rgba(239,68,68,.75)"], [hg, "rgba(34,197,94,.75)"], [hb, "rgba(59,130,246,.75)"]].forEach(function(q){
+      x.fillStyle = q[1]; for(let i=0;i<256;i++){ const h = Math.min(1, q[0][i] / mx) * (H - 4); x.fillRect(i * W / 256, H - h, Math.ceil(W / 256), h); } });
+    x.globalCompositeOperation = "source-over";
+  } else {
+    const ganho = tipo === "vetor" ? 0.9 : 0.55;
+    for(let i=0, j=0;i<o.length;i+=4, j+=3){ o[i] = Math.min(255, soma[j] * 255 * ganho); o[i+1] = Math.min(255, soma[j+1] * 255 * ganho); o[i+2] = Math.min(255, soma[j+2] * 255 * ganho); o[i+3] = 255; }
+    x.putImageData(img, 0, 0);
+  }
+  // grades
+  x.strokeStyle = "rgba(255,255,255,.14)"; x.lineWidth = 1; x.fillStyle = "rgba(255,255,255,.45)"; x.font = "9px sans-serif";
+  if(tipo === "vetor"){
+    const R = Math.min(W, H) * 0.46; x.beginPath(); x.arc(W / 2, H / 2, R, 0, Math.PI * 2); x.stroke();
+    x.beginPath(); x.moveTo(W / 2, H / 2); const ang = (123 / 180) * Math.PI; x.lineTo(W / 2 + Math.cos(ang) * R, H / 2 - Math.sin(ang) * R); x.stroke();     // linha da pele
+    [["R", -0.1146, 0.5], ["G", -0.3854, -0.4542], ["B", 0.5, -0.0458], ["Am", -0.5, 0.0458], ["Ci", 0.1146, -0.5], ["Mg", 0.3854, 0.4542]].forEach(function(q){
+      const px = W / 2 + q[1] * 2 * R * 0.75, py = H / 2 - q[2] * 2 * R * 0.75; x.strokeRect(px - 4, py - 4, 8, 8); x.fillText(q[0], px + 6, py + 3); });
+  } else if(tipo !== "hist"){
+    [0, 0.25, 0.5, 0.75, 1].forEach(function(v){ const yy = Math.round((1 - v) * (H - 1)) + 0.5; x.beginPath(); x.moveTo(0, yy); x.lineTo(W, yy); x.stroke(); x.fillText(Math.round(v * 100), 2, Math.max(9, yy - 2)); });
+  }
+}
+/* espera as LUTs que já estão carregando (no máximo 15 s) */
+async function _evpLutsEsperar(){
+  const ps = Object.keys(_evpLuts).map(function(u){ return _evpLuts[u].prom; }).filter(Boolean);
+  if(!ps.length) return;
+  await Promise.race([Promise.all(ps), new Promise(function(r){ setTimeout(r, 15000); })]);
+}
+
 const _EVP_RNNOISE = "https://cdn.jsdelivr.net/npm/@shiguredo/rnnoise-wasm@2025.1.5/dist/rnnoise.js";
 
 function _evpId(){ return Math.random().toString(36).slice(2, 10); }
@@ -117159,8 +117455,8 @@ function _evpTdeTau(c, tau){
   return c.t0 + f * L / (c.vel || 1);
 }
 function _evpAnimTem(c){ return !!(c && c.anim && Array.isArray(c.anim.pts) && c.anim.pts.length); }
-function _evpAnimBase(c){ return { z:_evpNum(c.zoom, 1), x:_evpNum(c.x, 0), y:_evpNum(c.y, 0), r:_evpNum(c.rot, 0), o:1, b:0 }; }
-function _evpPtVal(p){ return { z:_evpNum(p.z, 1), x:_evpNum(p.x, 0), y:_evpNum(p.y, 0), r:_evpNum(p.r, 0), o:_evpNum(p.o, 1), b:_evpNum(p.b, 0) }; }
+function _evpAnimBase(c){ return { z:_evpNum(c.zoom, 1), x:_evpNum(c.x, 0), y:_evpNum(c.y, 0), r:_evpNum(c.rot, 0), o:1, b:0, k:1 }; }
+function _evpPtVal(p){ return { z:_evpNum(p.z, 1), x:_evpNum(p.x, 0), y:_evpNum(p.y, 0), r:_evpNum(p.r, 0), o:_evpNum(p.o, 1), b:_evpNum(p.b, 0), k:_evpNum(p.k, 1) }; }
 /* valores (zoom, x, y, girar, opacidade, desfoque) no tempo tau do clipe — o zoom anda em escala (log): "Constante" parece constante de verdade */
 function _evpAnimEm(c, tau){
   if(!_evpAnimTem(c)) return _evpAnimBase(c);
@@ -117174,7 +117470,7 @@ function _evpAnimEm(c, tau){
 function _evpAnimMistura(a, b, k){
   const za = Math.log(Math.max(0.05, a.z)), zb = Math.log(Math.max(0.05, b.z));
   return { z:Math.exp(za + (zb - za) * k), x:a.x + (b.x - a.x) * k, y:a.y + (b.y - a.y) * k, r:a.r + (b.r - a.r) * k,
-           o:_evClamp(a.o + (b.o - a.o) * k, 0, 1), b:Math.max(0, a.b + (b.b - a.b) * k) };
+           o:_evClamp(a.o + (b.o - a.o) * k, 0, 1), b:Math.max(0, a.b + (b.b - a.b) * k), k:_evClamp(_evpNum(a.k, 1) + (_evpNum(b.k, 1) - _evpNum(a.k, 1)) * k, 0, 1) };
 }
 const _evpR4 = function(v){ return Math.round(v * 10000) / 10000; };
 /* ponto da agulha: acha (a menos de 1 quadro) ou cria com os valores daquele instante. o = clipe do projeto (muda), cc = o mesmo clipe no calc */
@@ -117184,7 +117480,7 @@ function _evpAnimPonto(o, cc, tt){
   o.anim = Object.assign({ mblur:true }, o.anim || {}); o.anim.pts = (o.anim.pts || []).slice();
   let p = o.anim.pts.find(function(q){ return Math.abs(q.t - tau) <= tol; });
   if(p) return p;
-  p = { t:_evpR4(tau), z:_evpR4(atual.z), x:_evpR4(atual.x), y:_evpR4(atual.y), r:_evpR4(atual.r), o:_evpR4(atual.o), b:_evpR4(atual.b), e:"io" };
+  p = { t:_evpR4(tau), z:_evpR4(atual.z), x:_evpR4(atual.x), y:_evpR4(atual.y), r:_evpR4(atual.r), o:_evpR4(atual.o), b:_evpR4(atual.b), k:_evpR4(_evpNum(atual.k, 1)), e:"io" };
   // o novo ponto herda a curva do trecho em que caiu
   const ant = o.anim.pts.filter(function(q){ return q.t < tau; }).pop(); if(ant && ant.e) p.e = Array.isArray(ant.e) ? ant.e.slice() : ant.e;
   o.anim.pts.push(p); o.anim.pts.sort(function(a, b){ return a.t - b.t; });
@@ -117263,7 +117559,8 @@ function _evpAnimLimpa(a){
   const okE = function(e){ if(Array.isArray(e) && e.length === 4 && e.every(function(n){ return isFinite(Number(n)); })) return [_evClamp(+e[0], 0, 1), _evClamp(+e[1], -1, 2), _evClamp(+e[2], 0, 1), _evClamp(+e[3], -1, 2)].map(_evpR4);
     return _EVP_CURVAS.some(function(q){ return q.id === e; }) ? e : "io"; };
   const pts = a.pts.filter(function(p){ return p && isFinite(Number(p.t)); }).map(function(p){ return { t:_evpR4(Math.max(0, +p.t)), z:_evpR4(_evClamp(_evpNum(p.z, 1), 0.3, 6)), x:_evpR4(_evClamp(_evpNum(p.x, 0), -1.5, 1.5)),
-    y:_evpR4(_evClamp(_evpNum(p.y, 0), -1.5, 1.5)), r:_evpR4(_evClamp(_evpNum(p.r, 0), -360, 360)), o:_evpR4(_evClamp(_evpNum(p.o, 1), 0, 1)), b:_evpR4(_evClamp(_evpNum(p.b, 0), 0, 40)), e:okE(p.e) }; })
+    y:_evpR4(_evClamp(_evpNum(p.y, 0), -1.5, 1.5)), r:_evpR4(_evClamp(_evpNum(p.r, 0), -360, 360)), o:_evpR4(_evClamp(_evpNum(p.o, 1), 0, 1)), b:_evpR4(_evClamp(_evpNum(p.b, 0), 0, 40)),
+    k:_evpR4(_evClamp(_evpNum(p.k, 1), 0, 1)), e:okE(p.e) }; })
     .sort(function(x, y){ return x.t - y.t; }).filter(function(p, i, arr){ return !i || p.t - arr[i-1].t > 0.0005; }).slice(0, 80);
   return pts.length ? { pts:pts, mblur:a.mblur !== false } : null;
 }
@@ -118416,6 +118713,7 @@ function _evpMotor(canvas, o){
   const DIM = _evpDim(o.projeto && o.projeto.formato), W = DIM.w, H = DIM.h;
   if(canvas.width !== W) canvas.width = W; if(canvas.height !== H) canvas.height = H;
   const cx = canvas.getContext("2d");
+  try{ ((o.projeto && o.projeto.clips) || []).forEach(function(c){ if(c && c.cor && c.cor.lut && c.cor.lut.url) _evpLutCarregar(c.cor.lut.url); }); }catch(_){}   // v21: LUTs já carregando
   const kit = o.kit || {}, base = o.base || {};
   const pri = kit.cor_principal || "#7c3aed", sec = kit.cor_secundaria || "#ffffff", txt = kit.cor_texto || "#ffffff";
   /* cores do texto: [fundo, letra com fundo, letra sem fundo] */
@@ -118613,9 +118911,9 @@ function _evpMotor(canvas, o){
   }
 
   /* ─── desenho ─── */
-  function filtroCor(c){
+  function filtroCor(c, k0){
     if(antes) return "none";
-    const k = c.cor || {}; const f = [];
+    const k = k0 || c.cor || {}; const f = [];
     if(k.bri) f.push("brightness(" + (1 + k.bri).toFixed(3) + ")");
     if(k.con) f.push("contrast(" + (1 + k.con).toFixed(3) + ")");
     if(k.sat) f.push("saturate(" + Math.max(0, 1 + k.sat).toFixed(3) + ")");
@@ -118627,7 +118925,9 @@ function _evpMotor(canvas, o){
     // "ao contrário": usa os quadros guardados (se prontos); senão o próprio vídeo parado no ponto certo
     let v = v0;
     if(c.reverso){ const q = _evpQuadroReverso(c, srcT(c, tt)); if(q) v = q; }
-    if(!antes && c.cor && _evpCorAvancada(c.cor)){ const g = _evpCorGL.render(v, c.cor); if(g) v = g; }     // v19: cor completa na placa de vídeo
+    let corE = antes ? null : _evpCorEfetiva(c, tt);                                         // v21: intensidade do filtro × força da cor (◆)
+    if(corE && corE.flick){ corE = Object.assign({}, corE, { _ganho:_evpFlickerGanho(c, v) }); }      // v21: tirar o piscar
+    if(corE && _evpCorAvancada(corE)){ const g = _evpCorGL.render(v, corE); if(g) v = g; }     // v19: cor completa na placa de vídeo
     const VW = v.videoWidth || v.width, VH = v.videoHeight || v.height; if(!VW || !VH) return;
     const k = c.corte || {}, rx = VW * _evpNum(k.l, 0), ry = VH * _evpNum(k.t, 0);
     const vw = Math.max(8, VW * (1 - _evpNum(k.l, 0) - _evpNum(k.r, 0))), vh = Math.max(8, VH * (1 - _evpNum(k.t, 0) - _evpNum(k.b, 0)));   // recorte
@@ -118635,12 +118935,12 @@ function _evpMotor(canvas, o){
     const tr = !(o.tratados && o.tratados[c.clipe]) && c.estab && proj.estab && proj.estab[c.clipe];
     let sdx = 0, sdy = 0, sz = 1;
     if(tr){ const e = _evpTremidoEm(tr, srcT(c, tt)); sdx = e[0]; sdy = e[1]; sz = c._zt || (c._zt = _evpZoomTremido(tr, c.ini, c.fim)); }
-    ctx.save(); ctx.filter = filtroCor(c);
+    ctx.save(); ctx.filter = filtroCor(c, corE);
     if(modo === "encaixar"){
       const sc = Math.max(W/vw, H/vh);
       const bw = vw * sc, bh = vh * sc, fx0 = (bw - W) / 2 / sc, fy0 = (bh - H) / 2 / sc;     // pedaço do vídeo que cobre a tela
       borrar(ctx, v, rx + Math.max(0, fx0), ry + Math.max(0, fy0), Math.min(vw, W / sc), Math.min(vh, H / sc), 0, 0, W, H, 40, 0.6);
-      ctx.filter = filtroCor(c);
+      ctx.filter = filtroCor(c, corE);
     }
     const s0 = modo === "encaixar" ? Math.min(W/vw, H/vh) : Math.max(W/vw, H/vh);
     // movimento ao longo do clipe (Ken Burns): u vai de 0 a 1 do começo ao fim do trecho
@@ -118687,8 +118987,8 @@ function _evpMotor(canvas, o){
       ctx.drawImage(ofsC, 0, 0, ow, oh, 0, 0, W, H);
     } else amostras.forEach(function(V, i){ pinta(ctx, V, 1 / (i + 1)); });
     ctx.restore();
-    const temp = !antes && c.cor && c.cor.temp;
-    if(!antes && c.cor) _evpVinhetaGrao(ctx, W, H, c.cor, tt);       // v19: vinheta e grão
+    const temp = !antes && corE && corE.temp;
+    if(!antes && corE) _evpVinhetaGrao(ctx, W, H, corE, tt);       // v19: vinheta e grão
     if(temp){ ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.fillStyle = temp > 0 ? "rgba(255,150,40," + Math.min(0.5, temp*0.5) + ")" : "rgba(40,120,255," + Math.min(0.5, -temp*0.5) + ")"; ctx.fillRect(0,0,W,H); ctx.restore(); }
   }
   function desenharVideo(){
@@ -119112,7 +119412,7 @@ function _evpMotor(canvas, o){
     play: function(){ if(!calc.clips.length) return; if(t >= calc.total - 0.02) t = 0; if(ac.state === "suspended") ac.resume(); agendar(); tocando = true; },
     pause: function(){ segurar(false); tocando = false; pararAudio(); Object.keys(els).forEach(function(k){ try{ els[k].pause(); }catch(_){} }); Object.keys(els2).forEach(function(k){ try{ els2[k].pause(); }catch(_){} }); },
     seek: function(nt){ marcar(); t = _evClamp(Number(nt)||0, 0, calc.total); const i = _evpClipEm(calc, Math.min(t, Math.max(0, calc.fimCortes - 0.001))); if(calc.clips[i]) mirar(calc.clips[i], t); if(tocando) agendar(); },
-    atualizar: function(novoCalc, novoProj, vozes, narr){ marcar(); calc = novoCalc; proj = novoProj; if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
+    atualizar: function(novoCalc, novoProj, vozes, narr){ marcar(); calc = novoCalc; proj = novoProj; try{ ((novoProj && novoProj.clips) || []).forEach(function(c){ if(c && c.cor && c.cor.lut && c.cor.lut.url) _evpLutCarregar(c.cor.lut.url); }); }catch(_){} if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
     setTratados: function(tr){ o.tratados = tr; marcar(); },
     setAntes: function(v){ antes = !!v; marcar(); },                  // v19
     get ocupado(){ return ocupadoV; },                                  // v20
@@ -120372,7 +120672,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
             ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
             mostrarAntes={mostrarAntes} setMostrarAntes={setMostrarAntes} simulando={simulando}
-            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido}/>
+            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido} p={p} calc={calc} mudar={mudar}/>
         )}
         </div></div>
       </div>
@@ -120555,11 +120855,257 @@ function _EvpRevisor({ rev, revisando, passo, revisar, irPara, usarPedido, desat
   );
 }
 
+/* ─── v21: CONTA-GOTAS — clique no vídeo e a cor daquele ponto volta para quem pediu ─── */
+let _evpContaGotasCb = null, _evpCvPrevia = null, _evpVerMascara = false;
+function _evpPegarCor(cb, dica){ _evpContaGotasCb = cb; try{ window.dispatchEvent(new CustomEvent("evp-contagotas", { detail:{ on:true, dica:dica || "Clique no vídeo para pegar a cor" } })); }catch(_){} }
+function _EvpContaGotasCamada({ cvRef }){
+  const [on, setOn] = useState(null);
+  useEffect(function(){ _evpCvPrevia = cvRef && cvRef.current; });                    // scopes leem a tela da prévia
+  useEffect(function(){ const f = function(e){ setOn(e && e.detail && e.detail.on ? e.detail : null); }; window.addEventListener("evp-contagotas", f); return function(){ window.removeEventListener("evp-contagotas", f); }; }, []);
+  useEffect(function(){ if(!on) return; const k = function(e){ if(e.key === "Escape"){ _evpContaGotasCb = null; setOn(null); } }; window.addEventListener("keydown", k); return function(){ window.removeEventListener("keydown", k); }; }, [on]);
+  if(!on) return null;
+  const pegar = function(e){
+    e.preventDefault(); e.stopPropagation();
+    const cv = cvRef && cvRef.current; const cb = _evpContaGotasCb; _evpContaGotasCb = null; setOn(null);
+    if(!cv || !cb) return;
+    try{
+      const r = e.currentTarget.getBoundingClientRect(), x = Math.round((e.clientX - r.left) / r.width * cv.width), y = Math.round((e.clientY - r.top) / r.height * cv.height);
+      const d = cv.getContext("2d").getImageData(_evClamp(x - 3, 0, cv.width - 7), _evClamp(y - 3, 0, cv.height - 7), 7, 7).data; const s = [0, 0, 0];
+      for(let i=0;i<d.length;i+=4){ s[0] += d[i]; s[1] += d[i+1]; s[2] += d[i+2]; }
+      cb(s.map(function(v){ return v / (d.length / 4); }), { x:x / cv.width, y:y / cv.height });
+    }catch(err){ _evToast("error", "Não consegui ler a cor deste vídeo (" + ((err && err.message) || "erro") + ")."); }
+  };
+  return <div role="button" aria-label="Clique para pegar a cor" onPointerDown={pegar} title="Clique para pegar a cor (Esc cancela)"
+    style={{position:"absolute",inset:0,zIndex:30,cursor:"crosshair",outline:"3px dashed " + _EVP_COR.roxoFixo,outlineOffset:-3,borderRadius:"inherit"}}>
+    <div style={{position:"absolute",left:"50%",top:8,transform:"translateX(-50%)",background:"rgba(11,16,32,.85)",color:"#fff",fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:99,whiteSpace:"nowrap"}}>{on.dica} · Esc cancela</div>
+  </div>;
+}
+
+/* ─── v21: AUTO — analisa o take e corrige luz e balanço de branco (R$ 0, no próprio computador) ─── */
+function _EvpCorAuto({ c, p, mudar, ctl }){
+  const [a, setA] = useState(null), [f, setF] = useState(0.8), [carregando, setCarregando] = useState(false);
+  useEffect(function(){ let vivo = true; setA(null); setCarregando(true);
+    _evpAnalisarClipe(c.clipe).then(function(r){ if(vivo){ setA(r); setCarregando(false); } }).catch(function(){ if(vivo) setCarregando(false); });
+    return function(){ vivo = false; }; }, [c.clipe]);
+  const aplicar = function(modo, todos){
+    if(!a && !todos){ _evToast("warning", "Espere as miniaturas carregarem."); return; }
+    const faz = async function(){
+      const est = {}; if(todos){ for(const o of p.clips){ if(!est[o.clipe]) est[o.clipe] = await _evpAnalisarClipe(o.clipe); } } else est[c.clipe] = a;
+      let n = 0;
+      mudar(function(np){ np.clips.forEach(function(o){
+        if(!(todos ? est[o.clipe] : o.id === c.id)) return;
+        const auto = _evpAutoCor(est[o.clipe], f, modo === "melhorar" ? "tudo" : modo);
+        const k = Object.assign({}, o.cor || {});
+        if(modo !== "bal") ["exp","pret","bran","somb","real","vib"].forEach(function(q){ delete k[q]; });
+        if(modo !== "luz") delete k.bal;
+        Object.assign(k, auto); if(modo === "melhorar") k.nit = Math.max(_evpNum(k.nit, 0), Math.round(0.2 * f * 100) / 100);
+        delete k.look; o.cor = k; n++;
+      }); });
+      _evToast("success", (todos ? n + " clipes corrigidos" : "Corrigido") + " — confira segurando B (antes/depois)");
+    };
+    faz();
+  };
+  const tx = { escuro:"escuro", claro:"claro demais", lavado:"sem contraste", cor:"cor puxada", desfocado:"pouco nítido" };
+  return (<div>
+    <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Analisa as miniaturas deste vídeo e acerta a luz e o branco sozinho. Sem IA paga: roda neste computador.</div>
+    {carregando && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Analisando…</div>}
+    {a && <div style={{padding:"8px 10px",borderRadius:10,background:_EVP_COR.faixa,border:"1px solid " + _EVP_COR.linha,marginBottom:8,fontSize:12}}>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}><b style={{fontSize:20,fontFamily:_EVP_MONO,color:a.nota >= 8 ? "#15803d" : a.nota >= 5 ? "#a16207" : "#b91c1c"}}>{a.nota}</b><span style={{color:_EVP_COR.sub}}>nota técnica do take (0 a 10)</span></div>
+      <div style={{marginTop:4,color:_EVP_COR.ink}}>{a.problemas.length ? a.problemas.map(function(x){ return x.txt; }).join(" · ") : "Luz, contraste e cor ok."}</div>
+      <div style={{marginTop:2,color:_EVP_COR.fraco,fontSize:11}}>Luz média {Math.round(a.p50 * 100)}% · contraste {Math.round((a.p98 - a.p2) * 100)}% · estouro {Math.round(a.estouro * 100)}%</div>
+    </div>}
+    <_EvpSlider ctl={{ vivo:function(fn){ fn(null); }, fim:function(){}, mudar:function(fn){ fn(null); } }} rotulo="Intensidade da correção" v={f} min={0.2} max={1} step={0.05} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={0.8}
+      aplicar={function(np, v){ setF(v); }}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:6}}>
+      <button onClick={function(){ aplicar("tudo"); }} style={Object.assign(_evpBtn("primario"), {justifyContent:"center",gridColumn:"1 / -1"})}>Corrigir automaticamente</button>
+      <button onClick={function(){ aplicar("luz"); }} style={Object.assign(_evpBtn(), {justifyContent:"center"})}>Só a exposição</button>
+      <button onClick={function(){ aplicar("bal"); }} style={Object.assign(_evpBtn(), {justifyContent:"center"})}>Só o branco</button>
+      <button onClick={function(){ aplicar("escuro"); }} style={Object.assign(_evpBtn(), {justifyContent:"center"})}>Recuperar vídeo escuro</button>
+      <button onClick={function(){ aplicar("melhorar"); }} style={Object.assign(_evpBtn(), {justifyContent:"center"})}>Melhorar (cor + nitidez)</button>
+      <button onClick={function(){ aplicar("tudo", true); }} style={Object.assign(_evpBtn("suave"), {justifyContent:"center",gridColumn:"1 / -1"})}>Corrigir todos os clipes (cada um pelo seu)</button>
+    </div>
+    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>Muito escuro de verdade? Ligue também “Melhorar a imagem no PC” (tira o granulado).</div>
+  </div>);
+}
+
+/* ─── v21: LUT (.cube) — importar, intensidade, guardar como LUT da marca ─── */
+function _EvpCorLut({ c, p, mudar, ctl, tCard, kit, edUnidade }){
+  const [subindo, setSubindo] = useState(false), [estado, setEstado] = useState(null);
+  const L = (c.cor && c.cor.lut) || null;
+  useEffect(function(){ let vivo = true; if(!L || !L.url){ setEstado(null); return; } setEstado("carregando");
+    _evpLutCarregar(L.url).then(function(it){ if(vivo) setEstado(it ? (it.estado === "ok" ? "ok · " + it.N + "³ pontos" : "erro: " + it.erro) : null); });
+    return function(){ vivo = false; }; }, [L && L.url]);
+  const daMarca = []; ((kit && kit.filtros) || []).forEach(function(fl){ if(fl && fl.cor && fl.cor.lut && fl.cor.lut.url) daMarca.push({ nome:fl.nome, lut:fl.cor.lut }); });
+  const noVideo = []; p.clips.forEach(function(o){ const l = o.cor && o.cor.lut; if(l && l.url && !noVideo.some(function(x){ return x.url === l.url; }) && !daMarca.some(function(x){ return x.lut.url === l.url; })) noVideo.push(l); });
+  const usar = function(lut, todos){ mudar(function(np){ np.clips.forEach(function(o){ if(todos ? true : o.id === c.id){ o.cor = Object.assign({}, o.cor, { lut:{ url:lut.url, nome:lut.nome || "LUT", f:_evpNum(lut.f, 1) } }); delete o.cor.look; } }); }); };
+  const importar = async function(e){
+    const fl = e.target.files && e.target.files[0]; e.target.value = ""; if(!fl) return;
+    if(!/\.cube$/i.test(fl.name)){ _evToast("error", "Use um arquivo .cube (LUT 3D)."); return; }
+    if(fl.size > 12 * 1024 * 1024){ _evToast("error", "LUT grande demais (máx. 12 MB)."); return; }
+    setSubindo(true);
+    try{
+      const txt = await fl.text(); _evpLerCube(txt);          // confere antes de subir
+      const nome = fl.name.replace(/\.cube$/i, "").slice(0, 50), limpo = nome.normalize("NFD").replace(/[^\w-]+/g, "_").slice(0, 40) || "lut";
+      const path = "tasks/" + ((tCard && tCard.id) || "sem-card") + "/estudio/lut-" + Date.now() + "-" + limpo + ".cube";
+      await pxUploadResumable(new File([fl], limpo + ".cube", { type:"text/plain" }), path, function(){});
+      const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+      usar({ url:url, nome:nome, f:1 }); _evToast("success", "LUT “" + nome + "” aplicada");
+    }catch(err){ _evToast("error", "Não usei a LUT: " + ((err && err.message) || err)); }
+    setSubindo(false);
+  };
+  const guardarMarca = async function(){
+    if(!L) return;
+    try{ const r = await window._sb.rpc("criacao_kit_filtro_salvar", { p_client:tCard && tCard.client, p_unidade:edUnidade || "", p_nome:"LUT " + String(L.nome || "").slice(0, 34), p_cor:{ lut:L } });
+      if(r.error) throw new Error(r.error.message); _evToast("success", "Guardada como LUT da marca (aparece em Filtros e aqui em todos os vídeos do cliente)"); }
+    catch(err){ _evToast("error", "Não guardou: " + ((err && err.message) || err)); }
+  };
+  return (<div>
+    <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>LUT é o “filtro de cinema” das câmeras e dos coloristas (arquivo .cube). Roda na placa de vídeo, igual na prévia e na gravação.</div>
+    <label style={Object.assign(_evpBtn("primario", !subindo), {justifyContent:"center",width:"100%",boxSizing:"border-box",cursor:subindo ? "default" : "pointer"})}>
+      {subindo ? "Subindo a LUT…" : "Importar LUT (.cube)"}<input type="file" accept=".cube" onChange={importar} disabled={subindo} style={{display:"none"}} aria-label="Importar LUT"/></label>
+    {L && <div style={{marginTop:10,padding:"8px 10px",borderRadius:10,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
+      <div style={{fontSize:12.5,fontWeight:800}}>{L.nome}</div>
+      <div style={{fontSize:11,color:estado && /^erro/.test(estado) ? "#b91c1c" : _EVP_COR.fraco}}>{estado || ""}</div>
+      <_EvpSlider ctl={ctl} rotulo="Intensidade da LUT" v={_evpNum(L.f, 1)} min={0} max={1} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={1}
+        aplicar={function(np, v){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(o && o.cor && o.cor.lut) o.cor = Object.assign({}, o.cor, { lut:Object.assign({}, o.cor.lut, { f:v }) }); }}/>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <button onClick={function(){ usar(L, true); _evToast("success", "LUT em todos os clipes"); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>Usar em todos os clipes</button>
+        <button onClick={guardarMarca} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>Guardar como LUT da marca</button>
+        <button onClick={function(){ mudar(function(np){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(o && o.cor){ o.cor = Object.assign({}, o.cor); delete o.cor.lut; } }); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>Tirar a LUT</button>
+      </div>
+    </div>}
+    {(daMarca.length > 0 || noVideo.length > 0) && <div style={_EVP_TIT}>LUTs da marca e deste vídeo</div>}
+    {daMarca.map(function(x){ return <button key={"m" + x.lut.url} onClick={function(){ usar(x.lut); }} style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"flex-start",marginBottom:4})}>★ {x.nome}</button>; })}
+    {noVideo.filter(function(x){ return !L || x.url !== L.url; }).map(function(x){ return <button key={"v" + x.url} onClick={function(){ usar(x); }} style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"flex-start",marginBottom:4})}>{x.nome}</button>; })}
+  </div>);
+}
+
+/* ─── v21: CURVAS DE MATIZ (Matiz × Matiz, × Saturação, × Luz e Luz × Saturação) ─── */
+function _EvpCurvasMatiz({ c, ctl, mudar, nk }){
+  const [q, setQ] = useState("hs");
+  const cor = c.cor || {}, pts = (cor.hcv && cor.hcv[q]) || [[0, 0.5], [1, 0.5]];
+  const nomes = { hh:"Matiz × Matiz", hs:"Matiz × Saturação", hl:"Matiz × Luz", ls:"Luz × Saturação" };
+  const dica = { hh:"Troca uma cor por outra (ex.: o verde do pasto mais amarelado).", hs:"Mais ou menos saturação só numa cor (suba o ponto em cima da cor).",
+                 hl:"Clareia ou escurece só uma cor (ex.: céu azul mais escuro).", ls:"Saturação pela luz: ex.: tira a cor das sombras." }[q];
+  return (<div>
+    <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
+      {Object.keys(nomes).map(function(k){ const mex = cor.hcv && cor.hcv[k];
+        return <button key={k} onClick={function(){ setQ(k); }} style={Object.assign(_evpChip(q === k), { padding:"5px 9px", fontSize:11.5 })}>{nomes[k]}{mex ? " •" : ""}</button>; })}
+    </div>
+    <_EvpCurvasEditor pts0={pts} canal={q} plana={true} rotulo={nomes[q]} onVivo={function(nv){ ctl.vivo(nk(function(k){ k.hcv = Object.assign({}, k.hcv); k.hcv[q] = nv; })); }} onFim={ctl.fim}/>
+    <div style={{height:10,maxWidth:280,borderRadius:6,marginTop:4,background:q === "ls" ? "linear-gradient(90deg,#000,#fff)" : "linear-gradient(90deg,#ff3b3b,#ffe600,#3bff6b,#00e5ff,#3b6bff,#ff00d4,#ff3b3b)"}}/>
+    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>{dica} Meio = sem mudança. Duplo clique cria/tira ponto.</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+      <button onClick={function(){ _evpPegarCor(function(rgb){ const h = _evpHslMaisPerto(rgb), x = q === "ls" ? h.l : h.h / 360;
+          mudar(nk(function(k){ k.hcv = Object.assign({}, k.hcv); const at = (k.hcv[q] || [[0, 0.5], [1, 0.5]]).slice(); if(!at.some(function(p){ return Math.abs(p[0] - x) < 0.02; })) at.push([Math.round(x * 1000) / 1000, 0.5]);
+            k.hcv[q] = at.sort(function(a, b){ return a[0] - b[0]; }).slice(0, 12); })); _evToast("info", "Ponto criado na cor que você clicou: arraste para cima ou para baixo"); }, "Clique na cor que quer mexer"); }}
+        style={_evpBtn("suave")}>Conta-gotas: criar ponto na cor do vídeo</button>
+      <button onClick={function(){ mudar(nk(function(k){ if(k.hcv){ k.hcv = Object.assign({}, k.hcv); delete k.hcv[q]; } })); }} style={_evpBtn()}>Zerar esta curva</button>
+    </div>
+  </div>);
+}
+
+/* ─── v21: COR SECUNDÁRIA (HSL Secondary) — escolhe uma faixa de cor no vídeo e mexe só nela ─── */
+function _EvpCorSecundaria({ c, ctl, mudar, nk }){
+  const s = (c.cor && c.cor.sec) || { h:120, w:25, s0:0.15, l0:0, l1:1, dh:0, ds:0, dl:0 };
+  const [ver, setVer] = useState(false);
+  useEffect(function(){ _evpVerMascara = ver; return function(){ _evpVerMascara = false; }; }, [ver]);
+  const set = function(q){ return nk(function(k, v){ k.sec = Object.assign({ h:120, w:25, s0:0.15, l0:0, l1:1, dh:0, ds:0, dl:0 }, k.sec); k.sec[q] = v; }); };
+  const sinal = function(v){ return (v > 0 ? "+" : "") + Math.round(v * 100); };
+  return (<div>
+    <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Pegue uma cor no vídeo (ex.: a camisa, o céu, a máquina) e mude só ela.</div>
+    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:8}}>
+      <button onClick={function(){ _evpPegarCor(function(rgb){ const h = _evpHslMaisPerto(rgb);
+          mudar(nk(function(k){ k.sec = Object.assign({ w:25, l0:0, l1:1, dh:0, ds:0, dl:0 }, k.sec, { h:h.h, s0:Math.round(Math.max(0.05, h.s * 0.5) * 100) / 100 }); })); _evToast("info", "Cor escolhida: mexa em matiz, saturação ou luz"); }, "Clique na cor que quer mudar"); }}
+        style={_evpBtn("primario")}>Conta-gotas</button>
+      <span title="Cor escolhida" style={{width:26,height:26,borderRadius:8,border:"1px solid " + _EVP_COR.linha,background:"hsl(" + s.h + ",80%,50%)"}}/>
+      <button onPointerDown={function(){ setVer(true); }} onPointerUp={function(){ setVer(false); }} onPointerLeave={function(){ setVer(false); }} title="Segure para ver o que está sendo pego (branco = pega)"
+        style={Object.assign(_evpBtn(ver ? "suave" : null), {marginLeft:"auto"})}>Ver a máscara (segure)</button>
+    </div>
+    <_EvpSlider ctl={ctl} rotulo="Matiz da cor escolhida" v={_evpNum(s.h, 120)} min={0} max={359} step={1} fmt={function(v){ return Math.round(v) + "°"; }} padrao={120} aplicar={set("h")}/>
+    <_EvpSlider ctl={ctl} rotulo="Largura da faixa" v={_evpNum(s.w, 25)} min={5} max={90} step={1} fmt={function(v){ return "±" + Math.round(v) + "°"; }} padrao={25} aplicar={set("w")}/>
+    <_EvpSlider ctl={ctl} rotulo="Saturação mínima" v={_evpNum(s.s0, 0.15)} min={0} max={1} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={0.15} aplicar={set("s0")}/>
+    <_EvpSlider ctl={ctl} rotulo="Luz de" v={_evpNum(s.l0, 0)} min={0} max={1} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={0} aplicar={set("l0")}/>
+    <_EvpSlider ctl={ctl} rotulo="Luz até" v={_evpNum(s.l1, 1)} min={0} max={1} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={1} aplicar={set("l1")}/>
+    <div style={_EVP_TIT}>O que fazer com essa cor</div>
+    <_EvpSlider ctl={ctl} rotulo="Matiz" v={_evpNum(s.dh, 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={set("dh")}/>
+    <_EvpSlider ctl={ctl} rotulo="Saturação" v={_evpNum(s.ds, 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={set("ds")}/>
+    <_EvpSlider ctl={ctl} rotulo="Luz" v={_evpNum(s.dl, 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={set("dl")}/>
+    <button onClick={function(){ mudar(nk(function(k){ delete k.sec; })); }} style={Object.assign(_evpBtn(), {marginTop:6})}>Tirar a cor secundária</button>
+  </div>);
+}
+
+/* ─── v21: SCOPES — forma de onda, RGB parade, vetorscópio, histograma (do quadro na tela) ─── */
+function _EvpScopesPainel(){
+  const [tipo, setTipo] = useState(function(){ try{ return localStorage.getItem("pxev-scope") || "onda"; }catch(_){ return "onda"; } });
+  const ref = useRef(null);
+  useEffect(function(){
+    let vivo = true;
+    const rodar = function(){ if(!vivo) return; const cv = _evpCvPrevia, out = ref.current;
+      if(cv && out && cv.width){ try{ _evpScopes(cv, tipo, out); }catch(_){} }
+      setTimeout(rodar, 300); };
+    rodar(); return function(){ vivo = false; };
+  }, [tipo]);
+  const nomes = [["onda","Forma de onda"],["parade","RGB parade"],["vetor","Vetorscópio"],["hist","Histograma"]];
+  const dica = { onda:"Luz de cada coluna da imagem: em cima = claro (100), embaixo = escuro (0). Nada colado no 100 ou no 0 = não estourou.",
+                 parade:"O mesmo, separado em vermelho, verde e azul: nas partes brancas/cinzas os três devem ficar na mesma altura.",
+                 vetor:"Cor e saturação: longe do centro = mais saturado. A linha é a da pele: rosto bom fica perto dela.",
+                 hist:"Quantos pontos têm cada luz (esquerda escuro, direita claro), por canal." }[tipo];
+  return (<div>
+    <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
+      {nomes.map(function(n){ return <button key={n[0]} onClick={function(){ setTipo(n[0]); try{ localStorage.setItem("pxev-scope", n[0]); }catch(_){} }} style={Object.assign(_evpChip(tipo === n[0]), { padding:"5px 9px", fontSize:11.5 })}>{n[1]}</button>; })}
+    </div>
+    <canvas ref={ref} width={300} height={tipo === "vetor" ? 220 : 160} aria-label={"Scope: " + tipo} style={{width:"100%",borderRadius:10,background:"#0b0f19",display:"block"}}/>
+    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>{dica}</div>
+  </div>);
+}
+
+/* ─── v21: MELHORIAS SUGERIDAS (sem IA, R$ 0) — escuro, estourado, sem contraste, cor puxada, pouco nítido, tremido ─── */
+function _EvpMelhorias({ p, calc, mudar, infoClipe, irPara }){
+  const [lista, setLista] = useState(null), [aberto, setAberto] = useState(false);
+  const usados = []; p.clips.forEach(function(c){ if(usados.indexOf(c.clipe) < 0) usados.push(c.clipe); });
+  const chave = usados.join("|");
+  useEffect(function(){ if(!aberto) return; let vivo = true; setLista(null);
+    (async function(){ const out = [];
+      for(const id of usados){ const a = await _evpAnalisarClipe(id); if(!a) continue;
+        const c0 = calc.clips.find(function(c){ return c.clipe === id; }), inf = infoClipe[id] || {};
+        a.problemas.forEach(function(pr){ out.push({ id:id + ":" + pr.id, clipe:id, tipo:pr.id, txt:pr.txt, nome:(inf.n ? inf.n + ". " : "") + (inf.nome || id), t:c0 ? c0.t0 + 0.2 : 0, a:a }); });
+        const tremido = p.estab && p.estab[id] && !p.clips.some(function(c){ return c.clipe === id && c.estab; });
+        if(tremido) out.push({ id:id + ":estab", clipe:id, tipo:"estab", txt:"tremido", nome:(inf.n ? inf.n + ". " : "") + (inf.nome || id), t:c0 ? c0.t0 + 0.2 : 0 });
+      }
+      if(vivo) setLista(out); })();
+    return function(){ vivo = false; }; }, [aberto, chave]);
+  const acao = { escuro:"Corrigir a exposição", claro:"Baixar a luz", lavado:"Dar contraste", cor:"Balanço de branco", desfocado:"Mais nitidez", estab:"Estabilizar" };
+  const aplicarUm = function(np, it){
+    np.clips.forEach(function(o){ if(o.clipe !== it.clipe) return;
+      if(it.tipo === "estab"){ o.estab = true; return; }
+      const k = Object.assign({}, o.cor || {}); delete k.look;
+      if(it.tipo === "cor") Object.assign(k, _evpAutoCor(it.a, 0.85, "bal"));
+      else if(it.tipo === "desfocado") k.nit = Math.max(_evpNum(k.nit, 0), 0.35);
+      else Object.assign(k, _evpAutoCor(it.a, 0.85, it.tipo === "escuro" ? "escuro" : "luz"));
+      o.cor = k; });
+  };
+  return (<div style={{marginTop:10}}>
+    <button onClick={function(){ setAberto(!aberto); }} aria-expanded={aberto} style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center"})}><_EvpIco n="estab" s={15}/>{aberto ? "Fechar melhorias sugeridas" : "Melhorias sugeridas (sem IA)"}</button>
+    {aberto && <div style={{marginTop:8,border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:"8px 10px",background:_EVP_COR.campo}}>
+      {!lista && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Analisando os takes…</div>}
+      {lista && !lista.length && <div style={{fontSize:12,color:"#15803d",fontWeight:700}}>Nenhum problema de imagem nos takes usados.</div>}
+      {lista && lista.map(function(it){ return <div key={it.id} style={{display:"flex",gap:6,alignItems:"center",padding:"5px 0",borderTop:"1px solid " + _EVP_COR.linha2,fontSize:12}}>
+        <button onClick={function(){ irPara(it.t); }} title="Levar a agulha" style={{font:"inherit",fontSize:11,fontWeight:800,border:0,borderRadius:6,padding:"1px 6px",background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,cursor:"pointer",whiteSpace:"nowrap"}}>{it.nome.slice(0, 18)}</button>
+        <span style={{flex:1,minWidth:0,color:_EVP_COR.ink}}>{it.txt}</span>
+        <button onClick={function(){ mudar(function(np){ aplicarUm(np, it); }); setLista(lista.filter(function(x){ return x.id !== it.id; })); _evToast("success", acao[it.tipo] + " — segure B para comparar"); }}
+          style={Object.assign(_evpBtn(), {padding:"3px 8px",fontSize:11})}>{acao[it.tipo]}</button></div>; })}
+      {lista && lista.length > 1 && <button onClick={function(){ mudar(function(np){ lista.forEach(function(it){ aplicarUm(np, it); }); }); setLista([]); _evToast("success", "Melhorias aplicadas — segure B para comparar"); }}
+        style={Object.assign(_evpBtn("primario", true), {width:"100%",justifyContent:"center",marginTop:8,padding:"6px 10px",fontSize:12})}>Aplicar todas ({lista.length})</button>}
+    </div>}
+  </div>);
+}
+
 /* ─── ASSISTENTE DE IA (painel da direita quando nada está selecionado) ─── */
 const _EVP_SUGESTOES = ["Tirar os silêncios e os \"éé\"", "Deixar mais dinâmico, cortes mais rápidos", "Fazer uma versão de 30 segundos", "Destacar o nome da cidade",
   "Legenda amarela estilo karaokê", "Filtro quente em tudo", "Música mais baixa na fala", "Começar pela frase mais forte"];
 function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFerr, clipAg, infoClipe, edId, ed, onVoltarVersao, previa, aplicarPrevia, descartarPrevia, aplicandoPrev,
-                          mostrarAntes, setMostrarAntes, simulando, revIA, revisando, passoRev, revisarIA, irPara, usarPedido }){
+                          mostrarAntes, setMostrarAntes, simulando, revIA, revisando, passoRev, revisarIA, irPara, usarPedido, p, calc, mudar }){
   /* v8 (29/09): pedido por voz — grava no microfone, a OpenAI (whisper) escreve, o texto entra na caixa para conferir antes de mandar */
   const [voz, setVoz] = useState(null);              // null | "gravando" | "escrevendo"
   const [segVoz, setSegVoz] = useState(0);
@@ -120626,6 +121172,7 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
       <_EvpModeloIA ocupado={ajustando}/>
       {revisarIA && <_EvpRevisor rev={revIA} revisando={revisando} passo={passoRev} revisar={revisarIA} irPara={irPara} usarPedido={usarPedido}
         desatualizado={!!(revIA && ed && revIA.versao && (ed.versoes || []).length !== revIA.versao)}/>}
+      {p && calc && mudar && <_EvpMelhorias p={p} calc={calc} mudar={mudar} infoClipe={infoClipe} irPara={irPara}/>}
       <button onClick={function(){ window.dispatchEvent(new CustomEvent("evp-cola", { detail:{ busca:"" } })); }} title="Acha a palavra ou frase em tudo o que foi falado e leva a agulha"
         style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center",marginTop:8})}><_EvpIco n="busca" s={15}/>Buscar palavra ou frase na fala</button>
       <div style={_EVP_TIT}>Ajustes rápidos {inf ? "· clipe " + inf.n + " (agulha)" : ""}</div>
@@ -120737,6 +121284,7 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
         boxShadow:"0 0 0 1px rgba(15,23,42,.08), 0 20px 50px -24px rgba(49,46,129,.55)",cursor:enquadrar && sel ? "move" : hover ? "grab" : "pointer"}}
       onPointerDown={down} onDoubleClick={duplo} onPointerMove={mvHover}>
       <canvas ref={cvRef} width={D.w} height={D.h} style={{width:"100%",height:"100%",display:"block"}}/>
+      <_EvpContaGotasCamada cvRef={cvRef}/>
       {caixa && !escrevendo && (
         <div style={{position:"absolute",left:caixa.x*ex - 4,top:caixa.y*ey - 4,width:caixa.w*ex + 8,height:caixa.h*ey + 8,border:"1.5px solid #fff",borderRadius:8,
           boxShadow:"0 0 0 1.5px " + _EVP_COR.roxo + ", 0 0 18px rgba(124,58,237,.6)",pointerEvents:"none"}}>
@@ -122258,6 +122806,7 @@ function _EvpAnimar({ c, p, calc, ctl, mudar, tempo, irPara, ga, agDentro, tauAg
         <div style={{opacity:agDentro ? 1 : 0.5,pointerEvents:agDentro ? "auto" : "none"}}>
           <_EvpSlider ctl={ctl} rotulo={"Opacidade" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.o)} min={0} max={1} step={0.01} fmt={pct} padrao={1} aplicar={ga("o")}/>
           <_EvpSlider ctl={ctl} rotulo={"Desfoque" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(Vag.b)} min={0} max={40} step={0.5} fmt={function(v){ return Math.round(v); }} padrao={0} aplicar={ga("b")}/>
+          <_EvpSlider ctl={ctl} rotulo={"Força da cor" + (ptAg >= 0 ? " ◆" : "")} v={_evpR4(_evpNum(Vag.k, 1))} min={0} max={1} step={0.01} fmt={pct} padrao={1} aplicar={ga("k")}/>
         </div>
         {!n && <div style={{fontSize:11,color:_EVP_COR.fraco}}>Sem pontos, zoom/posição/girar valem para o clipe inteiro. Opacidade e desfoque já criam um ponto ◆.</div>}
       </div>
@@ -122707,24 +123256,26 @@ function _EvpThumbCor({ url, cor, w, h }){
     if(!url){ pinta(null); return; } const im = _evpImg(url); if(im.complete && im.naturalWidth) pinta(im); else { pinta(null); im.addEventListener("load", function(){ pinta(im); }, { once:true }); } }, [url, chave, w, h]);
   return <canvas ref={ref} width={w} height={h} style={{width:"100%",height:h,display:"block"}}/>;
 }
-function _EvpLooks2({ thumbClipe, atual, lista, onEscolher }){
+function _EvpLooks2({ thumbClipe, atual, lista, onEscolher, favs, onFav }){
   const th = thumbClipe ? _evpThumbEm(thumbClipe, 1) : null;
   return (
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6}}>
       {lista.map(function(lk){ const on = atual === lk.id;
-        return <button key={lk.id} onClick={function(){ onEscolher(lk); }} title={lk.label} style={{font:"inherit",padding:0,border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),borderRadius:10,background:_EVP_COR.campo,cursor:"pointer",overflow:"hidden",
+        return <button key={lk.id} onClick={function(){ onEscolher(lk); }} title={lk.label} style={{position:"relative",font:"inherit",padding:0,border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),borderRadius:10,background:_EVP_COR.campo,cursor:"pointer",overflow:"hidden",
           boxShadow:on ? "0 0 0 3px rgba(124,58,237,.18)" : "none"}}>
           <_EvpThumbCor url={th} cor={lk.cor} w={96} h={52}/>
           <div style={{fontSize:10.5,fontWeight:700,padding:"4px 2px",color:on ? _EVP_COR.roxo : _EVP_COR.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{lk.label}</div>
+          {onFav && <span role="button" aria-label={"Favorito: " + lk.label} title="Favorito" onClick={function(e){ e.stopPropagation(); onFav(lk.id); }}
+            style={{position:"absolute",right:3,top:3,fontSize:13,lineHeight:1,color:(favs || []).indexOf(lk.id) >= 0 ? "#facc15" : "rgba(255,255,255,.75)",textShadow:"0 1px 2px rgba(0,0,0,.7)",cursor:"pointer"}}>★</span>}
         </button>; })}
     </div>
   );
 }
 /* curvas: arrastar pontos; duplo clique no fundo cria, duplo clique num ponto do meio tira */
-function _EvpCurvasEditor({ pts0, canal, onVivo, onFim }){
-  const W = 240, H = 240, P = 14, pts = (Array.isArray(pts0) && pts0.length >= 2 ? pts0 : [[0, 0], [1, 1]]).map(function(q){ return q.slice(); });
+function _EvpCurvasEditor({ pts0, canal, onVivo, onFim, plana, rotulo }){
+  const W = 240, H = 240, P = 14, pts = (Array.isArray(pts0) && pts0.length >= 2 ? pts0 : plana ? [[0, 0.5], [1, 0.5]] : [[0, 0], [1, 1]]).map(function(q){ return q.slice(); });
   const X = function(x){ return P + x * (W - 2 * P); }, Y = function(y){ return P + (1 - y) * (H - 2 * P); };
-  const svgRef = useRef(null), cor = { l:"#e5e7eb", r:"#f87171", g:"#4ade80", b:"#60a5fa" }[canal] || "#e5e7eb";
+  const svgRef = useRef(null), cor = { l:"#e5e7eb", r:"#f87171", g:"#4ade80", b:"#60a5fa", hh:"#c4b5fd", hs:"#f9a8d4", hl:"#fde68a", ls:"#a5f3fc" }[canal] || "#e5e7eb";
   const ponto = function(m){ const r = svgRef.current.getBoundingClientRect(), sx = W / r.width, sy = H / r.height;
     return [Math.round(_evClamp(((m.clientX - r.left) * sx - P) / (W - 2 * P), 0, 1) * 1000) / 1000, Math.round(_evClamp(1 - ((m.clientY - r.top) * sy - P) / (H - 2 * P), 0, 1) * 1000) / 1000]; };
   const arrastar = function(k, ev){ ev.preventDefault(); ev.stopPropagation(); const base = pts.map(function(q){ return q.slice(); });
@@ -122734,10 +123285,10 @@ function _EvpCurvasEditor({ pts0, canal, onVivo, onFim }){
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); };
   const tab = _evpCurvaTabela(pts); let d = ""; for(let i=0;i<=64;i++){ const x = i / 64; d += (i ? " L" : "M") + X(x).toFixed(1) + " " + Y(tab[Math.round(x * 255)] / 255).toFixed(1); }
   return (
-    <svg ref={svgRef} viewBox={"0 0 " + W + " " + H} role="img" aria-label="Curva de cor" style={{width:"100%",maxWidth:280,display:"block",background:"#0b1020",borderRadius:12,touchAction:"none",userSelect:"none"}}
+    <svg ref={svgRef} viewBox={"0 0 " + W + " " + H} role="img" aria-label={rotulo || "Curva de cor"} style={{width:"100%",maxWidth:280,display:"block",background:"#0b1020",borderRadius:12,touchAction:"none",userSelect:"none"}}
       onDoubleClick={function(m){ if(m.target.tagName === "circle") return; const q = ponto(m); if(q[0] <= 0.02 || q[0] >= 0.98) return; const nv = pts.concat([q]).sort(function(a, b){ return a[0] - b[0]; }).slice(0, 12); onVivo(nv); onFim(); }}>
       {[0.25, 0.5, 0.75].map(function(g){ return <g key={g}><line x1={X(g)} x2={X(g)} y1={Y(0)} y2={Y(1)} stroke="#1a2036"/><line x1={X(0)} x2={X(1)} y1={Y(g)} y2={Y(g)} stroke="#1a2036"/></g>; })}
-      <line x1={X(0)} y1={Y(0)} x2={X(1)} y2={Y(1)} stroke="#2c3450" strokeDasharray="4 4"/>
+      {plana ? <line x1={X(0)} y1={Y(0.5)} x2={X(1)} y2={Y(0.5)} stroke="#2c3450" strokeDasharray="4 4"/> : <line x1={X(0)} y1={Y(0)} x2={X(1)} y2={Y(1)} stroke="#2c3450" strokeDasharray="4 4"/>}
       <path d={d} fill="none" stroke={cor} strokeWidth="2.5"/>
       {pts.map(function(q, k){ return <circle key={k} cx={X(q[0])} cy={Y(q[1])} r="7" fill="#0b1020" stroke={cor} strokeWidth="2.5" style={{cursor:"grab"}} onPointerDown={function(ev){ arrastar(k, ev); }}
         onDoubleClick={function(ev){ ev.stopPropagation(); if(k === 0 || k === pts.length - 1) return; onVivo(pts.filter(function(_, i){ return i !== k; })); onFim(); }}/>; })}
@@ -122776,7 +123327,10 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
   const lista = _EVP_LOOKS2.concat(((kit && kit.filtros) || []).concat(salvos).filter(function(f, i, a){ return f && f.nome && a.findIndex(function(x){ return x.nome === f.nome; }) === i; })
     .map(function(f){ return { id:"cli:" + f.nome, label:f.nome, cor:f.cor || {} }; }));
   const antes = function(v){ try{ window.dispatchEvent(new CustomEvent("evp-antes", { detail:v })); }catch(_){} };
-  const abas = [["filtros","Filtros"],["basico","Básico"],["cor","Cor"],["hsl","HSL"],["curvas","Curvas"],["rodas","Rodas"],["detalhes","Detalhes"],["igualar","Igualar"]];
+  const abas = [["filtros","Filtros"],["auto","Auto"],["basico","Básico"],["cor","Cor"],["hsl","HSL"],["curvas","Curvas"],["matiz","Curvas de matiz"],["secundaria","Cor secundária"],
+                ["rodas","Rodas"],["lut","LUT"],["detalhes","Detalhes"],["igualar","Igualar"],["scopes","Scopes"]];        // v21
+  const [favs, setFavs] = useState(function(){ try{ return JSON.parse(localStorage.getItem("pxev-looks-fav") || "[]"); }catch(_){ return []; } });
+  const favTroca = function(id){ const n = favs.indexOf(id) >= 0 ? favs.filter(function(x){ return x !== id; }) : favs.concat([id]); setFavs(n); try{ localStorage.setItem("pxev-looks-fav", JSON.stringify(n)); }catch(_){} };
   const hslV = (cor.hsl && cor.hsl[corHsl]) || [0, 0, 0];
   const setHsl = function(i){ return nk(function(k, v){ k.hsl = Object.assign({}, k.hsl); const t = (k.hsl[corHsl] || [0, 0, 0]).slice(); t[i] = v; k.hsl[corHsl] = t; }); };
   const curvaAt = (cor.curvas && cor.curvas[canal]) || [[0, 0], [1, 1]];
@@ -122798,8 +123352,12 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
       </div>
 
       {aba === "filtros" && (<div>
-        <_EvpLooks2 thumbClipe={c.clipe} atual={cor.look || (Object.keys(_evpCorLimpa(cor)).length === 4 && !cor.bri && !cor.con && !cor.sat && !cor.temp ? "original" : null)} lista={lista}
+        <_EvpLooks2 thumbClipe={c.clipe} atual={cor.look || (Object.keys(_evpCorLimpa(cor)).length === 4 && !cor.bri && !cor.con && !cor.sat && !cor.temp ? "original" : null)} favs={favs} onFav={favTroca}
+          lista={lista.slice().sort(function(a, b){ return (favs.indexOf(b.id) >= 0 ? 1 : 0) - (favs.indexOf(a.id) >= 0 ? 1 : 0); })}
           onEscolher={function(lk){ mudar(nk(function(k){ const ig = k.ig; Object.keys(k).forEach(function(q){ delete k[q]; }); Object.assign(k, { bri:0, con:0, sat:0, temp:0 }, _evpCopia(lk.cor), ig ? { ig:ig } : {}, { look:lk.id }); })); }}/>
+        <div style={{marginTop:10}}><_EvpSlider ctl={ctl} rotulo="Intensidade do filtro" v={_evpNum(cor.forca, 1)} min={0} max={1} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={1}
+          aplicar={function(np, v){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(o){ o.cor = Object.assign({}, o.cor, { forca:v }); } }}/></div>
+        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:-4}}>Clique na ★ de um filtro para deixá-lo no começo da lista.</div>
         <div style={_EVP_TIT}>Guardar meu filtro (no kit do cliente)</div>
         <div style={{display:"flex",gap:6}}>
           <input value={nomeF} maxLength={40} onChange={function(e){ setNomeF(e.target.value); }} placeholder="Nome (ex.: Clem obra)" aria-label="Nome do filtro"
@@ -122817,7 +123375,13 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
         {sl("bran", "Brancos", -1, 1)}
         {sl("pret", "Pretos", -1, 1)}
         {sl("bri", "Brilho", -0.5, 0.5)}
+        {sl("fade", "Desbotar (fade)", 0, 1, function(v){ return Math.round(v * 100) + "%"; })}
       </div>)}
+      {aba === "auto" && <_EvpCorAuto c={c} p={p} mudar={mudar} ctl={ctl}/>}
+      {aba === "lut" && <_EvpCorLut c={c} p={p} mudar={mudar} ctl={ctl} tCard={tCard} kit={kit} edUnidade={edUnidade}/>}
+      {aba === "matiz" && <_EvpCurvasMatiz c={c} ctl={ctl} mudar={mudar} nk={nk}/>}
+      {aba === "secundaria" && <_EvpCorSecundaria c={c} ctl={ctl} mudar={mudar} nk={nk}/>}
+      {aba === "scopes" && <_EvpScopesPainel/>}
 
       {aba === "cor" && (<div>
         {sl("temp", "Temperatura", -1, 1, function(v){ return v > 0 ? "quente " + Math.round(v * 100) : v < 0 ? "fria " + Math.round(-v * 100) : "0"; })}
@@ -122825,6 +123389,15 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
         {sl("sat", "Saturação", -1, 1)}
         {sl("vib", "Vibração", -1, 1)}
         <div style={{fontSize:11,color:_EVP_COR.fraco}}>Vibração dá cor ao que está apagado sem estourar a pele.</div>
+        <div style={_EVP_TIT}>Balanço de branco</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={async function(){ const a = await _evpAnalisarClipe(c.clipe); if(!a){ _evToast("warning", "Espere as miniaturas carregarem."); return; }
+              const b = _evpAutoCor(a, 1, "bal").bal || [1, 1, 1]; mudar(nk(function(k){ k.bal = b; })); _evToast("success", "Branco acertado automaticamente"); }} style={_evpBtn("suave")}>Automático</button>
+          <button onClick={function(){ _evpPegarCor(function(rgb){ mudar(nk(function(k){ k.bal = _evpBalDoPixel(rgb, k.bal); })); _evToast("success", "Aquele ponto agora é branco/cinza neutro"); }, "Clique em algo que deveria ser branco ou cinza"); }}
+            style={_evpBtn("suave")}>Conta-gotas (clique no branco)</button>
+          {Array.isArray(cor.bal) && <button onClick={function(){ mudar(nk(function(k){ delete k.bal; })); }} style={_evpBtn()}>Zerar</button>}
+        </div>
+        {Array.isArray(cor.bal) && <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4,fontFamily:_EVP_MONO}}>R ×{cor.bal[0]} · G ×{cor.bal[1]} · B ×{cor.bal[2]}</div>}
       </div>)}
 
       {aba === "hsl" && (<div>
@@ -122834,7 +123407,9 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
               style={{width:28,height:28,borderRadius:99,background:h.hex,border:"2px solid " + (on ? _EVP_COR.ink : "transparent"),boxShadow:on ? "0 0 0 2px " + _EVP_COR.roxo : "none",cursor:"pointer",position:"relative",padding:0}}>
               {mex && <span style={{position:"absolute",right:-2,top:-2,width:8,height:8,borderRadius:99,background:"#fff",border:"1.5px solid #0b1020"}}/>}</button>; })}
         </div>
-        <div style={{fontSize:12,fontWeight:800,marginBottom:6}}>{(_EVP_HSL_CORES.find(function(h){ return h.id === corHsl; }) || {}).label}</div>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}><b style={{fontSize:12}}>{(_EVP_HSL_CORES.find(function(h){ return h.id === corHsl; }) || {}).label}</b>
+          <button onClick={function(){ _evpPegarCor(function(rgb){ const h = _evpHslMaisPerto(rgb); setCorHsl(h.faixa); _evToast("info", "Cor escolhida: " + ((_EVP_HSL_CORES.find(function(x){ return x.id === h.faixa; }) || {}).label || "")); }, "Clique na cor que quer mexer"); }}
+            style={Object.assign(_evpBtn("suave"), {marginLeft:"auto",padding:"4px 9px",fontSize:11.5})}>Conta-gotas</button></div>
         <_EvpSlider ctl={ctl} rotulo="Matiz" v={_evpNum(hslV[0], 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={setHsl(0)}/>
         <_EvpSlider ctl={ctl} rotulo="Saturação" v={_evpNum(hslV[1], 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={setHsl(1)}/>
         <_EvpSlider ctl={ctl} rotulo="Luz" v={_evpNum(hslV[2], 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={setHsl(2)}/>
@@ -122858,8 +123433,8 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
       </div>)}
 
       {aba === "rodas" && (<div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-          {[["s","Sombras"],["m","Meios"],["a","Realces"]].map(function(q){
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+          {[["s","Sombras"],["m","Meios"],["a","Realces"],["o","Offset (tudo)"]].map(function(q){
             return <_EvpRoda key={q[0]} rot={q[1]} valor={cor.rodas && cor.rodas[q[0]]} onFim={ctl.fim}
               onVivo={function(nv){ ctl.vivo(nk(function(k){ k.rodas = Object.assign({}, k.rodas); k.rodas[q[0]] = nv; })); }}/>; })}
         </div>
@@ -122870,6 +123445,8 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
         {sl("nit", "Nitidez", 0, 1, function(v){ return Math.round(v * 100) + "%"; })}
         {sl("vin", "Vinheta", -1, 1, function(v){ return v > 0 ? "escura " + Math.round(v * 100) : v < 0 ? "clara " + Math.round(-v * 100) : "0"; })}
         {sl("grao", "Grão", 0, 1, function(v){ return Math.round(v * 100) + "%"; })}
+        <_EvpInterruptor on={!!cor.flick} onChange={function(v){ mudar(nk(function(k){ if(v) k.flick = true; else delete k.flick; })); }}
+          label="Tirar o piscar (flicker)" dica="Luz de LED ou fluorescente piscando no vídeo: o motor compensa quadro a quadro (igual na prévia e na gravação)"/>
       </div>)}
 
       {aba === "igualar" && (<div>
@@ -123761,7 +124338,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
           setExp(function(x){ return (x && x.fase === "gravando") ? Object.assign({}, x, { esperando:esp }) : x; });
         },
         onTempo:function(tt){ const pc = Math.round(tt / tot * 100); setExp(function(x){ return (x && x.fase === "gravando" && x.pct !== pc) ? Object.assign({}, x, { pct:pc }) : x; }); } });
-      await motor.pronto;
+      await motor.pronto; await _evpLutsEsperar();          // v21: LUT carregada antes do 1º quadro
       await ac.resume();
       const stream = new MediaStream(audioSo ? dest.stream.getAudioTracks() : [].concat(cv.captureStream(30).getVideoTracks(), dest.stream.getAudioTracks()));
       rec = new MediaRecorder(stream, audioSo ? { mimeType:mime, audioBitsPerSecond:192000 } : { mimeType:mime, videoBitsPerSecond:BPS[qual] || 12000000, audioBitsPerSecond:192000 });
