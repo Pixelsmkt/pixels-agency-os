@@ -21636,7 +21636,7 @@ async function pxCascataPuxar(removidos){
     const buracos={};
     (Array.isArray(removidos)?removidos:[]).forEach(function(t){
       const iso=String((t&&(t.publish_date||t.publishDate))||"").slice(0,10);
-      if(!iso||iso<=hoje) return;
+      if(!iso||iso<hoje) return;   // (01/10) vaga aberta HOJE também conta: dá pra preencher o resto da semana
       if(t.somente_story||t.somenteStory) return;      // story não ocupa vaga na cadência
       _pxColAlvos(t).forEach(function(a){
         if(!PX_CASCATA_CAP[a]) return;
@@ -21686,7 +21686,11 @@ async function pxCascataPuxar(removidos){
       const de=String(t.publish_date||"").slice(0,10);
       const semanaVelha=_pxApLinha(de);
       const para=_pxCasDiaComFolga(t,L,rows.filter(function(x){ return String(x.id)!==String(t.id); }),hoje);
-      if(!para||para>=de||para<piso) continue;                    // só pra trás, e nunca colado no hoje
+      /* (01/10/2026, Gustavo) A vaga desta semana também tem que ser preenchida. Dentro dos próximos
+         7 dias só vem card JÁ PRONTO (aprovado/agendado ou em avaliação) — esse não precisa de
+         prazo de produção. Os outros continuam respeitando os 7 dias. */
+      const _pronto=_pxCasProntidao(t)>=40;
+      if(!para||para>=de||(para<piso&&!_pronto)) continue;        // só pra trás; colado no hoje só se já estiver pronto
       moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""});
       t.publish_date=para;                                        // vale pras próximas iterações
       fila.push({alvo:alvo,L:L,trilha:v.trilha});                 // a vaga pode ter sobrado
@@ -48081,6 +48085,18 @@ function _cardPodeSerResp(u){
       // (24/09) a data de onde o card saiu vira a vaga do deslocado (troca de lugar)
       const _vagaDe=_mudouData?String(task.publishDate||"").slice(0,10):"";
       setTimeout(function(){ try{ pxCascataVarrer(task.id,{vaga:_vagaDe}); }catch(_e){} },2500);
+    }
+    /* (01/10/2026, Gustavo) "mudei de feed pra Somente story… abriu os faltantes… porque já não arrumou
+       fazendo a cascata reversa?". Card que JÁ existia e deixa de ocupar o dia (virou Somente story ou
+       Não publica) abre vaga na semana → cascata PRA TRÁS: o próximo post da fila vem pra essa vaga.
+       Vai a versão de ANTES (ainda feed), senão a cascata acha que story não deixou buraco. */
+    const _viraStory=(!!somenteStory&&!(task.somenteStory||task.somente_story))||(!!naoPublica&&!(task.naoPublica||task.nao_publica));
+    const _isoVaga=String(publishDate||task.publishDate||"").slice(0,10);
+    if(!task._isDraft&&_viraStory&&_isoVaga&&typeof pxCascataPuxar==="function"){
+      const _saiu={id:task.id,client:client||task.client,bioter_unit:(client==="bioter"?(bioterUnit||""):""),bioterUnit:(client==="bioter"?(bioterUnit||""):""),
+        publish_date:_isoVaga,publishDate:_isoVaga,status:task.status,title:formattedTitle||task.title||"",tags:tags||task.tags||[],
+        content_type:contentType||task.contentType||null,contentType:contentType||task.contentType||null,somente_story:false,somenteStory:false,nao_publica:false,naoPublica:false};
+      setTimeout(function(){ try{ pxCascataPuxar([_saiu]); }catch(_e){} },2500);
     }
     _gravar();
     function _gravar(){
