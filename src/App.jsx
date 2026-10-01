@@ -114483,6 +114483,12 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v20 (01/10/2026) — FASE G: O CLAUDE JUNTO NA EDIÇÃO (video-editar v32):
+     • Modelo da IA: Sonnet 5.5 · Opus 5.5 · Fable 5.1 · Sonnet 5 (cada pessoa escolhe; "padrão da agência" vale para o Guvi e o PC) + "Testar os modelos"
+     • Conversa: cada pedido, o que a IA respondeu, O QUE MUDOU de verdade (duração, cortes, cor, textos, legenda, música…), modelo e custo; desfazer com 1 clique
+     • "Mostrar antes de aplicar": a IA faz a prévia, você dá o play e escolhe Aplicar (vira versão) ou Descartar
+     • Revisor: tira quadros do vídeo como está (mesmo motor da gravação) e a IA aponta o que dá para ver de errado, com o segundo e "Corrigir com a IA"
+     • Buscar palavra ou frase na Cola da fala (‹ › leva a agulha) · Sugestões: "Aceitar todas"
    v19 (01/10/2026) — FASE C do checklist "Estúdio completo": COR COMPLETA (como Ajustes do CapCut / Lumetri), na PLACA DE VÍDEO (WebGL):
      • Básico: exposição, contraste, realces, sombras, brancos, pretos, brilho · Cor: temperatura, matiz (verde↔magenta), saturação, vibração
      • HSL por cor (8 cores: matiz, saturação, luz) · Curvas (geral, R, G, B, arrastando pontos) · Rodas de cor (sombras, meios, realces)
@@ -116200,7 +116206,8 @@ async function _evPrepararMontar(t, setPasso, extra){
     clipes.push({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg });
   }
   setPasso("A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
-  const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(extra || {}) } });
+  const modM = _evpModeloLer();                                   // v20: modelo escolhido no Estúdio (sem = padrão da agência)
+  const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(modM ? { modelo:modM } : {}), ...(extra || {}) } });
   if(res.error) throw new Error(await _evErroFn(res));
   return res.data || {};
 }
@@ -116278,7 +116285,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     try{
       const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:p }, extra && typeof extra === "object" ? extra : {}) });   // v13: correções da linha do tempo
       if(res.error) throw new Error(await _evErroFn(res));
-      setPedido(""); _evToast("success", "Ajuste feito — versão " + ((res.data && res.data.versao) || "nova")); setRec(function(n){ return n+1; }); ok = true;
+      setPedido(""); _evToast("success", "Ajuste feito — versão " + ((res.data && res.data.versao) || "nova") + (res.data && res.data.aviso_modelo ? " · " + res.data.aviso_modelo : "")); setRec(function(n){ return n+1; }); ok = true;
     }catch(e){ setErro(String((e && e.message) || e)); }
     setAjustando(false);
     return ok;
@@ -116939,6 +116946,113 @@ const _EVP_LOOKS2 = [
   { id:"pb", label:"P&B", cor:{ bri:0.02, con:0.15, sat:-1, temp:0 } },
   { id:"pb_forte", label:"P&B forte", cor:{ sat:-1, con:0.3, pret:-0.2, bran:0.2, grao:0.25 } },
 ];
+
+/* ═══ v20 — FASE G: o Claude junto na edição — escolher o modelo, conversa com "o que mudei", prévia antes de aplicar, revisor ═══ */
+const _EVP_MODELOS = [
+  { id:"", nome:"Padrão da agência", dica:"o que estiver definido para a agência (Guvi e PC usam este)" },
+  { id:"claude-sonnet-5-5", nome:"Sonnet 5.5", dica:"rápido · mesmo preço de hoje (US$ 2 / 10 por milhão)" },
+  { id:"claude-opus-5-5", nome:"Opus 5.5", dica:"mais caprichado · ~2× o custo (US$ 4 / 20)" },
+  { id:"claude-fable-5-1", nome:"Fable 5.1", dica:"o mais forte e o mais lento · ~5× o custo (US$ 10 / 50)" },
+  { id:"claude-sonnet-5", nome:"Sonnet 5", dica:"o modelo de antes (reserva)" } ];
+function _evpModeloNome(id){ const m = _EVP_MODELOS.find(function(x){ return x.id === id; }); return m ? m.nome : (id || "padrão"); }
+function _evpModeloLer(){ try{ const v = localStorage.getItem("pxev-modelo") || ""; return _EVP_MODELOS.some(function(m){ return m.id === v; }) ? v : ""; }catch(_){ return ""; } }
+function _evpModeloGravar(v){ try{ localStorage.setItem("pxev-modelo", v || ""); }catch(_){} try{ window.dispatchEvent(new Event("pxev-modelo")); }catch(_){} }
+function _evpUsarModelo(){
+  const [v, setV] = useState(_evpModeloLer);
+  useEffect(function(){ const f = function(){ setV(_evpModeloLer()); }; window.addEventListener("pxev-modelo", f); return function(){ window.removeEventListener("pxev-modelo", f); }; }, []);
+  return [v, function(n){ setV(n); _evpModeloGravar(n); }];
+}
+
+/* duração do vídeo pelo projeto (só os cortes) */
+function _evpDurProj(p){
+  return ((p && p.clips) || []).reduce(function(s, c){ const v = Math.max(0.1, Number(c.vel) || 1);
+    return s + (Number(c.congelar) > 0 ? Number(c.congelar) : Math.max(0, (Number(c.fim) || 0) - (Number(c.ini) || 0)) / v); }, 0);
+}
+/* O QUE MUDOU entre duas versões do projeto — frases curtas para a conversa e para a prévia */
+function _evpOQueMudou(a, b){
+  a = a || {}; b = b || {};
+  const out = [], js = function(x){ return JSON.stringify(x === undefined ? null : x); }, f1 = function(x){ return (Math.round(x * 10) / 10).toLocaleString("pt-BR"); };
+  const ca = a.clips || [], cb = b.clips || [];
+  const da = _evpDurProj(a), db = _evpDurProj(b);
+  if(Math.abs(da - db) >= 0.1) out.push("Duração " + f1(da) + " s → " + f1(db) + " s");
+  if(ca.length !== cb.length) out.push("Cortes: " + ca.length + " → " + cb.length + " clipes");
+  else if(ca.some(function(c, i){ const d = cb[i]; return c.clipe !== d.clipe || Math.abs((c.ini || 0) - (d.ini || 0)) > 0.01 || Math.abs((c.fim || 0) - (d.fim || 0)) > 0.01; })) out.push("Pontos de corte ajustados");
+  const porId = {}; ca.forEach(function(c){ porId[c.id] = c; });
+  [["cor","Cor"],["trans","Transição"],["vel","Velocidade"],["anim","Animação"],["zoom","Zoom"],["vol","Volume"],["mov","Movimento"],["rampa","Rampa de velocidade"],["fundo","Fundo"],["corte","Recorte"],["estab","Estabilização"]].forEach(function(k){
+    let n = 0; cb.forEach(function(c){ const o = porId[c.id]; if(o && js(o[k[0]]) !== js(c[k[0]])) n++; });
+    if(n) out.push(k[1] + " em " + n + " clipe" + (n > 1 ? "s" : ""));
+  });
+  const lista = function(k, nome){
+    const la = a[k] || [], lb = b[k] || [], ia = {}, ib = {};
+    la.forEach(function(x){ ia[x.id] = x; }); lb.forEach(function(x){ ib[x.id] = x; });
+    const add = lb.filter(function(x){ return !ia[x.id]; }).length, rem = la.filter(function(x){ return !ib[x.id]; }).length,
+          mud = lb.filter(function(x){ return ia[x.id] && js(ia[x.id]) !== js(x); }).length;
+    const p = []; if(add) p.push("+" + add); if(rem) p.push("−" + rem); if(mud) p.push(mud + " mudado" + (mud > 1 ? "s" : ""));
+    if(p.length) out.push(nome + ": " + p.join(", "));
+  };
+  lista("textos", "Textos"); lista("imagens", "Imagens e apoio"); lista("sfx", "Efeitos sonoros"); lista("narracoes", "Narrações");
+  const la = a.legenda || {}, lb = b.legenda || {};
+  const NL = { ativa:"ligar/desligar", estilo:"estilo", posicao:"posição", y:"altura", tam:"tamanho", fonte:"fonte", cor:"cor", corTexto:"cor do texto", corDestaque:"cor de destaque",
+               anim:"animação", linhas:"linhas", caixa:"maiúsculas", peso:"peso", edits:"palavras", correcoes:"correções", traducao:"tradução", trechos:"trechos", cortes:"quebras", pintadas:"palavras pintadas" };
+  const ml = Object.keys(NL).filter(function(k){ return js(la[k]) !== js(lb[k]); }).map(function(k){ return NL[k]; });
+  if(ml.length) out.push("Legenda: " + ml.join(", "));
+  const ma = a.musica, mb = b.musica;
+  if(!!ma !== !!mb) out.push(mb ? "Música colocada" : "Música tirada");
+  else if(ma && mb){
+    if(ma.id !== mb.id) out.push("Música trocada");
+    else if(Math.abs((Number(ma.vol) || 0) - (Number(mb.vol) || 0)) > 0.005) out.push("Volume da música " + Math.round((Number(ma.vol) || 0) * 100) + "% → " + Math.round((Number(mb.vol) || 0) * 100) + "%");
+    else if(js(ma) !== js(mb)) out.push("Música ajustada");
+  }
+  [["formato","Formato"],["abertura","Abertura"],["tela_final","Tela final"],["logo","Logo"],["audio","Tratamento do áudio"],["canais","Mixer"]].forEach(function(k){
+    if(js(a[k[0]]) !== js(b[k[0]])) out.push(k[0] === "formato" ? "Formato " + (a.formato || "9x16") + " → " + (b.formato || "9x16") : k[1] + " mudou");
+  });
+  return out;
+}
+
+/* REVISOR: tira quadros do vídeo como está agora (o MESMO motor da gravação) e monta folhas 4×3 com o segundo no canto */
+async function _evpTirarQuadros(motor, cv, total, prog){
+  if(!motor || !cv || !(total > 0)) throw new Error("o vídeo ainda não carregou");
+  const qs = Math.max(1, Math.ceil(total / 36 * 2) / 2);
+  const tempos = []; for(let t = Math.min(qs / 2, total / 2); t < total - 0.05 && tempos.length < 36; t += qs) tempos.push(Math.round(t * 100) / 100);
+  const vert = cv.height >= cv.width, CW = vert ? Math.round(320 * cv.width / cv.height) : 320, CH = vert ? 320 : Math.round(320 * cv.height / cv.width);
+  const G = 4, COLS = 4, ROWS = 3, POR = COLS * ROWS, W = COLS * CW + (COLS + 1) * G, H = ROWS * CH + (ROWS + 1) * G;
+  const esperar = async function(){
+    const ini = performance.now(); let livres = 0;
+    while(performance.now() - ini < 2500){
+      await new Promise(function(r){ requestAnimationFrame(function(){ r(); }); });
+      if(!motor.ocupado){ if(++livres >= 3) return; } else livres = 0;
+    }
+  };
+  const folhas = []; let fc = null, fx = null;
+  for(let i = 0; i < tempos.length; i++){
+    if(i % POR === 0){ fc = document.createElement("canvas"); fc.width = W; fc.height = H; fx = fc.getContext("2d"); fx.fillStyle = "#fff"; fx.fillRect(0, 0, W, H); }
+    motor.seek(tempos[i]); await esperar();
+    const k = i % POR, x0 = G + (k % COLS) * (CW + G), y0 = G + Math.floor(k / COLS) * (CH + G);
+    fx.drawImage(cv, x0, y0, CW, CH);
+    fx.fillStyle = "rgba(0,0,0,.65)"; fx.fillRect(x0, y0, 58, 22); fx.fillStyle = "#fff"; fx.font = "bold 15px sans-serif";
+    fx.fillText((Math.round(tempos[i] * 10) / 10).toLocaleString("pt-BR") + "s", x0 + 5, y0 + 16);
+    if(k === POR - 1 || i === tempos.length - 1){
+      const lin = Math.floor(k / COLS) + 1, hh = lin * (CH + G) + G;          // folha incompleta: corta as linhas vazias (menos imagem = mais barato)
+      let fim = fc; if(lin < ROWS){ fim = document.createElement("canvas"); fim.width = W; fim.height = hh; fim.getContext("2d").drawImage(fc, 0, 0); }
+      folhas.push(fim.toDataURL("image/jpeg", 0.78));
+    }
+    if(prog) prog("Olhando o vídeo… " + (i + 1) + " de " + tempos.length);
+  }
+  return { folhas:folhas, quadro_seg:qs, n:tempos.length };
+}
+
+/* BUSCA NA FALA: acha a palavra ou a frase (sem acento, sem pontuação; a última palavra pode estar pela metade) */
+function _evpBuscarFala(palavras, q){
+  const toks = String(q || "").split(/\s+/).map(function(x){ return _evNorm(x); }).filter(Boolean);
+  if(!toks.length) return [];
+  const ps = palavras.map(function(w){ return _evNorm(w); }), out = [];
+  for(let i = 0; i + toks.length <= ps.length; i++){
+    let ok = true;
+    for(let j = 0; j < toks.length && ok; j++){ const p = ps[i + j]; ok = j === toks.length - 1 ? p.indexOf(toks[j]) === 0 : p === toks[j]; }
+    if(ok) out.push([i, i + toks.length - 1]);
+  }
+  return out;
+}
 
 const _EVP_RNNOISE = "https://cdn.jsdelivr.net/npm/@shiguredo/rnnoise-wasm@2025.1.5/dist/rnnoise.js";
 
@@ -118326,6 +118440,7 @@ function _evpMotor(canvas, o){
   let mascara = null, mascaraDe = -1, segOcupado = false;
   let ofsC = null, ofsX = null;   // v17: camada do clipe com desfoque / opacidade (Animar)
   let antes = false;              // v19: antes/depois (sem a cor)
+  let ocupadoV = true;            // v20: algum vídeo ainda buscando o quadro (o revisor espera)
   const estD = { n:0, soma:0, max:0, lentos:0 };   // v19: tempo de desenho de cada quadro (teste de velocidade)
   /* DESEMPENHO (29/09): parado, só redesenha quando algo muda (e 4×/s de reserva para imagens/fontes que chegam);
      o fundo desfocado e os desfoques são feitos numa cópia pequena (o blur em 1080×1920 era o que travava a aba) */
@@ -118979,6 +119094,7 @@ function _evpMotor(canvas, o){
     sincronizarSobre(); if(!tocando || t < calc.fimCortes) sincronizarFinal();     // antes do fim: já deixa o vídeo da tela final carregado
     const agora = performance.now();
     const vAt = c && els[c.id], mexendo = !!(vAt && (vAt.seeking || vAt.readyState < 2)) || Object.keys(els2).some(function(k){ return els2[k].seeking; });
+    ocupadoV = mexendo || sujo > 0;
     if(tocando || o.pausarAoEsperar || sujo > 0 || mexendo || t !== ultTempo || agora - ultDesenho > 250){
       const d0 = performance.now(); desenhar(); const dd = performance.now() - d0;   // v19: mede o desenho
       if(tocando){ estD.n++; estD.soma += dd; if(dd > estD.max) estD.max = dd; if(dd > 33) estD.lentos++; }
@@ -118999,6 +119115,7 @@ function _evpMotor(canvas, o){
     atualizar: function(novoCalc, novoProj, vozes, narr){ marcar(); calc = novoCalc; proj = novoProj; if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
     setTratados: function(tr){ o.tratados = tr; marcar(); },
     setAntes: function(v){ antes = !!v; marcar(); },                  // v19
+    get ocupado(){ return ocupadoV; },                                  // v20
     get estatisticas(){ return { quadros:estD.n, media:estD.n ? estD.soma / estD.n : 0, max:estD.max, lentos:estD.lentos }; },
     volumeGeral: function(v){ try{ master.gain.setValueAtTime(v, ac.currentTime); }catch(_){ master.gain.value = v; } },   // 0 = mudo (gravando narração)
     destruir: function(){ vivo = false; cancelAnimationFrame(raf); pararAudio(); document.removeEventListener("visibilitychange", aoSumir);
@@ -119252,6 +119369,12 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [avisoRasc, setAvisoRasc] = useState(temRasc && JSON.stringify(inicial) !== JSON.stringify(salvo) ? { em:ed.rascunho_em, por:ed.rascunho_por } : null);
   const [pedido, setPedido] = useState("");
   const [exp, setExp] = useState(null);
+  const [modeloIA] = _evpUsarModelo();                         // v20
+  const [mostrarAntes, setMostrarAntes] = _evpUsarLS("pxev-previa");
+  const [previa, setPrevia] = useState(null);                  // v20: prévia da IA (ainda não é versão)
+  const [simulando, setSimulando] = useState(false), [aplicandoPrev, setAplicandoPrev] = useState(false);
+  const [revIA, setRevIA] = useState(function(){ return (ed.receita && ed.receita.revisor_estudio) || null; });
+  const [revisando, setRevisando] = useState(false), [passoRev, setPassoRev] = useState("");
   const cvRef = useRef(null), motorRef = useRef(null), pRef = useRef(p), copiaRef = useRef(null), expRef = useRef(null), tempoUi = useRef({ em:0, toc:false, esp:false });
   pRef.current = p;
   const soVer = !!isMob;
@@ -119957,10 +120080,56 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   };
   /* pedir à IA: salva antes o que foi mexido à mão (fica nas versões) */
   const pedirIA = async function(){
-    const x = pedido.trim(); if(!x || ajustando) return;
+    const x = pedido.trim(); if(!x || ajustando || simulando || previa) return;
     if(alterado){ const ok = await salvar(); if(!ok) return; }
-    const ok2 = await onAjustar(x); if(ok2) setPedido("");
+    if(mostrarAntes) return pedirPrevia(x);                     // v20: a IA mostra antes de virar versão
+    const ok2 = await onAjustar(x, modeloIA ? { modelo:modeloIA } : null); if(ok2) setPedido("");
   };
+  /* v20: PRÉVIA — a IA faz o ajuste sem gravar; o projeto novo entra na tela (dá para tocar); Aplicar vira versão, Descartar volta */
+  const pedirPrevia = async function(x){
+    setSimulando(true);
+    try{
+      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:x, simular:true }, modeloIA ? { modelo:modeloIA } : {}) });
+      if(res.error) throw new Error(await _evErroFn(res));
+      const d = res.data || {}; if(!d.projeto) throw new Error("a IA não devolveu a prévia");
+      const ant = pRef.current, np = _evpNormalizar(_evpCopia(d.projeto), clipes);
+      confirmar(ant, np);
+      setPrevia({ pedido:x, explicacao:d.explicacao || "", modelo:d.modelo || "", aviso:d.aviso_modelo || "", custo:d.custo_brl, antes:ant, mudou:_evpOQueMudou(ant, np) });
+      setPedido(""); _evToast("info", "Prévia pronta: dê o play e escolha Aplicar ou Descartar");
+    }catch(e){ _evToast("error", "A prévia falhou: " + ((e && e.message) || e)); }
+    setSimulando(false);
+  };
+  const aplicarPrevia = async function(){
+    const pv = previa; if(!pv || aplicandoPrev) return;
+    setAplicandoPrev(true);
+    try{
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"aplicar_previa", id:ed.id, projeto:pRef.current, pedido:pv.pedido, explicacao:pv.explicacao, modelo:pv.modelo || null, custo_brl:pv.custo } });
+      if(res.error) throw new Error(await _evErroFn(res));
+      setSalvoJson(JSON.stringify(pRef.current)); try{ localStorage.removeItem("pxev-rascunho-" + ed.id); }catch(_){}
+      setPrevia(null); _evToast("success", "Aplicado — versão " + ((res.data && res.data.versao) || "nova"));
+      if(onRecarregar) onRecarregar();
+    }catch(e){ _evToast("error", "Não aplicou: " + ((e && e.message) || e)); }
+    setAplicandoPrev(false);
+  };
+  const descartarPrevia = function(){ if(!previa) return; setP(previa.antes); setPrevia(null); _evToast("info", "Prévia descartada (nada mudou)"); };
+  /* v20: REVISOR — quadros do vídeo como está agora → a IA aponta o que dá para ver de errado */
+  const revisarIA = async function(){
+    if(revisando) return;
+    const m = motorRef.current, cv = cvRef.current; if(!m || !cv){ _evToast("error", "O vídeo ainda não carregou."); return; }
+    if(alterado){ const ok = await salvar(); if(!ok) return; }
+    setRevisando(true); setPassoRev("Olhando o vídeo…");
+    const t0 = tempo, tocava = m.tocando; if(tocava){ m.pause(); setTocando(false); }
+    try{
+      const q = await _evpTirarQuadros(m, cv, calc.total, setPassoRev);
+      setPassoRev("A IA está conferindo " + q.n + " quadros…");
+      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"revisar_quadros", id:ed.id, folhas:q.folhas, quadro_seg:q.quadro_seg, duracao:Math.round(calc.total * 100) / 100 }, modeloIA ? { modelo:modeloIA } : {}) });
+      if(res.error) throw new Error(await _evErroFn(res));
+      setRevIA((res.data && res.data.revisor) || null);
+    }catch(e){ _evToast("error", "A revisão falhou: " + ((e && e.message) || e)); }
+    try{ m.seek(t0); setTempo(t0); }catch(_){}
+    setRevisando(false); setPassoRev("");
+  };
+  const usarPedido = function(x){ setPedido(String(x || "").slice(0, 1500)); setSel(null); setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 40); };
 
   /* "Tentar no PC de novo" (depois que caiu para o navegador) */
   const pedirEstab = function(cid, tipo){
@@ -120200,7 +120369,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
             trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""}/>
         ) : (
-          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}/>
+          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
+            ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
+            mostrarAntes={mostrarAntes} setMostrarAntes={setMostrarAntes} simulando={simulando}
+            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido}/>
         )}
         </div></div>
       </div>
@@ -120231,10 +120403,163 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   );
 }
 
+/* ─── v20: MODELO DA IA (cada pessoa escolhe neste computador; o padrão da agência vale para o Guvi e o PC) ─── */
+function _EvpModeloIA({ ocupado }){
+  const [modelo, setModelo] = _evpUsarModelo();
+  const [info, setInfo] = useState(null);           // { padrao, gasto_mes_brl, limite_mes_brl }
+  const [testes, setTestes] = useState(null);
+  const [testando, setTestando] = useState(false);
+  const [definindo, setDefinindo] = useState(false);
+  const [aberto, setAberto] = useState(false);
+  const carregar = function(){
+    if(!window._sb || !window._sb.functions) return;
+    window._sb.functions.invoke("video-editar", { body:{ acao:"modelos" } }).then(function(r){ if(!r.error && r.data && r.data.ok) setInfo(r.data); }).catch(function(){});
+  };
+  useEffect(carregar, []);
+  const testar = async function(){
+    if(testando) return; setTestando(true); setTestes(null);
+    try{ const r = await window._sb.functions.invoke("video-editar", { body:{ acao:"testar_modelos" } }); if(r.error) throw new Error(await _evErroFn(r)); setTestes((r.data && r.data.testes) || []); }
+    catch(e){ _evToast("error", "Não testou: " + ((e && e.message) || e)); }
+    setTestando(false);
+  };
+  const definir = async function(){
+    if(!modelo || definindo) return;
+    if(!window.confirm("Usar o " + _evpModeloNome(modelo) + " como padrão da agência? Vale para o Guvi, o PC e quem não escolheu modelo.")) return;
+    setDefinindo(true);
+    try{ const r = await window._sb.functions.invoke("video-editar", { body:{ acao:"definir_modelo", modelo:modelo } }); if(r.error) throw new Error(await _evErroFn(r));
+      _evToast("success", "Padrão da agência: " + _evpModeloNome(modelo)); carregar(); }
+    catch(e){ _evToast("error", "Não mudou o padrão: " + ((e && e.message) || e)); }
+    setDefinindo(false);
+  };
+  const atual = _EVP_MODELOS.find(function(m){ return m.id === modelo; }) || _EVP_MODELOS[0];
+  const padraoNome = info ? _evpModeloNome(info.padrao) : "…";
+  const brl = function(x){ return "R$ " + Number(x || 0).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 }); };
+  return (
+    <div style={{marginTop:8,padding:"8px 10px",borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <label htmlFor="evp-modelo" style={{fontSize:11.5,fontWeight:800,color:_EVP_COR.sub,whiteSpace:"nowrap"}}>Modelo da IA</label>
+        <select id="evp-modelo" value={modelo} disabled={ocupado} onChange={function(e){ setModelo(e.target.value); }} aria-label="Modelo da IA"
+          style={{flex:1,minWidth:0,font:"inherit",fontSize:12.5,fontWeight:700,padding:"5px 8px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink}}>
+          {_EVP_MODELOS.map(function(m){ return <option key={m.id} value={m.id}>{m.id ? m.nome : "Padrão da agência (" + padraoNome + ")"}</option>; })}
+        </select>
+        <button onClick={function(){ setAberto(!aberto); }} aria-expanded={aberto} title="Custo, teste e padrão da agência" style={Object.assign(_evpBtn("icone"), {padding:5})}><_EvpIco n={aberto ? "fechar" : "alerta"} s={14}/></button>
+      </div>
+      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4,lineHeight:1.4}}>{atual.dica}</div>
+      {aberto && <div style={{marginTop:8,borderTop:"1px solid " + _EVP_COR.linha,paddingTop:8,fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.5}}>
+        {info && <div>Padrão da agência: <b style={{color:_EVP_COR.ink}}>{padraoNome}</b> · IA de vídeo no mês: <b style={{color:_EVP_COR.ink}}>{brl(info.gasto_mes_brl)}</b> de {brl(info.limite_mes_brl)}</div>}
+        <div style={{marginTop:2}}>Cada ajuste guarda o modelo e o custo real; aparece na conversa.</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+          <button onClick={testar} disabled={testando} style={Object.assign(_evpBtn("suave", !testando), {padding:"5px 10px",fontSize:11.5})}>{testando ? "Testando…" : "Testar os modelos"}</button>
+          {modelo && info && info.padrao !== modelo && <button onClick={definir} disabled={definindo} style={Object.assign(_evpBtn("suave", !definindo), {padding:"5px 10px",fontSize:11.5})}>Usar {_evpModeloNome(modelo)} como padrão da agência</button>}
+        </div>
+        {testes && <table style={{width:"100%",borderCollapse:"collapse",marginTop:8,fontSize:11.5}}>
+          <thead><tr>{["Modelo","Respondeu","Tempo","Custo"].map(function(h){ return <th key={h} style={{textAlign:"left",fontWeight:800,color:_EVP_COR.fraco,padding:"3px 4px",borderBottom:"1px solid " + _EVP_COR.linha}}>{h}</th>; })}</tr></thead>
+          <tbody>{testes.filter(Boolean).map(function(x){ return <tr key={x.id}>
+            <td style={{padding:"3px 4px",fontWeight:700,color:_EVP_COR.ink}}>{x.nome}</td>
+            <td style={{padding:"3px 4px",color:x.ok ? "#15803d" : "#b91c1c"}} title={x.erro || x.resposta || ""}>{x.ok ? "✓ sim" : "✗ " + String(x.erro || "erro").slice(0, 60)}</td>
+            <td style={{padding:"3px 4px",fontFamily:_EVP_MONO}}>{(Number(x.ms || 0) / 1000).toLocaleString("pt-BR", { maximumFractionDigits:1 })} s</td>
+            <td style={{padding:"3px 4px",fontFamily:_EVP_MONO}}>{x.ok ? "R$ " + Number(x.custo_brl || 0).toLocaleString("pt-BR", { maximumFractionDigits:4 }) : "—"}</td></tr>; })}</tbody>
+        </table>}
+      </div>}
+    </div>
+  );
+}
+
+/* ─── v20: CONVERSA — cada pedido à IA, o que ela respondeu, o que mudou de verdade, modelo e custo; voltar com um clique ─── */
+function _EvpConversa({ ed, onVoltarVersao }){
+  const vs = (ed && ed.versoes) || [];
+  const itens = useMemo(function(){
+    const out = [];
+    vs.forEach(function(v, i){
+      if(i === 0) return;
+      const ant = vs[i - 1], ped = String(v.pedido || "");
+      const manual = ped === "Edição manual na linha do tempo";
+      out.push({ n:v.n, ant:ant && ant.n, pedido:ped, manual:manual, por:v.por || "", em:v.em, modelo:v.modelo || "", custo:v.custo_brl, previa:!!v.previa,
+        explicacao:manual ? "" : String((v.receita && v.receita.explicacao) || ""),
+        mudou:_evpOQueMudou(ant && ant.receita && ant.receita.projeto, v.receita && v.receita.projeto) });
+    });
+    return out.slice(-8);
+  }, [vs.length, ed && ed.id]);
+  const fim = useRef(null);
+  useEffect(function(){ if(fim.current && fim.current.scrollIntoView) fim.current.scrollIntoView({ block:"nearest" }); }, [itens.length]);
+  if(!itens.length) return <div style={{fontSize:11.5,color:_EVP_COR.fraco,margin:"2px 0 8px"}}>Converse com a IA: peça, veja o que ela mudou e volte se não gostar.</div>;
+  const hora = function(x){ try{ return new Date(x).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }); }catch(_){ return ""; } };
+  const ultimo = itens[itens.length - 1].n;
+  return (
+    <div aria-label="Conversa com a IA" style={{maxHeight:"34vh",overflow:"auto",margin:"2px 0 8px",paddingRight:2,display:"flex",flexDirection:"column",gap:8}}>
+      {itens.map(function(it){
+        if(it.manual) return <div key={it.n} style={{fontSize:11,color:_EVP_COR.fraco,textAlign:"center"}}>v{it.n} · edição à mão por {it.por || "alguém"} · {hora(it.em)}</div>;
+        return <div key={it.n} style={{display:"flex",flexDirection:"column",gap:4}}>
+          <div style={{alignSelf:"flex-end",maxWidth:"88%",background:_EVP_COR.roxoSoft,color:_EVP_COR.ink,borderRadius:"12px 12px 4px 12px",padding:"7px 10px",fontSize:12.5,lineHeight:1.4}}>
+            {it.pedido}<div style={{fontSize:10.5,color:_EVP_COR.fraco,marginTop:2}}>{it.por} · {hora(it.em)}</div></div>
+          <div style={{alignSelf:"flex-start",maxWidth:"94%",background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha,borderRadius:"12px 12px 12px 4px",padding:"7px 10px",fontSize:12.5,lineHeight:1.45}}>
+            <div style={{display:"flex",gap:6,alignItems:"center",fontSize:10.5,fontWeight:800,color:_EVP_COR.roxo,marginBottom:2}}><_EvpIco n="ia" s={12}/>v{it.n}{it.modelo ? " · " + _evpModeloNome(it.modelo) : ""}
+              {it.custo != null && <span style={{color:_EVP_COR.fraco,fontWeight:700}}>· R$ {Number(it.custo).toLocaleString("pt-BR", { minimumFractionDigits:2 })}</span>}
+              {it.previa && <span style={{color:_EVP_COR.fraco,fontWeight:700}}>· aprovado na prévia</span>}</div>
+            {it.explicacao && <div style={{color:_EVP_COR.ink}}>{it.explicacao}</div>}
+            {it.mudou.length > 0 && <ul style={{margin:"4px 0 0",paddingLeft:16,color:_EVP_COR.sub,fontSize:11.5}}>{it.mudou.slice(0, 8).map(function(m, k){ return <li key={k}>{m}</li>; })}</ul>}
+            {!it.mudou.length && <div style={{color:_EVP_COR.fraco,fontSize:11.5,marginTop:2}}>Nada mudou no projeto.</div>}
+            {it.ant && <div style={{marginTop:6}}>
+              <button onClick={function(){ onVoltarVersao(it.ant); }} title={"Volta para a versão " + it.ant + " (esta continua guardada nas versões)"}
+                style={Object.assign(_evpBtn(), {padding:"3px 9px",fontSize:11})}>{it.n === ultimo ? "Desfazer (voltar à v" + it.ant + ")" : "Voltar para antes deste (v" + it.ant + ")"}</button></div>}
+          </div>
+        </div>; })}
+      <div ref={fim}/>
+    </div>
+  );
+}
+
+/* ─── v20: PRÉVIA — a IA mostra antes; nada vira versão até a pessoa aplicar ─── */
+function _EvpPreviaIA({ previa, aplicar, descartar, aplicando }){
+  if(!previa) return null;
+  return (
+    <div role="region" aria-label="Prévia da IA" style={{marginBottom:10,border:"2px solid " + _EVP_COR.roxo,borderRadius:12,padding:"9px 11px",background:_EVP_COR.roxoSoft}}>
+      <div style={{display:"flex",gap:6,alignItems:"center",fontSize:12,fontWeight:800,color:_EVP_COR.roxo}}><_EvpIco n="ia" s={14}/>Prévia da IA — dê o play para conferir
+        <span style={{marginLeft:"auto",fontSize:10.5,color:_EVP_COR.sub,fontWeight:700}}>{_evpModeloNome(previa.modelo)}{previa.custo != null ? " · R$ " + Number(previa.custo).toLocaleString("pt-BR", { minimumFractionDigits:2 }) : ""}</span></div>
+      <div style={{fontSize:12,color:_EVP_COR.ink,marginTop:4}}>“{previa.pedido}”</div>
+      {previa.explicacao && <div style={{fontSize:12,color:_EVP_COR.sub,marginTop:4,lineHeight:1.45}}>{previa.explicacao}</div>}
+      {previa.mudou && previa.mudou.length > 0 && <ul style={{margin:"4px 0 0",paddingLeft:16,color:_EVP_COR.sub,fontSize:11.5}}>{previa.mudou.slice(0, 8).map(function(m, k){ return <li key={k}>{m}</li>; })}</ul>}
+      {previa.aviso && <div style={{fontSize:11,color:"#a16207",marginTop:4}}>{previa.aviso}</div>}
+      <div style={{display:"flex",gap:6,marginTop:8}}>
+        <button onClick={aplicar} disabled={aplicando} style={Object.assign(_evpBtn("primario", !aplicando), {padding:"6px 12px",fontSize:12})}>{aplicando ? "Aplicando…" : "Aplicar (vira versão)"}</button>
+        <button onClick={descartar} disabled={aplicando} style={Object.assign(_evpBtn(), {padding:"6px 12px",fontSize:12})}>Descartar</button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── v20: REVISOR — a IA olha o vídeo como está agora e aponta o que dá para VER de errado, com o segundo e o pedido para corrigir ─── */
+function _EvpRevisor({ rev, revisando, passo, revisar, irPara, usarPedido, desatualizado }){
+  const lista = (rev && rev.problemas) || [];
+  return (
+    <div style={{marginTop:10}}>
+      <button onClick={revisar} disabled={revisando} title="Tira quadros do vídeo como está agora (o mesmo da gravação) e a IA confere texto cortado, legenda no rosto, tela preta, imagem escura…"
+        style={Object.assign(_evpBtn("suave", !revisando), {width:"100%",justifyContent:"center"})}><_EvpIco n="olho" s={15}/>{revisando ? (passo || "Revisando…") : "Revisar o vídeo com IA"}</button>
+      {rev && !revisando && <div style={{marginTop:8,border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:"8px 10px",background:_EVP_COR.campo}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",fontSize:11.5,fontWeight:800,color:lista.length ? "#b45309" : "#15803d"}}>
+          {lista.length ? lista.length + " ponto" + (lista.length > 1 ? "s" : "") + " para conferir" : "Nada errado à vista"}
+          {rev.nota != null && <span style={{color:_EVP_COR.sub}}>· nota {rev.nota}/10</span>}
+          <span style={{marginLeft:"auto",fontSize:10.5,color:_EVP_COR.fraco,fontWeight:700}}>{_evpModeloNome(rev.modelo)}{rev.custo_brl != null ? " · R$ " + Number(rev.custo_brl).toLocaleString("pt-BR", { minimumFractionDigits:2 }) : ""}</span></div>
+        {desatualizado && <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:2}}>Feita na versão {rev.versao}; o vídeo mudou depois. Revise de novo para conferir.</div>}
+        {rev.resumo && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:3}}>{rev.resumo}</div>}
+        {lista.map(function(x){ return <div key={x.n} style={{borderTop:"1px solid " + _EVP_COR.linha2,padding:"6px 0 2px",fontSize:12}}>
+          <div style={{display:"flex",gap:6,alignItems:"baseline"}}>
+            <button onClick={function(){ irPara(x.t); }} title="Levar a agulha" style={{font:"inherit",fontFamily:_EVP_MONO,fontSize:11,fontWeight:800,border:0,borderRadius:6,padding:"1px 6px",background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,cursor:"pointer"}}>{Number(x.t).toLocaleString("pt-BR", { maximumFractionDigits:1 })}s</button>
+            <span style={{color:_EVP_COR.ink}}>{x.o_que}</span></div>
+          {x.pedido && <button onClick={function(){ usarPedido(x.pedido); }} style={Object.assign(_evpBtn(), {padding:"3px 9px",fontSize:11,marginTop:4})}>Corrigir com a IA</button>}
+        </div>; })}
+        {lista.filter(function(x){ return x.pedido; }).length > 1 && <button onClick={function(){ usarPedido(lista.filter(function(x){ return x.pedido; }).map(function(x){ return x.pedido; }).join(" · ")); }}
+          style={Object.assign(_evpBtn("primario", true), {padding:"5px 10px",fontSize:11.5,marginTop:8,width:"100%",justifyContent:"center"})}>Corrigir todos com a IA</button>}
+      </div>}
+    </div>
+  );
+}
+
 /* ─── ASSISTENTE DE IA (painel da direita quando nada está selecionado) ─── */
 const _EVP_SUGESTOES = ["Tirar os silêncios e os \"éé\"", "Deixar mais dinâmico, cortes mais rápidos", "Fazer uma versão de 30 segundos", "Destacar o nome da cidade",
   "Legenda amarela estilo karaokê", "Filtro quente em tudo", "Música mais baixa na fala", "Começar pela frase mais forte"];
-function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFerr, clipAg, infoClipe, edId }){
+function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFerr, clipAg, infoClipe, edId, ed, onVoltarVersao, previa, aplicarPrevia, descartarPrevia, aplicandoPrev,
+                          mostrarAntes, setMostrarAntes, simulando, revIA, revisando, passoRev, revisarIA, irPara, usarPedido }){
   /* v8 (29/09): pedido por voz — grava no microfone, a OpenAI (whisper) escreve, o texto entra na caixa para conferir antes de mandar */
   const [voz, setVoz] = useState(null);              // null | "gravando" | "escrevendo"
   const [segVoz, setSegVoz] = useState(0);
@@ -120280,6 +120605,8 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
     <div style={Object.assign({}, _EVP_PAINEL, { padding:14, overflow:"auto", height:"100%", boxSizing:"border-box", minWidth:0 })}>
       <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14.5}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="ia"/></span>Assistente de IA</div>
       <div style={{fontSize:12,color:_EVP_COR.sub,margin:"3px 0 10px"}}>A IA mexe no vídeo com todas as ferramentas. O que você fez é salvo antes como versão.</div>
+      <_EvpPreviaIA previa={previa} aplicar={aplicarPrevia} descartar={descartarPrevia} aplicando={aplicandoPrev}/>
+      {ed && <_EvpConversa ed={ed} onVoltarVersao={onVoltarVersao || function(){}}/>}
       <textarea ref={iaRef} value={pedido} onChange={function(e){ setPedido(e.target.value); }} rows={3} maxLength={1500} disabled={ajustando} aria-label="Pedido para a IA"
         onKeyDown={function(e){ e.stopPropagation(); if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); pedirIA(); } }}
         placeholder="Peça um ajuste… (Ctrl + Enter envia)"
@@ -120292,8 +120619,15 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
         {_EVP_SUGESTOES.map(function(s){ return <button key={s} onClick={function(){ setPedido(s); if(iaRef.current) iaRef.current.focus(); }} disabled={ajustando}
           style={{font:"inherit",fontSize:11,fontWeight:700,padding:"5px 9px",borderRadius:99,border:"1px solid "+_EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,cursor:"pointer"}}>{s}</button>; })}
       </div>
-      <button onClick={pedirIA} disabled={ajustando || !pedido.trim()} style={Object.assign(_evpBtn("primario", !ajustando && !!pedido.trim()), {width:"100%",justifyContent:"center",padding:"10px 12px"})}>
-        <_EvpIco n="ia" s={16}/>{ajustando ? "A IA está ajustando…" : "Ajustar com IA"}</button>
+      <button onClick={pedirIA} disabled={ajustando || !pedido.trim() || !!previa} style={Object.assign(_evpBtn("primario", !ajustando && !!pedido.trim() && !previa), {width:"100%",justifyContent:"center",padding:"10px 12px"})}>
+        <_EvpIco n="ia" s={16}/>{simulando ? "A IA está preparando a prévia…" : ajustando ? "A IA está ajustando…" : previa ? "Aplique ou descarte a prévia" : mostrarAntes ? "Ver a prévia da IA" : "Ajustar com IA"}</button>
+      {setMostrarAntes && <label style={{display:"flex",gap:7,alignItems:"center",fontSize:12,color:_EVP_COR.sub,marginTop:7,cursor:"pointer"}}>
+        <input type="checkbox" checked={!!mostrarAntes} onChange={function(e){ setMostrarAntes(e.target.checked); }} disabled={ajustando}/>Mostrar antes de aplicar (eu aprovo cada mudança)</label>}
+      <_EvpModeloIA ocupado={ajustando}/>
+      {revisarIA && <_EvpRevisor rev={revIA} revisando={revisando} passo={passoRev} revisar={revisarIA} irPara={irPara} usarPedido={usarPedido}
+        desatualizado={!!(revIA && ed && revIA.versao && (ed.versoes || []).length !== revIA.versao)}/>}
+      <button onClick={function(){ window.dispatchEvent(new CustomEvent("evp-cola", { detail:{ busca:"" } })); }} title="Acha a palavra ou frase em tudo o que foi falado e leva a agulha"
+        style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center",marginTop:8})}><_EvpIco n="busca" s={15}/>Buscar palavra ou frase na fala</button>
       <div style={_EVP_TIT}>Ajustes rápidos {inf ? "· clipe " + inf.n + " (agulha)" : ""}</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6}}>
         {rap.map(function(r){ return <button key={r[0]} onClick={function(){ abrirFerr(r[0]); }} disabled={!clipAg} title={r[1] + " do clipe que está na agulha"}
@@ -121104,6 +121438,9 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
   const [modoCor, setModoCor] = useState("destaque");
   const [novoTxt, setNovoTxt] = useState(""); const [guardar, setGuardar] = useState(false);
   const [nomeNovo, setNomeNovo] = useState(""); const [verNomes, setVerNomes] = useState(false);
+  const [busca, setBusca] = useState(foco && typeof foco.busca === "string" ? foco.busca : ""), [achadoN, setAchadoN] = useState(0);   // v20
+  const buscaRef = useRef(null);
+  useEffect(function(){ if(foco && typeof foco.busca === "string" && buscaRef.current) setTimeout(function(){ try{ buscaRef.current.focus(); }catch(_){} }, 60); }, []);
   const lg = p.legenda || {};
   const lgN = useMemo(function(){ return Object.assign({}, lg, { _nomesKit:nomesKit || [] }); }, [lg, (nomesKit || []).join("|")]);
   const brutos = useMemo(function(){
@@ -121158,6 +121495,23 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
   const pintar = function(cor, nome){ if(!pals.length) return; pintarTrechos(pals.map(function(x){ return { clipe:x.clipe, a:x.i, b:x.b }; }), modoCor === "letra" ? { corTexto:cor } : { corDestaque:cor }, nome); limpar(); };
   const nomes = []; ((lg.nomes || []).concat(nomesKit || [])).forEach(function(n){ if(nomes.indexOf(n) < 0) nomes.push(n); });
   const chip = function(on){ return Object.assign(_evpChip(on), { padding:"3px 9px", fontSize:11 }); };
+  const achados = useMemo(function(){
+    const q = busca.trim(); if(!q) return [];
+    const out = [];
+    brutos.forEach(function(bb){
+      const ws = bb.itens.filter(function(it){ return it.tipo === "palavra"; });
+      _evpBuscarFala(ws.map(function(it){ return it.txt || it.p; }), q).forEach(function(r){
+        out.push({ chaves:ws.slice(r[0], r[1] + 1).map(function(it){ return it.chave; }), t:ws[r[0]].t, texto:ws.slice(r[0], r[1] + 1).map(function(it){ return it.p; }).join(" ") }); });
+    });
+    return out;
+  }, [busca, brutos]);
+  const marcados = useMemo(function(){ const m = {}; achados.forEach(function(a, i){ a.chaves.forEach(function(k){ m[k] = i === achadoN ? 2 : 1; }); }); return m; }, [achados, achadoN]);
+  const irAchado = function(d){
+    if(!achados.length) return;
+    const n = (achadoN + d + achados.length) % achados.length; setAchadoN(n);
+    const a = achados[n]; if(a.t != null) irPara(a.t);
+    setTimeout(function(){ try{ const el = document.querySelector('[data-cola="' + a.chaves[0] + '"]'); if(el) el.scrollIntoView({ block:"center" }); }catch(_){} }, 30);
+  };
   return (
     <div role="dialog" aria-label="Cola da fala" style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(11,16,32,.38)",backdropFilter:"blur(3px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
       onPointerDown={function(e){ e.stopPropagation(); }}>
@@ -121173,6 +121527,15 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
           {[["tudo","Tudo"],["ficou","Só o que ficou"],["saiu","Só o que saiu"]].map(function(o){ return <button key={o[0]} onClick={function(){ setVer(o[0]); }} style={chip(ver === o[0])}>{o[1]}</button>; })}
           <span style={{color:_EVP_COR.sub,marginLeft:6}}>Fala: {f1(tot.fala)} s · no vídeo {f1(tot.ficou)} s · saiu {f1(Math.max(0, tot.fala - tot.ficou))} s</span>
           <button onClick={function(){ setVerNomes(!verNomes); }} style={Object.assign(chip(verNomes), {marginLeft:"auto"})}>Nomes que a legenda nunca erra ({nomes.length})</button>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",padding:"7px 16px",borderBottom:"1px solid " + _EVP_COR.linha,fontSize:12}}>
+          <_EvpIco n="busca" s={15}/>
+          <input ref={buscaRef} value={busca} onChange={function(e){ setBusca(e.target.value); setAchadoN(0); }} placeholder="Buscar palavra ou frase (ex.: colheita, preço do adubo)" aria-label="Buscar na fala"
+            onKeyDown={function(e){ e.stopPropagation(); if(e.key === "Enter"){ e.preventDefault(); irAchado(e.shiftKey ? -1 : 1); } }}
+            style={{flex:1,minWidth:0,font:"inherit",fontSize:12.5,padding:"6px 9px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink}}/>
+          {busca.trim() && <span style={{color:_EVP_COR.sub,whiteSpace:"nowrap"}}>{achados.length ? (achadoN + 1) + " de " + achados.length + (achados[achadoN] && achados[achadoN].t == null ? " (fora do vídeo)" : "") : "nada achado"}</span>}
+          {achados.length > 0 && <button onClick={function(){ irAchado(-1); }} aria-label="Achado anterior" style={chip(false)}>‹</button>}
+          {achados.length > 0 && <button onClick={function(){ irAchado(1); }} aria-label="Próximo achado" style={chip(false)}>›</button>}
         </div>
         {verNomes && <div style={{padding:"8px 16px",borderBottom:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>{nomes.map(function(n){ return <span key={n} style={{fontSize:11.5,fontWeight:700,padding:"2px 8px",borderRadius:99,background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo}}>{n}</span>; })}
@@ -121207,11 +121570,12 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
                     background:it.motivoRun.sem ? "#f1f5f9" : it.motivoRun.motivo === "pedido" || it.motivoRun.motivo === "correcao" || it.motivoRun.motivo === "mao" ? "#eff6ff" : "#fff7ed",
                     color:it.motivoRun.sem ? "#64748b" : it.motivoRun.motivo === "pedido" || it.motivoRun.motivo === "correcao" || it.motivoRun.motivo === "mao" ? "#1d4ed8" : "#c2410c"}}>
                   ✂ {it.motivoRun.sem ? "sem motivo" : (_EVP_MOTIVOS[it.motivoRun.motivo] || "saiu")}</span> : null;
-                return [badge, chipMot, <span key={it.chave} onClick={function(e){ clicar(it, e); }} onDoubleClick={function(){ if(it.t != null) irPara(it.t); }}
+                const ach = marcados[it.chave] || 0;   // v20: busca
+                return [badge, chipMot, <span key={it.chave} data-cola={it.chave} onClick={function(e){ clicar(it, e); }} onDoubleClick={function(){ if(it.t != null) irPara(it.t); }}
                   title={(dentro ? "No vídeo" : "Saiu do vídeo") + (mudou ? " · legenda: \"" + it.txt + "\"" : "") + (it.cor ? " · cor do trecho" : "")}
                   style={{fontSize:15,padding:"2px 3px",margin:"0 1px",borderRadius:5,cursor:"pointer",
                     textDecoration:dentro ? "none" : "line-through",textDecorationColor:dentro ? undefined : "rgba(100,116,139,.8)",
-                    background:on ? (dentro ? _EVP_COR.erro : _EVP_COR.roxoSoft) : noFoco ? "rgba(250,204,21,.28)" : "transparent", fontWeight:noFoco ? 800 : undefined,
+                    background:on ? (dentro ? _EVP_COR.erro : _EVP_COR.roxoSoft) : ach === 2 ? "rgba(250,204,21,.75)" : ach ? "rgba(250,204,21,.32)" : noFoco ? "rgba(250,204,21,.28)" : "transparent", fontWeight:noFoco || ach === 2 ? 800 : undefined,
                     color:on && dentro ? _EV.verm : dentro ? _EVP_COR.ink : _EVP_COR.fraco,
                     borderBottom:it.cor ? "3px solid " + it.cor : "3px solid transparent"}}>{mudou && dentro ? it.txt || "∅" : it.p}</span>]; })}
             </div>; })}
@@ -123183,8 +123547,11 @@ function _EvpSugestoes({ ed, p, mudar, kit }){
     const o = (np.textos || []).find(function(q){ return q.id === sg.texto_id; }); if(!o) return;
     o.modelo = sg.modelo; o.y = null; o.dx = 0; if(sg.texto) o.texto = sg.texto; if(sg.linha2 != null) o.linha2 = sg.linha2;
   }); _evToast("success", st === "aceita" ? "Sugestão aplicada" : "Sugestão recusada — a IA aprende com isso"); };
+  const aceitaveis = lista.filter(function(sg){ return _evgAchar(kit, sg.modelo) && (sg.tipo === "tela_final" || (p.textos || []).some(function(q){ return q.id === sg.texto_id; })); });
+  const aceitarTodas = function(){ aceitaveis.forEach(function(sg){ decidir(sg, "aceita"); }); };   // v20
   return (<div style={{background:_EVP_COR.painel,border:"1px solid " + _EVP_COR.linha,borderRadius:14,padding:10,marginBottom:8,maxHeight:"45%",overflow:"auto",flexShrink:0}}>
-    <div style={{fontSize:12,fontWeight:800,color:_EVP_COR.roxo,marginBottom:6}}>Sugestões da IA</div>
+    <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:800,color:_EVP_COR.roxo,marginBottom:6}}>Sugestões da IA
+      {aceitaveis.length > 1 && <button onClick={aceitarTodas} style={Object.assign(_evpBtn("primario", true), {padding:"3px 9px",fontSize:11,marginLeft:"auto"})}>Aceitar todas ({aceitaveis.length})</button>}</div>
     {lista.map(function(sg){ const it = _evgAchar(kit, sg.modelo), existe = sg.tipo === "tela_final" || (p.textos || []).some(function(q){ return q.id === sg.texto_id; });
       return <div key={sg.id} style={{borderTop:"1px solid " + _EVP_COR.linha,padding:"8px 0 2px"}}>
         <div style={{fontSize:12,color:_EVP_COR.ink,lineHeight:1.4}}>{sg.tipo === "tela_final" ? "Tela final" : "\"" + String(sg.trecho || "").slice(0, 40) + "\""} → <b>{(it && it.nome) || sg.modelo_nome || "outro elemento"}</b></div>
