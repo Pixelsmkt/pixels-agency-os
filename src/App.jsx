@@ -2330,6 +2330,77 @@ function _pxRestauraSiglas(original, formatado){
     });
   }catch(_){ return formatado; }
 }
+/* ═══ NOMES PRÓPRIOS COM MAIÚSCULA NO TÍTULO (01/10/2026, Gustavo) ═══
+   "quando for nome próprio, tipo de data comemorativa ou nome de pessoa… a pessoa escreve,
+   quando salva já é corrigido". Ex.: "Dia do vendedor" → "Dia do Vendedor".
+   Só troca a CAIXA da primeira letra — nunca muda letra, acento ou ordem. Roda no fim do
+   smartFormatTitle (todo salvar de card) e no taskToRow (tudo que vai pro Supabase).
+   1) "dia/semana (mundial|nacional|internacional…) do/da/de/dos/das X" → cada palavra de X
+      maiúscula (preposição interna fica minúscula), até pontuação ou palavra de ligação.
+      "dia da entrega", "dia da gravação" etc. não contam (não são data comemorativa).
+   2) Lista fixa: Natal, Páscoa, Black Friday, Outubro Rosa, Corpus Christi, São João…
+   3) Nomes de pessoa: nomes da equipe/clientes do app + nomes comuns brasileiros
+      (fora os que também são palavra comum: clara, rosa, luz, lima, vitória…). */
+const _PX_NP_LIG=new Set(["de","do","da","dos","das","e","di","du","von","van"]);
+const _PX_NP_STOP=new Set(["com","para","pra","no","na","nos","nas","em","sobre","que","ao","aos","à","às","pelo","pela","pelos","pelas","por","sem","um","uma","até","post","arte","vídeo","video","carrossel","story","stories","reels","reel","feed","card","foto","fotos","campanha","promoção","promocao","sorteio","live"]);
+const _PX_NP_NAO_DATA=new Set(["semana","entrega","publicação","publicacao","gravação","gravacao","postagem","visita","reunião","reuniao","folga","pagamento","chuva","sol","evento","feira","aula","prova","inauguração","inauguracao","mês","mes","ano","hoje","aniversário","aniversario","obra","montagem","instalação","instalacao","coleta","viagem","semana."]);
+const _PX_NP_FRASES=["black friday","cyber monday","ano novo","outubro rosa","novembro azul","setembro amarelo","agosto lilás","janeiro branco","maio amarelo","abril verde","dezembro laranja","junho vermelho","julho amarelo","corpus christi","sexta-feira santa","quarta-feira de cinzas","proclamação da república","consciência negra","independência do brasil","nossa senhora aparecida","são joão","são pedro","são paulo","são miguel","santo antônio","santa catarina","rio grande do sul","natal","páscoa","pascoa","carnaval","réveillon","reveillon","finados","tiradentes","halloween","expointer","agrishow","itaipu"];
+const _PX_NP_NOMES_COMUNS=["ana","maria","joão","josé","antônio","antonio","francisco","carlos","paulo","pedro","lucas","luiz","luís","luis","marcos","gabriel","rafael","daniel","marcelo","bruno","eduardo","felipe","rodrigo","gustavo","vinicius","vinícius","andré","andre","guilherme","fernando","fábio","fabio","leonardo","diego","thiago","tiago","ricardo","alexandre","sérgio","sergio","jorge","roberto","mateus","matheus","juliana","mariana","fernanda","patrícia","patricia","aline","camila","amanda","bruna","jéssica","jessica","letícia","leticia","larissa","gabriela","adriana","daniela","beatriz","débora","debora","carla","sandra","márcia","marcia","simone","renata","vanessa","cristina","tatiana","raquel","priscila","natália","natalia","isabela","isabel","laura","júlia","julia","sofia","helena","alice","manuela","valentina","heloísa","heloisa","lorena","eduarda","hellen","ellen","erick","eric","jonas","davi","miguel","arthur","heitor","bernardo","enzo","lorenzo","samuel","benjamin","murilo","otávio","otavio","joaquim","caio","vitor","victor","henrique","rogério","rogerio","cláudio","claudio","márcio","marcio","célio","celio","mauro","nelson","valdir","valmir","ademir","adilson","edson","gilmar","jair","neusa","ivone","lúcia","lucia","sônia","sonia","regina","rita","teresa","tereza","fátima","fatima","elisa","elaine","silvia","sílvia","jaqueline","franciele","francieli","tainá","taina","schneider","vedovatto"];
+let _pxNpNomesCache=null, _pxNpNomesN=-1;
+function _pxNpNomes(){
+  const nT=(typeof TEAM!=="undefined"&&Array.isArray(TEAM))?TEAM.length:0;
+  if(_pxNpNomesCache&&_pxNpNomesN===nT) return _pxNpNomesCache;
+  const NAO=new Set(["clara","rosa","luz","lima","vitória","vitoria","glória","gloria","graça","graca","aurora","flor","mel","paz","cruz","branca","celeste","serena","estrela","bela","sol","mar","neve","íris","iris","pérola","perola","dora","alegria","prado","campos","costa","santos","rocha","pinto","leão","leao","pires","nunes","moura","bento","cândido","candido","ramos","machado","martins","souza"]);
+  const s=new Set();
+  _PX_NP_NOMES_COMUNS.forEach(function(n){ s.add(n); });
+  try{ (typeof TEAM!=="undefined"?TEAM:[]).forEach(function(u){ String((u&&u.name)||"").split(/\s+/).forEach(function(w){ w=w.toLocaleLowerCase("pt-BR"); if(w.length>=3&&!_PX_NP_LIG.has(w)) s.add(w); }); }); }catch(_){}
+  NAO.forEach(function(n){ s.delete(n); });
+  _pxNpNomesCache=s; _pxNpNomesN=nT; return s;
+}
+function _pxNpCap(w){ return w?w.charAt(0).toLocaleUpperCase("pt-BR")+w.slice(1):w; }
+function pxNomesProprios(input){
+  if(!input||typeof input!=="string") return input||"";
+  try{
+    let s=input;
+    const L="A-Za-zÀ-ÿ0-9";
+    // 1) Datas comemorativas "dia do X"
+    s=s.replace(new RegExp("(^|[^"+L+"])(dia|semana)(\\s+(?:mundial|nacional|internacional|estadual|municipal|oficial))?(\\s+)(de|d[oa]s?)(\\s+)([^,;:()\\[\\]|!?.–—]+)","gi"),
+      function(m,pre,dia,adj,sp1,prep,sp2,resto){
+        const ws=resto.split(/(\s+)/);
+        const prim=(ws[0]||"").toLocaleLowerCase("pt-BR");
+        if(!prim||_PX_NP_NAO_DATA.has(prim)||/^\d/.test(prim)||(prim.length===1&&prep.toLowerCase()==="")) return m;
+        if(prim==="d") return m; // "dia D"
+        let conteudo=0, parar=false;
+        const out=ws.map(function(w,i){
+          if(parar||/^\s+$/.test(w)||!w) return w;
+          const lw=w.toLocaleLowerCase("pt-BR");
+          if(w==="-"||_PX_NP_STOP.has(lw)||/^\d/.test(w)){ parar=true; return w; }
+          if(_PX_NP_LIG.has(lw)){
+            // "e" só continua se vier outra preposição depois ("do Agricultor e do Pecuarista")
+            if(lw==="e"){ const prox=(ws[i+2]||"").toLocaleLowerCase("pt-BR"); if(!/^d[oae]s?$/.test(prox)){ parar=true; return w; } }
+            return lw;
+          }
+          if(conteudo>=4){ parar=true; return w; }
+          conteudo++;
+          return /^[a-zà-ÿ]/.test(w)?_pxNpCap(w):w;
+        }).join("");
+        return pre+_pxNpCap(dia)+(adj?adj.replace(/\S+/,function(a){return _pxNpCap(a);}):"")+sp1+prep.toLocaleLowerCase("pt-BR")+sp2+out;
+      });
+    // 2) Frases fixas (feriados, campanhas de mês, santos, estados)
+    _PX_NP_FRASES.forEach(function(f){
+      const pat=f.split(" ").map(function(p){return p.replace(/[-]/g,"\\-");}).join("\\s+");
+      s=s.replace(new RegExp("(^|[^"+L+"])("+pat+")(?=$|[^"+L+"])","gi"),function(m,pre,fr){
+        return pre+fr.split(/(\s+|-)/).map(function(w){ const lw=w.toLocaleLowerCase("pt-BR"); return (_PX_NP_LIG.has(lw)||/^(\s+|-)$/.test(w))?(/^\s+$/.test(w)||w==="-"?w:lw):_pxNpCap(w); }).join("");
+      });
+    });
+    // 3) Nomes de pessoa (palavra inteira, minúscula → primeira letra maiúscula)
+    const nomes=_pxNpNomes();
+    s=s.replace(new RegExp("(^|[^"+L+"])([a-zà-ÿ]["+L+"]*)(?=$|[^"+L+"])","g"),function(m,pre,w){
+      return nomes.has(w)?pre+_pxNpCap(w):m;
+    });
+    return s;
+  }catch(_){ return input; }
+}
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
   let s=stripEmojis(input);
@@ -2488,7 +2559,7 @@ function smartFormatTitle(input){
       result=result.slice(0,wordStart)+firstAlphaMatch[0].toLocaleUpperCase("pt-BR")+result.slice(wordStart+1);
     }
   }
-  return _pxRestauraSiglas(input, result);
+  return pxNomesProprios(_pxRestauraSiglas(input, result));
 }
 
 /* ─── DESIGNER PAYMENTS ─── */
@@ -20018,6 +20089,52 @@ function _demTemProducao(t){
     return al.some(function(id){var m=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===id;});return !!(m&&m.pagamentoPorDemanda);});
   }catch(_){return false;}
 }
+/* ═══ DATA DE PUBLICAÇÃO NA CAPA — designers e edição de vídeo (01/10/2026, Gustavo) ═══
+   "Na capa dos cards de demanda dos Designers e edição de vídeo coloca a data de publicação,
+   pra eles saberem facilmente que tipo: é pra hoje".
+   pxPubRelativo(t) → {txt, cor, bg, borda, forte, title} ou null (sem data).
+   Hoje = "É pra hoje" · amanhã = "Pra amanhã" · até 6 dias = "Pra quinta · 02/10" ·
+   depois = "Publica 15/10" · passou e ainda não saiu = "Passou · era 28/09".
+   Card já agendado/publicado/aprovado: só a data, neutra (não é mais urgência de produção). */
+function pxPubRelativo(t){
+  try{
+    if(!t||!t.publishDate) return null;
+    var d=new Date(String(t.publishDate).slice(0,10)+"T12:00:00");
+    if(isNaN(d.getTime())) return null;
+    var h=new Date(); h.setHours(12,0,0,0);
+    var dias=Math.round((d-h)/86400000);
+    var dm=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    var semana=["domingo","segunda","terça","quarta","quinta","sexta","sábado"][d.getDay()];
+    var title="Publicação: "+d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
+    var feito=["agendado","publicado","aprovado","aprovacao_final"].indexOf(t.status)!==-1;
+    if(feito) return {txt:"Publica "+dm,cor:"#0369a1",bg:"#e0f2fe",borda:"#bae6fd",forte:false,title:title};
+    if(dias<0)  return {txt:"Passou · era "+dm,cor:"#fff",bg:"#991b1b",borda:"#991b1b",forte:true,title:title+" — a data já passou"};
+    if(dias===0)return {txt:"É pra hoje",cor:"#fff",bg:"#dc2626",borda:"#dc2626",forte:true,title:title};
+    if(dias===1)return {txt:"Pra amanhã",cor:"#fff",bg:"#ea580c",borda:"#ea580c",forte:true,title:title};
+    if(dias<=6) return {txt:"Pra "+semana+" · "+dm,cor:"#92400e",bg:"#fef3c7",borda:"#fcd34d",forte:false,title:title};
+    return {txt:"Publica "+dm,cor:"#0369a1",bg:"#e0f2fe",borda:"#bae6fd",forte:false,title:title};
+  }catch(_){ return null; }
+}
+/* Card de quem produz (designer/editor freela) ou de vídeo → mostra a data grande na capa. */
+function pxCapaMostraPub(t){
+  if(!t||!t.publishDate) return false;
+  try{
+    if(_demTemProducao(t)) return true;
+    if(typeof pxIsVideoTask==="function"&&pxIsVideoTask(t)) return true;
+    if(typeof pxEhEdicaoVideo==="function"&&pxEhEdicaoVideo(t)) return true;
+  }catch(_){}
+  return false;
+}
+function PxSeloPublicacao({task,grande}){
+  var p=pxPubRelativo(task);
+  if(!p) return null;
+  return <span title={p.title} style={{display:"inline-flex",alignItems:"center",gap:grande?6:4,background:p.bg,color:p.cor,border:"1px solid "+p.borda,
+    borderRadius:99,padding:grande?"4px 11px":"2px 9px",fontSize:grande?12:10.5,fontWeight:800,letterSpacing:-.1,whiteSpace:"nowrap",lineHeight:1.3,
+    boxShadow:p.forte?"0 2px 8px "+p.bg+"55":"none",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <svg width={grande?13:11} height={grande?13:11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    {p.txt}
+  </span>;
+}
 function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
   /* 30/09/2026 (Gustavo): "super feio… ângulos mais arredondados, mais minimalista".
      O modo big (Calendário de publicações) virou uma pílula clara e redonda: setas redondas,
@@ -28794,7 +28911,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   })()}
                   <style>{`@keyframes pixelsPulseAlert{0%,100%{transform:scale(1);box-shadow:0 2px 8px rgba(220,38,38,0.55),0 0 0 2px #fff}50%{transform:scale(1.08);box-shadow:0 3px 12px rgba(220,38,38,0.75),0 0 0 3px #fff}}`}</style>
                   {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
-                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t)))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t))||pxCapaMostraPub(t))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                    {/* (01/10/2026, Gustavo) Data de publicação na capa — designer/editor bate o olho e sabe se "é pra hoje" */}
+                    {pxCapaMostraPub(t)&&<PxSeloPublicacao task={t}/>}
                     {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
                     {t.contentType&&(function(){
                       const types={
@@ -28842,7 +28961,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const hasTopChips=!!(t.contentType||t.referenceMonth);
+                    const hasTopChips=!!(t.contentType||t.referenceMonth||pxCapaMostraPub(t));
                     // Respiro entre chips (Arte única / Mai/26) e capa: 8px.
                     // Sem chips em cima a capa cola no topo (visual sem espaço morto).
                     const mt=hasVisibleTagStripe?5:(hasTopChips?8:0);
@@ -28902,8 +29021,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         </span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                        {/* Data de publicação — badge moderno com calendário */}
-                        {t.publishDate&&(function(){
+                        {/* Data de publicação — badge moderno com calendário (card de designer/editor já mostra grande no topo) */}
+                        {t.publishDate&&!pxCapaMostraPub(t)&&(function(){
                           const d=new Date(t.publishDate+"T12:00:00");
                           const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
                           const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
@@ -54680,6 +54799,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                 <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,fontWeight:600,padding:"2px 8px",borderRadius:3}}>{mainCl.abbr}</span>
                 <span style={{fontSize:11,color:"#94a3b8"}}>{dlLabel}</span>
               </div>}
+              {main.publishDate&&<div style={{marginBottom:10}}><PxSeloPublicacao task={main} grande/></div>}
               <div style={{color:"#0f172a",fontWeight:600,fontSize:20,lineHeight:1.3,marginBottom:8}}>{main.title}</div>
               {desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6,marginBottom:14,flex:1}}>
                 {desc.length>200?desc.slice(0,200)+"…":desc}
@@ -54730,9 +54850,10 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                   <span style={{fontSize:9,color:"#94a3b8"}}>{dlLabel}</span>
                 </div>
                 <div style={{fontSize:12,color:"#0f172a",fontWeight:500,lineHeight:1.3,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
-                {cl&&<div style={{display:"flex",gap:4,alignItems:"center"}}>
-                  <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:8,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{cl.abbr}</span>
-                  {t.sector&&<span style={{fontSize:9,color:"#94a3b8"}}>{t.sector}</span>}
+                {(cl||t.publishDate)&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+                  {cl&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:8,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{cl.abbr}</span>}
+                  {cl&&t.sector&&<span style={{fontSize:9,color:"#94a3b8"}}>{t.sector}</span>}
+                  {t.publishDate&&<span style={{marginLeft:"auto"}}><PxSeloPublicacao task={t}/></span>}
                 </div>}
               </div>;
             })}
@@ -57889,7 +58010,7 @@ const rowToTask = (r) => ({
 
 const taskToRow = (t) => ({
   id:             String(t.id),
-  title:          t.title        || "Nova Demanda",
+  title:          (typeof pxNomesProprios==="function"?pxNomesProprios(t.title):t.title) || "Nova Demanda",
   status:         t.status       || "demanda",
   assignee:       t.assignee     || "",
   sector:         t.sector       || "design",
@@ -88653,17 +88774,20 @@ function _calcDescValor(it, d){
   const r = d.tipo==="pct" ? Math.round(bruto * Math.min(100,v) / 100) : Math.min(bruto, Math.round(v));
   return Math.max(0, r);
 }
-function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
+function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob, inicial, propostaId, onSalvar}){
+  /* (01/10/2026, Gustavo) Salvar proposta: "inicial" traz os campos de uma proposta salva
+     (cliente, validade, intro, descontos, nomes editados…) pra editar sem refazer tudo. */
+  const _ini = (inicial && typeof inicial==="object") ? inicial : {};
   const fmt = _calcFmtBRL;
   const PX = "#9F43F6", INK="#0f172a", MUTE="#64748b", BORD="#e5e0f2", SOFT2="#94a3b8";
   const FF = (typeof _PORTF_FF!=="undefined") ? _PORTF_FF : "Inter, system-ui, sans-serif";
-  const [cliente,setCliente] = useState("");
-  const [validade,setValidade] = useState(15);
-  const [obs,setObs] = useState("");
-  const [logoCli,setLogoCli] = useState("");   // data-url ou logo de cliente cadastrado
+  const [cliente,setCliente] = useState(_ini.cliente||"");
+  const [validade,setValidade] = useState(_ini.validade!=null?_ini.validade:15);
+  const [obs,setObs] = useState(_ini.obs||"");
+  const [logoCli,setLogoCli] = useState(_ini.logoCli||"");   // data-url ou logo de cliente cadastrado
   const _introPadrao = function(nome){ return (nome?nome+", p":"P")+"reparamos esta proposta a partir do que conversamos sobre o momento da sua empresa.\n\nA Pixels é uma assessoria de marketing e growth. Não fazemos só arte e postagem: cuidamos da estratégia, do planejamento, da produção, da análise dos resultados e do acompanhamento da marca, pra que o digital gere demanda e apoie o comercial.\n\nNesta primeira página está tudo o que o trabalho inclui, serviço por serviço, e os bônus que o pacote libera. Na página seguinte, o investimento item a item."; };
-  const [intro,setIntro] = useState(_introPadrao(""));
-  const [introMexido,setIntroMexido] = useState(false);
+  const [intro,setIntro] = useState(_ini.intro!=null?_ini.intro:_introPadrao(_ini.cliente||""));
+  const [introMexido,setIntroMexido] = useState(!!_ini.introMexido);
   useEffect(function(){ if(!introMexido) setIntro(_introPadrao(String(cliente).trim())); },[cliente]);
   const _clientesComLogo = (function(){
     try{
@@ -88672,18 +88796,53 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
       return Object.keys(CLIENT_LOGOS).filter(function(k){ return k!=="pixels"&&CLIENT_LOGOS[k]; }).map(function(k){ return {id:k,nome:nomes[k]||k}; });
     }catch(_){ return []; }
   })();
+  /* (01/10/2026, Gustavo) Proposta pra quem ainda não é cliente: leads do CRM (Comercial)
+     preenchem o nome; a logo enviada fica salva com a proposta e volta sozinha da próxima vez
+     que escolher o mesmo lead/empresa. */
+  const _leadsCrm = (function(){
+    try{
+      const st=(typeof _comLoad==="function")?_comLoad():null; if(!st) return [];
+      const vistos={}, out=[];
+      (st.prospects||[]).concat((st.oportunidades||[]).map(function(o){return {empresa:o.cliente,status:o.status};})).forEach(function(x){
+        const n=String((x&&(x.empresa||x.cliente))||"").trim(); if(!n) return;
+        const k=n.toLocaleLowerCase("pt-BR"); if(vistos[k]) return; vistos[k]=1;
+        out.push({nome:n,info:[x.segmento,x.cidade].filter(Boolean).join(" · ")});
+      });
+      return out.sort(function(a,b){return a.nome.localeCompare(b.nome,"pt-BR");});
+    }catch(_){ return []; }
+  })();
+  function _logoSalvaDe(nome){
+    const n=String(nome||"").trim(); if(!n||typeof window==="undefined"||!window._sb) return;
+    window._sb.from("propostas_comerciais").select("export,updated_at").ilike("cliente",n.replace(/[%_]/g,"")+"%").order("updated_at",{ascending:false}).limit(10)
+      .then(function(r){
+        const rows=(r&&!r.error&&r.data)||[];
+        const achou=rows.find(function(x){ return x&&x.export&&x.export.logoCli; });
+        if(achou) setLogoCli(function(atual){ return atual||achou.export.logoCli; });
+      }).catch(function(){});
+  }
   function _subirLogo(e){
     const f=e.target.files&&e.target.files[0]; if(!f) return;
     if(!/^image\//.test(f.type)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolha uma imagem (PNG, JPG ou SVG)."); return; }
     const r=new FileReader(); r.onload=function(){ setLogoCli(String(r.result||"")); }; r.readAsDataURL(f);
   }
-  const [desc,setDesc] = useState({});
-  const [geral,setGeral] = useState({valor:"", motivo:""});   // desconto geral em %, depois dos descontos por item   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
+  const [desc,setDesc] = useState(_ini.desc&&typeof _ini.desc==="object"?_ini.desc:{});
+  const [geral,setGeral] = useState(_ini.geral&&typeof _ini.geral==="object"?_ini.geral:{valor:"", motivo:""});   // desconto geral em %, depois dos descontos por item   // { [itemId]: {tipo:"pct"|"brl", valor, motivo} }
   function _d(id){ return desc[id] || {tipo:"pct", valor:"", motivo:""}; }
   function _set(id, patch){ setDesc(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, _d(id), patch); return n; }); }
 
   /* (01/10 16:12, Gustavo) nome e detalhe de cada item editáveis — ex.: "… · Lero Agro" no lugar de "Conta 1" */
-  const [txt,setTxt] = useState({});   // { [itemId]: {nome, detalhe} }
+  const [txt,setTxt] = useState(_ini.txt&&typeof _ini.txt==="object"?_ini.txt:{});   // { [itemId]: {nome, detalhe} }
+  const [salvando,setSalvando] = useState(false);
+  const [salvoEm,setSalvoEm] = useState(null);
+  function _salvar(comoNova){
+    if(typeof onSalvar!=="function"||salvando) return;
+    if(!String(cliente).trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Coloque o nome do cliente pra salvar a proposta."); return; }
+    setSalvando(true);
+    const dados={cliente:String(cliente).trim(),validade:validade,obs:obs,logoCli:logoCli,intro:intro,introMexido:introMexido,desc:desc,geral:geral,txt:txt};
+    Promise.resolve(onSalvar(dados,{comoNova:!!comoNova,totalMensal:T.recFinal,totalPontual:T.ponFinal}))
+      .then(function(ok){ setSalvando(false); if(ok) setSalvoEm(new Date()); })
+      .catch(function(){ setSalvando(false); });
+  }
   function _setTxt(id, patch){ setTxt(function(o){ const n=Object.assign({},o); n[id]=Object.assign({}, o[id]||{}, patch); return n; }); }
   const linhas = itens.map(function(it){
     const d = _d(it.id);
@@ -88972,13 +89131,17 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
             <input type="number" min="1" value={validade} onChange={function(e){setValidade(e.target.value);}} style={Object.assign({},_inp,{width:64})}/> dias</label>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",border:"1px solid #eef0f5",borderRadius:12,padding:"10px 12px"}}>
-          <span style={{color:MUTE,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Logo do cliente</span>
+          <span style={{color:MUTE,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Logo do cliente ou lead</span>
           {logoCli?<img src={logoCli} alt="" style={{height:30,maxWidth:120,objectFit:"contain",border:"1px solid #eef0f5",borderRadius:6,padding:3,background:"#fff"}}/>:<span style={{color:SOFT2,fontSize:12}}>sem logo</span>}
           {_clientesComLogo.length>0&&<select value="" onChange={function(e){ const k=e.target.value; if(k&&CLIENT_LOGOS[k]){ setLogoCli(CLIENT_LOGOS[k]); const n=_clientesComLogo.find(function(x){return x.id===k;}); if(n&&!String(cliente).trim()) setCliente(n.nome); } }} style={Object.assign({},_inp,{width:200})}>
             <option value="">Usar logo de um cliente…</option>
             {_clientesComLogo.map(function(x){ return <option key={x.id} value={x.id}>{x.nome}</option>; })}
           </select>}
-          <label style={{background:"#fff",border:"1px solid "+BORD,borderRadius:9,padding:"7px 11px",fontSize:12,fontWeight:800,color:"#475569",cursor:"pointer"}}>Enviar logo
+          {_leadsCrm.length>0&&<select value="" onChange={function(e){ const n=e.target.value; if(!n) return; setCliente(n); _logoSalvaDe(n); }} title="Proposta pra lead (ainda não é cliente): puxa o nome do Comercial e a logo de uma proposta anterior, se tiver" style={Object.assign({},_inp,{width:190})}>
+            <option value="">Lead do CRM…</option>
+            {_leadsCrm.map(function(x){ return <option key={x.nome} value={x.nome}>{x.nome}{x.info?" — "+x.info:""}</option>; })}
+          </select>}
+          <label title="Qualquer imagem — serve pra lead que ainda não é cliente. Fica salva junto com a proposta." style={{background:"#fff",border:"1px solid "+BORD,borderRadius:9,padding:"7px 11px",fontSize:12,fontWeight:800,color:"#475569",cursor:"pointer"}}>Enviar logo
             <input type="file" accept="image/*" onChange={_subirLogo} style={{display:"none"}}/></label>
           {logoCli&&<button type="button" onClick={function(){setLogoCli("");}} style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:12,fontWeight:700,cursor:"pointer"}}>remover</button>}
         </div>
@@ -89014,7 +89177,17 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
           {rec.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Mensal: {T.recDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.recCheio)}</s>} <b style={{color:PX,fontSize:16}}>{fmt(T.recFinal)}</b>/mês{T.recDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.recDesc)}</span>}</div>}
           {pon.length>0&&<div style={{color:INK,fontSize:13,fontWeight:700}}>Pontual: {T.ponDesc>0&&<s style={{color:"#94a3b8",fontWeight:600}}>{fmt(T.ponCheio)}</s>} <b style={{color:PX,fontSize:16}}>{ponAPartir?"a partir de ":""}{fmt(T.ponFinal)}</b>{T.ponDesc>0&&<span style={{color:"#16a34a",fontSize:12,fontWeight:800}}> · economia {fmt(T.ponDesc)}</span>}</div>}
         </div>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {typeof onSalvar==="function"&&<>
+            {salvoEm&&<span style={{color:"#16a34a",fontSize:11.5,fontWeight:700}}>Salva às {salvoEm.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span>}
+            {propostaId&&<button type="button" onClick={function(){_salvar(true);}} disabled={salvando} title="Cria uma cópia nova e mantém a original como está"
+              style={{background:"#fff",border:"1px solid "+BORD,borderRadius:10,padding:"10px 13px",color:"#475569",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Salvar como nova</button>}
+            <button type="button" onClick={function(){_salvar(false);}} disabled={salvando} title={propostaId?"Atualiza esta proposta (a versão anterior fica guardada no histórico)":"Guarda a proposta em Propostas salvas pra editar depois"}
+              style={{background:"#0f172a",border:"none",borderRadius:10,padding:"10px 15px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:salvando?"wait":"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:6}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              {salvando?"Salvando…":(propostaId?"Salvar alterações":"Salvar proposta")}
+            </button>
+          </>}
           <button type="button" onClick={copiar} style={{background:"#fff",border:"1px solid "+BORD,borderRadius:10,padding:"10px 15px",color:"#475569",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Copiar texto</button>
           <button type="button" onClick={exportarPDF} style={{background:PX,border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)"}}>Exportar PDF</button>
         </div>
@@ -89023,6 +89196,70 @@ function _CalcExportarProposta({itens, bonus, servicos, onClose, isMob}){
   </div>;
 }
 
+/* ═══ PROPOSTAS SALVAS da calculadora (01/10/2026, Gustavo) ═══
+   "deveria ter um botão Salvar pra não precisar criar a proposta toda vez, e dar pra editar…
+   um arquivo das propostas produzidas… poder alterar as já criadas por ali mesmo".
+   Tabela propostas_comerciais: calc (seleção da calculadora) + export (campos do Exportar:
+   cliente, intro, descontos, nomes editados…). Editar guarda a versão anterior em
+   "historico" (últimas 20) — nada é perdido. Não tem excluir. */
+function _calcFmtData(iso){ try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } }
+function _CalcPropostasSalvas({onAbrir, onDuplicar, onClose, isMob, atualId}){
+  const PX="#9F43F6", INK="#0f172a", MUTE="#64748b", BORD="#e5e0f2";
+  const FF=(typeof _PORTF_FF!=="undefined")?_PORTF_FF:"Inter, system-ui, sans-serif";
+  const fmt=_calcFmtBRL;
+  const [lista,setLista]=useState(null);
+  const [erro,setErro]=useState("");
+  const [busca,setBusca]=useState("");
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb){ setErro("Sem conexão com o banco."); setLista([]); return; }
+    window._sb.from("propostas_comerciais").select("id,cliente,total_mensal,total_pontual,created_by,created_at,updated_by,updated_at,calc,export")
+      .is("arquivada_at",null).order("updated_at",{ascending:false}).limit(300)
+      .then(function(r){
+        if(r&&r.error){ setErro(/relation|does not exist|schema cache/i.test(r.error.message||"")?"O arquivo de propostas ainda não foi ativado no banco.":"Não consegui carregar: "+r.error.message); setLista([]); return; }
+        setLista((r&&r.data)||[]);
+      }).catch(function(e){ setErro("Não consegui carregar."); setLista([]); });
+  },[]);
+  const q=String(busca).trim().toLocaleLowerCase("pt-BR");
+  const vis=(lista||[]).filter(function(p){ return !q||String(p.cliente||"").toLocaleLowerCase("pt-BR").indexOf(q)>=0; });
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:isMob?8:20,fontFamily:FF}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:760,maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(15,23,42,.3)",overflow:"hidden"}}>
+      <div style={{padding:"18px 22px",borderBottom:"1px solid #eef0f5",display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{flex:1}}>
+          <div style={{color:INK,fontWeight:800,fontSize:18,letterSpacing:-.3}}>Propostas salvas</div>
+          <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Abra pra editar os itens e os descontos, ou duplique pra usar de base numa proposta nova.</div>
+        </div>
+        <button type="button" onClick={onClose} title="Fechar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
+      </div>
+      <div style={{padding:"12px 22px 0"}}>
+        <input type="text" value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar pelo cliente…"
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid "+BORD,borderRadius:10,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none"}}/>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"12px 22px 18px",display:"flex",flexDirection:"column",gap:8}}>
+        {lista===null&&<div style={{color:MUTE,fontSize:13,padding:"20px 0",textAlign:"center"}}>Carregando…</div>}
+        {erro&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:10,padding:"10px 12px",fontSize:12.5,fontWeight:600}}>{erro}</div>}
+        {lista&&!erro&&vis.length===0&&<div style={{color:MUTE,fontSize:13,padding:"24px 0",textAlign:"center"}}>{q?"Nenhuma proposta com esse nome.":"Nenhuma proposta salva ainda. Monte na calculadora, clique em Exportar proposta e depois em Salvar proposta."}</div>}
+        {vis.map(function(p){
+          const atual=atualId&&p.id===atualId;
+          return <div key={p.id} style={{border:"1px solid "+(atual?PX:"#eef0f5"),background:atual?"#faf5ff":"#fff",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{color:INK,fontSize:14,fontWeight:800}}>{p.cliente||"Sem nome"}{atual&&<span style={{color:PX,fontSize:11,fontWeight:800,marginLeft:8}}>aberta agora</span>}</div>
+              <div style={{color:MUTE,fontSize:11.5,marginTop:3}}>
+                {Number(p.total_mensal)>0&&<b style={{color:INK}}>{fmt(Number(p.total_mensal))}/mês</b>}
+                {Number(p.total_mensal)>0&&Number(p.total_pontual)>0&&" · "}
+                {Number(p.total_pontual)>0&&<b style={{color:INK}}>{fmt(Number(p.total_pontual))} pontual</b>}
+                {" · "}alterada {_calcFmtData(p.updated_at)}{p.updated_by?" por "+p.updated_by:""}
+              </div>
+            </div>
+            <button type="button" onClick={function(){ onDuplicar(p); }} title="Abre uma cópia — a original fica como está"
+              style={{background:"#fff",border:"1px solid "+BORD,borderRadius:9,padding:"8px 12px",color:"#475569",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Duplicar</button>
+            <button type="button" onClick={function(){ onAbrir(p); }}
+              style={{background:PX,border:"none",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:FF}}>Abrir e editar</button>
+          </div>;
+        })}
+      </div>
+    </div>
+  </div>;
+}
 function _CalculadoraModular({isMob, persistClientId}){
   const PX = "#9F43F6";
   const PX_DK = "#7c3aed";
@@ -89060,6 +89297,8 @@ function _CalculadoraModular({isMob, persistClientId}){
   const [confete,setConfete]   = useState(false);
   const [copiado,setCopiado]   = useState(false);
   const [exportOpen,setExportOpen] = useState(false);   // 01/10/2026: Exportar proposta
+  const [arquivoOpen,setArquivoOpen] = useState(false);  // 01/10/2026: Propostas salvas
+  const [propAtual,setPropAtual] = useState(null);       // {id, cliente, export} — proposta salva aberta na calculadora
   const _prevUnlocked = useRef(0);
   // Peças do confete — geradas uma única vez pra não recalcular a cada render.
   const _confPecas = useMemo(function(){
@@ -89189,6 +89428,69 @@ function _CalculadoraModular({isMob, persistClientId}){
     };
     if(extra) for(const k in extra) base[k]=extra[k];
     return base;
+  }
+  /* ═══ Propostas salvas (01/10/2026, Gustavo) ═══ */
+  function _aplicarCalc(pl){
+    if(!pl||typeof pl!=="object") return;
+    try{
+      setSocialChannels(pl.socialChannels&&typeof pl.socialChannels==="object"?pl.socialChannels:{fbInsta:0,tiktok:0,linkedin:0});
+      setSocialPosts(typeof pl.socialPosts==="number"?pl.socialPosts:cfg.socialManagement.basePostsPerWeek);
+      setCreatives(pl.creatives&&typeof pl.creatives==="object"?pl.creatives:{staticCreatives:0,editedVideos:0,videoVariations:0});
+      setTrafficKey(typeof pl.trafficKey==="string"?pl.trafficKey:"none");
+      setGrowthOn(!!pl.growthOn);
+      setGraficosKey(typeof pl.graficosKey==="string"?pl.graficosKey:"none");
+      setCaptureDailies(typeof pl.captureDailies==="number"?pl.captureDailies:0);
+      setOneTimeIds(Array.isArray(pl.oneTimeIds)?pl.oneTimeIds:[]);
+    }catch(_){}
+  }
+  function _abrirProposta(row, duplicar){
+    _aplicarCalc(row.calc);
+    const ex=Object.assign({}, row.export||{});
+    if(duplicar) ex.cliente=(ex.cliente||row.cliente||"")+" (cópia)";
+    setPropAtual(duplicar?{id:null,cliente:ex.cliente,export:ex}:{id:row.id,cliente:row.cliente,export:ex});
+    setArquivoOpen(false);
+    setExportOpen(false);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(duplicar?"Cópia aberta — ajuste e salve como proposta nova.":"Proposta aberta: "+(row.cliente||"")+". Mexa nos itens e clique em Exportar pra salvar.",4200);
+  }
+  async function _salvarProposta(dados, info){
+    const sb=(typeof window!=="undefined")&&window._sb;
+    if(!sb){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexão com o banco."); return false; }
+    const quem=(typeof _pxQuem==="function"?_pxQuem():"")||"";
+    const agora=new Date().toISOString();
+    const base={cliente:dados.cliente, calc:_calcPayload(), export:dados,
+      total_mensal:Number(info&&info.totalMensal)||0, total_pontual:Number(info&&info.totalPontual)||0,
+      updated_by:quem, updated_at:agora};
+    try{
+      if(propAtual&&propAtual.id&&!(info&&info.comoNova)){
+        const cur=await sb.from("propostas_comerciais").select("calc,export,total_mensal,total_pontual,updated_at,updated_by,historico").eq("id",propAtual.id).maybeSingle();
+        if(cur&&cur.error) throw cur.error;
+        const h=Array.isArray(cur&&cur.data&&cur.data.historico)?cur.data.historico.slice(0):[];
+        if(cur&&cur.data) h.push({calc:cur.data.calc,export:cur.data.export,total_mensal:cur.data.total_mensal,total_pontual:cur.data.total_pontual,updated_at:cur.data.updated_at,updated_by:cur.data.updated_by});
+        const r=await sb.from("propostas_comerciais").update(Object.assign({},base,{historico:h.slice(-20)})).eq("id",propAtual.id);
+        if(r&&r.error) throw r.error;
+        setPropAtual({id:propAtual.id,cliente:dados.cliente,export:dados});
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Proposta atualizada.");
+      } else {
+        const r=await sb.from("propostas_comerciais").insert(Object.assign({},base,{created_by:quem,created_at:agora,historico:[]})).select("id").single();
+        if(r&&r.error) throw r.error;
+        setPropAtual({id:r.data.id,cliente:dados.cliente,export:dados});
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Proposta salva em Propostas salvas.");
+      }
+      return true;
+    }catch(e){
+      const m=String((e&&e.message)||e||"");
+      if(typeof pixelsToast!=="undefined") pixelsToast.error(/relation|does not exist|schema cache/i.test(m)?"O arquivo de propostas ainda não foi ativado no banco.":"Não consegui salvar: "+m,6000);
+      return false;
+    }
+  }
+  function _PropostasButton(){
+    return <button type="button" onClick={function(){ setArquivoOpen(true); }} title="Propostas já criadas — abrir, editar ou duplicar"
+      style={{background:"#fff",color:"#475569",border:"1px solid "+BORD,borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=PX;e.currentTarget.style.color=PX_DK;}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor=BORD;e.currentTarget.style.color="#475569";}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      Propostas salvas
+    </button>;
   }
   // Salvar o orcamento (botao da ultima etapa, no portal do cliente)
   const [orcSalvando,setOrcSalvando] = useState(false);
@@ -90898,6 +91200,7 @@ function _CalculadoraModular({isMob, persistClientId}){
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingTop:4}}>
         <_ResetButton/>
         {!isMob&&<_CopyButton/>}
+        {!persistClientId&&<_PropostasButton/>}
         {!isMob&&!persistClientId&&<_ExportButton/>}
         {!isMob&&<_FocusButton/>}
       </div>
@@ -90905,7 +91208,16 @@ function _CalculadoraModular({isMob, persistClientId}){
 
     {/* ═══ TRILHA DE ETAPAS ═══ */}
     <_StepRail/>
-    {exportOpen&&<_CalcExportarProposta itens={_itensProposta()} servicos={_servicosProposta()} bonus={calculateUnlockedBonuses(monthlyRecurring)} isMob={isMob} onClose={function(){setExportOpen(false);}}/>}
+    {/* Proposta salva aberta — faixa pra saber o que está editando */}
+    {!persistClientId&&propAtual&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#faf5ff",border:"1px solid "+PX_BD,borderRadius:12,padding:"9px 14px",marginTop:12}}>
+      <span style={{color:PX_DK,fontSize:12.5,fontWeight:800,flex:1,minWidth:180}}>{propAtual.id?"Editando a proposta salva: ":"Cópia (ainda não salva): "}<span style={{color:INK}}>{propAtual.cliente||"sem nome"}</span></span>
+      <button type="button" onClick={function(){ if(hasAnySelection) setExportOpen(true); }} style={{background:PX,color:"#fff",border:"none",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:800,cursor:"pointer"}}>Abrir proposta</button>
+      <button type="button" onClick={function(){ setPropAtual(null); }} title="Para de editar esta proposta (ela continua salva)" style={{background:"#fff",color:MUTE,border:"1px solid "+BORD,borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sair da edição</button>
+    </div>}
+    {arquivoOpen&&<_CalcPropostasSalvas isMob={isMob} atualId={propAtual&&propAtual.id} onClose={function(){setArquivoOpen(false);}}
+      onAbrir={function(r){ _abrirProposta(r,false); }} onDuplicar={function(r){ _abrirProposta(r,true); }}/>}
+    {exportOpen&&<_CalcExportarProposta key={(propAtual&&(propAtual.id||"copia"))||"nova"} itens={_itensProposta()} servicos={_servicosProposta()} bonus={calculateUnlockedBonuses(monthlyRecurring)} isMob={isMob} onClose={function(){setExportOpen(false);}}
+      inicial={propAtual&&propAtual.export} propostaId={propAtual&&propAtual.id} onSalvar={persistClientId?null:_salvarProposta}/>}
 
     {/* ═══ CORPO — etapa atual + resumo lateral ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 340px",gap:18,alignItems:"start",marginTop:16}}>
