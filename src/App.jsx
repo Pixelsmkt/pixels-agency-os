@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 49/49 | Nao editar diretamente
+// Modulos: 50/50 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -2065,6 +2065,7 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"gestao.projecao",      label:"Projeção financeira",  desc:"Padrão: chave Financeiro ou sócio",
       padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
     {key:"gestao.operacao",      label:"Operação",             desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.crescimento",   label:"Plano de Crescimento", desc:"Materiais do negócio + diagnóstico da IA (gargalos, melhorias, plano 30/60/90). Padrão: só sócios", padrao:_pxSocio}, // 01/10/2026
     {key:"gestao.eficiencia",    label:"Eficiência e Resultados", desc:"Placar da IA: copy e arte aprovadas de primeira, resultados e vídeos lidos pela IA de cada cliente. Padrão: fechado (só sócios)", padrao:false}, // 27/09/2026 (v2 à noite: placar)
     {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.administrativo",label:"Administrativo",       desc:"Padrão: só sócios", padrao:_pxSocio},
@@ -3958,6 +3959,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="edicao_arte")        return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.8"/></svg>; // 29/09/2026
   if(id==="edicao_video")       return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 9.5h18M7.5 5l2 4.5M12.5 5l2 4.5M17.5 5l2 4.5"/><path d="M10.5 12.5v4l3.5-2z"/></svg>; // 28/09/2026
+  if(id==="gestao_crescimento") return <svg {...p}><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>; // 01/10/2026
   if(id==="gestao_eficiencia")  return <svg {...p}><path d="M4 20h16"/><rect x="5" y="12" width="3.5" height="6" rx="1"/><rect x="10.25" y="7" width="3.5" height="11" rx="1"/><rect x="15.5" y="10" width="3.5" height="8" rx="1"/></svg>; // 27/09/2026 (v2: placar)
   if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
@@ -4031,6 +4033,7 @@ const NAV=[
     {id:"gestao_projecao",      icon:"▥", label:"Projeção financeira"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_eficiencia",    icon:"▥", label:"Eficiência e Resultados"}, // (27/09/2026) v2: placar da IA + vídeos lidos por cliente
+    {id:"gestao_crescimento",   icon:"◆", label:"Plano de Crescimento"}, // (01/10/2026) materiais do negócio + diagnóstico da IA — só sócios
     {id:"gestao_time",          icon:"◉", label:"Time"},
     {id:"gestao_administrativo", icon:"▤", label:"Administrativo"},
     {id:"gestao_whatsapp",      icon:"◎", label:"WhatsApp Pixels"}, // (24/09/2026) caixa de entrada do Guvi
@@ -59686,6 +59689,7 @@ export default function AgencyOS(){
       case "gestao_projecao":      return _menuBloco("gestao.projecao",p);       // era verFinanceiro||sócio
       case "gestao_operacional":   return _menuBloco("gestao.operacao",p);       // era só sócio
       case "gestao_eficiencia":    return _menuBloco("gestao.eficiencia",p);     // (27/09/2026) nasce fechada
+      case "gestao_crescimento":   return _menuBloco("gestao.crescimento",p);    // (01/10/2026) Plano de Crescimento — só sócios
       case "edicao_arte":          return _menuBloco("criacao.edicao_arte",p);   // (29/09/2026) Criação › Edição de arte — nasce fechada
       case "edicao_video":         return _menuBloco("criacao.edicao_video",p);  // (28/09/2026) Criação › Edição de vídeo — nasce fechada
       case "gestao_portfolio":     return _menuBloco("gestao.portfolio",p);      // era só sócio
@@ -59799,6 +59803,7 @@ export default function AgencyOS(){
       case "gestao_projecao":       return _menuBloco("gestao.projecao",effectivePerms)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
       case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_eficiencia":     return _menuBloco("gestao.eficiencia",effectivePerms)?<PageEficiencia isMob={isMob}/>:<NoPerm/>; // (27/09/2026)
+      case "gestao_crescimento":    return _menuBloco("gestao.crescimento",effectivePerms)?<PagePlanoCrescimento isMob={isMob}/>:<NoPerm/>; // (01/10/2026)
       case "edicao_arte":           return _menuBloco("criacao.edicao_arte",effectivePerms)?(typeof PageEdicaoArte==="function"?<PageEdicaoArte isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>):<NoPerm/>; // (29/09/2026)
       case "edicao_video":          return _menuBloco("criacao.edicao_video",effectivePerms)?<PageEdicaoVideo isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>; // (28/09/2026)
       case "gestao_portfolio":      return _menuBloco("gestao.portfolio",effectivePerms)?<PagePortfolio {...p}/>:<NoPerm/>;
@@ -131212,5 +131217,330 @@ function _EaAprende({ isMob }){
         </div>; })}
       </div>; })}
     {lista && !filtradas.length && <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub}}>Nenhuma regra ainda.</div>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   55_plano_crescimento.jsx — Gestão › Plano de Crescimento (01/10/2026, Gustavo)
+   "uma aba de planejamento do negócio, onde a gente também possa subir materiais.. e que você faça
+   uma leitura e analisando junto com nosso sistema, identificar gargalos e pontos de melhoria em
+   nosso negócio, a partir desses materiais". Nome escolhido por ele: Plano de Crescimento.
+   Só sócios (bloco gestao.crescimento, padrão _pxSocio).
+
+   1) Materiais do negócio — a MESMA caixa dos Materiais do cliente (_PbMateriais), guardada à parte
+      com client_id "pixels-negocio" (não mistura com o cérebro de copy de nenhum cliente).
+   2) Retrato da operação — números que o app já tem: demandas (abertas, atrasadas, paradas, no prazo,
+      retrabalho, carga por pessoa), receita recorrente (client_contracts) e concentração, vendas pontuais, funil comercial
+      e o placar de eficiência (efic_placar). Lê só colunas leves (nada de timeline/arquivos).
+   3) Diagnóstico — a IA cruza materiais + retrato e devolve gargalos (com a evidência), melhorias em
+      ordem de prioridade e plano 30/60/90. Cada análise fica salva na tabela plano_crescimento_analises
+      (RLS: só sócios) pra comparar mês a mês. NÃO usa app_data: ele é baixado pro navegador de toda a
+      equipe ao abrir o app (appDataHydrateFromSupabase) e o diagnóstico tem receita e carga de cada um.
+═══════════════════════════════════════════════════════════════════════════════ */
+const PC_CLIENT = "pixels-negocio";
+const PC_TABELA = "plano_crescimento_analises";
+const PC_FINAIS = ["aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"];
+const PC_PRODUCAO = ["recebida","execucao","ajustes","alteracao","alteracao_copy","avaliacao"];
+
+function _pcIso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function _pcBRL(n){ return "R$ "+Math.round(Number(n)||0).toLocaleString("pt-BR"); }
+function _pcPct(a,b){ return b>0?Math.round(a*100/b):0; }
+function _pcNome(id){ const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===id;}); return (u&&u.name)||id; }
+function _pcCli(id){ const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===id;}); return (c&&c.name)||id||"—"; }
+
+/* Junta os números da operação. Devolve {m: métricas pra tela, txt: resumo em texto pra IA}. */
+async function _pcColetar(){
+  const sb=window._sb; if(!sb) throw new Error("Sem conexão com o banco.");
+  const hoje=new Date(); const hojeIso=_pcIso(hoje);
+  const d90=new Date(hoje); d90.setDate(d90.getDate()-90); const d90Iso=_pcIso(d90);
+  const d30f=new Date(hoje); d30f.setDate(d30f.getDate()+30); const d30fIso=_pcIso(d30f);
+  const rs=await Promise.all([
+    sb.from("tasks").select("id,client,status,assignee,assignees,content_type,deadline,publish_date,completed_at,col_entered_at,ajustar,is_alteracao,ajuste_origin,aguardando_info,urgente,somente_story,nao_publica").is("deleted_at",null).limit(5000),
+    sb.from("client_contracts").select("*").limit(500),   // fonte única dos contratos (02b_contratos_core.jsx)
+    sb.from("vendas_pontuais").select("cliente_id,valor,mes_ref,data_venda,status").limit(3000),
+    sb.from("app_data").select("value").eq("key","pixels-comercial-v1").maybeSingle(),
+    sb.rpc("efic_placar",{p_dias:90}),
+  ]);
+  const tasks=(rs[0]&&rs[0].data)||[];
+  const contratos=(rs[1]&&rs[1].data)||[];
+  const vendas=(rs[2]&&rs[2].data)||[];
+  const com=(rs[3]&&rs[3].data&&rs[3].data.value)||{};
+  const efic=(rs[4]&&!rs[4].error)?rs[4].data:null;
+
+  /* ── Demandas ── */
+  const st={}; tasks.forEach(function(t){ st[t.status||"?"]=(st[t.status||"?"]||0)+1; });
+  const abertas=tasks.filter(function(t){ return PC_FINAIS.indexOf(t.status)<0&&t.status!=="rascunhos"; });
+  const emProd=tasks.filter(function(t){ return PC_PRODUCAO.indexOf(t.status)>=0; });
+  const atrasadas=emProd.filter(function(t){ const d=String(t.deadline||"").slice(0,10); return d&&d<hojeIso; });
+  const paradas=emProd.filter(function(t){ if(!t.col_entered_at) return false; return (hoje-new Date(t.col_entered_at))/86400000>5; });
+  const paradasPorCol={}; paradas.forEach(function(t){ paradasPorCol[t.status]=(paradasPorCol[t.status]||0)+1; });
+  const entregues=tasks.filter(function(t){ const c=String(t.completed_at||"").slice(0,10); return c&&c>=d90Iso; });
+  const noPrazo=entregues.filter(function(t){ const c=String(t.completed_at||"").slice(0,10), d=String(t.deadline||"").slice(0,10); return !d||c<=d; });
+  const retrab=entregues.filter(function(t){ return t.is_alteracao||t.ajuste_origin||t.ajustar; });
+  const carga={}; abertas.forEach(function(t){ const al=Array.isArray(t.assignees)&&t.assignees.length?t.assignees:(t.assignee?[t.assignee]:[]); al.forEach(function(a){ carga[a]=(carga[a]||0)+1; }); });
+  const cargaLista=Object.keys(carga).map(function(k){ return {nome:_pcNome(k),n:carga[k]}; }).sort(function(a,b){return b.n-a.n;});
+  const atrasoCli={}; atrasadas.forEach(function(t){ atrasoCli[t.client]=(atrasoCli[t.client]||0)+1; });
+  const aguardando={}; tasks.filter(function(t){return t.aguardando_info;}).forEach(function(t){ aguardando[t.client]=(aguardando[t.client]||0)+1; });
+  const prox30=tasks.filter(function(t){ const p=String(t.publish_date||"").slice(0,10); return p>=hojeIso&&p<=d30fIso&&!t.somente_story&&!t.nao_publica; });
+  const prox30Cli={}; prox30.forEach(function(t){ prox30Cli[t.client]=(prox30Cli[t.client]||0)+1; });
+  const urgentes=abertas.filter(function(t){return t.urgente;}).length;
+
+  /* ── Receita recorrente: contratos ativos e recorrentes (client_contracts, mesmo cálculo do Financeiro: pxCtValor) ── */
+  const mrrCli={}; let pausados=0;
+  contratos.forEach(function(c){
+    const stc=String(c.status||"ativo"); if(stc==="pausado") pausados++;
+    if(stc!=="ativo"||String(c.tipo||"mensal")==="pontual") return;
+    const v=(typeof pxCtValor==="function")?pxCtValor(c):(Number(c.valor_mensal)||0);
+    mrrCli[c.client_id]=(mrrCli[c.client_id]||0)+v;
+  });
+  const mrrLista=Object.keys(mrrCli).filter(function(k){return mrrCli[k]>0;}).map(function(k){ return {cli:_pcCli(k),v:mrrCli[k]}; }).sort(function(a,b){return b.v-a.v;});
+  const mrr=mrrLista.reduce(function(s,x){return s+x.v;},0);
+  const top=mrrLista[0]||null; const top3=mrrLista.slice(0,3).reduce(function(s,x){return s+x.v;},0);
+  const fimContrato=(typeof PX_CASCATA_FIM_CONTRATO!=="undefined")?PX_CASCATA_FIM_CONTRATO:{};
+
+  /* ── Vendas pontuais (últimos 6 meses) ── */
+  const d180=new Date(hoje); d180.setMonth(d180.getMonth()-6); const d180Iso=_pcIso(d180);
+  const pont=vendas.filter(function(v){ const d=String(v.data_venda||v.mes_ref||"").slice(0,10); return d&&d>=d180Iso.slice(0,d.length); });
+  const pontTotal=pont.reduce(function(s,v){return s+(Number(v.valor)||0);},0);
+
+  /* ── Comercial ── */
+  const prospects=Array.isArray(com.prospects)?com.prospects:[];
+  const opps=Array.isArray(com.oportunidades)?com.oportunidades:[];
+  const porStatus=function(arr){ const o={}; arr.forEach(function(x){ const k=String(x.status||"?"); o[k]=(o[k]||0)+1; }); return o; };
+  const followAtras=prospects.filter(function(p){ const d=String(p.proximaAcaoData||"").slice(0,10); return d&&d<hojeIso&&!/ganho|perdid|fechad/i.test(String(p.status||"")); }).length;
+  const potencial=prospects.concat(opps).filter(function(x){ return !/ganho|perdid|fechad|vendid/i.test(String(x.status||"")); }).reduce(function(s,x){return s+(Number(x.valorPotencial)||0);},0);
+
+  const m={
+    abertas:abertas.length, atrasadas:atrasadas.length, paradas:paradas.length, urgentes:urgentes,
+    entregues:entregues.length, noPrazoPct:_pcPct(noPrazo.length,entregues.length), retrabPct:_pcPct(retrab.length,entregues.length),
+    carga:cargaLista, mrr:mrr, topCli:top?top.cli:"", topPct:_pcPct(top?top.v:0,mrr), top3Pct:_pcPct(top3,mrr), clientesAtivos:mrrLista.length,
+    pontTotal:pontTotal, prospects:prospects.length, opps:opps.length, followAtras:followAtras, potencial:potencial,
+  };
+  const L=[];
+  L.push("DATA DE HOJE: "+hojeIso);
+  L.push("\n## DEMANDAS (cards do app)");
+  L.push("Por status: "+Object.keys(st).map(function(k){return k+"="+st[k];}).join(", "));
+  L.push("Abertas (fora de rascunho/finalizadas): "+abertas.length+" · em produção: "+emProd.length+" · urgentes: "+urgentes);
+  L.push("Atrasadas (prazo de entrega vencido, ainda em produção): "+atrasadas.length+(atrasadas.length?(" — por cliente: "+Object.keys(atrasoCli).map(function(k){return _pcCli(k)+" "+atrasoCli[k];}).join(", ")):""));
+  L.push("Paradas há mais de 5 dias na mesma coluna: "+paradas.length+(paradas.length?(" — "+Object.keys(paradasPorCol).map(function(k){return k+" "+paradasPorCol[k];}).join(", ")):""));
+  L.push("Entregues nos últimos 90 dias: "+entregues.length+" · no prazo: "+m.noPrazoPct+"% · com retrabalho/ajuste: "+m.retrabPct+"%");
+  L.push("Carga aberta por pessoa: "+(cargaLista.map(function(x){return x.nome+" "+x.n;}).join(", ")||"—"));
+  L.push("Esperando material do cliente: "+(Object.keys(aguardando).map(function(k){return _pcCli(k)+" "+aguardando[k];}).join(", ")||"nenhum"));
+  L.push("Publicações previstas nos próximos 30 dias: "+prox30.length+" — "+Object.keys(prox30Cli).map(function(k){return _pcCli(k)+" "+prox30Cli[k];}).join(", "));
+  L.push("Papéis: sócios Gustavo (gestão, financeiro, mídia paga, IA) e Vinicius (estratégia, comercial, copy, stories); Hellen social media/coordenação; designers André e Maria e editor Guilherme pagos por demanda.");
+  L.push("\n## FINANCEIRO");
+  L.push("Receita recorrente mensal (contratos ativos): "+_pcBRL(mrr)+" em "+mrrLista.length+" clientes"+(pausados?(" · "+pausados+" contrato(s) pausado(s)"):""));
+  L.push("Por cliente: "+(mrrLista.map(function(x){return x.cli+" "+_pcBRL(x.v);}).join(", ")||"sem contratos cadastrados"));
+  if(top) L.push("Concentração: maior cliente ("+top.cli+") = "+m.topPct+"% da receita; 3 maiores = "+m.top3Pct+"%");
+  if(Object.keys(fimContrato).length) L.push("Fins de contrato conhecidos: "+Object.keys(fimContrato).map(function(k){return _pcCli(k)+" "+fimContrato[k];}).join(", "));
+  L.push("Vendas pontuais (projetos) nos últimos 6 meses: "+_pcBRL(pontTotal)+" em "+pont.length+" vendas");
+  L.push("\n## COMERCIAL");
+  L.push("Prospects: "+prospects.length+" ("+Object.entries(porStatus(prospects)).map(function(e){return e[0]+" "+e[1];}).join(", ")+") · oportunidades: "+opps.length+" ("+Object.entries(porStatus(opps)).map(function(e){return e[0]+" "+e[1];}).join(", ")+")");
+  L.push("Follow-ups atrasados: "+followAtras+" · valor potencial em aberto no funil: "+_pcBRL(potencial));
+  if(efic){ let j=""; try{ j=JSON.stringify(efic); }catch(_){} L.push("\n## EFICIÊNCIA (placar dos últimos 90 dias, JSON do app)"); L.push(j.slice(0,5000)); }
+  return {m:m, txt:L.join("\n")};
+}
+
+async function _pcMateriaisTexto(){
+  const sb=window._sb; if(!sb) return {txt:"",n:0};
+  const r=await sb.from("claude_materiais").select("titulo,arquivo_nome,ficha,ficha_status,ativo").eq("client_id",PC_CLIENT).limit(200);
+  const rows=((r&&r.data)||[]).filter(function(x){ return x.ativo!==false&&x.ficha&&String(x.ficha).trim(); });
+  let total=0; const partes=[];
+  rows.forEach(function(x){
+    if(total>60000) return;
+    const f=String(x.ficha).slice(0,12000); total+=f.length;
+    partes.push("### "+(x.titulo||x.arquivo_nome||"material")+"\n"+f);
+  });
+  return {txt:partes.join("\n\n"), n:rows.length};
+}
+
+function _pcParseJSON(t){
+  const s=String(t||""); const i=s.indexOf("{"), j=s.lastIndexOf("}");
+  if(i<0||j<=i) throw new Error("A IA não devolveu o diagnóstico no formato esperado.");
+  return JSON.parse(s.slice(i,j+1));
+}
+
+async function _pcAnalisar(foco){
+  const ret=await _pcColetar();
+  const mat=await _pcMateriaisTexto();
+  const system="Você é um consultor sênior de gestão e growth analisando a PIXELS, uma assessoria de marketing e growth (não é agência de publicidade) de Chapecó/SC, focada em agronegócio B2B. "+
+    "Seu trabalho: cruzar os MATERIAIS DO NEGÓCIO (planejamento, metas, processos, reuniões) com o RETRATO DA OPERAÇÃO (números reais do sistema interno) e apontar gargalos e pontos de melhoria concretos. "+
+    "Regras: use só o que está nos dados — nada inventado; cada gargalo precisa de evidência (número do retrato ou trecho do material) e da fonte. Se faltar dado pra concluir algo, diga o que falta. "+
+    "Escreva em português do Brasil, direto, sem jargão de agência, linguagem de crescimento/vendas/resultado. "+
+    "Responda APENAS com um JSON válido, sem texto antes ou depois, no formato: "+
+    "{\"resumo\":\"3 a 5 frases\",\"gargalos\":[{\"titulo\":\"\",\"evidencia\":\"\",\"fonte\":\"retrato|material: nome\",\"impacto\":\"alto|medio|baixo\"}],"+
+    "\"melhorias\":[{\"titulo\":\"\",\"como\":\"passos práticos\",\"prioridade\":1,\"esforco\":\"baixo|medio|alto\",\"resultado_esperado\":\"\"}],"+
+    "\"plano\":{\"d30\":[\"\"],\"d60\":[\"\"],\"d90\":[\"\"]},\"faltam_dados\":[\"\"]}. "+
+    "Entre 3 e 7 gargalos e entre 4 e 8 melhorias, melhorias ordenadas por prioridade (1 = primeiro).";
+  const user="# RETRATO DA OPERAÇÃO (sistema interno)\n"+ret.txt+
+    "\n\n# MATERIAIS DO NEGÓCIO ("+mat.n+" material(is) lido(s))\n"+(mat.txt||"(nenhum material subido ainda — analise só o retrato e diga quais materiais ajudariam)")+
+    (foco&&String(foco).trim()?("\n\n# FOCO PEDIDO PELOS SÓCIOS\n"+String(foco).trim()):"");
+  const data=await askClaude({model:(typeof PX_IA_MODELO!=="undefined"?PX_IA_MODELO:undefined),max_tokens:8000,system:system,messages:[{role:"user",content:user}]});
+  const texto=(data&&data.content||[]).map(function(b){return b.text||"";}).join("");
+  const res=_pcParseJSON(texto);
+  return {resultado:res, metricas:ret.m, nMateriais:mat.n};
+}
+
+function PagePlanoCrescimento({isMob}){
+  const FF="'Inter',system-ui,sans-serif";
+  const [ret,setRet]=useState(null);
+  const [retErro,setRetErro]=useState("");
+  const [hist,setHist]=useState(null);
+  const [selId,setSelId]=useState("");
+  const [foco,setFoco]=useState("");
+  const [rodando,setRodando]=useState(false);
+  const [erro,setErro]=useState("");
+
+  useEffect(function(){
+    let vivo=true;
+    _pcColetar().then(function(r){ if(vivo) setRet(r.m); }).catch(function(e){ if(vivo) setRetErro((e&&e.message)||"Não consegui montar o retrato."); });
+    const sb=window._sb;
+    if(sb) sb.from(PC_TABELA).select("id,criado_em,quem,foco,resultado,metricas,n_materiais").order("criado_em",{ascending:false}).limit(24).then(function(r){
+      if(!vivo) return;
+      const a=((r&&!r.error&&r.data)||[]).map(function(x){ return {id:x.id,at:x.criado_em,quem:x.quem,foco:x.foco,resultado:x.resultado,metricas:x.metricas,nMateriais:x.n_materiais}; });
+      setHist(a); if(a.length) setSelId(a[0].id);
+    },function(){ if(vivo) setHist([]); });
+    return function(){ vivo=false; };
+  },[]);
+
+  async function analisar(){
+    if(rodando) return; setRodando(true); setErro("");
+    try{
+      const r=await _pcAnalisar(foco);
+      const item={id:"pc-"+Date.now(),at:new Date().toISOString(),quem:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"",foco:String(foco||"").trim(),resultado:r.resultado,metricas:r.metricas,nMateriais:r.nMateriais};
+      const novo=[item].concat(hist||[]).slice(0,24);
+      setHist(novo); setSelId(item.id); setRet(r.metricas);
+      const sb=window._sb;
+      if(sb){ const u=await sb.from(PC_TABELA).insert({id:item.id,criado_em:item.at,quem:item.quem,foco:item.foco||null,resultado:item.resultado,metricas:item.metricas,n_materiais:item.nMateriais||0});
+        if(u&&u.error&&typeof pixelsToast!=="undefined") pixelsToast.warning("A análise saiu, mas não consegui guardar no histórico: "+u.error.message,6000); }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Diagnóstico pronto.");
+    }catch(e){ setErro((e&&e.message)||String(e)); }
+    setRodando(false);
+  }
+
+  const sel=(hist||[]).find(function(x){return x.id===selId;})||null;
+  const R=sel&&sel.resultado||null;
+  const card={background:"#fff",border:"1px solid #e9edf3",borderRadius:16,padding:isMob?"16px":"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,.04)"};
+  const h2={color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,margin:0};
+  const sub={color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.5};
+  const tile=function(rot,val,cor,dica){ return <div title={dica||""} style={{flex:"1 1 150px",minWidth:140,background:"#f8fafc",border:"1px solid #eef2f7",borderRadius:12,padding:"11px 13px"}}>
+    <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{rot}</div>
+    <div style={{color:cor||"#0f172a",fontSize:20,fontWeight:800,marginTop:3,letterSpacing:-.4}}>{val}</div>
+  </div>; };
+  const corImp=function(i){ return i==="alto"?"#dc2626":i==="medio"?"#d97706":"#64748b"; };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1180,margin:"0 auto",fontFamily:FF}}>
+    <div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?21:26,letterSpacing:-.6}}>Plano de Crescimento</div>
+      <div style={{color:"#64748b",fontSize:13,marginTop:4,maxWidth:760,lineHeight:1.55}}>Suba os materiais do negócio (planejamento, metas, processos, reuniões). A IA cruza com os números reais do app e aponta onde a Pixels trava e o que fazer primeiro.</div>
+    </div>
+
+    {/* 1) Materiais do negócio */}
+    <div style={{display:"flex",flexDirection:"column",gap:0}}>
+      {typeof _PbMateriais==="function"
+        ? <_PbMateriais clientId={PC_CLIENT} clienteNome="Pixels (negócio)" isBioter={false} unitTab={null} isAdmin={true}/>
+        : <div style={card}>Caixa de materiais indisponível.</div>}
+    </div>
+
+    {/* 2) Retrato da operação */}
+    <div style={card}>
+      <div style={h2}>Retrato da operação</div>
+      <div style={sub}>Números de agora, direto do app — é isso que entra na análise junto com os materiais.</div>
+      {retErro&&<div style={{color:"#b45309",fontSize:12.5,marginTop:10}}>{retErro}</div>}
+      {!ret&&!retErro&&<div style={{color:"#94a3b8",fontSize:12.5,marginTop:12}}>Montando o retrato…</div>}
+      {ret&&<>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+          {tile("Demandas abertas",ret.abertas)}
+          {tile("Atrasadas",ret.atrasadas,ret.atrasadas?"#dc2626":null,"Prazo de entrega vencido e ainda em produção")}
+          {tile("Paradas +5 dias",ret.paradas,ret.paradas?"#d97706":null,"Mais de 5 dias na mesma coluna")}
+          {tile("No prazo (90d)",ret.noPrazoPct+"%",null,ret.entregues+" entregues nos últimos 90 dias")}
+          {tile("Retrabalho (90d)",ret.retrabPct+"%",ret.retrabPct>=30?"#dc2626":null,"Entregas que tiveram ajuste ou alteração")}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+          {tile("Receita recorrente",_pcBRL(ret.mrr),null,ret.clientesAtivos+" clientes com contrato")}
+          {tile("Maior cliente",ret.topPct+"%",ret.topPct>=35?"#d97706":null,(ret.topCli||"")+" — fatia da receita recorrente")}
+          {tile("Projetos (6 meses)",_pcBRL(ret.pontTotal))}
+          {tile("Funil comercial",ret.prospects+ret.opps,null,ret.prospects+" prospects · "+ret.opps+" oportunidades · "+_pcBRL(ret.potencial)+" em aberto")}
+          {tile("Follow-ups atrasados",ret.followAtras,ret.followAtras?"#dc2626":null)}
+        </div>
+        {ret.carga&&ret.carga.length>0&&<div style={{color:"#64748b",fontSize:12,marginTop:10}}><b style={{color:"#334155"}}>Carga aberta:</b> {ret.carga.map(function(x){return x.nome+" "+x.n;}).join(" · ")}</div>}
+      </>}
+    </div>
+
+    {/* 3) Diagnóstico */}
+    <div style={card}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:240}}>
+          <div style={h2}>Diagnóstico</div>
+          <div style={sub}>Gargalos com a evidência, melhorias em ordem de prioridade e plano de 30/60/90 dias.</div>
+        </div>
+        {(hist||[]).length>0&&<select value={selId} onChange={function(e){setSelId(e.target.value);}}
+          style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 10px",fontSize:12.5,fontFamily:FF,color:"#334155",background:"#fff"}}>
+          {(hist||[]).map(function(x){ return <option key={x.id} value={x.id}>{new Date(x.at).toLocaleDateString("pt-BR")+" "+new Date(x.at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+(x.quem?(" · "+x.quem):"")}</option>; })}
+        </select>}
+      </div>
+      <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+        <input value={foco} onChange={function(e){setFoco(e.target.value);}} placeholder="Opcional: no que olhar com mais atenção (ex.: margem dos projetos, atrasos da edição de vídeo, comercial)"
+          style={{flex:1,minWidth:240,border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:FF,outline:"none"}}/>
+        <button type="button" onClick={analisar} disabled={rodando}
+          style={{background:rodando?"#e2e8f0":"linear-gradient(135deg,#7c3aed,#9F43F6)",color:rodando?"#64748b":"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:13,fontWeight:800,cursor:rodando?"wait":"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:7,boxShadow:rodando?"none":"0 6px 16px rgba(124,58,237,.28)"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
+          {rodando?"Analisando… (leva 1 a 2 min)":"Analisar agora"}
+        </button>
+      </div>
+      {erro&&<div style={{color:"#b91c1c",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 12px",fontSize:12.5,marginTop:10}}>{erro}</div>}
+      {hist&&hist.length===0&&!rodando&&<div style={{color:"#94a3b8",fontSize:12.5,marginTop:14}}>Nenhum diagnóstico ainda. Suba os materiais acima (ou rode só com os números do app) e clique em Analisar agora.</div>}
+
+      {R&&<div style={{display:"flex",flexDirection:"column",gap:14,marginTop:16}}>
+        {sel.foco&&<div style={{color:"#64748b",fontSize:12}}>Foco pedido: <b style={{color:"#334155"}}>{sel.foco}</b></div>}
+        {R.resumo&&<div style={{background:"#faf5ff",border:"1px solid #e9d8fe",borderRadius:12,padding:"12px 14px",color:"#3b0764",fontSize:13.5,lineHeight:1.6}}>{R.resumo}</div>}
+
+        {Array.isArray(R.gargalos)&&R.gargalos.length>0&&<div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,marginBottom:8}}>Gargalos</div>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
+            {R.gargalos.map(function(g,i){ return <div key={i} style={{border:"1px solid #fde2e2",borderLeft:"4px solid "+corImp(g.impacto),borderRadius:10,padding:"10px 12px",background:"#fff"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,flex:1}}>{g.titulo}</div>
+                {g.impacto&&<span style={{background:corImp(g.impacto)+"18",color:corImp(g.impacto),borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap"}}>impacto {g.impacto}</span>}
+              </div>
+              {g.evidencia&&<div style={{color:"#475569",fontSize:12.5,marginTop:5,lineHeight:1.5}}>{g.evidencia}</div>}
+              {g.fonte&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Fonte: {g.fonte}</div>}
+            </div>; })}
+          </div>
+        </div>}
+
+        {Array.isArray(R.melhorias)&&R.melhorias.length>0&&<div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,marginBottom:8}}>O que fazer, em ordem</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {R.melhorias.slice().sort(function(a,b){return (Number(a.prioridade)||99)-(Number(b.prioridade)||99);}).map(function(mm,i){ return <div key={i} style={{display:"flex",gap:12,border:"1px solid #dcfce7",borderRadius:10,padding:"10px 12px",background:"#fff"}}>
+              <span style={{width:26,height:26,borderRadius:99,background:"#16a34a",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:12.5,flexShrink:0}}>{i+1}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{color:"#0f172a",fontWeight:700,fontSize:13.5}}>{mm.titulo}</span>
+                  {mm.esforco&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>esforço {mm.esforco}</span>}
+                </div>
+                {mm.como&&<div style={{color:"#475569",fontSize:12.5,marginTop:4,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{mm.como}</div>}
+                {mm.resultado_esperado&&<div style={{color:"#15803d",fontSize:12,marginTop:4,fontWeight:600}}>Resultado esperado: {mm.resultado_esperado}</div>}
+              </div>
+            </div>; })}
+          </div>
+        </div>}
+
+        {R.plano&&<div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,marginBottom:8}}>Plano 30 / 60 / 90 dias</div>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:8}}>
+            {[["d30","30 dias"],["d60","60 dias"],["d90","90 dias"]].map(function(p){ const it=(R.plano&&Array.isArray(R.plano[p[0]]))?R.plano[p[0]].filter(Boolean):[]; return <div key={p[0]} style={{background:"#f8fafc",border:"1px solid #eef2f7",borderRadius:10,padding:"10px 12px"}}>
+              <div style={{color:"#7c3aed",fontWeight:800,fontSize:11,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{p[1]}</div>
+              {it.length?it.map(function(x,i){ return <div key={i} style={{color:"#334155",fontSize:12.5,lineHeight:1.5,marginBottom:4}}>• {x}</div>; }):<div style={{color:"#94a3b8",fontSize:12}}>—</div>}
+            </div>; })}
+          </div>
+        </div>}
+
+        {Array.isArray(R.faltam_dados)&&R.faltam_dados.filter(Boolean).length>0&&<div style={{color:"#64748b",fontSize:12,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 12px"}}>
+          <b style={{color:"#92400e"}}>Pra análise ficar mais certeira, faltam:</b> {R.faltam_dados.filter(Boolean).join(" · ")}
+        </div>}
+        <div style={{color:"#94a3b8",fontSize:11}}>Feita com {sel.nMateriais||0} material(is) do negócio + o retrato da operação daquele dia.</div>
+      </div>}
+    </div>
   </div>;
 }
