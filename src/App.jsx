@@ -24451,7 +24451,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
     if(_ancoraRef.current) _ancoraRef.current.parar();
     const alvo=el.getBoundingClientRect().top; _rodapeTopRef.current=alvo;
     let raf=0;
-    const corrige=function(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(function(){ if(_rodapeNavRef.current) _pxRolarAte(_rodapeNavRef.current,alvo); }); };
+    // corrige DENTRO do ResizeObserver (antes do navegador desenhar). Com requestAnimationFrame
+    // a correção ficava 1 quadro atrasada e a página "piscava" (subia e descia) — medido quadro a quadro.
+    const corrige=function(){ if(_rodapeNavRef.current) _pxRolarAte(_rodapeNavRef.current,alvo); };
     let ro=null; try{ ro=new ResizeObserver(corrige); ro.observe(document.body); let p=el.parentElement; if(p) ro.observe(p); }catch(_){}
     const parar=function(){ try{ ro&&ro.disconnect(); }catch(_){} cancelAnimationFrame(raf); clearTimeout(tm);
       window.removeEventListener("wheel",parar,true); window.removeEventListener("touchstart",parar,true); window.removeEventListener("keydown",parar,true);
