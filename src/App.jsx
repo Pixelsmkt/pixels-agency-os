@@ -122421,6 +122421,9 @@ function _EvMontarNoPC({ trabalho, onEstado }){
    • Botão "Link de envio" no card (Materiais): gera/copía o link, mostra quantos chegaram, encerra.
    • Servidor: edge function envio-link (confere o código, dá o token de envio de cada arquivo, põe no card,
      avisa no WhatsApp) + RPCs envio_link_criar / envio_links_do_card / envio_link_encerrar.
+   • (30/09/2026) Botão "Link do Drive" ao lado: cola o link de um arquivo ou pasta do Google Drive; o PC do escritório
+     baixa direto do Google (sem gastar o Supabase) e põe aqui em Materiais. "Editar com IA quando terminar" já pede a edição.
+     RPCs drive_link_pedir / drive_links_do_card / drive_link_cancelar (fila video_pc_trabalhos, tipo "drive").
    ═══════════════════════════════════════════════════════════════════════════════════════════ */
 
 function pxEnvioCodigoDaUrl(){
@@ -122700,7 +122703,7 @@ function PxBotaoLinkEnvio({task}){
   };
   const ativo=(links||[]).find(function(l){ return l.valido; });
   const fmtD=function(s){ const d=new Date(s); return isNaN(d)?"":(String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")); };
-  return <span style={{position:"relative",display:"inline-flex"}}>
+  return <span style={{display:"inline-flex",gap:6,flexWrap:"wrap",alignItems:"center"}}><span style={{position:"relative",display:"inline-flex"}}>
     <button onClick={function(e){ e.stopPropagation(); setAberto(!aberto); }} title="Gerar um link para o cliente mandar arquivos grandes direto neste card"
       style={{background:"#fff",color:"#0891b2",border:"1px solid #a5f3fc",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
@@ -122725,6 +122728,110 @@ function PxBotaoLinkEnvio({task}){
       {(links||[]).filter(function(l){ return !l.valido; }).length>0&&<div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #f1f5f9",color:"#94a3b8",fontSize:11}}>
         Links anteriores: {(links||[]).filter(function(l){ return !l.valido; }).map(function(l){ return (l.status==="encerrado"?"encerrado":"vencido")+" ("+l.recebidos+" arq.)"; }).join(" · ")}
       </div>}
+    </div>}
+  </span>{typeof PxBotaoLinkDrive==="function"&&<PxBotaoLinkDrive task={task}/>}</span>;
+}
+
+/* ─── (30/09/2026) LINK DO GOOGLE DRIVE ─────────────────────────────────────────────────────────────────────────────
+   O PC do escritório baixa direto do Google (o Supabase só recebe — não gasta egress), confere o tamanho e põe aqui em
+   Materiais. O link precisa estar como "Qualquer pessoa com o link". Arquivo que já está no card não baixa de novo. */
+function _pxDriveLinkOk(l){ return /^https?:\/\/(drive|docs)\.google\.com\/.*(\/folders\/|\/d\/|[?&]id=)[A-Za-z0-9_-]{10,}/i.test(String(l||"").trim()); }
+
+function PxBotaoLinkDrive({task}){
+  const [aberto,setAberto]=useState(false);
+  const [lista,setLista]=useState(null);
+  const [link,setLink]=useState("");
+  const [editar,setEditar]=useState(true);
+  const [inst,setInst]=useState("");
+  const [ocupado,setOcupado]=useState(false);
+  const [aviso,setAviso]=useState("");
+  const taskId=task&&task.id;
+  const carrega=async function(){
+    try{ const r=await window._sb.rpc("drive_links_do_card",{p_task:String(taskId)}); setLista(Array.isArray(r.data)?r.data:[]); }
+    catch(_){ setLista([]); }
+  };
+  useEffect(function(){ if(aberto) carrega(); },[aberto,taskId]);
+  const andando=(lista||[]).some(function(x){ return x.status==="fila"||x.status==="processando"||(x.edicao&&(x.edicao.status==="fila"||x.edicao.status==="processando")); });
+  useEffect(function(){
+    if(!aberto||!andando) return;
+    const t=setInterval(carrega,5000);
+    return function(){ clearInterval(t); };
+  },[aberto,andando,taskId]);
+  useEffect(function(){
+    if(!aberto) return;
+    const fecha=function(){ setAberto(false); };
+    const t=setTimeout(function(){ document.addEventListener("click",fecha); },0);
+    return function(){ clearTimeout(t); document.removeEventListener("click",fecha); };
+  },[aberto]);
+  const pedir=async function(){
+    const l=link.trim();
+    if(!_pxDriveLinkOk(l)){ setAviso("Cole o link de um arquivo ou de uma pasta do Google Drive."); return; }
+    setOcupado(true); setAviso("");
+    try{
+      const r=await window._sb.rpc("drive_link_pedir",{p_task:String(taskId),p_link:l,p_editar:!!editar,p_instrucoes:inst.trim()||null});
+      if(r.error) throw r.error;
+      const d=r.data||{};
+      if(!d.ok){ setAviso(d.erro||"Não deu certo."); }
+      else{
+        setLink(""); setInst("");
+        if(d.ja) setAviso("Esse link já está na fila deste card.");
+        else if(typeof pixelsToast!=="undefined") pixelsToast.success(d.pc_ligado?"Pronto! O PC do escritório vai baixar do Drive.":"Anotado! O PC do escritório está sem sinal: baixa quando ligar.");
+        await carrega();
+      }
+    }catch(e){ setAviso("Não consegui pedir: "+((e&&e.message)||e)); }
+    setOcupado(false);
+  };
+  const cancelar=async function(id){
+    try{ await window._sb.rpc("drive_link_cancelar",{p_id:id}); await carrega(); }catch(_){}
+  };
+  const quando=function(s){ const d=new Date(s); return isNaN(d)?"":(String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")); };
+  const curto=function(u){ const m=/(?:folders\/|\/d\/|[?&]id=)([A-Za-z0-9_-]{6})/.exec(String(u||"")); return (/\/folders\//.test(String(u||""))?"Pasta ":"Arquivo ")+(m?m[1]+"…":""); };
+  const linha=function(x){
+    const p=x.progresso||{};
+    let cor="#64748b", txt="";
+    if(x.status==="fila"){ txt="Na fila"+(x.na_frente?(" · "+x.na_frente+" na frente"):"")+(x.erro&&/^continua/.test(x.erro)?" · "+x.erro.replace(/^continua: /,""):""); cor="#b45309"; }
+    else if(x.status==="processando"){ txt=(p.msg||"Baixando do Drive…")+(p.total?(" ("+(p.feitos||0)+"/"+p.total+")"):""); cor="#0369a1"; }
+    else if(x.status==="pronto"&&!x.erro){ txt="✓ "+x.baixados+" baixado(s)"+(x.ja?(" · "+x.ja+" já estava(m) no card"):""); cor="#15803d"; }
+    else if(x.status==="cancelado"){ txt="Cancelado"; cor="#94a3b8"; }
+    else { txt="✗ "+(x.erro||"Não deu certo")+(x.baixados?(" (baixou "+x.baixados+")"):""); cor="#b91c1c"; }
+    const ed=x.edicao;
+    return <div key={x.id} style={{borderTop:"1px solid #f1f5f9",padding:"7px 0",fontSize:11.5,lineHeight:1.45}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:6,alignItems:"baseline"}}>
+        <a href={x.link} target="_blank" rel="noopener noreferrer" style={{color:"#0f172a",fontWeight:700,textDecoration:"none"}}>{curto(x.link)}</a>
+        <span style={{color:"#94a3b8",fontSize:10.5,whiteSpace:"nowrap"}}>{quando(x.criado_em)}</span>
+      </div>
+      <div style={{color:cor}}>{txt}</div>
+      {(x.fora||[]).length>0&&<div style={{color:"#94a3b8",fontSize:11}}>Ficaram de fora: {(x.fora||[]).slice(0,4).map(function(f){ return f.nome+" ("+f.motivo+")"; }).join("; ")}{(x.fora||[]).length>4?"…":""}</div>}
+      {x.editar&&<div style={{color:"#7c3aed",fontSize:11}}>{ed?(ed.status==="pronto"?"🎬 A IA editou: abra o Estúdio deste card.":ed.status==="erro"?"🎬 A edição falhou: "+(ed.erro||""):ed.status==="cancelado"?"🎬 Edição cancelada.":"🎬 A IA está editando…"):(x.status==="pronto"&&!x.erro?"🎬 Sem vídeo para editar.":"🎬 Edita com IA quando terminar.")}</div>}
+      {x.status==="fila"&&<button onClick={function(){ cancelar(x.id); }} style={{marginTop:3,background:"#fff",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:8,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Tirar da fila</button>}
+    </div>;
+  };
+  return <span style={{position:"relative",display:"inline-flex"}}>
+    <button onClick={function(e){ e.stopPropagation(); setAberto(!aberto); }} title="Colar o link de um vídeo ou pasta do Google Drive: o PC do escritório baixa e põe aqui"
+      style={{background:"#fff",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3h8l6 11-4 7H6l-4-7z"/><path d="M8 3l8 18M16 3L6 21M2 14h20"/></svg>
+      Link do Drive
+    </button>
+    {aberto&&<div onClick={function(e){ e.stopPropagation(); }}
+      style={Object.assign({zIndex:50,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,boxShadow:"0 16px 40px rgba(15,23,42,.16)",padding:14,textAlign:"left",boxSizing:"border-box"},
+        (typeof window!=="undefined"&&window.innerWidth<560)?{position:"fixed",left:12,right:12,top:72,maxHeight:"80vh",overflowY:"auto"}:{position:"absolute",top:"calc(100% + 6px)",right:0,width:340,maxWidth:"88vw"})}>
+      <div style={{fontWeight:800,fontSize:13.5,marginBottom:4,color:"#0f172a"}}>Baixar do Google Drive</div>
+      <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.5,marginBottom:10}}>Cole o link de um vídeo ou de uma pasta. O PC do escritório baixa direto do Google e põe aqui em Materiais, na qualidade original. O link precisa estar como <b>“Qualquer pessoa com o link”</b>.</div>
+      <input value={link} onChange={function(e){ setLink(e.target.value); setAviso(""); }} onKeyDown={function(e){ if(e.key==="Enter") pedir(); }}
+        placeholder="https://drive.google.com/…" style={{width:"100%",boxSizing:"border-box",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 10px",fontSize:12,fontFamily:"inherit",marginBottom:8}}/>
+      <label style={{display:"flex",alignItems:"center",gap:7,fontSize:12,color:"#0f172a",cursor:"pointer",marginBottom:editar?6:8}}>
+        <input type="checkbox" checked={editar} onChange={function(e){ setEditar(e.target.checked); }}/> Editar com IA quando terminar de baixar
+      </label>
+      {editar&&<textarea value={inst} onChange={function(e){ setInst(e.target.value); }} rows={2} placeholder="O que a IA deve fazer (opcional). Ex.: anúncio da feira, 30 s, legenda grande"
+        style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 10px",fontSize:11.5,fontFamily:"inherit",resize:"vertical",marginBottom:8}}/>}
+      {aviso&&<div style={{color:"#b91c1c",fontSize:11.5,marginBottom:8}}>{aviso}</div>}
+      <button disabled={ocupado||!link.trim()} onClick={pedir} style={{width:"100%",background:"#15803d",color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:12.5,fontWeight:700,cursor:(ocupado||!link.trim())?"default":"pointer",opacity:(ocupado||!link.trim())?.6:1,fontFamily:"inherit"}}>{ocupado?"Pedindo…":"Baixar pro card"}</button>
+      {lista===null?<div style={{color:"#94a3b8",fontSize:12,marginTop:10}}>Carregando…</div>:
+       lista.length>0&&<div style={{marginTop:10}}>
+         <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginBottom:2}}>Links deste card</div>
+         {lista.map(linha)}
+         {lista.some(function(x){ return x.status==="pronto"&&x.baixados>0; })&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4}}>Se os arquivos não aparecerem em Materiais, feche e abra o card.</div>}
+       </div>}
     </div>}
   </span>;
 }
