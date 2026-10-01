@@ -20130,7 +20130,7 @@ function PxSeloPublicacao({task,grande}){
   var p=pxPubRelativo(task);
   if(!p) return null;
   return <span title={p.title} style={{display:"inline-flex",alignItems:"center",gap:grande?6:4,background:p.bg,color:p.cor,border:"1px solid "+p.borda,
-    borderRadius:99,padding:grande?"4px 11px":"2px 9px",fontSize:grande?12:10.5,fontWeight:800,letterSpacing:-.1,whiteSpace:"nowrap",lineHeight:1.3,
+    borderRadius:99,padding:grande?"4px 11px":"2px 9px",fontSize:grande?11:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",lineHeight:1.4,
     boxShadow:p.forte?"0 2px 8px "+p.bg+"55":"none",fontFamily:"'Inter',system-ui,sans-serif"}}>
     <svg width={grande?13:11} height={grande?13:11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     {p.txt}
