@@ -114483,6 +114483,13 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v19 (01/10/2026) — FASE C do checklist "Estúdio completo": COR COMPLETA (como Ajustes do CapCut / Lumetri), na PLACA DE VÍDEO (WebGL):
+     • Básico: exposição, contraste, realces, sombras, brancos, pretos, brilho · Cor: temperatura, matiz (verde↔magenta), saturação, vibração
+     • HSL por cor (8 cores: matiz, saturação, luz) · Curvas (geral, R, G, B, arrastando pontos) · Rodas de cor (sombras, meios, realces)
+     • Detalhes: nitidez, vinheta, grão · 17 filtros prontos + "Guardar meu filtro" no kit do cliente (rpc criacao_kit_filtro_salvar)
+     • Igualar a cor entre vídeos (média e contraste de cada canal) · Antes/depois segurando a tecla B (ou o botão)
+     • "Testar a velocidade deste computador" no Exportar (ms por quadro) — para medir no Pixels 01.
+     Mesmo motor na prévia, no navegador e no PC; sem WebGL a cor avançada não entra (avisa).
    v18 (01/10/2026) — FASES D + E + F do checklist "Estúdio completo":
      • LEGENDA: "Altura" bem à vista (↑ Subir / ↓ Descer, altura na tela, lugares prontos, guia da área segura); DIVIDIR a legenda na agulha
        (tecla S com a legenda escolhida → legenda.cortes); "Cor do pedaço": cor da letra / destaque, modelo e tamanho só daquele pedaço
@@ -116722,6 +116729,217 @@ function _evpTransPinta(ctx, W, H, tipo, p0, A, B, curva){
   else ctx.drawImage(B, 0, 0, W, H);
   ctx.restore();
 }
+
+/* ══ v19 (01/10/2026) COR COMPLETA — FASE C do checklist (como Ajustes do CapCut / Lumetri do Premiere) ══
+   c.cor = { bri, con, sat, temp (como antes, filtro do navegador)
+             exp (exposição, −2 a 2 pontos), real (realces), somb (sombras), bran (brancos), pret (pretos), tint (matiz verde↔magenta), vib (vibração): −1 a 1
+             hsl { ver, lar, ama, verde, ciano, azul, roxo, mag: [matiz, saturação, luz] (−1 a 1) }
+             rodas { s, m, a: [ângulo 0–360, força 0–1, luz −1 a 1] } (sombras, meios, realces)
+             curvas { l, r, g, b: [[x, y]…] (0–1) } · nit (nitidez 0–1) · vin (vinheta −1 a 1) · grao (0–1)
+             ig { m:[r,g,b], k:[r,g,b], r:[r,g,b], f } (igualar com outro clipe) · look (id do filtro pronto) }
+   Tudo menos vinheta e grão roda na PLACA DE VÍDEO (WebGL), no mesmo motor do navegador e do PC. Sem WebGL: sai sem a cor avançada (a Conferência avisa). */
+const _EVP_HSL_CORES = [ { id:"ver", label:"Vermelho", h:0, hex:"#ef4444" }, { id:"lar", label:"Laranja", h:30, hex:"#f97316" }, { id:"ama", label:"Amarelo", h:58, hex:"#eab308" },
+  { id:"verde", label:"Verde", h:120, hex:"#22c55e" }, { id:"ciano", label:"Ciano", h:185, hex:"#06b6d4" }, { id:"azul", label:"Azul", h:225, hex:"#3b82f6" },
+  { id:"roxo", label:"Roxo", h:270, hex:"#8b5cf6" }, { id:"mag", label:"Magenta", h:318, hex:"#ec4899" } ];
+const _EVP_COR_NUM = ["exp", "real", "somb", "bran", "pret", "tint", "vib", "nit", "vin", "grao"];
+function _evpCurvaIdent(pts){ return !Array.isArray(pts) || pts.length < 2 || pts.every(function(q){ return Math.abs(q[0] - q[1]) < 0.002; }); }
+/* tem algo que precisa da placa de vídeo? */
+function _evpCorAvancada(k){
+  if(!k) return false;
+  if(["exp","real","somb","bran","pret","tint","vib","nit"].some(function(q){ return Math.abs(_evpNum(k[q], 0)) > 0.0005; })) return true;
+  if(k.hsl && Object.keys(k.hsl).some(function(q){ const v = k.hsl[q]; return Array.isArray(v) && v.some(function(x){ return Math.abs(_evpNum(x, 0)) > 0.0005; }); })) return true;
+  if(k.rodas && ["s","m","a"].some(function(q){ const v = k.rodas[q]; return Array.isArray(v) && (_evpNum(v[1], 0) > 0.0005 || Math.abs(_evpNum(v[2], 0)) > 0.0005); })) return true;
+  if(k.curvas && ["l","r","g","b"].some(function(q){ return !_evpCurvaIdent(k.curvas[q]); })) return true;
+  if(k.ig && _evpNum(k.ig.f, 0) > 0) return true;
+  return false;
+}
+/* limpeza (mesma regra do servidor) */
+function _evpCorLimpa(k0){
+  const k = Object.assign({ bri:0, con:0, sat:0, temp:0 }, k0 || {}), o = { bri:_evClamp(_evpNum(k.bri, 0), -0.5, 0.5), con:_evClamp(_evpNum(k.con, 0), -0.5, 0.5), sat:_evClamp(_evpNum(k.sat, 0), -1, 1), temp:_evClamp(_evpNum(k.temp, 0), -1, 1) };
+  _EVP_COR_NUM.forEach(function(q){ const lim = q === "exp" ? 2 : 1, mn = (q === "nit" || q === "grao") ? 0 : -lim, v = _evClamp(_evpNum(k[q], 0), mn, lim); if(Math.abs(v) > 0.0005) o[q] = Math.round(v * 1000) / 1000; });
+  if(k.hsl && typeof k.hsl === "object"){ const h = {}; _EVP_HSL_CORES.forEach(function(c){ const v = k.hsl[c.id]; if(Array.isArray(v)){ const t = [0,1,2].map(function(i){ return Math.round(_evClamp(_evpNum(v[i], 0), -1, 1) * 1000) / 1000; }); if(t.some(function(x){ return x; })) h[c.id] = t; } }); if(Object.keys(h).length) o.hsl = h; }
+  if(k.rodas && typeof k.rodas === "object"){ const r = {}; ["s","m","a"].forEach(function(q){ const v = k.rodas[q]; if(Array.isArray(v)){ const t = [Math.round(((_evpNum(v[0], 0) % 360) + 360) % 360), Math.round(_evClamp(_evpNum(v[1], 0), 0, 1) * 1000) / 1000, Math.round(_evClamp(_evpNum(v[2], 0), -1, 1) * 1000) / 1000];
+    if(t[1] || t[2]) r[q] = t; } }); if(Object.keys(r).length) o.rodas = r; }
+  if(k.curvas && typeof k.curvas === "object"){ const cv = {}; ["l","r","g","b"].forEach(function(q){ const v = k.curvas[q]; if(!Array.isArray(v)) return;
+    const pts = v.filter(function(p){ return Array.isArray(p) && isFinite(Number(p[0])) && isFinite(Number(p[1])); }).map(function(p){ return [Math.round(_evClamp(+p[0], 0, 1) * 1000) / 1000, Math.round(_evClamp(+p[1], 0, 1) * 1000) / 1000]; })
+      .sort(function(a, b){ return a[0] - b[0]; }).filter(function(p, i, a){ return !i || p[0] - a[i-1][0] > 0.01; }).slice(0, 12);
+    if(pts.length >= 2 && !_evpCurvaIdent(pts)) cv[q] = pts; }); if(Object.keys(cv).length) o.curvas = cv; }
+  if(k.ig && _evpNum(k.ig.f, 0) > 0 && ["m","k","r"].every(function(q){ return Array.isArray(k.ig[q]) && k.ig[q].length === 3; })){
+    o.ig = { f:Math.round(_evClamp(_evpNum(k.ig.f, 1), 0, 1) * 100) / 100, m:k.ig.m.map(function(x){ return Math.round(_evClamp(+x || 0, 0, 1) * 1000) / 1000; }),
+             k:k.ig.k.map(function(x){ return Math.round(_evClamp(+x || 1, 0.5, 2) * 1000) / 1000; }), r:k.ig.r.map(function(x){ return Math.round(_evClamp(+x || 0, 0, 1) * 1000) / 1000; }) }; }
+  if(typeof k.look === "string" && /^[a-z0-9_:-]{1,40}$/i.test(k.look)) o.look = k.look;
+  return o;
+}
+/* curva suave que passa pelos pontos (sem "ondular": Fritsch–Carlson) → tabela de 256 valores */
+function _evpCurvaTabela(pts0){
+  const out = new Uint8Array(256);
+  const pts = (Array.isArray(pts0) && pts0.length >= 2 ? pts0 : [[0, 0], [1, 1]]).slice().sort(function(a, b){ return a[0] - b[0]; });
+  if(pts[0][0] > 0) pts.unshift([0, pts[0][1]]); if(pts[pts.length-1][0] < 1) pts.push([1, pts[pts.length-1][1]]);
+  const n = pts.length, d = [], m = new Array(n).fill(0);
+  for(let i=0;i<n-1;i++) d.push((pts[i+1][1] - pts[i][1]) / Math.max(1e-6, pts[i+1][0] - pts[i][0]));
+  m[0] = d[0]; m[n-1] = d[n-2]; for(let i=1;i<n-1;i++) m[i] = d[i-1] * d[i] <= 0 ? 0 : (d[i-1] + d[i]) / 2;
+  for(let i=0;i<n-1;i++){ if(d[i] === 0){ m[i] = 0; m[i+1] = 0; continue; } const a = m[i] / d[i], b = m[i+1] / d[i], s = a * a + b * b; if(s > 9){ const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i+1] = t * b * d[i]; } }
+  for(let k=0;k<256;k++){ const x = k / 255; let i = 0; while(i < n - 2 && x > pts[i+1][0]) i++;
+    const h = Math.max(1e-6, pts[i+1][0] - pts[i][0]), t = _evClamp((x - pts[i][0]) / h, 0, 1), t2 = t * t, t3 = t2 * t;
+    const y = (2*t3 - 3*t2 + 1) * pts[i][1] + (t3 - 2*t2 + t) * h * m[i] + (-2*t3 + 3*t2) * pts[i+1][1] + (t3 - t2) * h * m[i+1];
+    out[k] = Math.round(_evClamp(y, 0, 1) * 255); }
+  return out;
+}
+function _evpRodaRGB(r){
+  if(!Array.isArray(r)) return [0, 0, 0];
+  const a = (_evpNum(r[0], 0) % 360) * Math.PI / 180, f = _evpNum(r[1], 0), l = _evpNum(r[2], 0);
+  const cr = Math.cos(a), cg = Math.cos(a - 2.0944), cb = Math.cos(a + 2.0944);      // cor do ângulo, soma zero
+  return [cr * f * 0.1 + l * 0.12, cg * f * 0.1 + l * 0.12, cb * f * 0.1 + l * 0.12];
+}
+/* MOTOR DE COR (WebGL) — um só para a página inteira; devolve um canvas com o quadro já com a cor */
+const _evpCorGL = (function(){
+  let cv = null, gl = null, prog = null, tex = null, lut = null, lutChave = "", U = {}, falhou = false, maxLado = 4096;
+  const VS = "attribute vec2 p; varying vec2 v; void main(){ v = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }";
+  const FS = [
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH", "precision highp float;", "#else", "precision mediump float;", "#endif",
+    "varying vec2 v; uniform sampler2D u_t; uniform sampler2D u_lut; uniform vec2 u_px;",
+    "uniform float u_exp, u_real, u_somb, u_bran, u_pret, u_tint, u_vib, u_nit, u_lutOn, u_igF, u_hslOn;",
+    "uniform vec3 u_igM, u_igK, u_igR, u_ws, u_wm, u_wh; uniform vec4 u_hsl[8];",
+    "float luma(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }",
+    "vec3 rgb2hsv(vec3 c){ vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0); vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));",
+    "  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r)); float d = q.x - min(q.w, q.y); float e = 1.0e-10;",
+    "  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x); }",
+    "vec3 hsv2rgb(vec3 c){ vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0); vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y); }",
+    "float lut(float x, float k){ vec4 t = texture2D(u_lut, vec2(clamp(x, 0.0, 1.0) * (255.0/256.0) + 0.5/256.0, 0.5)); return k < 0.5 ? t.r : k < 1.5 ? t.g : k < 2.5 ? t.b : t.a; }",
+    "void main(){",
+    "  vec3 c = texture2D(u_t, v).rgb;",
+    "  if(u_nit > 0.0){ vec3 n = texture2D(u_t, v + vec2(u_px.x, 0.0)).rgb + texture2D(u_t, v - vec2(u_px.x, 0.0)).rgb + texture2D(u_t, v + vec2(0.0, u_px.y)).rgb + texture2D(u_t, v - vec2(0.0, u_px.y)).rgb;",
+    "    c = c + u_nit * 1.5 * (c - n * 0.25); }",
+    "  if(u_igF > 0.0){ c = mix(c, (c - u_igM) * u_igK + u_igR, u_igF); }",
+    "  if(u_exp != 0.0){ vec3 l = pow(max(c, 0.0), vec3(2.2)) * exp2(u_exp); c = pow(l, vec3(1.0/2.2)); }",
+    "  float bp = -0.10 * u_pret, wp = 1.0 - 0.10 * u_bran; c = (c - bp) / max(0.05, wp - bp);",
+    "  float L = luma(clamp(c, 0.0, 1.0)); float ms = 1.0 - smoothstep(0.0, 0.55, L), mh = smoothstep(0.45, 1.0, L);",
+    "  c += vec3(u_somb * 0.28 * ms + u_real * 0.28 * mh);",
+    "  c += vec3(0.5, -1.0, 0.5) * u_tint * 0.06;",
+    "  if(u_vib != 0.0){ float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)); float k = 1.0 + u_vib * (1.0 - clamp(mx - mn, 0.0, 1.0)); float l2 = luma(c); c = mix(vec3(l2), c, k); }",
+    "  if(u_hslOn > 0.5){ vec3 h = rgb2hsv(clamp(c, 0.0, 1.0)); float hs = 0.0, ss = 0.0, ls = 0.0;",
+    "    for(int i = 0; i < 8; i++){ float d = abs(fract(h.x - u_hsl[i].w + 0.5) - 0.5); float w = clamp(1.0 - d / 0.11, 0.0, 1.0); w = w * w * (3.0 - 2.0 * w);",
+    "      hs += w * u_hsl[i].x; ss += w * u_hsl[i].y; ls += w * u_hsl[i].z; }",
+    "    float g = smoothstep(0.04, 0.22, h.y); h.x = fract(h.x + hs * g * (30.0/360.0)); h.y = clamp(h.y * (1.0 + ss * g), 0.0, 1.0); h.z = clamp(h.z * (1.0 + ls * g * 0.45), 0.0, 1.0);",
+    "    c = hsv2rgb(h); }",
+    "  float L2 = luma(clamp(c, 0.0, 1.0)); float wS = (1.0 - L2) * (1.0 - L2), wH = L2 * L2, wM = 1.0 - wS - wH;",
+    "  c += u_ws * wS + u_wm * wM + u_wh * wH;",
+    "  if(u_lutOn > 0.5){ c = clamp(c, 0.0, 1.0); c = vec3(lut(c.r, 0.0), lut(c.g, 1.0), lut(c.b, 2.0)); c = vec3(lut(c.r, 3.0), lut(c.g, 3.0), lut(c.b, 3.0)); }",
+    "  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);",
+    "}" ].join("\n");
+  function iniciar(){
+    if(gl || falhou) return !!gl;
+    try{
+      cv = document.createElement("canvas"); cv.width = 16; cv.height = 16;
+      gl = cv.getContext("webgl", { preserveDrawingBuffer:true, premultipliedAlpha:false, antialias:false }) || cv.getContext("experimental-webgl", { preserveDrawingBuffer:true });
+      if(!gl) throw new Error("sem WebGL");
+      const sh = function(t, src){ const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+      prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+      if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      gl.useProgram(prog);
+      const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      ["u_t","u_lut","u_px","u_exp","u_real","u_somb","u_bran","u_pret","u_tint","u_vib","u_nit","u_lutOn","u_igF","u_hslOn","u_igM","u_igK","u_igR","u_ws","u_wm","u_wh","u_hsl"].forEach(function(n){ U[n] = gl.getUniformLocation(prog, n); });
+      const tx = function(){ const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; };
+      tex = tx(); lut = tx();
+      gl.uniform1i(U.u_t, 0); gl.uniform1i(U.u_lut, 1);
+      maxLado = Math.min(4096, gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096);
+      return true;
+    }catch(e){ falhou = true; gl = null; try{ console.warn("[cor] WebGL indisponível:", e && e.message); }catch(_){} return false; }
+  }
+  function render(src, k){
+    if(!iniciar()) return null;
+    const sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height; if(!sw || !sh) return null;
+    const e = Math.min(1, maxLado / Math.max(sw, sh)), w = Math.max(2, Math.round(sw * e)), h = Math.max(2, Math.round(sh * e));
+    if(cv.width !== w) cv.width = w; if(cv.height !== h) cv.height = h;
+    gl.viewport(0, 0, w, h);
+    try{ gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); }
+    catch(_){ return null; }
+    const cvs = k.curvas || {}, temLut = ["l","r","g","b"].some(function(q){ return !_evpCurvaIdent(cvs[q]); });
+    if(temLut){ const ch = JSON.stringify(cvs); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, lut);
+      if(ch !== lutChave){ const tr = _evpCurvaTabela(cvs.r), tg = _evpCurvaTabela(cvs.g), tb = _evpCurvaTabela(cvs.b), tl = _evpCurvaTabela(cvs.l), px = new Uint8Array(256 * 4);
+        for(let i=0;i<256;i++){ px[i*4] = tr[i]; px[i*4+1] = tg[i]; px[i*4+2] = tb[i]; px[i*4+3] = tl[i]; }
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); lutChave = ch; }
+      gl.activeTexture(gl.TEXTURE0); }
+    const n = function(q){ return _evpNum(k[q], 0); };
+    gl.uniform2f(U.u_px, 1.5 / w, 1.5 / h);
+    gl.uniform1f(U.u_exp, n("exp")); gl.uniform1f(U.u_real, n("real")); gl.uniform1f(U.u_somb, n("somb")); gl.uniform1f(U.u_bran, n("bran")); gl.uniform1f(U.u_pret, n("pret"));
+    gl.uniform1f(U.u_tint, n("tint")); gl.uniform1f(U.u_vib, n("vib")); gl.uniform1f(U.u_nit, Math.max(0, n("nit"))); gl.uniform1f(U.u_lutOn, temLut ? 1 : 0);
+    const ig = k.ig && _evpNum(k.ig.f, 0) > 0 ? k.ig : null;
+    gl.uniform1f(U.u_igF, ig ? _evpNum(ig.f, 1) : 0);
+    gl.uniform3fv(U.u_igM, ig ? ig.m : [0,0,0]); gl.uniform3fv(U.u_igK, ig ? ig.k : [1,1,1]); gl.uniform3fv(U.u_igR, ig ? ig.r : [0,0,0]);
+    const rd = k.rodas || {}; gl.uniform3fv(U.u_ws, _evpRodaRGB(rd.s)); gl.uniform3fv(U.u_wm, _evpRodaRGB(rd.m)); gl.uniform3fv(U.u_wh, _evpRodaRGB(rd.a));
+    const hsl = k.hsl || {}, arr = new Float32Array(32); let on = false;
+    _EVP_HSL_CORES.forEach(function(c, i){ const v = hsl[c.id] || [0,0,0]; arr[i*4] = _evpNum(v[0], 0); arr[i*4+1] = _evpNum(v[1], 0); arr[i*4+2] = _evpNum(v[2], 0); arr[i*4+3] = c.h / 360; if(v[0] || v[1] || v[2]) on = true; });
+    gl.uniform4fv(U.u_hsl, arr); gl.uniform1f(U.u_hslOn, on ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    return cv;
+  }
+  return { render:render, ok:function(){ return iniciar(); } };
+})();
+/* grão (fixo, 256×256) */
+let _evpGraoTela = null;
+function _evpGrao(){
+  if(_evpGraoTela) return _evpGraoTela;
+  const c = document.createElement("canvas"); c.width = 256; c.height = 256; const x = c.getContext("2d"), d = x.createImageData(256, 256);
+  let s = 12345; for(let i=0;i<d.data.length;i+=4){ s = (s * 1103515245 + 12345) & 0x7fffffff; const v = 128 + ((s >> 8) % 96) - 48; d.data[i] = d.data[i+1] = d.data[i+2] = v; d.data[i+3] = 255; }
+  x.putImageData(d, 0, 0); _evpGraoTela = c; return c;
+}
+/* vinheta e grão na saída (tela W×H) — tt deixa o grão igual na prévia e na gravação */
+function _evpVinhetaGrao(ctx, W, H, k, tt){
+  const vin = _evpNum(k && k.vin, 0), gr = _evpNum(k && k.grao, 0);
+  if(Math.abs(vin) > 0.005){
+    const r = Math.hypot(W, H) / 2, g = ctx.createRadialGradient(W / 2, H / 2, r * 0.38, W / 2, H / 2, r);
+    const cor = vin > 0 ? "0,0,0" : "255,255,255", a = Math.min(0.85, Math.abs(vin) * 0.8);
+    g.addColorStop(0, "rgba(" + cor + ",0)"); g.addColorStop(1, "rgba(" + cor + "," + a.toFixed(3) + ")");
+    ctx.save(); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+  if(gr > 0.005){
+    const pt = ctx.createPattern(_evpGrao(), "repeat"), q = Math.floor((tt || 0) * 30), ox = (q * 97) % 256, oy = (q * 57) % 256;
+    ctx.save(); ctx.globalCompositeOperation = "overlay"; ctx.globalAlpha = Math.min(0.6, gr * 0.5); ctx.translate(-ox, -oy); ctx.fillStyle = pt; ctx.fillRect(ox, oy, W, H); ctx.restore();
+  }
+}
+/* estatística de cor por canal (média e desvio) das miniaturas de um bruto — para IGUALAR */
+async function _evpCorEstat(clipe){
+  const th = (_evpMidia[clipe] && _evpMidia[clipe].thumbs) || []; if(!th.length) return null;
+  const cv = document.createElement("canvas"); cv.width = 48; cv.height = 48; const cx = cv.getContext("2d", { willReadFrequently:true });
+  const s = [0,0,0], s2 = [0,0,0]; let n = 0;
+  for(const x of th.slice(0, 12)){
+    const im = new Image(); im.src = x.url; await new Promise(function(ok){ im.onload = ok; im.onerror = ok; }); if(!im.width) continue;
+    cx.drawImage(im, 0, 0, 48, 48); const d = cx.getImageData(0, 0, 48, 48).data;
+    for(let i=0;i<d.length;i+=4){ for(let j=0;j<3;j++){ const v = d[i+j] / 255; s[j] += v; s2[j] += v * v; } n++; }
+  }
+  if(!n) return null;
+  const m = s.map(function(v){ return v / n; }), dp = s2.map(function(v, j){ return Math.sqrt(Math.max(1e-6, v / n - m[j] * m[j])); });
+  return { m:m, d:dp };
+}
+/* igualar: (cor − média do clipe) × (desvio da referência ÷ desvio do clipe) + média da referência — por canal */
+function _evpIgualarIg(ref, alvo, forca){
+  return { f:forca == null ? 1 : forca, m:alvo.m.map(function(x){ return Math.round(x * 1000) / 1000; }),
+           k:alvo.d.map(function(d, j){ return Math.round(_evClamp(ref.d[j] / Math.max(0.02, d), 0.6, 1.6) * 1000) / 1000; }), r:ref.m.map(function(x){ return Math.round(x * 1000) / 1000; }) };
+}
+/* FILTROS PRONTOS (v19: 17) */
+const _EVP_LOOKS2 = [
+  { id:"original", label:"Original", cor:{} },
+  { id:"natural", label:"Natural", cor:{ bri:0.02, con:0.06, sat:0.08, temp:0.05 } },
+  { id:"vivo", label:"Vivo", cor:{ bri:0.03, con:0.12, sat:0.3, temp:0.05, vib:0.25 } },
+  { id:"limpo", label:"Limpo e claro", cor:{ exp:0.25, somb:0.2, real:-0.2, vib:0.15, nit:0.25 } },
+  { id:"produto", label:"Produto nítido", cor:{ con:0.08, nit:0.45, vib:0.2, real:-0.15 } },
+  { id:"quente", label:"Quente", cor:{ bri:0.03, con:0.06, sat:0.1, temp:0.35 } },
+  { id:"frio", label:"Frio", cor:{ bri:0.01, con:0.08, sat:-0.05, temp:-0.35 } },
+  { id:"campo", label:"Campo verde", cor:{ temp:0.05, vib:0.3, hsl:{ verde:[-0.15, 0.35, 0.05], ama:[0, 0.2, 0] } } },
+  { id:"por_do_sol", label:"Pôr do sol", cor:{ temp:0.4, tint:0.1, real:-0.2, vib:0.2, rodas:{ a:[35, 0.35, 0] } } },
+  { id:"laranja_azul", label:"Cinema (azul e laranja)", cor:{ con:0.12, sat:-0.05, rodas:{ s:[200, 0.35, -0.02], a:[30, 0.3, 0.02] }, hsl:{ azul:[0, 0.2, 0], lar:[0, 0.15, 0] } } },
+  { id:"cinema", label:"Cinema", cor:{ bri:-0.04, con:0.18, sat:-0.15, temp:0.1 } },
+  { id:"moody", label:"Escuro (moody)", cor:{ exp:-0.3, con:0.15, sat:-0.25, somb:-0.2, rodas:{ s:[210, 0.3, -0.05] }, vin:0.45 } },
+  { id:"matte", label:"Fosco", cor:{ con:-0.1, sat:-0.15, pret:0.6, curvas:{ l:[[0, 0.08], [0.5, 0.5], [1, 0.95]] } } },
+  { id:"terra", label:"Obra", cor:{ bri:0.02, con:0.1, sat:0.15, temp:0.25 } },
+  { id:"vintage", label:"Vintage", cor:{ temp:0.25, tint:0.05, sat:-0.2, pret:0.5, grao:0.3, vin:0.3, curvas:{ l:[[0, 0.06], [0.5, 0.52], [1, 0.93]] } } },
+  { id:"pb", label:"P&B", cor:{ bri:0.02, con:0.15, sat:-1, temp:0 } },
+  { id:"pb_forte", label:"P&B forte", cor:{ sat:-1, con:0.3, pret:-0.2, bran:0.2, grao:0.25 } },
+];
+
 const _EVP_RNNOISE = "https://cdn.jsdelivr.net/npm/@shiguredo/rnnoise-wasm@2025.1.5/dist/rnnoise.js";
 
 function _evpId(){ return Math.random().toString(36).slice(2, 10); }
@@ -117030,7 +117248,7 @@ function _evpNormalizar(p, clipes){
     o.vel = Math.min(4, Math.max(0.25, _evpNum(o.vel,1))); o.vol = Math.min(3, Math.max(0, _evpNum(o.vol,1)));
     o.zoom = Math.min(4, Math.max(0.5, _evpNum(o.zoom,1))); o.x = Math.max(-1, Math.min(1, _evpNum(o.x,0))); o.y = Math.max(-1, Math.min(1, _evpNum(o.y,0)));
     o.rot = Math.max(-180, Math.min(180, _evpNum(o.rot,0)));
-    o.cor = Object.assign({ bri:0, con:0, sat:0, temp:0 }, o.cor||{});
+    o.cor = _evpCorLimpa(o.cor);                                     // v19: cor completa (limpa e com limites)
     const k = Object.assign({ l:0, t:0, r:0, b:0 }, o.corte||{});
     ["l","t","r","b"].forEach(function(q){ k[q] = Math.max(0, Math.min(0.45, _evpNum(k[q], 0))); }); o.corte = k;
     o.fi = Math.max(0, Math.min(5, _evpNum(o.fi, 0))); o.fo = Math.max(0, Math.min(5, _evpNum(o.fo, 0)));
@@ -118107,6 +118325,8 @@ function _evpMotor(canvas, o){
   const pessoa = document.createElement("canvas"); pessoa.width = W; pessoa.height = H; const px2 = pessoa.getContext("2d");   // recorte da pessoa (fundo / texto atrás)
   let mascara = null, mascaraDe = -1, segOcupado = false;
   let ofsC = null, ofsX = null;   // v17: camada do clipe com desfoque / opacidade (Animar)
+  let antes = false;              // v19: antes/depois (sem a cor)
+  const estD = { n:0, soma:0, max:0, lentos:0 };   // v19: tempo de desenho de cada quadro (teste de velocidade)
   /* DESEMPENHO (29/09): parado, só redesenha quando algo muda (e 4×/s de reserva para imagens/fontes que chegam);
      o fundo desfocado e os desfoques são feitos numa cópia pequena (o blur em 1080×1920 era o que travava a aba) */
   let sujo = 30, ultDesenho = 0, ultTempo = -1, ultToc = null, ultEsp = null;
@@ -118279,6 +118499,7 @@ function _evpMotor(canvas, o){
 
   /* ─── desenho ─── */
   function filtroCor(c){
+    if(antes) return "none";
     const k = c.cor || {}; const f = [];
     if(k.bri) f.push("brightness(" + (1 + k.bri).toFixed(3) + ")");
     if(k.con) f.push("contrast(" + (1 + k.con).toFixed(3) + ")");
@@ -118291,6 +118512,7 @@ function _evpMotor(canvas, o){
     // "ao contrário": usa os quadros guardados (se prontos); senão o próprio vídeo parado no ponto certo
     let v = v0;
     if(c.reverso){ const q = _evpQuadroReverso(c, srcT(c, tt)); if(q) v = q; }
+    if(!antes && c.cor && _evpCorAvancada(c.cor)){ const g = _evpCorGL.render(v, c.cor); if(g) v = g; }     // v19: cor completa na placa de vídeo
     const VW = v.videoWidth || v.width, VH = v.videoHeight || v.height; if(!VW || !VH) return;
     const k = c.corte || {}, rx = VW * _evpNum(k.l, 0), ry = VH * _evpNum(k.t, 0);
     const vw = Math.max(8, VW * (1 - _evpNum(k.l, 0) - _evpNum(k.r, 0))), vh = Math.max(8, VH * (1 - _evpNum(k.t, 0) - _evpNum(k.b, 0)));   // recorte
@@ -118350,7 +118572,8 @@ function _evpMotor(canvas, o){
       ctx.drawImage(ofsC, 0, 0, ow, oh, 0, 0, W, H);
     } else amostras.forEach(function(V, i){ pinta(ctx, V, 1 / (i + 1)); });
     ctx.restore();
-    const temp = c.cor && c.cor.temp;
+    const temp = !antes && c.cor && c.cor.temp;
+    if(!antes && c.cor) _evpVinhetaGrao(ctx, W, H, c.cor, tt);       // v19: vinheta e grão
     if(temp){ ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.fillStyle = temp > 0 ? "rgba(255,150,40," + Math.min(0.5, temp*0.5) + ")" : "rgba(40,120,255," + Math.min(0.5, -temp*0.5) + ")"; ctx.fillRect(0,0,W,H); ctx.restore(); }
   }
   function desenharVideo(){
@@ -118757,7 +118980,9 @@ function _evpMotor(canvas, o){
     const agora = performance.now();
     const vAt = c && els[c.id], mexendo = !!(vAt && (vAt.seeking || vAt.readyState < 2)) || Object.keys(els2).some(function(k){ return els2[k].seeking; });
     if(tocando || o.pausarAoEsperar || sujo > 0 || mexendo || t !== ultTempo || agora - ultDesenho > 250){
-      desenhar(); ultDesenho = agora; if(sujo > 0) sujo--;
+      const d0 = performance.now(); desenhar(); const dd = performance.now() - d0;   // v19: mede o desenho
+      if(tocando){ estD.n++; estD.soma += dd; if(dd > estD.max) estD.max = dd; if(dd > 33) estD.lentos++; }
+      ultDesenho = agora; if(sujo > 0) sujo--;
     }
     if(o.onTempo && (t !== ultTempo || tocando !== ultToc || esperando !== ultEsp)){ o.onTempo(t, tocando, esperando); }
     ultTempo = t; ultToc = tocando; ultEsp = esperando;
@@ -118773,6 +118998,8 @@ function _evpMotor(canvas, o){
     seek: function(nt){ marcar(); t = _evClamp(Number(nt)||0, 0, calc.total); const i = _evpClipEm(calc, Math.min(t, Math.max(0, calc.fimCortes - 0.001))); if(calc.clips[i]) mirar(calc.clips[i], t); if(tocando) agendar(); },
     atualizar: function(novoCalc, novoProj, vozes, narr){ marcar(); calc = novoCalc; proj = novoProj; if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
     setTratados: function(tr){ o.tratados = tr; marcar(); },
+    setAntes: function(v){ antes = !!v; marcar(); },                  // v19
+    get estatisticas(){ return { quadros:estD.n, media:estD.n ? estD.soma / estD.n : 0, max:estD.max, lentos:estD.lentos }; },
     volumeGeral: function(v){ try{ master.gain.setValueAtTime(v, ac.currentTime); }catch(_){ master.gain.value = v; } },   // 0 = mudo (gravando narração)
     destruir: function(){ vivo = false; cancelAnimationFrame(raf); pararAudio(); document.removeEventListener("visibilitychange", aoSumir);
       if(vFinal){ try{ vFinal.pause(); vFinal.removeAttribute("src"); vFinal.load(); }catch(_){} vFinal = null; }
@@ -119691,6 +119918,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       else if(!ctl && (k === "s" || k === "S")){ e.preventDefault(); cortar(); }
       else if(!ctl && (k === "m" || k === "M")){ e.preventDefault(); addMarca(); }
       else if(!ctl && (k === "f" || k === "F")){ e.preventDefault(); setAssistir(true); }
+      else if(!ctl && (k === "b" || k === "B")){ e.preventDefault(); if(!e.repeat){ const m = motorRef.current; if(m && m.setAntes) m.setAntes(true); } }
       else if(!ctl && (k === "c" || k === "C")){ e.preventDefault(); marcarCorrecao(); }
       else if(k === "Delete" || k === "Backspace"){ e.preventDefault(); apagar(); }
       else if(k === "ArrowLeft"){ e.preventDefault(); irPara(tempo - (e.shiftKey ? 1 : 1/30)); }
@@ -119704,6 +119932,13 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     };
     window.addEventListener("keydown", h); return function(){ window.removeEventListener("keydown", h); };
   });
+  /* v19: antes/depois — solta a tecla B (ou o botão do painel Cor) e a cor volta */
+  useEffect(function(){
+    const solta = function(e){ if(e.key === "b" || e.key === "B"){ const m = motorRef.current; if(m && m.setAntes) m.setAntes(false); } };
+    const ev = function(e){ const m = motorRef.current; if(m && m.setAntes) m.setAntes(!!(e && e.detail)); };
+    window.addEventListener("keyup", solta); window.addEventListener("evp-antes", ev);
+    return function(){ window.removeEventListener("keyup", solta); window.removeEventListener("evp-antes", ev); };
+  }, []);
 
   const salvar = async function(){
     if(salvando || soVer) return false;
@@ -119963,7 +120198,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpInspetor fotosCard={(Array.isArray(t.files) ? t.files : []).filter(function(f){ return f && !f.isAnnotation && typeof f.url === "string" && (/^image\//.test(String(f.type || "")) || /\.(png|jpe?g|webp)(\?|#|$)/i.test(f.url)); }).map(function(f){ return { url:f.url, nome:f.name || "" }; })}
             tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
-            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara}/>
+            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""}/>
         ) : (
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}/>
         )}
@@ -122076,9 +122311,268 @@ function _EvpBotaoInsta(){
   return <button onClick={function(){ setInsta(!insta); }} aria-pressed={insta} title="Ver como no Instagram: botões e texto do Reels por cima (só para conferir)"
     style={Object.assign(_evpBtn(insta ? "suave" : null), {marginLeft:2})}><_EvpIco n="olho" s={15}/>Instagram</button>;
 }
+/* ─── v19: COR COMPLETA — painel (Filtros · Básico · Cor · HSL · Curvas · Rodas · Detalhes · Igualar) ─── */
+function _evpPintarCor2D(ctx, src, W, H, k){
+  k = k || {};
+  let s = src; if(_evpCorAvancada(k)){ const g = _evpCorGL.render(src, k); if(g) s = g; }
+  const sw = s.videoWidth || s.naturalWidth || s.width, sh = s.videoHeight || s.naturalHeight || s.height; if(!sw || !sh) return;
+  const e = Math.max(W / sw, H / sh), f = [];
+  if(k.bri) f.push("brightness(" + (1 + k.bri).toFixed(3) + ")"); if(k.con) f.push("contrast(" + (1 + k.con).toFixed(3) + ")"); if(k.sat) f.push("saturate(" + Math.max(0, 1 + k.sat).toFixed(3) + ")");
+  ctx.save(); ctx.filter = f.join(" ") || "none"; ctx.drawImage(s, (W - sw * e) / 2, (H - sh * e) / 2, sw * e, sh * e); ctx.restore();
+  if(k.temp){ ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.fillStyle = k.temp > 0 ? "rgba(255,150,40," + Math.min(0.5, k.temp * 0.5) + ")" : "rgba(40,120,255," + Math.min(0.5, -k.temp * 0.5) + ")"; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  _evpVinhetaGrao(ctx, W, H, k, 0);
+}
+/* imagem de amostra (céu, pasto, pele, terra) para ver os filtros quando o vídeo ainda não tem miniatura */
+let _evpAmostra = null;
+function _evpAmostraCor(){
+  if(_evpAmostra) return _evpAmostra;
+  const c = document.createElement("canvas"); c.width = 192; c.height = 108; const x = c.getContext("2d");
+  const ceu = x.createLinearGradient(0, 0, 0, 55); ceu.addColorStop(0, "#5b8fd6"); ceu.addColorStop(1, "#b9d3ee"); x.fillStyle = ceu; x.fillRect(0, 0, 192, 55);
+  const pasto = x.createLinearGradient(0, 55, 0, 108); pasto.addColorStop(0, "#6f9a3c"); pasto.addColorStop(1, "#3e5d22"); x.fillStyle = pasto; x.fillRect(0, 55, 192, 53);
+  x.fillStyle = "#8a5a3c"; x.fillRect(0, 88, 192, 20);
+  x.fillStyle = "#e0ad8a"; x.beginPath(); x.arc(130, 48, 18, 0, Math.PI * 2); x.fill();
+  x.fillStyle = "#c0392b"; x.fillRect(112, 66, 36, 30);
+  _evpAmostra = c; return c;
+}
+const _evpImgCache = {};
+function _evpImg(url){ if(!_evpImgCache[url]){ const im = new Image(); im.crossOrigin = "anonymous"; im.src = url; _evpImgCache[url] = im; } return _evpImgCache[url]; }
+function _EvpThumbCor({ url, cor, w, h }){
+  const ref = useRef(null), chave = JSON.stringify(cor || {});
+  useEffect(function(){ const cv = ref.current; if(!cv) return; const x = cv.getContext("2d");
+    const pinta = function(im){ x.clearRect(0, 0, w, h); _evpPintarCor2D(x, im || _evpAmostraCor(), w, h, cor); };
+    if(!url){ pinta(null); return; } const im = _evpImg(url); if(im.complete && im.naturalWidth) pinta(im); else { pinta(null); im.addEventListener("load", function(){ pinta(im); }, { once:true }); } }, [url, chave, w, h]);
+  return <canvas ref={ref} width={w} height={h} style={{width:"100%",height:h,display:"block"}}/>;
+}
+function _EvpLooks2({ thumbClipe, atual, lista, onEscolher }){
+  const th = thumbClipe ? _evpThumbEm(thumbClipe, 1) : null;
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6}}>
+      {lista.map(function(lk){ const on = atual === lk.id;
+        return <button key={lk.id} onClick={function(){ onEscolher(lk); }} title={lk.label} style={{font:"inherit",padding:0,border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),borderRadius:10,background:_EVP_COR.campo,cursor:"pointer",overflow:"hidden",
+          boxShadow:on ? "0 0 0 3px rgba(124,58,237,.18)" : "none"}}>
+          <_EvpThumbCor url={th} cor={lk.cor} w={96} h={52}/>
+          <div style={{fontSize:10.5,fontWeight:700,padding:"4px 2px",color:on ? _EVP_COR.roxo : _EVP_COR.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{lk.label}</div>
+        </button>; })}
+    </div>
+  );
+}
+/* curvas: arrastar pontos; duplo clique no fundo cria, duplo clique num ponto do meio tira */
+function _EvpCurvasEditor({ pts0, canal, onVivo, onFim }){
+  const W = 240, H = 240, P = 14, pts = (Array.isArray(pts0) && pts0.length >= 2 ? pts0 : [[0, 0], [1, 1]]).map(function(q){ return q.slice(); });
+  const X = function(x){ return P + x * (W - 2 * P); }, Y = function(y){ return P + (1 - y) * (H - 2 * P); };
+  const svgRef = useRef(null), cor = { l:"#e5e7eb", r:"#f87171", g:"#4ade80", b:"#60a5fa" }[canal] || "#e5e7eb";
+  const ponto = function(m){ const r = svgRef.current.getBoundingClientRect(), sx = W / r.width, sy = H / r.height;
+    return [Math.round(_evClamp(((m.clientX - r.left) * sx - P) / (W - 2 * P), 0, 1) * 1000) / 1000, Math.round(_evClamp(1 - ((m.clientY - r.top) * sy - P) / (H - 2 * P), 0, 1) * 1000) / 1000]; };
+  const arrastar = function(k, ev){ ev.preventDefault(); ev.stopPropagation(); const base = pts.map(function(q){ return q.slice(); });
+    const mv = function(m){ const q = ponto(m), nv = base.map(function(x){ return x.slice(); }); const a = k > 0 ? nv[k-1][0] + 0.02 : 0, b = k < nv.length - 1 ? nv[k+1][0] - 0.02 : 1;
+      nv[k] = [k === 0 ? 0 : k === nv.length - 1 ? 1 : _evClamp(q[0], a, b), q[1]]; onVivo(nv); };
+    const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); onFim(); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); };
+  const tab = _evpCurvaTabela(pts); let d = ""; for(let i=0;i<=64;i++){ const x = i / 64; d += (i ? " L" : "M") + X(x).toFixed(1) + " " + Y(tab[Math.round(x * 255)] / 255).toFixed(1); }
+  return (
+    <svg ref={svgRef} viewBox={"0 0 " + W + " " + H} role="img" aria-label="Curva de cor" style={{width:"100%",maxWidth:280,display:"block",background:"#0b1020",borderRadius:12,touchAction:"none",userSelect:"none"}}
+      onDoubleClick={function(m){ if(m.target.tagName === "circle") return; const q = ponto(m); if(q[0] <= 0.02 || q[0] >= 0.98) return; const nv = pts.concat([q]).sort(function(a, b){ return a[0] - b[0]; }).slice(0, 12); onVivo(nv); onFim(); }}>
+      {[0.25, 0.5, 0.75].map(function(g){ return <g key={g}><line x1={X(g)} x2={X(g)} y1={Y(0)} y2={Y(1)} stroke="#1a2036"/><line x1={X(0)} x2={X(1)} y1={Y(g)} y2={Y(g)} stroke="#1a2036"/></g>; })}
+      <line x1={X(0)} y1={Y(0)} x2={X(1)} y2={Y(1)} stroke="#2c3450" strokeDasharray="4 4"/>
+      <path d={d} fill="none" stroke={cor} strokeWidth="2.5"/>
+      {pts.map(function(q, k){ return <circle key={k} cx={X(q[0])} cy={Y(q[1])} r="7" fill="#0b1020" stroke={cor} strokeWidth="2.5" style={{cursor:"grab"}} onPointerDown={function(ev){ arrastar(k, ev); }}
+        onDoubleClick={function(ev){ ev.stopPropagation(); if(k === 0 || k === pts.length - 1) return; onVivo(pts.filter(function(_, i){ return i !== k; })); onFim(); }}/>; })}
+    </svg>
+  );
+}
+/* roda de cor: arrastar o ponto (ângulo = cor, distância = força) + luz embaixo */
+function _EvpRoda({ rot, valor, onVivo, onFim }){
+  const v = Array.isArray(valor) ? valor : [0, 0, 0], R = 37, S = 88, C = S / 2, ref = useRef(null);
+  const a = _evpNum(v[0], 0) * Math.PI / 180, f = _evpNum(v[1], 0), px = C + Math.cos(a) * f * R, py = C - Math.sin(a) * f * R;
+  const arrastar = function(ev){ ev.preventDefault(); const mv = function(m){ const r = ref.current.getBoundingClientRect(), x = (m.clientX - r.left) * S / r.width - C, y = C - (m.clientY - r.top) * S / r.height;
+      const ang = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360, fo = _evClamp(Math.hypot(x, y) / R, 0, 1); onVivo([Math.round(ang), Math.round(fo * 100) / 100, _evpNum(v[2], 0)]); };
+    mv(ev); const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); onFim(); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); };
+  const grad = "conic-gradient(from 90deg, #ff3b3b, #ff00d4, #3b6bff, #00e5ff, #3bff6b, #ffe600, #ff3b3b)";
+  return (
+    <div style={{textAlign:"center"}}>
+      <div ref={ref} onPointerDown={arrastar} onDoubleClick={function(){ onVivo([0, 0, _evpNum(v[2], 0)]); onFim(); }} title="Arraste para dar cor · duplo clique zera"
+        style={{position:"relative",width:S,height:S,borderRadius:"50%",margin:"0 auto",cursor:"crosshair",touchAction:"none",background:"radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 68%), " + grad}}>
+        <div style={{position:"absolute",left:px - 7,top:py - 7,width:14,height:14,borderRadius:"50%",border:"2px solid #0b1020",background:"#fff",boxShadow:"0 0 0 2px rgba(255,255,255,.6)",pointerEvents:"none"}}/>
+      </div>
+      <div style={{fontSize:11.5,fontWeight:800,marginTop:4}}>{rot}</div>
+      <input type="range" min={-1} max={1} step={0.01} value={_evpNum(v[2], 0)} aria-label={"Luz — " + rot} onChange={function(e){ onVivo([_evpNum(v[0], 0), _evpNum(v[1], 0), Number(e.target.value)]); }} onPointerUp={onFim} onKeyUp={onFim}
+        style={{width:S,accentColor:_EVP_COR.roxo}}/>
+    </div>
+  );
+}
+function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
+  const [aba, setAba] = useState(function(){ try{ return localStorage.getItem("pxev-cor-aba") || "filtros"; }catch(_){ return "filtros"; } });
+  const irAba = function(a){ setAba(a); try{ localStorage.setItem("pxev-cor-aba", a); }catch(_){} };
+  const [canal, setCanal] = useState("l"), [corHsl, setCorHsl] = useState("verde"), [nomeF, setNomeF] = useState(""), [salvos, setSalvos] = useState([]), [refClipe, setRefClipe] = useState("");
+  const cor = c.cor || {};
+  const sinal = function(v){ return (v > 0 ? "+" : "") + Math.round(v * 100); };
+  const nk = function(fn){ return function(np, v){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return; o.cor = Object.assign({}, o.cor); fn(o.cor, v); delete o.cor.look; }; };
+  const sl = function(q, rot, min, max, fmt){ return <_EvpSlider key={q} ctl={ctl} rotulo={rot} v={_evpNum(cor[q], 0)} min={min} max={max} step={0.01} fmt={fmt || sinal} padrao={0} aplicar={nk(function(k, v){ k[q] = v; })}/>; };
+  const lista = _EVP_LOOKS2.concat(((kit && kit.filtros) || []).concat(salvos).filter(function(f, i, a){ return f && f.nome && a.findIndex(function(x){ return x.nome === f.nome; }) === i; })
+    .map(function(f){ return { id:"cli:" + f.nome, label:f.nome, cor:f.cor || {} }; }));
+  const antes = function(v){ try{ window.dispatchEvent(new CustomEvent("evp-antes", { detail:v })); }catch(_){} };
+  const abas = [["filtros","Filtros"],["basico","Básico"],["cor","Cor"],["hsl","HSL"],["curvas","Curvas"],["rodas","Rodas"],["detalhes","Detalhes"],["igualar","Igualar"]];
+  const hslV = (cor.hsl && cor.hsl[corHsl]) || [0, 0, 0];
+  const setHsl = function(i){ return nk(function(k, v){ k.hsl = Object.assign({}, k.hsl); const t = (k.hsl[corHsl] || [0, 0, 0]).slice(); t[i] = v; k.hsl[corHsl] = t; }); };
+  const curvaAt = (cor.curvas && cor.curvas[canal]) || [[0, 0], [1, 1]];
+  const outros = []; p.clips.forEach(function(o){ if(o.clipe !== c.clipe && outros.indexOf(o.clipe) < 0) outros.push(o.clipe); });
+  const salvarFiltro = async function(){
+    const nome = nomeF.trim().slice(0, 40); if(!nome){ _evToast("warning", "Dê um nome ao filtro."); return; }
+    const k = Object.assign({}, cor); delete k.ig; delete k.look;
+    try{
+      const r = await window._sb.rpc("criacao_kit_filtro_salvar", { p_client:tCard && tCard.client, p_unidade:edUnidade || "", p_nome:nome, p_cor:k });
+      if(r.error){ const m = String(r.error.message || ""); throw new Error(/function|não existe|does not exist|schema cache/i.test(m) ? "falta colar o SQL da Fase C no Supabase" : m); }
+      setSalvos(function(a){ return a.filter(function(x){ return x.nome !== nome; }).concat([{ nome:nome, cor:k }]); }); setNomeF("");
+      _evToast("success", "Filtro “" + nome + "” guardado no kit do cliente");
+    }catch(e){ _evToast("error", "Não guardou o filtro: " + ((e && e.message) || e)); }
+  };
+  return (
+    <div>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
+        {abas.map(function(a){ return <button key={a[0]} onClick={function(){ irAba(a[0]); }} style={Object.assign(_evpChip(aba === a[0]), { padding:"5px 9px", fontSize:11.5 })}>{a[1]}</button>; })}
+      </div>
+
+      {aba === "filtros" && (<div>
+        <_EvpLooks2 thumbClipe={c.clipe} atual={cor.look || (Object.keys(_evpCorLimpa(cor)).length === 4 && !cor.bri && !cor.con && !cor.sat && !cor.temp ? "original" : null)} lista={lista}
+          onEscolher={function(lk){ mudar(nk(function(k){ const ig = k.ig; Object.keys(k).forEach(function(q){ delete k[q]; }); Object.assign(k, { bri:0, con:0, sat:0, temp:0 }, _evpCopia(lk.cor), ig ? { ig:ig } : {}, { look:lk.id }); })); }}/>
+        <div style={_EVP_TIT}>Guardar meu filtro (no kit do cliente)</div>
+        <div style={{display:"flex",gap:6}}>
+          <input value={nomeF} maxLength={40} onChange={function(e){ setNomeF(e.target.value); }} placeholder="Nome (ex.: Clem obra)" aria-label="Nome do filtro"
+            style={{font:"inherit",flex:1,minWidth:0,padding:"7px 9px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,fontSize:12.5,background:_EVP_COR.campo,color:_EVP_COR.ink}}/>
+          <button onClick={salvarFiltro} style={_evpBtn("suave")}>Guardar</button>
+        </div>
+        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Guarda os ajustes deste clipe como filtro do cliente (aparece aqui em todos os vídeos dele).</div>
+      </div>)}
+
+      {aba === "basico" && (<div>
+        {sl("exp", "Exposição", -2, 2, function(v){ return (v > 0 ? "+" : "") + v.toFixed(2); })}
+        {sl("con", "Contraste", -0.5, 0.5)}
+        {sl("real", "Realces", -1, 1)}
+        {sl("somb", "Sombras", -1, 1)}
+        {sl("bran", "Brancos", -1, 1)}
+        {sl("pret", "Pretos", -1, 1)}
+        {sl("bri", "Brilho", -0.5, 0.5)}
+      </div>)}
+
+      {aba === "cor" && (<div>
+        {sl("temp", "Temperatura", -1, 1, function(v){ return v > 0 ? "quente " + Math.round(v * 100) : v < 0 ? "fria " + Math.round(-v * 100) : "0"; })}
+        {sl("tint", "Matiz (verde ↔ magenta)", -1, 1)}
+        {sl("sat", "Saturação", -1, 1)}
+        {sl("vib", "Vibração", -1, 1)}
+        <div style={{fontSize:11,color:_EVP_COR.fraco}}>Vibração dá cor ao que está apagado sem estourar a pele.</div>
+      </div>)}
+
+      {aba === "hsl" && (<div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          {_EVP_HSL_CORES.map(function(h){ const on = corHsl === h.id, mex = cor.hsl && cor.hsl[h.id];
+            return <button key={h.id} onClick={function(){ setCorHsl(h.id); }} title={h.label} aria-label={h.label}
+              style={{width:28,height:28,borderRadius:99,background:h.hex,border:"2px solid " + (on ? _EVP_COR.ink : "transparent"),boxShadow:on ? "0 0 0 2px " + _EVP_COR.roxo : "none",cursor:"pointer",position:"relative",padding:0}}>
+              {mex && <span style={{position:"absolute",right:-2,top:-2,width:8,height:8,borderRadius:99,background:"#fff",border:"1.5px solid #0b1020"}}/>}</button>; })}
+        </div>
+        <div style={{fontSize:12,fontWeight:800,marginBottom:6}}>{(_EVP_HSL_CORES.find(function(h){ return h.id === corHsl; }) || {}).label}</div>
+        <_EvpSlider ctl={ctl} rotulo="Matiz" v={_evpNum(hslV[0], 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={setHsl(0)}/>
+        <_EvpSlider ctl={ctl} rotulo="Saturação" v={_evpNum(hslV[1], 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={setHsl(1)}/>
+        <_EvpSlider ctl={ctl} rotulo="Luz" v={_evpNum(hslV[2], 0)} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={setHsl(2)}/>
+        <div style={{fontSize:11,color:_EVP_COR.fraco}}>Mexe só naquela cor. Ex.: verde +saturação deixa o pasto mais verde sem mudar a pele.</div>
+      </div>)}
+
+      {aba === "curvas" && (<div>
+        <div style={{display:"flex",gap:4,marginBottom:8}}>
+          {[["l","Geral"],["r","Vermelho"],["g","Verde"],["b","Azul"]].map(function(q){ return <button key={q[0]} onClick={function(){ setCanal(q[0]); }} style={Object.assign(_evpChip(canal === q[0]), { padding:"5px 9px", fontSize:11.5 })}>{q[1]}</button>; })}
+        </div>
+        <_EvpCurvasEditor pts0={curvaAt} canal={canal} onVivo={function(nv){ ctl.vivo(nk(function(k){ k.curvas = Object.assign({}, k.curvas); k.curvas[canal] = nv; })); }} onFim={ctl.fim}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+          <button onClick={function(){ mudar(nk(function(k){ k.curvas = Object.assign({}, k.curvas, { l:[[0, 0], [0.25, 0.2], [0.75, 0.8], [1, 1]] }); })); }} style={_evpBtn()}>Curva em S (contraste)</button>
+          <button onClick={function(){ mudar(nk(function(k){ if(k.curvas){ k.curvas = Object.assign({}, k.curvas); delete k.curvas[canal]; } })); }} style={_evpBtn()}>Zerar esta curva</button>
+        </div>
+        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Arraste os pontos. Duplo clique no fundo cria um ponto; num ponto do meio, tira.</div>
+        <div style={_EVP_TIT}>Ajuste simples (sombras, meios, altas luzes)</div>
+        {[["s","Sombras"],["m","Meios-tons"],["a","Altas luzes"],["r","Vermelho"],["g","Verde"],["b","Azul"]].map(function(q){
+          return <_EvpSlider key={q[0]} ctl={ctl} rotulo={q[1]} v={_evpNum((c.curva || {})[q[0]], 0)} min={-1} max={1} step={0.02} fmt={sinal} padrao={0}
+            aplicar={function(np, v){ const o = np.clips.find(function(x){ return x.id === c.id; }); if(o){ o.curva = Object.assign({}, o.curva); o.curva[q[0]] = v; } }}/>; })}
+      </div>)}
+
+      {aba === "rodas" && (<div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+          {[["s","Sombras"],["m","Meios"],["a","Realces"]].map(function(q){
+            return <_EvpRoda key={q[0]} rot={q[1]} valor={cor.rodas && cor.rodas[q[0]]} onFim={ctl.fim}
+              onVivo={function(nv){ ctl.vivo(nk(function(k){ k.rodas = Object.assign({}, k.rodas); k.rodas[q[0]] = nv; })); }}/>; })}
+        </div>
+        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>Puxe o ponto para a cor que quer dar (mais longe do centro = mais forte). A barra embaixo clareia ou escurece. Duplo clique zera.</div>
+      </div>)}
+
+      {aba === "detalhes" && (<div>
+        {sl("nit", "Nitidez", 0, 1, function(v){ return Math.round(v * 100) + "%"; })}
+        {sl("vin", "Vinheta", -1, 1, function(v){ return v > 0 ? "escura " + Math.round(v * 100) : v < 0 ? "clara " + Math.round(-v * 100) : "0"; })}
+        {sl("grao", "Grão", 0, 1, function(v){ return Math.round(v * 100) + "%"; })}
+      </div>)}
+
+      {aba === "igualar" && (<div>
+        <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Deixa a cor de um vídeo igual à de outro (média e contraste de cada canal, medidos nas miniaturas).</div>
+        {outros.length ? (<div>
+          <select value={refClipe} onChange={function(e){ setRefClipe(e.target.value); }} aria-label="Vídeo de referência" style={{font:"inherit",width:"100%",padding:"7px 9px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,fontSize:12.5,marginBottom:6,background:_EVP_COR.campo,color:_EVP_COR.ink}}>
+            <option value="">Escolha o vídeo de referência…</option>
+            {outros.map(function(id){ const n = (p.clips.find(function(o){ return o.clipe === id; }) || {}).clipe; return <option key={id} value={id}>{(tCard && (tCard.files || []).find(function(f){ return f.id === id; }) || {}).name || n}</option>; })}
+          </select>
+          <button onClick={async function(){ if(!refClipe){ _evToast("warning", "Escolha o vídeo de referência."); return; }
+              const ref = await _evpCorEstat(refClipe), alvo = await _evpCorEstat(c.clipe); if(!ref || !alvo){ _evToast("warning", "Espere as miniaturas carregarem."); return; }
+              const ig = _evpIgualarIg(ref, alvo, 1); mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe === c.clipe){ o.cor = Object.assign({}, o.cor, { ig:ig }); } }); }); _evToast("success", "Este vídeo agora tem a cor da referência"); }}
+            style={Object.assign(_evpBtn("primario"), {width:"100%",justifyContent:"center"})}>Igualar este vídeo à referência</button>
+        </div>) : <div style={{fontSize:12,color:_EVP_COR.fraco}}>Só tem um vídeo na linha do tempo.</div>}
+        <button onClick={async function(){ const ref = await _evpCorEstat(c.clipe); if(!ref){ _evToast("warning", "Espere as miniaturas carregarem."); return; }
+            const est = {}; for(const id of outros){ est[id] = await _evpCorEstat(id); } let n = 0;
+            mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe !== c.clipe && est[o.clipe]){ o.cor = Object.assign({}, o.cor, { ig:_evpIgualarIg(ref, est[o.clipe], 1) }); n++; } }); });
+            _evToast(outros.length ? "success" : "warning", outros.length ? "Os outros vídeos agora têm a cor deste" : "Só tem um vídeo"); }}
+          style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center",marginTop:6})}>Igualar os outros a este</button>
+        {cor.ig && (<div style={{marginTop:10}}>
+          <_EvpSlider ctl={ctl} rotulo="Força do igualar" v={_evpNum(cor.ig.f, 1)} min={0.1} max={1} step={0.05} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={1}
+            aplicar={function(np, v){ np.clips.forEach(function(o){ if(o.clipe === c.clipe && o.cor && o.cor.ig){ o.cor = Object.assign({}, o.cor, { ig:Object.assign({}, o.cor.ig, { f:v }) }); } }); }}/>
+          <button onClick={function(){ mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe === c.clipe && o.cor){ o.cor = Object.assign({}, o.cor); delete o.cor.ig; } }); }); }} style={_evpBtn()}>Tirar o igualar</button>
+        </div>)}
+      </div>)}
+
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:14,paddingTop:10,borderTop:"1px solid " + _EVP_COR.linha2}}>
+        <button onPointerDown={function(){ antes(true); }} onPointerUp={function(){ antes(false); }} onPointerLeave={function(){ antes(false); }} title="Segure para ver sem a cor (ou segure a tecla B)"
+          style={_evpBtn("suave")}>Antes/depois (segure · B)</button>
+        <button onClick={function(){ const cc = _evpCopia(cor), cv = Object.assign({}, c.curva); delete cc.ig; mudar(function(np){ np.clips.forEach(function(o){ const ig = o.cor && o.cor.ig; o.cor = Object.assign(_evpCopia(cc), ig ? { ig:ig } : {}); o.curva = Object.assign({}, cv); }); }); _evToast("success", "Cor aplicada em todos os clipes"); }} style={_evpBtn()}>Usar em todos os clipes</button>
+        <button onClick={function(){ mudar(nk(function(k){ const ig = k.ig; Object.keys(k).forEach(function(q){ delete k[q]; }); Object.assign(k, { bri:0, con:0, sat:0, temp:0 }, ig ? { ig:ig } : {}); })); }} style={_evpBtn()}>Zerar a cor</button>
+      </div>
+      {_evpCorAvancada(cor) && !_evpCorGL.ok() && <div style={{marginTop:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.aviso,color:_EV.amarelo,fontSize:11.5,fontWeight:700}}>Este navegador está sem WebGL: a cor avançada não aparece aqui.</div>}
+    </div>
+  );
+}
+/* ─── v19: TESTE DE VELOCIDADE — mede quanto o computador leva para desenhar cada quadro (com a cor, animação e transições deste vídeo) ─── */
+function _EvpTesteVelocidade({ ed, projeto, calc, kit, base, tratados, logoUrl }){
+  const [st, setSt] = useState(null);
+  const rodar = async function(){
+    setSt({ rodando:true });
+    let m = null, cv = document.createElement("canvas");
+    try{
+      m = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:ed.clipes || [], original:true, logoUrl:logoUrl, tratados:tratados });
+      await m.pronto; m.volumeGeral(0);
+      const dur = Math.min(8, Math.max(1, calc.fimCortes || calc.total));
+      m.seek(0); await new Promise(function(r){ setTimeout(r, 1200); }); m.play();
+      await new Promise(function(r){ const iv = setInterval(function(){ if(!m.tocando || m.tempo >= dur){ clearInterval(iv); r(); } }, 100); });
+      const e = m.estatisticas; m.pause();
+      setSt({ feito:true, media:e.media, max:e.max, lentos:e.lentos, quadros:e.quadros, gl:_evpCorGL.ok() });
+    }catch(err){ setSt({ erro:String((err && err.message) || err) }); }
+    try{ if(m) m.destruir(); }catch(_){}
+  };
+  const bom = st && st.feito && st.media < 20 && st.lentos <= Math.max(2, st.quadros * 0.03);
+  return (
+    <div style={{marginTop:10,fontSize:11.5,color:_EVP_COR.sub}}>
+      <button onClick={rodar} disabled={st && st.rodando} style={Object.assign(_evpBtn(null, !(st && st.rodando)), {padding:"6px 10px",fontSize:11.5})}><_EvpIco n="velocidade" s={14}/>{st && st.rodando ? "Testando… (8 s)" : "Testar a velocidade deste computador"}</button>
+      {st && st.feito && <div style={{marginTop:6,fontWeight:700,color:bom ? _EV.verde : _EV.amarelo,lineHeight:1.5}}>
+        {bom ? "✓ Grava liso." : "⚠ Pode travar na gravação."} Média {st.media.toFixed(1).replace(".", ",")} ms por quadro (máx. {Math.round(st.max)} ms; {st.lentos} de {st.quadros} quadros acima de 33 ms){st.gl ? "" : " · sem WebGL"}.
+        <div style={{fontWeight:500,color:_EVP_COR.sub}}>Para gravar a 30 quadros por segundo cada quadro precisa de menos de 33 ms.</div></div>}
+      {st && st.erro && <div style={{marginTop:6,color:_EV.verm,fontWeight:700}}>Não testou: {st.erro}</div>}
+    </div>
+  );
+}
 /* ─── PAINEL DA DIREITA: mostra só a ferramenta escolhida na barra embaixo do vídeo ─── */
 function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef, confirmar, kit, base, infoClipe, musicas, musInfo, setMusica, enquadrar, setEnquadrar,
-                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara }){
+                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara, edUnidade }){
   const ctl = _evpUsarCtl(pRef, setP, confirmar, mudar);
   const caixa = Object.assign({}, _EVP_PAINEL, { padding:14, overflow:"auto", height:"100%", boxSizing:"border-box", minWidth:0 });
   const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:10, border:"1px solid "+_EVP_COR.linha, fontSize:13, userSelect:"text" };
@@ -122228,31 +122722,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           {estabTxt && <div style={{display:"flex",gap:6,alignItems:"center",fontSize:12,fontWeight:700,color:estabCor}}><_EvpIco n={estabCor === _EV.verde ? "check" : "pc"} s={14}/>{estabTxt}</div>}
           {(c.estab || c.melhorar) && it && it.status === "navegador" && !tratados[c.clipe] && <button onClick={function(){ pedirEstab(c.clipe); }} style={Object.assign(_evpBtn(), {marginTop:8})}><_EvpIco n="pc" s={15}/>Tentar no PC de novo</button>}
         </div>)}
-        {ferr === "cor" && (<div>
-          <div style={{..._EVP_TIT, marginTop:0}}>Filtros prontos</div>
-          <_EvpLooks thumbClipe={c.clipe} atual={(_EVP_LOOKS.find(function(lk){ return ["bri","con","sat","temp"].every(function(q){ return Math.abs(_evpNum(cor[q], 0) - lk.cor[q]) < 0.001; }); }) || {}).id}
-            onEscolher={function(lk){ mudar(nc(function(o){ o.cor = Object.assign({}, lk.cor); })); }}/>
-          <div style={_EVP_TIT}>Ajuste fino</div>
-          <_EvpSlider ctl={ctl} rotulo="Brilho" v={cor.bri || 0} min={-0.5} max={0.5} step={0.01} fmt={sinal} padrao={0} aplicar={nc(function(o, v){ o.cor = Object.assign({}, o.cor, { bri:v }); })}/>
-          <_EvpSlider ctl={ctl} rotulo="Contraste" v={cor.con || 0} min={-0.5} max={0.5} step={0.01} fmt={sinal} padrao={0} aplicar={nc(function(o, v){ o.cor = Object.assign({}, o.cor, { con:v }); })}/>
-          <_EvpSlider ctl={ctl} rotulo="Saturação" v={cor.sat || 0} min={-1} max={1} step={0.01} fmt={sinal} padrao={0} aplicar={nc(function(o, v){ o.cor = Object.assign({}, o.cor, { sat:v }); })}/>
-          <_EvpSlider ctl={ctl} rotulo="Temperatura" v={cor.temp || 0} min={-1} max={1} step={0.01} fmt={function(v){ return v > 0 ? "quente " + Math.round(v*100) : v < 0 ? "fria " + Math.round(-v*100) : "0"; }} padrao={0} aplicar={nc(function(o, v){ o.cor = Object.assign({}, o.cor, { temp:v }); })}/>
-          <div style={_EVP_TIT}>Curvas</div>
-          {[["s","Sombras"],["m","Meios-tons"],["a","Altas luzes"]].map(function(q){
-            return <_EvpSlider key={q[0]} ctl={ctl} rotulo={q[1]} v={_evpNum((c.curva || {})[q[0]], 0)} min={-1} max={1} step={0.02} fmt={sinal} padrao={0} aplicar={nc(function(o, v){ o.curva = Object.assign({}, o.curva); o.curva[q[0]] = v; })}/>; })}
-          <div style={_EVP_TIT}>Equilíbrio de cor</div>
-          {[["r","Vermelho"],["g","Verde"],["b","Azul"]].map(function(q){
-            return <_EvpSlider key={q[0]} ctl={ctl} rotulo={q[1]} v={_evpNum((c.curva || {})[q[0]], 0)} min={-1} max={1} step={0.02} fmt={sinal} padrao={0} aplicar={nc(function(o, v){ o.curva = Object.assign({}, o.curva); o.curva[q[0]] = v; })}/>; })}
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <button onClick={function(){ const cc = Object.assign({}, cor), cv = Object.assign({}, c.curva); mudar(function(np){ np.clips.forEach(function(o){ o.cor = Object.assign({}, cc); o.curva = Object.assign({}, cv); }); }); _evToast("success", "Cor aplicada em todos os clipes"); }} style={_evpBtn()}>Usar esta cor em todos</button>
-            <button onClick={async function(){
-              const ref = await _evpCorMedia(c.clipe); if(!ref){ _evToast("warning", "Espere as miniaturas carregarem."); return; }
-              const medias = {}; for(const o of p.clips){ if(o.clipe !== c.clipe && !medias[o.clipe]) medias[o.clipe] = await _evpCorMedia(o.clipe); }
-              mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe !== c.clipe && medias[o.clipe]) o.cor = _evpIgualarCor(ref, medias[o.clipe], o.cor); }); });
-              _evToast("success", "Cor dos outros clipes igualada a este");
-            }} style={_evpBtn()}>Igualar os outros a este</button>
-          </div>
-        </div>)}
+        {ferr === "cor" && <_EvpCorPainel c={c} p={p} ctl={ctl} mudar={mudar} kit={kit} tCard={tCard} edUnidade={edUnidade}/>}
         {ferr === "fundo" && (<div>
           <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>A IA recorta a pessoa e troca o que está atrás dela. Funciona melhor com a pessoa em primeiro plano.</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
@@ -122731,6 +123201,9 @@ function _EvpSugestoes({ ed, p, mudar, kit }){
 /* ─── CONFERÊNCIA antes de exportar (a mesma lista que a IA vai usar na automação pelo WhatsApp) ─── */
 function _evpConferir(p, calc, o){
   const out = [], add = function(nivel, titulo, detalhe, acao){ out.push({ nivel:nivel, titulo:titulo, detalhe:detalhe || "", acao:acao || null }); };
+  // v19: cor completa precisa de WebGL (placa de vídeo)
+  if(calc.clips.some(function(c){ return c.cor && _evpCorAvancada(c.cor); }) && !_evpCorGL.ok())
+    add("aviso", "Este computador está sem WebGL", "A cor avançada (curvas, HSL, rodas, exposição…) não aparece aqui. No PC do escritório ela sai normal.");
   // v16: originais no Drive e nitidez do vídeo deitado no vertical
   (function(){
     const dD = o.driveDe || {}, usados = {}; calc.clips.forEach(function(c){ if(!usados[c.clipe]) usados[c.clipe] = c; });
@@ -123074,6 +123547,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
               : pcItem.status === "erro" ? "O PC não conseguiu: " + (pcItem.erro || "erro") : ""}</div>}
         </div>
       )}
+      {!ativo && !isMob && !pcAuto && <_EvpTesteVelocidade ed={ed} projeto={projeto} calc={calc} kit={kit} base={base} tratados={tratados} logoUrl={logoUrl}/>}
       {exp && exp.fase === "erro" && aviso(_EV.verm, _EVP_COR.erro, "alerta", "Não exportou: " + exp.msg)}
       {exp && exp.fase === "feito" && <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:_EVP_COR.ok,color:_EV.verde,fontSize:12.5,fontWeight:700,display:"flex",gap:8,alignItems:"center"}}>
         <_EvpIco n="check" s={15}/>{exp.msg} {exp.url && <a href={exp.url} download={exp.nome} style={{color:_EV.verde,marginLeft:6}}>Baixar cópia</a>}</div>}
