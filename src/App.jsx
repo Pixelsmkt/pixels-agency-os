@@ -90511,11 +90511,14 @@ function _CalculadoraModular({isMob, persistClientId}){
       if(q<=0) return;
       const ch = sc.channels[k];
       const unit = ch.price + (sc.multiplyPostsPerChannel ? _extra : 0);
-      const tot = unit*q + (!sc.multiplyPostsPerChannel && _primeiro ? _extra : 0);
-      _primeiro = false;
-      out.push({id:"social-"+k, recorrente:true, qtd:q, total:tot,
-        nome:"Gestão de Redes Sociais — "+ch.label+(q>1?(" · "+q+" contas"):""),
-        detalhe:(_posts*4)+" publicações/mês por conta"+(q>1?(" · "+fmt(unit)+" por conta"):"")});
+      /* (01/10 15:47, Gustavo) uma linha POR CONTA — cada conta tem o seu desconto */
+      for(let i=1;i<=q;i++){
+        const tot = unit + (!sc.multiplyPostsPerChannel && _primeiro ? _extra : 0);
+        _primeiro = false;
+        out.push({id:"social-"+k+"-"+i, recorrente:true, qtd:1, total:tot,
+          nome:"Gestão de Redes Sociais — "+ch.label+(q>1?(" · Conta "+i):""),
+          detalhe:(_posts*4)+" publicações/mês"});
+      }
     });
     const cr = cfg.creatives;
     if(creatives.staticCreatives>0) out.push({id:"cr-est",recorrente:true,qtd:creatives.staticCreatives,total:creatives.staticCreatives*cr.staticCreative,nome:"Criativos estáticos extras",detalhe:creatives.staticCreatives+" por mês · "+fmt(cr.staticCreative)+" cada"});
