@@ -24438,9 +24438,16 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       const usa=Math.min(pad,d); if(usa>0){ el.style.paddingTop=(pad-usa)+"px"; d-=usa; }
       if(d<1) return;
       let p=el.parentElement;
-      while(p&&p!==document.body){ const cs=getComputedStyle(p); if(/(auto|scroll)/.test(cs.overflowY)&&p.scrollHeight>p.clientHeight){ p.scrollTop+=d; return; } p=p.parentElement; }
-      window.scrollBy(0,d);
+      /* (01/10, 4ª versão) O <main> do app tem scroll-behavior:smooth: "scrollTop+=d" DESLIZAVA e as
+         correções seguintes eram medidas no meio do deslize → pulos. Agora pula direto (instant). */
+      const sc=_pxScroller(el);
+      if(sc) sc.scrollTo({top:sc.scrollTop+d,behavior:"instant"}); else window.scrollTo({top:window.scrollY+d,behavior:"instant"});
     }catch(_){}
+  }
+  function _pxScroller(el){
+    let p=el&&el.parentElement;
+    while(p&&p!==document.body){ const cs=getComputedStyle(p); if(/(auto|scroll)/.test(cs.overflowY)&&p.scrollHeight>p.clientHeight) return p; p=p.parentElement; }
+    return null;
   }
   /* (01/10, 3ª versão) O mês atual termina de carregar coisa DEPOIS (avisos de lacuna, plano, fotos)
      e a altura muda de novo depois de 1s. Agora o seletor fica ANCORADO: um ResizeObserver corrige a
@@ -24455,7 +24462,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
     // a correção ficava 1 quadro atrasada e a página "piscava" (subia e descia) — medido quadro a quadro.
     const corrige=function(){ if(_rodapeNavRef.current) _pxRolarAte(_rodapeNavRef.current,alvo); };
     let ro=null; try{ ro=new ResizeObserver(corrige); ro.observe(document.body); let p=el.parentElement; if(p) ro.observe(p); }catch(_){}
-    const parar=function(){ try{ ro&&ro.disconnect(); }catch(_){} cancelAnimationFrame(raf); clearTimeout(tm);
+    // o navegador tem um "ajuste automático" (scroll anchoring) que brigava com a correção: desliga só enquanto ancorado
+    const _sc=_pxScroller(el); const _oaAntes=_sc?_sc.style.overflowAnchor:""; if(_sc) _sc.style.overflowAnchor="none";
+    const parar=function(){ try{ ro&&ro.disconnect(); }catch(_){} try{ if(_sc) _sc.style.overflowAnchor=_oaAntes; }catch(_){} cancelAnimationFrame(raf); clearTimeout(tm);
       window.removeEventListener("wheel",parar,true); window.removeEventListener("touchstart",parar,true); window.removeEventListener("keydown",parar,true);
       _rodapeTopRef.current=null; _ancoraRef.current=null; };
     const tm=setTimeout(parar,8000);
