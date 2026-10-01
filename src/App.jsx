@@ -34016,6 +34016,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [tab,setTab]=useState(initTab||"copys");
   const [cardIdx,setCardIdx]=useState(0);
   const [filtroTipo,setFiltroTipo]=useState("");   // (23/09/2026) "" = fila inteira
+  const [filtroCli,setFiltroCli]=useState("");     // (01/10/2026, Gustavo) filtro por cliente (logo) — "" = todos
   const [imgIdx,setImgIdx]=useState(0);
   const [imgZoom,setImgZoom]=useState(false); // Lightbox: clique na imagem → zoom fullscreen
   // ESC fecha o zoom
@@ -34217,15 +34218,21 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      aquele tipo; a aprovação continua card a card. A régua é a mesma do contador do calendário
      (pxEhFotoDeObra, pxEhShort) e do estilo da copy (pxEstiloCard). */
   const copyQueueTudo=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"));
-  const copyQueue=filtroTipo?copyQueueTudo.filter(function(t){ return _pxTipoDaFila(t)===filtroTipo; }):copyQueueTudo;
+  /* (01/10/2026, Gustavo) "coloca por cliente também.. a logo de cada um, pra podermos aprovar tudo de um
+     cliente de uma vez". Combina com o filtro de tipo (ex.: só Climaves + só Vídeo). */
+  const copyQueue=copyQueueTudo.filter(function(t){
+    if(filtroTipo&&_pxTipoDaFila(t)!==filtroTipo) return false;
+    if(filtroCli&&String(t.client||"")!==filtroCli) return false;
+    return true;
+  });
   /* (25/09/2026, Vinicius) Filtro (ex.: só Short) acabou e ainda tem copy de outro tipo na fila:
      tira o filtro sozinho e mostra as outras, em vez de "Nenhuma copy aguarda aprovação". */
   useEffect(function(){
-    if(filtroTipo&&copyQueue.length===0&&copyQueueTudo.length>0){
-      setFiltroTipo("");
-      if(typeof pixelsToast!=="undefined") pixelsToast.info("Acabaram as copys desse tipo — mostrando a fila inteira.",3500);
+    if((filtroTipo||filtroCli)&&copyQueue.length===0&&copyQueueTudo.length>0){
+      setFiltroTipo(""); setFiltroCli("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.info(filtroCli&&!filtroTipo?"Acabaram as copys desse cliente — mostrando a fila inteira.":"Acabaram as copys desse filtro — mostrando a fila inteira.",3500);
     }
-  },[filtroTipo,copyQueue.length,copyQueueTudo.length]);
+  },[filtroTipo,filtroCli,copyQueue.length,copyQueueTudo.length]);
   // Ajuste queue: cards marcados para ajuste
   const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
   // Publication queue: cards in "avaliacao" — separada por tipo (design vs vídeo)
@@ -35419,12 +35426,32 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
       {/* (23/09/2026) CHIPS DE TIPO — só na Avaliação de copys. Um por vez; clicar de novo desliga. */}
       {tab==="copys"&&(function(){
-        const _cont={}; (copyQueueTudo||[]).forEach(function(x){ const k=_pxTipoDaFila(x); _cont[k]=(_cont[k]||0)+1; });
+        // contagem de tipo respeita o cliente escolhido, e a de cliente respeita o tipo escolhido
+        const _cont={}; (copyQueueTudo||[]).forEach(function(x){ if(filtroCli&&String(x.client||"")!==filtroCli) return; const k=_pxTipoDaFila(x); _cont[k]=(_cont[k]||0)+1; });
+        const _contCli={}; (copyQueueTudo||[]).forEach(function(x){ if(filtroTipo&&_pxTipoDaFila(x)!==filtroTipo) return; const k=String(x.client||""); if(k) _contCli[k]=(_contCli[k]||0)+1; });
+        const _clisFila=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){ return (copyQueueTudo||[]).some(function(x){ return String(x.client||"")===c.id; }); });
+        const _nomeCli=filtroCli?(((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===filtroCli;})||{}).name||filtroCli):"";
         /* (23/09/2026, Vinicius) "quando eu clico em algum filtro ele muda o lugar das tags… devem
            ficar fixas". O texto "mostrando só…" estava NA linha dos chips, centralizada — aparecia e
            empurrava tudo pra esquerda. Agora fica numa linha própria, com altura reservada. */
         const _rotulo=filtroTipo?((PX_TIPOS_FILA.find(function(o){return o.id===filtroTipo;})||{}).label||""):"";
         return <div style={{padding:"2px 0 4px",paddingRight:(isMob?0:(tab==="copys"?378:398))}}>
+        {_clisFila.length>1&&<div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
+          {_clisFila.map(function(c){
+            const on=filtroCli===c.id, n=_contCli[c.id]||0;
+            const logo=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS)?CLIENT_LOGOS[c.id]:"";
+            return <button key={c.id} type="button" disabled={!n&&!on}
+              onClick={function(){ setFiltroCli(on?"":c.id); setCardIdx(0); }}
+              title={on?"Desligar o filtro — volta todos os clientes":("Mostrar só "+c.name+" na fila")}
+              style={{background:on?"#f5f0ff":"#fff",border:(on?"2px solid #9F43F6":"1px solid #e2e8f0"),borderRadius:10,padding:on?"3px 9px":"4px 10px",cursor:(n||on)?"pointer":"default",opacity:(n||on)?1:.45,display:"inline-flex",alignItems:"center",gap:7,height:34,boxSizing:"border-box",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:on?"0 0 0 3px rgba(159,67,246,.12)":"none"}}
+              onMouseEnter={function(e){ if(!on&&n) e.currentTarget.style.borderColor="#c9a5ff"; }}
+              onMouseLeave={function(e){ if(!on&&n) e.currentTarget.style.borderColor="#e2e8f0"; }}>
+              {logo?<img src={logo} alt={c.name} style={{maxHeight:18,maxWidth:64,objectFit:"contain",display:"block"}}/>
+                :<span style={{fontSize:11.5,fontWeight:700,color:"#475569"}}>{c.abbr||c.name}</span>}
+              <span style={{background:on?"#9F43F6":"#f1f5f9",color:on?"#fff":"#94a3b8",borderRadius:99,padding:"0 6px",fontSize:10,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{n}</span>
+            </button>;
+          })}
+        </div>}
         <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {PX_TIPOS_FILA.map(function(o){
             const on=filtroTipo===o.id, n=_cont[o.id]||0;
@@ -35439,7 +35466,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           })}
         </div>
         <div style={{minHeight:16,textAlign:"center",color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4,lineHeight:"16px"}}>
-          {filtroTipo?("mostrando só "+_rotulo+" · "+copyQueue.length+" de "+copyQueueTudo.length):""}
+          {(filtroTipo||filtroCli)?("mostrando só "+[_nomeCli,_rotulo].filter(Boolean).join(" · ")+" · "+copyQueue.length+" de "+copyQueueTudo.length):""}
         </div>
         </div>;
       })()}
