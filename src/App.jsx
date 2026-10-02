@@ -118123,9 +118123,9 @@ const _EVP_TRANS_APOIO_ROT = { corte:"Corte seco", fade:"Fundir", desfoque:"Desf
 function _evpHexRgb(h){ const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "")); if(!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function _evpMisturaHex(a, b, k){ const x = _evpHexRgb(a) || [124, 58, 237], y = _evpHexRgb(b) || [0, 0, 0];
   return "#" + x.map(function(v, i){ return Math.round(v + (y[i] - v) * k).toString(16).padStart(2, "0"); }).join(""); }
-function _evpLuz(h){ const c = _evpHexRgb(h) || [0, 0, 0]; return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; }
+function _evpLuzMarca(h){ const c = _evpHexRgb(h) || [0, 0, 0]; return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; }   // v30.1: nome próprio (_evpLuz já existe no 52)
 /* 3ª faixa: a cor secundária do kit, se ela se destaca da principal; senão branco quente (principal escura) ou grafite (principal clara) */
-function _evpMarcaContraste(pri, sec){ if(_evpHexRgb(sec) && Math.abs(_evpLuz(sec) - _evpLuz(pri)) > 0.25) return sec; return _evpLuz(pri) < 0.6 ? "#f8f5ef" : "#14121a"; }
+function _evpMarcaContraste(pri, sec){ if(_evpHexRgb(sec) && Math.abs(_evpLuzMarca(sec) - _evpLuzMarca(pri)) > 0.25) return sec; return _evpLuzMarca(pri) < 0.6 ? "#f8f5ef" : "#14121a"; }
 const _EVP_TRANS_DURS = [ { v:0.2, label:"Curta" }, { v:0.35, label:"Média" }, { v:0.6, label:"Longa" } ];
 function _evpTransDur(c){ const d = _evpNum(c && c.transDur, 0.35); return d === 0.2 || d === 0.6 ? d : 0.35; }
 function _evpTransNova(id){ return _EVP_TRANS_NOVAS.some(function(o){ return o.id === id; }); }
