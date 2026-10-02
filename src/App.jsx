@@ -115620,6 +115620,8 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v29.2 (02/10/2026): tela "Preparar a edição" nova (3 passos, Narração | Material em 2 colunas, barra de ação fixa) · Narração IA com visual novo ·
+     andamento do PC com barra (batimento motor_pc_progresso) e aviso de programa desatualizado (banco v32).
    v29.1 (02/10/2026): o mesmo painel "🎙 Narração IA" aparece dentro do cartão do kanban (10_radar_entrega, abaixo de "Como esta peça sai"), só em card de vídeo.
    v29 (02/10/2026) — A VOZ PRIMEIRO + VÍDEO PESADO PELO PC (pedido do Vini: "quando criar o cartão, já criar a voz… a edição tem que ser em cima disso";
      "como é que eu vou editar material se isso aqui não pode ser editado?"):
@@ -117484,46 +117486,66 @@ function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = d
   if(nc === undefined || (noCard && semAcesso)) return null;
   const pronta = !!(nc && nc.url);
   const desatualizada = pronta && (String(nc.texto_gerado || "").replace(/\s+/g, " ").trim() !== texto.replace(/\s+/g, " ").trim() || (vozId && nc.voz_gerada && vozId !== nc.voz_gerada));
-  const cx = { marginTop:12, padding:"12px 14px", borderRadius:12, border:"1px solid " + (ligado ? "#fed7aa" : _EV.linha), background:ligado ? "#fff7ed" : "#fff" };
-  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:9, border:"1px solid #fed7aa", fontSize:_evF(13, isMob), background:"#fff" };
-  const bt = function(tipo, on){ return { font:"inherit", fontSize:_evF(12.5, isMob), fontWeight:800, padding:"8px 12px", borderRadius:9, cursor:on ? "pointer" : "default", opacity:on ? 1 : 0.6,
-    border:"1px solid " + (tipo === "p" ? "#c2410c" : "#fed7aa"), background:tipo === "p" ? "#c2410c" : "#fff", color:tipo === "p" ? "#fff" : "#7c2d12" }; };
+  // v29.2: visual novo (cartão branco, interruptor, 3 blocos claros: texto · voz · narração pronta)
+  const cx = { marginTop:noCard ? 12 : 0, padding:isMob ? 12 : 16, borderRadius:14, border:"1px solid " + (ligado ? _EV.roxoBorda : _EV.linha), background:"#fff", boxShadow:ligado ? "0 1px 0 rgba(124,58,237,.06)" : "none" };
+  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"9px 11px", borderRadius:10, border:"1px solid " + _EV.linha, fontSize:_evF(13, isMob), background:"#fff", color:_EV.texto };
+  const bt = function(tipo, on){ return { font:"inherit", fontSize:_evF(12.5, isMob), fontWeight:800, padding:"8px 13px", borderRadius:10, cursor:on ? "pointer" : "default", opacity:on ? 1 : 0.55,
+    border:"1px solid " + (tipo === "p" ? _EV.roxo : _EV.roxoBorda), background:tipo === "p" ? _EV.roxo : _EV.roxoClaro, color:tipo === "p" ? "#fff" : _EV.roxo, whiteSpace:"nowrap" }; };
+  const rot = { fontSize:_evF(11, isMob), fontWeight:800, color:_EV.sub, textTransform:"uppercase", letterSpacing:".05em" };
+  const nPal = texto.trim().split(/\s+/).filter(Boolean).length;
   return (
     <div style={cx} aria-label="Narração IA do card">
-      <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontWeight:800,color:ligado ? "#7c2d12" : _EV.texto,fontSize:_evF(14, isMob)}}>
-        <input type="checkbox" checked={ligado} onChange={function(e){ ligar(e.target.checked); }} aria-label="Narração IA" style={{width:18,height:18}}/>
-        🎙 Narração IA <span style={{fontWeight:600,color:_EV.sub,fontSize:_evF(12, isMob)}}>— a voz da IA narra o vídeo e a edição monta os vídeos em cima dela</span>
+      <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+        <span style={{width:34,height:34,borderRadius:10,background:ligado ? _EV.roxoClaro : _EV.fundo,color:ligado ? _EV.roxo : _EV.fraco,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:17}}>🎙</span>
+        <span style={{flex:1,minWidth:0}}>
+          <span style={{display:"block",fontWeight:800,fontSize:_evF(14, isMob),color:_EV.texto}}>Narração IA</span>
+          <span style={{display:"block",fontSize:_evF(12, isMob),color:_EV.sub,lineHeight:1.4}}>{ligado ? "A voz da IA narra e a edição monta os vídeos em cima dela." : "Desligada: a edição usa a fala dos próprios vídeos."}</span>
+        </span>
+        <span style={{position:"relative",width:42,height:24,flexShrink:0}}>
+          <input type="checkbox" checked={ligado} onChange={function(e){ ligar(e.target.checked); }} aria-label="Narração IA" style={{position:"absolute",inset:0,margin:0,opacity:0,cursor:"pointer",zIndex:1}}/>
+          <span aria-hidden="true" style={{position:"absolute",inset:0,borderRadius:99,background:ligado ? _EV.roxo : "#e2e8f0",transition:"background .16s"}}/>
+          <span aria-hidden="true" style={{position:"absolute",top:3,left:ligado ? 21 : 3,width:18,height:18,borderRadius:99,background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.3)",transition:"left .16s"}}/>
+        </span>
       </label>
-      {ligado && <div style={{marginTop:10}}>
-        <div style={{fontSize:_evF(12, isMob),fontWeight:700,color:"#7c2d12",marginBottom:4}}>1. Texto que a voz vai ler</div>
-        <textarea value={texto} onChange={function(e){ setTexto(e.target.value); }} onBlur={function(){ if(nc ? texto !== (nc.texto || "") : !!texto) salvar({ texto:texto }).catch(function(){}); }}
-          rows={isMob ? 6 : 5} maxLength={1600} aria-label="Texto da narração" placeholder="Escreva aqui o que a voz vai falar — ou clique em Escrever com IA (ela usa o briefing e o tom do cliente)." style={Object.assign({}, campo, { resize:"vertical", lineHeight:1.5 })}/>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:6}}>
-          <button onClick={escrever} disabled={!!ocupado} style={bt("s", !ocupado)}>{ocupado === "texto" ? "A IA está escrevendo…" : (texto.trim() ? "✨ Melhorar com IA" : "✨ Escrever com IA")}</button>
-          <span style={{fontSize:_evF(11.5, isMob),color:texto.length > 1500 ? _EV.verm : _EV.sub}}>{texto.trim().split(/\s+/).filter(Boolean).length} palavras · uns {Math.round(texto.trim().split(/\s+/).filter(Boolean).length / 2.4)} s · {texto.length}/1.500</span>
+      {!ligado && textoBriefing && <div style={{marginTop:10,fontSize:_evF(12, isMob),color:_EV.sub,background:_EV.fundo,borderRadius:10,padding:"8px 10px"}}>O briefing tem um texto de narração ("NARRAÇÃO:"). Ligue para usar.</div>}
+      {ligado && <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:6}}>
+            <span style={rot}>1 · Texto que a voz vai ler</span>
+            <span style={{fontSize:_evF(11.5, isMob),color:texto.length > 1500 ? _EV.verm : _EV.fraco,whiteSpace:"nowrap"}}>{nPal} palavras · ~{Math.round(nPal / 2.4)} s · {texto.length}/1.500</span>
+          </div>
+          <textarea value={texto} onChange={function(e){ setTexto(e.target.value); }} onBlur={function(){ if(nc ? texto !== (nc.texto || "") : !!texto) salvar({ texto:texto }).catch(function(){}); }}
+            rows={isMob ? 6 : 6} maxLength={1600} aria-label="Texto da narração" placeholder="Escreva o que a voz vai falar — ou clique em Escrever com IA (usa o briefing e o tom do cliente)." style={Object.assign({}, campo, { resize:"vertical", lineHeight:1.55 })}/>
+          <div style={{marginTop:6}}>
+            <button onClick={escrever} disabled={!!ocupado} style={bt("s", !ocupado)}>{ocupado === "texto" ? "A IA está escrevendo…" : (texto.trim() ? "✨ Melhorar com IA" : "✨ Escrever com IA")}</button>
+          </div>
         </div>
-        <div style={{fontSize:_evF(12, isMob),fontWeight:700,color:"#7c2d12",margin:"12px 0 4px"}}>2. Voz</div>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          <select value={vozId} onChange={function(e){ setVozId(e.target.value); salvar({ voz_id:e.target.value || null }).catch(function(){}); }} aria-label="Voz da narração do card" style={Object.assign({}, campo, { width:"auto", minWidth:220, flex:"1 1 220px" })}>
-            {!vozes.length && <option value="">Voz padrão da agência</option>}
-            {vozes.map(function(v){ return <option key={v.id} value={v.id}>{v.nome}</option>; })}
-          </select>
-          {amostraUrl ? <audio controls preload="none" src={amostraUrl} style={{height:34,flex:"1 1 220px"}} aria-label="Amostra da voz"/>
-            : vozSel && <button onClick={gerarAmostra} disabled={!!ocupado} style={bt("s", !ocupado)}>{ocupado === "amostra" ? "Gerando a amostra…" : "▶ Ouvir amostra"}</button>}
+        <div>
+          <div style={Object.assign({}, rot, { marginBottom:6 })}>2 · Voz</div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <select value={vozId} onChange={function(e){ setVozId(e.target.value); salvar({ voz_id:e.target.value || null }).catch(function(){}); }} aria-label="Voz da narração do card" style={Object.assign({}, campo, { width:"auto", minWidth:200, flex:"1 1 200px" })}>
+              {!vozes.length && <option value="">Voz padrão da agência</option>}
+              {vozes.map(function(v){ return <option key={v.id} value={v.id}>{v.nome}</option>; })}
+            </select>
+            {amostraUrl ? <audio controls preload="none" src={amostraUrl} style={{height:36,flex:"1 1 200px",minWidth:0}} aria-label="Amostra da voz"/>
+              : vozSel && <button onClick={gerarAmostra} disabled={!!ocupado} style={bt("s", !ocupado)}>{ocupado === "amostra" ? "Gerando a amostra…" : "▶ Ouvir amostra"}</button>}
+          </div>
         </div>
-        <div style={{fontSize:_evF(12, isMob),fontWeight:700,color:"#7c2d12",margin:"12px 0 4px"}}>3. Narração pronta (a edição usa esta)</div>
-        {pronta && <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
-          <audio controls preload="none" src={nc.url} style={{height:34,flex:"1 1 260px"}} aria-label="Narração pronta"/>
-          <span style={{fontSize:_evF(12, isMob),fontWeight:700,color:desatualizada ? _EV.amarelo : _EV.verde}}>
-            {desatualizada ? "⚠ O texto ou a voz mudou — gere de novo" : "✓ Pronta · " + _evTempo(Number(nc.dur) || 0).replace(/\.\d$/, "") + (nc.voz_nome ? " · " + nc.voz_nome : "")}</span>
-        </div>}
-        <button onClick={gerar} disabled={!!ocupado || !texto.trim()} style={bt("p", !ocupado && !!texto.trim())}>
-          {ocupado === "voz" ? "Gerando a voz… (uns 20 s)" : pronta ? "🎙 Gerar a voz de novo" : "🎙 Gerar a voz"}</button>
-        <div style={{fontSize:_evF(11.5, isMob),color:_EV.sub,marginTop:6,lineHeight:1.45}}>
-          A voz fica guardada no card. Quando os vídeos chegarem, o "Editar com IA" monta os vídeos, a música e a legenda em cima dela (não gera outra).
-          Custo: uns R$ 0,12 por minuto de voz{texto.trim() ? "" : " · texto pela IA: uns R$ 0,03"}.</div>
+        <div style={{background:pronta && !desatualizada ? _EV.verdeClaro : _EV.fundo,border:"1px solid " + (pronta && !desatualizada ? "#bbf7d0" : _EV.linha2),borderRadius:12,padding:"10px 12px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={rot}>3 · Narração pronta (a edição usa esta)</span>
+            {pronta ? <span style={{fontSize:_evF(12, isMob),fontWeight:800,color:desatualizada ? _EV.amarelo : _EV.verde}}>
+              {desatualizada ? "⚠ O texto ou a voz mudou — gere de novo" : "✓ Pronta · " + _evTempo(Number(nc.dur) || 0).replace(/\.\d$/, "") + (nc.voz_nome ? " · " + nc.voz_nome : "")}</span>
+              : <span style={{fontSize:_evF(12, isMob),fontWeight:700,color:_EV.sub}}>Ainda não gerada</span>}
+          </div>
+          {pronta && <audio controls preload="none" src={nc.url} style={{width:"100%",height:36,marginTop:8}} aria-label="Narração pronta"/>}
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginTop:8}}>
+            <button onClick={gerar} disabled={!!ocupado || !texto.trim()} style={bt(pronta && !desatualizada ? "s" : "p", !ocupado && !!texto.trim())}>
+              {ocupado === "voz" ? "Gerando a voz… (uns 20 s)" : pronta ? "🎙 Gerar a voz de novo" : "🎙 Gerar a voz"}</button>
+            <span style={{fontSize:_evF(11.5, isMob),color:_EV.fraco,lineHeight:1.4,flex:"1 1 180px"}}>Fica guardada no card; o "Editar com IA" monta em cima dela. Uns R$ 0,12 por minuto de voz.</span>
+          </div>
+        </div>
       </div>}
-      {!ligado && textoBriefing && <div style={{fontSize:_evF(12, isMob),color:_EV.sub,marginTop:6}}>O briefing tem um texto de narração. Ligue a Narração IA para usar.</div>}
     </div>
   );
 }
@@ -117548,12 +117570,123 @@ function _EvPcTrabalho({ t, isMob, rec, onPronto }){
   const tit = w.status === "fila" ? "⏳ Na fila do PC do escritório" : w.status === "processando" ? "🖥️ O PC " + (w.pc || "do escritório") + " está preparando os vídeos"
     : w.status === "pronto" ? "✓ O PC terminou" : w.status === "erro" ? "❌ O PC não conseguiu" : "PC: " + w.status;
   return (
-    <div style={{marginTop:12,padding:"10px 14px",borderRadius:12,background:cor[0],color:cor[1],fontSize:_evF(13, isMob),lineHeight:1.5}} aria-label="Andamento no PC do escritório">
+    <div style={{marginTop:12,padding:"10px 12px",borderRadius:12,background:cor[0],color:cor[1],fontSize:_evF(12.5, isMob),lineHeight:1.5}} aria-label="Andamento no PC do escritório">
       <b>{tit}</b>{w.tipo === "drive" ? " (link do Drive)" : ""}
+      {w.status === "processando" && w.progresso && w.progresso.total > 0 && (function(){ const pg = w.progresso, pct = Math.round(100 * Math.min(pg.feitos, pg.total) / pg.total);   // v29.2: barra do PC (batimento a cada 60 s)
+        return <div style={{marginTop:6}}>
+          <div style={{height:6,borderRadius:99,background:"rgba(55,48,163,.15)",overflow:"hidden"}}><div style={{height:"100%",width:pct + "%",background:"#4f46e5",transition:"width .4s"}}/></div>
+          <div style={{fontSize:_evF(11.5, isMob),marginTop:3}}>Cópias leves: {pg.feitos} de {pg.total}{pg.msg ? " · " + String(pg.msg).slice(0, 90) : ""}</div></div>; })()}
+      {w.status === "processando" && w.progresso && !w.progresso.total && w.progresso.msg && <div style={{fontSize:_evF(12, isMob)}}>Agora: {String(w.progresso.msg).slice(0, 160)}</div>}
       {ev && <div style={{fontSize:_evF(12, isMob)}}>Último passo: {ev.replace(/\s+/g, " ").slice(0, 220)}</div>}
+      {w.status === "fila" && w.pc_ligado && w.pc_atualizado === false && <div style={{fontSize:_evF(12, isMob),fontWeight:800,color:_EV.verm}}>O programa do PC está desatualizado: no Pixels 01, salve o exportar_pc.py novo na pasta pixels-app (a janela preta reinicia sozinha).</div>}
       {w.status === "erro" && w.erro && <div style={{fontSize:_evF(12, isMob)}}>Motivo: {String(w.erro).slice(0, 300)}</div>}
       {(w.status === "fila" || w.status === "processando") && !w.pc_ligado && <div style={{fontSize:_evF(12, isMob),fontWeight:800,color:_EV.verm}}>O PC do escritório parece desligado: ligue o Pixels 01 e abra o start_video_pc.bat.</div>}
       {(w.status === "fila" || w.status === "processando") && <div style={{fontSize:_evF(11.5, isMob),opacity:0.85}}>Vídeos grandes: o PC faz a cópia leve de cada um (2 a 5 min por vídeo, só na 1ª vez) e depois a IA edita. Esta tela atualiza sozinha.</div>}
+    </div>
+  );
+}
+
+/* ══ v29.2 (02/10/2026) — TELA "PREPARAR A EDIÇÃO" NOVA (pedido do Vini: "tá horrível o layout… quero algo funcional").
+   Antes: lista corrida dos 30 arquivos, caixas empilhadas e o botão lá embaixo. Agora:
+   • 3 passos no topo (Narração → Vídeos → Edição com IA) com o estado de cada um;
+   • duas colunas: Narração IA (esquerda) e Material (direita: números, barra das cópias leves, lista compacta com selo por arquivo);
+   • andamento do PC com barra; barra de ação fixa embaixo com o botão e o gasto do mês. */
+
+function _evMB(b){ const n = Number(b || 0); return n >= 1073741824 ? (n / 1073741824).toLocaleString("pt-BR", { maximumFractionDigits:1 }) + " GB" : Math.max(1, Math.round(n / 1048576)) + " MB"; }
+
+function _EvPasso({ n, titulo, estado, cor, isMob }){
+  const c = cor === "ok" ? [_EV.verde, _EV.verdeClaro, "#bbf7d0"] : cor === "vez" ? [_EV.roxo, _EV.roxoClaro, _EV.roxoBorda] : cor === "pc" ? ["#3730a3", "#eef2ff", "#c7d2fe"] : [_EV.sub, "#fff", _EV.linha];
+  return <div style={{flex:"1 1 0",minWidth:isMob ? "100%" : 0,display:"flex",gap:10,alignItems:"center",padding:"10px 12px",borderRadius:12,background:c[1],border:"1px solid " + c[2]}}>
+    <span style={{width:26,height:26,borderRadius:99,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,background:cor === "ok" ? _EV.verde : "#fff",
+      color:cor === "ok" ? "#fff" : c[0],border:cor === "ok" ? 0 : "1.5px solid " + c[0],fontWeight:800,fontSize:12.5}}>{cor === "ok" ? "✓" : n}</span>
+    <span style={{minWidth:0}}>
+      <span style={{display:"block",fontSize:_evF(12.5, isMob),fontWeight:800,color:_EV.texto}}>{titulo}</span>
+      <span style={{display:"block",fontSize:_evF(11.5, isMob),color:c[0],fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{estado}</span>
+    </span>
+  </div>;
+}
+
+function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, narrLigado, setNarrLigado, pcRec, onPcPronto }){
+  const [abrirLista, setAbrirLista] = useState(false);
+  const [nc, setNc] = useState(null);                     // só para o passo 1 (o painel tem o estado completo)
+  const [pc, setPc] = useState(null);
+  useEffect(function(){ if(!window._sb || !t) return; let vivo = true;
+    const ler = function(){ window._sb.rpc("criacao_narracoes_status", { p_tasks:[t.id] }).then(function(r){ if(vivo && !r.error && r.data) setNc(r.data[t.id] || null); }).catch(function(){}); };
+    ler(); const iv = setInterval(ler, 20000); return function(){ vivo = false; clearInterval(iv); }; }, [t && t.id, narrLigado]);
+  const brutos = _evBrutos(t), pesados = _evPesados(t);
+  const leves = brutos.filter(function(f){ return !!f.previewUrl; }).length;
+  const grandes = brutos.filter(function(f){ return Number(f.size || 0) >= 150 * 1048576; }).length;
+  const total = brutos.reduce(function(a, f){ return a + Number(f.size || 0); }, 0);
+  const narrTem = nc ? !!nc.ligado : (narrLigado === true || (narrLigado === null && !!_evRoteiroNarracao(t)));
+  const p1 = !narrTem ? ["Sem narração (usa a fala dos vídeos)", "neutro"] : nc && nc.pronta ? ["Voz pronta" + (Number(nc.dur) > 0 ? " · " + _evTempo(Number(nc.dur)).replace(/\.\d$/, "") : ""), "ok"] : ["Falta gerar a voz", "vez"];
+  const p2 = !brutos.length ? ["Nenhum vídeo no card ainda", "neutro"] : pesados.length ? [pesados.length + " pesado" + (pesados.length > 1 ? "s" : "") + " → o PC faz a cópia leve", "pc"] : [brutos.length + " vídeo" + (brutos.length > 1 ? "s" : "") + " prontos para editar", "ok"];
+  const p3 = ed && ed.existe && ed.status === "erro" ? ["A última tentativa falhou — tente de novo", "vez"] : brutos.length ? ["Pronto para começar", "vez"] : ["Espera os vídeos", "neutro"];
+  const card = { background:"#fff", border:"1px solid " + _EV.linha, borderRadius:14, padding:isMob ? 12 : 16 };
+  const rot = { fontSize:_evF(11, isMob), fontWeight:800, color:_EV.sub, textTransform:"uppercase", letterSpacing:".05em" };
+  const selo = function(f){ if(f.previewUrl) return ["✓ leve", _EV.verdeClaro, _EV.verde]; if(Number(f.size || 0) >= 150 * 1048576) return ["PC faz a cópia", "#eef2ff", "#3730a3"]; return ["ok", _EV.fundo, _EV.sub]; };
+  const podeEditar = !soVer && brutos.length > 0;
+  return (
+    <div style={{marginTop:14}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <div style={{fontSize:_evF(17, isMob),fontWeight:800,color:_EV.texto}}>{ed && ed.existe ? "Editar de novo com a IA" : "Preparar a edição"}</div>
+        <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub}}>A IA monta o Reels no estilo do Kit do cliente: cortes, legenda, destaques, música, transições e tela final.</div>
+      </div>
+      {ed && ed.existe && ed.erro && <div style={{marginBottom:10,padding:"10px 12px",borderRadius:12,background:_EV.vermClaro,border:"1px solid #fecaca",color:_EV.verm,fontSize:_evF(12.5, isMob),lineHeight:1.5}}>
+        <b>A última edição não terminou.</b> {String(ed.erro).slice(0, 300)}</div>}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}} aria-label="Passos da edição">
+        <_EvPasso n={1} titulo="Narração" estado={p1[0]} cor={p1[1]} isMob={isMob}/>
+        <_EvPasso n={2} titulo="Vídeos" estado={p2[0]} cor={p2[1]} isMob={isMob}/>
+        <_EvPasso n={3} titulo="Edição com IA" estado={p3[0]} cor={p3[1]} isMob={isMob}/>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr" : "minmax(0,1.35fr) minmax(0,1fr)",gap:12,marginTop:12,alignItems:"start"}}>
+        <div style={{minWidth:0}}>
+          <_EvNarracaoCard t={t} isMob={isMob} onLigado={setNarrLigado}/>
+        </div>
+        <div style={Object.assign({}, card, {minWidth:0})} aria-label="Material do card">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+            <span style={rot}>Material</span>
+            {brutos.length > 0 && <button onClick={function(){ setAbrirLista(!abrirLista); }} style={{font:"inherit",fontSize:_evF(12, isMob),fontWeight:700,color:_EV.roxo,background:"none",border:0,cursor:"pointer",padding:0}}>
+              {abrirLista ? "Esconder lista" : "Ver os " + brutos.length + " arquivos"}</button>}
+          </div>
+          {!brutos.length ? <div style={{marginTop:10,fontSize:_evF(13, isMob),color:_EV.sub,lineHeight:1.5}}>Nenhum vídeo no card ainda. Anexe como Material ou cole o Link do Drive no card — dá para gerar a voz antes.</div> : <>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginTop:10}}>
+              {[[brutos.length, "vídeos"], [_evMB(total), "no total"], [grandes ? leves + "/" + grandes : "—", "cópias leves"]].map(function(x, i){
+                return <div key={i} style={{background:_EV.fundo,borderRadius:10,padding:"8px 10px"}}>
+                  <div style={{fontSize:_evF(16, isMob),fontWeight:800,color:_EV.texto}}>{x[0]}</div>
+                  <div style={{fontSize:_evF(11, isMob),color:_EV.sub,fontWeight:600}}>{x[1]}</div></div>; })}
+            </div>
+            {grandes > 0 && <div style={{marginTop:10}}>
+              <div style={{height:6,borderRadius:99,background:_EV.linha2,overflow:"hidden"}}><div style={{height:"100%",width:Math.round(100 * leves / grandes) + "%",background:leves >= grandes ? _EV.verde : "#6366f1",transition:"width .3s"}}/></div>
+              <div style={{marginTop:5,fontSize:_evF(11.5, isMob),color:_EV.sub}}>{leves >= grandes ? "Todos os vídeos grandes já têm cópia leve: a edição abre direto aqui." : "Vídeo de 150 MB ou mais: o PC do escritório faz a cópia leve (só na 1ª vez) e a IA edita em seguida."}</div>
+            </div>}
+            {abrirLista && <div style={{marginTop:10,maxHeight:isMob ? 240 : 300,overflow:"auto",border:"1px solid " + _EV.linha2,borderRadius:10}}>
+              {brutos.map(function(f, i){ const s = selo(f);
+                return <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderTop:i ? "1px solid " + _EV.linha2 : 0,fontSize:_evF(12, isMob)}}>
+                  <span style={{width:8,height:8,borderRadius:2,background:_EV_CORES_CLIPE[i % 12],flexShrink:0}}/>
+                  <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:_EV.texto}} title={f.name || ""}>{f.name || ("Bruto " + (i + 1))}</span>
+                  <span style={{color:_EV.fraco,flexShrink:0}}>{f.size ? _evMB(f.size) : ""}</span>
+                  <span style={{flexShrink:0,padding:"2px 7px",borderRadius:99,background:s[1],color:s[2],fontWeight:700,fontSize:_evF(10.5, isMob)}}>{s[0]}</span>
+                </div>; })}
+            </div>}
+          </>}
+          <_EvPcTrabalho t={t} isMob={isMob} rec={pcRec} onPronto={onPcPronto}/>
+        </div>
+      </div>
+
+      <div style={{position:"sticky",bottom:0,zIndex:5,marginTop:12,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",justifyContent:"space-between",
+                   background:"rgba(255,255,255,.96)",backdropFilter:"blur(6px)",border:"1px solid " + _EV.linha,borderRadius:14,padding:isMob ? "10px 12px" : "12px 16px",boxShadow:"0 -6px 20px -12px rgba(15,23,42,.25)"}}>
+        <div style={{fontSize:_evF(12, isMob),color:_EV.sub,lineHeight:1.5,minWidth:0}}>
+          {musicas ? (musicas.length ? musicas.length + " músicas na biblioteca" : "Sem músicas na biblioteca: sai sem trilha") : ""}
+          {ed && ed.limite_brl ? " · IA no mês: R$ " + Number(ed.gasto_mes_brl || 0).toLocaleString("pt-BR", { minimumFractionDigits:2 }) + " de R$ " + Number(ed.limite_brl).toLocaleString("pt-BR") : ""}
+          {narrTem && nc && !nc.pronta ? <span style={{display:"block",color:_EV.amarelo,fontWeight:700}}>A voz ainda não foi gerada: a IA gera na hora (uns R$ 0,12/min).</span> : null}
+        </div>
+        {soVer ? <span style={{fontSize:_evF(13, isMob),color:_EV.sub}}>Para editar, use o computador.</span>
+          : <button onClick={montar} disabled={!podeEditar || mandandoPc} title={!brutos.length ? "Anexe os vídeos no card primeiro" : ""}
+              style={{font:"inherit",padding:isMob ? "11px 16px" : "12px 22px",borderRadius:12,border:0,background:podeEditar ? _EV.roxo : "#cbd5e1",color:"#fff",fontWeight:800,
+                      fontSize:_evF(14, isMob),cursor:podeEditar ? "pointer" : "not-allowed",boxShadow:podeEditar ? "0 8px 20px -10px rgba(124,58,237,.7)" : "none"}}>
+              {mandandoPc ? "Mandando para o PC…" : pesados.length ? "✨ Editar com IA · pelo PC do escritório" : "✨ Editar com IA"}</button>}
+      </div>
     </div>
   );
 }
@@ -117706,36 +117839,8 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
       )}
 
       {t && ed && !passo && (!ed.existe || ed.status==="erro" || (ed.status==="processando" && ed.criado_em && Date.now() - new Date(ed.criado_em).getTime() > 12*60000)) && (
-        <div style={caixa}>
-          <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>{ed.existe ? "A última edição não terminou" : "Este vídeo ainda não foi editado"}</div>
-          {ed.existe && ed.erro && <div style={{marginTop:6,fontSize:_evF(13,isMob),color:_EV.verm}}>Motivo: {ed.erro}</div>}
-          <div style={{marginTop:8,fontSize:_evF(13,isMob),color:_EV.sub,lineHeight:1.55}}>
-            A IA assiste {_evBrutos(t).length===0 ? "os vídeos brutos (quando chegarem)" : _evBrutos(t).length===1 ? "o vídeo bruto" : "os " + _evBrutos(t).length + " vídeos brutos"} do card, lê a fala (ou usa a voz da Narração IA) e monta o Reels no estilo do Kit do cliente:
-            cortes (tira silêncios e erros), legenda, textos de destaque, tarja, logo, música, transições e tela final.
-          </div>
-          <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:4}}>
-            {_evBrutos(t).map(function(f, i){ return <div key={f.id} style={{fontSize:_evF(12.5,isMob),color:_EV.texto}}>
-              <span style={{display:"inline-block",width:10,height:10,borderRadius:3,background:_EV_CORES_CLIPE[i%12],marginRight:8}}/>{f.name||("Bruto " + (i+1))}
-              <span style={{color:_EV.fraco}}>{f.size ? " · " + Math.round(Number(f.size)/1048576) + " MB" : ""}</span></div>; })}
-          </div>
-          <_EvNarracaoCard t={t} isMob={isMob} onLigado={setNarrLigado}/>
-          {(function(){ const pes = _evPesados(t); if(!pes.length) return null;      // v29
-            const gb = pes.reduce(function(a, f){ return a + Number(f.size || 0); }, 0) / 1073741824;
-            return <div style={{marginTop:12,padding:"10px 12px",borderRadius:10,background:"#eef2ff",border:"1px solid #c7d2fe",fontSize:_evF(12.5,isMob),color:"#3730a3",lineHeight:1.5}}>
-              <b>🖥️ {pes.length} vídeo{pes.length > 1 ? "s pesados" : " pesado"} ({gb >= 1 ? gb.toLocaleString("pt-BR",{maximumFractionDigits:1}) + " GB" : Math.round(gb*1024) + " MB"}).</b> O navegador não abre vídeo deste tamanho:
-              o "Editar com IA" manda para o PC do escritório (Pixels 01). Ele faz uma cópia leve de cada vídeo (só na 1ª vez, 2 a 5 min por vídeo) e a IA edita.
-              Pode fechar esta aba — o andamento aparece aqui e o vídeo editado abre sozinho.</div>; })()}
-          <_EvPcTrabalho t={t} isMob={isMob} rec={pcRec} onPronto={function(){ setRec(function(n){ return n+1; }); }}/>
-          {!kit || !musicas ? null : (
-            <div style={{marginTop:10,fontSize:_evF(12,isMob),color:_EV.sub}}>
-              {musicas.length ? musicas.length + " música" + (musicas.length>1?"s":"") + " liberada" + (musicas.length>1?"s":"") + " na biblioteca." : "Sem músicas na biblioteca (guia Músicas): o vídeo sai sem trilha."}
-              {ed.limite_brl ? " · Gasto da IA no mês: R$ " + Number(ed.gasto_mes_brl||0).toLocaleString("pt-BR",{minimumFractionDigits:2}) + " de R$ " + Number(ed.limite_brl).toLocaleString("pt-BR") : ""}
-            </div>
-          )}
-          {soVer ? <div style={{marginTop:12,fontSize:_evF(13,isMob),color:_EV.sub}}>Para editar, use o computador.</div>
-                 : !_evBrutos(t).length ? <div style={{marginTop:14,fontSize:_evF(13,isMob),color:_EV.sub,fontWeight:700}}>Sem vídeo no card ainda: gere a voz agora; quando os vídeos chegarem (Material ou Link do Drive), clique em Editar com IA.</div>
-                 : <button onClick={montar} disabled={mandandoPc} style={Object.assign(btn(), {marginTop:14})}>{mandandoPc ? "Mandando para o PC…" : _evPesados(t).length ? "✨ Editar com IA (pelo PC do escritório)" : "✨ Editar com IA"}</button>}
-        </div>
+        <_EvPreparo t={t} ed={ed} isMob={isMob} kit={kit} musicas={musicas} soVer={soVer} montar={montar} mandandoPc={mandandoPc}
+          narrLigado={narrLigado} setNarrLigado={setNarrLigado} pcRec={pcRec} onPcPronto={function(){ setRec(function(n){ return n+1; }); }}/>      // v29.2: tela nova
       )}
 
       {t && ed && !passo && ed.existe && ed.status==="processando" && !(ed.criado_em && Date.now() - new Date(ed.criado_em).getTime() > 12*60000) && (
