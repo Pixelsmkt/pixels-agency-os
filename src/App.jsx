@@ -115611,6 +115611,11 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v28 (01/10/2026) — NARRAÇÃO AUTOMÁTICA (pedido do Vini · video-editar v39):
+     • O card pede narração ([NARRAÇÃO], "Roteiro de narração", "• ROTEIRO (vídeo narrado)", "NARRAÇÃO:" ou tag) → "Editar com IA" (ou o Link do Drive /
+       o Guvi) gera a voz, a IA escolhe as imagens de cada frase e o servidor encaixa os vídeos na voz. Não envia o áudio dos brutos (mais rápido).
+     • Legenda pela narração (p.legenda.origem = "narracao", palavras de narracoes[].palavras, com a grafia do card) · Fila: "🎙 Narração automática"
+     • Narração › Voz: texto, outra voz da biblioteca (ou voz livre), jeito de falar, "Gerar de novo" e reencaixar os vídeos nas frases novas
    v27 (01/10/2026) — FASE L: BANCO DE MÍDIA DO CLIENTE + MULTICÂMERA (tabela video_midia · video-editar v38):
      • Banco de mídia (Mídia › Banco de mídia, ou Ctrl+K): todos os vídeos e imagens dos cards do cliente (e de todos os clientes), busca sem acento por nome,
        tags, o que a IA viu e o que foi falado; pastas e subpastas, coleções, tags, favoritos, renomear, duplicar, arquivar (nada se apaga), filtros por tipo e data
@@ -115868,23 +115873,7 @@ function _evAplicarPronuncia(texto, prons){
 }
 /* roteiro do card: blocos "NARRAÇÃO:", "LOCUÇÃO:", "OFF:" (até a linha vazia ou outro rótulo) ou [NARRAÇÃO]…[/NARRAÇÃO] */
 function _evTexto(html){ return String(html || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"); }
-function _evRoteiroNarracao(t){
-  const tx = _evTexto((t && t.description) || "") + "\n" + _evTexto((t && t.roteiro) || "");
-  const out = [];
-  tx.replace(/\[(?:narra[çc][aã]o|locu[çc][aã]o|off)\]([\s\S]*?)\[\/(?:narra[çc][aã]o|locu[çc][aã]o|off)\]/gi, function(m, a){ out.push(a.trim()); return m; });
-  if(!out.length){
-    const ls = tx.split(/\n/); let lendo = false, bloco = [];
-    const fecha = function(){ if(bloco.length){ out.push(bloco.join(" ").trim()); bloco = []; } };
-    ls.forEach(function(l){
-      const m = l.match(/^\s*(?:[-•*]\s*)?(?:🎙️?\s*)?(narra[çc][aã]o|locu[çc][aã]o|off|voz off|texto da narra[çc][aã]o)\s*(?:\(.*?\))?\s*[:\-–]\s*(.*)$/i);
-      if(m){ fecha(); lendo = true; if(m[2].trim()) bloco.push(m[2].trim()); return; }
-      if(lendo && (!l.trim() || /^\s*(?:[-•*]\s*)?(cena|imagem|texto na tela|legenda|gc|lettering|m[uú]sica|obs|observa[çc][aã]o|take|v[ií]deo)\s*\d*\s*[:\-–]/i.test(l))){ fecha(); lendo = false; return; }
-      if(lendo) bloco.push(l.trim());
-    });
-    fecha();
-  }
-  return out.filter(Boolean).join("\n\n").replace(/^["“”]+|["“”]+$/g, "").slice(0, 1500);
-}
+function _evRoteiroNarracao(t){ return _evNarracaoDoTexto((t && t.description) || "", t && t.tags, (t && t.roteiro) || ""); }   // v28: regras novas (n_narracao.js)
 function _evTagNarracao(t){ return (Array.isArray(t && t.tags) ? t.tags : []).some(function(x){ return /narra|locu/i.test(String(x || "")); }); }
 
 function _EvVozes({ isMob }){
@@ -116118,7 +116107,7 @@ function _EvFilaItem({ x, isMob, onAbrirCard, onEstudio }){
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7}}>
           {x.pub ? chip((x.atrasado ? "Atrasado · " : "Publica ") + _evDataBR(x.pub), x.atrasado ? [_EV.vermClaro,_EV.verm] : [_EV.fundo,_EV.texto])
                  : chip("Sem data de publicação", [_EV.fundo,_EV.sub])}
-          {(_evTagNarracao(t) || _evRoteiroNarracao(t)) && chip("🎙 Narração", ["#fff7ed","#c2410c"])}
+          {_evRoteiroNarracao(t) ? chip("🎙 Narração automática", ["#fff7ed","#c2410c"]) : _evTagNarracao(t) && chip("🎙 Narração", ["#fff7ed","#c2410c"])}
           {x.brutos>0 ? chip("🎞 " + x.brutos + (x.brutos===1 ? " bruto no card" : " brutos no card"), [_EV.verdeClaro,_EV.verde])
                       : chip("Sem bruto no card", [_EV.amareloClaro,_EV.amarelo])}
           {x.refs>0 && chip(x.refs + (x.refs===1 ? " referência" : " referências"), [_EV.roxoClaro,_EV.roxo])}
@@ -117342,6 +117331,7 @@ async function _evDesmontar(blob, quadroSeg, prog){
 
 /* ── preparar os brutos e pedir a edição à IA (v8 · 29/09: a MESMA função serve o Estúdio e o PC do escritório no Guvi editora) ── */
 async function _evPrepararMontar(t, setPasso, extra){
+  const narrado = _evVaiNarrar(t, extra);                // v28: a voz vem do texto do card; a fala dos brutos não entra
   const brutos = _evBrutos(t).slice(0, 30);            // v10e: até 30 arquivos por edição (antes 12)
   if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
   setPasso("Medindo os vídeos…");
@@ -117367,7 +117357,7 @@ async function _evPrepararMontar(t, setPasso, extra){
       if(u.error) throw new Error("não consegui enviar os quadros (" + (u.error.message||"") + ")");
       folhas.push(p);
     }
-    for(let k=0;k<r.pedacos.length;k++){
+    for(let k=0;k<(narrado ? 0 : r.pedacos.length);k++){
       setPasso("Enviando o áudio do " + nome + "… " + (k+1) + " de " + r.pedacos.length);
       const p = pasta + "c" + (i+1) + "_fala_" + String(k+1).padStart(2,"0") + ".wav";
       const u = await bk.upload(p, r.pedacos[k].blob, { contentType:"audio/wav", upsert:false });
@@ -117376,7 +117366,8 @@ async function _evPrepararMontar(t, setPasso, extra){
     }
     clipes.push({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg });
   }
-  setPasso("A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
+  setPasso(narrado ? "A IA está gerando a narração e montando os vídeos em cima dela… leva de 1 a 3 minutos. Pode continuar usando o app."
+                   : "A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
   const modM = _evpModeloLer();                                   // v20: modelo escolhido no Estúdio (sem = padrão da agência)
   const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(modM ? { modelo:modM } : {}), ...(extra || {}) } });
   if(res.error) throw new Error(await _evErroFn(res));
@@ -117441,11 +117432,12 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     return function(){ clearInterval(iv); };
   }, [ed && ed.status]);
 
+  const [narrarOn, setNarrarOn] = useState(true);                       // v28: narração automática (desligar = edita do jeito de sempre)
   const montar = async function(){
     if(!t || passo) return;
     setErro(null);
     try{
-      await _evPrepararMontar(t, setPasso);
+      await _evPrepararMontar(t, setPasso, _evRoteiroNarracao(t) && !narrarOn ? { narrar:false } : undefined);
       setPasso(null); _evToast("success", "Vídeo editado pela IA. Dê o play!"); setRec(function(n){ return n+1; });
     }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(n){ return n+1; }); }
   };
@@ -117524,6 +117516,14 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
               <span style={{display:"inline-block",width:10,height:10,borderRadius:3,background:_EV_CORES_CLIPE[i%12],marginRight:8}}/>{f.name||("Bruto " + (i+1))}
               <span style={{color:_EV.fraco}}>{f.size ? " · " + Math.round(Number(f.size)/1048576) + " MB" : ""}</span></div>; })}
           </div>
+          {_evRoteiroNarracao(t) && (function(){ const nt = _evRoteiroNarracao(t), np2 = nt.split(/\s+/).filter(Boolean).length;      // v28
+            return <div style={{marginTop:12,padding:"10px 12px",borderRadius:10,background:"#fff7ed",border:"1px solid #fed7aa",fontSize:_evF(12.5,isMob),color:"#7c2d12",lineHeight:1.5}}>
+              <b>🎙 Vídeo narrado.</b> {nt.length > 1500 ? "O texto da narração do card tem " + nt.length + " letras (máximo 1.500): encurte para a IA gerar a voz." :
+                "A IA gera a narração com o texto do card (" + np2 + " palavras, uns " + Math.round(np2 / 2.6) + " s), escolhe as imagens de cada frase e encaixa os vídeos na voz. O som dos brutos fica desligado e a legenda sai da narração."}
+              <div style={{marginTop:6,color:_EV.sub,fontStyle:"italic",whiteSpace:"pre-wrap",maxHeight:84,overflow:"auto"}}>{nt.slice(0, 400)}{nt.length > 400 ? "…" : ""}</div>
+              {nt.length <= 1500 && <label style={{display:"flex",gap:6,alignItems:"center",marginTop:8,color:_EV.texto,fontWeight:700,cursor:"pointer"}}>
+                <input type="checkbox" checked={narrarOn} onChange={function(e){ setNarrarOn(e.target.checked); }} aria-label="Gerar a narração automática"/>Gerar a narração (desligado: edita pela fala dos vídeos, como antes)</label>}
+            </div>; })()}
           {!kit || !musicas ? null : (
             <div style={{marginTop:10,fontSize:_evF(12,isMob),color:_EV.sub}}>
               {musicas.length ? musicas.length + " música" + (musicas.length>1?"s":"") + " liberada" + (musicas.length>1?"s":"") + " na biblioteca." : "Sem músicas na biblioteca (guia Músicas): o vídeo sai sem trilha."}
@@ -119362,6 +119362,104 @@ async function _evpMidiaQuadros(url, tipo){
 const _EVP_PARADAS = { de:1, da:1, do:1, das:1, dos:1, a:1, o:1, as:1, os:1, um:1, uma:1, e:1, em:1, no:1, na:1, nos:1, nas:1, com:1, para:1, pra:1, por:1, que:1, sendo:1, sobre:1, video:1, vídeo:1, foto:1, imagem:1, onde:1, quando:1 };
 function _evpBuscaLimpa(t){ return String(t || "").split(/\s+/).filter(function(w){ return w && !_EVP_PARADAS[w.toLowerCase()]; }).join(" "); }
 
+/* ══ v28 (01/10/2026) — NARRAÇÃO AUTOMÁTICA (pedido do Vini: "colocar o texto no briefing, solicitando a narração, enviar o link
+   da pasta ou subir as mídias e ele me entregar tudo pronto"). O servidor (video-editar v39) gera a voz, marca o tempo de cada palavra e
+   encaixa os vídeos nas frases. Aqui: achar a narração no card (mesmas regras do servidor), legenda pela narração (p.legenda.origem =
+   "narracao", palavras de narracoes[].palavras), "Gerar de novo com outra voz" e reencaixar os vídeos quando a narração muda de tempo. */
+
+/* achar o texto da narração no card — igual ao narracao.ts do servidor */
+const _EV_NARR_PARA = /^\s*(?:[-•*]\s*)?(?:\*\*)?\s*(?:•\s*)?(imagens|im[aá]genes|o que precisamos|link(?:\s+d[aeo]\s+\w+)?|pasta(?:\s+do\s+drive)?|drive|observa[çc](?:[aã]o|[õo]es)|obs\.?|textos?\s+n[ao]\s+(?:tela|arte|v[ií]deo)|legenda(?:\s+do\s+post)?|lettering|m[uú]sica|trilha(?:\s+sonora)?|refer[eê]ncias?|gc|tarja|t[ií]tulo|cta\s+visual|formato|checklist|materia(?:l|is))\s*(?:[:\-–—(]|$)/i;
+const _EV_NARR_TITULO = /^\s*(?:[-•*]\s*)?(?:🎙️?\s*)?(?:roteiro\s+(?:de\s+|da\s+|para\s+)?(?:narra[çc][aã]o|locu[çc][aã]o)|roteiro\s*\(\s*(?:v[ií]deo\s+)?narrado[^)]*\)|(?:texto\s+(?:da|de)\s+)?(?:narra[çc][aã]o|locu[çc][aã]o)(?:\s+(?:com|por)\s+ia)?|voz\s+off|off)\s*(?:\([^)]*\))?\s*[:\-–—]?\s*$/i;
+const _EV_NARR_ROTULO = /^\s*(?:[-•*]\s*)?(?:🎙️?\s*)?(narra[çc][aã]o|locu[çc][aã]o|off|voz off|texto da narra[çc][aã]o)\s*(?:\([^)]*\))?\s*[:\-–]\s*(.+)$/i;
+const _EV_NARR_OUTRO = /^\s*(?:[-•*]\s*)?(cena|imagem|texto na tela|legenda|gc|lettering|m[uú]sica|obs|observa[çc][aã]o|take|v[ií]deo)\s*\d*\s*[:\-–]/i;
+const _EV_NARR_CENA = /^\s*(?:[-•*]\s*)?(?:\*\*)?cena\s*\d+\s*(?:[—–\-:]\s*[^.!?]{0,60})?\s*(?:\*\*)?$/i;
+const _EV_NARR_TAG = /\[(?:narra[çc][aã]o|locu[çc][aã]o|off)\]/i;
+function _evNarrLinha(l){
+  return String(l).replace(/https?:\/\/\S+/g, "").replace(/^\s*(?:[-•*·]|\d{1,2}[.)])\s*/, "").replace(/^(?:narra[çc][aã]o|locu[çc][aã]o|off)\s*[:\-–]\s*/i, "")
+    .replace(/\*\*/g, "").replace(/^["“”']+|["“”']+$/g, "").replace(/\s+/g, " ").trim();
+}
+function _evNarrJuntar(ls){ return ls.map(_evNarrLinha).filter(function(l){ return l && !_EV_NARR_CENA.test(l); }).map(function(l){ return /[.!?…:;]$/.test(l) ? l : l + "."; }).join("\n").trim(); }
+function _evNarracaoDoTexto(html, tags, extra){
+  const tx = _evTexto(html || "") + (extra ? "\n" + _evTexto(extra) : "");
+  const out = [];
+  tx.replace(/\[(?:narra[çc][aã]o|locu[çc][aã]o|off)\]([\s\S]*?)\[\/(?:narra[çc][aã]o|locu[çc][aã]o|off)\]/gi, function(m, a){ const j = _evNarrJuntar(String(a).split("\n")); if(j) out.push(j); return m; });
+  const ls = tx.split("\n");
+  if(!out.length){ const k = ls.findIndex(function(l){ return _EV_NARR_TAG.test(l); });
+    if(k >= 0){ const bl = [ls[k].replace(/^[\s\S]*?\[(?:narra[çc][aã]o|locu[çc][aã]o|off)\]/i, "")]; for(let i=k+1;i<ls.length && !_EV_NARR_PARA.test(ls[i]);i++) bl.push(ls[i]); const j = _evNarrJuntar(bl); if(j) out.push(j); } }
+  if(!out.length){ const k = ls.findIndex(function(l){ return _EV_NARR_TITULO.test(l); });
+    if(k >= 0){ const bl = []; for(let i=k+1;i<ls.length && !_EV_NARR_PARA.test(ls[i]);i++) bl.push(ls[i]); const j = _evNarrJuntar(bl); if(j) out.push(j); } }
+  if(!out.length){
+    let lendo = false, bl = [];
+    const fecha = function(){ const j = _evNarrJuntar(bl); if(j) out.push(j); bl = []; };
+    ls.forEach(function(l){ const m = l.match(_EV_NARR_ROTULO);
+      if(m){ fecha(); lendo = true; if(m[2].trim()) bl.push(m[2]); return; }
+      if(lendo && (!l.trim() || _EV_NARR_OUTRO.test(l) || _EV_NARR_PARA.test(l))){ fecha(); lendo = false; return; }
+      if(lendo) bl.push(l); });
+    fecha();
+  }
+  if(!out.length && (Array.isArray(tags) ? tags : []).some(function(x){ return /narra|locu/i.test(String(x || "")); })){
+    const bl = []; for(const l of ls){ if(_EV_NARR_PARA.test(l)) break; bl.push(l); }
+    const j = _evNarrJuntar(bl); if(j.split(/\s+/).length >= 8) out.push(j);
+  }
+  return out.join("\n").replace(/\n{2,}/g, "\n").trim();
+}
+/* "sem narração" no pedido (igual ao servidor) */
+function _evSemNarracao(s){ return /sem narra[çc][aã]o|n[aã]o\s+(?:gere|gerar|fa[çc]a|fazer|quero|precisa(?:\s+de)?)\s+(?:a\s+)?narra[çc][aã]o|sem locu[çc][aã]o/i.test(String(s || "")); }
+/* o "Editar com IA" vai gerar a narração? (texto achado e até 1.500 letras) */
+function _evVaiNarrar(t, extra){ const tx = _evRoteiroNarracao(t); return !!tx && tx.length <= 1500 && !(extra && (extra.narrar === false || _evSemNarracao(extra.instrucoes))); }
+
+/* LEGENDA PELA NARRAÇÃO: blocos das palavras da narração (o tempo é o do áudio + onde a narração começa) */
+function _evpTemNarrPalavras(p){ return (p.narracoes || []).some(function(n){ return n && !n.off && !n.musica && Array.isArray(n.palavras) && n.palavras.length; }); }
+function _evpBlocosNarracao(p, o){
+  const blocos = [];
+  (p.narracoes || []).filter(function(n){ return n && !n.off && !n.musica && Array.isArray(n.palavras) && n.palavras.length; })
+    .sort(function(a, b){ return _evpNum(a.t0, 0) - _evpNum(b.t0, 0); }).forEach(function(n){
+      const cid = "narr_" + String(n.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
+      const corte = _evpNum(n.corte, 0), fimA = corte + _evpNum(n.dur, 1), t0 = _evpNum(n.t0, 0);
+      let atual = null;
+      n.palavras.forEach(function(w){
+        const wi = Number(w.i), wf = Number(w.f); if(!(wi >= corte - 0.01 && wi < fimA - 0.05)) return;
+        const chave = cid + "@" + wi.toFixed(2);
+        const txt = o.edits[chave] != null ? String(o.edits[chave]) : o.fixa(w.p); if(!txt.trim()) return;
+        const aj = o.ajTempos[chave];
+        const a = t0 + (wi - corte) + o.atrasoL + (aj ? _evpNum(aj[0], 0) : 0), b = t0 + (Math.min(fimA, wf) - corte) + o.atrasoL + (aj ? _evpNum(aj[1], 0) : 0);
+        const ult = atual && atual.words[atual.words.length - 1];
+        if(!atual || atual.words.length >= o.porBloco || (ult && a - ult.b > 0.35) || (ult && /[.!?]$/.test(ult.p)) || o.cortesL[chave]){
+          atual = { words:[], a:a, b:b, clipe:cid, cid:cid, est:"", tam:0, narr:n.id }; blocos.push(atual); }
+        atual.words.push({ p:txt, a:a, b:Math.max(a + 0.05, b), chave:chave, orig:w.p, trId:"", corT:o.pint[chave] || "", corD:"" }); atual.b = Math.max(atual.b, b);
+      });
+    });
+  return blocos;
+}
+
+/* NARRAÇÃO TROCADA (outra voz / texto corrigido): as frases mudam de tempo → os cortes, textos, imagens e efeitos vão junto.
+   Mapa ponto a ponto entre o começo de cada frase na narração antiga e na nova (mesmo texto = mesmas frases). */
+function _evpComecosFrases(ws){ const out = []; let novo = true; (ws || []).forEach(function(w){ if(novo) out.push(Number(w.i)); novo = /[.!?…]["”']?$/.test(String(w.p)); }); return out; }
+function _evpMapaNarracao(nA, nN){
+  const a = _evpComecosFrases(nA.palavras), b = _evpComecosFrases(nN.palavras), k = Math.min(a.length, b.length);
+  const pa = [0], pb = [0];
+  for(let i=1;i<k;i++){ const x = _evpNum(nA.t0, 0) + a[i] - 0.12, y = _evpNum(nN.t0, 0) + b[i] - 0.12; if(x > pa[pa.length - 1] + 0.05 && y > pb[pb.length - 1] + 0.05){ pa.push(x); pb.push(y); } }
+  const fa = _evpNum(nA.t0, 0) + _evpNum(nA.dur, 1) + 0.7, fb = _evpNum(nN.t0, 0) + _evpNum(nN.dur, 1) + 0.7;
+  if(fa > pa[pa.length - 1] + 0.05 && fb > pb[pb.length - 1] + 0.05){ pa.push(fa); pb.push(fb); }
+  return function(t){ if(t <= 0) return t; for(let i=1;i<pa.length;i++){ if(t <= pa[i]){ const f = (t - pa[i - 1]) / Math.max(0.001, pa[i] - pa[i - 1]); return pb[i - 1] + f * (pb[i] - pb[i - 1]); } } return t + (pb[pb.length - 1] - pa[pa.length - 1]); };
+}
+/* reencaixa a faixa de vídeo (magnética) e o que está por cima, pelo mapa. Bruto curto: anda para trás no bruto ou fica mais lento (até 0,5×). */
+function _evpReencaixar(np, mapa, durDe, semId){
+  let t = 0, tN = 0, lentos = 0; const r2 = function(x){ return Math.round(x * 100) / 100; };
+  (np.clips || []).forEach(function(c){
+    const d = _evpDurClip(c), b = t + d; t = b;
+    if(_evpNum(c.congelar, 0) > 0 || (c.rampa && c.rampa !== "nenhuma")){ tN += d; return; }
+    const alvo = Math.max(0.2, mapa(b) - tN), v0 = _evpNum(c.vel, 1), need = alvo * v0, dB = _evpNum(durDe(c.clipe), c.fim);
+    if(need <= dB){ if(c.ini + need <= dB) c.fim = r2(c.ini + need); else { c.ini = r2(Math.max(0, dB - need)); c.fim = r2(dB); } }
+    else { c.ini = 0; c.fim = r2(dB); c.vel = Math.max(0.5, Math.round(dB / alvo * 1000) / 1000); lentos++; }
+    tN += _evpDurClip(c);
+  });
+  ["textos", "imagens", "sfx"].forEach(function(k){ (np[k] || []).forEach(function(x){ if(x == null || x.t0 == null) return;
+    const a = mapa(_evpNum(x.t0, 0)); if(x.t1 != null){ x.t1 = r2(Math.max(a + 0.2, mapa(_evpNum(x.t1, 0)))); } x.t0 = r2(a); }); });
+  (np.narracoes || []).forEach(function(n){ if(n.id !== semId && !n.auto) n.t0 = r2(mapa(_evpNum(n.t0, 0))); });
+  return { lentos:lentos, total:tN };
+}
+
 const _EVP_RNNOISE = "https://cdn.jsdelivr.net/npm/@shiguredo/rnnoise-wasm@2025.1.5/dist/rnnoise.js";
 
 function _evpId(){ return Math.random().toString(36).slice(2, 10); }
@@ -119871,6 +119969,12 @@ function _evpCalcular(p, fala, kit){
   const blocos = [];
   if(p.legenda && p.legenda.ativa!==false && estilo!=="sem" && Array.isArray(p.legenda.srt) && p.legenda.srt.length){        // v26: legenda importada (.srt)
     _evpBlocosSrt(p.legenda.srt.map(function(e){ return { a:e.a + atrasoL, b:e.b + atrasoL, t:e.t }; }), edits).forEach(function(b){ blocos.push(b); });
+  }
+  else if(p.legenda && p.legenda.ativa!==false && estilo!=="sem" && p.legenda.origem === "narracao" && _evpTemNarrPalavras(p)){     // v28: legenda pela narração
+    _evpBlocosNarracao(p, { edits:edits, fixa:fixa, ajTempos:ajTempos, atrasoL:atrasoL, cortesL:cortesL, pint:pint, porBloco:porBloco }).forEach(function(b){ blocos.push(b); });
+    for(let k=blocos.length-1;k>0;k--){ const bk = blocos[k], ba = blocos[k-1];
+      if(juntarL[bk.words[0].chave] && ba.cid === bk.cid){ ba.words = ba.words.concat(bk.words); ba.b = Math.max(ba.b, bk.b); blocos.splice(k, 1); } }
+    for(let k=0;k<blocos.length-1;k++){ if(blocos[k+1].a - blocos[k].b < 0.3) blocos[k].b = blocos[k+1].a; }
   }
   else if(p.legenda && p.legenda.ativa!==false && estilo!=="sem"){
     clips.forEach(function(c){
@@ -121629,7 +121733,7 @@ const _EVP_FERR = {
   imagem:[ { id:"tamanho", label:"Tamanho", icone:"encaixar" }, { id:"anim", label:"Animação", icone:"animacao" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"seguir", label:"Seguir", icone:"olho" },
            { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   final:[ { id:"duracao", label:"Duração", icone:"tempo" } ],
-  narracao:[ { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
+  narracao:[ { id:"voz", label:"Voz", icone:"robo" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
              { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
 };
 const _EVP_LOOKS = [
@@ -123004,7 +123108,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpInspetor fotosCard={(Array.isArray(t.files) ? t.files : []).filter(function(f){ return f && !f.isAnnotation && typeof f.url === "string" && (/^image\//.test(String(f.type || "")) || /\.(png|jpe?g|webp)(\?|#|$)/i.test(f.url)); }).map(function(f){ return { url:f.url, nome:f.name || "" }; })}
             tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
-            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel}/>
+            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id}/>
         ) : (
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
             ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
@@ -124596,6 +124700,73 @@ function _EvpSincPainel({ c, p, mudar, infoClipe, clipes }){
       </div>}
     </div>}
   </div>);
+}
+
+/* v28: NARRAÇÃO › Voz — gerar de novo com outra voz (ou o texto corrigido) e reencaixar os vídeos; legenda pela narração */
+function _EvpNarrVoz({ x, edId, mudar, infoClipe, cliente, p }){
+  const vozes = _evVozesDoCliente(_evUsarVozes(), cliente);
+  const textoBase = function(){ return x.texto || (Array.isArray(x.palavras) ? x.palavras.map(function(w){ return w.p; }).join(" ") : ""); };
+  const [texto, setTexto] = useState(textoBase());
+  const [vozId, setVozId] = useState(x.voz && vozes.some(function(v){ return v.id === x.voz; }) ? x.voz : "");
+  const [vozLivre, setVozLivre] = useState("ash");
+  const [jeito, setJeito] = useState("");
+  const [encaixar, setEncaixar] = useState(true);
+  const [gerando, setGerando] = useState(false);
+  useEffect(function(){ setTexto(textoBase()); }, [x.id, x.url]);
+  const vozSel = vozes.find(function(v){ return v.id === vozId; }) || null;
+  const temPal = Array.isArray(x.palavras) && x.palavras.length > 0;
+  const gerar = async function(){
+    const tx = texto.trim(); if(!tx || gerando) return;
+    if(tx.length > 1500){ _evToast("warning", "Máximo de 1.500 letras na narração."); return; }
+    setGerando(true);
+    try{
+      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"narracao_refazer", id:edId, texto:tx, jeito:jeito.trim() }, vozSel ? { voz_id:vozSel.id } : { voz:vozLivre }) });
+      if(res.error) throw new Error(await _evErroFn(res));
+      const d = res.data || {}; if(!d.url || !Array.isArray(d.palavras)) throw new Error("a IA não devolveu a narração");
+      try{ delete _evpMidia["narr:" + x.id]; }catch(_){}          // o áudio novo é carregado de novo (mesmo id: a legenda e a faixa continuam)
+      let info = null;
+      mudar(function(np){
+        const o = (np.narracoes || []).find(function(q){ return q.id === x.id; }); if(!o) return;
+        const antes = { t0:_evpNum(o.t0, 0), dur:_evpNum(o.dur, 1), palavras:o.palavras };
+        Object.assign(o, { url:d.url, dur:Math.round(_evpNum(d.dur, 1) * 100) / 100, palavras:d.palavras, texto:tx.replace(/\s*\n+\s*/g, " "), ia:true,
+          voz:(d.voz && (d.voz.id || d.voz.voz)) || o.voz, nome:("Narração · " + ((d.voz && d.voz.nome) || "IA")).slice(0, 60) });
+        delete o.corte; delete o.cortado; delete o.volPts;
+        if(encaixar && antes.palavras && antes.palavras.length && Math.abs(antes.dur - o.dur) > 0.05){
+          info = _evpReencaixar(np, _evpMapaNarracao(antes, o), function(id){ return infoClipe[id] ? Number(infoClipe[id].duracao) : null; }, o.id);
+          info.dif = o.dur - antes.dur;
+        }
+        if(np.legenda && np.legenda.origem === "narracao"){ const pre = "narr_" + String(o.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60) + "@";      // as correções antigas eram do tempo antigo
+          ["edits", "tempos", "pintadas"].forEach(function(k){ const m = np.legenda[k]; if(m && typeof m === "object") Object.keys(m).forEach(function(c){ if(c.indexOf(pre) === 0) delete m[c]; }); });
+          ["cortes", "juntar"].forEach(function(k){ if(Array.isArray(np.legenda[k])) np.legenda[k] = np.legenda[k].filter(function(c){ return String(c).indexOf(pre) !== 0; }); }); }
+      });
+      _evToast("success", "Narração nova pronta" + (d.custo_brl != null ? " · R$ " + String(d.custo_brl).replace(".", ",") : "") +
+        (info ? " · vídeos reencaixados (" + (info.dif > 0 ? "+" : "") + String(Math.round(info.dif * 10) / 10).replace(".", ",") + " s)" + (info.lentos ? ", " + info.lentos + " trecho(s) mais lento(s)" : "") : ""));
+    }catch(e){ _evToast("error", "Não gerou: " + ((e && e.message) || e)); }
+    setGerando(false);
+  };
+  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"6px 8px", borderRadius:9, border:"1px solid " + _EVP_COR.linha, fontSize:12, background:_EVP_COR.campo };
+  return (
+    <div>
+      {x.auto && <div style={{fontSize:11.5,fontWeight:700,color:"#7c2d12",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:9,padding:"6px 8px",marginBottom:8}}>🎙 Narração automática: a voz do vídeo, feita com o texto do card. Os vídeos estão encaixados nas frases dela.</div>}
+      <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,marginBottom:4}}>Texto da narração</div>
+      <textarea value={texto} onChange={function(e){ setTexto(e.target.value); }} rows={5} maxLength={1600} aria-label="Texto da narração" style={Object.assign({}, campo, { resize:"vertical", userSelect:"text" })}/>
+      <div style={{fontSize:10.5,color:texto.length > 1500 ? _EV.verm : _EVP_COR.fraco,textAlign:"right"}}>{texto.length} / 1.500</div>
+      <select value={vozId} onChange={function(e){ setVozId(e.target.value); }} aria-label="Voz da narração" style={Object.assign({}, campo, { marginTop:4 })}>
+        <option value="">Voz livre (escolher abaixo)</option>
+        {vozes.map(function(v){ return <option key={v.id} value={v.id}>{v.nome}</option>; })}</select>
+      {vozSel && vozSel.amostra_url && <audio controls preload="none" src={vozSel.amostra_url} style={{width:"100%",height:30,marginTop:6}}/>}
+      {!vozSel && <select value={vozLivre} onChange={function(e){ setVozLivre(e.target.value); }} aria-label="Voz livre" style={Object.assign({}, campo, { marginTop:6 })}>
+        {_EVP_VOZES.map(function(v){ return <option key={v.id} value={v.id}>{v.label}</option>; })}</select>}
+      <input value={jeito} onChange={function(e){ setJeito(e.target.value); }} maxLength={200} aria-label="Jeito de falar da narração" placeholder="Jeito de falar (opcional, ex.: mais animado)" style={Object.assign({}, campo, { marginTop:6, userSelect:"text" })}/>
+      {temPal && <div style={{marginTop:6}}><_EvpInterruptor on={encaixar} onChange={setEncaixar} label="Encaixar os vídeos na narração nova" dica="Se a voz nova for mais rápida ou mais lenta, os cortes, textos e imagens acompanham as frases"/></div>}
+      <button onClick={gerar} disabled={gerando || !texto.trim()} style={Object.assign(_evpBtn(gerando || !texto.trim() ? null : "primario", !gerando && !!texto.trim()), {width:"100%",justifyContent:"center",marginTop:8})}>
+        <_EvpIco n="ia" s={15}/>{gerando ? "Gerando a voz…" : "Gerar de novo"}</button>
+      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>Custa uns centavos (voz + tempo das palavras) e entra no gasto do mês. Nomes difíceis: Kit do cliente › Pronúncia.</div>
+      {temPal && <div style={{marginTop:10}}>
+        <_EvpInterruptor on={!!(p.legenda && p.legenda.origem === "narracao")} onChange={function(v){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda || {}); if(v) np.legenda.origem = "narracao"; else delete np.legenda.origem; }); }}
+          label="Legenda pela narração" dica="A legenda mostra o que a voz fala (com a grafia do texto). Desligado: a legenda volta para a fala dos vídeos."/></div>}
+    </div>
+  );
 }
 
 /* ─── ASSISTENTE DE IA (painel da direita quando nada está selecionado) ─── */
@@ -127066,7 +127237,7 @@ function _EvpTesteVelocidade({ ed, projeto, calc, kit, base, tratados, logoUrl }
 }
 /* ─── PAINEL DA DIREITA: mostra só a ferramenta escolhida na barra embaixo do vídeo ─── */
 function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef, confirmar, kit, base, infoClipe, musicas, musInfo, setMusica, enquadrar, setEnquadrar,
-                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara, edUnidade, setSel }){
+                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara, edUnidade, setSel, edId }){
   const ctl = _evpUsarCtl(pRef, setP, confirmar, mudar);
   const caixa = Object.assign({}, _EVP_PAINEL, { padding:14, overflow:"auto", height:"100%", boxSizing:"border-box", minWidth:0 });
   const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:10, border:"1px solid "+_EVP_COR.linha, fontSize:13, userSelect:"text" };
@@ -127456,6 +127627,8 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
     const nn = function(fn){ return function(np, v){ const o = (np.narracoes || []).find(function(q){ return q.id === x.id; }); if(o) fn(o, v); }; };
     return (
       <div style={caixa}>{cab}
+        {ferr === "voz" && !x.musica && x.fonte !== "clipe" && <_EvpNarrVoz x={x} edId={edId} mudar={mudar} infoClipe={infoClipe} cliente={tCard && tCard.client} p={p}/>}
+        {ferr === "voz" && (x.musica || x.fonte === "clipe") && <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>Este áudio não é narração (trilha ou som de um clipe).</div>}
         <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n={x.musica ? "musica" : x.ia ? "robo" : "gravar"} s={14}/>{x.musica ? "Trilha extra (música em outro canal)" : x.ia ? "Voz gerada pela IA" : "Gravada no microfone"} · {_evTempo(x.dur)}</div>
         {ferr === "volume" && (<div>
           <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(x.vol, 1)} min={0} max={3} step={0.05} fmt={pct} padrao={1} aplicar={nn(function(o, v){ o.vol = v; })}/>
