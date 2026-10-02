@@ -115611,6 +115611,7 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v28.1 (02/10/2026): o briefing no app fica em t.desc (o banco chama description) — a narração do card não era achada no navegador.
    v28 (01/10/2026) — NARRAÇÃO AUTOMÁTICA (pedido do Vini · video-editar v39):
      • O card pede narração ([NARRAÇÃO], "Roteiro de narração", "• ROTEIRO (vídeo narrado)", "NARRAÇÃO:" ou tag) → "Editar com IA" (ou o Link do Drive /
        o Guvi) gera a voz, a IA escolhe as imagens de cada frase e o servidor encaixa os vídeos na voz. Não envia o áudio dos brutos (mais rápido).
@@ -115873,7 +115874,7 @@ function _evAplicarPronuncia(texto, prons){
 }
 /* roteiro do card: blocos "NARRAÇÃO:", "LOCUÇÃO:", "OFF:" (até a linha vazia ou outro rótulo) ou [NARRAÇÃO]…[/NARRAÇÃO] */
 function _evTexto(html){ return String(html || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"); }
-function _evRoteiroNarracao(t){ return _evNarracaoDoTexto((t && t.description) || "", t && t.tags, (t && t.roteiro) || ""); }   // v28: regras novas (n_narracao.js)
+function _evRoteiroNarracao(t){ return _evNarracaoDoTexto((t && (t.desc || t.description)) || "", t && t.tags, (t && t.roteiro) || ""); }   // v28.1: no app o briefing fica em t.desc (no banco é description)
 function _evTagNarracao(t){ return (Array.isArray(t && t.tags) ? t.tags : []).some(function(x){ return /narra|locu/i.test(String(x || "")); }); }
 
 function _EvVozes({ isMob }){
