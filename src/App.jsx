@@ -115620,6 +115620,8 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v30 (02/10/2026): TRANSIÇÕES DE VERDADE — apoio (B-roll) em tela cheia com transição de entrada e saída (trIn/trOut/trDur), transição nova "marca"
+     (faixas inclinadas com as cores do kit) e mapa de transições da IA (video-editar v42: tipos por momento, no máximo 3 por vídeo, whoosh no quadro).
    v29.3 (02/10/2026): EXPORTAR RÁPIDO — o PC (v9.1) converte só os trechos usados dos originais 4K; o Exportar mostra a previsão antes ("~6 min") e o andamento com "faltam ~X min".
    v29.2 (02/10/2026): tela "Preparar a edição" nova (3 passos, Narração | Material em 2 colunas, barra de ação fixa) · Narração IA com visual novo ·
      andamento do PC com barra (batimento motor_pc_progresso) e aviso de programa desatualizado (banco v32).
@@ -118104,14 +118106,26 @@ const _EVP_TRANS_GRUPOS = [
   { id:"luz", label:"Luz", ids:["flash", "brilho", "vazamento", "exposicao", "lente"] },
   { id:"mov", label:"Movimento", ids:["zoom_entra", "zoom_sai", "giro", "empurrar"] },
   { id:"outras", label:"Desfoque e glitch", ids:["desfoque", "glitch"] },
+  { id:"marca", label:"Marca", ids:["marca"] },                                            // v30
 ];
 const _EVP_TRANS_NOVAS = [
   { id:"flash", label:"Flash suave" }, { id:"brilho", label:"Brilho" }, { id:"vazamento", label:"Vazamento de luz" }, { id:"exposicao", label:"Exposição" },
   { id:"lente", label:"Lente (flare)" }, { id:"zoom_entra", label:"Zoom com desfoque" }, { id:"zoom_sai", label:"Zoom saindo" }, { id:"giro", label:"Giro" },
   { id:"empurrar", label:"Empurrar para cima" }, { id:"desfoque", label:"Desfoque" }, { id:"glitch", label:"Glitch leve" },
+  { id:"marca", label:"Marca (cores do cliente)" },                                         // v30
 ];
 _EVP_TRANS_NOVAS.forEach(function(o){ if(!_EVP_TRANS.some(function(q){ return q.id === o.id; })) _EVP_TRANS.push(o); });
 const _EVP_TRANS_LUZ = ["flash", "brilho", "vazamento", "exposicao", "lente"];
+/* v30: a transição "marca" usa as cores do kit (o motor atualiza ao abrir o projeto); o apoio em tela cheia entra e sai com estas */
+let _EVP_MARCA_CORES = ["#7c3aed", "#ffffff"];
+const _EVP_TRANS_APOIO = ["corte", "fade", "desfoque", "deslizar", "empurrar", "whip", "zoom", "zoom_entra", "marca"];
+const _EVP_TRANS_APOIO_ROT = { corte:"Corte seco", fade:"Fundir", desfoque:"Desfoque", deslizar:"Deslizar", empurrar:"Empurrar", whip:"Chicote", zoom:"Zoom", zoom_entra:"Zoom + desfoque", marca:"Marca" };
+function _evpHexRgb(h){ const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "")); if(!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function _evpMisturaHex(a, b, k){ const x = _evpHexRgb(a) || [124, 58, 237], y = _evpHexRgb(b) || [0, 0, 0];
+  return "#" + x.map(function(v, i){ return Math.round(v + (y[i] - v) * k).toString(16).padStart(2, "0"); }).join(""); }
+function _evpLuz(h){ const c = _evpHexRgb(h) || [0, 0, 0]; return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; }
+/* 3ª faixa: a cor secundária do kit, se ela se destaca da principal; senão branco quente (principal escura) ou grafite (principal clara) */
+function _evpMarcaContraste(pri, sec){ if(_evpHexRgb(sec) && Math.abs(_evpLuz(sec) - _evpLuz(pri)) > 0.25) return sec; return _evpLuz(pri) < 0.6 ? "#f8f5ef" : "#14121a"; }
 const _EVP_TRANS_DURS = [ { v:0.2, label:"Curta" }, { v:0.35, label:"Média" }, { v:0.6, label:"Longa" } ];
 function _evpTransDur(c){ const d = _evpNum(c && c.transDur, 0.35); return d === 0.2 || d === 0.6 ? d : 0.35; }
 function _evpTransNova(id){ return _EVP_TRANS_NOVAS.some(function(o){ return o.id === id; }); }
@@ -118202,6 +118216,21 @@ function _evpTransPinta(ctx, W, H, tipo, p0, A, B, curva){
     const t1 = _evpTrTela("df1", W, H), x1 = t1.getContext("2d"); x1.clearRect(0, 0, W, H); _evpTrBorrado(x1, A, W, H, r);
     const t2 = _evpTrTela("df2", W, H), x2 = t2.getContext("2d"); x2.clearRect(0, 0, W, H); _evpTrBorrado(x2, B, W, H, r);
     ctx.drawImage(t1, 0, 0); const k = sm(0.3, 0.7, e); if(k > 0){ ctx.globalAlpha = k; ctx.drawImage(t2, 0, 0); ctx.globalAlpha = 1; }
+  }
+  else if(tipo === "marca"){
+    // v30: 3 faixas inclinadas (secundária, principal escurecida, principal) cobrem a tela; a troca A→B acontece escondida no meio e elas saem pelo outro lado
+    ctx.drawImage(e < 0.5 ? A : B, 0, 0, W, H);
+    const c1 = _EVP_MARCA_CORES[0] || "#7c3aed", sk = H * 0.21;
+    const fx = [ { c:_evpMarcaContraste(c1, _EVP_MARCA_CORES[1]), d:0 }, { c:_evpMisturaHex(c1, "#000000", 0.38), d:0.07 }, { c:c1, d:0.14, topo:true } ];
+    fx.forEach(function(b){
+      const iIn = sm(b.d, b.d + 0.36, e), iOut = sm(0.5 + (0.14 - b.d), 0.86 + (0.14 - b.d), e);
+      if(iIn <= 0 || iOut >= 1) return;
+      const R = -sk + (W + sk) * iIn, L = -2 * sk + (W + 2 * sk) * iOut;
+      ctx.fillStyle = b.c; ctx.beginPath(); ctx.moveTo(L, H); ctx.lineTo(L + sk, 0); ctx.lineTo(R + sk, 0); ctx.lineTo(R, H); ctx.closePath(); ctx.fill();
+      if(b.topo){                                   // fio de luz na borda que anda (acabamento)
+        const xb = iIn < 1 ? R : L; ctx.strokeStyle = "rgba(255,255,255,.38)"; ctx.lineWidth = Math.max(2, W * 0.005);
+        ctx.beginPath(); ctx.moveTo(xb, H); ctx.lineTo(xb + sk, 0); ctx.stroke(); }
+    });
   }
   else if(tipo === "glitch"){
     const base = e < 0.5 ? A : B; ctx.drawImage(base, 0, 0, W, H);
@@ -120138,8 +120167,9 @@ function _evpNormalizar(p, clipes){
     }
     if(o.camada === "desfoque"){ o.alt = Math.max(0.03, Math.min(1, _evpNum(o.alt, 0.12))); o.forca = Math.max(4, Math.min(80, _evpNum(o.forca, 28))); o.oval = !!o.oval; o.anim = "nenhuma"; }
     // v10 (30/09): APOIO em tela cheia (B-roll) — cobre a tela toda por cima do principal, sem moldura e sem som; foto com zoom lento
-    if(o.cheia === true && o.camada !== "desfoque"){ o.x = 0.5; o.y = 0.5; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; } if(o.camada === "imagem") o.kb = o.kb !== false; }
-    else delete o.cheia;
+    if(o.cheia === true && o.camada !== "desfoque"){ o.x = 0.5; o.y = 0.5; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; } if(o.camada === "imagem") o.kb = o.kb !== false;
+      ["trIn", "trOut"].forEach(function(k){ if(_EVP_TRANS_APOIO.indexOf(o[k]) < 1) delete o[k]; }); if(o.trDur !== 0.2 && o.trDur !== 0.6) delete o.trDur; }   // v30: entrada/saída do apoio
+    else { delete o.cheia; delete o.trIn; delete o.trOut; delete o.trDur; }
     o.canal = Math.max(2, Math.min(10, Math.round(_evpNum(o.canal, 2))));      // v11: canal de vídeo V2–V10 (V1 = principal)
     return o; });
   p.narracoes = (p.narracoes||[]).filter(function(x){ return x && (x.url || (x.fonte === "clipe" && x.clipe && dur[x.clipe] != null)); }).map(function(x){ const o = Object.assign({ id:_evpId(), t0:0, vol:1, nome:"Narração", dur:1, ia:false }, x);
@@ -121185,6 +121215,7 @@ function _evpMotor(canvas, o){
   try{ ((o.projeto && o.projeto.clips) || []).forEach(function(c){ if(c && c.cor && c.cor.lut && c.cor.lut.url) _evpLutCarregar(c.cor.lut.url); }); }catch(_){}   // v21: LUTs já carregando
   const kit = o.kit || {}, base = o.base || {};
   const pri = kit.cor_principal || "#7c3aed", sec = kit.cor_secundaria || "#ffffff", txt = kit.cor_texto || "#ffffff";
+  _EVP_MARCA_CORES = [pri, sec];                    // v30: transição "marca" nas cores do cliente
   /* cores do texto: [fundo, letra com fundo, letra sem fundo] */
   const coresTx = function(c){ return c === "branco" ? ["#ffffff", "#0f172a", "#ffffff"] : c === "preto" ? ["#0b1020", "#ffffff", "#0b1020"] : c === "amarelo" ? ["#facc15", "#111827", "#facc15"] : [pri, txt, "#ffffff"]; };
   const F = "\"" + (kit.fonte||"Montserrat") + "\", Montserrat, system-ui, sans-serif";
@@ -121753,6 +121784,19 @@ function _evpMotor(canvas, o){
   }
   function desenharImagens(){
     const csV = calc.canais || {};
+    // v30: apoio em tela cheia com transição de entrada/saída — A = o que já está na tela, B = o apoio (mesmo desenho das transições entre clipes)
+    const apoioTr = function(x, bl, opG, pinta){
+      const tin = _EVP_TRANS_APOIO.indexOf(x.trIn) > 0 ? x.trIn : "", tout = _EVP_TRANS_APOIO.indexOf(x.trOut) > 0 ? x.trOut : "";
+      const dd = Math.max(0.05, Math.min(_evpTransDur({ transDur:x.trDur }), (x.t1 - x.t0) / 2.5));
+      const pIn = tin ? (t - x.t0) / dd : 1, pOut = tout ? (x.t1 - t) / dd : 1;
+      if((pIn >= 1 && pOut >= 1) || bl || opG < 1){ pinta(cx); return; }
+      const B = _evpTrTela("apB", W, H), bx = B.getContext("2d"); bx.setTransform(1, 0, 0, 1, 0, 0); bx.globalAlpha = 1; bx.globalCompositeOperation = "source-over"; bx.filter = "none";
+      bx.fillStyle = "#000"; bx.fillRect(0, 0, W, H); pinta(bx);
+      const A = _evpTrTela("apA", W, H), ax = A.getContext("2d"); ax.setTransform(1, 0, 0, 1, 0, 0); ax.globalAlpha = 1; ax.globalCompositeOperation = "source-over"; ax.filter = "none";
+      ax.clearRect(0, 0, W, H); ax.drawImage(canvas, 0, 0, W, H);
+      if(pIn < 1) _evpTransPinta(cx, W, H, tin, Math.max(0, pIn), A, B, "io");
+      else _evpTransPinta(cx, W, H, tout, Math.min(1, 1 - pOut), B, A, "io");
+    };
     // v11: canais de vídeo — V2 embaixo … V10 em cima (na mesma camada, vale a ordem da lista); canal escondido não aparece
     (calc.imagens||[]).map(function(x, k){ return { x:x, k:k }; }).sort(function(a, b){ return (_evpNum(a.x.canal, 2) - _evpNum(b.x.canal, 2)) || (a.k - b.k); }).map(function(q){ return q.x; }).forEach(function(x0){
       if(t < x0.t0 || t > x0.t1 || x0.soFundo) return;
@@ -121793,7 +121837,7 @@ function _evpMotor(canvas, o){
         const s = Math.max(W / v.videoWidth, H / v.videoHeight), w = v.videoWidth * s, h = v.videoHeight * s;
         caixas.push({ id:x.id, tipo:"imagem", x:0, y:0, w:W, h:H });
         const vs = x.chroma && x.chroma.on ? (_evpCorGL.render(v, { chroma:x.chroma }) || v) : v;      // v23: chroma no apoio
-        cx.drawImage(vs, (W - w) / 2, (H - h) / 2, w, h);
+        apoioTr(x, bl, opG, function(g){ g.drawImage(vs, (W - w) / 2, (H - h) / 2, w, h); });          // v30: com entrada/saída
         return;
       }
       if(x.camada === "video"){              // vídeo sobre vídeo
@@ -121822,7 +121866,7 @@ function _evpMotor(canvas, o){
         const kz = x.kb === false ? 1 : 1 + 0.08 * Math.max(0, Math.min(1, (t - x.t0) / Math.max(0.1, x.t1 - x.t0)));
         const s = Math.max(W / im.naturalWidth, H / im.naturalHeight) * kz, w = im.naturalWidth * s, h = im.naturalHeight * s;
         caixas.push({ id:x.id, tipo:"imagem", x:0, y:0, w:W, h:H });
-        cx.drawImage(gq || im, (W - w) / 2, (H - h) / 2, w, h);
+        apoioTr(x, bl, opG, function(g){ g.drawImage(gq || im, (W - w) / 2, (H - h) / 2, w, h); });     // v30: com entrada/saída
         return;
       }
       const k = animK(x, t), w = W * _evpNum(x.escala, 0.35), h = w * im.naturalHeight / im.naturalWidth;
@@ -127991,6 +128035,21 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           <_EvpInterruptor on={!!x.cheia} onChange={function(v){ mudar(ni(function(o){ if(v){ o.cheia = true; o.x = 0.5; o.y = 0.5; o.escala = 1; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; o.mudo = true; } } else { delete o.cheia; o.escala = 0.35; o.y = 0.3; } })); }}
             label="Apoio em tela cheia" dica="Imagem de apoio (B-roll): cobre a tela toda por cima do vídeo principal; a fala continua por baixo"/>
           {x.cheia && x.camada === "video" && <_EvpSlider ctl={ctl} rotulo="Velocidade do apoio" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} fmt={function(v){ return (Math.round(v * 100) / 100) + "×"; }} padrao={1} aplicar={ni(function(o, v){ o.vel = v; })}/>}
+          {x.cheia && (<div style={{display:"flex",gap:6,marginTop:8}}>{/* v30: transição de entrada e saída do apoio */}
+            {[["trIn", "Entrada"], ["trOut", "Saída"]].map(function(q){ return (
+              <label key={q[0]} style={{flex:1,minWidth:0,fontSize:11.5,color:_EVP_COR.sub,fontWeight:600}}>{q[1]}
+                <select value={_EVP_TRANS_APOIO.indexOf(x[q[0]]) > 0 ? x[q[0]] : "corte"} aria-label={"Transição de " + q[1].toLowerCase() + " do apoio"}
+                  onChange={function(e){ const v = e.target.value; mudar(ni(function(o){ if(v === "corte") delete o[q[0]]; else o[q[0]] = v; })); }}
+                  style={{font:"inherit",width:"100%",padding:"6px 8px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,fontSize:12.5,marginTop:3,background:_EVP_COR.campo,color:_EVP_COR.ink}}>
+                  {_EVP_TRANS_APOIO.map(function(id){ return <option key={id} value={id}>{_EVP_TRANS_APOIO_ROT[id] || id}</option>; })}
+                </select></label>); })}
+            <label style={{width:86,flex:"none",fontSize:11.5,color:_EVP_COR.sub,fontWeight:600}}>Duração
+              <select value={String(_evpTransDur({ transDur:x.trDur }))} aria-label="Duração da transição do apoio"
+                onChange={function(e){ const n = Number(e.target.value); mudar(ni(function(o){ if(n === 0.2 || n === 0.6) o.trDur = n; else delete o.trDur; })); }}
+                style={{font:"inherit",width:"100%",padding:"6px 8px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,fontSize:12.5,marginTop:3,background:_EVP_COR.campo,color:_EVP_COR.ink}}>
+                {_EVP_TRANS_DURS.map(function(d){ return <option key={d.v} value={String(d.v)}>{d.label}</option>; })}
+              </select></label>
+          </div>)}
           {x.cheia && x.motivo && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:4}}>Por que esta cena: {x.motivo}</div>}
           {x.cheia && x.t1 - x.t0 < 2 && <div style={{fontSize:11.5,color:_EV.amarelo,fontWeight:700,marginTop:4}}>Imagem de apoio com menos de 2 s — o ideal é 2 s ou mais.</div>}
         </div>)}
