@@ -115620,6 +115620,7 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v29.3 (02/10/2026): EXPORTAR RÁPIDO — o PC (v9.1) converte só os trechos usados dos originais 4K; o Exportar mostra a previsão antes ("~6 min") e o andamento com "faltam ~X min".
    v29.2 (02/10/2026): tela "Preparar a edição" nova (3 passos, Narração | Material em 2 colunas, barra de ação fixa) · Narração IA com visual novo ·
      andamento do PC com barra (batimento motor_pc_progresso) e aviso de programa desatualizado (banco v32).
    v29.1 (02/10/2026): o mesmo painel "🎙 Narração IA" aparece dentro do cartão do kanban (10_radar_entrega, abaixo de "Como esta peça sai"), só em card de vídeo.
@@ -120323,6 +120324,21 @@ function _evpM(id){ if(!_evpMidia[id]) _evpMidia[id] = { thumbs:[], tratado:{} }
 /* v16: na GRAVAÇÃO do PC, a cópia leve (Drive) vira o ORIGINAL servido pelo próprio PC. No navegador não muda nada. */
 function _evTroca(u){ try{ const t = window.__CFG && window.__CFG.trocas; return (u && t && t[u]) || u; }catch(_){ return u; } }
 /* v16: dados do original no Drive de cada vídeo do card (id do arquivo → {id, nome, bytes, w, h, dur…}) */
+/* v29.3: PREVISÃO DO EXPORTAR NO PC — mesma regra do PC v9.1 (converte só os trechos usados de cada original, +1,5 s de folga).
+   ~1,5 s de trabalho por segundo de original 4K (medido no Pixels 01 em 02/10: 572 s de 4K + gravação em 14,7 min) + 8 s por arquivo; depois grava o vídeo (≈ duração × 1,15 + 40 s). */
+function _evPrevisaoPC(projeto, driveDe, total){
+  const usos = {}, add = function(id, a, b){ if(!driveDe[id]) return; (usos[id] = usos[id] || []).push([Math.max(0, a - 1.5), b + 1.5]); };
+  (projeto.clips || []).forEach(function(c){ const a = Number(c.ini) || 0, b = Number(c.fim) || 0; add(c.clipe, Math.min(a, b), Math.max(a, b)); });
+  (projeto.imagens || []).forEach(function(im){ if(!im || !im.clipe) return; const a = Number(im.ini) || 0; add(im.clipe, a, a + Math.max(0.1, ((Number(im.t1) || 0) - (Number(im.t0) || 0)) * Math.max(0.25, Number(im.vel) || 1))); });
+  let seg = 0, n = 0;
+  Object.keys(usos).forEach(function(id){ const dur = Number(driveDe[id].dur) || 0; const rs = usos[id].sort(function(x, y){ return x[0] - y[0]; }); const j = [];
+    rs.forEach(function(r){ if(j.length && r[0] <= j[j.length - 1][1] + 1) j[j.length - 1][1] = Math.max(j[j.length - 1][1], r[1]); else j.push([r[0], r[1]]); });
+    let u = j.reduce(function(s2, r){ return s2 + Math.max(0, Math.min(dur || r[1], r[1]) - r[0]); }, 0); if(dur && u >= dur * 0.8) u = dur; seg += u; n++; });
+  const grava = (Number(total) || 60) * 1.15 + 40;
+  return { originais:n, segUsados:Math.round(seg), seg:Math.round(seg * 1.5 + n * 8 + grava), segJaConvertido:Math.round(grava) };
+}
+function _evMin(seg){ const m = Math.max(1, Math.round(seg / 60)); return m >= 60 ? Math.floor(m / 60) + " h " + (m % 60 ? (m % 60) + " min" : "") : m + " min"; }
+
 function _evDriveDe(files){ const m = {}; (Array.isArray(files) ? files : []).forEach(function(f){ if(f && f.id && f.driveOriginal && typeof f.driveOriginal === "object") m[f.id] = f.driveOriginal; }); return m; }
 /* v16: tamanho REAL do original (para o aviso de nitidez): do Drive; ou o próprio vídeo quando não tem cópia leve */
 function _evDimsOriginal(id, info, driveDe){ const d = driveDe && driveDe[id]; if(d && d.w && d.h) return { w:Number(d.w), h:Number(d.h), drive:true };
@@ -128396,6 +128412,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     .filter(function(v, i, a){ return a.indexOf(v) === i; });
   const driveUsados = useMemo(function(){ const dD = _evDriveDe(t && t.files); return usadosIds.filter(function(id){ return !!dD[id]; }); }, [t && t.files, usadosIds.join(",")]);
   const soNoPC = !pcAuto && driveUsados.length > 0;      // v16: originais no Drive → a gravação é no PC (o navegador só tem a cópia leve)
+  const prevPC = useMemo(function(){ return _evPrevisaoPC(projeto, _evDriveDe(t && t.files), calc.total); }, [projeto, t && t.files, calc.total]);   // v29.3
   const envato = !!(projeto.musica && !projeto.musica.mudo && musInfo && /envato/i.test(musInfo.fonte || ""));
   const faltaLicenca = envato && !projeto.musica.licenca_ok;
   const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit, motivos:(ed.receita && ed.receita.motivos_corte) || [],
@@ -128579,7 +128596,9 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       </div>
       {!ativo && <button onClick={function(){ exportar(); }} disabled={faltaLicenca || nErro > 0} title={nErro ? "Corrija o que está em vermelho na Conferência" : ""} style={Object.assign(_evpBtn("verde", !faltaLicenca && !nErro), {marginTop:10,padding:"10px 16px",fontSize:13.5})}>
         <_EvpIco n={soNoPC && !soAudio ? "pc" : "baixar"} s={16}/>{soAudio ? "Gravar e baixar o áudio" : soNoPC ? "Exportar no PC com os originais do Drive" : alterado ? "Salvar, exportar e anexar no card" : ed.final ? "Exportar de novo e anexar no card" : "Aprovar, exportar e anexar no card"}</button>}
-      {!ativo && soNoPC && !soAudio && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.45}}>{driveUsados.length === 1 ? "1 vídeo tem" : driveUsados.length + " vídeos têm"} o original no Drive. O PC do escritório confere cada original com a cópia leve e grava em qualidade máxima — você pode fechar o navegador.</div>}
+      {!ativo && soNoPC && !soAudio && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.45}}>{driveUsados.length === 1 ? "1 vídeo tem" : driveUsados.length + " vídeos têm"} o original no Drive. O PC do escritório confere cada original com a cópia leve e grava em Full HD — você pode fechar o navegador.</div>}
+      {!ativo && soNoPC && !soAudio && !pcAtivo && <div style={{marginTop:6,padding:"7px 10px",borderRadius:10,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha,fontSize:12,lineHeight:1.45}} aria-label="Previsão do exportar">
+        <b>⏱ Previsão: ~{_evMin(prevPC.seg)}</b> <span style={{color:_EVP_COR.sub}}>— converte só os {prevPC.segUsados} s usados de {prevPC.originais} original{prevPC.originais === 1 ? "" : "is"} 4K e grava o vídeo de {_evTempo(calc.total).replace(/\.\d$/, "")}. Se o PC já converteu esses trechos antes, ~{_evMin(prevPC.segJaConvertido)}.</span></div>}
       {!ativo && !soAudio && !isMob && !pcAuto && (
         <div style={{marginTop:10,padding:"9px 11px",borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo}}>
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -128589,7 +128608,9 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
           </div>
           {pcItem && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.5}}>
             {pcItem.status === "fila" ? "Na fila do PC (pedido por " + (pcItem.pedido_por || "") + ")" + (pcItem.erro ? " · " + pcItem.erro : "") + "."
-              : pcItem.status === "processando" ? "O PC " + (pcItem.pc || "") + " está gravando o vídeo agora (tentativa " + pcItem.tentativas + " de 3)."
+              : pcItem.status === "processando" ? (function(){ const r = pcItem.resultado || {};      // v29.3: andamento e quanto falta
+                  const etapa = r.fase === "gravando" ? "gravando " + (r.pct || 0) + "%" : r.total ? "convertendo os originais: " + (r.feitos || 0) + " de " + r.total : (r.msg || "preparando");
+                  return "O PC " + (pcItem.pc || "") + " está " + etapa + (r.eta_s ? " · faltam ~" + _evMin(r.eta_s) : "") + (pcItem.pego_em ? " · começou " + new Date(pcItem.pego_em).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "") + "."; })()
               : pcItem.status === "pronto" ? "Pronto no PC " + (pcItem.pc || "") + " — o vídeo está no card." + (pcItem.resultado && pcItem.resultado.whats_url ? " Tem versão leve para WhatsApp." : "")
               : pcItem.status === "erro" ? "O PC não conseguiu: " + (pcItem.erro || "erro") : ""}</div>}
         </div>
