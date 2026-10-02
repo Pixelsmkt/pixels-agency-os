@@ -52724,6 +52724,15 @@ function _cardPodeSerResp(u){
             </div>;
           })()}
 
+          {/* ── Narração IA (02/10/2026, Vini: "dentro do cartão, um botão para dizer quando é vídeo com Narração de IA";
+               "quando criar o cartão, já criar a voz… a edição tem que ser em cima disso").
+               É o MESMO painel do Estúdio (_EvNarracaoCard, 52_edicao_video): liga/desliga, texto (ou a IA escreve), voz com amostra
+               e "Gerar a voz". Grava direto em tasks.narracao_ia (fora do salvar do cartão). Só em card de vídeo; some para quem não
+               tem acesso à Criação. */}
+          {typeof _EvNarracaoCard==="function"&&pxIsVideoTask({...task,contentType:contentType})&&(task._isDraft
+            ? <div style={{fontSize:11.5,color:"#94a3b8",fontWeight:500}}>🎙 Narração IA: salve o card para ligar a voz da IA.</div>
+            : <_EvNarracaoCard t={{...task,desc:desc,contentType:contentType}} isMob={false} noCard/>)}
+
           {/* Mês de pagamento — só aparece quando a EQUIPE DE PRODUÇÃO (pago por demanda: André/Maria/Guilherme) está marcada. Cards só com sócios/coordenação não têm pagamento por demanda. */}
           {_bl("campo.mes_pagamento")&&(assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);}) && (
           <div>
@@ -115611,6 +115620,14 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v29.1 (02/10/2026): o mesmo painel "🎙 Narração IA" aparece dentro do cartão do kanban (10_radar_entrega, abaixo de "Como esta peça sai"), só em card de vídeo.
+   v29 (02/10/2026) — A VOZ PRIMEIRO + VÍDEO PESADO PELO PC (pedido do Vini: "quando criar o cartão, já criar a voz… a edição tem que ser em cima disso";
+     "como é que eu vou editar material se isso aqui não pode ser editado?"):
+     • 🎙 Narração IA no Estúdio (mesmo sem vídeo no card): liga/desliga, texto (ou "Escrever com IA"), voz com amostra, "Gerar a voz" → fica no card
+       (tasks.narracao_ia). O "Editar com IA" monta os vídeos em cima dessa voz (não gera outra). Fila: "Voz pronta" / "Falta gerar a voz".
+     • Vídeo de 150 MB ou mais sem cópia leve → "Editar com IA" manda para o PC do escritório (criacao_pc_preparar): ele faz as cópias leves,
+       a IA edita e o andamento aparece aqui. Depois disso o navegador já abre as cópias leves (refazer/ajustar sem o PC).
+     • Vídeo narrado: até 60 min de brutos (a fala deles não é lida). Banco v30 · video-editar v40 · exportar_pc v8.2.
    v28.1 (02/10/2026): o briefing no app fica em t.desc (o banco chama description) — a narração do card não era achada no navegador.
    v28 (01/10/2026) — NARRAÇÃO AUTOMÁTICA (pedido do Vini · video-editar v39):
      • O card pede narração ([NARRAÇÃO], "Roteiro de narração", "• ROTEIRO (vídeo narrado)", "NARRAÇÃO:" ou tag) → "Editar com IA" (ou o Link do Drive /
@@ -116030,6 +116047,13 @@ function _EvFila({ tasks, isMob, onAbrirCard, onEstudio }){
       .sort(function(a,b){ return a.nome.localeCompare(b.nome,"pt-BR"); });
   }, [todos]);
   const lista = cliente ? todos.filter(function(x){ return x.t.client===cliente; }) : todos;
+  const [narrSt, setNarrSt] = useState({});                             // v29: { id: {ligado, pronta, dur} } da Narração IA do card
+  const idsChave = todos.map(function(x){ return x.t.id; }).join(",");
+  useEffect(function(){
+    if(!window._sb || !idsChave) return; let vivo = true;
+    window._sb.rpc("criacao_narracoes_status", { p_tasks:idsChave.split(",") }).then(function(r){ if(vivo && !r.error && r.data && typeof r.data === "object") setNarrSt(r.data); }).catch(function(){});
+    return function(){ vivo = false; };
+  }, [idsChave]);
 
   const ordem = [""].concat(clientes.map(function(c){ return c.id; }));
   const pos = Math.max(0, ordem.indexOf(cliente));
@@ -116075,7 +116099,7 @@ function _EvFila({ tasks, isMob, onAbrirCard, onEstudio }){
           <div key={col.id} style={{marginTop:18}}>
             <div style={{fontSize:_evF(13,isMob),fontWeight:800,color:_EV.sub,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>{col.label} · {itens.length}</div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {itens.map(function(x){ return <_EvFilaItem key={x.t.id} x={x} isMob={isMob} onAbrirCard={onAbrirCard} onEstudio={onEstudio}/>; })}
+              {itens.map(function(x){ return <_EvFilaItem key={x.t.id} x={x} narr={narrSt[x.t.id] || null} isMob={isMob} onAbrirCard={onAbrirCard} onEstudio={onEstudio}/>; })}
             </div>
           </div>
         );
@@ -116088,7 +116112,7 @@ function _EvFila({ tasks, isMob, onAbrirCard, onEstudio }){
   );
 }
 
-function _EvFilaItem({ x, isMob, onAbrirCard, onEstudio }){
+function _EvFilaItem({ x, narr, isMob, onAbrirCard, onEstudio }){
   const t = x.t;
   const cor = _evCorCliente(t.client);
   const pessoas = (Array.isArray(t.assignees) && t.assignees.length ? t.assignees : (t.assignee ? [t.assignee] : []))
@@ -116108,7 +116132,10 @@ function _EvFilaItem({ x, isMob, onAbrirCard, onEstudio }){
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7}}>
           {x.pub ? chip((x.atrasado ? "Atrasado · " : "Publica ") + _evDataBR(x.pub), x.atrasado ? [_EV.vermClaro,_EV.verm] : [_EV.fundo,_EV.texto])
                  : chip("Sem data de publicação", [_EV.fundo,_EV.sub])}
-          {_evRoteiroNarracao(t) ? chip("🎙 Narração automática", ["#fff7ed","#c2410c"]) : _evTagNarracao(t) && chip("🎙 Narração", ["#fff7ed","#c2410c"])}
+          {narr && narr.ligado ? (narr.pronta ? chip("🎙 Voz pronta" + (Number(narr.dur) > 0 ? " · " + _evTempo(Number(narr.dur)).replace(/\.\d$/, "") : ""), [_EV.verdeClaro,_EV.verde])
+                                             : chip("🎙 Falta gerar a voz", ["#fff7ed","#c2410c"]))
+            : narr && narr.ligado === false ? null
+            : _evRoteiroNarracao(t) ? chip("🎙 Narração no briefing", ["#fff7ed","#c2410c"]) : _evTagNarracao(t) && chip("🎙 Narração", ["#fff7ed","#c2410c"])}
           {x.brutos>0 ? chip("🎞 " + x.brutos + (x.brutos===1 ? " bruto no card" : " brutos no card"), [_EV.verdeClaro,_EV.verde])
                       : chip("Sem bruto no card", [_EV.amareloClaro,_EV.amarelo])}
           {x.refs>0 && chip(x.refs + (x.refs===1 ? " referência" : " referências"), [_EV.roxoClaro,_EV.roxo])}
@@ -116117,6 +116144,10 @@ function _EvFilaItem({ x, isMob, onAbrirCard, onEstudio }){
         {pessoas.length>0 && <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginTop:6}}>Com: {pessoas.join(", ")}</div>}
       </div>
       <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+        {typeof onEstudio==="function" && x.brutos===0 && (      // v29: a voz antes dos vídeos
+          <button onClick={function(){ onEstudio(t); }} style={{font:"inherit",padding:"9px 14px",borderRadius:10,border:"1px solid #fed7aa",
+            background:"#fff7ed",color:"#c2410c",fontWeight:800,fontSize:_evF(13,isMob),cursor:"pointer",whiteSpace:"nowrap"}}>🎙 Narração</button>
+        )}
         {typeof onEstudio==="function" && x.brutos>0 && (
           <button onClick={function(){ onEstudio(t); }} style={{font:"inherit",padding:"9px 14px",borderRadius:10,border:0,
             background:_EV.roxo,color:"#fff",fontWeight:800,fontSize:_evF(13,isMob),cursor:"pointer",whiteSpace:"nowrap"}}>🎬 Estúdio</button>
@@ -117338,7 +117369,8 @@ async function _evPrepararMontar(t, setPasso, extra){
   setPasso("Medindo os vídeos…");
   const durs = []; for(let i=0;i<brutos.length;i++) durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url));
   const total = durs.reduce(function(s,x){ return s+x; }, 0);
-  if(total > 20*60) throw new Error("Os brutos somam mais de 20 minutos. Deixe no card só o material deste vídeo.");
+  const maxMin = narrado ? 60 : 20;                     // v29: vídeo narrado não lê a fala dos brutos — aceita até 60 min
+  if(total > maxMin*60) throw new Error("Os brutos somam mais de " + maxMin + " minutos. Deixe no card só o material deste vídeo.");
   const quadroSeg = Math.max(2, Math.ceil(total/150));
   const pasta = "edicao/" + _evUuid() + "/";
   const bk = window._sb.storage.from("video-leituras");
@@ -117346,7 +117378,7 @@ async function _evPrepararMontar(t, setPasso, extra){
   for(let i=0;i<brutos.length;i++){
     const f = brutos[i], nome = "vídeo " + (i+1) + " de " + brutos.length;
     const src = f.previewUrl || f.url;
-    if(!f.previewUrl && Number(f.size||0) > 700*1024*1024) throw new Error("\"" + (f.name||"vídeo") + "\" é grande demais para abrir no navegador (mais de 700 MB).");
+    if(!f.previewUrl && Number(f.size||0) > 700*1024*1024) throw new Error("\"" + (f.name||"vídeo") + "\" é grande demais para abrir no navegador (mais de 700 MB): clique em Editar com IA de novo — vai para o PC do escritório.");
     setPasso("Baixando o " + nome + "…");
     const blob = await _evBaixar(src, function(p){ setPasso("Baixando o " + nome + "… " + p + "%"); });
     const r = await _evDesmontar(blob, quadroSeg, function(m){ setPasso(nome.charAt(0).toUpperCase() + nome.slice(1) + ": " + m); });
@@ -117373,6 +117405,157 @@ async function _evPrepararMontar(t, setPasso, extra){
   const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(modM ? { modelo:modM } : {}), ...(extra || {}) } });
   if(res.error) throw new Error(await _evErroFn(res));
   return res.data || {};
+}
+
+/* ══ v29 (02/10/2026) — NARRAÇÃO NO CARD + VÍDEO PESADO VAI PARA O PC (pedido do Vini: "a voz primeiro, a edição em cima dela";
+   "como é que eu vou editar material se isso aqui não pode ser editado?").
+   • _EvNarracaoCard: liga/desliga a Narração IA do card, texto (ou a IA escreve), voz com amostra, "Gerar a voz" → fica guardada no card
+     (tasks.narracao_ia, video-editar "narracao_card"); a edição usa essa voz pronta.
+   • _EvPcTrabalho: andamento do PC do escritório (fila, preparando, cópias leves, erro) para o card aberto.
+   • _evPesados: vídeos que o navegador não abre bem (150 MB ou mais, sem cópia leve) → o "Editar com IA" manda para o PC. */
+
+function _evPesados(t){ return _evBrutos(t).filter(function(f){ return !f.previewUrl && !(f.driveOriginal && typeof f.driveOriginal === "object") && Number(f.size || 0) >= 150 * 1048576; }); }
+
+function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = dentro do cartão do kanban (some para quem não tem acesso à Criação)
+  const vozesTodas = _evUsarVozes();
+  const vozes = _evVozesDoCliente(vozesTodas, t && t.client);
+  const [nc, setNc] = useState(undefined);               // undefined = carregando · null = o card ainda não tem
+  const [texto, setTexto] = useState("");
+  const [vozId, setVozId] = useState("");
+  const [ligado, setLigado] = useState(false);
+  const [ocupado, setOcupado] = useState("");            // "" | "texto" | "voz" | "amostra"
+  const [amostras, setAmostras] = useState({});
+  const [semAcesso, setSemAcesso] = useState(false);
+  const textoBriefing = _evRoteiroNarracao(t);
+  const carregar = function(){
+    if(!window._sb || !t) return;
+    window._sb.rpc("criacao_narracao_card", { p_task:t.id }).then(function(r){
+      if(r.error){ if(/permiss/i.test(String(r.error.message || ""))) setSemAcesso(true); setNc(null); return; }
+      const d = r.data || null; setNc(d);
+      setTexto(d && d.texto ? d.texto : textoBriefing);
+      setVozId(d && d.voz_id ? d.voz_id : "");
+      setLigado(d ? !!d.ligado : !!textoBriefing);
+    }).catch(function(){ setNc(null); });
+  };
+  useEffect(function(){ setNc(undefined); carregar(); }, [t && t.id]);
+  useEffect(function(){ if(typeof onLigado !== "function" || nc === undefined) return;     // true = narra (texto do card) · false = não narra · null = segue o briefing
+    const tx = nc && nc.ligado === true ? String(nc.texto || "").trim() : "";
+    onLigado(nc && nc.ligado === false ? false : (tx && tx.length <= 1500 ? true : null)); }, [nc, textoBriefing]);
+  useEffect(function(){ if(!vozId && vozes.length){ const inst = vozes.find(function(v){ return /institucional/i.test(v.nome || ""); }); setVozId((inst || vozes[0]).id); } }, [vozes.length, nc === undefined]);
+  const salvar = function(dados){
+    return window._sb.rpc("criacao_narracao_card_salvar", { p_task:t.id, p_dados:dados }).then(function(r){
+      if(r.error) throw new Error(r.error.message); setNc(Object.assign({}, nc || {}, r.data || {})); return r.data; });
+  };
+  const ligar = function(v){ setLigado(v); salvar({ ligado:v, texto:texto, voz_id:vozId || null }).then(function(){ _evToast("success", v ? "Narração IA ligada: a edição vai montar os vídeos em cima da voz." : "Narração IA desligada: a edição usa a fala dos vídeos."); })
+    .catch(function(e){ _evToast("error", "Não salvou: " + ((e && e.message) || e)); setLigado(!v); }); };
+  const escrever = async function(){
+    if(ocupado) return; setOcupado("texto");
+    try{ const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"narracao_texto", task_id:t.id, segundos:60, atual:texto } });
+      if(res.error) throw new Error(await _evErroFn(res)); const d = res.data || {}; if(!d.texto) throw new Error("a IA não devolveu o texto");
+      setTexto(d.texto); await salvar({ ligado:true, texto:d.texto, voz_id:vozId || null }); setLigado(true);
+      _evToast("success", "Texto pronto" + (d.custo_brl != null ? " · R$ " + String(d.custo_brl).replace(".", ",") : "") + ". Confira e clique em Gerar a voz."); }
+    catch(e){ _evToast("error", "Não escreveu: " + ((e && e.message) || e)); }
+    setOcupado("");
+  };
+  const gerar = async function(){
+    if(ocupado) return; const tx = texto.trim(); if(!tx){ _evToast("warning", "Escreva o texto da narração (ou clique em Escrever com IA)."); return; }
+    if(tx.length > 1500){ _evToast("warning", "Máximo de 1.500 letras."); return; }
+    setOcupado("voz");
+    try{ await salvar({ ligado:true, texto:tx, voz_id:vozId || null }); setLigado(true);
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"narracao_card", task_id:t.id } });
+      if(res.error) throw new Error(await _evErroFn(res)); const d = res.data || {}; if(!d.narracao) throw new Error("a IA não devolveu a voz");
+      setNc(d.narracao); _evToast("success", "Voz pronta (" + _evTempo(Number(d.narracao.dur) || 0).replace(/\.\d$/, "") + ")" + (d.custo_brl != null ? " · R$ " + String(d.custo_brl).replace(".", ",") : "") + ". A edição vai usar esta voz."); }
+    catch(e){ _evToast("error", "Não gerou a voz: " + ((e && e.message) || e)); }
+    setOcupado("");
+  };
+  const vozSel = vozes.find(function(v){ return v.id === vozId; }) || null;
+  const amostraUrl = vozSel ? (amostras[vozSel.id] || vozSel.amostra_url || "") : "";
+  const gerarAmostra = async function(){
+    if(!vozSel || ocupado) return; setOcupado("amostra");
+    try{ const txA = vozSel.amostra_texto || "Olá! Esta é a voz que vai narrar os vídeos. Fala com clareza, no ritmo certo e com a energia da marca.";
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"voz_amostra", voz:vozSel.voz, instrucao:vozSel.instrucao || "", texto:txA } });
+      if(res.error) throw new Error(await _evErroFn(res)); const u = res.data && res.data.url; if(!u) throw new Error("sem áudio");
+      setAmostras(function(a){ const o = Object.assign({}, a); o[vozSel.id] = u; return o; });
+      window._sb.rpc("criacao_voz_salvar", { p_id:vozSel.id, p_dados:{ nome:vozSel.nome, voz:vozSel.voz, instrucao:vozSel.instrucao || "", genero:vozSel.genero || "", estilo:vozSel.estilo || "",
+        amostra_url:u, amostra_texto:txA, clientes:vozSel.clientes || [] } }).then(function(){ try{ _evVozesCarregar(true); }catch(_){} });
+    }catch(e){ _evToast("error", "Não gerou a amostra: " + ((e && e.message) || e)); }
+    setOcupado("");
+  };
+  if(nc === undefined || (noCard && semAcesso)) return null;
+  const pronta = !!(nc && nc.url);
+  const desatualizada = pronta && (String(nc.texto_gerado || "").replace(/\s+/g, " ").trim() !== texto.replace(/\s+/g, " ").trim() || (vozId && nc.voz_gerada && vozId !== nc.voz_gerada));
+  const cx = { marginTop:12, padding:"12px 14px", borderRadius:12, border:"1px solid " + (ligado ? "#fed7aa" : _EV.linha), background:ligado ? "#fff7ed" : "#fff" };
+  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:9, border:"1px solid #fed7aa", fontSize:_evF(13, isMob), background:"#fff" };
+  const bt = function(tipo, on){ return { font:"inherit", fontSize:_evF(12.5, isMob), fontWeight:800, padding:"8px 12px", borderRadius:9, cursor:on ? "pointer" : "default", opacity:on ? 1 : 0.6,
+    border:"1px solid " + (tipo === "p" ? "#c2410c" : "#fed7aa"), background:tipo === "p" ? "#c2410c" : "#fff", color:tipo === "p" ? "#fff" : "#7c2d12" }; };
+  return (
+    <div style={cx} aria-label="Narração IA do card">
+      <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontWeight:800,color:ligado ? "#7c2d12" : _EV.texto,fontSize:_evF(14, isMob)}}>
+        <input type="checkbox" checked={ligado} onChange={function(e){ ligar(e.target.checked); }} aria-label="Narração IA" style={{width:18,height:18}}/>
+        🎙 Narração IA <span style={{fontWeight:600,color:_EV.sub,fontSize:_evF(12, isMob)}}>— a voz da IA narra o vídeo e a edição monta os vídeos em cima dela</span>
+      </label>
+      {ligado && <div style={{marginTop:10}}>
+        <div style={{fontSize:_evF(12, isMob),fontWeight:700,color:"#7c2d12",marginBottom:4}}>1. Texto que a voz vai ler</div>
+        <textarea value={texto} onChange={function(e){ setTexto(e.target.value); }} onBlur={function(){ if(nc ? texto !== (nc.texto || "") : !!texto) salvar({ texto:texto }).catch(function(){}); }}
+          rows={isMob ? 6 : 5} maxLength={1600} aria-label="Texto da narração" placeholder="Escreva aqui o que a voz vai falar — ou clique em Escrever com IA (ela usa o briefing e o tom do cliente)." style={Object.assign({}, campo, { resize:"vertical", lineHeight:1.5 })}/>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:6}}>
+          <button onClick={escrever} disabled={!!ocupado} style={bt("s", !ocupado)}>{ocupado === "texto" ? "A IA está escrevendo…" : (texto.trim() ? "✨ Melhorar com IA" : "✨ Escrever com IA")}</button>
+          <span style={{fontSize:_evF(11.5, isMob),color:texto.length > 1500 ? _EV.verm : _EV.sub}}>{texto.trim().split(/\s+/).filter(Boolean).length} palavras · uns {Math.round(texto.trim().split(/\s+/).filter(Boolean).length / 2.4)} s · {texto.length}/1.500</span>
+        </div>
+        <div style={{fontSize:_evF(12, isMob),fontWeight:700,color:"#7c2d12",margin:"12px 0 4px"}}>2. Voz</div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <select value={vozId} onChange={function(e){ setVozId(e.target.value); salvar({ voz_id:e.target.value || null }).catch(function(){}); }} aria-label="Voz da narração do card" style={Object.assign({}, campo, { width:"auto", minWidth:220, flex:"1 1 220px" })}>
+            {!vozes.length && <option value="">Voz padrão da agência</option>}
+            {vozes.map(function(v){ return <option key={v.id} value={v.id}>{v.nome}</option>; })}
+          </select>
+          {amostraUrl ? <audio controls preload="none" src={amostraUrl} style={{height:34,flex:"1 1 220px"}} aria-label="Amostra da voz"/>
+            : vozSel && <button onClick={gerarAmostra} disabled={!!ocupado} style={bt("s", !ocupado)}>{ocupado === "amostra" ? "Gerando a amostra…" : "▶ Ouvir amostra"}</button>}
+        </div>
+        <div style={{fontSize:_evF(12, isMob),fontWeight:700,color:"#7c2d12",margin:"12px 0 4px"}}>3. Narração pronta (a edição usa esta)</div>
+        {pronta && <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+          <audio controls preload="none" src={nc.url} style={{height:34,flex:"1 1 260px"}} aria-label="Narração pronta"/>
+          <span style={{fontSize:_evF(12, isMob),fontWeight:700,color:desatualizada ? _EV.amarelo : _EV.verde}}>
+            {desatualizada ? "⚠ O texto ou a voz mudou — gere de novo" : "✓ Pronta · " + _evTempo(Number(nc.dur) || 0).replace(/\.\d$/, "") + (nc.voz_nome ? " · " + nc.voz_nome : "")}</span>
+        </div>}
+        <button onClick={gerar} disabled={!!ocupado || !texto.trim()} style={bt("p", !ocupado && !!texto.trim())}>
+          {ocupado === "voz" ? "Gerando a voz… (uns 20 s)" : pronta ? "🎙 Gerar a voz de novo" : "🎙 Gerar a voz"}</button>
+        <div style={{fontSize:_evF(11.5, isMob),color:_EV.sub,marginTop:6,lineHeight:1.45}}>
+          A voz fica guardada no card. Quando os vídeos chegarem, o "Editar com IA" monta os vídeos, a música e a legenda em cima dela (não gera outra).
+          Custo: uns R$ 0,12 por minuto de voz{texto.trim() ? "" : " · texto pela IA: uns R$ 0,03"}.</div>
+      </div>}
+      {!ligado && textoBriefing && <div style={{fontSize:_evF(12, isMob),color:_EV.sub,marginTop:6}}>O briefing tem um texto de narração. Ligue a Narração IA para usar.</div>}
+    </div>
+  );
+}
+
+function _EvPcTrabalho({ t, isMob, rec, onPronto }){
+  const [w, setW] = useState(null);
+  const ult = useRef(null);
+  useEffect(function(){
+    if(!window._sb || !t) return; let vivo = true, iv = null;
+    const ler = function(){ window._sb.rpc("criacao_pc_trabalho_do_card", { p_task:t.id }).then(function(r){
+      if(!vivo || r.error) return; const d = r.data || null; setW(d);
+      if(ult.current && ult.current.id === (d && d.id) && ult.current.status !== "pronto" && d && d.status === "pronto" && typeof onPronto === "function") onPronto();
+      ult.current = d; }).catch(function(){}); };
+    ler(); iv = setInterval(ler, 15000);
+    return function(){ vivo = false; clearInterval(iv); };
+  }, [t && t.id, rec]);
+  if(!w) return null;
+  const recente = w.concluido_em ? (Date.now() - new Date(w.concluido_em).getTime() < 20 * 60000) : true;
+  if((w.status === "pronto" || w.status === "cancelado") && !recente) return null;
+  const ev = (w.ultimo && w.ultimo.evento) || "";
+  const cor = w.status === "erro" ? [_EV.vermClaro, _EV.verm] : w.status === "pronto" ? [_EV.verdeClaro, _EV.verde] : ["#eef2ff", "#3730a3"];
+  const tit = w.status === "fila" ? "⏳ Na fila do PC do escritório" : w.status === "processando" ? "🖥️ O PC " + (w.pc || "do escritório") + " está preparando os vídeos"
+    : w.status === "pronto" ? "✓ O PC terminou" : w.status === "erro" ? "❌ O PC não conseguiu" : "PC: " + w.status;
+  return (
+    <div style={{marginTop:12,padding:"10px 14px",borderRadius:12,background:cor[0],color:cor[1],fontSize:_evF(13, isMob),lineHeight:1.5}} aria-label="Andamento no PC do escritório">
+      <b>{tit}</b>{w.tipo === "drive" ? " (link do Drive)" : ""}
+      {ev && <div style={{fontSize:_evF(12, isMob)}}>Último passo: {ev.replace(/\s+/g, " ").slice(0, 220)}</div>}
+      {w.status === "erro" && w.erro && <div style={{fontSize:_evF(12, isMob)}}>Motivo: {String(w.erro).slice(0, 300)}</div>}
+      {(w.status === "fila" || w.status === "processando") && !w.pc_ligado && <div style={{fontSize:_evF(12, isMob),fontWeight:800,color:_EV.verm}}>O PC do escritório parece desligado: ligue o Pixels 01 e abra o start_video_pc.bat.</div>}
+      {(w.status === "fila" || w.status === "processando") && <div style={{fontSize:_evF(11.5, isMob),opacity:0.85}}>Vídeos grandes: o PC faz a cópia leve de cada um (2 a 5 min por vídeo, só na 1ª vez) e depois a IA edita. Esta tela atualiza sozinha.</div>}
+    </div>
+  );
 }
 
 /* ── ESTÚDIO: tela ── */
@@ -117433,12 +117616,30 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     return function(){ clearInterval(iv); };
   }, [ed && ed.status]);
 
-  const [narrarOn, setNarrarOn] = useState(true);                       // v28: narração automática (desligar = edita do jeito de sempre)
+  const [narrLigado, setNarrLigado] = useState(null);                   // v29: true = narra com o texto do card · false = não narra · null = segue o briefing
+  const [pcRec, setPcRec] = useState(0);
+  const [mandandoPc, setMandandoPc] = useState(false);
+  useEffect(function(){ setNarrLigado(null); }, [taskId]);
+  const mandarPc = async function(){                                   // v29: vídeo pesado → o PC do escritório prepara e a IA edita
+    if(mandandoPc) return; setMandandoPc(true); setErro(null);
+    try{
+      const r = await window._sb.rpc("criacao_pc_preparar", { p_task:t.id, p_instrucoes:"", p_narrar:narrLigado === false ? false : (narrLigado ? true : null) });
+      if(r.error) throw new Error(r.error.message || "erro");
+      const d = r.data || {}; if(d.ok === false) throw new Error(d.erro || "não foi para o PC");
+      _evToast(d.pc_ligado === false ? "warning" : "success", d.ja ? "Este vídeo já está com o PC do escritório. O andamento aparece aqui."
+        : d.pc_ligado === false ? "Foi para a fila do PC, mas o PC do escritório parece desligado: ligue o Pixels 01 e abra o start_video_pc.bat."
+        : "Foi para o PC do escritório: ele faz as cópias leves e a IA edita. Pode fechar esta aba — o andamento aparece aqui.");
+      setPcRec(function(n){ return n+1; });
+    }catch(e){ setErro("Não consegui mandar para o PC: " + String((e && e.message) || e)); }
+    setMandandoPc(false);
+  };
   const montar = async function(){
     if(!t || passo) return;
     setErro(null);
+    if(!_evBrutos(t).length){ setErro("O card ainda não tem vídeo bruto. Anexe os vídeos no card como Material (ou pelo Link do Drive) e clique em Editar com IA."); return; }
+    if(_evPesados(t).length){ await mandarPc(); return; }
     try{
-      await _evPrepararMontar(t, setPasso, _evRoteiroNarracao(t) && !narrarOn ? { narrar:false } : undefined);
+      await _evPrepararMontar(t, setPasso, narrLigado === false ? { narrar:false } : (narrLigado ? { narrado:true } : undefined));
       setPasso(null); _evToast("success", "Vídeo editado pela IA. Dê o play!"); setRec(function(n){ return n+1; });
     }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(n){ return n+1; }); }
   };
@@ -117509,7 +117710,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
           <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>{ed.existe ? "A última edição não terminou" : "Este vídeo ainda não foi editado"}</div>
           {ed.existe && ed.erro && <div style={{marginTop:6,fontSize:_evF(13,isMob),color:_EV.verm}}>Motivo: {ed.erro}</div>}
           <div style={{marginTop:8,fontSize:_evF(13,isMob),color:_EV.sub,lineHeight:1.55}}>
-            A IA assiste {_evBrutos(t).length===1 ? "o vídeo bruto" : "os " + _evBrutos(t).length + " vídeos brutos"} do card, lê a fala e monta o Reels no estilo do Kit do cliente:
+            A IA assiste {_evBrutos(t).length===0 ? "os vídeos brutos (quando chegarem)" : _evBrutos(t).length===1 ? "o vídeo bruto" : "os " + _evBrutos(t).length + " vídeos brutos"} do card, lê a fala (ou usa a voz da Narração IA) e monta o Reels no estilo do Kit do cliente:
             cortes (tira silêncios e erros), legenda, textos de destaque, tarja, logo, música, transições e tela final.
           </div>
           <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:4}}>
@@ -117517,14 +117718,14 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
               <span style={{display:"inline-block",width:10,height:10,borderRadius:3,background:_EV_CORES_CLIPE[i%12],marginRight:8}}/>{f.name||("Bruto " + (i+1))}
               <span style={{color:_EV.fraco}}>{f.size ? " · " + Math.round(Number(f.size)/1048576) + " MB" : ""}</span></div>; })}
           </div>
-          {_evRoteiroNarracao(t) && (function(){ const nt = _evRoteiroNarracao(t), np2 = nt.split(/\s+/).filter(Boolean).length;      // v28
-            return <div style={{marginTop:12,padding:"10px 12px",borderRadius:10,background:"#fff7ed",border:"1px solid #fed7aa",fontSize:_evF(12.5,isMob),color:"#7c2d12",lineHeight:1.5}}>
-              <b>🎙 Vídeo narrado.</b> {nt.length > 1500 ? "O texto da narração do card tem " + nt.length + " letras (máximo 1.500): encurte para a IA gerar a voz." :
-                "A IA gera a narração com o texto do card (" + np2 + " palavras, uns " + Math.round(np2 / 2.6) + " s), escolhe as imagens de cada frase e encaixa os vídeos na voz. O som dos brutos fica desligado e a legenda sai da narração."}
-              <div style={{marginTop:6,color:_EV.sub,fontStyle:"italic",whiteSpace:"pre-wrap",maxHeight:84,overflow:"auto"}}>{nt.slice(0, 400)}{nt.length > 400 ? "…" : ""}</div>
-              {nt.length <= 1500 && <label style={{display:"flex",gap:6,alignItems:"center",marginTop:8,color:_EV.texto,fontWeight:700,cursor:"pointer"}}>
-                <input type="checkbox" checked={narrarOn} onChange={function(e){ setNarrarOn(e.target.checked); }} aria-label="Gerar a narração automática"/>Gerar a narração (desligado: edita pela fala dos vídeos, como antes)</label>}
-            </div>; })()}
+          <_EvNarracaoCard t={t} isMob={isMob} onLigado={setNarrLigado}/>
+          {(function(){ const pes = _evPesados(t); if(!pes.length) return null;      // v29
+            const gb = pes.reduce(function(a, f){ return a + Number(f.size || 0); }, 0) / 1073741824;
+            return <div style={{marginTop:12,padding:"10px 12px",borderRadius:10,background:"#eef2ff",border:"1px solid #c7d2fe",fontSize:_evF(12.5,isMob),color:"#3730a3",lineHeight:1.5}}>
+              <b>🖥️ {pes.length} vídeo{pes.length > 1 ? "s pesados" : " pesado"} ({gb >= 1 ? gb.toLocaleString("pt-BR",{maximumFractionDigits:1}) + " GB" : Math.round(gb*1024) + " MB"}).</b> O navegador não abre vídeo deste tamanho:
+              o "Editar com IA" manda para o PC do escritório (Pixels 01). Ele faz uma cópia leve de cada vídeo (só na 1ª vez, 2 a 5 min por vídeo) e a IA edita.
+              Pode fechar esta aba — o andamento aparece aqui e o vídeo editado abre sozinho.</div>; })()}
+          <_EvPcTrabalho t={t} isMob={isMob} rec={pcRec} onPronto={function(){ setRec(function(n){ return n+1; }); }}/>
           {!kit || !musicas ? null : (
             <div style={{marginTop:10,fontSize:_evF(12,isMob),color:_EV.sub}}>
               {musicas.length ? musicas.length + " música" + (musicas.length>1?"s":"") + " liberada" + (musicas.length>1?"s":"") + " na biblioteca." : "Sem músicas na biblioteca (guia Músicas): o vídeo sai sem trilha."}
@@ -117532,7 +117733,8 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
             </div>
           )}
           {soVer ? <div style={{marginTop:12,fontSize:_evF(13,isMob),color:_EV.sub}}>Para editar, use o computador.</div>
-                 : <button onClick={montar} style={Object.assign(btn(), {marginTop:14})}>✨ Editar com IA</button>}
+                 : !_evBrutos(t).length ? <div style={{marginTop:14,fontSize:_evF(13,isMob),color:_EV.sub,fontWeight:700}}>Sem vídeo no card ainda: gere a voz agora; quando os vídeos chegarem (Material ou Link do Drive), clique em Editar com IA.</div>
+                 : <button onClick={montar} disabled={mandandoPc} style={Object.assign(btn(), {marginTop:14})}>{mandandoPc ? "Mandando para o PC…" : _evPesados(t).length ? "✨ Editar com IA (pelo PC do escritório)" : "✨ Editar com IA"}</button>}
         </div>
       )}
 
@@ -119407,7 +119609,8 @@ function _evNarracaoDoTexto(html, tags, extra){
 /* "sem narração" no pedido (igual ao servidor) */
 function _evSemNarracao(s){ return /sem narra[çc][aã]o|n[aã]o\s+(?:gere|gerar|fa[çc]a|fazer|quero|precisa(?:\s+de)?)\s+(?:a\s+)?narra[çc][aã]o|sem locu[çc][aã]o/i.test(String(s || "")); }
 /* o "Editar com IA" vai gerar a narração? (texto achado e até 1.500 letras) */
-function _evVaiNarrar(t, extra){ const tx = _evRoteiroNarracao(t); return !!tx && tx.length <= 1500 && !(extra && (extra.narrar === false || _evSemNarracao(extra.instrucoes))); }
+function _evVaiNarrar(t, extra){ if(extra && extra.narrado && extra.narrar !== false) return true;   // v29: Narração IA ligada no card (texto do card)
+  const tx = _evRoteiroNarracao(t); return !!tx && tx.length <= 1500 && !(extra && (extra.narrar === false || _evSemNarracao(extra.instrucoes))); }
 
 /* LEGENDA PELA NARRAÇÃO: blocos das palavras da narração (o tempo é o do áudio + onde a narração começa) */
 function _evpTemNarrPalavras(p){ return (p.narracoes || []).some(function(n){ return n && !n.off && !n.musica && Array.isArray(n.palavras) && n.palavras.length; }); }
