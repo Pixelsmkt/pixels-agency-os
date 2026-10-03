@@ -115673,6 +115673,8 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v37 (03/10/2026): FOTOS DO CARD no painel Mídia (todas as imagens do card, de qualquer seção): "+ por cima" e "Tela cheia" · botão "Pôr as fotos na
+     fala" (acha o nome de cada foto na fala e põe a foto na hora; foto com 2 nomes vira tela final em tela cheia; apertar de novo troca, não duplica).
    v36 (03/10/2026): VÍDEO PREMIUM rodada 3 — ENQUADRAMENTO AUTOMÁTICO por clipe e "em todos" (rosto pelo MediaPipe em CPU, câmera suave,
      olhos no terço de cima dentro da área segura, 2 pessoas: quem fala, troca com corte; vira pontos ◆ editáveis) · cor: 2 shaders (o com HLG
      só no clipe HLG — sem HLG volta à velocidade da v33) · junção v35 (revisor × anúncio sem aviso repetido, "Apertar ritmo"/"Encaixar"
@@ -120722,6 +120724,7 @@ function _evpNormalizar(p, clipes){
       ["trIn", "trOut"].forEach(function(k){ if(_EVP_TRANS_APOIO.indexOf(o[k]) < 1) delete o[k]; }); if(o.trDur !== 0.2 && o.trDur !== 0.6) delete o.trDur; }   // v30: entrada/saída do apoio
     else { delete o.cheia; delete o.trIn; delete o.trOut; delete o.trDur; }
     o.canal = Math.max(2, Math.min(10, Math.round(_evpNum(o.canal, 2))));      // v11: canal de vídeo V2–V10 (V1 = principal)
+    if(o.auto != null){ if(typeof o.auto === "string" && o.auto) o.auto = o.auto.slice(0, 20); else delete o.auto; }   // v37: auto:"fotos" = posta pelo "Pôr as fotos na fala"
     return o; });
   p.narracoes = (p.narracoes||[]).filter(function(x){ return x && (x.url || (x.fonte === "clipe" && x.clipe && dur[x.clipe] != null)); }).map(function(x){ const o = Object.assign({ id:_evpId(), t0:0, vol:1, nome:"Narração", dur:1, ia:false }, x);
     o.t0 = Math.max(0, _evpNum(o.t0, 0)); o.vol = Math.max(0, Math.min(3, _evpNum(o.vol, 1))); o.dur = Math.max(0.1, _evpNum(o.dur, 1));
@@ -124945,9 +124948,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       pos: tipo === "tarja" ? "baixo" : "meio", tam:1, anim: it && it.dados && it.dados.anim ? it.dados.anim : tipo === "tarja" ? "deslizar" : "pop", cor:"principal" }, it ? { modelo:it.id } : {})); });
     setSel({ tipo:"texto", id:id }); setFerr(function(f){ return Object.assign({}, f, { texto:"editar" }); });
   };
-  const addImagem = function(url, nome){
+  const addImagem = function(url, nome, extra){            // v37: extra = { cheia:true, … } (foto do card em tela cheia)
     const id = _evpId(), t0 = Math.min(tempo, Math.max(0, calc.fimCortes - 0.5));
-    mudar(function(np){ np.imagens.push({ id:id, url:url, nome:nome || "", t0:t0, t1:Math.min(t0 + 3, Math.max(t0 + 0.5, calc.fimCortes)), x:0.5, y:0.3, escala:0.35, rot:0, anim:"pop" }); });
+    mudar(function(np){ np.imagens.push(Object.assign({ id:id, url:url, nome:nome || "", t0:t0, t1:Math.min(t0 + 3, Math.max(t0 + 0.5, calc.fimCortes)), x:0.5, y:0.3, escala:0.35, rot:0, anim:"pop" }, extra || {})); });
     setSel({ tipo:"imagem", id:id });
   };
   const addMarca = function(){ const id = _evpId(); mudar(function(np){ np.marcas.push({ id:id, t:tempo, nota:"" }); }); _evToast("success", "Marcador em " + _evTempo(tempo)); };
@@ -125641,7 +125644,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <_EvpSugestoes ed={ed} p={p} mudar={mudar} kit={kit}/>
         <div style={{flex:1,minHeight:0}}>
         {sel && selObj && sel.tipo === "motion" ? <_EvmInspetor evm={evm} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem}/> : sel && selObj ? (   /* v35 */
-          <_EvpInspetor fotosCard={(Array.isArray(t.files) ? t.files : []).filter(function(f){ return f && !f.isAnnotation && typeof f.url === "string" && (/^image\//.test(String(f.type || "")) || /\.(png|jpe?g|webp)(\?|#|$)/i.test(f.url)); }).map(function(f){ return { url:f.url, nome:f.name || "" }; })}
+          <_EvpInspetor fotosCard={_evpFotosDoCard(t.files).map(function(f){ return { url:f.url, nome:f.arq }; })}
             tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
             trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id}/>
@@ -127633,6 +127636,126 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
   );
 }
 
+/* ══ v37 (03/10/2026) FOTOS DO CARD NO ESTÚDIO — as imagens do card (Material, Arquivo editável, Referência, Final) aparecem na Mídia
+   ("+ por cima" / "Tela cheia") e "Pôr as fotos na fala": procura o nome de cada foto na fala do vídeo final e põe a foto no canto de cima
+   quando o nome é falado; foto com 2+ nomes (ex.: "Callai e Altair") vira o fechamento (apoio em tela cheia nos últimos ~3 s).
+   As fotos que ele coloca levam auto:"fotos" — apertar de novo troca só essas (não duplica). Tudo com desfazer. ══ */
+function _evpFotosDoCard(files){
+  const vistos = {}, out = [];
+  (Array.isArray(files) ? files : []).forEach(function(f){
+    if(!f || f.isAnnotation || f.uploading || typeof f.url !== "string" || !f.url) return;
+    const nm = String(f.name || ""), tp = String(f.type || "").toLowerCase();
+    const img = /^image\/(png|jpe?g|webp)$/.test(tp) || /\.(png|jpe?g|webp)$/i.test(nm) || /\.(png|jpe?g|webp)(\?|#|$)/i.test(f.url);   // arquivo editável vem como octet-stream: vale a extensão
+    if(!img || vistos[f.url]) return; vistos[f.url] = 1;
+    out.push({ url:f.url, nome:nm.replace(/\.[^.]+$/, "").trim() || "Foto", arq:nm || "foto", tipo:f.tipo || "final" });
+  });
+  return out;
+}
+const _EVP_FOTO_SECAO = { material:"Material", editavel:"Editável", referencia:"Referência", final:"Final" };
+// palavras que não dizem de quem é a foto (ficam de fora da busca na fala)
+const _EVP_FOTO_GEN = ("e de da do das dos di du em no na nos nas com sem por para pra ao aos a o os as um uma the and of with " +
+  "foto fotos img image imagem imagens photo pic santinho santinhos arte artes final finais card post posts story stories capa perfil banner flyer " +
+  "logo logos logotipo marca png jpg jpeg webp copia copy versao nova novo editado editada recorte recortado sem fundo whatsapp screenshot captura tela at " +
+  "prefeito prefeita vice vereador vereadora candidato candidata deputado deputada governador governadora senador senadora presidente dr dra doutor doutora sr sra").split(" ");
+function _evpFotoPalavras(nome){
+  return String(nome || "").replace(/\.[a-z0-9]{2,5}$/i, "").split(/[\s_\-.,;()\[\]+&\/]+/).map(_evNorm)
+    .filter(function(w, i, a){ return w.length >= 3 && !/\d/.test(w) && _EVP_FOTO_GEN.indexOf(w) < 0 && a.indexOf(w) === i; });
+}
+// nome com 2+ pessoas: "Callai e Altair", "Callai & Altair", "Callai, Altair" — ou que junta os nomes de 2+ outras fotos
+function _evpFotoGrupo(f, todas){
+  const partes = String(f.nome || "").split(/\s+(?:e|and|com|x|vs)\s+|\s*[&+,]\s*/i).filter(function(s){ return _evpFotoPalavras(s).length > 0; });
+  if(partes.length >= 2) return true;
+  const ks = _evpFotoPalavras(f.nome);
+  return (todas || []).filter(function(o){ if(o === f) return false; const ko = _evpFotoPalavras(o.nome); return ko.length && ks.length > ko.length && ko.every(function(k){ return ks.indexOf(k) >= 0; }); }).length >= 2;
+}
+// palavras faladas no VÍDEO FINAL (as mesmas da legenda; com a legenda desligada, calcula como se estivesse ligada)
+function _evpFalaFinal(p, calc, fala, kit){
+  let bl = calc && calc.blocos;
+  if(!bl || !bl.length){ try{ bl = _evpCalcular(Object.assign({}, p, { legenda:Object.assign({}, p.legenda || {}, { ativa:true, estilo:"palavra" }) }), fala, kit).blocos; }catch(_){ bl = []; } }
+  const out = [];
+  (bl || []).forEach(function(b){ (b.words || []).forEach(function(w){ const ns = String(w.p || "").split(/\s+/).concat(String(w.orig || "").split(/\s+/)).map(_evNorm).filter(Boolean);
+    if(ns.length) out.push({ ns:ns, a:_evpNum(w.a, 0), b:_evpNum(w.b, 0), p:String(w.p || "") }); }); });
+  return out.sort(function(x, y){ return x.a - y.a; });
+}
+function _evpQuaseIgual(a, b){              // no máximo 1 letra diferente (a transcrição erra nome: "Calai" × "Callai")
+  if(Math.abs(a.length - b.length) > 1 || Math.min(a.length, b.length) < 5 || Math.max(a.length, b.length) < 6) return false;
+  let i = 0, j = 0, d = 0;
+  while(i < a.length && j < b.length){ if(a[i] === b[j]){ i++; j++; continue; } if(++d > 1) return false;
+    if(a.length > b.length) i++; else if(b.length > a.length) j++; else { i++; j++; } }
+  return d + (a.length - i) + (b.length - j) <= 1;
+}
+// 1ª vez que alguma das palavras é falada (exata; se não tiver, a parecida)
+function _evpFotoAchar(chaves, pal){
+  for(let k = 0; k < pal.length; k++){ if(pal[k].ns.some(function(n){ return chaves.indexOf(n) >= 0; })) return { w:pal[k], parecida:false }; }
+  for(let k = 0; k < pal.length; k++){ const n = pal[k].ns.find(function(n){ return chaves.some(function(c){ return _evpQuaseIgual(n, c); }); }); if(n) return { w:pal[k], parecida:true }; }
+  return null;
+}
+// tamanho de cada foto (para caber no canto, dentro da área segura)
+const _evpFotoTams = {};
+function _evpFotoTam(url){
+  if(_evpFotoTams[url]) return Promise.resolve(_evpFotoTams[url]);
+  return new Promise(function(ok){ let feito = false; const fim = function(r){ if(feito) return; feito = true; if(r) _evpFotoTams[url] = r; ok(r || { w:4, h:5 }); };
+    try{ const im = new Image(); im.onload = function(){ fim(im.naturalWidth ? { w:im.naturalWidth, h:im.naturalHeight } : null); }; im.onerror = function(){ fim(null); }; im.src = url; }catch(_){ fim(null); }
+    setTimeout(function(){ fim(null); }, 6000); });
+}
+/* o plano (puro): fotos + palavras faladas → imagens novas e o que não achou. tams = { url: {w,h} } */
+function _evpFotosPlanejar(fotos, pal, fimCortes, tams){
+  const D = { w:1080, h:1920 }, SEG = { lado:80, topo:290 }, out = { imagens:[], naFala:[], final:[], nao:[], fim:[] };
+  const fim = Math.max(0, _evpNum(fimCortes, 0)); if(!fim || !(fotos || []).length) return out;
+  const grupos = fotos.filter(function(f){ return _evpFotoGrupo(f, fotos); }), fechamento = grupos[0] || null;
+  const soltas = fotos.filter(function(f){ return f !== fechamento; });
+  // fechamento: apoio em tela cheia nos últimos ~3 s do vídeo (vídeo curto: no máximo 40% dele, mínimo 1,2 s)
+  const dF = fechamento ? Math.max(1.2, Math.min(3, fim * 0.4)) : 0, tF = Math.round((fim - dF) * 100) / 100;
+  if(fechamento){ out.imagens.push({ id:_evpId(), url:fechamento.url, nome:fechamento.nome, t0:tF, t1:Math.round(fim * 100) / 100, x:0.5, y:0.5, escala:1, rot:0, anim:"nenhuma",
+    cheia:true, kb:false, trIn:"fade", auto:"fotos" }); out.final.push(fechamento.nome);     // tela final parada: o zoom lento cortaria nome/número da borda
+    const tf = (tams && tams[fechamento.url]) || null; if(tf && Math.abs(tf.h / Math.max(1, tf.w) - 16 / 9) > 0.2) out.corta = fechamento.nome; }
+  // palavras que só uma foto tem (Silva em duas fotos não serve para achar nenhuma)
+  const chaves = soltas.map(function(f){ return _evpFotoPalavras(f.nome); });
+  const unicas = chaves.map(function(ks, i){ const u = ks.filter(function(k){ return !chaves.some(function(o, j){ return j !== i && o.indexOf(k) >= 0; }); }); return u.length ? u : ks; });
+  const achadas = [];
+  soltas.forEach(function(f, i){ const ks = unicas[i]; const r = ks.length ? _evpFotoAchar(ks, pal) : null;
+    if(!r){ out.nao.push(f.nome); return; }
+    const t0 = Math.max(0, Math.round((r.w.a - 0.1) * 100) / 100), lim = fechamento ? tF : fim;
+    if(lim - t0 < 0.8){ out.fim.push(f.nome); return; }
+    achadas.push({ f:f, t0:t0, t1:Math.round(Math.min(t0 + 2.5, lim) * 100) / 100, parecida:r.parecida ? r.w.p : "" }); });
+  achadas.sort(function(a, b){ return a.t0 - b.t0; });
+  const ultimo = { dir:null, esq:null };
+  achadas.forEach(function(q){
+    // canto de cima (o rosto costuma estar no meio): direita; se a da direita ainda está na tela, esquerda; se as duas estão, a mais velha sai
+    let lado = "dir";
+    if(ultimo.dir && ultimo.dir.t1 > q.t0){ lado = !ultimo.esq || ultimo.esq.t1 <= q.t0 ? "esq" : (ultimo.esq.t1 < ultimo.dir.t1 ? "esq" : "dir"); }
+    const ant = ultimo[lado]; if(ant && ant.t1 > q.t0) ant.t1 = Math.max(ant.t0 + 0.6, q.t0);
+    const tm = (tams && tams[q.f.url]) || { w:4, h:5 }, ar = Math.max(0.3, Math.min(3, tm.h / Math.max(1, tm.w)));
+    const esc = Math.min(0.28, 520 / ar / D.w), w = esc * D.w, h = w * ar;
+    const x = lado === "dir" ? (D.w - SEG.lado - w / 2) / D.w : (SEG.lado + w / 2) / D.w, y = (SEG.topo + h / 2) / D.h;
+    const im = { id:_evpId(), url:q.f.url, nome:q.f.nome, t0:q.t0, t1:q.t1, x:Math.round(x * 1000) / 1000, y:Math.round(y * 1000) / 1000, escala:Math.round(esc * 1000) / 1000, rot:0, anim:"pop", auto:"fotos" };
+    out.imagens.push(im); ultimo[lado] = im; out.naFala.push(q.parecida ? q.f.nome + " (ouvi \"" + q.parecida + "\")" : q.f.nome); });
+  out.imagens.sort(function(a, b){ return (a.cheia ? 1 : 0) - (b.cheia ? 1 : 0) || a.t0 - b.t0; });     // o fechamento fica por cima
+  return out;
+}
+/* o botão: ctx = { projeto, calc, fala, kit, fotos, mudar }. Devolve o plano (o teste lê). */
+async function _evpFotosNaFala(ctx){
+  const fotos = (ctx.fotos || []).filter(function(f){ return f.tipo !== "referencia"; });     // referência é inspiração, não vai para o vídeo
+  if(!fotos.length){ _evToast("warning", "O card não tem fotos (Material ou Arquivo editável)."); return null; }
+  const pal = _evpFalaFinal(ctx.projeto, ctx.calc, ctx.fala, ctx.kit);
+  const tams = {}; await Promise.all(fotos.map(function(f){ return _evpFotoTam(f.url).then(function(r){ tams[f.url] = r; }); }));
+  const r = _evpFotosPlanejar(fotos, pal, ctx.calc.fimCortes, tams);
+  if(!r.imagens.length){ _evToast("warning", (pal.length ? "Não achei na fala: " + r.nao.concat(r.fim).map(function(n){ return "\"" + n + "\""; }).join(", ") : "Este vídeo não tem fala transcrita") + ". Nenhuma foto colocada."); return r; }
+  ctx.mudar(function(np){ np.imagens = (np.imagens || []).filter(function(x){ return x.auto !== "fotos"; }).concat(r.imagens); });
+  const nF = r.naFala.length, nT = r.final.length, partes = [];
+  if(nF) partes.push(nF + " foto" + (nF > 1 ? "s" : "") + " na fala");
+  if(nT) partes.push(nT + " na tela final");
+  let msg = partes.join(" + ");
+  if(r.nao.length) msg += "; não achei na fala: " + r.nao.map(function(n){ return "\"" + n + "\""; }).join(", ");
+  if(r.fim.length) msg += "; só falado no fim (fica atrás do fechamento): " + r.fim.map(function(n){ return "\"" + n + "\""; }).join(", ");
+  const fF = r.imagens.find(function(x){ return x.cheia; });
+  const nMo = fF ? (((ctx.projeto || {}).motion || {}).itens || []).filter(function(i){ return i && _evpNum(i.t1, 0) > fF.t0 + 0.05 && _evpNum(i.t0, 0) < fF.t1; }).length : 0;
+  if(nMo) msg += "; " + nMo + " texto" + (nMo > 1 ? "s" : "") + " de motion fica" + (nMo > 1 ? "m" : "") + " por cima da tela final — confira";
+  if(r.corta) msg += "; a tela final \"" + r.corta + "\" não é vertical (9:16): as laterais ficam cortadas — confira";
+  _evToast(r.nao.length || r.fim.length || r.corta || nMo ? "warning" : "success", msg + " (Ctrl+Z desfaz)");
+  return r;
+}
+
 /* ─── painel da esquerda: muda conforme o menu de cima ─── */
 function _EvpPainelMenu(q){
   const { menu, p, calc, sel, setSel, mudar, irPara, tempo, infoClipe, clipes, addClipe, addTexto, addSfx, kit } = q;
@@ -127657,6 +127780,13 @@ function _EvpPainelMenu(q){
   const silencios = useMemo(function(){ return _evpSilencios(p, q.fala, minSil, 0.12); }, [p.clips, q.fala, minSil]);
   const muletas = useMemo(function(){ return _evpMuletas(p, q.fala); }, [p.clips, q.fala]);
   const figs = useMemo(function(){ return _evpFigurinhas(kit.cor_principal); }, [kit.cor_principal]);
+  const fotosC = useMemo(function(){ return _evpFotosDoCard(q.t && q.t.files); }, [q.t && q.t.files]);     // v37: fotos do card
+  const usadasF = {}; (p.imagens || []).forEach(function(x){ if(x && x.url) usadasF[x.url] = (usadasF[x.url] || 0) + 1; });
+  const [pondoFotos, setPondoFotos] = useState(false);
+  const fotosNaFala = async function(){ if(pondoFotos) return; setPondoFotos(true);
+    try{ await _evpFotosNaFala({ projeto:p, calc:calc, fala:q.fala, kit:kit, fotos:fotosC, mudar:mudar }); }catch(e){ _evToast("error", "Não deu para pôr as fotos: " + ((e && e.message) || e)); }
+    setPondoFotos(false); };
+  const bFoto = { font:"inherit", flex:1, minWidth:0, padding:"5px 2px", borderRadius:7, border:"1px solid " + _EVP_COR.linha, background:_EVP_COR.faixa, color:_EVP_COR.ink, fontSize:10.5, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" };
   const enviarImagem = async function(f){
     if(!f) return;
     if(!/^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(f.type || "")){ _evToast("warning", "Use PNG, JPG, WEBP, GIF ou SVG."); return; }
@@ -127685,7 +127815,7 @@ function _EvpPainelMenu(q){
   return (
     <div style={caixa}>
       {menu === "midia" && (<div>
-        {cab("midia", "Mídia", "Os vídeos brutos do card")}
+        {cab("midia", "Mídia", "Os vídeos e as fotos do card")}
         <button onClick={function(){ window.dispatchEvent(new CustomEvent("evp-banco")); }} style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginBottom:8})}><_EvpIco n="busca" s={15}/>Banco de mídia do cliente</button>
         <div style={_EVP_TIT}>Brutos do card ({clipes.length}) · {Object.keys(usadosB).length} no vídeo</div>
         <div style={{fontSize:11,color:_EVP_COR.fraco,marginBottom:6,display:"flex",gap:10,flexWrap:"wrap"}}><span style={{display:"inline-flex",gap:4,alignItems:"center"}}><_EvpIco n="mais" s={12}/>na linha do tempo</span><span style={{display:"inline-flex",gap:4,alignItems:"center"}}><_EvpIco n="camadas" s={12}/>por cima do vídeo</span></div>
@@ -127708,6 +127838,26 @@ function _EvpPainelMenu(q){
             </div>; })}
         </div>
         <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:10,lineHeight:1.5}}>Clique no vídeo para pôr na linha do tempo, depois do clipe da agulha. O ícone de camadas põe o vídeo por cima (vídeo sobre vídeo).</div>
+        {fotosC.length > 0 && (<div data-fotos-card="1">
+          <div style={_EVP_TIT}>Fotos do card ({fotosC.length}) · {fotosC.filter(function(f){ return usadasF[f.url]; }).length} no vídeo</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            {fotosC.map(function(f){ const n = usadasF[f.url] || 0;
+              return <div key={f.url} data-foto={f.nome} style={{border:"1px solid " + _EVP_COR.linha,borderRadius:10,overflow:"hidden",background:_EVP_COR.campo,display:"flex",flexDirection:"column"}}>
+                <div style={{position:"relative",height:84,background:"#1c2236"}}>
+                  <img src={f.url} alt={f.nome} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                  <span style={{position:"absolute",left:6,top:6,color:"#fff",fontSize:9.5,fontWeight:800,background:"rgba(11,16,32,.6)",borderRadius:5,padding:"1px 5px"}}>{_EVP_FOTO_SECAO[f.tipo] || "Card"}</span>
+                  {n ? <span title={"Está no vídeo " + n + "×"} style={{position:"absolute",right:6,top:6,background:"#7c3aed",color:"#fff",borderRadius:6,padding:"0 6px",fontSize:10,fontWeight:800}}>✓ {n > 1 ? n + "×" : "no vídeo"}</span> : null}
+                </div>
+                <div title={f.arq} style={{fontSize:10.5,fontWeight:700,color:_EVP_COR.ink,padding:"5px 7px 4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.nome}</div>
+                <div style={{display:"flex",gap:4,padding:"0 5px 5px"}}>
+                  <button onClick={function(){ q.addImagem(f.url, f.nome); }} title="Põe a foto por cima do vídeo, na agulha (3 s)" aria-label={"Pôr " + f.nome + " por cima"} style={bFoto}>+ por cima</button>
+                  <button onClick={function(){ q.addImagem(f.url, f.nome, { cheia:true, x:0.5, y:0.5, escala:1, rot:0, anim:"nenhuma" }); }} title="Apoio em tela cheia, sem moldura (zoom lento), na agulha (3 s)" aria-label={"Pôr " + f.nome + " em tela cheia"} style={bFoto}>Tela cheia</button>
+                </div>
+              </div>; })}
+          </div>
+          <button onClick={fotosNaFala} disabled={pondoFotos} data-fotos-fala="1" style={Object.assign(_evpBtn("suave", !pondoFotos), {width:"100%",justifyContent:"center",marginTop:8})}><_EvpIco n="fala" s={15}/>{pondoFotos ? "Procurando os nomes na fala…" : "Pôr as fotos na fala"}</button>
+          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:6,lineHeight:1.5}}>Procura o nome de cada foto na fala e põe a foto no canto de cima quando o nome é falado. Foto com dois nomes (ex.: "Callai e Altair") fecha o vídeo em tela cheia. Apertar de novo troca as que ele pôs; Ctrl+Z desfaz.</div>
+        </div>)}
       </div>)}
 
       {menu === "editar" && (<div>
@@ -132098,6 +132248,10 @@ function _evpConferir(p, calc, o){
     if(itF && itF.dados && itF.dados.midia === "video" && Number(itF.dados.dur) > 0 && calc.total - calc.fimCortes + 0.05 < Number(itF.dados.dur))
       add("aviso", "Tela final cortada", "O vídeo \"" + itF.nome + "\" tem " + String(itF.dados.dur).replace(".", ",") + " s e a tela final está com " + String(Math.round((calc.total - calc.fimCortes) * 10) / 10).replace(".", ",") + " s.");
   }
+  try{ const fs = (o.fotos || []).filter(function(f){ return f.tipo !== "referencia"; });       // v37: fotos do card fora do vídeo
+    if(fs.length){ const us = {}; (p.imagens || []).forEach(function(x){ if(x && x.url) us[x.url] = 1; }); const fora = fs.filter(function(f){ return !us[f.url]; });
+      if(fora.length && fora.length === fs.length) add("aviso", fora.length + " foto" + (fora.length > 1 ? "s" : "") + " do card fora do vídeo", fora.slice(0, 4).map(function(f){ return "\"" + f.nome + "\""; }).join(", ") + (fora.length > 4 ? "…" : "") + ". \"Pôr as fotos na fala\" põe cada uma quando o nome é falado.", { id:"fotos_fala", label:"Pôr as fotos na fala" });
+      else add("ok", (fs.length - fora.length) + " foto" + (fs.length - fora.length > 1 ? "s" : "") + " do card no vídeo" + (fora.length ? " · " + fora.length + " fora (" + fora.slice(0, 3).map(function(f){ return f.nome; }).join(", ") + ")" : "")); } }catch(_){}
   try{ _evpRevItens(p, calc, o).forEach(function(x){ out.push(x); }); }catch(_){}      // v35: revisor (gancho 2 s, ritmo × tipo, legenda, som, cor, área segura)
   _evpAnuncioConferir(p, calc, o).forEach(function(x){ out.push(x); });   // v35: bloco do modo anúncio
   return out;
@@ -132127,7 +132281,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     for(const c of (projeto.clips || [])){ try{ const a = await _evpAnalisarClipe(c.clipe, _evpNum(c.ini, 0), _evpNum(c.fim, 0)); if(a) r[c.id] = a; }catch(_){} }
     if(vivo) setCorEst(r); })(); return function(){ vivo = false; }; }, [(projeto.clips || []).map(function(c){ return c.id + ":" + c.ini + ":" + c.fim; }).join("|")]);
   const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit, motivos:(ed.receita && ed.receita.motivos_corte) || [],
-    driveDe:_evDriveDe(t && t.files), clipes:ed.clipes || [], receita:ed.receita || null, corEst:corEst }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit, t && t.files, corEst, _evpAnuncioOlhado.v]);
+    driveDe:_evDriveDe(t && t.files), clipes:ed.clipes || [], receita:ed.receita || null, corEst:corEst, fotos:_evpFotosDoCard(t && t.files) }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit, t && t.files, corEst, _evpAnuncioOlhado.v]);
   const nErro = conf.filter(function(x){ return x.nivel === "erro"; }).length, nAviso = conf.filter(function(x){ return x.nivel === "aviso"; }).length;
   const [verConf, setVerConf] = useState(false);
   const agir = function(a){
@@ -132138,6 +132292,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     else if(a.id === "musvol") mudar(function(np){ if(np.musica) np.musica.vol = _evpVolIdeal(np.musica, musInfo && musInfo.nivel_db != null ? Number(musInfo.nivel_db) : null); });
     else if(a.id === "legenda") mudar(function(np){ np.legenda.ativa = true; });
     else if(a.id === "anuncio") mudar(function(np){ _evpAnuncioAgir(np, a, { fala:fala, clipes:ed.clipes || [], kit:kit, base:base }); });   // v35: modo anúncio
+    else if(a.id === "fotos_fala") _evpFotosNaFala({ projeto:projeto, calc:calc, fala:fala, kit:kit, fotos:_evpFotosDoCard(t && t.files), mudar:mudar });   // v37
     else if(a.id === "silencio") tirarTrechos(a.lista, "Silêncios tirados");
     else if(a.id === "texto"){ const x = (projeto.textos || []).find(function(q){ return q.id === a.alvo; }); if(x){ setSel({ tipo:"texto", id:x.id }); irPara(x.t0 + 0.05); } }
     else if(a.id === "cola"){ window.dispatchEvent(new CustomEvent("evp-cola", { detail:true })); }
