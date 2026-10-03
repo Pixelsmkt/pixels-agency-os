@@ -115673,6 +115673,8 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v40 (03/10/2026): SOM EDITÁVEL — efeito/som importado tem "ini" (de onde começa dentro do arquivo): Dividir na agulha (botão Dividir, tecla S e no painel),
+     Cortar o começo, Duração e Velocidade por pedaço (a duração acompanha); bloco na linha do tempo do tamanho certo; Dividir/S também divide vídeo por cima e narração.
    v39 (03/10/2026): VELOCIDADE POR TRECHO — vídeo por cima: "Dividir na agulha" + Velocidade 0,25–4× (o som acompanha); efeito sonoro com Velocidade 0,5–2×.
    v38 (03/10/2026): MOTION NA MÃO — arrastar cada peça com o mouse/dedo (dx/dy, presa na área segura), TAMANHO por peça (50–200%), "Voltar ao
      lugar", COR por peça no inspetor · Mídia: "Vídeos novos no card" → INCLUIR NA EDIÇÃO (rpc criacao_edicao_clipe_incluir).
@@ -120738,7 +120740,8 @@ function _evpNormalizar(p, clipes){
   p.foco = (p.foco && typeof p.foco === "object") ? p.foco : {};                                       // v16
   if(p.deitado !== "preencher" && p.deitado !== "encaixar") delete p.deitado;
   p.sfx = (p.sfx||[]).filter(Boolean).map(function(s){ const o = Object.assign({ id:_evpId(), tipo:"whoosh", t0:0, vol:0.8 }, s); o.canal = Math.max(3, Math.min(10, Math.round(_evpNum(o.canal, 4))));
-    const vs = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(vs !== 1) o.vel = Math.round(vs * 100) / 100; else delete o.vel; return o; });   // v39: velocidade do som
+    const vs = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(vs !== 1) o.vel = Math.round(vs * 100) / 100; else delete o.vel;   // v39: velocidade do som
+    const ini = Math.max(0, _evpNum(o.ini, 0)); if(ini > 0) o.ini = Math.round(ini * 100) / 100; else delete o.ini; return o; });   // v40: de onde começa no arquivo
   if(p.sfxAuto && typeof p.sfxAuto === "object"){ const a = p.sfxAuto, o = {};                             // v34: sons automáticos (motion e transições)
     if(typeof a.on === "boolean") o.on = a.on; if(a.vol != null) o.vol = Math.max(0, Math.min(2, _evpNum(a.vol, 1)));
     const tr = {}; Object.keys(a.trocas || {}).forEach(function(k){ const v = a.trocas[k]; if(_EVP_SFX_AUTO_CAT.some(function(c){ return c.id === k; }) && (v === "nenhum" || (_EVP_SFX_DUR[v] && !_EVP_SFX_AMB[v]))) tr[k] = v; });
@@ -123615,21 +123618,22 @@ function _evpMotor(canvas, o){
     }
     // efeitos sonoros
     (calc.sfx||[]).forEach(function(fx){
-      const durFx = _evpNum(fx.dur, 0), amb = !!_EVP_SFX_AMB[fx.tipo];                        // v24: duração, ambiente, som importado
-      const dTot0 = durFx > 0 ? durFx : (amb ? 6 : 0);
-      if(_evpNum(fx.t0,0) < t - 0.02 && !(dTot0 > 0 && fx.t0 + dTot0 > t)) return;
+      const durFx = _evpNum(fx.dur, 0), amb = !!_EVP_SFX_AMB[fx.tipo], iniFx = amb ? 0 : Math.max(0, _evpNum(fx.ini, 0));   // v24: duração, ambiente, som importado; v40: ini
+      const vFx = Math.max(0.5, Math.min(2, _evpNum(fx.vel, 1)));                                              // v39: velocidade do som
       let buf = null;
       if(fx.url){ const it = _evpSfxUrl(ac, fx.url); buf = it.buf; if(!buf) return; }
       else { const kb = fx.tipo + "#" + (fx.v || 0); if(!sfxBuf[kb]) sfxBuf[kb] = _evpSfxBuffer(ac, fx.tipo, fx.v); buf = sfxBuf[kb]; }   // v34: v = variação
+      const dTot0 = durFx > 0 ? durFx : (amb ? 6 : Math.max(0, buf.duration - iniFx) / vFx);                   // v40: inteiro = o que sobra do arquivo
+      if(_evpNum(fx.t0,0) < t - 0.02 && !(fx.t0 + dTot0 > t)) return;
+      if(iniFx >= buf.duration - 0.01) return;
       const fs = (calc.faixas && calc.faixas.sfx) || {};
       const vF = fs.mudo ? 0 : _evpNum(fx.vol, 0.8) * _evpNum(fs.vol, 1) * ganhoCanal("A" + _evpNum(fx.canal, 4));
-      const vFx = Math.max(0.5, Math.min(2, _evpNum(fx.vel, 1)));                                              // v39: velocidade do som
-      const comeca = Math.max(t, fx.t0), quando = agora + (comeca - t), atraso = comeca - fx.t0, dTot = dTot0 > 0 ? dTot0 : buf.duration / vFx, resta = dTot - atraso;
+      const comeca = Math.max(t, fx.t0), quando = agora + (comeca - t), atraso = comeca - fx.t0, dTot = dTot0, resta = dTot - atraso;
       if(resta <= 0.01) return;
-      const s = ac.createBufferSource(); s.buffer = buf; s.playbackRate.value = vFx; s.loop = amb || (durFx > buf.duration / vFx && !!fx.url); const g = ac.createGain();
+      const s = ac.createBufferSource(); s.buffer = buf; s.playbackRate.value = vFx; s.loop = amb || (durFx > (buf.duration - iniFx) / vFx + 0.05 && !!fx.url); const g = ac.createGain();
       if(dTot0 > 0){ const fIn = amb ? 0.4 : 0.01; g.gain.setValueAtTime(atraso < fIn ? 0 : vF, quando); if(atraso < fIn) g.gain.linearRampToValueAtTime(vF, quando + (fIn - atraso));
         g.gain.setValueAtTime(vF, quando + Math.max(0.02, resta - 0.35)); g.gain.linearRampToValueAtTime(0, quando + resta); } else g.gain.value = vF;
-      s.connect(g); g.connect(master); s.start(quando, s.loop ? ((atraso * vFx) % buf.duration) : Math.min(atraso * vFx, Math.max(0, buf.duration - 0.01))); s.stop(quando + resta + 0.02); fontes.push(s);
+      s.connect(g); g.connect(master); s.start(quando, s.loop ? ((iniFx + atraso * vFx) % buf.duration) : Math.min(iniFx + atraso * vFx, Math.max(0, buf.duration - 0.01))); s.stop(quando + resta + 0.02); fontes.push(s);   // v40: começa em ini
     });
     // v34: SONS AUTOMÁTICOS (motion e transições) — canal A4, abaixam na fala (pela legenda; sem legenda, pela onda da fala)
     const fsA = (calc.faixas && calc.faixas.sfx) || {};
@@ -124329,7 +124333,8 @@ const _EVP_FERR = {
           { id:"pontos", label:"Animar", icone:"movimento" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"seguir", label:"Seguir", icone:"olho" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   musica:[ { id:"trocar", label:"Trocar", icone:"musica" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"suave", label:"Suave", icone:"audio" },
            { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"apagar", label:"Tirar", icone:"apagar", acao:true } ],
-  sfx:[ { id:"som", label:"Som", icone:"efeitos" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
+  sfx:[ { id:"som", label:"Som", icone:"efeitos" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" },
+        { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v40
         { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   legenda:[ { id:"altura", label:"Altura", icone:"mover" }, { id:"pintar", label:"Cor do pedaço", icone:"cor" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true },
             { id:"corrigir", label:"Corrigir", icone:"lapis" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"estilo", label:"Estilo", icone:"estilo" } ],
@@ -124338,7 +124343,7 @@ const _EVP_FERR = {
   motion:[ { id:"campos", label:"Textos", icone:"lapis" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v35
            { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   final:[ { id:"duracao", label:"Duração", icone:"tempo" } ],
-  narracao:[ { id:"voz", label:"Voz", icone:"robo" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },
+  narracao:[ { id:"voz", label:"Voz", icone:"robo" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v40
              { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
 };
 const _EVP_LOOKS = [
@@ -124529,6 +124534,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [ferr, setFerr] = useState({});                 // ferramenta aberta por tipo de item
   const [menu, setMenu] = useState("midia");
   const [tempo, setTempo] = useState(0); const [tocando, setTocando] = useState(false); const [esperando, setEsperando] = useState(false);
+  /* v40: som importado do projeto já carrega ao abrir (o bloco fica do tamanho certo e toca na 1ª vez) */
+  const [, setSfxTick] = useState(0);
+  useEffect(function(){ const falta = (p.sfx || []).filter(function(x){ return x.url && !(_evpSfxUrls[x.url] && _evpSfxUrls[x.url].buf); }); if(!falta.length) return;
+    try{ const AC = window.AudioContext || window.webkitAudioContext; window.__pxAcSfx = window.__pxAcSfx || new AC();
+      falta.forEach(function(x){ const it = _evpSfxUrl(window.__pxAcSfx, x.url); (it.prom || Promise.resolve(it)).then(function(){ setSfxTick(function(n){ return n + 1; }); }); }); }catch(_){} }, [(p.sfx || []).map(function(x){ return x.url || ""; }).join("|")]);
   const [pxs, setPxs] = useState(40);
   const [enquadrar, setEnquadrar] = useState(false);
   const [vozes, setVozes] = useState({});
@@ -124784,8 +124794,38 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     setSel({ tipo:"legenda", id:k + 1 }); setFerr(function(f){ return Object.assign({}, f, { legenda:"pintar" }); });
     _evToast("success", "Legenda dividida: escolha a cor deste pedaço");
   };
+  /* v40: dividir efeito/som importado na agulha. O 2º pedaço começa no arquivo onde o 1º parou (ini), e cada um pode ter sua velocidade. */
+  const dividirSfx = function(id){
+    const x = (p.sfx || []).find(function(q){ return q.id === id; }); if(!x) return;
+    const T = tempo, dT = _evpSfxDurTotal(x), k = T - x.t0;
+    if(k <= 0.05 || k >= dT - 0.05){ _evToast("warning", "Leve a agulha para o meio deste som."); return; }
+    const nid = _evpId(), vel = Math.max(0.5, Math.min(2, _evpNum(x.vel, 1)));
+    mudar(function(np){ const o = (np.sfx || []).find(function(q){ return q.id === id; }); if(!o) return;
+      const b = Object.assign(_evpCopia(o), { id:nid, t0:Math.round(T * 100) / 100, ini:Math.round((_evpNum(o.ini, 0) + k * vel) * 100) / 100, dur:Math.round((dT - k) * 100) / 100 });
+      if(_EVP_SFX_AMB[o.tipo]) delete b.ini; o.dur = Math.round(k * 100) / 100; np.sfx.push(b); });
+    setSel({ tipo:"sfx", id:nid }); _evToast("success", "Som dividido na agulha: mude a velocidade de cada pedaço");
+  };
+  const dividirNarracao = function(id){
+    const x = (p.narracoes || []).find(function(q){ return q.id === id; }); if(!x) return;
+    const k = tempo - x.t0; if(k <= 0.1 || k >= _evpNum(x.dur, 1) - 0.1){ _evToast("warning", "Leve a agulha para o meio deste áudio."); return; } const nid = _evpId();
+    mudar(function(np){ const o = (np.narracoes || []).find(function(q){ return q.id === id; }); if(!o) return; const d0 = _evpNum(o.dur, 1);
+      np.narracoes.push(Object.assign(_evpCopia(o), { id:nid, t0:Math.round(tempo * 100) / 100, corte:Math.round((_evpNum(o.corte, 0) + k) * 100) / 100, dur:Math.round((d0 - k) * 100) / 100, cortado:true, volPts:undefined }));
+      o.dur = Math.round(k * 100) / 100; o.cortado = true; });
+    setSel({ tipo:"narracao", id:nid }); _evToast("success", "Áudio dividido na agulha");
+  };
+  const dividirImagemVideo = function(id){
+    const x = (p.imagens || []).find(function(q){ return q.id === id; }); if(!x || x.camada !== "video" || x.cheia) return false;
+    const T = tempo; if(!(T > x.t0 + 0.1 && T < x.t1 - 0.1)){ _evToast("warning", "Leve a agulha para dentro deste vídeo por cima (não nas pontas)."); return true; }
+    const nid = _evpId();
+    mudar(function(np){ const o = (np.imagens || []).find(function(q){ return q.id === id; }); if(!o) return; const vx = _evpNum(o.vel, 1) || 1;
+      const b = Object.assign(_evpCopia(o), { id:nid, t0:T, ini:_evpNum(o.ini, 0) + (T - o.t0) * vx, anim:"nenhuma" }); o.t1 = T; o.saida = "corte"; np.imagens.push(b); });
+    setSel({ tipo:"imagem", id:nid }); _evToast("success", "Dividido na agulha: mude a velocidade de cada pedaço"); return true;
+  };
   const cortar = function(){
     if(sel && sel.tipo === "legenda") return dividirLegenda();
+    if(sel && sel.tipo === "sfx") return dividirSfx(sel.id);                                   // v40
+    if(sel && sel.tipo === "narracao") return dividirNarracao(sel.id);                         // v40
+    if(sel && sel.tipo === "imagem" && dividirImagemVideo(sel.id)) return;                     // v40
     if(p.travas && p.travas.video){ _evToast("warning", "A faixa Vídeo está travada (cadeado)."); return; }   // v25
     const tt = tempo, i = _evpClipEm(calc, tt), c = calc.clips[i]; if(!c || tt <= c.t0 + 0.1 || tt >= c.t1 - 0.1) { _evToast("warning", "Leve a agulha para o meio de um clipe para dividir."); return; }
     mudar(function(np){
@@ -124933,7 +124973,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(!ctxK) return [];
     const tp = ctxK.tipo, ehLista = !!listaDe(tp), sOff = ehLista && ((p[listaDe(tp)] || []).find(function(x){ return x.id === ctxK.id; }) || {}).off;
     const L = [];
-    if(tp === "clip") L.push({ label:"Dividir na agulha", atalho:"S", fn:cortar });
+    if(tp === "clip" || tp === "sfx" || tp === "narracao" || tp === "imagem") L.push({ label:"Dividir na agulha", atalho:"S", fn:cortar });   // v40: som, narração e vídeo por cima também
     if(ehLista) L.push({ label:"Duplicar", atalho:"Ctrl+D", fn:duplicar }, { label:"Copiar", atalho:"Ctrl+C", fn:copiar }, { label:"Colar na agulha", atalho:"Ctrl+V", fn:colar, ok:!!copiaRef.current });
     if(["clip", "texto", "imagem"].indexOf(tp) >= 0) L.push("-", { label:"Copiar ajustes", atalho:"Ctrl+Alt+C", fn:copiarAtrib }, { label:"Colar ajustes…", atalho:"Ctrl+Alt+V", fn:abrirColarAtrib, ok:!!copiaAtr });
     if(ehLista) L.push("-", { label:sOff ? "Ligar" : "Desligar (não aparece nem toca)", atalho:"Shift+E", fn:alternarOff });
@@ -125726,7 +125766,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpInspetor fotosCard={_evpFotosDoCard(t.files).map(function(f){ return { url:f.url, nome:f.arq }; })}
             tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
-            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id}/>
+            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id} dividir={cortar}/>
         ) : (
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
             ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
@@ -128871,6 +128911,10 @@ const _EVP_REGUA = 24;
 function _evpPassoRegua(pxs){ const ps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60]; for(let i=0;i<ps.length;i++){ if(ps[i]*pxs >= 64) return ps[i]; } return 120; }
 function _evpRotuloT(s){ const m = Math.floor(s/60), r = s - m*60; return m ? m + ":" + (r < 10 ? "0" : "") + Math.round(r) : (Number.isInteger(Math.round(r*10)/10) ? Math.round(r) + "s" : (Math.round(r*10)/10) + "s"); }
 function _evpDurSfx(tipo){ return _EVP_SFX_DUR[tipo] || 0.3; }   // v34: a duração de verdade de cada som
+/* v40: quanto o efeito ocupa na linha do tempo (segundos). dur = segundos da linha do tempo; ini = de onde começa dentro do arquivo (segundos do arquivo) */
+function _evpSfxDurTotal(x){ const d = _evpNum(x.dur, 0); if(d > 0) return d; if(_EVP_SFX_AMB[x.tipo]) return 6;
+  const vel = Math.max(0.5, Math.min(2, _evpNum(x.vel, 1))), b = x.url && _evpSfxUrls[x.url] && _evpSfxUrls[x.url].buf;
+  if(b) return Math.max(0.05, (b.duration - _evpNum(x.ini, 0)) / vel); return _evpDurSfx(x.tipo) / vel; }
 
 /* forma de onda da fala de um trecho (picos a cada 20 ms do bruto) */
 function _EvpOnda({ clipe, ini, fim, w, h, cor, mudo, vol }){
@@ -129316,7 +129360,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
             <div style={Object.assign(faixaEstilo("sfx"), fx.sfx && fx.sfx.mudo ? { opacity:.45 } : {})} onPointerDown={fundo}>
               {(p.sfx||[]).map(function(x){ const lb = (_EVP_SFX.find(function(q){ return q.id === x.tipo; }) || {}).label || x.tipo;
                 return <div key={x.id} title={lb} onPointerDown={function(e){ moverSfx(e, x); }} onContextMenu={function(e){ menuCtx(e, "sfx", x.id); }}
-                  style={Object.assign(bloco(_EVP_COR.sfx, ehSel("sfx", x.id)), { left:x.t0*pxs, width:Math.max(24, (_evpNum(x.dur, 0) > 0 ? x.dur / Math.max(0.5, Math.min(2, _evpNum(x.vel, 1))) : _EVP_SFX_AMB[x.tipo] ? 6 : (x.url && _evpSfxUrls[x.url] && _evpSfxUrls[x.url].buf ? _evpSfxUrls[x.url].buf.duration : _evpDurSfx(x.tipo)))*pxs), padding:"0 4px" }, x.off ? _EVP_OFF : {})}><_EvpIco n="efeitos" s={12}/>{x.nome || lb}</div>; })}
+                  style={Object.assign(bloco(_EVP_COR.sfx, ehSel("sfx", x.id)), { left:x.t0*pxs, width:Math.max(24, _evpSfxDurTotal(x)*pxs), padding:"0 4px" }, x.off ? _EVP_OFF : {})}><_EvpIco n="efeitos" s={12}/>{x.nome || lb}</div>; })}
               {/* v34: sons automáticos (só mostram, tracejados; trocar/desligar no menu Efeitos) */}
               {(calc.sfxAuto || []).map(function(x){ const lb = (_EVP_SFX.find(function(q){ return q.id === x.tipo; }) || {}).label || x.tipo;
                 return <div key={"auto" + x.chave} data-sfx-auto={x.tipo} style={Object.assign(bloco(_EVP_COR.sfx, false), { left:x.t0*pxs, width:Math.max(12, x.dur*pxs), padding:"0 3px", background:"transparent", border:"1.5px dashed " + _EVP_COR.sfx, color:_EVP_COR.sfx, opacity:.75, pointerEvents:"none", zIndex:0 })}>{x.dur*pxs > 46 ? lb : ""}</div>; })}
@@ -130640,7 +130684,7 @@ function _EvpTesteVelocidade({ ed, projeto, calc, kit, base, tratados, logoUrl }
 }
 /* ─── PAINEL DA DIREITA: mostra só a ferramenta escolhida na barra embaixo do vídeo ─── */
 function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef, confirmar, kit, base, infoClipe, musicas, musInfo, setMusica, enquadrar, setEnquadrar,
-                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara, edUnidade, setSel, edId }){
+                        trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara, edUnidade, setSel, edId, dividir }){   // v40: dividir = o Dividir da barra
   const ctl = _evpUsarCtl(pRef, setP, confirmar, mudar);
   const caixa = Object.assign({}, _EVP_PAINEL, { padding:14, overflow:"auto", height:"100%", boxSizing:"border-box", minWidth:0 });
   const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:10, border:"1px solid "+_EVP_COR.linha, fontSize:13, userSelect:"text" };
@@ -131027,10 +131071,20 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {ferr === "volume" && (<div>
           <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(x.vol, 0.8)} min={0} max={2} step={0.05} fmt={pct} padrao={0.8} aplicar={ns(function(o, v){ o.vol = v; })}/>
           <_EvpSlider ctl={ctl} rotulo="Momento" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={ns(function(o, v){ o.t0 = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Velocidade" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} padrao={1} fmt={function(v){ return (Math.round(v * 100) / 100).toString().replace(".", ",") + "×"; }} aplicar={ns(function(o, v){ o.vel = v; })}/>{/* v39 */}
-          <_EvpSlider ctl={ctl} rotulo={_EVP_SFX_AMB[x.tipo] ? "Duração (o ambiente repete)" : "Duração (0 = o som inteiro)"} v={_evpNum(x.dur, _EVP_SFX_AMB[x.tipo] ? 6 : 0)} min={0} max={60} step={0.1} fmt={seg} padrao={_EVP_SFX_AMB[x.tipo] ? 6 : 0} aplicar={ns(function(o, v){ if(v > 0.05) o.dur = v; else delete o.dur; })}/>
+          <_EvpSlider ctl={ctl} rotulo="Velocidade (o pedaço encurta/alonga)" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} padrao={1} fmt={function(v){ return (Math.round(v * 100) / 100).toString().replace(".", ",") + "×"; }}
+            aplicar={ns(function(o, v){ const v0 = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(!_EVP_SFX_AMB[o.tipo] && _evpNum(o.dur, 0) > 0) o.dur = Math.max(0.05, Math.round(o.dur * v0 / v * 100) / 100); o.vel = v; })}/>{/* v39; v40: a duração acompanha (mesmo trecho do arquivo) */}
           <_EvpCanalSel letra="A" valor={_evpNum(x.canal, 4)} min={3} onChange={function(k){ mudar(ns(function(o){ o.canal = k; })); }}/>
         </div>)}
+        {ferr === "tempo" && (function(){ const amb = !!_EVP_SFX_AMB[x.tipo], vel = Math.max(0.5, Math.min(2, _evpNum(x.vel, 1))), bf = x.url && _evpSfxUrls[x.url] && _evpSfxUrls[x.url].buf, durArq = bf ? bf.duration : _evpDurSfx(x.tipo), dT = _evpSfxDurTotal(x);   /* v40 */
+          return (<div>
+          <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:8,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="efeitos" s={14}/>{x.nome || "Som"} · ocupa {seg(dT)}{!amb && <span> · no arquivo: {seg(_evpNum(x.ini, 0))} → {seg(Math.min(durArq, _evpNum(x.ini, 0) + dT * vel))}</span>}</div>
+          <_EvpSlider ctl={ctl} rotulo="Começa" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={ns(function(o, v){ o.t0 = v; })}/>
+          {!amb && <_EvpSlider ctl={ctl} rotulo="Cortar o começo (do arquivo)" v={_evpNum(x.ini, 0)} min={0} max={Math.max(0.1, durArq - 0.1)} step={0.02} fmt={seg} padrao={0}
+            aplicar={ns(function(o, v){ const a = _evpNum(o.ini, 0), vv = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(_evpNum(o.dur, 0) > 0) o.dur = Math.max(0.05, Math.round((o.dur - (v - a) / vv) * 100) / 100); o.ini = Math.round(v * 100) / 100; })}/>}
+          <_EvpSlider ctl={ctl} rotulo={amb ? "Duração (o ambiente repete)" : "Duração (corta o fim; 0 = até o fim do arquivo)"} v={_evpNum(x.dur, amb ? 6 : 0)} min={0} max={60} step={0.05} fmt={seg} padrao={amb ? 6 : 0} aplicar={ns(function(o, v){ if(v > 0.05) o.dur = Math.round(v * 100) / 100; else delete o.dur; })}/>
+          <button onClick={function(){ if(dividir) dividir(); }} style={Object.assign(_evpBtn(), {marginTop:6,width:"100%",justifyContent:"center"})}><_EvpIco n="dividir" s={14}/>Dividir na agulha</button>
+          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:8}}>Divida, depois mude a Velocidade de cada pedaço (aba Volume). O botão Dividir lá em cima e a tecla S também dividem o som selecionado.</div>
+        </div>); })()}
       </div>
     );
   }
