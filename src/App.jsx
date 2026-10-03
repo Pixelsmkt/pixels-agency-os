@@ -8873,8 +8873,42 @@ async function _pxBxBlob(url, nome){
    Link assinado em sequência NÃO serve pra vários: cada clique é uma navegação e o navegador
    cancela a anterior se a próxima começa antes da resposta — foi assim que o slide 2 do
    carrossel da VetService sumiu (29/09). Arte é leve, blob resolve; vídeo único segue no link. */
+/* TRAVA DE VÍDEO (02/10/2026): vídeo do Supabase é baixado pelo PORTEIRO (função video-porteiro). Ele conta na cota do dia
+   (2 GB por pessoa · 20 GB a agência) e é o único caminho para o original pesado, que fica no cofre (bucket fechado "videos"). */
+function pxEhVideoSupabase(u){
+  const s=String(u||"");
+  return /\/storage\/v1\/object\/(?:public\/|sign\/|authenticated\/)?(?:agency-files|videos)\/[^?#]+\.(?:mp4|mov|m4v|webm|mkv|avi)(?:[?#]|$)/i.test(s)
+      || /^tasks\/[^?#]+\.(?:mp4|mov|m4v|webm|mkv|avi)$/i.test(s);
+}
+async function pxPorteiroLink(ref, modo, nome){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  if(!sb||!sb.functions) throw Object.assign(new Error("sem conexão com o servidor"),{motivo:"sem_conexao"});
+  const r=await sb.functions.invoke("video-porteiro",{ body:{ acao:"pedir", ref:ref, modo:modo||"baixar", nome:nome||undefined } });
+  let d=r&&r.data;
+  if(!d&&r&&r.error){ try{ d=await r.error.context.json(); }catch(_){ d=null; } }
+  if(!d) throw Object.assign(new Error("o porteiro de vídeo não respondeu"),{motivo:"erro"});
+  if(!d.ok) throw Object.assign(new Error(d.mensagem||d.motivo||"pedido recusado"),{motivo:d.motivo||"negado"});
+  return d;
+}
 async function pxBaixarArquivo(url, storagePath, nome, viaBlob){
   const sb=(typeof window!=="undefined")?window._sb:null;
+  if(!viaBlob && pxEhVideoSupabase(storagePath||url)){            // trava de vídeo: conta no porteiro (e o original do cofre só sai por ele)
+    try{
+      const d=await pxPorteiroLink(storagePath||url,"baixar",nome);
+      if(d.bucket==="videos"){
+        const a=document.createElement("a"); a.href=d.url; a.rel="noopener"; a.style.display="none";
+        document.body.appendChild(a); a.click(); setTimeout(function(){ a.remove(); },300);
+        return true;
+      }
+    }catch(e){
+      const m=(e&&e.motivo)||"";
+      if(m!=="sem_permissao"&&m!=="nao_achei"&&m!=="sem_login"&&m!=="sem_conexao"&&m!=="erro"){
+        const _t=(typeof pixelsToast!=="undefined")?pixelsToast:null; if(_t) _t.warning(String((e&&e.message)||e),6000);
+        return false;
+      }
+      console.warn("[pxBaixarArquivo] porteiro:",(e&&e.message)||e);
+    }
+  }
   if(viaBlob){
     try{ return await _pxBxBlob(url,nome); }catch(e){ console.warn("[pxBaixarArquivo] blob direto falhou:",(e&&e.message)||e); }
     if(storagePath&&sb&&sb.storage){
@@ -49167,6 +49201,25 @@ function _cardPodeSerResp(u){
       if(m && m[1]){
         _sp = decodeURIComponent(m[1]);
         console.log("[downloadFile] storagePath extraído da URL:", _sp);
+      }
+    }
+    // TRAVA DE VÍDEO (02/10/2026): vídeo do Supabase passa pelo PORTEIRO (conta na cota do dia; o original pesado está no cofre)
+    if(typeof pxEhVideoSupabase==="function" && typeof pxPorteiroLink==="function" && pxEhVideoSupabase(_sp||url)){
+      try{
+        const d = await pxPorteiroLink(_sp||url, "baixar", filename);
+        if(d.bucket==="videos"){
+          const a=document.createElement("a"); a.href=d.url; a.rel="noopener"; a.style.display="none";
+          document.body.appendChild(a); a.click(); setTimeout(()=>{try{a.remove();}catch(_){}},300);
+          if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixando: "+filename,3000);
+          return;
+        }
+      }catch(e){
+        const m=(e&&e.motivo)||"";
+        if(m!=="sem_permissao"&&m!=="nao_achei"&&m!=="sem_login"&&m!=="sem_conexao"&&m!=="erro"){
+          if(typeof pixelsToast!=="undefined") pixelsToast.warning(String((e&&e.message)||e),6000);
+          return;
+        }
+        console.warn("[downloadFile] porteiro:",(e&&e.message)||e);
       }
     }
     // 1) Tenta SDK do Supabase (mais confiavel — usa auth do usuário, ignora CORS)
@@ -115620,6 +115673,14 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v32 (02/10/2026): TRAVA DE VÍDEO (decisão do Vini: tudo no Supabase, original pesado só pelo porteiro, gravação FullHD).
+     • _evLeve(c): o navegador SÓ usa a cópia leve (no PC, a cópia FullHD local do exportar_pc v10). Valia "preview_url || url" em 10 lugares:
+       agora é uma função só. _evComLeve completa a cópia leve dos clipes da edição com a do card (a edição guardava endereço velho).
+     • _evBuscar: cada cópia leve é baixada UMA vez por computador (Cache Storage do navegador) e nunca baixa vídeo acima de 150 MB.
+       O áudio (onda) e as miniaturas usam essa cópia guardada — antes baixavam o arquivo inteiro de novo a cada abertura.
+     • Exportar no navegador com vídeo acima de 150 MB → vai para o PC do escritório (grava em FullHD com a cópia mestre do cofre).
+     • Teste de velocidade e sincronizar pelo som: cópia leve (antes abriam o original 4K no navegador).
+     • _EvTravaVideo: aviso quando o disjuntor desarma; para sócio, o painel "Trava de vídeo" (uso do dia, liberar, limites).
    v31 (02/10/2026): MOTION GRAPHICS (Fase 2 do plano "Vídeo premium Pixels") — projeto.motion {estilo: editorial|tech, itens} desenhado no
      mesmo motor do player e do PC: manchete, tarja, kinetic, palco (a tela encolhe num quadro + mapa/contadores/fluxo/gráfico), CTA e a
      transição "marca". Cores derivadas do kit; só no 9:16 (a Conferência avisa nos outros formatos); o Exportar espera as fontes do motion.
@@ -117314,6 +117375,8 @@ function _evDuracao(url){
 async function _evBaixar(url, prog){
   const r = await fetch(url); if(!r.ok) throw new Error("não consegui baixar o vídeo (HTTP " + r.status + ")");
   const tot = Number(r.headers.get("content-length")) || 0;
+  if(tot > _EV_NAV_MAX && !(typeof window !== "undefined" && window.__CFG)){ try{ if(r.body) r.body.cancel(); }catch(_){}           // v32: trava de vídeo
+    throw new Error("vídeo pesado (" + Math.round(tot / 1e6) + " MB): o navegador só abre a cópia leve — clique em Editar com IA de novo, vai para o PC do escritório"); }
   if(!r.body || !tot) return await r.blob();
   const rd = r.body.getReader(); const partes = []; let n = 0, ult = 0;
   for(;;){ const x = await rd.read(); if(x.done) break; partes.push(x.value); n += x.value.length;
@@ -117386,7 +117449,7 @@ async function _evPrepararMontar(t, setPasso, extra){
   for(let i=0;i<brutos.length;i++){
     const f = brutos[i], nome = "vídeo " + (i+1) + " de " + brutos.length;
     const src = f.previewUrl || f.url;
-    if(!f.previewUrl && Number(f.size||0) > 700*1024*1024) throw new Error("\"" + (f.name||"vídeo") + "\" é grande demais para abrir no navegador (mais de 700 MB): clique em Editar com IA de novo — vai para o PC do escritório.");
+    if(!f.previewUrl && Number(f.size||0) > _EV_NAV_MAX) throw new Error("\"" + (f.name||"vídeo") + "\" é pesado demais para abrir no navegador (mais de 150 MB): clique em Editar com IA de novo — vai para o PC do escritório.");   // v32 (antes 700 MB)
     setPasso("Baixando o " + nome + "…");
     const blob = await _evBaixar(src, function(p){ setPasso("Baixando o " + nome + "… " + p + "%"); });
     const r = await _evDesmontar(blob, quadroSeg, function(m){ setPasso(nome.charAt(0).toUpperCase() + nome.slice(1) + ": " + m); });
@@ -117724,7 +117787,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     window._sb.rpc("criacao_edicao", { p_task:t.id }).then(function(r){
       if(!vivo) return;
       if(r.error){ setErro(/permiss/i.test(r.error.message||"") ? "Você não tem acesso ao Estúdio." : "Não consegui carregar a edição agora."); return; }
-      setEd(r.data || { existe:false });
+      setEd(_evComLeve(r.data || { existe:false }, t));          // v32: cópia leve mais nova do card
     }).catch(function(){ if(vivo) setErro("Não consegui carregar a edição agora."); });
     return function(){ vivo = false; };
   }, [t && t.id, rec]);
@@ -117826,6 +117889,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
         </div>
         {t && typeof onAbrirCard==="function" && <button onClick={function(){ onAbrirCard(t); }} style={btn2}>Abrir card</button>}
       </div>
+      {!soVer && <_EvTravaVideo isMob={isMob}/>}
 
       {!t && (
         <div style={Object.assign({}, caixa, {textAlign:"center",color:_EV.sub,fontSize:_evF(14,isMob),padding:"28px 16px"})}>
@@ -120357,6 +120421,105 @@ function _evpAvisar(){ _evpOuvintes.forEach(function(f){ try{ f(); }catch(_){} }
 function _evpUsarMidia(){ const [, setN] = useState(0); useEffect(function(){ const f = function(){ setN(function(n){ return n+1; }); }; _evpOuvintes.add(f); return function(){ _evpOuvintes.delete(f); }; }, []); }
 function _evpM(id){ if(!_evpMidia[id]) _evpMidia[id] = { thumbs:[], tratado:{} }; return _evpMidia[id]; }
 /* v16: na GRAVAÇÃO do PC, a cópia leve (Drive) vira o ORIGINAL servido pelo próprio PC. No navegador não muda nada. */
+/* ══ v32 (02/10/2026) TRAVA DE VÍDEO — o navegador só usa a cópia leve, guardada uma vez por computador ══ */
+const _EV_NAV_MAX = 150 * 1000 * 1000;          // o navegador nunca baixa vídeo maior que isso (o original pesado só sai pelo PC/porteiro)
+const _EV_CACHE = "pixels-video-v1";
+function _evComLeve(ed, t){                      // a edição guarda o endereço da cópia leve de quando foi feita; o card tem o mais novo
+  try{
+    if(!ed || !Array.isArray(ed.clipes) || !t || !Array.isArray(t.files)) return ed;
+    const porId = {}, porUrl = {}; t.files.forEach(function(f){ if(f && f.previewUrl){ if(f.id) porId[f.id] = f.previewUrl; if(f.url) porUrl[f.url] = f.previewUrl; } });
+    let mudou = false;
+    const cl = ed.clipes.map(function(c){ if(!c || c.preview_url) return c; const pv = porId[c.id] || porUrl[c.url]; if(!pv) return c; mudou = true; return Object.assign({}, c, { preview_url:pv }); });
+    return mudou ? Object.assign({}, ed, { clipes:cl }) : ed;
+  }catch(_){ return ed; }
+}
+function _evLeve(c){                             // endereço para VER/ANALISAR: a cópia leve (no PC: a versão FullHD local)
+  if(!c) return "";
+  const tr = (typeof window !== "undefined" && window.__CFG && window.__CFG.trocas) || null;
+  if(tr){ if(c.url && tr[c.url]) return tr[c.url]; if(c.preview_url && tr[c.preview_url]) return tr[c.preview_url]; }
+  return c.preview_url || c.url || "";
+}
+async function _evCachePodar(cache){ try{ const ks = await cache.keys(); for(let i = 0; i < ks.length - 300; i++) await cache.delete(ks[i]); }catch(_){} }
+async function _evBuscar(url){                   // baixa a cópia leve UMA vez por computador e devolve o arquivo (Blob)
+  if(!url) throw new Error("vídeo sem endereço");
+  const local = (typeof window !== "undefined" && window.__CFG) || /^(blob:|data:|\/)/.test(url);
+  let cache = null;
+  if(!local){ try{ cache = await caches.open(_EV_CACHE); const hit = await cache.match(url); if(hit) return await hit.blob(); }catch(_){ cache = null; } }
+  const r = await fetch(url); if(!r.ok) throw new Error("não consegui abrir o vídeo (HTTP " + r.status + ")");
+  const n = Number(r.headers.get("content-length")) || 0;
+  if(!local && n > _EV_NAV_MAX){ try{ if(r.body) r.body.cancel(); }catch(_){} throw new Error("vídeo pesado (" + Math.round(n / 1e6) + " MB): o navegador só abre a cópia leve, que o PC do escritório faz"); }
+  const b = await r.blob();
+  if(cache && b.size <= _EV_NAV_MAX){ try{ await cache.put(url, new Response(b, { headers:{ "content-type":b.type || "video/mp4" } })); _evCachePodar(cache); }catch(_){} }
+  return b;
+}
+const _evObjUrls = {};
+async function _evUrlLocal(url){                 // <video> com a cópia guardada no computador (no PC: o arquivo local)
+  if((typeof window !== "undefined" && window.__CFG) || !url || /^(blob:|data:)/.test(url)) return url;
+  if(_evObjUrls[url]) return _evObjUrls[url];
+  try{ const b = await _evBuscar(url); return (_evObjUrls[url] = URL.createObjectURL(b)); }catch(e){ if(/pesado/.test(String(e && e.message))) throw e; return url; }
+}
+
+/* aviso do disjuntor + painel do sócio (uso do dia, liberar, limites) — banco: video_porteiro_meu / _painel / _liberar / _limites */
+function _EvTravaVideo({ isMob }){
+  const [meu, setMeu] = useState(null), [pn, setPn] = useState(null), [aberto, setAberto] = useState(false), [ocupado, setOcupado] = useState(false);
+  const [lim, setLim] = useState(null);
+  const ler = function(){
+    if(!window._sb) return;
+    window._sb.rpc("video_porteiro_meu").then(function(r){ if(!r.error) setMeu(r.data || null); }).catch(function(){});
+    window._sb.rpc("video_porteiro_painel").then(function(r){ if(!r.error && r.data){ setPn(r.data); } }).catch(function(){});
+  };
+  useEffect(function(){ ler(); const iv = setInterval(ler, 5 * 60 * 1000); return function(){ clearInterval(iv); }; }, []);
+  const gb = function(b){ return (Number(b || 0) / 1e9).toLocaleString("pt-BR", { maximumFractionDigits:2 }) + " GB"; };
+  const acao = async function(nome, args, ok){
+    setOcupado(true);
+    try{ const r = await window._sb.rpc(nome, args); if(r.error) throw new Error(r.error.message); if(r.data) setPn(r.data); _evToast("success", ok); ler(); }
+    catch(e){ _evToast("error", "Não deu: " + ((e && e.message) || e)); }
+    setOcupado(false);
+  };
+  const disj = !!((pn && pn.disjuntor) || (meu && meu.disjuntor));
+  const motivo = (pn && pn.config && pn.config.disjuntor_motivo) || (meu && meu.disjuntor_motivo) || "limite do dia";
+  if(!pn && !disj) return null;
+  const cfg = (pn && pn.config) || {};
+  const b = { font:"inherit", fontSize:12, fontWeight:800, padding:"6px 10px", borderRadius:9, border:"1px solid " + _EV.roxoBorda, background:_EV.roxoClaro, color:_EV.roxo, cursor:"pointer" };
+  return (
+    <div style={{marginTop:10}}>
+      {disj && <div style={{padding:"10px 12px",borderRadius:12,background:_EV.vermClaro,color:_EV.verm,fontSize:_evF(13,isMob),fontWeight:700,lineHeight:1.45}}>
+        🛑 Vídeos bloqueados por hoje: {motivo}. {pn ? "Você é sócio: libere abaixo se for uso de verdade." : "Peça ao Vini ou ao Gustavo para liberar."}</div>}
+      {pn && <div style={{marginTop:disj ? 8 : 0,background:"#fff",border:"1px solid " + _EV.linha,borderRadius:12,padding:"8px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",cursor:"pointer"}} onClick={function(){ setAberto(!aberto); }}>
+          <b style={{fontSize:13}}>🛡 Trava de vídeo</b>
+          <span style={{fontSize:12.5,color:_EV.sub}}>hoje: <b style={{color:_EV.texto}}>{gb(pn.total)}</b> de {cfg.gb_total} GB · PCs {gb(pn.pcs)} de {cfg.gb_pcs} GB · {cfg.gb_pessoa} GB por pessoa</span>
+          <span style={{marginLeft:"auto",fontSize:12,color:_EV.roxo,fontWeight:800}}>{aberto ? "fechar" : "abrir"}</span>
+        </div>
+        {aberto && <div style={{marginTop:8,fontSize:12.5}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            {disj && <button disabled={ocupado} style={b} onClick={function(){ acao("video_porteiro_liberar", { p_alvo:"disjuntor", p_gb:0 }, "Disjuntor liberado"); }}>Liberar o disjuntor</button>}
+            <button disabled={ocupado} style={b} onClick={function(){ acao("video_porteiro_liberar", { p_alvo:"total", p_gb:5 }, "+5 GB no total de hoje"); }}>+5 GB no total hoje</button>
+            <button disabled={ocupado} style={b} onClick={function(){ acao("video_porteiro_liberar", { p_alvo:"pcs", p_gb:5 }, "+5 GB para os PCs hoje"); }}>+5 GB para os PCs hoje</button>
+          </div>
+          {(pn.uso || []).length ? <div style={{border:"1px solid " + _EV.linha,borderRadius:10,overflow:"hidden",marginBottom:8}}>
+            {(pn.uso || []).map(function(u){ return <div key={u.quem} style={{display:"flex",gap:8,alignItems:"center",padding:"6px 10px",borderTop:"1px solid " + _EV.linha}}>
+              <span style={{flex:1}}>{u.tipo === "pc" ? "🖥 " : "👤 "}{u.nome || u.quem}</span>
+              <span style={{color:_EV.sub}}>{gb(u.bytes)} · {u.pedidos} pedido{u.pedidos === 1 ? "" : "s"}{u.negados ? " · " + u.negados + " negado" + (u.negados === 1 ? "" : "s") : ""}</span>
+              {u.tipo === "nav" && <button disabled={ocupado} style={Object.assign({}, b, {padding:"3px 8px",fontSize:11})} onClick={function(){ acao("video_porteiro_liberar", { p_alvo:u.quem, p_gb:2 }, "+2 GB para " + (u.nome || "a pessoa")); }}>+2 GB</button>}
+            </div>; })}
+          </div> : <div style={{color:_EV.sub,marginBottom:8}}>Ninguém pediu vídeo pelo porteiro hoje.</div>}
+          {(pn.negados || []).length > 0 && <div style={{color:_EV.sub,marginBottom:8}}>Últimos negados: {(pn.negados || []).slice(0, 5).map(function(x){ return x.motivo; }).join(", ")}</div>}
+          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            <span>Limites por dia (GB):</span>
+            {[["gb_pessoa", "pessoa"], ["gb_pcs", "PCs"], ["gb_total", "total"]].map(function(k){
+              const v = lim ? lim[k[0]] : cfg[k[0]];
+              return <label key={k[0]} style={{display:"flex",gap:4,alignItems:"center"}}>{k[1]}<input type="number" min="0.5" max="500" step="0.5" value={v == null ? "" : v}
+                onChange={function(e){ const val = e.target.value; setLim(function(l){ return Object.assign({ gb_pessoa:cfg.gb_pessoa, gb_pcs:cfg.gb_pcs, gb_total:cfg.gb_total }, l || {}, { [k[0]]:val }); }); }}
+                style={{width:62,font:"inherit",padding:"4px 6px",borderRadius:7,border:"1px solid " + _EV.linha}}/></label>; })}
+            {lim && <button disabled={ocupado} style={b} onClick={function(){ acao("video_porteiro_limites", { p_gb_pessoa:Number(lim.gb_pessoa), p_gb_pcs:Number(lim.gb_pcs), p_gb_total:Number(lim.gb_total) }, "Limites salvos").then(function(){ setLim(null); }); }}>Salvar limites</button>}
+          </div>
+        </div>}
+      </div>}
+    </div>
+  );
+}
+
 function _evTroca(u){ try{ const t = window.__CFG && window.__CFG.trocas; return (u && t && t[u]) || u; }catch(_){ return u; } }
 /* v16: dados do original no Drive de cada vídeo do card (id do arquivo → {id, nome, bytes, w, h, dur…}) */
 /* v29.3: PREVISÃO DO EXPORTAR NO PC — mesma regra do PC v9.1 (converte só os trechos usados de cada original, +1,5 s de folga).
@@ -120418,7 +120581,8 @@ async function _evpMiniaturas(clipe, url){
   const m = _evpM(clipe);
   if(m.thumbsProm) return m.thumbsProm;
   m.thumbsProm = (async function(){
-    const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.crossOrigin = "anonymous"; v.playsInline = true; v.src = url;
+    const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.crossOrigin = "anonymous"; v.playsInline = true;
+    try{ v.src = await _evUrlLocal(url); }catch(_){ return; }            // v32: a cópia leve guardada no computador
     try{
       await _evEsperar(v, "loadedmetadata", 30000);
       const d = v.duration; if(!isFinite(d) || d <= 0) return;
@@ -120450,8 +120614,7 @@ async function _evpAudio(clipe, url){
   if(m.audioProm) return m.audioProm;
   m.audioProm = (async function(){
     try{
-      const r = await fetch(url); if(!r.ok) throw new Error("HTTP " + r.status);
-      const ab = await r.arrayBuffer();
+      const ab = await (await _evBuscar(url)).arrayBuffer();        // v32: a cópia leve guardada no computador (baixa uma vez só)
       const dec = new OfflineAudioContext(1, 48000, 48000);
       const buf = await dec.decodeAudioData(ab);
       const len = buf.length, mono = new Float32Array(len);
@@ -121798,7 +121961,7 @@ function _evpMotor(canvas, o){
 
   function urlClipe(id){ const c = (o.clipes||[]).find(function(x){ return x.id===id; }) || {};
     if(o.tratados && o.tratados[id]) return _evTroca(o.tratados[id]);
-    return _evTroca(o.original ? c.url : (c.preview_url || c.url)); }
+    return _evTroca(o.original ? c.url : _evLeve(c)); }
   function el(c){
     if(els[c.id] && els[c.id]._src === urlClipe(c.clipe)) return els[c.id];
     const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true;
@@ -122294,7 +122457,7 @@ function _evpMotor(canvas, o){
   /* imagens e figurinhas por cima do vídeo */
   function imagem(url){ if(!imgs[url]){ const im = new Image(); if(!/^data:/.test(url)) im.crossOrigin = "anonymous"; im.src = url; imgs[url] = im; } return imgs[url]; }
   function el2(x){
-    const url = _evTroca((o.tratados && o.tratados[x.clipe]) || (function(){ const c = (o.clipes||[]).find(function(q){ return q.id === x.clipe; }) || {}; return o.original ? c.url : (c.preview_url || c.url); })());
+    const url = _evTroca((o.tratados && o.tratados[x.clipe]) || (function(){ const c = (o.clipes||[]).find(function(q){ return q.id === x.clipe; }) || {}; return o.original ? c.url : _evLeve(c); })());
     if(els2[x.id] && els2[x.id]._src === url) return els2[x.id];
     const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true; v._src = url; v.src = url;
     els2[x.id] = v; return v;
@@ -122928,7 +123091,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       if(tratados[cid] || (p.estab && p.estab[cid]) || analisando[cid] != null) return;
       const c = infoClipe[cid]; if(!c) return;
       setAnalisando(function(a){ const n = Object.assign({}, a); n[cid] = 0; return n; });
-      _evpAnalisarTremido(c.preview_url || c.url, function(pc){ setAnalisando(function(a){ const n = Object.assign({}, a); n[cid] = pc; return n; }); })
+      _evpAnalisarTremido(_evLeve(c), function(pc){ setAnalisando(function(a){ const n = Object.assign({}, a); n[cid] = pc; return n; }); })
         .then(function(tr){ setP(function(pp){ const np = _evpCopia(pp); np.estab = np.estab || {}; np.estab[cid] = tr; return np; }); })
         .catch(function(){ _evToast("error", "Não consegui medir o tremido de " + (c.nome || "um vídeo")); })
         .finally(function(){ setAnalisando(function(a){ const n = Object.assign({}, a); delete n[cid]; return n; }); });
@@ -122936,7 +123099,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   }, [precisaEstab.join(","), Object.keys(tratados).join(",")]);
 
   /* mídia: miniaturas + áudio (tratado conforme as opções) */
-  useEffect(function(){ clipes.forEach(function(c){ const u = c.preview_url || c.url; _evpMiniaturas(c.id, u); _evpAudio(c.id, u); }); }, [ed.id]);
+  useEffect(function(){ clipes.forEach(function(c){ const u = _evLeve(c); _evpMiniaturas(c.id, u); _evpAudio(c.id, u); }); }, [ed.id]);
   const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + _evpChaveExtra(p.audio) + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().join(",") : "");
   const [tratandoAudio, setTratandoAudio] = useState(true);   // v10b (30/09): começa "tratando" — o PC não pode gravar antes de carregar a fala (saía sem som)
   const [metodoRuido, setMetodoRuido] = useState(null);
@@ -122949,7 +123112,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           const a2 = await _evpAudio("pc:" + c.id, vozesPC[c.id]);
           if(a2){ const b2 = await _evpTratar("pc:" + c.id, { ruido:false, voz:false, eco:!!p.audio.eco, nivelar:!!p.audio.nivelar }); if(b2){ out[c.id] = b2; met = "estudio"; continue; } }
         }
-        const a = await _evpAudio(c.id, c.preview_url || c.url); if(!a) continue;
+        const a = await _evpAudio(c.id, _evLeve(c)); if(!a) continue;
         const b = await _evpTratar(c.id, p.audio); if(b){ out[c.id] = b; if(b._metodoRuido && met !== "estudio") met = b._metodoRuido; } }
       if(vivo){ setVozes(out); setMetodoRuido(met); setTratandoAudio(false); }
     })().catch(function(){ if(vivo) setTratandoAudio(false); });
@@ -122965,7 +123128,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       const out = {};
       for(const n of (p.narracoes || [])){
         if(n.fonte === "clipe"){ const inf = clipes.find(function(c){ return c.id === n.clipe; }); if(!inf) continue;      // v24: som separado do clipe
-          const a0 = await _evpAudio(n.clipe, inf.preview_url || inf.url); if(!a0) continue; const b0 = await _evpTratar(n.clipe, p.audio); if(b0) out[n.id] = b0; continue; }
+          const a0 = await _evpAudio(n.clipe, _evLeve(inf)); if(!a0) continue; const b0 = await _evpTratar(n.clipe, p.audio); if(b0) out[n.id] = b0; continue; }
         const a = await _evpAudio("narr:" + n.id, n.url); if(!a) continue;
         const b = n.musica ? a : await _evpTratar("narr:" + n.id, { ruido:!!p.audio.ruido && !n.ia, voz:!!p.audio.voz && !n.ia, eco:!!p.audio.eco && !n.ia, nivelar:!!p.audio.nivelar,
           hum:n.ia ? 0 : p.audio.hum, cliques:!n.ia && !!p.audio.cliques, pops:!n.ia && !!p.audio.pops, eq:p.audio.eq });   // v11: trilha extra (música) sem limpeza de voz
@@ -122982,7 +123145,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     p.clips.filter(function(c){ return c.reverso; }).forEach(function(c){
       const k = _evpChaveRev(c), inf = infoClipe[c.clipe]; if(!inf || (_evpReversos[k] && (_evpReversos[k].pronto || prepRev[k] != null))) return;
       setPrepRev(function(a){ const n = Object.assign({}, a); n[k] = 0; return n; });
-      _evpPrepararReverso(c, inf.preview_url || inf.url, function(pc){ setPrepRev(function(a){ const n = Object.assign({}, a); n[k] = pc; return n; }); })
+      _evpPrepararReverso(c, _evLeve(inf), function(pc){ setPrepRev(function(a){ const n = Object.assign({}, a); n[k] = pc; return n; }); })
         .catch(function(){ _evToast("error", "Não consegui preparar o trecho ao contrário."); })
         .finally(function(){ setPrepRev(function(a){ const n = Object.assign({}, a); delete n[k]; return n; }); });
     });
@@ -123000,7 +123163,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       if(medindoFoco[cid]) return;
       const c = infoClipe[cid]; if(!c) return;
       setMedindoFoco(function(a){ const n = Object.assign({}, a); n[cid] = 1; return n; });
-      const u = pcAuto ? _evTroca(c.url) : (c.preview_url || c.url);        // no PC: o original (local), sem baixar nada
+      const u = _evLeve(c);        // no PC: a versão FullHD local (exportar_pc v10), sem baixar nada · v32
       Promise.race([_evpFocoPessoa(u), new Promise(function(r){ setTimeout(function(){ r(null); }, 60000); })])
         .then(function(x){ setP(function(pp){ const np = _evpCopia(pp); np.foco = Object.assign({}, np.foco || {}); np.foco[cid] = x == null ? -1 : x; return np; }); })
         .catch(function(){ setP(function(pp){ const np = _evpCopia(pp); np.foco = Object.assign({}, np.foco || {}); np.foco[cid] = -1; return np; }); })
@@ -123016,7 +123179,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       if((p.reenq && p.reenq[cid]) || medindoAcao[cid] != null) return;
       const c = infoClipe[cid]; if(!c) return;
       setMedindoAcao(function(a){ const n = Object.assign({}, a); n[cid] = 0; return n; });
-      _evpAnalisarAcao(c.preview_url || c.url, function(pc){ setMedindoAcao(function(a){ const n = Object.assign({}, a); n[cid] = pc; return n; }); })
+      _evpAnalisarAcao(_evLeve(c), function(pc){ setMedindoAcao(function(a){ const n = Object.assign({}, a); n[cid] = pc; return n; }); })
         .then(function(rq){ setP(function(pp){ const np = _evpCopia(pp); np.reenq = np.reenq || {}; np.reenq[cid] = rq; return np; }); })
         .catch(function(){ _evToast("error", "Não consegui acompanhar a ação de " + (c.nome || "um vídeo")); })
         .finally(function(){ setMedindoAcao(function(a){ const n = Object.assign({}, a); delete n[cid]; return n; }); });
@@ -124498,7 +124661,7 @@ function _EvpCamadaDesenho(){
 function _EvpRastrearPainel({ c, calc, p, mudar, tempo, infoClipe, irPara, setSel, setFerr }){
   const [dir, setDir] = useState("tudo"), [prog, setProg] = useState(null), [ver, setVer] = useState(null);
   const pararRef = useRef(null);
-  const inf = infoClipe[c.clipe] || {}, url = inf.preview_url || inf.url;
+  const inf = infoClipe[c.clipe] || {}, url = _evLeve(inf);
   const cc = calc.clips.find(function(q){ return q.id === c.id; }) || c;
   const agDentro = tempo >= cc.t0 && tempo < cc.t1;
   const tbAg = agDentro ? _evpSrcT(cc, tempo) : cc.ini;
@@ -125393,12 +125556,12 @@ function _EvpBanco({ aberto, onFechar, cliente, taskId, onUsarImagem }){
   const trocar = function(x){ setDados(function(d){ return d ? Object.assign({}, d, { itens:d.itens.map(function(y){ return y.id === x.id ? Object.assign({}, y, x) : y; }) }) : d; }); };
   const salvar = async function(x, campos, aviso){ try{ const r = await rpc("criacao_midia_salvar", { p_id:x.id, p_dados:campos }); if(r) trocar(r); if(aviso) _evToast("success", aviso); return r; }catch(e){ _evToast("error", "Não salvou: " + ((e && e.message) || e)); return null; } };
   const medir = async function(x){
-    const r = await _evpMidiaQuadros(x.url, x.tipo);
+    const r = await _evpMidiaQuadros(x.copia || x.url, x.tipo);
     await salvar(x, Object.assign({ qualidade:Object.assign({}, r.qualidade, { medido_em:new Date().toISOString(), w:r.w, h:r.h }) }, r.duracao ? { duracao:String(r.duracao) } : {}));
     return r;
   };
   const analisar = async function(x){
-    const r = await _evpMidiaQuadros(x.url, x.tipo);
+    const r = await _evpMidiaQuadros(x.copia || x.url, x.tipo);
     if(!x.qualidade) await salvar(x, Object.assign({ qualidade:Object.assign({}, r.qualidade, { medido_em:new Date().toISOString(), w:r.w, h:r.h }) }, r.duracao ? { duracao:String(r.duracao) } : {}));
     const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"midia_analisar", id:x.id, folha:r.folha }, modeloIA ? { modelo:modeloIA } : {}) });
     if(res.error) throw new Error(await _evErroFn(res));
@@ -125497,7 +125660,7 @@ function _EvpBancoItem({ x, salvar, medir, analisar, rpc, taskId, onUsarImagem, 
   const fazer = async function(rot, fn){ setOcupado(rot); try{ await fn(); }catch(e){ _evToast("error", rot + ": " + ((e && e.message) || e)); } setOcupado(""); };
   const lista = function(t, v){ return v && v.length ? <div style={{marginBottom:4}}><b>{t}:</b> {v.join(", ")}</div> : null; };
   return (<div>
-    {x.tipo === "imagem" ? <img src={x.url} alt="" style={{width:"100%",borderRadius:10,background:"#000"}}/> : <video src={x.url} controls preload="metadata" poster={x.thumb || undefined} style={{width:"100%",maxHeight:260,borderRadius:10,background:"#000"}}/>}
+    {x.tipo === "imagem" ? <img src={x.url} alt="" style={{width:"100%",borderRadius:10,background:"#000"}}/> : <video src={x.copia || x.url} controls preload="metadata" poster={x.thumb || undefined} style={{width:"100%",maxHeight:260,borderRadius:10,background:"#000"}}/>}
     <div style={{display:"flex",gap:6,marginTop:8}}>
       <input value={nome} onChange={function(e){ setNome(e.target.value); }} onKeyDown={function(e){ e.stopPropagation(); }} aria-label="Nome no banco" style={_EVP_CAMPO_K}/>
       <button onClick={function(){ salvar(x, { renomeado:nome.trim() === x.nome ? "" : nome.trim() }, "Renomeado"); }} disabled={nome === (x.renomeado || x.nome)} style={_evpBtn(null, nome !== (x.renomeado || x.nome))}>Renomear</button>
@@ -125561,7 +125724,7 @@ function _EvpSincPainel({ c, p, mudar, infoClipe, clipes }){
     if(!outro) return; setCalc2(true); setRes(null);
     try{
       const ia = infoClipe[c.clipe] || {}, ib = infoClipe[outro] || {};
-      const [a, b] = await Promise.all([_evpAudio(c.clipe, ia.url), _evpAudio(outro, ib.url)]);
+      const [a, b] = await Promise.all([_evpAudio(c.clipe, _evLeve(ia)), _evpAudio(outro, _evLeve(ib))]);      // v32: cópia leve (antes o original inteiro)
       if(!a || !b) throw new Error("um dos vídeos não tem som");
       await new Promise(function(r){ setTimeout(r, 30); });
       const r = _evpSincronizarSom(a, b, 120); if(!r) throw new Error("não achei o encaixe");
@@ -128120,7 +128283,7 @@ function _EvpTesteVelocidade({ ed, projeto, calc, kit, base, tratados, logoUrl }
     setSt({ rodando:true });
     let m = null, cv = document.createElement("canvas");
     try{
-      m = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:ed.clipes || [], original:true, logoUrl:logoUrl, tratados:tratados });
+      m = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:ed.clipes || [], original:!!(window.__CFG), logoUrl:logoUrl, tratados:tratados });   // v32: no navegador, a cópia leve
       await m.pronto; m.volumeGeral(0);
       const dur = Math.min(8, Math.max(1, calc.fimCortes || calc.total));
       m.seek(0); await new Promise(function(r){ setTimeout(r, 1200); }); m.play();
@@ -129020,7 +129183,9 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
   const pendPC = ((trat && trat.itens) || []).filter(function(x){ return usadosIds.indexOf(x.clipe_id) >= 0 && (x.status === "fila" || x.status === "processando"); }).map(function(x){ return x.clipe_id; })
     .filter(function(v, i, a){ return a.indexOf(v) === i; });
   const driveUsados = useMemo(function(){ const dD = _evDriveDe(t && t.files); return usadosIds.filter(function(id){ return !!dD[id]; }); }, [t && t.files, usadosIds.join(",")]);
-  const soNoPC = !pcAuto && driveUsados.length > 0;      // v16: originais no Drive → a gravação é no PC (o navegador só tem a cópia leve)
+  const pesadosUsados = useMemo(function(){ const fs = (t && t.files) || [];                 // v32: original acima de 150 MB nunca abre no navegador
+    return usadosIds.filter(function(id){ const f = fs.find(function(x){ return x && x.id === id; }); return !!f && Number(f.size || 0) > _EV_NAV_MAX; }); }, [t && t.files, usadosIds.join(",")]);
+  const soNoPC = !pcAuto && (driveUsados.length > 0 || pesadosUsados.length > 0);      // v16: originais no Drive · v32: vídeo pesado → a gravação é no PC (FullHD)
   const prevPC = useMemo(function(){ return _evPrevisaoPC(projeto, _evDriveDe(t && t.files), calc.total); }, [projeto, t && t.files, calc.total]);   // v29.3
   const envato = !!(projeto.musica && !projeto.musica.mudo && musInfo && /envato/i.test(musInfo.fonte || ""));
   const faltaLicenca = envato && !projeto.musica.licenca_ok;
@@ -129044,7 +129209,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     const qual = o.qualidade || qualidade, leg = o.legenda != null ? !!o.legenda : comLegenda, audioSo = o.qualidade ? false : soAudio;
     if(exp && exp.fase && exp.fase !== "feito" && exp.fase !== "erro") return;
     if(faltaLicenca){ _evToast("warning", "Marque que a música do Envato foi registrada neste projeto."); return; }
-    if(soNoPC && !audioSo){ _evToast("info", "Os originais estão no Drive: a gravação é no PC do escritório, com qualidade máxima."); exportarNoPC(); return; }
+    if(soNoPC && !audioSo){ _evToast("info", driveUsados.length ? "Os originais estão no Drive: a gravação é no PC do escritório, em FullHD." : "Vídeo pesado: a gravação é no PC do escritório, em FullHD (o original não abre no navegador)."); exportarNoPC(); return; }
     const mimeAudio = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find(function(x){ try{ return window.MediaRecorder && MediaRecorder.isTypeSupported(x); }catch(_){ return false; } });
     const mime = audioSo ? mimeAudio : _evMimeGravacao();
     if(!mime || !HTMLCanvasElement.prototype.captureStream){ setExp({ fase:"erro", msg:"Este navegador não grava vídeo. Use o Google Chrome no computador." }); return; }
@@ -129205,8 +129370,8 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
         </div>
       </div>
       {!ativo && <button onClick={function(){ exportar(); }} disabled={faltaLicenca || nErro > 0} title={nErro ? "Corrija o que está em vermelho na Conferência" : ""} style={Object.assign(_evpBtn("verde", !faltaLicenca && !nErro), {marginTop:10,padding:"10px 16px",fontSize:13.5})}>
-        <_EvpIco n={soNoPC && !soAudio ? "pc" : "baixar"} s={16}/>{soAudio ? "Gravar e baixar o áudio" : soNoPC ? "Exportar no PC com os originais do Drive" : alterado ? "Salvar, exportar e anexar no card" : ed.final ? "Exportar de novo e anexar no card" : "Aprovar, exportar e anexar no card"}</button>}
-      {!ativo && soNoPC && !soAudio && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.45}}>{driveUsados.length === 1 ? "1 vídeo tem" : driveUsados.length + " vídeos têm"} o original no Drive. O PC do escritório confere cada original com a cópia leve e grava em Full HD — você pode fechar o navegador.</div>}
+        <_EvpIco n={soNoPC && !soAudio ? "pc" : "baixar"} s={16}/>{soAudio ? "Gravar e baixar o áudio" : soNoPC ? (driveUsados.length ? "Exportar no PC com os originais do Drive" : "Exportar no PC do escritório (FullHD)") : alterado ? "Salvar, exportar e anexar no card" : ed.final ? "Exportar de novo e anexar no card" : "Aprovar, exportar e anexar no card"}</button>}
+      {!ativo && soNoPC && !soAudio && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.45}}>{driveUsados.length ? (driveUsados.length === 1 ? "1 vídeo tem" : driveUsados.length + " vídeos têm") + " o original no Drive." : (pesadosUsados.length === 1 ? "1 vídeo passa" : pesadosUsados.length + " vídeos passam") + " de 150 MB."} O PC do escritório confere cada vídeo com a cópia leve e grava em Full HD — você pode fechar o navegador.</div>}
       {!ativo && soNoPC && !soAudio && !pcAtivo && <div style={{marginTop:6,padding:"7px 10px",borderRadius:10,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha,fontSize:12,lineHeight:1.45}} aria-label="Previsão do exportar">
         <b>⏱ Previsão: ~{_evMin(prevPC.seg)}</b> <span style={{color:_EVP_COR.sub}}>— converte só os {prevPC.segUsados} s usados de {prevPC.originais} original{prevPC.originais === 1 ? "" : "is"} 4K e grava o vídeo de {_evTempo(calc.total).replace(/\.\d$/, "")}. Se o PC já converteu esses trechos antes, ~{_evMin(prevPC.segJaConvertido)}.</span></div>}
       {!ativo && !soAudio && !isMob && !pcAuto && (
@@ -129580,7 +129745,7 @@ function _EvExportarNoPC({ trabalho, onEstado }){
         if(vr){ const v = ((e.receita && e.receita.variantes) || []).find(function(x){ return x && x.id === vr; });
           if(!v || !v.projeto) throw new Error("a opção " + vr + " não existe nesta edição");
           e2 = Object.assign({}, e, { receita:Object.assign({}, e.receita, { projeto:v.projeto }) }); }
-        setEd(Object.assign({}, e2, { rascunho:null, rascunho_em:null }));        // exporta a última versão salva (ou a opção B)
+        setEd(_evComLeve(Object.assign({}, e2, { rascunho:null, rascunho_em:null }), t));        // exporta a última versão salva (ou a opção B) · v32
         avisar({ fase:"carregado", msg:"Estúdio aberto no PC" });
       }catch(err){ avisar({ fase:"erro", msg:String((err && err.message) || err) }); }
     })();
