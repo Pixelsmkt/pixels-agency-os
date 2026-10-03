@@ -115673,6 +115673,8 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v38 (03/10/2026): MOTION NA MÃO — arrastar cada peça com o mouse/dedo (dx/dy, presa na área segura), TAMANHO por peça (50–200%), "Voltar ao
+     lugar", COR por peça no inspetor · Mídia: "Vídeos novos no card" → INCLUIR NA EDIÇÃO (rpc criacao_edicao_clipe_incluir).
    v37 (03/10/2026): FOTOS DO CARD no painel Mídia (todas as imagens do card, de qualquer seção): "+ por cima" e "Tela cheia" · botão "Pôr as fotos na
      fala" (acha o nome de cada foto na fala e põe a foto na hora; foto com 2 nomes vira tela final em tela cheia; apertar de novo troca, não duplica).
    v36 (03/10/2026): VÍDEO PREMIUM rodada 3 — ENQUADRAMENTO AUTOMÁTICO por clipe e "em todos" (rosto pelo MediaPipe em CPU, câmera suave,
@@ -122701,7 +122703,7 @@ function manchete(it, t){
   const fundoH = Math.max(900, (fS.linhas.length ? yS(fS.linhas.length - 1) : fimT) + 260);
   X.save(); X.globalAlpha = 1 - sai; X.translate(0, -sai * 40);
   const g = X.createLinearGradient(0, 0, 0, fundoH); g.addColorStop(0, "rgba(8,5,16,.72)"); g.addColorStop(1, "rgba(8,5,16,0)");
-  X.globalAlpha = (1 - sai) * EASE(pin); X.fillStyle = g; X.fillRect(0, 0, W, fundoH); X.globalAlpha = 1 - sai;
+  if(!SO_CONT){ X.globalAlpha = (1 - sai) * EASE(pin); X.fillStyle = g; X.fillRect(-DX, Math.min(0, -DY), W, fundoH + Math.abs(DY)); } X.globalAlpha = 1 - sai;   // v38: peça arrastada
   const pr = prog(t, it.t0, 0.35); X.fillStyle = R.marca.logo; X.fillRect(x, y0 - 22, 54 * EOUT(pr), 6);
   if(tech()){
     const fR = ajusta("// " + it.rotulo, 26, "Mono", MW - 70, { esp: 1 }, 1, 0.5);
@@ -122742,7 +122744,7 @@ function kinetic(it, t){
   const pout = prog(t, it.t1 - 0.25, 0.25); if(t < it.t0 || pout >= 1) return;
   X.save(); X.globalAlpha = 1 - EIN(pout);
   const n = it.palavras.length, passo = n > 3 ? 170 : 190, y00 = n > 3 ? 700 : 840;
-  const g = X.createRadialGradient(540, y00 + passo * (n - 1) / 2, 0, 540, y00 + passo * (n - 1) / 2, 760); g.addColorStop(0, "rgba(8,5,16,.6)"); g.addColorStop(1, "rgba(8,5,16,0)"); X.fillStyle = g; X.fillRect(0, 300, W, 1200);
+  const g = X.createRadialGradient(540, y00 + passo * (n - 1) / 2, 0, 540, y00 + passo * (n - 1) / 2, 760); g.addColorStop(0, "rgba(8,5,16,.6)"); g.addColorStop(1, "rgba(8,5,16,0)"); if(!SO_CONT){ X.fillStyle = g; X.fillRect(-DX, 300, W, 1200); }   // v38
   it.palavras.forEach((p, i) => { const ti = it.tempos[i] - 0.06, pp = prog(t, ti, 0.4); if(pp <= 0) return;
     const f = ajusta(p, i === 0 ? (n > 3 ? 132 : 150) : (n > 3 ? 156 : 176), "Anton", W - 2 * SAFE.lado - 70, { esp: 2 }, 1, 0.3);
     const m = mola(pp), tam = f.tam, y = y00 + i * passo, w = f.w;
@@ -122876,12 +122878,12 @@ function palco(it, t, im){
   const s = palcoEstado(it, t); if(s <= 0) return false;
   const c = palcoCard(it), rx = lerp(0, c.x, s), ry = lerp(0, c.y, s), rw = lerp(W, c.w, s), rh = lerp(H, c.h, s), raio = (tech() ? 6 : R.estilo === "impacto" ? 12 : 34) * s;
   const claro = it.fundo === "claro" && !tech() && R.estilo !== "impacto";     // v33: Impacto é sempre escuro
-  if(claro) fundoClaro(t, 1); else fundoEscuro(t, 1);
+  if(!SO_CONT){ if(claro) fundoClaro(t, 1); else fundoEscuro(t, 1); }          // v38: medindo a caixa, só o conteúdo
   const escuro = !claro, tinta = escuro ? "#ffffff" : R.marca.tinta, sub = tech() ? R.tom.t3 : escuro ? R.tom.t1 : R.marca.pri;
   // conteúdo (entra depois que o quadro encolheu) — cascata
   const c0 = it.entrada === "marca" ? it.t0 + 0.05 : it.t0 + 0.38, sai = 1 - EASE(prog(t, it.t1 - 0.62, 0.26));
   const col = it.lado === "esquerda" ? { x: c.x + c.w + 46, w: W - SAFE.lado - (c.x + c.w + 46) } : { x: SAFE.lado + 4, w: c.x - SAFE.lado - 50 };
-  X.save(); X.globalAlpha = sai;
+  X.save(); X.globalAlpha = sai; X.translate(DX, DY);                          // v38: o conteúdo do palco anda (o quadro do vídeo fica)
   X.fillStyle = R.marca.logo; X.fillRect(col.x, c.y + 4, 46 * EOUT(prog(t, c0, 0.3)), 6);
   /* v33: título e frase cabem na coluna (diminui / quebra em 2 linhas); o bloco não passa de c.y + 330 (embaixo vem o mapa ou o gráfico) */
   const tT = it.titulo.length > 7 ? 104 : 138, fT0 = ajusta(it.titulo, tT, "Anton", col.w, { esp: 1 }, 2, 0.75);
@@ -122917,6 +122919,7 @@ function palco(it, t, im){
     if(d.modelo === "grafico") grafico(d, t, prog(t, c0 + 0.3, 0.6), { x: col.x, y: c.y + 372, w: col.w, h: 396 });
   });
   X.restore();
+  if(SO_CONT) return { card: { x: rx, y: ry, w: rw, h: rh }, s };              // v38: medindo a caixa do conteúdo
   // o vídeo dentro do quadro
   X.save(); if(s > 0.02){ X.shadowColor = "rgba(0,0,0," + (0.45 * s) + ")"; X.shadowBlur = 60 * s; X.shadowOffsetY = 26 * s; X.fillStyle = "#000"; ret(rx, ry, rw, rh, raio); X.fill(); } X.restore();
   desenharVideo(im, rx, ry, rw, rh, raio, lerp(zoomDoCorte(t), 1.12, s), 0.36);
@@ -122953,7 +122956,7 @@ function wordmark(cx, y, tam, cor, k){
 function cta(it, t){
   if(t < it.t0) return; const pin = prog(t, it.t0, 0.6), m = mola(pin), fimVideo = INFO.fim;
   const fim = EASE(prog(t, fimVideo - 0.05, 0.6));            // depois que a fala acaba: fecha numa tela de marca
-  X.save(); X.fillStyle = "rgba(10,6,20," + (0.45 * EASE(pin) + 0.5 * fim) + ")"; X.fillRect(0, 0, W, H); X.restore();
+  if(!SO_CONT){ X.save(); X.fillStyle = "rgba(10,6,20," + (0.45 * EASE(pin) + 0.5 * fim) + ")"; X.fillRect(-DX, -DY, W, H); X.restore(); }   // v38: fica parado na tela
   /* v33: tudo acima da área de baixo do Reels (a logo final passava de SAFE.base); título longo quebra em 2 linhas, frase longa também */
   const subTx = tech() ? it.sub.toUpperCase() : it.sub;
   const fT = ajusta(it.titulo, 82, "Anton", 900 - 52 - 180, { esp: 1 }, 2, 0.8);
@@ -123003,7 +123006,7 @@ function cartao(x, y, w, h, rp, o){ o = o || {}; X.save();
   if(tech() && !o.semHud) hud(x - 10, y - 10, w + 20, h + 20, o.hud || R.marca.logo, 30, 4);
   X.restore(); }
 /* proteção escura atrás das peças do meio (o texto fica legível em qualquer vídeo) */
-function protege(a){ if(a <= 0) return; X.save(); X.globalAlpha *= a;
+function protege(a){ if(a <= 0 || SO_CONT) return; X.save(); X.globalAlpha *= a; X.translate(-DX, -DY);   // v38: parada na tela
   const g = X.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgba(8,5,16,.28)"); g.addColorStop(0.4, "rgba(8,5,16,.56)"); g.addColorStop(0.72, "rgba(8,5,16,.42)"); g.addColorStop(1, "rgba(8,5,16,.18)");
   X.fillStyle = g; X.fillRect(0, 0, W, H); X.restore(); }
 /* entrada e saída do grupo: sobe 36 px e cresce de 94% (0,5 s) · sai subindo e apagando (0,3 s) */
@@ -123191,6 +123194,61 @@ function selo(it, t){
   X.restore();
 }
 
+/* ── v38: cada peça com o seu lugar (it.dx / it.dy, fração da tela) e a sua cor (it.cor → a mesma paleta da cor do vídeo, via INFO.marcaDe) ── */
+let DX = 0, DY = 0, SO_CONT = false, SEM_DESL = false, SEM_ESC = false;
+const _centroC = new WeakMap();
+function centroDe(it){                       // v38b: centro da peça no tamanho natural (para o zoom crescer "no lugar")
+  const k = it.modelo + "|" + it.t0 + "|" + it.t1 + "|" + (it.titulo || it.nome || it.texto || "") + "|" + (it.pos || "") + "|" + (it.lado || "");
+  const c = _centroC.get(it); if(c && c.k === k) return c;
+  const i = R && R.itens ? R.itens.indexOf(it) : -1; if(i < 0) return null;
+  SEM_ESC = true; let b = null; try{ b = caixaDe(i, Math.min(it.t0 + 0.7, it.t1 - 0.05), true); } catch(_){} finally { SEM_ESC = false; }
+  const r = { k, x: b ? b.x + b.w / 2 : W / 2, y: b ? b.y + b.h / 2 : H / 2 }; _centroC.set(it, r); return r;
+}
+const _tonsC = new WeakMap();
+function usarMarca(m){ let tm = _tonsC.get(m); if(!tm){ tm = tons(m); _tonsC.set(m, tm); } R.marca = m; R.tom = tm; }
+function comPeca(it, mover, fn){
+  const mb = R.marca, tb = R.tom, dx = SEM_DESL ? 0 : cl(+it.dx || 0, -0.5, 0.5) * W, dy = SEM_DESL ? 0 : cl(+it.dy || 0, -0.5, 0.5) * H;
+  if(it.cor && INFO && INFO.marcaDe){ const m = INFO.marcaDe(it.cor); if(m && m !== mb) usarMarca(m); }
+  const esc = (SEM_DESL || SEM_ESC) ? 1 : cl(+it.esc || 1, 0.5, 2);
+  DX = dx; DY = dy; X.save(); if(mover && (dx || dy)) X.translate(dx, dy);
+  if(mover && esc !== 1){ const c = centroDe(it); if(c){ X.translate(c.x, c.y); X.scale(esc, esc); X.translate(-c.x, -c.y); } }
+  try{ return fn(); } finally { X.restore(); DX = 0; DY = 0; if(R.marca !== mb){ R.marca = mb; R.tom = tb; } }
+}
+function umaPeca(it, t){ const m = it.modelo;
+  if(m === "manchete") manchete(it, t); else if(m === "tarja") tarja(it, t); else if(m === "kinetic") kinetic(it, t);
+  else if(m === "numero") numero(it, t); else if(m === "lista") lista(it, t); else if(m === "antesdepois") antesdepois(it, t); else if(m === "citacao") citacao(it, t);
+  else if(m === "selo") selo(it, t); else if(m === "cta") cta(it, t); else if(m === "palco") palco(it, t, null); }
+/* caixa da peça (px da tela 1080×1920) desenhando só ela, sem as proteções escuras, numa tela de 1/4 (sem sombra, que não encolhe junto) */
+let _cxC = null, _cxG = null, _cxP = null;
+function caixaDe(i, t, semDesl){
+  const it = R && R.itens && R.itens[i]; if(!it) return null;
+  if(!_cxC){ _cxC = document.createElement("canvas"); _cxC.width = W / 4; _cxC.height = H / 4; _cxG = _cxC.getContext("2d", { willReadFrequently: true });
+    _cxP = new Proxy(_cxG, { get: (o, k) => { const v = o[k]; return typeof v === "function" ? v.bind(o) : v; },
+      set: (o, k, v) => { if(k === "shadowBlur" || k === "shadowOffsetX" || k === "shadowOffsetY" || k === "shadowColor") return true; o[k] = v; return true; } }); }
+  const g = _cxG; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "source-over"; g.clearRect(0, 0, W / 4, H / 4);
+  const X0 = X; X = _cxP; SO_CONT = true; SEM_DESL = !!semDesl;
+  try{ g.setTransform(0.25, 0, 0, 0.25, 0, 0); comPeca(it, it.modelo !== "palco", () => umaPeca(it, t)); }catch(_){} finally { X = X0; SO_CONT = false; SEM_DESL = false; g.setTransform(1, 0, 0, 1, 0, 0); }
+  const w = W / 4, h = H / 4, d = g.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for(let y = 0; y < h; y++){ const o = y * w * 4; for(let x = 0; x < w; x++) if(d[o + x * 4 + 3] > 60){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
+  if(x1 < 0) return null; return { x: x0 * 4, y: y0 * 4, w: (x1 - x0 + 1) * 4, h: (y1 - y0 + 1) * 4 };
+}
+const ativa = (it, t) => t >= it.t0 && (it.modelo === "cta" || t < it.t1);
+API.caixa = function(i, t){ const it = R && R.itens && R.itens[i]; if(!it || !ativa(it, t)) return null; return caixaDe(i, t, false); };
+/* a peça de cima no ponto (x, y) no tempo t (a mesma ordem do desenho, de cima para baixo) → índice ou -1 */
+API.pecaEm = function(x, y, t){
+  const cam = (m) => m === "selo" ? 4 : m === "cta" ? 3 : _EVM_NOVOS.indexOf(m) >= 0 ? 2 : m === "palco" ? 0 : 1;
+  const L = (R && R.itens || []).map((it, i) => i).filter((i) => ativa(R.itens[i], t)).sort((a, b) => cam(R.itens[b].modelo) - cam(R.itens[a].modelo) || b - a);
+  for(const i of L){ const c = caixaDe(i, t, false); if(c && x >= c.x - 14 && x <= c.x + c.w + 14 && y >= c.y - 14 && y <= c.y + c.h + 14) return i; }
+  return -1; };
+/* até onde a peça pode andar sem sair da área segura (65 dos lados, 270 em cima, 670 embaixo): caixa no lugar padrão, juntando 3 momentos da peça */
+API.limites = function(i){
+  const it = R && R.itens && R.itens[i]; if(!it) return null;
+  const fimP = it.modelo === "cta" ? Math.max(it.t0 + 0.6, (it.marca_t || it.t0) + 1) : it.t1 - 0.34;
+  const ts = it.modelo === "cta" ? [it.t0 + 0.7, fimP] : [it.t0 + 0.7, it.t0 + 1.5, fimP].map((v) => cl(v, it.t0 + 0.05, Math.max(it.t0 + 0.05, fimP)));
+  let b = null; ts.forEach((tt) => { const c = caixaDe(i, tt, true); if(c) b = b ? { x: Math.min(b.x, c.x), y: Math.min(b.y, c.y), w: Math.max(b.x + b.w, c.x + c.w) - Math.min(b.x, c.x), h: Math.max(b.y + b.h, c.y + c.h) - Math.min(b.y, c.y) } : c; });
+  if(!b) return { x0: 0, x1: 0, y0: 0, y1: 0, caixa: null };
+  return { x0: Math.min(0, SAFE.lado - b.x) / W, x1: Math.max(0, W - SAFE.lado - b.x - b.w) / W, y0: Math.min(0, SAFE.topo - b.y) / H, y1: Math.max(0, SAFE.base - b.y - b.h) / H, caixa: b }; };
+
 /* ── API do Estúdio ──
    preparar(ctx, mot, info): roteiro + dados do vídeo (marca, palavras da legenda, fim do vídeo, logo, nome)
    palco(ctx, tela, t): se um palco está ativo, troca a tela pelo fundo + infográfico + a tela atual dentro do quadro → {card, s} ou null
@@ -123207,7 +123265,7 @@ API.palco = function(ctx, tela, t){
   if(!_snap) _snap = document.createElement("canvas"); if(_snap.width !== W) _snap.width = W; if(_snap.height !== H) _snap.height = H;
   const sx = _snap.getContext("2d"); sx.setTransform(1, 0, 0, 1, 0, 0); sx.globalAlpha = 1; sx.globalCompositeOperation = "source-over"; sx.clearRect(0, 0, W, H); sx.drawImage(tela, 0, 0, W, H);
   X.save(); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1; X.globalCompositeOperation = "source-over";     // o fundo do palco é opaco: cobre a tela toda
-  const r = palco(p, t, _snap); X.restore(); return r || null;
+  const r = comPeca(p, false, () => palco(p, t, _snap)); X.restore(); return r || null;     // v38: cor e lugar da peça
 };
 API.escondeLegenda = function(t){
   return R.itens.some((i) => (i.modelo === "kinetic" || i.modelo === "tarja") && t >= i.t0 - 0.05 && t < i.t1) || R.itens.some((i) => i.modelo === "cta" && t >= i.t0)
@@ -123216,12 +123274,13 @@ API.escondeLegenda = function(t){
 };
 API.sobre = function(ctx, t, emPalco){
   X = ctx; X.save(); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1; X.globalCompositeOperation = "source-over";
-  R.itens.forEach((it) => { if(it.modelo === "manchete") manchete(it, t); if(it.modelo === "tarja") tarja(it, t); if(it.modelo === "kinetic") kinetic(it, t); });
-  R.itens.forEach((it) => { if(it.modelo === "numero") numero(it, t); if(it.modelo === "lista") lista(it, t); if(it.modelo === "antesdepois") antesdepois(it, t); if(it.modelo === "citacao") citacao(it, t); });   // v34
-  R.itens.forEach((it) => { if(it.modelo === "selo") selo(it, t); });                                  // v34: o selo fica por cima
+  const des = (it) => comPeca(it, true, () => umaPeca(it, t));                                         // v38: cada peça no seu lugar e na sua cor
+  R.itens.forEach((it) => { if(it.modelo === "manchete" || it.modelo === "tarja" || it.modelo === "kinetic") des(it); });
+  R.itens.forEach((it) => { if(_EVM_ESCONDE.indexOf(it.modelo) >= 0) des(it); });                     // v34: numero, lista, antesdepois, citacao
+  R.itens.forEach((it) => { if(it.modelo === "selo") des(it); });                                      // v34: o selo fica por cima
   if(emPalco && emPalco.s > 0.6) legenda(t, { cx: emPalco.card.x + emPalco.card.w / 2, y: emPalco.card.y + emPalco.card.h - 56, tam: 40, maxW: emPalco.card.w - 36 });
-  const ctaIt = R.itens.find((i) => i.modelo === "cta"); if(ctaIt) cta(ctaIt, t);
-  R.itens.forEach((it) => { if(it.modelo === "palco" && it.entrada === "marca") marcaWipe(it.t0, t); });
+  const ctaIt = R.itens.find((i) => i.modelo === "cta"); if(ctaIt) des(ctaIt);
+  R.itens.forEach((it) => { if(it.modelo === "palco" && it.entrada === "marca") comPeca(it, false, () => marcaWipe(it.t0, t)); });
   X.restore();
 };
 API.SAFE = SAFE; API.W = W; API.H = H;
@@ -123299,6 +123358,11 @@ function _evmNormalizar(m, total){
     else if(it.modelo === "antesdepois"){ const rt = S(it.rotulo, 30); if(rt) o.rotulo = rt; o.antes = S(it.antes, 22); o.depois = S(it.depois, 22); if(!o.antes || !o.depois) return; }
     else if(it.modelo === "citacao"){ o.texto = S(it.texto, 90); if(!o.texto) return; const au = S(it.autor, 28); if(au) o.autor = au; }
     else if(it.modelo === "selo"){ o.texto = S(it.texto, 16); if(!o.texto) return; const sb = S(it.sub, 20); if(sb) o.sub = sb; o.pos = it.pos === "meio" ? "meio" : "topo"; }
+    /* v38: lugar arrastado no player (fração da tela; o Estúdio já prende na área segura) e cor só desta peça */
+    const dl = function(v){ if(typeof v !== "number" || !isFinite(v)) return 0; return Math.round(Math.max(-0.5, Math.min(0.5, v)) * 1000) / 1000; };
+    const pdx = dl(it.dx), pdy = dl(it.dy); if(pdx) o.dx = pdx; if(pdy) o.dy = pdy;
+    const pe = (typeof it.esc === "number" && isFinite(it.esc)) ? Math.round(Math.max(0.5, Math.min(2, it.esc)) * 100) / 100 : 1; if(pe !== 1) o.esc = pe;   // v38b: tamanho
+    const pc = typeof it.cor === "string" ? it.cor.trim() : ""; if(/^#[0-9a-fA-F]{6}$/.test(pc)) o.cor = pc.toLowerCase();
     itens.push(o);
   });
   if(!itens.length) return null;
@@ -123333,6 +123397,9 @@ function _evpMotor(canvas, o){
   const evmPalavras = function(){ if(o.semLegenda) return []; if(evmPalDe !== calc.blocos){ evmPalDe = calc.blocos; evmPal = [];
     (calc.blocos || []).forEach(function(b){ (b.words || []).forEach(function(w){ const pz = String(w.p || "").trim(); if(pz) evmPal.push({ p:pz, t0:w.a, t1:w.b }); }); }); } return evmPal; };
   const evmLiga = function(){ return !!(calc.motion && W === 1080 && H === 1920); };
+  /* v38: dados do motion (a paleta de cada peça sai de evmMarcaDe, que guarda pronta por cor) e consultas do player (clicar e arrastar a peça) */
+  const evmInfo = function(){ return { marca:evmMarcaDe(calc.motion.cor), marcaDe:evmMarcaDe, palavras:evmPalavras(), fim:calc.fimCortes, logo:logo, nome:(base && base.nome) || "" }; };
+  const evmUsa = function(fn, nada){ if(!evmLiga() || evmErro) return nada; try{ _EVM.preparar(cx, calc.motion, evmInfo()); return fn(); }catch(_){ return nada; } };
   let evmRefazer = false;
   /* roteiro com defeito: desliga só o motion deste vídeo, desfaz o estado da tela (save/clip que ficaram abertos) e redesenha o quadro limpo */
   const evmFalhou = function(e){ evmErro = true; evmRefazer = true; try{ for(let k = 0; k < 64; k++) cx.restore(); cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
@@ -124121,7 +124188,7 @@ function _evpMotor(canvas, o){
       desenharImagens();
       // v31: motion — o palco troca a tela pelo fundo + infográfico com o vídeo dentro do quadro (antes dos textos, que ficam por cima)
       let mo = evmLiga() && !evmErro, emPalco = null;
-      if(mo){ try{ _EVM.preparar(cx, calc.motion, { marca:evmMarcaDe(calc.motion.cor), palavras:evmPalavras(), fim:calc.fimCortes, logo:logo, nome:(base && base.nome) || "" }); emPalco = _EVM.palco(cx, canvas, t); }
+      if(mo){ try{ _EVM.preparar(cx, calc.motion, evmInfo()); emPalco = _EVM.palco(cx, canvas, t); }
         catch(e){ evmFalhou(e); mo = false; } }
       if(!ocultos) (calc.textos||[]).forEach(function(x0){ if(t < x0.t0 || t > x0.t1) return; const x = _evpTrkAplicar(x0, t, calc, proj); const itG = _evgDoTexto(kit, x); desenharTextoItem(x, itG); });   // v26
       if(atras && !ocultos && !emPalco && recortarPessoa()) cx.drawImage(pessoa, 0, 0);     // a pessoa passa na frente do texto (no palco o vídeo está no quadro)
@@ -124196,6 +124263,9 @@ function _evpMotor(canvas, o){
   return {
     pronto: pronto, ctx: ac,
     get tempo(){ return t; }, get tocando(){ return tocando; }, get caixas(){ return caixas; },
+    motionEm: function(x, y){ return evmUsa(function(){ return _EVM.pecaEm(x, y, t); }, -1); },          // v38: peça de motion no ponto (px da tela)
+    motionCaixa: function(i){ return evmUsa(function(){ return _EVM.caixa(i, t); }, null); },             // v38: onde a peça está agora
+    motionLimites: function(i){ return evmUsa(function(){ return _EVM.limites(i); }, null); },            // v38: quanto pode andar (área segura)
     play: function(){ if(!calc.clips.length) return; if(t >= calc.total - 0.02) t = 0; if(ac.state === "suspended") ac.resume(); agendar(); tocando = true; },
     pause: function(){ segurar(false); tocando = false; pararAudio(); Object.keys(els).forEach(function(k){ try{ els[k].pause(); }catch(_){} }); Object.keys(els2).forEach(function(k){ try{ els2[k].pause(); }catch(_){} }); },
     seek: function(nt){ marcar(); t = _evClamp(Number(nt)||0, 0, calc.total); const i = _evpClipEm(calc, Math.min(t, Math.max(0, calc.fimCortes - 0.001))); if(calc.clips[i]) mirar(calc.clips[i], t); if(tocando) agendar(); },
@@ -125581,7 +125651,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           onMusicasMudou={onMusicasMudou} setFerr={setFerr} pRef={pRef} setP={setP} confirmar={confirmar}
           addImagem={addImagem} addMarca={addMarca} tirarTrechos={tirarTrechos} fala={ed.fala} modelos={modelos} salvarModelo={salvarModelo} aplicarModelo={aplicarModelo}
           voltarTrechos={voltarTrechos} pintarTrechos={pintarTrechos} corrigirTexto={corrigirTexto} addNome={addNome} coresCli={coresCli} nomesKit={nomesKit} clipesTodos={clipes} addTrilha={addTrilha}
-          gerarCapa={gerarCapa} capaUrl={capaUrl} t={t} edId={ed.id} tratandoTudo={Object.keys(medindoAcao).length} trat={trat}
+          gerarCapa={gerarCapa} capaUrl={capaUrl} t={t} edId={ed.id} onRecarregar={onRecarregar} tratandoTudo={Object.keys(medindoAcao).length} trat={trat}
           addSobre={addSobre} addDesfoque={addDesfoque} addForma={addForma} batidas={batidas} encaixarBatida={encaixarBatida} gravarNarracao={gravarNarracao} gravando={gravando} subindoNarr={subindoNarr}
           locucaoIA={locucaoIA} gerandoVoz={gerandoVoz} traduzirLegenda={traduzirLegenda} traduzindo={traduzindo} baixarSrt={baixarSrt} comentarios={comentarios}/>
         <div ref={palcoRef} style={Object.assign({}, _EVP_PAINEL, {background:"radial-gradient(900px 380px at 50% -10%, rgba(139,92,246,.10), transparent 62%), " + _EVP_COR.palco,
@@ -125589,7 +125659,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} comparar={comparar} setComparar={setComparar} lupa={lupa}
             sel={sel} selObj={selObj} enquadrar={enquadrar && sel && sel.tipo === "clip"} pRef={pRef} setP={setP} confirmar={confirmar} tempo={tempo} nome={(base && base.nome) || ""}
             onSelTexto={function(id, tipo){ if(tipo === "legenda"){ let k = calc.blocos.findIndex(function(b){ return tempo >= b.a && tempo < b.b; }); if(k < 0) k = 0; if(calc.blocos.length) setSel({ tipo:"legenda", id:k }); return; } setSel({ tipo:tipo || "texto", id:id }); }}
-            onSemTexto={function(){ if(sel && (sel.tipo === "texto" || sel.tipo === "imagem" || sel.tipo === "legenda")){ setSel(null); return true; } return false; }}
+            onSemTexto={function(){ if(sel && (sel.tipo === "texto" || sel.tipo === "imagem" || sel.tipo === "legenda" || sel.tipo === "motion")){ setSel(null); return true; } return false; }}
+            onSelMotion={p.motion ? function(i){ if(!sel || sel.tipo !== "motion" || sel.id !== i) setSel({ tipo:"motion", id:i }); } : null}
             onMover={function(dx, dy, dz, fim){
               const c = sel && sel.tipo === "clip" && p.clips.find(function(x){ return x.id === sel.id; }); if(!c) return;
               if(fim){ confirmar(fim.anterior, pRef.current); return; }
@@ -127479,7 +127550,7 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
 }
 
 /* ─── visualizador 9:16: clicar num texto seleciona, arrastar move, duplo clique escreve; modo Recortar: arrastar move a imagem, roda = zoom ─── */
-function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel, selObj, enquadrar, onMover, pRef, setP, confirmar, tempo, onSelTexto, onSemTexto, soVer, nome, comparar, setComparar, lupa }){
+function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel, selObj, enquadrar, onMover, pRef, setP, confirmar, tempo, onSelTexto, onSemTexto, soVer, nome, comparar, setComparar, lupa, onSelMotion }){
   const [guia, setGuia] = useState(null);           // v25: guias de centro ao arrastar
   const [pan, setPan] = useState({ x:0.5, y:0.5 });  // v25: lupa — ponto do vídeo no centro
   const z = lupa > 1 ? lupa : 1;
@@ -127489,11 +127560,13 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
   const [caixa, setCaixa] = useState(null);         // caixa do texto selecionado (px do canvas 1080×1920)
   const [escrevendo, setEscrevendo] = useState(null);
   const D = dim || { w:_EV_W, h:_EV_H }, ex = w / D.w, ey = h / D.h;
-  const textoSel = sel && (sel.tipo === "texto" || sel.tipo === "imagem") ? sel.id : sel && sel.tipo === "legenda" ? "legenda" : null;
+  const textoSel = sel && (sel.tipo === "texto" || sel.tipo === "imagem") ? sel.id : sel && sel.tipo === "legenda" ? "legenda" : sel && sel.tipo === "motion" ? "motion:" + sel.id : null;   // v38: + peça de motion
+  const hovT = useRef(0);
   useEffect(function(){
     if(!textoSel){ setCaixa(null); return; }
     const iv = setInterval(function(){ const m = motorRef && motorRef.current; if(!m) return;
-      const c = (m.caixas || []).find(function(x){ return x.id === textoSel; }) || null;
+      const mi = /^motion:/.test(String(textoSel)) ? Number(String(textoSel).slice(7)) : -1;
+      const c = mi >= 0 ? (m.motionCaixa ? m.motionCaixa(mi) : null) : (m.caixas || []).find(function(x){ return x.id === textoSel; }) || null;
       setCaixa(function(a){ return (a && c && Math.abs(a.x - c.x) < 0.5 && Math.abs(a.y - c.y) < 0.5 && Math.abs(a.w - c.w) < 0.5 && Math.abs(a.h - c.h) < 0.5) || (!a && !c) ? a : c; }); }, 120);
     return function(){ clearInterval(iv); };
   }, [textoSel]);
@@ -127519,6 +127592,8 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
       return;
     }
+    const mi = motionNoPonto(e);                     // v38: peça de motion (fica por cima dos textos): seleciona e arrasta
+    if(mi >= 0){ moverMotion(e, mi); return; }
     const hit = acharTexto(e);
     if(!hit){ if(!(onSemTexto && onSemTexto())) tocar(); return; }
     e.preventDefault();
@@ -127556,6 +127631,25 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
     const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); setGuia(null); if(movido && ultimo) confirmar(anterior, ultimo); };
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
   };
+  /* v38: peça de motion no ponto do clique (-1 = nenhuma) */
+  const motionNoPonto = function(e){ const m = motorRef && motorRef.current; if(!onSelMotion || !m || !m.motionEm || !boxRef.current) return -1;
+    const r = boxRef.current.getBoundingClientRect(); return m.motionEm((e.clientX - r.left) / ex, (e.clientY - r.top) / ey); };
+  /* v38: arrastar a peça: guarda o deslocamento (dx, dy em fração da tela) preso na área segura; ímã no lugar padrão; um passo de desfazer */
+  const moverMotion = function(e, mi){
+    e.preventDefault(); onSelMotion(mi);
+    const m = motorRef.current, anterior = pRef.current, it0 = anterior.motion && anterior.motion.itens && anterior.motion.itens[mi]; if(!it0) return;
+    const lim = (m.motionLimites && m.motionLimites(mi)) || { x0:0, x1:0, y0:0, y1:0 };
+    const x0 = e.clientX, y0 = e.clientY, dx0 = _evpNum(it0.dx, 0), dy0 = _evpNum(it0.dy, 0), r3 = function(v){ return Math.round(v * 1000) / 1000; };
+    let movido = false, ultimo = null;
+    const mv = function(ev){ const ddx = ev.clientX - x0, ddy = ev.clientY - y0; if(!movido && Math.abs(ddx) + Math.abs(ddy) < 4) return; movido = true;
+      const nx = r3(ima(_evClamp(dx0 + ddx / w, lim.x0, lim.x1), 0, 0.012)), ny = r3(ima(_evClamp(dy0 + ddy / h, lim.y0, lim.y1), 0, 0.007));
+      const np = _evpCopia(anterior), o = np.motion.itens[mi]; if(!o) return;
+      if(nx) o.dx = nx; else delete o.dx; if(ny) o.dy = ny; else delete o.dy;
+      setGuia({ v:!nx && dx0 !== 0, h:false }); ultimo = np; setP(np); };
+    const up = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); setGuia(null);
+      if(movido && ultimo) confirmar(anterior, ultimo); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
   const duplo = function(e){ if(soVer || enquadrar) return; const hit = acharTexto(e); if(!hit || hit.tipo === "imagem" || hit.tipo === "legenda") return; const o = pRef.current.textos.find(function(q){ return q.id === hit.id; }); if(!o) return;
     onSelTexto(hit.id); setEscrevendo({ id:hit.id, caixa:hit, anterior:pRef.current, valor:o.texto }); };
   const fecharEscrita = function(salvar){
@@ -127577,13 +127671,15 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
   rodaRef.current = roda;
   useEffect(function(){ const b = boxRef.current; if(!b) return; const h2 = function(e){ rodaRef.current(e); }; b.addEventListener("wheel", h2, { passive:false }); return function(){ b.removeEventListener("wheel", h2); }; }, []);
   const [hover, setHover] = useState(false);
-  const mvHover = function(e){ if(soVer || enquadrar) return; const on = !!acharTexto(e); if(on !== hover) setHover(on); };
+  const mvHover = function(e){ if(soVer || enquadrar) return; let on = !!acharTexto(e);
+    if(!on && onSelMotion){ const ag = Date.now(); if(ag - hovT.current < 90) return; hovT.current = ag; on = motionNoPonto(e) >= 0; }   // v38: mãozinha em cima da peça de motion
+    if(on !== hover) setHover(on); };
   // v10: área segura do Instagram por cima da prévia (ligada no menu Legenda)
   const [areaSegura, setAreaSegura] = useState(function(){ try{ return localStorage.getItem("pxev-area-segura") === "1"; }catch(_){ return false; } });
   useEffect(function(){ const f = function(){ try{ setAreaSegura(localStorage.getItem("pxev-area-segura") === "1"); }catch(_){} }; window.addEventListener("pxev-area-segura", f); return function(){ window.removeEventListener("pxev-area-segura", f); }; }, []);
   return (
     <div ref={boxRef} style={{position:"relative",width:w,height:h,borderRadius:16,overflow:"hidden",background:"#000",
-        boxShadow:"0 0 0 1px rgba(15,23,42,.08), 0 20px 50px -24px rgba(49,46,129,.55)",cursor:enquadrar && sel ? "move" : hover ? "grab" : "pointer"}}
+        boxShadow:"0 0 0 1px rgba(15,23,42,.08), 0 20px 50px -24px rgba(49,46,129,.55)",cursor:enquadrar && sel ? "move" : hover ? "grab" : "pointer",touchAction:soVer ? "auto" : "none"}}
       onPointerDown={down} onDoubleClick={duplo} onPointerMove={mvHover}>
       <canvas ref={cvRef} width={D.w} height={D.h} style={{width:"100%",height:"100%",display:"block",transformOrigin:"0 0",
         transform:z > 1 ? "translate(" + Math.round(w * (0.5 - pan.x * z)) + "px," + Math.round(h * (0.5 - pan.y * z)) + "px) scale(" + z + ")" : "none"}}/>
@@ -127596,7 +127692,7 @@ function _EvpViewer({ cvRef, motorRef, w, h, dim, tocar, tocando, esperando, sel
       {caixa && !escrevendo && z === 1 && (
         <div style={{position:"absolute",left:caixa.x*ex - 4,top:caixa.y*ey - 4,width:caixa.w*ex + 8,height:caixa.h*ey + 8,border:"1.5px solid #fff",borderRadius:8,
           boxShadow:"0 0 0 1.5px " + _EVP_COR.roxo + ", 0 0 18px rgba(124,58,237,.6)",pointerEvents:"none"}}>
-          <span style={{position:"absolute",left:0,top:caixa.y*ey > 30 ? -22 : caixa.h*ey + 12,background:_EVP_COR.roxo,color:"#fff",fontSize:10,fontWeight:800,borderRadius:6,padding:"2px 6px",whiteSpace:"nowrap"}}>{sel && sel.tipo === "imagem" ? "arraste para mover · roda do mouse = tamanho" : sel && sel.tipo === "legenda" ? "arraste para mover a legenda" : "arraste para mover · duplo clique para escrever"}</span>
+          <span style={{position:"absolute",left:0,top:caixa.y*ey > 30 ? -22 : caixa.h*ey + 12,background:_EVP_COR.roxo,color:"#fff",fontSize:10,fontWeight:800,borderRadius:6,padding:"2px 6px",whiteSpace:"nowrap"}}>{sel && sel.tipo === "imagem" ? "arraste para mover · roda do mouse = tamanho" : sel && sel.tipo === "legenda" ? "arraste para mover a legenda" : sel && sel.tipo === "motion" ? "arraste para mover a peça" : "arraste para mover · duplo clique para escrever"}</span>
         </div>
       )}
       {escrevendo && (
@@ -127781,6 +127877,22 @@ function _EvpPainelMenu(q){
   const muletas = useMemo(function(){ return _evpMuletas(p, q.fala); }, [p.clips, q.fala]);
   const figs = useMemo(function(){ return _evpFigurinhas(kit.cor_principal); }, [kit.cor_principal]);
   const fotosC = useMemo(function(){ return _evpFotosDoCard(q.t && q.t.files); }, [q.t && q.t.files]);     // v37: fotos do card
+  /* v38: vídeo anexado no card DEPOIS da preparação — entra na edição com 1 clique (sem refazer nada) */
+  const novosVid = useMemo(function(){ const tem = {}; (clipes || []).forEach(function(c){ if(c){ tem[c.id] = 1; if(c.url) tem[c.url] = 1; } });
+    return _evBrutos(q.t).filter(function(f){ return !tem[f.id] && !tem[f.url]; }); }, [q.t && q.t.files, clipes]);
+  const [incluindo, setIncluindo] = useState(null);
+  const incluirVideo = async function(f){
+    if(incluindo || !q.edId || !window._sb) return; setIncluindo(f.id);
+    try{
+      const dur = await _evDuracao(f.previewUrl || f.url);
+      if(!(dur > 0)) throw new Error("não consegui ler a duração deste vídeo");
+      const r = await window._sb.rpc("criacao_edicao_clipe_incluir", { p_id:q.edId, p_clipe:{ id:f.id, nome:f.name || "Vídeo", url:f.url, preview_url:f.previewUrl || null, duracao:Math.round(dur * 1000) / 1000 } });
+      if(r.error) throw new Error(r.error.message || "erro");
+      _evToast("success", "\"" + (f.name || "Vídeo") + "\" entrou na edição — está nos Brutos do card");
+      if(q.onRecarregar) q.onRecarregar();
+    }catch(e){ _evToast("error", "Não deu para incluir: " + (e && e.message ? e.message : e)); }
+    setIncluindo(null);
+  };
   const usadasF = {}; (p.imagens || []).forEach(function(x){ if(x && x.url) usadasF[x.url] = (usadasF[x.url] || 0) + 1; });
   const [pondoFotos, setPondoFotos] = useState(false);
   const fotosNaFala = async function(){ if(pondoFotos) return; setPondoFotos(true);
@@ -127838,6 +127950,15 @@ function _EvpPainelMenu(q){
             </div>; })}
         </div>
         <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:10,lineHeight:1.5}}>Clique no vídeo para pôr na linha do tempo, depois do clipe da agulha. O ícone de camadas põe o vídeo por cima (vídeo sobre vídeo).</div>
+        {novosVid.length > 0 && (<div data-videos-novos="1">
+          <div style={_EVP_TIT}>Vídeos novos no card ({novosVid.length})</div>
+          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginBottom:6,lineHeight:1.5}}>Anexados no card depois que a edição foi preparada. Clique em Incluir: o vídeo entra nos Brutos do card e já dá para pôr na linha do tempo ou por cima.</div>
+          {novosVid.map(function(f){ return <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",borderRadius:10,border:"1px solid "+_EVP_COR.linha,background:_EVP_COR.campo,marginBottom:6}}>
+            <span style={{color:_EVP_COR.roxo,display:"grid"}}><_EvpIco n="camadas" s={16}/></span>
+            <span style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={f.name || ""}>{f.name || "Vídeo"}{Number(f.size) > 0 ? <span style={{color:_EVP_COR.fraco,fontWeight:500}}> · {Math.round(Number(f.size) / 1048576 * 10) / 10} MB</span> : null}</span>
+            <button onClick={function(){ incluirVideo(f); }} disabled={incluindo != null} aria-label={"Incluir " + (f.name || "vídeo") + " na edição"} style={_evpBtn(incluindo === f.id ? null : "suave", incluindo == null)}>{incluindo === f.id ? "Incluindo…" : "Incluir na edição"}</button>
+          </div>; })}
+        </div>)}
         {fotosC.length > 0 && (<div data-fotos-card="1">
           <div style={_EVP_TIT}>Fotos do card ({fotosC.length}) · {fotosC.filter(function(f){ return usadasF[f.url]; }).length} no vídeo</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -129445,8 +129566,9 @@ function _EvmPainel(q){
   if(!evm) return <div>{cab}</div>;
   const mo = evm.mo, gd = evm.guardado, atual = mo || gd, itens = (atual && atual.itens) || [], estilo = (atual && atual.estilo) || "editorial";
   const corKit = /^#[0-9a-fA-F]{6}$/.test(String(kit.cor_principal || "")) ? String(kit.cor_principal).toLowerCase() : "#7c3aed", cor = (atual && atual.cor) || null, corVer = cor || corKit;
-  const paleta = [kit.cor_principal, kit.cor_secundaria, kit.cor_texto].concat(Array.isArray(kit.cores) ? kit.cores : []).map(function(c){ return String(c || "").toLowerCase(); })
-    .filter(function(c, k, a){ return /^#[0-9a-f]{6}$/.test(c) && a.indexOf(c) === k && c !== corKit && c !== "#ffffff" && c !== "#000000"; }).slice(0, 6);
+  const paleta = [kit.cor_principal, kit.cor_secundaria, kit.cor_texto].concat(Array.isArray(kit.cores) ? kit.cores : []).map(function(c){ return String(c || "").toLowerCase(); }).concat(["#1eda62"])   // v38: + verde
+    .filter(function(c, k, a){ return /^#[0-9a-f]{6}$/.test(c) && a.indexOf(c) === k && c !== corKit && c !== "#ffffff" && c !== "#000000"; }).slice(0, 7);
+  const nProprias = itens.filter(function(x){ return !!x.cor; }).length;          // v38: peças com cor própria não seguem a cor do vídeo
   const fazendo = evm.ia && evm.ia.estado === "fazendo", erroIA = evm.ia && evm.ia.estado === "erro";
   const linhaBtn = { font:"inherit", width:"100%", display:"flex", alignItems:"center", gap:9, textAlign:"left", padding:"8px 10px", borderRadius:10, border:"1px solid " + _EVP_COR.linha,
     background:_EVP_COR.campo, fontWeight:700, fontSize:12.5, cursor:"pointer", marginBottom:6, color:_EVP_COR.ink };
@@ -129493,16 +129615,21 @@ function _EvmPainel(q){
       </div>
       <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>{(_EVM_ESTILOS.find(function(e){ return e.id === estilo; }) || {}).desc}</div>
 
-      <div style={_EVP_TIT}>Cor</div>
+      <div style={_EVP_TIT}>Cor do vídeo inteiro</div>
+      <div data-evm-cor-video="1" style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:11,border:"1.5px solid " + _EVP_COR.linha,background:_EVP_COR.campo,marginBottom:7}}>
+        <span style={{width:30,height:30,borderRadius:9,background:corVer,boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)",flexShrink:0}}/>
+        <span style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,color:_EVP_COR.ink}}>{cor ? "Escolhida para este vídeo" : "Cor do cliente (kit)"}
+          <span style={{display:"block",fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.sub,fontWeight:600}}>{corVer}{nProprias ? " · " + nProprias + (nProprias === 1 ? " peça com cor própria" : " peças com cor própria") : " · todas as peças"}</span></span></div>
       <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
         <button onClick={function(){ escolherCor(null); }} aria-pressed={!cor} aria-label="Cor do cliente" title={"Cor do kit: " + corKit} style={Object.assign(_evpChip(!cor && !!atual), {padding:"4px 9px 4px 5px",fontSize:11.5})}>
           <span style={{width:16,height:16,borderRadius:99,background:corKit,boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}}/>Cor do cliente</button>
-        {paleta.map(function(c){ const on = cor === c; return <button key={c} onClick={function(){ escolherCor(c); }} aria-label={"Cor " + c} title={"Do kit: " + c}
+        {paleta.map(function(c){ const on = cor === c; return <button key={c} onClick={function(){ escolherCor(c); }} aria-label={"Cor " + c} title={c === "#1eda62" ? "Verde " + c : "Do kit: " + c}
           style={{width:24,height:24,borderRadius:99,padding:0,cursor:"pointer",background:c,border:"2px solid " + (on ? _EVP_COR.roxo : "rgba(15,23,42,.18)"),boxShadow:on ? "0 0 0 2px rgba(124,58,237,.25)" : "none"}}/>; })}
         <label title="Escolher outra cor" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,cursor:"pointer"}}>
           <input type="color" aria-label="Outra cor do motion" value={corVer} onChange={function(e){ escolherCor(e.target.value); }} style={{width:30,height:26,border:0,padding:0,background:"none",cursor:"pointer"}}/>Outra</label>
       </div>
       {cor && <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>Só neste vídeo: <b style={{fontFamily:_EVP_MONO,color:_EVP_COR.ink}}>{cor}</b>. "Cor do cliente" volta para a cor do kit.</div>}
+      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>Vale para as peças sem cor própria. Para uma peça só: clique nela e use "Cor desta peça" no painel da direita.</div>
 
       <div style={_EVP_TIT}>Peças ({itens.length}){gd ? " · desligado" : ""}</div>
       {itens.map(function(it, i){ const tp = _EVM_TIPOS[it.modelo] || {}, on = q.sel && q.sel.tipo === "motion" && q.sel.id === i && !!mo;
@@ -129614,8 +129741,41 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
         {flx.passos.length < 3 && <button onClick={function(){ evm.mudarPeca(i, md("fluxo", function(d, o){ d.passos.push({ icone:"sparkles", titulo:"PASSO " + (d.passos.length + 1), sub:"exemplo", t:Math.min(o.t1 - 0.2, o.t0 + 0.6 + d.passos.length * 0.6) }); })); }} style={Object.assign(_evpBtn(), {padding:"5px 10px",fontSize:11.5})}><_EvpIco n="mais" s={13}/>Mais uma etapa</button>}</div>}
     </div>;
   }
+  /* v38: lugar (arrastado no player) e cor só desta peça */
+  const kit = evm.kit || {}, hx = function(c){ c = String(c || "").trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(c) ? c : ""; };
+  const corKit = hx(kit.cor_principal) || "#7c3aed", corVideo = (evm.mo && hx(evm.mo.cor)) || corKit, corPeca = hx(it.cor);
+  const coresKit = [kit.cor_principal, kit.cor_secundaria, kit.cor_texto].concat(Array.isArray(kit.cores) ? kit.cores : []).map(hx).concat(["#1eda62"])
+    .filter(function(c, k, a){ return c && a.indexOf(c) === k && c !== "#ffffff" && c !== "#000000"; }).slice(0, 8);
+  const porCor = function(c){ evm.mudarPeca(i, function(o){ if(c) o.cor = c; else delete o.cor; }); };
+  const movida = !!(it.dx || it.dy || (it.esc && it.esc !== 1)), pct = function(v, L){ return Math.round(Math.abs(v || 0) * L) + " px"; };
+  const escAtual = (typeof it.esc === "number" && isFinite(it.esc)) ? Math.max(0.5, Math.min(2, it.esc)) : 1;
+  const porEsc = function(v){ v = Math.round(Math.max(0.5, Math.min(2, Number(v) || 1)) * 100) / 100; evm.mudarPeca(i, function(o){ if(v === 1) delete o.esc; else o.esc = v; }); };
+  const lugarCor = ferr === "tempo" ? null : <div data-evm-lugarcor="1">
+    <div style={_EVP_TIT}>Lugar na tela</div>
+    <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:6,lineHeight:1.45}}>{movida ? <span>Arrastada {it.dx ? (it.dx > 0 ? "→ " : "← ") + pct(it.dx, 1080) : ""}{it.dx && it.dy ? " · " : ""}{it.dy ? (it.dy > 0 ? "↓ " : "↑ ") + pct(it.dy, 1920) : ""} do lugar padrão.</span> : "No lugar padrão. Arraste a peça no vídeo (mouse ou dedo) para mudar de lugar: ela não sai da área segura."}
+      {it.modelo === "palco" ? " No palco, só os textos e o infográfico andam (o quadro do vídeo fica no lugar)." : ""}</div>
+    <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0 8px"}}>
+      <span style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,width:62}}>Tamanho</span>
+      <input type="range" min={50} max={200} step={5} value={Math.round(escAtual * 100)} aria-label="Tamanho da peça" onChange={function(e){ porEsc(Number(e.target.value) / 100); }} style={{flex:1}}/>
+      <span style={{fontSize:11.5,fontFamily:_EVP_MONO,width:44,textAlign:"right"}}>{Math.round(escAtual * 100)}%</span>
+    </div>
+    <button onClick={function(){ evm.mudarPeca(i, function(o){ delete o.dx; delete o.dy; delete o.esc; }); }} disabled={!movida} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px",opacity:movida ? 1 : .5})}><_EvpIco n="mover" s={13}/>Voltar ao lugar</button>
+    <div style={_EVP_TIT}>Cor desta peça</div>
+    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+      <button onClick={function(){ porCor(null); }} aria-pressed={!corPeca} aria-label="Cor do vídeo" title={"A cor do vídeo inteiro: " + corVideo} style={Object.assign(_evpChip(!corPeca), {padding:"4px 9px 4px 5px",fontSize:11.5})}>
+        <span style={{width:16,height:16,borderRadius:99,background:corVideo,boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}}/>Cor do vídeo</button>
+      {coresKit.map(function(c){ const on = corPeca === c; return <button key={c} onClick={function(){ porCor(c); }} aria-pressed={on} aria-label={"Cor da peça " + c} title={c === "#1eda62" ? "Verde " + c : "Do kit: " + c}
+        style={{width:24,height:24,borderRadius:99,padding:0,cursor:"pointer",background:c,border:"2px solid " + (on ? _EVP_COR.roxo : "rgba(15,23,42,.18)"),boxShadow:on ? "0 0 0 2px rgba(124,58,237,.25)" : "none"}}/>; })}
+      <label title="Outra cor" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,cursor:"pointer"}}>
+        <input type="color" aria-label="Outra cor da peça" value={corPeca || corVideo} onChange={function(e){ porCor(hx(e.target.value)); }} style={{width:30,height:26,border:0,padding:0,background:"none",cursor:"pointer"}}/>Outra</label>
+      <input key={k0 + "hex" + (corPeca || "")} defaultValue={corPeca} placeholder="#1eda62" maxLength={7} aria-label="Cor da peça em hex" onKeyDown={function(e){ e.stopPropagation(); if(e.key === "Enter") e.currentTarget.blur(); }}
+        onBlur={function(e){ const v0 = String(e.target.value || "").trim(), v = hx(v0.charAt(0) === "#" ? v0 : "#" + v0); if(!v0 || v === corPeca) return; if(!v){ e.target.value = corPeca; _evToast("warning", "Cor inválida: use #rrggbb (ex.: #1eda62)."); return; } porCor(v); }}
+        style={{font:"inherit",width:84,padding:"5px 7px",borderRadius:8,border:"1px solid " + _EVP_COR.linha,fontFamily:_EVP_MONO,fontSize:11.5,background:_EVP_COR.campo,color:_EVP_COR.ink,userSelect:"text"}}/>
+    </div>
+    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>{corPeca ? <span>Só esta peça: <b style={{fontFamily:_EVP_MONO,color:_EVP_COR.ink}}>{corPeca}</b>. "Cor do vídeo" volta para a cor do vídeo inteiro.</span> : "Segue a cor do vídeo inteiro (menu Motion)."}</div>
+  </div>;
   return (
-    <div style={caixa} data-evm-inspetor={it.modelo}>{cab}{corpo}
+    <div style={caixa} data-evm-inspetor={it.modelo}>{cab}{corpo}{lugarCor}
       <div style={{display:"flex",gap:6,marginTop:14,paddingTop:10,borderTop:"1px solid " + _EVP_COR.linha2}}>
         <button onClick={function(){ evm.irPara(it.t0 + Math.min(0.8, (it.t1 - it.t0) / 2)); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}><_EvpIco n="play" s={13}/>Ver</button>
         <button onClick={function(){ evm.duplicar(i); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}><_EvpIco n="duplicar" s={13}/>Duplicar</button>
