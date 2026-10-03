@@ -125213,7 +125213,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     }catch(e){ _evToast("error", "A capa foi gerada, mas não subiu: " + ((e && e.message) || e)); }
   };
   const addSfx = function(tipo, nome){ const id = _evpId(), url = /^url:/.test(String(tipo)) ? String(tipo).slice(4) : null;     // v24: importado e ambiente
-    mudar(function(np){ np.sfx.push(Object.assign({ id:id, tipo:url ? "importado" : tipo, t0:tempo, vol:_EVP_SFX_AMB[tipo] ? 0.5 : 0.8 }, url ? { url:url, nome:String(nome || "Som").slice(0, 40) } : {}, _EVP_SFX_AMB[tipo] ? { dur:6 } : {})); }); setSel({ tipo:"sfx", id:id }); };
+    mudar(function(np){ np.sfx.push(Object.assign({ id:id, tipo:url ? "importado" : tipo, t0:tempo, vol:_EVP_SFX_AMB[tipo] ? 0.5 : 0.8 }, url ? { url:url, nome:String(nome || "Som").slice(0, 40) } : {}, _EVP_SFX_AMB[tipo] ? { dur:6 } : {})); }); setSel({ tipo:"sfx", id:id });
+    /* v39.1: som importado — já carrega o áudio (toca na 1ª vez) e mede a duração (o bloco na linha do tempo fica do tamanho certo) */
+    if(url){ try{ const AC = window.AudioContext || window.webkitAudioContext; window.__pxAcSfx = window.__pxAcSfx || new AC(); const it = _evpSfxUrl(window.__pxAcSfx, url);
+      (it.prom || Promise.resolve(it)).then(function(o){ const d = o && o.buf ? Math.round(o.buf.duration * 100) / 100 : 0; if(!(d > 0)) return;
+        mudar(function(np){ const x = (np.sfx || []).find(function(q){ return q.id === id; }); if(x && !(_evpNum(x.dur, 0) > 0)) x.dur = d; }); }); }catch(_){} } };
   const setMusica = function(id){ mudar(function(np){ np.musica = id ? Object.assign({ vol:0.15, mudo:false, t0:0, ini:0, duck:true, fadeIn:0.5, fadeOut:1.5 }, np.musica || {}, { id:id, licenca_ok:false }) : null; }); setSel(id ? { tipo:"musica", id:"m" } : null); };
 
   /* ─── FASE C: vídeo por cima, desfocar área, corte no ritmo, narração, locução da IA, legenda traduzida, .srt ─── */
@@ -129312,7 +129316,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
             <div style={Object.assign(faixaEstilo("sfx"), fx.sfx && fx.sfx.mudo ? { opacity:.45 } : {})} onPointerDown={fundo}>
               {(p.sfx||[]).map(function(x){ const lb = (_EVP_SFX.find(function(q){ return q.id === x.tipo; }) || {}).label || x.tipo;
                 return <div key={x.id} title={lb} onPointerDown={function(e){ moverSfx(e, x); }} onContextMenu={function(e){ menuCtx(e, "sfx", x.id); }}
-                  style={Object.assign(bloco(_EVP_COR.sfx, ehSel("sfx", x.id)), { left:x.t0*pxs, width:Math.max(24, (_evpNum(x.dur, 0) > 0 ? x.dur : _EVP_SFX_AMB[x.tipo] ? 6 : _evpDurSfx(x.tipo))*pxs), padding:"0 4px" }, x.off ? _EVP_OFF : {})}><_EvpIco n="efeitos" s={12}/>{x.nome || lb}</div>; })}
+                  style={Object.assign(bloco(_EVP_COR.sfx, ehSel("sfx", x.id)), { left:x.t0*pxs, width:Math.max(24, (_evpNum(x.dur, 0) > 0 ? x.dur / Math.max(0.5, Math.min(2, _evpNum(x.vel, 1))) : _EVP_SFX_AMB[x.tipo] ? 6 : (x.url && _evpSfxUrls[x.url] && _evpSfxUrls[x.url].buf ? _evpSfxUrls[x.url].buf.duration : _evpDurSfx(x.tipo)))*pxs), padding:"0 4px" }, x.off ? _EVP_OFF : {})}><_EvpIco n="efeitos" s={12}/>{x.nome || lb}</div>; })}
               {/* v34: sons automáticos (só mostram, tracejados; trocar/desligar no menu Efeitos) */}
               {(calc.sfxAuto || []).map(function(x){ const lb = (_EVP_SFX.find(function(q){ return q.id === x.tipo; }) || {}).label || x.tipo;
                 return <div key={"auto" + x.chave} data-sfx-auto={x.tipo} style={Object.assign(bloco(_EVP_COR.sfx, false), { left:x.t0*pxs, width:Math.max(12, x.dur*pxs), padding:"0 3px", background:"transparent", border:"1.5px dashed " + _EVP_COR.sfx, color:_EVP_COR.sfx, opacity:.75, pointerEvents:"none", zIndex:0 })}>{x.dur*pxs > 46 ? lb : ""}</div>; })}
@@ -131078,7 +131082,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           {x.camada === "video" && !x.cheia && (<div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>{/* v39: velocidade por trecho — divide na agulha e acelera só um pedaço */}
             <button onClick={function(){ const T = tempo; if(!(T > x.t0 + 0.1 && T < x.t1 - 0.1)){ _evToast("warning", "Leve a agulha para dentro deste vídeo por cima (não nas pontas)."); return; }
                 mudar(function(np){ const o = (np.imagens || []).find(function(q){ return q.id === x.id; }); if(!o) return; const vx = _evpNum(o.vel, 1) || 1;
-                  const b = Object.assign(_evpCopia(o), { id:_evpId(), t0:T, ini:_evpNum(o.ini, 0) + (T - o.t0) * vx, anim:"nenhuma" }); o.t1 = T; np.imagens.push(b); }); _evToast("success", "Dividido na agulha: mude a velocidade de cada pedaço"); }}
+                  const b = Object.assign(_evpCopia(o), { id:_evpId(), t0:T, ini:_evpNum(o.ini, 0) + (T - o.t0) * vx, anim:"nenhuma" }); o.t1 = T; o.saida = "corte"; np.imagens.push(b); }); /* v39.1: corte seco dos 2 lados */ _evToast("success", "Dividido na agulha: mude a velocidade de cada pedaço"); }}
               style={_evpBtn("suave")}><_EvpIco n="dividir" s={14}/>Dividir na agulha</button>
             <span style={{fontSize:11,color:_EVP_COR.fraco}}>Divida e acelere só um pedaço.</span></div>)}
           {x.camada === "video" && <_EvpSlider ctl={ctl} rotulo={x.cheia ? "Velocidade do apoio" : "Velocidade (o som acompanha)"} v={_evpNum(x.vel, 1)} min={x.cheia ? 0.5 : 0.25} max={x.cheia ? 2 : 4} step={0.05} fmt={function(v){ return (Math.round(v * 100) / 100) + "×"; }} padrao={1} aplicar={ni(function(o, v){ o.vel = v; })}/>}
