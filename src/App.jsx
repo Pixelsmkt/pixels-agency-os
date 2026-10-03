@@ -115673,6 +115673,7 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v39 (03/10/2026): VELOCIDADE POR TRECHO — vídeo por cima: "Dividir na agulha" + Velocidade 0,25–4× (o som acompanha); efeito sonoro com Velocidade 0,5–2×.
    v38 (03/10/2026): MOTION NA MÃO — arrastar cada peça com o mouse/dedo (dx/dy, presa na área segura), TAMANHO por peça (50–200%), "Voltar ao
      lugar", COR por peça no inspetor · Mídia: "Vídeos novos no card" → INCLUIR NA EDIÇÃO (rpc criacao_edicao_clipe_incluir).
    v37 (03/10/2026): FOTOS DO CARD no painel Mídia (todas as imagens do card, de qualquer seção): "+ por cima" e "Tela cheia" · botão "Pôr as fotos na
@@ -120715,7 +120716,7 @@ function _evpNormalizar(p, clipes){
     o.t0 = Math.max(0, _evpNum(o.t0,0)); o.t1 = Math.max(o.t0 + 0.2, _evpNum(o.t1, o.t0 + 3));
     if(o.camada === "video"){                  // vídeo sobre vídeo: toca o bruto a partir de "ini" (1x)
       const d = dur[o.clipe] || 9999; o.ini = Math.max(0, Math.min(d - 0.2, _evpNum(o.ini, 0)));
-      o.vel = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1)));                 // v10d: velocidade do vídeo por cima (apoio acelerado ou lento)
+      o.vel = Math.max(0.25, Math.min(4, _evpNum(o.vel, 1)));                // v10d/v39: velocidade do vídeo por cima (0,25–4×)
       o.t1 = Math.min(o.t1, o.t0 + (d - o.ini) / o.vel);
       o.vol = Math.max(0, Math.min(2, _evpNum(o.vol, 1))); o.mudo = o.mudo !== false; o.borda = o.borda !== false; o.cantos = Math.max(0, Math.min(0.5, _evpNum(o.cantos, 0.08)));
       o.anim = o.anim === "pop" ? "aparecer" : o.anim;
@@ -120736,7 +120737,8 @@ function _evpNormalizar(p, clipes){
   p.reenq = p.reenq || {};
   p.foco = (p.foco && typeof p.foco === "object") ? p.foco : {};                                       // v16
   if(p.deitado !== "preencher" && p.deitado !== "encaixar") delete p.deitado;
-  p.sfx = (p.sfx||[]).filter(Boolean).map(function(s){ const o = Object.assign({ id:_evpId(), tipo:"whoosh", t0:0, vol:0.8 }, s); o.canal = Math.max(3, Math.min(10, Math.round(_evpNum(o.canal, 4)))); return o; });
+  p.sfx = (p.sfx||[]).filter(Boolean).map(function(s){ const o = Object.assign({ id:_evpId(), tipo:"whoosh", t0:0, vol:0.8 }, s); o.canal = Math.max(3, Math.min(10, Math.round(_evpNum(o.canal, 4))));
+    const vs = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(vs !== 1) o.vel = Math.round(vs * 100) / 100; else delete o.vel; return o; });   // v39: velocidade do som
   if(p.sfxAuto && typeof p.sfxAuto === "object"){ const a = p.sfxAuto, o = {};                             // v34: sons automáticos (motion e transições)
     if(typeof a.on === "boolean") o.on = a.on; if(a.vol != null) o.vol = Math.max(0, Math.min(2, _evpNum(a.vol, 1)));
     const tr = {}; Object.keys(a.trocas || {}).forEach(function(k){ const v = a.trocas[k]; if(_EVP_SFX_AUTO_CAT.some(function(c){ return c.id === k; }) && (v === "nenhum" || (_EVP_SFX_DUR[v] && !_EVP_SFX_AMB[v]))) tr[k] = v; });
@@ -123566,10 +123568,11 @@ function _evpMotor(canvas, o){
     (calc.imagens||[]).forEach(function(x){
       if(x.camada !== "video" || x.mudo || x.t1 <= t) return;
       const b = o.vozes && o.vozes[x.clipe]; if(!b) return;
-      const ini = Math.max(t, x.t0), off = _evpNum(x.ini, 0) + (ini - x.t0), quando = agora + (ini - t);
+      const vx = _evpNum(x.vel, 1) || 1;                                                                       // v39: som na velocidade do vídeo por cima
+      const ini = Math.max(t, x.t0), off = _evpNum(x.ini, 0) + (ini - x.t0) * vx, quando = agora + (ini - t);
       if(off >= b.duration) return;
-      const s = ac.createBufferSource(); s.buffer = b; const g = ac.createGain(); g.gain.value = _evpNum(x.vol, 1) * ganhoCanal("A1");
-      s.connect(g); g.connect(master); s.start(quando, off, Math.max(0.01, x.t1 - ini)); fontes.push(s);
+      const s = ac.createBufferSource(); s.buffer = b; s.playbackRate.value = vx; const g = ac.createGain(); g.gain.value = _evpNum(x.vol, 1) * ganhoCanal("A1");
+      s.connect(g); g.connect(master); s.start(quando, off, Math.max(0.01, (x.t1 - ini) * vx)); fontes.push(s);
     });
     // música (abaixa sozinha quando tem fala)
     const mu = calc.musica;
@@ -123620,12 +123623,13 @@ function _evpMotor(canvas, o){
       else { const kb = fx.tipo + "#" + (fx.v || 0); if(!sfxBuf[kb]) sfxBuf[kb] = _evpSfxBuffer(ac, fx.tipo, fx.v); buf = sfxBuf[kb]; }   // v34: v = variação
       const fs = (calc.faixas && calc.faixas.sfx) || {};
       const vF = fs.mudo ? 0 : _evpNum(fx.vol, 0.8) * _evpNum(fs.vol, 1) * ganhoCanal("A" + _evpNum(fx.canal, 4));
-      const comeca = Math.max(t, fx.t0), quando = agora + (comeca - t), atraso = comeca - fx.t0, dTot = dTot0 > 0 ? dTot0 : buf.duration, resta = dTot - atraso;
+      const vFx = Math.max(0.5, Math.min(2, _evpNum(fx.vel, 1)));                                              // v39: velocidade do som
+      const comeca = Math.max(t, fx.t0), quando = agora + (comeca - t), atraso = comeca - fx.t0, dTot = dTot0 > 0 ? dTot0 : buf.duration / vFx, resta = dTot - atraso;
       if(resta <= 0.01) return;
-      const s = ac.createBufferSource(); s.buffer = buf; s.loop = amb || (durFx > buf.duration && !!fx.url); const g = ac.createGain();
+      const s = ac.createBufferSource(); s.buffer = buf; s.playbackRate.value = vFx; s.loop = amb || (durFx > buf.duration / vFx && !!fx.url); const g = ac.createGain();
       if(dTot0 > 0){ const fIn = amb ? 0.4 : 0.01; g.gain.setValueAtTime(atraso < fIn ? 0 : vF, quando); if(atraso < fIn) g.gain.linearRampToValueAtTime(vF, quando + (fIn - atraso));
         g.gain.setValueAtTime(vF, quando + Math.max(0.02, resta - 0.35)); g.gain.linearRampToValueAtTime(0, quando + resta); } else g.gain.value = vF;
-      s.connect(g); g.connect(master); s.start(quando, s.loop ? (atraso % buf.duration) : Math.min(atraso, Math.max(0, buf.duration - 0.01))); s.stop(quando + resta + 0.02); fontes.push(s);
+      s.connect(g); g.connect(master); s.start(quando, s.loop ? ((atraso * vFx) % buf.duration) : Math.min(atraso * vFx, Math.max(0, buf.duration - 0.01))); s.stop(quando + resta + 0.02); fontes.push(s);
     });
     // v34: SONS AUTOMÁTICOS (motion e transições) — canal A4, abaixam na fala (pela legenda; sem legenda, pela onda da fala)
     const fsA = (calc.faixas && calc.faixas.sfx) || {};
@@ -131019,6 +131023,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {ferr === "volume" && (<div>
           <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(x.vol, 0.8)} min={0} max={2} step={0.05} fmt={pct} padrao={0.8} aplicar={ns(function(o, v){ o.vol = v; })}/>
           <_EvpSlider ctl={ctl} rotulo="Momento" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={ns(function(o, v){ o.t0 = v; })}/>
+          <_EvpSlider ctl={ctl} rotulo="Velocidade" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} padrao={1} fmt={function(v){ return (Math.round(v * 100) / 100).toString().replace(".", ",") + "×"; }} aplicar={ns(function(o, v){ o.vel = v; })}/>{/* v39 */}
           <_EvpSlider ctl={ctl} rotulo={_EVP_SFX_AMB[x.tipo] ? "Duração (o ambiente repete)" : "Duração (0 = o som inteiro)"} v={_evpNum(x.dur, _EVP_SFX_AMB[x.tipo] ? 6 : 0)} min={0} max={60} step={0.1} fmt={seg} padrao={_EVP_SFX_AMB[x.tipo] ? 6 : 0} aplicar={ns(function(o, v){ if(v > 0.05) o.dur = v; else delete o.dur; })}/>
           <_EvpCanalSel letra="A" valor={_evpNum(x.canal, 4)} min={3} onChange={function(k){ mudar(ns(function(o){ o.canal = k; })); }}/>
         </div>)}
@@ -131070,7 +131075,13 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {(x.camada || "imagem") !== "desfoque" && x.camada !== "ajuste" && x.camada !== "forma" && ferr === "tamanho" && (<div style={{marginBottom:6}}>
           <_EvpInterruptor on={!!x.cheia} onChange={function(v){ mudar(ni(function(o){ if(v){ o.cheia = true; o.x = 0.5; o.y = 0.5; o.escala = 1; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; o.mudo = true; } } else { delete o.cheia; o.escala = 0.35; o.y = 0.3; } })); }}
             label="Apoio em tela cheia" dica="Imagem de apoio (B-roll): cobre a tela toda por cima do vídeo principal; a fala continua por baixo"/>
-          {x.cheia && x.camada === "video" && <_EvpSlider ctl={ctl} rotulo="Velocidade do apoio" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} fmt={function(v){ return (Math.round(v * 100) / 100) + "×"; }} padrao={1} aplicar={ni(function(o, v){ o.vel = v; })}/>}
+          {x.camada === "video" && !x.cheia && (<div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>{/* v39: velocidade por trecho — divide na agulha e acelera só um pedaço */}
+            <button onClick={function(){ const T = tempo; if(!(T > x.t0 + 0.1 && T < x.t1 - 0.1)){ _evToast("warning", "Leve a agulha para dentro deste vídeo por cima (não nas pontas)."); return; }
+                mudar(function(np){ const o = (np.imagens || []).find(function(q){ return q.id === x.id; }); if(!o) return; const vx = _evpNum(o.vel, 1) || 1;
+                  const b = Object.assign(_evpCopia(o), { id:_evpId(), t0:T, ini:_evpNum(o.ini, 0) + (T - o.t0) * vx, anim:"nenhuma" }); o.t1 = T; np.imagens.push(b); }); _evToast("success", "Dividido na agulha: mude a velocidade de cada pedaço"); }}
+              style={_evpBtn("suave")}><_EvpIco n="dividir" s={14}/>Dividir na agulha</button>
+            <span style={{fontSize:11,color:_EVP_COR.fraco}}>Divida e acelere só um pedaço.</span></div>)}
+          {x.camada === "video" && <_EvpSlider ctl={ctl} rotulo={x.cheia ? "Velocidade do apoio" : "Velocidade (o som acompanha)"} v={_evpNum(x.vel, 1)} min={x.cheia ? 0.5 : 0.25} max={x.cheia ? 2 : 4} step={0.05} fmt={function(v){ return (Math.round(v * 100) / 100) + "×"; }} padrao={1} aplicar={ni(function(o, v){ o.vel = v; })}/>}
           {x.cheia && (<div style={{display:"flex",gap:6,marginTop:8}}>{/* v30: transição de entrada e saída do apoio */}
             {[["trIn", "Entrada"], ["trOut", "Saída"]].map(function(q){ return (
               <label key={q[0]} style={{flex:1,minWidth:0,fontSize:11.5,color:_EVP_COR.sub,fontWeight:600}}>{q[1]}
