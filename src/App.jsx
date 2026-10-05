@@ -36163,7 +36163,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
           return(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,boxShadow:"0 4px 16px rgba(15,23,42,0.04)",padding:isMob?"18px 18px":"26px 32px",display:"flex",flexDirection:"column",gap:14,minHeight:"50vh"}}>
             {/* Cabeçalho copy — sem badge "Copy para aprovação" (redundante) */}
-            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:isMob?"wrap":"nowrap",minWidth:0}}>
               {/* (05/10/2026, Gustavo) Copiar link do cartão direto aqui, sem abrir "Ver detalhes do cartão" —
                   mesmo botão da Avaliação de design/vídeo (ao lado do download). order:99 = sempre no canto direito. */}
               <button type="button" title="Copiar link do cartão"
@@ -36175,27 +36175,23 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     if(typeof pixelsToast!=="undefined") pixelsToast.success("Link do cartão copiado!",2500);
                   }catch(e){ try{ window.prompt("Copie o link:",_url); }catch(_){} }
                 }}
-                style={{order:99,marginLeft:"auto",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,height:36,padding:"0 12px",gap:7,color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",fontSize:12,fontWeight:700,whiteSpace:"nowrap",transition:"all .15s"}}
+                style={{order:99,marginLeft:"auto",flexShrink:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,height:36,width:36,padding:0,gap:0,color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",fontSize:12,fontWeight:700,whiteSpace:"nowrap",transition:"all .15s"}}
                 onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
                 onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-                {isMob?null:"Copiar link"}
               </button>
-              {/* (05/10/2026, Gustavo) Caixa da logo com LARGURA FIXA — senão os colaboradores
-                  "pulam" pra esquerda/direita conforme o tamanho da logo de cada cliente. */}
-              <div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,width:isMob?150:200,height:58,boxSizing:"border-box",padding:"7px 14px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {cl?(CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:42,maxWidth:"100%",objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:19,fontWeight:700}}>{cl.abbr}</span>)):null}
-              </div>
-              {/* Unidades Bioter — "grupo"/"brasil" também viram chip (pxBioterUnidades) */}
-              {cl&&cl.id==="bioter"&&(()=>{
-                const sel=(typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit):[];
-                if(sel.length===0)return(<span title="Card da Bioter sem unidade marcada" style={{order:2,background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
-                  <Ico n="map-pin" size={13} color="#92400e"/>Unidade não definida
-                </span>);
-                return <div style={{order:2,display:"inline-flex",flexWrap:"wrap",gap:10}}>{sel.map(u=>(<span key={u.id} title={u.hint} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
-                  <Ico n="map-pin" size={13} color={u.color}/>{u.label}
-                  {u.grupo&&<span style={{background:u.color,color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{u.grupo}</span>}
-                </span>))}</div>;
+              {/* (05/10/2026, Gustavo) Caixa da logo com TAMANHO FIXO — "essas seções de cima não é pra
+                  ficarem mudando conforme a arte e o nome da empresa". A unidade da Bioter vai DENTRO
+                  da caixa (linha pequena embaixo da logo), em vez de um chip solto que empurrava tudo. */}
+              {(()=>{
+                const _bio=cl&&cl.id==="bioter";
+                const _uns=_bio&&(typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit):[];
+                return(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,width:150,height:58,boxSizing:"border-box",padding:"5px 10px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,flexShrink:0,overflow:"hidden"}}>
+                  {cl?(CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:_bio?28:42,maxWidth:"100%",objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:_bio?15:19,fontWeight:700}}>{cl.abbr}</span>)):null}
+                  {_bio&&(_uns.length===0
+                    ? <span title="Card da Bioter sem unidade marcada" style={{display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%",fontSize:10.5,fontWeight:800,color:"#b45309",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><Ico n="map-pin" size={10} color="#b45309"/>Unidade não definida</span>
+                    : <span title={_uns.map(u=>u.label+(u.grupo?" ("+u.grupo+")":"")).join(", ")} style={{display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%",fontSize:10.5,fontWeight:800,color:_uns[0].color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><Ico n="map-pin" size={10} color={_uns[0].color}/><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{_uns.map(u=>u.label).join(" · ")}</span></span>)}
+                </div>);
               })()}
               {/* Responsáveis — clique abre a grade com a foto de cada um (15/09/2026).
                    Mesma lista do cartão (`_cardPodeSerResp`) e mesmo `ensureSupervisors`,
@@ -36230,11 +36226,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     <span style={{color:"#0f172a",fontSize:15,fontWeight:600}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
                   </div>);
                 }
-                return(<div title="Clique pra ligar/desligar o responsável — salva no card" style={{order:1,display:"flex",flexWrap:"wrap",alignItems:"center",gap:6}}>
+                return(<div title="Clique pra ligar/desligar o responsável — salva no card" className="px-resp-fila" style={{order:1,display:"flex",flexWrap:isMob?"wrap":"nowrap",alignItems:"center",gap:6,flex:"1 1 auto",minWidth:0,overflowX:isMob?"visible":"auto",scrollbarWidth:"none",padding:"3px 2px"}}>
                   {_elegiveis.map(u=>{
                     const sel=ids.indexOf(u.id)>=0;
                     return <button key={u.id} type="button" onClick={()=>_trocar(u.id)} title={(sel?"Tirar ":"Colocar ")+u.name}
-                      style={{display:"inline-flex",alignItems:"center",gap:7,padding:"3px 13px 3px 3px",background:sel?"#f5efff":"#fff",border:"1.5px solid "+(sel?"#7c3aed":"#eef1f6"),borderRadius:99,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",boxShadow:sel?"0 0 0 3px rgba(124,58,237,.10)":"none"}}
+                      style={{flexShrink:0,display:"inline-flex",alignItems:"center",gap:7,padding:"3px 13px 3px 3px",background:sel?"#f5efff":"#fff",border:"1.5px solid "+(sel?"#7c3aed":"#eef1f6"),borderRadius:99,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",boxShadow:sel?"0 0 0 3px rgba(124,58,237,.10)":"none"}}
                       onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.borderColor="#cbd5e1";}}
                       onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.borderColor="#eef1f6";}}>
                       <span style={{position:"relative",display:"inline-flex",opacity:sel?1:.55,filter:sel?"none":"grayscale(.6)"}}>
@@ -36343,7 +36339,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     setMetaAberto(null);
                     abrirSeletor(ID(l.key));
                   };
-                  return(<div key={l.key} style={{position:"relative",zIndex:aqui?61:1,flex:isMob?"1 1 100%":(l.key==="saida"||l.key==="mat"?"1.35 1 0":"1 1 0"),minWidth:0,width:isMob?"100%":"auto"}}>
+                  return(<div key={l.key} style={{position:"relative",zIndex:aqui?61:1,flex:isMob?"1 1 100%":"1 1 0",minWidth:0,width:isMob?"100%":"auto"}}>
                     <div role={podeEditar?"button":undefined} tabIndex={podeEditar?0:undefined}
                       onClick={clicar}
                       onKeyDown={podeEditar?(e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();clicar();}}):undefined}
