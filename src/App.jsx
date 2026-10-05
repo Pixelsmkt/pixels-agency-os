@@ -4441,6 +4441,18 @@ function _pxContatoUtil(pb, unit){
    próprio CLIENTS e escolhe o coração de matiz mais próxima. */
 /* (05/10/2026, Gustavo) Cor do logo nem sempre é a cor do coração: a Arabutã é cinza no cadastro,
    mas "na Arabutã é coração vermelho" (já tinha pedido em 20/09). O fixo aqui manda antes da cor. */
+/* (05/10/2026, Gustavo) "tava selecionado Hellen, mas tava somente story — deveria estar marcado
+   somente Vinicius". Card Somente story é do Vinicius. Se o card é story e NÃO tem designer/editor
+   escolhido de propósito (nível 3), os responsáveis viram só o Vinicius. Devolve null se não muda. */
+function pxStoryRespVinicius(t){
+  if(!t||!(t.somenteStory||t.somente_story)) return null;
+  const st=String(t.status||""); if(st==="publicado"||st==="reprovado") return null;
+  const ids=Array.isArray(t.assignees)&&t.assignees.length?t.assignees:(t.assignee?[t.assignee]:[]);
+  if(ids.length===1&&ids[0]==="vinicius") return null;
+  const temExecutor=ids.some(function(id){ const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===id;}); return u&&u.level===3; });
+  if(temExecutor) return null;
+  return ["vinicius"];
+}
 const PX_CORACAO_FIXO={arabuta:"❤️"};
 function _pxCoracaoCliente(clientId){
   try{
@@ -35221,6 +35233,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       patch.referenceMonth=ym;
       tls.push({type:"edit",label:"Mês de pagamento "+(_vazio?"marcado":"atualizado")+" automático pela avaliação ("+(new Date().getDate()>=10?"do dia 10 em diante → próximo mês":"até o dia 9 → mês atual")+")",at:now,atFmt:nowFmt(),user:actor,from:_vazio?"em branco":_fm(_refAtual),to:_fm(ym)});
     }
+    // (05/10/2026) Somente story com Hellen (ou ninguém) de responsável → só o Vinicius.
+    const _rv=(typeof pxStoryRespVinicius==="function")?pxStoryRespVinicius(current):null;
+    if(_rv){
+      const _ant=(Array.isArray(current.assignees)&&current.assignees.length?current.assignees:(current.assignee?[current.assignee]:[])).map(function(id){const u=TEAM.find(x=>x.id===id);return u?u.name.split(" ")[0]:id;}).join(", ")||"em branco";
+      patch.assignees=_rv; patch.assignee="vinicius";
+      tls.push({type:"edit",label:"Responsável ajustado automático: Somente story é do Vinicius",at:now,atFmt:nowFmt(),user:actor,from:_ant,to:"Vinicius"});
+    }
     if(!tls.length) return;
     setTasks(p=>p.map(t=>t.id!==current.id?t:{...t,...patch,timeline:[...(t.timeline||[]),...tls]}));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -36378,6 +36397,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   if(_st)_tg=_tg.concat(["Somente story"]);
                   if(_np)_tg=_tg.concat(["Não publica"]);
                   patch.tags=_tg;
+                  // Virou Somente story → responsável vira só o Vinicius (se não tem designer/editor escolhido).
+                  if(campo==="somenteStory"&&valor&&typeof pxStoryRespVinicius==="function"){
+                    const _rv=pxStoryRespVinicius({...current,somenteStory:true});
+                    if(_rv){ patch.assignees=_rv; patch.assignee="vinicius"; }
+                  }
                 }
                 salvarMetaCard(current,patch,nome,valor?"não":"sim",valor?"sim":"não",false);
               };
@@ -58635,7 +58659,7 @@ const taskToRow = (t) => ({
   id:             String(t.id),
   title:          (typeof pxNomesProprios==="function"?pxNomesProprios(t.title):t.title) || "Nova Demanda",
   status:         t.status       || "demanda",
-  assignee:       t.assignee     || "",
+  assignee:       ((typeof pxStoryRespVinicius==="function"&&pxStoryRespVinicius(t))?"vinicius":(t.assignee || "")),
   sector:         t.sector       || "design",
   client:         t.client       || "",
   priority:       t.priority     || "media",
@@ -58658,7 +58682,7 @@ const taskToRow = (t) => ({
   is_alteracao:   !!t.isAlteracao,
   ajuste_origin:  t.ajusteOrigin || null,
   admin_tag:      t.adminTag || null,
-  assignees:      t.assignees    || [],
+  assignees:      ((typeof pxStoryRespVinicius==="function"&&pxStoryRespVinicius(t))||t.assignees || []),
   watchers:       t.watchers     || [],
   tags:           t.tags         || [],
   comments:       t.comments     || [],
