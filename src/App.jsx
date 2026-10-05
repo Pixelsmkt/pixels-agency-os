@@ -4439,8 +4439,12 @@ function _pxContatoUtil(pb, unit){
 /* Coração na cor da marca (pedido do Vinicius, 14/09/2026): em data comemorativa o
    emoji de coração tem que ser o da cor do cliente, não um ❤️ genérico. Lê a cor do
    próprio CLIENTS e escolhe o coração de matiz mais próxima. */
+/* (05/10/2026, Gustavo) Cor do logo nem sempre é a cor do coração: a Arabutã é cinza no cadastro,
+   mas "na Arabutã é coração vermelho" (já tinha pedido em 20/09). O fixo aqui manda antes da cor. */
+const PX_CORACAO_FIXO={arabuta:"❤️"};
 function _pxCoracaoCliente(clientId){
   try{
+    if(PX_CORACAO_FIXO[clientId]) return PX_CORACAO_FIXO[clientId];
     const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x&&x.id===clientId;});
     let hex=String((c&&c.color)||"").replace("#","").trim();
     if(hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
