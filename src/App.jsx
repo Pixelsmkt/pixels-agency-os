@@ -36130,6 +36130,23 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           return(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,boxShadow:"0 4px 16px rgba(15,23,42,0.04)",padding:isMob?"18px 18px":"26px 32px",display:"flex",flexDirection:"column",gap:14,minHeight:"50vh"}}>
             {/* Cabeçalho copy — sem badge "Copy para aprovação" (redundante) */}
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              {/* (05/10/2026, Gustavo) Copiar link do cartão direto aqui, sem abrir "Ver detalhes do cartão" —
+                  mesmo botão da Avaliação de design/vídeo (ao lado do download). order:99 = sempre no canto direito. */}
+              <button type="button" title="Copiar link do cartão"
+                onClick={async function(){
+                  const _url=(typeof window!=="undefined"&&window.location?window.location.origin+window.location.pathname:"")+"?card="+encodeURIComponent(current.id);
+                  try{
+                    if(navigator&&navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(_url); }
+                    else { const _ta=document.createElement("textarea"); _ta.value=_url; _ta.style.position="fixed"; _ta.style.opacity="0"; document.body.appendChild(_ta); _ta.select(); document.execCommand("copy"); document.body.removeChild(_ta); }
+                    if(typeof pixelsToast!=="undefined") pixelsToast.success("Link do cartão copiado!",2500);
+                  }catch(e){ try{ window.prompt("Copie o link:",_url); }catch(_){} }
+                }}
+                style={{order:99,marginLeft:"auto",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,height:36,padding:"0 12px",gap:7,color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",fontSize:12,fontWeight:700,whiteSpace:"nowrap",transition:"all .15s"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                {isMob?null:"Copiar link"}
+              </button>
               {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"7px 17px",display:"flex",alignItems:"center"}}>
                 {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:42,maxWidth:165,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:19,fontWeight:700}}>{cl.abbr}</span>)}
               </div>)}
