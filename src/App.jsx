@@ -34093,6 +34093,88 @@ const PX_TIPOS_FILA=[
   {id:"video",       label:"Vídeo"},
   {id:"comemorativa",label:"Comemorativa"},
 ];
+/* (05/10/2026, Gustavo) "moderniza os calendários aqui do data de publicação e do pagamento".
+   O seletor nativo do navegador não aceita estilo — então calendário e seletor de mês próprios,
+   no visual do app (cartão branco, dia escolhido em roxo, hoje com anel). */
+const _PX_MESES_LONGO=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const _PX_MESES_CURTO=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+function _pxIsoHoje(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function _PxCalNavBtn({onClick,dir,title}){
+  return <button type="button" title={title} onClick={onClick}
+    style={{width:30,height:30,borderRadius:9,border:"1px solid #eef1f6",background:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569",transition:"all .12s"}}
+    onMouseEnter={e=>{e.currentTarget.style.background="#f5efff";e.currentTarget.style.borderColor="#ddd0fb";e.currentTarget.style.color="#7c3aed";}}
+    onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#eef1f6";e.currentTarget.style.color="#475569";}}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">{dir<0?<polyline points="15 18 9 12 15 6"/>:<polyline points="9 18 15 12 9 6"/>}</svg>
+  </button>;
+}
+const _PX_POP={position:"absolute",top:"calc(100% + 7px)",left:0,zIndex:62,background:"#fff",border:"1px solid #e9ecf3",borderRadius:18,boxShadow:"0 18px 44px rgba(15,23,42,.18), 0 2px 6px rgba(15,23,42,.06)",padding:14,boxSizing:"border-box"};
+function PxMiniCalendario({value,onPick,onClear,titulo}){
+  const hoje=_pxIsoHoje();
+  const base=/^\d{4}-\d{2}/.test(String(value||""))?String(value):hoje;
+  const [ano,setAno]=useState(parseInt(base.slice(0,4)));
+  const [mes,setMes]=useState(parseInt(base.slice(5,7))-1);
+  const ir=(d)=>{let m=mes+d,a=ano;if(m<0){m=11;a--;}if(m>11){m=0;a++;}setMes(m);setAno(a);};
+  const primeiro=new Date(ano,mes,1).getDay();
+  const nDias=new Date(ano,mes+1,0).getDate();
+  const cel=[];for(let i=0;i<primeiro;i++)cel.push(null);for(let d=1;d<=nDias;d++)cel.push(d);while(cel.length%7)cel.push(null);
+  const iso=(d)=>ano+"-"+String(mes+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+  const val=String(value||"").slice(0,10);
+  return(<div onClick={e=>e.stopPropagation()} style={{..._PX_POP,width:292}}>
+    {titulo&&<div style={{fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,color:"#94a3b8",marginBottom:8}}>{titulo}</div>}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+      <_PxCalNavBtn dir={-1} title="Mês anterior" onClick={()=>ir(-1)}/>
+      <span style={{fontSize:14.5,fontWeight:800,color:"#0f172a",letterSpacing:-.2}}>{_PX_MESES_LONGO[mes]} <span style={{color:"#94a3b8",fontWeight:700}}>{ano}</span></span>
+      <_PxCalNavBtn dir={1} title="Próximo mês" onClick={()=>ir(1)}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+      {["D","S","T","Q","Q","S","S"].map((w,i)=><span key={i} style={{textAlign:"center",fontSize:10.5,fontWeight:800,color:(i===0||i===6)?"#c4cad4":"#94a3b8",padding:"4px 0"}}>{w}</span>)}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+      {cel.map((d,i)=>{
+        if(!d)return <span key={i}/>;
+        const k=iso(d),sel=k===val,eHoje=k===hoje,fds=(i%7===0||i%7===6);
+        return <button key={i} type="button" onClick={()=>onPick(k)}
+          style={{height:34,borderRadius:10,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:sel||eHoje?800:600,
+            background:sel?"linear-gradient(180deg,#8b5cf6,#6d28d9)":"transparent",color:sel?"#fff":(eHoje?"#7c3aed":(fds?"#94a3b8":"#334155")),
+            boxShadow:sel?"0 4px 10px rgba(124,58,237,.35), inset 0 1px 0 rgba(255,255,255,.25)":(eHoje?"inset 0 0 0 1.5px #c4b5fd":"none"),transition:"background .1s"}}
+          onMouseEnter={e=>{if(!sel)e.currentTarget.style.background="#f5efff";}}
+          onMouseLeave={e=>{if(!sel)e.currentTarget.style.background="transparent";}}>{d}</button>;
+      })}
+    </div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid #f1f4f8"}}>
+      {onClear?<button type="button" onClick={onClear} style={{background:"none",border:"none",color:"#94a3b8",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",padding:"5px 6px"}}>Limpar</button>:<span/>}
+      <button type="button" onClick={()=>onPick(hoje)} style={{background:"#f5efff",border:"none",color:"#7c3aed",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",padding:"6px 12px",borderRadius:8}}>Hoje</button>
+    </div>
+  </div>);
+}
+function PxMiniMeses({value,onPick,onClear,titulo}){
+  const d0=new Date();const atual=d0.getFullYear()+"-"+String(d0.getMonth()+1).padStart(2,"0");
+  const val=String(value||"").slice(0,7);
+  const [ano,setAno]=useState(parseInt((/^\d{4}-\d{2}/.test(val)?val:atual).slice(0,4)));
+  return(<div onClick={e=>e.stopPropagation()} style={{..._PX_POP,width:262}}>
+    {titulo&&<div style={{fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,color:"#94a3b8",marginBottom:8}}>{titulo}</div>}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+      <_PxCalNavBtn dir={-1} title="Ano anterior" onClick={()=>setAno(ano-1)}/>
+      <span style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{ano}</span>
+      <_PxCalNavBtn dir={1} title="Próximo ano" onClick={()=>setAno(ano+1)}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+      {_PX_MESES_CURTO.map((m,i)=>{
+        const k=ano+"-"+String(i+1).padStart(2,"0"),sel=k===val,eAtual=k===atual;
+        return <button key={k} type="button" onClick={()=>onPick(k)}
+          style={{height:38,borderRadius:11,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:sel||eAtual?800:600,
+            background:sel?"linear-gradient(180deg,#8b5cf6,#6d28d9)":"#f8fafc",color:sel?"#fff":(eAtual?"#7c3aed":"#334155"),
+            boxShadow:sel?"0 4px 10px rgba(124,58,237,.35), inset 0 1px 0 rgba(255,255,255,.25)":(eAtual?"inset 0 0 0 1.5px #c4b5fd":"none")}}
+          onMouseEnter={e=>{if(!sel)e.currentTarget.style.background="#f5efff";}}
+          onMouseLeave={e=>{if(!sel)e.currentTarget.style.background="#f8fafc";}}>{m}</button>;
+      })}
+    </div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid #f1f4f8"}}>
+      {onClear?<button type="button" onClick={onClear} style={{background:"none",border:"none",color:"#94a3b8",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",padding:"5px 6px"}}>Limpar</button>:<span/>}
+      <button type="button" onClick={()=>onPick(atual)} style={{background:"#f5efff",border:"none",color:"#7c3aed",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",padding:"6px 12px",borderRadius:8}}>Este mês</button>
+    </div>
+  </div>);
+}
 function _pxTipoDaFila(t){
   if(!t) return "arte";
   if(typeof pxEhArteComemorativa==="function"&&pxEhArteComemorativa(t)) return "comemorativa";
@@ -36335,7 +36417,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   const clicar=()=>{
                     if(!podeEditar)return;
                     if(l.key==="mat")return; // só leitura: marcar/desmarcar é no cartão
-                    if(l.key==="ct"||l.key==="saida"){ setMetaAberto(aqui?null:{id:current.id,campo:l.key}); return; }
+                    if(l.key==="ct"||l.key==="saida"||l.key==="pub"||l.key==="dl"||l.key==="ref"){ setMetaAberto(aqui?null:{id:current.id,campo:l.key}); return; }
                     setMetaAberto(null);
                     abrirSeletor(ID(l.key));
                   };
@@ -36365,19 +36447,24 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             style={{background:"#f1f4f8",color:pubT?"#334155":"#a5adba",borderRadius:7,padding:"2px 7px",fontSize:isMob?11:11.5,fontWeight:800,letterSpacing:-.1,flexShrink:0,cursor:podeEditar?"pointer":"default",outline:"none"}}>{pubT||"hora"}</span>)}
                         </span>
                       </span>
-                      {podeEditar&&l.key!=="mat"&&<Ico n={(l.key==="ct"||l.key==="saida")?"chevron-right":"edit"} size={12} color="#b6bec9"/>}
+                      {podeEditar&&l.key!=="mat"&&<Ico n={(l.key==="ct"||l.key==="saida"||l.key==="pub"||l.key==="dl"||l.key==="ref")?"chevron-right":"edit"} size={12} color="#b6bec9"/>}
                       {/* Inputs nativos invisíveis: são eles que abrem calendário, relógio e mês. */}
                       {podeEditar&&l.key==="pub"&&(<>
-                        <input id={ID("pub")} type="date" value={pubD||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
-                          onChange={e=>salvarMetaCard(current,{publishDate:e.target.value||""},"data de publicação",fmtBR(pubD),fmtBR(e.target.value))}/>
                         <input id={ID("hora")} type="time" value={pubT||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,right:26,bottom:6}}
                           onChange={e=>salvarMetaCard(current,{publishTime:e.target.value||""},"hora de publicação",pubT,e.target.value)}/>
                       </>)}
-                      {podeEditar&&l.key==="dl"&&(<input id={ID("dl")} type="date" value={dl||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
-                        onChange={e=>salvarMetaCard(current,{deadline:e.target.value||""},"prazo de entrega",fmtBR(dl),fmtBR(e.target.value))}/>)}
-                      {podeEditar&&l.key==="ref"&&(<input id={ID("ref")} type="month" value={refMes||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
-                        onChange={e=>salvarMetaCard(current,{referenceMonth:e.target.value||""},"mês de pagamento",fmtMes(refMes),fmtMes(e.target.value))}/>)}
                     </div>
+
+                    {/* (05/10/2026) Calendário e seletor de mês próprios — no lugar do nativo do navegador. */}
+                    {aqui&&l.key==="pub"&&<PxMiniCalendario titulo="Data de publicação" value={pubD}
+                      onPick={v=>{setMetaAberto(null);if(v!==pubD)salvarMetaCard(current,{publishDate:v},"data de publicação",fmtBR(pubD),fmtBR(v));}}
+                      onClear={pubD?(()=>{setMetaAberto(null);salvarMetaCard(current,{publishDate:""},"data de publicação",fmtBR(pubD),"");}):null}/>}
+                    {aqui&&l.key==="dl"&&<PxMiniCalendario titulo="Entrega" value={dl}
+                      onPick={v=>{setMetaAberto(null);if(v!==dl)salvarMetaCard(current,{deadline:v},"prazo de entrega",fmtBR(dl),fmtBR(v));}}
+                      onClear={dl?(()=>{setMetaAberto(null);salvarMetaCard(current,{deadline:""},"prazo de entrega",fmtBR(dl),"");}):null}/>}
+                    {aqui&&l.key==="ref"&&<PxMiniMeses titulo="Mês de pagamento" value={refMes}
+                      onPick={v=>{setMetaAberto(null);if(v!==refMes)salvarMetaCard(current,{referenceMonth:v},"mês de pagamento",fmtMes(refMes),fmtMes(v));}}
+                      onClear={refMes?(()=>{setMetaAberto(null);salvarMetaCard(current,{referenceMonth:""},"mês de pagamento",fmtMes(refMes),"");}):null}/>}
 
                     {/* Tipo de conteúdo — a lista fechada do cartão, num clique só. */}
                     {aqui&&l.key==="ct"&&(<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 7px)",left:0,zIndex:62,background:"#fff",border:"1px solid #e9ecf3",borderRadius:15,boxShadow:"0 16px 38px rgba(15,23,42,.18)",padding:7,minWidth:262,maxWidth:"min(310px, calc(100vw - 48px))",boxSizing:"border-box"}}>
