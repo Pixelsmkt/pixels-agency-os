@@ -47445,8 +47445,24 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
   const [abrirInst,setAbrirInst]=useState(false);
   const [mandando,setMandando]=useState(false);
   const [rec,setRec]=useState(0);
+  const [br,setBr]=useState(null);        // (05/10/2026) pasta de brutos no Drive deste card
+  const [ligando,setLigando]=useState(false);
   const taskId=task&&task.id;
   const ligado=Array.isArray(tags)&&tags.indexOf(_PX_TAG_EDICAO_IA)>=0;
+  const lerBr=function(){
+    if(!window._sb||!taskId) return;
+    window._sb.rpc("criacao_brutos_pasta",{p_task:String(taskId)}).then(function(r){
+      if(r.error){ if(/permiss/i.test(String(r.error.message||""))) setSemAcesso(true); else setBr({semSql:true}); return; }
+      setBr(r.data||null);
+    }).catch(function(){});
+  };
+  useEffect(function(){ setBr(null); lerBr(); },[taskId,rec]);
+  const brEsperando=!!(br&&br.existe&&!br.pronta&&!br.erro);
+  useEffect(function(){
+    if(!br||!br.existe||br.erro) return;
+    const iv=setInterval(lerBr,brEsperando?8000:30000);   // criando: a cada 8 s; pronta: a cada 30 s (contagem de arquivos)
+    return function(){ clearInterval(iv); };
+  },[taskId,br&&br.existe,brEsperando,br&&br.erro]);
   const ler=function(){
     if(!window._sb||!taskId) return;
     window._sb.rpc("criacao_pc_trabalho_do_card",{p_task:String(taskId)}).then(function(r){
@@ -47505,9 +47521,69 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
       if(r&&r.error&&typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui gravar o interruptor: "+r.error.message,5000);
     }).catch(function(){});
   };
+  /* (05/10/2026) "Edição com IA": liga a etiqueta (a IA edita sozinha quando o material chega) e cria a pasta do card no Drive */
+  const ligarIA=async function(link){
+    if(ligando||!window._sb) return;
+    setLigando(true);
+    try{
+      const r=await window._sb.rpc("criacao_brutos_ligar",{p_task:String(taskId),p_link:link||null});
+      if(r.error) throw new Error(/function|does not exist|schema cache/i.test(String(r.error.message||""))?"falta colar a SQL v37 no Supabase":(r.error.message||"erro"));
+      const d=r.data||{}; if(d.ok===false) throw new Error(d.erro||"não deu");
+      if(Array.isArray(d.tags)){
+        if(typeof setTags==="function") setTags(d.tags);
+        if(typeof setTasks==="function") setTasks(function(p){ return (p||[]).map(function(t){ return t.id===taskId?Object.assign({},t,{tags:d.tags}):t; }); });
+      }
+      setBr(d);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(link?"Pasta escolhida. O PC confere o acesso em instantes.":"Edição com IA ligada. A pasta no Drive fica pronta em alguns segundos.",4500);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui ligar a Edição com IA: "+String((e&&e.message)||e),6000); }
+    setLigando(false);
+  };
+  const outraPasta=function(){
+    const l=window.prompt("Cole o link da PASTA do Google Drive onde estão os brutos deste card.\n(Ela precisa estar no Drive da Pixels ou compartilhada com pixels@pixelsmarketingdigital.com.)\nDeixe vazio para voltar para a pasta automática.","");
+    if(l===null) return;
+    ligarIA(String(l).trim()||null);
+  };
+  const copiarLink=function(){
+    if(!br||!br.link) return;
+    try{ navigator.clipboard.writeText(br.link); if(typeof pixelsToast!=="undefined") pixelsToast.success("Link da pasta copiado. Pode mandar para quem vai subir os vídeos.",3500); }catch(_){}
+  };
   const btn={border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"};
+  const _brFmt=function(iso){ try{ const d=new Date(iso); return d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } };
+  const pastaBox=(ligado||(br&&br.existe))&&br&&!br.semSql?<div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:"#fff",border:"1px solid "+(br.erro?"#fecaca":"#e9d5ff")}}>
+    {!br.existe&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:11.5,color:"#4c1d95"}}>
+      📁 Este card ainda não tem pasta de brutos no Drive.
+      {canEdit&&<button disabled={ligando} onClick={function(){ ligarIA(null); }} style={Object.assign({},btn,{background:"#7c3aed",color:"#fff",padding:"6px 10px",fontSize:11.5})}>{ligando?"Criando…":"Criar pasta no Drive"}</button>}
+    </div>}
+    {br.existe&&br.erro&&<div style={{fontSize:11.5,color:"#b91c1c",fontWeight:600,lineHeight:1.45}}>
+      ❌ Pasta de brutos: {String(br.erro).slice(0,200)}
+      {canEdit&&<span> · <a href="#" onClick={function(e){ e.preventDefault(); ligarIA(null); }} style={{color:"#7c3aed"}}>usar a pasta automática</a> · <a href="#" onClick={function(e){ e.preventDefault(); outraPasta(); }} style={{color:"#7c3aed"}}>colar outro link</a></span>}
+    </div>}
+    {br.existe&&!br.erro&&!br.pronta&&<div style={{fontSize:11.5,color:"#b45309",fontWeight:600}}>
+      📁 {br.manual?"Conferindo a pasta escolhida…":"Criando a pasta no Drive…"}{br.pc_ligado===false?" · o "+(br.pc||"PC")+" está sem sinal: fica pronta quando ele ligar":" (uns segundos)"}
+    </div>}
+    {br.existe&&!br.erro&&br.pronta&&<div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:11.5,color:"#0f172a",fontWeight:700}}>📁 Pasta de brutos</span>
+        <a href={br.link} target="_blank" rel="noopener noreferrer" style={Object.assign({},btn,{background:"#0891b2",color:"#fff",padding:"6px 10px",fontSize:11.5,textDecoration:"none"})}>Abrir no Drive ↗</a>
+        <button onClick={copiarLink} style={Object.assign({},btn,{background:"#fff",color:"#0891b2",border:"1px solid #a5f3fc",padding:"5px 10px",fontSize:11.5})}>Copiar link</button>
+        {canEdit&&<a href="#" onClick={function(e){ e.preventDefault(); outraPasta(); }} style={{fontSize:11,color:"#7c3aed"}}>usar outra pasta</a>}
+      </div>
+      <div style={{marginTop:4,fontSize:11,color:"#64748b",lineHeight:1.45,wordBreak:"break-word"}}>
+        {br.manual?"Pasta escolhida: ":"K:\\Meu Drive\\App\\Edição de vídeo com IA\\"}{String(br.caminho||"").split(" / ").join(br.manual?" / ":"\\")}
+      </div>
+      <div style={{marginTop:3,fontSize:11,color:br.novos>0?"#b45309":"#15803d",fontWeight:600}}>
+        {br.novos>0?"⏳ "+br.novos+" arquivo(s) novo(s) na pasta: o PC puxa quando a pasta ficar "+(br.espera_min||4)+" min sem receber arquivo"
+          :br.arquivos>0?"✓ "+br.arquivos+" arquivo(s) na pasta, todos já no card"+(br.visto_em?" · conferido às "+_brFmt(br.visto_em):"")
+          :"Suba os vídeos brutos aqui (app do Drive no celular, arrastando no K: ou pelo navegador). O PC puxa sozinho, faz a cópia leve e a IA edita."}
+        {br.pc_ligado===false?" · ⚠️ o "+(br.pc||"PC")+" está sem sinal":""}
+      </div>
+    </div>}
+  </div>:null;
   return <div style={{marginBottom:12,padding:"10px 12px",borderRadius:12,background:"#faf5ff",border:"1px solid #e9d5ff"}}>
     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      {canEdit&&!ligado&&<button disabled={ligando} onClick={function(){ ligarIA(null); }}
+        title="Liga a edição automática (a IA edita sozinha quando os vídeos chegam) e cria a pasta deste card no Drive para subir os brutos"
+        style={Object.assign({},btn,{background:"linear-gradient(135deg,#7c3aed,#db2777)",color:"#fff",opacity:ligando?.6:1})}>✨ {ligando?"Ligando…":"Edição com IA"}</button>}
       {canEdit&&<button disabled={mandando||andando} onClick={mandar} title={temVideo?"O PC do escritório prepara os vídeos deste card e a IA edita (mesmo caminho do Estúdio)":"Anexe um vídeo bruto em Materiais primeiro"}
         style={Object.assign({},btn,{background:andando?"#c4b5fd":"#7c3aed",color:"#fff",opacity:mandando?.6:1,cursor:(mandando||andando)?"default":"pointer"})}>
         🎬 {mandando?"Mandando…":andando?"Em andamento":"Enviar para edição (IA)"}
@@ -47516,16 +47592,18 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
       {pronto&&<button onClick={_pxIrParaEdicaoVideo} title="Abre Criação › Edição de vídeo; este card aparece na Fila — clique em Estúdio"
         style={Object.assign({},btn,{background:"#fff",color:"#15803d",border:"1px solid #bbf7d0",padding:"7px 10px"})}>Abrir no Estúdio ↗</button>}
       <span style={{flex:1}}/>
-      {canEdit&&<label title="Quando chegar vídeo novo em Materiais (upload ou link de envio) num card com esta etiqueta, o banco manda para o PC e a IA edita sozinha, uns 3 min depois do último arquivo (precisa da SQL v36 no ar)."
-        style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,color:"#4c1d95",fontWeight:600,cursor:"pointer"}}>
-        <input type="checkbox" checked={ligado} onChange={alternarTag}/> Editar com IA quando o material chegar
-      </label>}
+      {ligado&&<span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,color:"#4c1d95",fontWeight:700}}>
+        ✨ Edição com IA ligada
+        {canEdit&&<a href="#" onClick={function(e){ e.preventDefault(); if(window.confirm("Desligar a Edição com IA deste card? A pasta no Drive continua lá; os vídeos que chegarem ainda entram no card, mas a IA não edita sozinha.")) alternarTag(); }}
+          style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>desligar</a>}
+      </span>}
     </div>
+    {pastaBox}
     {abrirInst&&canEdit&&!andando&&<textarea value={inst} onChange={function(e){ setInst(e.target.value); }} rows={2} maxLength={1500}
       placeholder="O que a IA deve fazer (opcional). Ex.: reels de 30 s, legenda grande, começa pela fala do produtor"
       style={{width:"100%",boxSizing:"border-box",marginTop:8,border:"1px solid #e9d5ff",borderRadius:9,padding:"7px 10px",fontSize:11.5,fontFamily:"inherit",resize:"vertical"}}/>}
     {txt&&<div style={{marginTop:6,fontSize:11.5,color:cor,fontWeight:600,lineHeight:1.45}}>{txt}</div>}
-    {!txt&&<div style={{marginTop:6,fontSize:11,color:"#94a3b8"}}>{temVideo?"A IA edita os vídeos de Materiais seguindo o briefing e o Kit do cliente. Pode fechar o card depois de mandar.":"Anexe os vídeos brutos em Materiais (ou pelo Link de envio / Link do Drive) e mande para a IA."}</div>}
+    {!txt&&!pastaBox&&<div style={{marginTop:6,fontSize:11,color:"#94a3b8"}}>{temVideo?"A IA edita os vídeos de Materiais seguindo o briefing e o Kit do cliente. Pode fechar o card depois de mandar.":"Anexe os vídeos brutos em Materiais (ou pelo Link de envio / Link do Drive) e mande para a IA."}</div>}
   </div>;
 }
 
