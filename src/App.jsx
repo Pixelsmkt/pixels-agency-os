@@ -32950,30 +32950,44 @@ function PublicacaoEditModal({task, onClose, onReject}){
     setStampTool(mode==="check"||mode==="x"||mode==="star"?mode:null);
   };
   // Carimbo: selo circular preenchido no ponto clicado (cor fixa por tipo)
+  // (05/10/2026, Gustavo) "redondinho, menorzinho, mais modernizado... 3dzinho":
+  // botão-bolinha com degradê (luz em cima), sombra embaixo, aro branco fino e brilho de vidro.
   const drawStamp=(ctx,x,y)=>{
     const kind=stampTool;
     if(!kind)return;
-    const R=Math.max(26,penSize*6);
-    const fill=kind==="check"?"#16a34a":kind==="x"?"#dc2626":"#f59e0b";
+    const R=Math.max(15,penSize*3.8);
+    const PAL=kind==="check"?{hi:"#4ade80",mid:"#16a34a",lo:"#0f6b31"}:kind==="x"?{hi:"#f87171",mid:"#dc2626",lo:"#8f1515"}:{hi:"#fcd34d",mid:"#f59e0b",lo:"#a85d04"};
     ctx.save();
     ctx.globalCompositeOperation="source-over";
-    ctx.fillStyle=fill;
+    // sombra projetada (dá o "flutuando")
+    ctx.shadowColor="rgba(0,0,0,.38)";ctx.shadowBlur=R*0.55;ctx.shadowOffsetY=R*0.22;
+    ctx.fillStyle="#fff";
+    ctx.beginPath();ctx.arc(x,y,R+Math.max(1.5,R*0.11),0,Math.PI*2);ctx.fill();
+    ctx.shadowColor="transparent";ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+    // corpo com degradê radial (luz vinda de cima/esquerda)
+    const g=ctx.createRadialGradient(x-R*0.35,y-R*0.45,R*0.1,x,y,R*1.05);
+    g.addColorStop(0,PAL.hi);g.addColorStop(0.55,PAL.mid);g.addColorStop(1,PAL.lo);
+    ctx.fillStyle=g;
     ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);ctx.fill();
+    // brilho de vidro no topo
+    const gl=ctx.createLinearGradient(x,y-R,x,y);
+    gl.addColorStop(0,"rgba(255,255,255,.55)");gl.addColorStop(1,"rgba(255,255,255,0)");
+    ctx.fillStyle=gl;
+    ctx.beginPath();ctx.ellipse(x,y-R*0.42,R*0.66,R*0.42,0,0,Math.PI*2);ctx.fill();
+    // símbolo branco com sombrinha leve
+    ctx.shadowColor="rgba(0,0,0,.28)";ctx.shadowBlur=R*0.12;ctx.shadowOffsetY=R*0.06;
     ctx.strokeStyle="#fff";
-    ctx.lineWidth=Math.max(2,R*0.08);
-    ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);ctx.stroke();
-    ctx.strokeStyle="#fff";
-    ctx.lineWidth=Math.max(3,R*0.18);
+    ctx.lineWidth=Math.max(2.2,R*0.2);
     ctx.lineCap="round";
     ctx.lineJoin="round";
     if(kind==="check"){
       ctx.beginPath();
-      ctx.moveTo(x-R*0.42,y+R*0.02);
-      ctx.lineTo(x-R*0.10,y+R*0.36);
-      ctx.lineTo(x+R*0.48,y-R*0.32);
+      ctx.moveTo(x-R*0.40,y+R*0.02);
+      ctx.lineTo(x-R*0.11,y+R*0.31);
+      ctx.lineTo(x+R*0.42,y-R*0.28);
       ctx.stroke();
     }else if(kind==="x"){
-      const o=R*0.42;
+      const o=R*0.33;
       ctx.beginPath();
       ctx.moveTo(x-o,y-o);ctx.lineTo(x+o,y+o);
       ctx.moveTo(x+o,y-o);ctx.lineTo(x-o,y+o);
@@ -32981,7 +32995,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
     }else if(kind==="star"){
       ctx.fillStyle="#fff";
       ctx.beginPath();
-      const spikes=5,outer=R*0.62,inner=R*0.28;
+      const spikes=5,outer=R*0.56,inner=R*0.25;
       let rot=-Math.PI/2;
       for(let i=0;i<spikes;i++){
         ctx.lineTo(x+Math.cos(rot)*outer,y+Math.sin(rot)*outer);
