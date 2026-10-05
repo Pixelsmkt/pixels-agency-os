@@ -32952,12 +32952,21 @@ function PublicacaoEditModal({task, onClose, onReject}){
   // Carimbo: selo circular preenchido no ponto clicado (cor fixa por tipo)
   // (05/10/2026, Gustavo) "redondinho, menorzinho, mais modernizado... 3dzinho":
   // botão-bolinha com degradê (luz em cima), sombra embaixo, aro branco fino e brilho de vidro.
-  const drawStamp=(ctx,x,y)=>{
+  const drawStamp=(ctx,px,py)=>{
     const kind=stampTool;
     if(!kind)return;
-    const R=Math.max(15,penSize*3.8);
+    // O canvas é 800x600 esticado no tamanho da imagem (vertical, quadrada...) — sem
+    // compensar, a bolinha sai oval. Escala o eixo Y pra ficar redonda NA TELA.
+    const _cv=ctx.canvas;
+    const _sx=(_cv&&_cv.clientWidth)?_cv.clientWidth/_cv.width:1;
+    const _sy=(_cv&&_cv.clientHeight)?_cv.clientHeight/_cv.height:1;
+    const _k=(_sx>0&&_sy>0)?_sx/_sy:1;
+    // Raio pensado em pixels DE TELA (≈11px no tamanho 4), convertido pra unidade do canvas.
+    const R=Math.max(10,penSize*2.75)/(_sx>0?_sx:1);
+    const x=0,y=0;
     const PAL=kind==="check"?{hi:"#4ade80",mid:"#16a34a",lo:"#0f6b31"}:kind==="x"?{hi:"#f87171",mid:"#dc2626",lo:"#8f1515"}:{hi:"#fcd34d",mid:"#f59e0b",lo:"#a85d04"};
     ctx.save();
+    ctx.translate(px,py);ctx.scale(1,_k);
     ctx.globalCompositeOperation="source-over";
     // sombra projetada (dá o "flutuando")
     ctx.shadowColor="rgba(0,0,0,.38)";ctx.shadowBlur=R*0.55;ctx.shadowOffsetY=R*0.22;
