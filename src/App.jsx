@@ -48156,6 +48156,30 @@ function _cardPodeSerResp(u){
   const canEditContentType = _bl("campo.tipo"); // padrão: sócio/etiquetas, editor de vídeo e coordenação (usuário VISTO)
   // Tags (faixas coloridas no card). Visíveis pra todos, editáveis só p/ sócios.
   const [tags,setTags]=useState(Array.isArray(task.tags)?task.tags:[]);
+  // (05/10/2026) Responsável "🤖 Agente de IA": em card novo fica pendente e é ligado logo depois do Salvar
+  const [agenteIAPend,setAgenteIAPend]=useState(false);
+  // (05/10/2026) Tipo "Vídeo narrado IA" / "Vídeo áudio cliente": content_type continua "video" (pagamento e cota iguais);
+  // o jeito da voz mora em tasks.narracao_ia {ligado, modo: "ia" | "audio_cliente"} (fora do salvar do cartão).
+  const [vozModo,setVozModo]=useState(task._isDraft?"":null);   // null = lendo · "" = sem narração · "ia" · "audio_cliente"
+  const [vozModoPend,setVozModoPend]=useState("");               // card novo: aplica depois do Salvar
+  useEffect(function(){
+    if(task._isDraft||!window._sb||!task.id){ setVozModo(""); return; }
+    let vivo=true;
+    window._sb.rpc("criacao_narracao_card",{p_task:String(task.id)}).then(function(r){
+      if(!vivo) return; const d=(r&&!r.error&&r.data)||null;
+      setVozModo(d&&d.ligado===true?(d.modo==="audio_cliente"?"audio_cliente":"ia"):"");
+    }).catch(function(){ if(vivo) setVozModo(""); });
+    return function(){ vivo=false; };
+  },[task.id]);
+  const pxDefinirModoVoz=function(m){
+    const ant=vozModo; setVozModo(m);
+    if(task._isDraft){ setVozModoPend(m); return; }
+    if(!window._sb) return;
+    window._sb.rpc("criacao_narracao_card_salvar",{p_task:String(task.id),p_dados:{ligado:!!m,modo:m||null}}).then(function(r){
+      if(r&&r.error){ setVozModo(ant); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou o tipo do vídeo: "+r.error.message,6000); return; }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(m==="audio_cliente"?"🎧 Vídeo com áudio do cliente: suba o áudio em Materiais — a edição monta em cima dele.":m==="ia"?"🎙 Vídeo narrado pela IA: escreva o texto e gere a voz em Narração IA (ou a IA usa o texto do briefing).":"Vídeo sem narração: a edição usa a fala dos vídeos.",5000);
+    }).catch(function(){ setVozModo(ant); });
+  };
   const [newTagInput,setNewTagInput]=useState("");
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
@@ -48778,6 +48802,18 @@ function _cardPodeSerResp(u){
             if(r && r.error){
               console.warn("[save persist error]", r.error.message||r.error);
               if(typeof pixelsToast!=="undefined") pixelsToast.error("Salvou local mas erro na base: "+r.error.message, 5000);
+            } else if(vozModoPend && window._sb){
+              // (05/10/2026) card novo "Vídeo narrado IA" / "Vídeo áudio cliente": grava o jeito da voz agora que o card existe
+              window._sb.rpc("criacao_narracao_card_salvar",{p_task:String(task.id),p_dados:{ligado:true,modo:vozModoPend}}).catch(function(){});
+            }
+            if(!(r && r.error) && agenteIAPend && window._sb){
+              // (05/10/2026) card novo com "🤖 Agente de IA": agora que existe no banco, liga a IA e pede a pasta de brutos
+              window._sb.rpc("criacao_brutos_ligar",{p_task:String(task.id),p_link:null}).then(function(r2){
+                const d2=(r2&&r2.data)||{};
+                if((r2&&r2.error)||d2.ok===false){ if(typeof pixelsToast!=="undefined") pixelsToast.error("O card foi salvo, mas o Agente de IA não ligou: "+String((r2&&r2.error&&r2.error.message)||d2.erro||"erro")+". Abra o card e marque de novo.",7000); return; }
+                if(Array.isArray(d2.tags)) setTasks(function(p){ return (p||[]).map(function(t){ return t.id===task.id?Object.assign({},t,{tags:d2.tags}):t; }); });
+                if(typeof pixelsToast!=="undefined") pixelsToast.success("🤖 Agente de IA ligado: a pasta de brutos fica pronta em alguns segundos (aba Arquivos).",5000);
+              }).catch(function(){});
             }
           })
           .catch(function(e){ console.warn("[save persist catch]", e && e.message||e); });
@@ -53067,6 +53103,50 @@ function _cardPodeSerResp(u){
                   {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>;
               })}
+              {/* (05/10/2026) 🤖 Agente de IA: a IA entra na fila e o PC cria a pasta de brutos no Drive (Cliente / mês ou unidade / card · código) */}
+              {typeof pxIsVideoTask==="function"&&pxIsVideoTask({...task,contentType:contentType})&&(function(){
+                const _TAG=(typeof _PX_TAG_EDICAO_IA!=="undefined")?_PX_TAG_EDICAO_IA:"Edição pela IA";
+                const _tg=Array.isArray(tags)?tags:[];
+                const sel=agenteIAPend||_tg.indexOf(_TAG)>=0;
+                const toggle=async function(){
+                  if(!canEdit) return;
+                  if(!sel){
+                    if(task._isDraft){
+                      setAgenteIAPend(true); setTags(_tg.concat([_TAG]));
+                      if(typeof pixelsToast!=="undefined") pixelsToast.info("🤖 Agente de IA marcado: ao Salvar, a IA entra na fila e a pasta de brutos é criada no Drive.",4500);
+                      return;
+                    }
+                    try{
+                      const r=await window._sb.rpc("criacao_brutos_ligar",{p_task:String(task.id),p_link:null});
+                      if(r.error) throw new Error(r.error.message||"erro");
+                      const d=r.data||{}; if(d.ok===false) throw new Error(d.erro||"não deu");
+                      const nt=Array.isArray(d.tags)?d.tags:_tg.concat([_TAG]);
+                      setTags(nt);
+                      setTasks(function(p){ return (p||[]).map(function(t){ return t.id===task.id?Object.assign({},t,{tags:nt}):t; }); });
+                      if(typeof pixelsToast!=="undefined") pixelsToast.success("🤖 Agente de IA no card: a pasta de brutos aparece em Arquivos em alguns segundos.",4500);
+                    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui ligar o Agente de IA: "+String((e&&e.message)||e),6000); }
+                  } else {
+                    if(!window.confirm("Tirar o Agente de IA deste card? A pasta no Drive continua; os vídeos que chegarem ainda entram no card, mas a IA não edita sozinha.")) return;
+                    const nt=_tg.filter(function(x){ return String(x)!==_TAG; });
+                    setAgenteIAPend(false); setTags(nt);
+                    if(!task._isDraft){
+                      setTasks(function(p){ return (p||[]).map(function(t){ return t.id===task.id?Object.assign({},t,{tags:nt}):t; }); });
+                      if(window._sb) window._sb.from("tasks").update({tags:nt}).eq("id",String(task.id)).then(function(r){
+                        if(r&&r.error&&typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui tirar o Agente de IA: "+r.error.message,5000);
+                      }).catch(function(){});
+                    }
+                  }
+                };
+                return <button key="agente-ia" type="button" disabled={!canEdit} onClick={toggle}
+                  title="Agente de IA: a IA edita sozinha quando os vídeos chegam e o PC cria a pasta de brutos deste card no Drive"
+                  style={{display:"flex",alignItems:"center",gap:7,padding:"5px 9px 5px 5px",background:sel?"#f5f3ff":"#fff",border:"1.5px solid "+(sel?"#7c3aed":"#e2e8f0"),borderRadius:99,cursor:canEdit?"pointer":"not-allowed",fontSize:11.5,color:sel?"#6d28d9":"#475569",fontWeight:sel?700:500,textAlign:"left",transition:"all .12s",fontFamily:"inherit",minWidth:0}}
+                  onMouseEnter={function(ev){if(canEdit&&!sel){ev.currentTarget.style.borderColor="#c4b5fd";ev.currentTarget.style.background="#faf5ff";}}}
+                  onMouseLeave={function(ev){if(canEdit&&!sel){ev.currentTarget.style.borderColor="#e2e8f0";ev.currentTarget.style.background="#fff";}}}>
+                  <span style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#db2777)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:13,lineHeight:1,flexShrink:0}}>🤖</span>
+                  <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Agente de IA</span>
+                  {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
+                </button>;
+              })()}
             </div>
           </div>}
 
@@ -53187,12 +53267,16 @@ function _cardPodeSerResp(u){
                 {id:"video_feira",label:"Vídeo básico",icon:"flag"},
                 {id:"video",label:"Vídeo",icon:"play"},
                 {id:"video_complexo",label:"Vídeo dinâmico",icon:"film"},
+                /* (05/10/2026) Linha 3: jeito da voz — gravam content_type "video" + tasks.narracao_ia.modo */
+                {id:"video_narrado_ia",label:"Vídeo narrado IA",icon:"sparkles",modo:"ia"},
+                {id:"video_audio_cliente",label:"Vídeo áudio cliente",icon:"mic",modo:"audio_cliente"},
                 /* "video_short" (short vindo do Drive do cliente) existe como valor — o sync do Drive grava —
                    mas não é escolhido à mão, então não aparece aqui. */
               ].map(opt=>{
-                const isSel=contentType===opt.id;
-                const _canPick=canEdit&&canEditContentType;
-                return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;const _newType=isSel?"":opt.id;setContentType(_newType);if((_newType==="video"||_newType==="corte"||_newType==="video_complexo"||_newType==="video_feira")&&!_ehShortCard(_newType)){setAssignees(p=>p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]));}}} disabled={!_canPick}
+                const isSel=opt.modo?(contentType==="video"&&vozModo===opt.modo):opt.id==="video"?(contentType==="video"&&!vozModo):contentType===opt.id;
+                const _canPick=canEdit&&canEditContentType&&!(opt.modo&&vozModo===null);
+                return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;const _newType=isSel?"":(opt.modo?"video":opt.id);setContentType(_newType);
+                  {const _m=(opt.modo&&!isSel)?opt.modo:"";if(vozModo!==null&&(opt.modo||opt.id==="video")&&_m!==(vozModo||""))pxDefinirModoVoz(_m);}if((_newType==="video"||_newType==="corte"||_newType==="video_complexo"||_newType==="video_feira")&&!_ehShortCard(_newType)){setAssignees(p=>p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]));}}} disabled={!_canPick}
                   style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:"6px 3px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:_canPick?"pointer":"not-allowed",fontSize:9.5,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.15,textAlign:"center",height:54,boxSizing:"border-box",opacity:_canPick?1:.7}}>
                   <Ico n={opt.icon} size={14}/>
                   <span style={{wordBreak:"break-word"}}>{opt.label}</span>
@@ -53226,7 +53310,7 @@ function _cardPodeSerResp(u){
                tem acesso à Criação. */}
           {typeof _EvNarracaoCard==="function"&&pxIsVideoTask({...task,contentType:contentType})&&(task._isDraft
             ? <div style={{fontSize:11.5,color:"#94a3b8",fontWeight:500}}>🎙 Narração IA: salve o card para ligar a voz da IA.</div>
-            : <_EvNarracaoCard t={{...task,desc:desc,contentType:contentType}} isMob={false} noCard/>)}
+            : <React.Fragment key={"narr-"+(vozModo||"x")}><_EvNarracaoCard t={{...task,desc:desc,contentType:contentType}} isMob={false} noCard/></React.Fragment>)}
 
           {/* Mês de pagamento — só aparece quando a EQUIPE DE PRODUÇÃO (pago por demanda: André/Maria/Guilherme) está marcada. Cards só com sócios/coordenação não têm pagamento por demanda. */}
           {_bl("campo.mes_pagamento")&&(assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);}) && (
@@ -118029,6 +118113,23 @@ function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = d
     border:"1px solid " + (tipo === "p" ? _EV.roxo : _EV.roxoBorda), background:tipo === "p" ? _EV.roxo : _EV.roxoClaro, color:tipo === "p" ? "#fff" : _EV.roxo, whiteSpace:"nowrap" }; };
   const rot = { fontSize:_evF(11, isMob), fontWeight:800, color:_EV.sub, textTransform:"uppercase", letterSpacing:".05em" };
   const nPal = texto.trim().split(/\s+/).filter(Boolean).length;
+  // (05/10/2026) "Vídeo áudio cliente": a voz do vídeo é o áudio que o cliente mandou (Materiais) — a IA não gera voz
+  if(nc && nc.ligado === true && nc.modo === "audio_cliente"){
+    return (
+      <div style={cx} aria-label="Vídeo com áudio do cliente">
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <span style={{width:34,height:34,borderRadius:10,background:_EV.roxoClaro,color:_EV.roxo,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>🎧</span>
+          <span style={{flex:1,minWidth:0}}>
+            <span style={{display:"block",fontWeight:800,fontSize:_evF(14, isMob),color:_EV.texto}}>Vídeo com áudio do cliente</span>
+            <span style={{display:"block",fontSize:_evF(12, isMob),color:_EV.sub,lineHeight:1.45}}>
+              {nc.audio_url
+                ? "Áudio em uso: " + (nc.audio_nome || "áudio do cliente") + (nc.dur ? " · " + _evTempo(nc.dur) : "") + ". A edição monta os vídeos em cima dele, com a legenda pela fala do cliente."
+                : "Suba o áudio do cliente em Materiais (mp3, m4a, wav ou ogg). Na edição, a IA ouve, marca cada palavra e monta os vídeos em cima dele (o som dos vídeos sai)."}
+            </span>
+          </span>
+        </div>
+      </div>);
+  }
   return (
     <div style={cx} aria-label="Narração IA do card">
       <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
