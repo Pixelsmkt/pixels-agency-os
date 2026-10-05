@@ -36367,11 +36367,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               {(()=>{
                 const _bio=cl&&cl.id==="bioter";
                 const _uns=_bio&&(typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit):[];
-                return(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,width:150,height:58,boxSizing:"border-box",padding:"5px 10px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,flexShrink:0,overflow:"hidden"}}>
-                  {cl?(CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:_bio?28:42,maxWidth:"100%",objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:_bio?15:19,fontWeight:700}}>{cl.abbr}</span>)):null}
+                return(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,width:150,height:58,boxSizing:"border-box",padding:"4px 10px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,flexShrink:0,overflow:"hidden"}}>
+                  {cl?(CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:_bio?24:42,maxWidth:"100%",objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:_bio?15:19,fontWeight:700}}>{cl.abbr}</span>)):null}
                   {_bio&&(_uns.length===0
-                    ? <span title="Card da Bioter sem unidade marcada" style={{display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%",fontSize:10.5,fontWeight:800,color:"#b45309",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><Ico n="map-pin" size={10} color="#b45309"/>Unidade não definida</span>
-                    : <span title={_uns.map(u=>u.label+(u.grupo?" ("+u.grupo+")":"")).join(", ")} style={{display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%",fontSize:10.5,fontWeight:800,color:_uns[0].color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><Ico n="map-pin" size={10} color={_uns[0].color}/><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{_uns.map(u=>u.label).join(" · ")}</span></span>)}
+                    ? <span title="Card da Bioter sem unidade marcada" style={{display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%",fontSize:12.5,fontWeight:800,color:"#b45309",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><Ico n="map-pin" size={12} color="#b45309"/>Unidade não definida</span>
+                    : <span title={_uns.map(u=>u.label+(u.grupo?" ("+u.grupo+")":"")).join(", ")} style={{display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%",fontSize:14,fontWeight:800,letterSpacing:-.2,color:_uns[0].color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><Ico n="map-pin" size={13} color={_uns[0].color}/><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{_uns.map(u=>u.label).join(" · ")}</span></span>)}
                 </div>);
               })()}
               {/* Responsáveis — clique abre a grade com a foto de cada um (15/09/2026).
