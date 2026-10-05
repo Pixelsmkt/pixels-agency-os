@@ -4913,6 +4913,54 @@ function pxCtxCadastroTxt(ctx){
     return "DADOS CADASTRAIS"+(unit?(" — unidade "+unit):"")+" (a ÚNICA fonte pra endereço, CEP, fone/WhatsApp, e-mail e site — ignore contato que apareça em material, catálogo ou legenda antiga):\n"+linhas.join("\n")+"\n\n";
   }catch(_){ return ""; }
 }
+/* (05/10/2026, Gustavo) "pedi pra refazer uma copy… vc me apresentou de ETA, porque no playbook não estava
+   Inativo?" — e estava: ETA é INATIVO em Toledo. A regra ia no prompt, mas dois MATERIAIS do grupo
+   ("ETA sangria", "Tratamento de água", sem unidade) entravam inteiros e o "refazer do zero" escolheu o
+   assunto por eles. Agora: (1) material cujo assunto principal é produto inativo NA UNIDADE do card não
+   entra no prompt; (2) a resposta é conferida — se citar produto inativo (sem a agência ter pedido),
+   refaz uma vez avisando; se insistir, não entrega. */
+function _pxProdAliasNorm(pr){
+  const out=[]; const vistos={};
+  const _semPar=[pr.nome].concat(pr.aliases||[]).map(function(a){ return String(a||"").replace(/\([^)]*\)/g," "); });
+  [pr.nome].concat(pr.aliases||[]).concat(_semPar).forEach(function(a){ const n=_pxProdNorm(a); if(n&&n.length>=3&&!vistos[n]){ vistos[n]=1; out.push(n); } });
+  return out;
+}
+function _pxContaMencoes(txtNorm,aliases){
+  let n=0;
+  (aliases||[]).forEach(function(a){ const re=new RegExp("(^| )"+a.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?= |$)","g"); const m=txtNorm.match(re); if(m) n+=m.length; });
+  return n;
+}
+function pxProdutosPorStatus(ctx){
+  const unit=String((ctx&&ctx._unit)||"");
+  let lista=[]; try{ lista=(typeof pxProdutosOficiais==="function")?pxProdutosOficiais(ctx,unit):[]; }catch(_){ lista=[]; }
+  const inativos=[], ativos=[];
+  lista.forEach(function(p){ const a=_pxProdAliasNorm(p); if(!a.length) return; (String(p.prioridade||"")==="inativo"?inativos:ativos).push({nome:p.nome,aliases:a,toks:_pxProdToks(p.nome)}); });
+  return {inativos:inativos,ativos:ativos};
+}
+/* Nomes dos produtos INATIVOS que o texto cita (vazio = ok). */
+function pxTextoCitaInativo(texto,ctx){
+  const st=pxProdutosPorStatus(ctx); if(!st.inativos.length) return [];
+  const t=_pxProdNorm(texto);
+  return st.inativos.filter(function(p){ return _pxContaMencoes(t,p.aliases)>0; }).map(function(p){ return p.nome; });
+}
+if(typeof window!=="undefined"){ window.pxTextoCitaInativo=pxTextoCitaInativo; }
+/* O material é SOBRE um produto inativo nesta unidade? (título pesa 5x; catálogo geral passa) */
+function _pxMaterialDeInativo(m,st){
+  if(!st||!st.inativos.length) return false;
+  const tit=_pxProdNorm((m&&m.titulo)||""), corpo=_pxProdNorm(String((m&&m.ficha)||"").slice(0,2500));
+  const titToks=_pxProdToks((m&&m.titulo)||"");
+  // Título manda: material com nome de produto inativo (e sem nome de ativo) é DESSE produto.
+  let tIn=0, tAt=0, cIn=0, cAt=0;
+  st.inativos.forEach(function(p){
+    tIn+=_pxContaMencoes(tit,p.aliases);
+    if(titToks.length>=2&&titToks.every(function(w){ return p.toks.indexOf(w)>=0; })) tIn++;
+    cIn+=_pxContaMencoes(corpo,p.aliases);
+  });
+  st.ativos.forEach(function(p){ tAt+=_pxContaMencoes(tit,p.aliases); cAt+=_pxContaMencoes(corpo,p.aliases); });
+  if(tIn>0) return tAt===0;
+  // Sem pista no título (catálogo, manual): só cai se o corpo é praticamente todo do inativo.
+  return tAt===0&&cIn>=3&&cAt===0;
+}
 function pxCtxMateriaisTxt(ctx){
   const _cad=(typeof pxCtxCadastroTxt==="function")?pxCtxCadastroTxt(ctx):"";
   const arr=(ctx&&Array.isArray(ctx.materiais))?ctx.materiais:[];
@@ -4932,8 +4980,10 @@ function pxCtxMateriaisTxt(ctx){
        "traduzidos, nunca o texto em português — e chame o produto pelo nome em espanhol que o "+
        "Playbook dá, quando houver.)\n";
   let gasto=0, entraram=0;
+  const _stProd=(ctx&&ctx._unit)?pxProdutosPorStatus(ctx):null;
   for(const m of arr){
     const ficha=String((m&&m.ficha)||"").trim(); if(!ficha) continue;
+    if(_stProd&&_pxMaterialDeInativo(m,_stProd)) continue;   // assunto é produto INATIVO nesta unidade
     if(gasto>=PX_CTX_MAT_ORCAMENTO) break;
     const corpo=ficha.slice(0,PX_CTX_MAT_POR_MATERIAL);
     u+="--- "+String((m&&m.titulo)||"Material")+
@@ -5545,8 +5595,18 @@ async function pxReescreverCopy(opts){
   }
 
   if(!soBrief&&!soStory) u+=soLeg?_pxAvisoNaoRepeteArte(_pxHtmlParaTexto(task.desc||task.description)):"\n⛔ A LEGENDA NÃO REPETE O TEXTO DA ARTE que você escreveu no briefing. Mesmo assunto, sim — mesmas frases, nunca. A legenda complementa com outras palavras e outro ângulo.\n";
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
-  let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+  { const _st=pxProdutosPorStatus(ctx);
+    if(_st.inativos.length) u+="\n⛔ PRODUTOS INATIVOS "+(unit?("NA UNIDADE "+unit.toUpperCase()):"DESTE CLIENTE")+" — não podem ser o assunto nem aparecer na copy, mesmo que algum material fale deles: "+_st.inativos.map(function(p){return p.nome;}).join(", ")+"."+(ehRefazer?" Escolha o assunto novo SÓ entre os produtos ativos.":"")+"\n"; }
+  const _pedidoCitaInativo=pxTextoCitaInativo(pedido,ctx);
+  let txt="";
+  for(let _tent=0;_tent<2;_tent++){
+    const data=await askIA({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
+    txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+    const _cita=pxTextoCitaInativo(txt,ctx).filter(function(n){ return _pedidoCitaInativo.indexOf(n)<0; });
+    if(!_cita.length) break;
+    if(_tent===1) throw new Error("A IA insistiu em produto INATIVO "+(unit?("em "+unit):"")+" ("+_cita.join(", ")+"). Nada foi trocado — tente de novo ou diga no pedido qual produto usar.");
+    u+="\n\n⛔ A RESPOSTA ANTERIOR FALOU DE "+_cita.join(", ")+" — INATIVO "+(unit?("NA UNIDADE "+unit.toUpperCase()):"")+". Escreva de novo, sobre outro produto ativo, sem citar esse.";
+  }
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Aceita ===BRIEFING===, ###BRIEFING###, **BRIEFING**, BRIEFING: etc. Normaliza tudo antes de cortar.
   txt=txt.replace(/^[\s>*#=_-]*(TITULO|T\u00cdTULO|BRIEFING|LEGENDA)\s*(DA COPY|DO CARD)?\s*[:\s>*#=_-]*$/gim,function(_m,p1){return "===" + (p1.toUpperCase()==="T\u00cdTULO"?"TITULO":p1.toUpperCase()) + "===";});
