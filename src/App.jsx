@@ -35098,12 +35098,19 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       patch.contentType="foto";
       tls.push({type:"edit",label:"Tipo de conteúdo marcado automático pela avaliação (foto de obra)",at:now,atFmt:nowFmt(),user:actor,from:"em branco",to:"Ajuste de template"});
     }
-    if(!/^\d{4}-\d{2}/.test(String(current.referenceMonth||current.reference_month||""))){
-      const d=new Date(); const alvo=new Date(d.getFullYear(),d.getMonth()+(d.getDate()>10?1:0),1);
-      const ym=alvo.getFullYear()+"-"+String(alvo.getMonth()+1).padStart(2,"0");
-      const mn=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][alvo.getMonth()]+"/"+String(alvo.getFullYear()).slice(-2);
+    /* (05/10/2026, Gustavo) "tá em 05/10 e tá aparecendo set/26 pra avaliação de copy — já deveria estar
+       outubro". O mês só era preenchido quando estava VAZIO; card criado em setembro ficava com set/26.
+       Agora: vazio OU já vencido (antes do mês de pagamento de hoje) → vira o mês de hoje, pela regra da casa
+       (pxMesPagamentoAuto: até o dia 9 = mês atual; do dia 10 em diante = mês seguinte). Mês à frente fica. */
+    const _refAtual=String(current.referenceMonth||current.reference_month||"").slice(0,7);
+    const _refHoje=(typeof pxMesPagamentoAuto==="function")?pxMesPagamentoAuto():"";
+    const _vazio=!/^\d{4}-\d{2}$/.test(_refAtual);
+    if(_refHoje&&(_vazio||_refAtual<_refHoje)&&!current.paidAt&&!current.paid_at){
+      const ym=_refHoje;
+      const _MN=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+      const _fm=function(x){ const q=String(x||"").split("-"); return q.length<2?"em branco":(_MN[parseInt(q[1],10)-1]+"/"+q[0].slice(-2)); };
       patch.referenceMonth=ym;
-      tls.push({type:"edit",label:"Mês de pagamento marcado automático pela avaliação ("+(d.getDate()>10?"depois do dia 10 → próximo mês":"até o dia 10 → mês atual")+")",at:now,atFmt:nowFmt(),user:actor,from:"em branco",to:mn});
+      tls.push({type:"edit",label:"Mês de pagamento "+(_vazio?"marcado":"atualizado")+" automático pela avaliação ("+(new Date().getDate()>=10?"do dia 10 em diante → próximo mês":"até o dia 9 → mês atual")+")",at:now,atFmt:nowFmt(),user:actor,from:_vazio?"em branco":_fm(_refAtual),to:_fm(ym)});
     }
     if(!tls.length) return;
     setTasks(p=>p.map(t=>t.id!==current.id?t:{...t,...patch,timeline:[...(t.timeline||[]),...tls]}));
