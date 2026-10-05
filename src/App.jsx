@@ -36158,19 +36158,21 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
                 {isMob?null:"Copiar link"}
               </button>
-              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"7px 17px",display:"flex",alignItems:"center"}}>
-                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:42,maxWidth:165,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:19,fontWeight:700}}>{cl.abbr}</span>)}
-              </div>)}
+              {/* (05/10/2026, Gustavo) Caixa da logo com LARGURA FIXA — senão os colaboradores
+                  "pulam" pra esquerda/direita conforme o tamanho da logo de cada cliente. */}
+              <div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,width:isMob?150:200,height:58,boxSizing:"border-box",padding:"7px 14px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {cl?(CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:42,maxWidth:"100%",objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:19,fontWeight:700}}>{cl.abbr}</span>)):null}
+              </div>
               {/* Unidades Bioter — "grupo"/"brasil" também viram chip (pxBioterUnidades) */}
               {cl&&cl.id==="bioter"&&(()=>{
                 const sel=(typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit):[];
-                if(sel.length===0)return(<span title="Card da Bioter sem unidade marcada" style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                if(sel.length===0)return(<span title="Card da Bioter sem unidade marcada" style={{order:2,background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
                   <Ico n="map-pin" size={13} color="#92400e"/>Unidade não definida
                 </span>);
-                return sel.map(u=>(<span key={u.id} title={u.hint} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
+                return <div style={{order:2,display:"inline-flex",flexWrap:"wrap",gap:10}}>{sel.map(u=>(<span key={u.id} title={u.hint} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
                   <Ico n="map-pin" size={13} color={u.color}/>{u.label}
                   {u.grupo&&<span style={{background:u.color,color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{u.grupo}</span>}
-                </span>));
+                </span>))}</div>;
               })()}
               {/* Responsáveis — clique abre a grade com a foto de cada um (15/09/2026).
                    Mesma lista do cartão (`_cardPodeSerResp`) e mesmo `ensureSupervisors`,
@@ -36198,14 +36200,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 // 05/10/2026 — Gustavo: "colocar já todos lado a lado... só um clique".
                 // Quem aprova vê todos os elegíveis numa fileira; um clique liga/desliga.
                 if(!podeEditar){
-                  return(<div style={{display:"inline-flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #e9ecf3",borderRadius:99,padding:"4px 15px 4px 5px"}}>
+                  return(<div style={{order:1,display:"inline-flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #e9ecf3",borderRadius:99,padding:"4px 15px 4px 5px"}}>
                     <div style={{display:"flex",alignItems:"center"}}>
                       {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name} style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-9,zIndex:3-i,flexShrink:0}}><UserAvatar user={u} size={40} border={false}/></div>))}
                     </div>
                     <span style={{color:"#0f172a",fontSize:15,fontWeight:600}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
                   </div>);
                 }
-                return(<div title="Clique pra ligar/desligar o responsável — salva no card" style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:6}}>
+                return(<div title="Clique pra ligar/desligar o responsável — salva no card" style={{order:1,display:"flex",flexWrap:"wrap",alignItems:"center",gap:6}}>
                   {_elegiveis.map(u=>{
                     const sel=ids.indexOf(u.id)>=0;
                     return <button key={u.id} type="button" onClick={()=>_trocar(u.id)} title={(sel?"Tirar ":"Colocar ")+u.name}
@@ -36304,9 +36306,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
               const ID=(k)=>"pxmeta-"+k+"-"+current.id;
               const INVIS={position:"absolute",opacity:0,pointerEvents:"none",border:"none",padding:0,margin:0,background:"transparent",width:1,height:1};
-              const ROT={display:"block",fontSize:isMob?8.5:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,lineHeight:1.2,color:"#94a3b8"};
-              const VAL=(vazio)=>({fontSize:isMob?13:14.5,fontWeight:800,letterSpacing:-.25,lineHeight:1.35,color:vazio?"#a5adba":"#0f172a",whiteSpace:"nowrap"});
-              return(<div style={{display:"flex",flexWrap:"wrap",gap:isMob?8:10,marginBottom:isMob?16:26}}>
+              const ROT={display:"block",fontSize:isMob?8.5:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:isMob?.8:.5,lineHeight:1.2,color:"#94a3b8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
+              const VAL=(vazio)=>({fontSize:isMob?13:13.5,fontWeight:800,letterSpacing:-.25,lineHeight:1.35,color:vazio?"#a5adba":"#0f172a",whiteSpace:"nowrap"});
+              return(<div style={{display:"flex",flexWrap:isMob?"wrap":"nowrap",gap:isMob?8:8,marginBottom:isMob?16:26}}>
                 {aberto&&<div onClick={()=>setMetaAberto(null)} style={{position:"fixed",inset:0,zIndex:55}}/>}
                 {linhas.map(l=>{
                   const vazio=!l.val;
@@ -36318,19 +36320,19 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     setMetaAberto(null);
                     abrirSeletor(ID(l.key));
                   };
-                  return(<div key={l.key} style={{position:"relative",zIndex:aqui?61:1,flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":258}}>
+                  return(<div key={l.key} style={{position:"relative",zIndex:aqui?61:1,flex:isMob?"1 1 100%":(l.key==="saida"||l.key==="mat"?"1.35 1 0":"1 1 0"),minWidth:0,width:isMob?"100%":"auto"}}>
                     <div role={podeEditar?"button":undefined} tabIndex={podeEditar?0:undefined}
                       onClick={clicar}
                       onKeyDown={podeEditar?(e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();clicar();}}):undefined}
                       title={l.key==="mat"?"Material solicitado pro cliente — não pedir de novo (marcar/desmarcar é no cartão)":(podeEditar?("Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"):undefined)}
-                      style={{position:"relative",display:"flex",alignItems:"center",gap:11,background:"#fff",
+                      style={{position:"relative",display:"flex",alignItems:"center",gap:isMob?11:9,background:"#fff",
                         border:"1px "+(vazio?"dashed":"solid")+" "+(aqui?"#7c3aed":(vazio?"#d7dde6":"#e9ecf3")),
-                        borderRadius:14,padding:isMob?"10px 12px":"11px 14px",width:"100%",boxSizing:"border-box",
+                        borderRadius:14,padding:isMob?"10px 12px":"10px 11px",width:"100%",boxSizing:"border-box",
                         boxShadow:aqui?"0 0 0 3px rgba(124,58,237,.13)":"0 1px 2px rgba(15,23,42,.05)",
                         cursor:(podeEditar&&l.key!=="mat")?"pointer":"default",transition:"border-color .12s,box-shadow .12s",outline:"none"}}
                       onMouseEnter={ev=>{if(podeEditar&&!aqui)ev.currentTarget.style.borderColor="#cbd5e1";}}
                       onMouseLeave={ev=>{if(podeEditar&&!aqui)ev.currentTarget.style.borderColor=vazio?"#d7dde6":"#e9ecf3";}}>
-                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?29:32,height:isMob?29:32,borderRadius:10,background:vazio?"#f1f4f8":l.color+"14",flexShrink:0}}>
+                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?29:28,height:isMob?29:28,borderRadius:9,background:vazio?"#f1f4f8":l.color+"14",flexShrink:0}}>
                         <Ico n={l.icon} size={isMob?14:15} color={vazio?"#a5adba":l.color}/>
                       </span>
                       <span style={{minWidth:0,flex:1}}>
