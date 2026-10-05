@@ -35226,7 +35226,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const _refAtual=String(current.referenceMonth||current.reference_month||"").slice(0,7);
     const _refHoje=(typeof pxMesPagamentoAuto==="function")?pxMesPagamentoAuto():"";
     const _vazio=!/^\d{4}-\d{2}$/.test(_refAtual);
-    if(_refHoje&&(_vazio||_refAtual<_refHoje)&&!current.paidAt&&!current.paid_at){
+    // (05/10/2026, Gustavo) "shorts não é pra aparecer com data de pagamento preenchido — não precisam de edição".
+    const _ehShort=(typeof pxEhShort==="function")&&pxEhShort(current);
+    if(_ehShort&&!_vazio&&!current.paidAt&&!current.paid_at){
+      patch.referenceMonth="";
+      tls.push({type:"edit",label:"Mês de pagamento tirado automático: Short não passa por edição",at:now,atFmt:nowFmt(),user:actor,from:_refAtual,to:"em branco"});
+    }
+    if(!_ehShort&&_refHoje&&(_vazio||_refAtual<_refHoje)&&!current.paidAt&&!current.paid_at){
       const ym=_refHoje;
       const _MN=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
       const _fm=function(x){ const q=String(x||"").split("-"); return q.length<2?"em branco":(_MN[parseInt(q[1],10)-1]+"/"+q[0].slice(-2)); };
@@ -36426,7 +36432,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 ...(_matPed?[{key:"mat",icon:"clock",rot:"Material",val:_matVal,color:"#f59e0b"}]:[]),
               ].filter(l=>podeEditar||l.val)
                /* (29/09, Gustavo) story / só o Vinicius: não tem tipo de conteúdo — o bloco vazio "definir" nem aparece */
-               .filter(l=>!((l.key==="ct"||l.key==="ref")&&!l.val&&_pxSoVinicius(current)));   // só quando é SÓ o Vinicius (story com designer continua pedindo)
+               .filter(l=>!((l.key==="ct"||l.key==="ref")&&!l.val&&_pxSoVinicius(current)))
+               .filter(l=>!(l.key==="ref"&&!l.val&&(typeof pxEhShort==="function")&&pxEhShort(current)));   // (05/10) short não tem pagamento   // só quando é SÓ o Vinicius (story com designer continua pedindo)
               if(linhas.length===0)return null;
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
               const ID=(k)=>"pxmeta-"+k+"-"+current.id;
@@ -58675,7 +58682,8 @@ const taskToRow = (t) => ({
   publish_time:   t.publishTime  || "09:00",
   bioter_unit:    t.bioterUnit   || "",
   content_type:   t.contentType  || null,
-  reference_month: t.referenceMonth || null,
+  // (05/10/2026, Gustavo) Short não passa por edição → não tem mês de pagamento (só fica se já foi pago).
+  reference_month: ((typeof pxEhShort==="function"&&pxEhShort(t)&&!t.paidAt&&!t.paid_at)?null:(t.referenceMonth || null)),
   paid_at:        t.paidAt         || null,
   score:          t.score        ?? null,
   ajustar:        !!t.ajustar,
