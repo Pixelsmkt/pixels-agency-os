@@ -20788,6 +20788,11 @@ function _pxCasGrupo(t){
    Aqui o id fica guardado durante a varredura inteira — as três passadas e tudo que elas
    chamam — em vez de ser empurrado por meia dúzia de assinaturas. Sempre zerado no fim. */
 let _PX_CAS_PROTEGIDO=null;
+/* (05/10/2026, Gustavo) "passei o Audrey Biodigestor Chapecó pra segunda (hoje), por que não arrastou
+   o Foto de obra pra frente?" Card de HOJE nunca anda na cascata — mas quando a pessoa ARRASTA um card
+   pra cima de outro da mesma unidade no mesmo dia, o que já estava lá tem que sair, mesmo sendo hoje
+   (regra de 24/09: quem anda é o outro card que estava lá). Esta é a única exceção: o id liberado. */
+let _PX_CAS_HOJE_OK=null;
 /* ═══ MEXEU NA DATA À MÃO, A DATA FICA (24/09/2026, Rodrigo) ═══════════════════════
    "Hellen arrastou post de sábado pra quinta.. mas jogou de volta pra sábado por conta da
     organização automática.. se ela arrastou pra quinta um card, você deveria ter jogado o
@@ -20870,7 +20875,8 @@ function _pxCasMovivel(t,hoje,novoId){
   if(st==="publicado"||st==="reprovado"||st==="pausado") return false;
   if(_pxNaoEhPublicacao(t)) return false;
   const iso=String(t.publish_date||"").slice(0,10);
-  if(!iso||iso<=hoje) return false;
+  if(!iso||iso<hoje) return false;
+  if(iso===hoje&&!(_PX_CAS_HOJE_OK&&String(t.id)===String(_PX_CAS_HOJE_OK))) return false;   // hoje só o liberado (05/10)
   // (17/09, Vinicius) Foto de obra e Short PODEM andar — feira/urgente vale mais que o grupo das
   // três unidades. Só a unidade afetada mexe; as outras ficam. Collab continua travado.
   // (17/09, Vinicius) Collab que NÃO é comemorativa ANDA — pela fila de quartas de collab.
@@ -21339,6 +21345,22 @@ async function pxCascataVarrer(protegerId,opts){
         .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
       if(!r||r.error) break;
       _pxCasProtegidosManuais(r.data||[]);
+      /* (05/10) o card que já estava NO MESMO DIA (e na mesma unidade) do card arrastado é o primeiro a sair */
+      let _prefSair=null;
+      if(protegerId){
+        const _pr=(r.data||[]).find(function(x){ return String(x.id)===String(protegerId); });
+        const _dia=_pr?String(_pr.publish_date||"").slice(0,10):"";
+        if(_dia&&_dia>=hoje){
+          const _alvP=_pxColAlvos(_pr);
+          const _col=(r.data||[]).filter(function(x){
+            if(String(x.id)===String(protegerId)||String(x.publish_date||"").slice(0,10)!==_dia) return false;
+            if(x.status==="publicado"||x.status==="reprovado"||x.status==="pausado"||_pxNaoEhPublicacao(x)) return false;
+            if(_pxCasTrilha(x)==="fixa"||_pxCasTrilha(x)==="collab") return false;
+            return _pxColAlvos(x).some(function(a){ return _alvP.indexOf(a)>=0; });
+          })[0];
+          if(_col){ _prefSair=String(_col.id); if(_dia===hoje) _PX_CAS_HOJE_OK=_prefSair; }
+        }
+      }
       const porSemana={};
       (r.data||[]).forEach(function(x){
         const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
@@ -21403,6 +21425,7 @@ async function pxCascataVarrer(protegerId,opts){
              passada só, em vez de uma volta por unidade. */
           // (collab sobrando na semana já foi tratado acima, antes da conta de cadência)
           // (24/09) sai primeiro quem NÃO tem data marcada à mão (o do fim da semana); marcado à mão só cede pro mais novo
+          if(!sair&&_prefSair) sair=ordenados.find(function(x){ return String(x.id)===_prefSair&&_pxCasMovivel(x,hoje,null); })||null;   // (05/10)
           if(!sair) sair=ordenados.filter(function(x){ return _pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"; }).sort(function(p,q){ return _pxCasCmpSaida(p,q); })[0]||null;
           if(!sair) continue;
           /* A âncora é só o ponto de partida (semana + alvo) do planejador e ele recusa data
@@ -21424,10 +21447,13 @@ async function pxCascataVarrer(protegerId,opts){
         const cabeAlvo=!!prot&&alvosS.length>0&&alvosS.every(function(a){ return alvosP.indexOf(a)>=0; });
         const noDia=(r.data||[]).filter(function(x){ return String(x.publish_date||"").slice(0,10)===_vaga&&String(x.id)!==String(sair.id); });
         const diaLivre=!_pxColConta(noDia,alvosS[0]).length&&alvosS.every(function(a){ return !_pxColConta(noDia,a).length; });
-        if(cabeAlvo&&diaLivre&&String(sair.publish_date||"").slice(0,10)!==_vaga){
+        /* (05/10) Foto de obra e Short (trilha material) não trocam de lugar: são a grade das segundas —
+           vão pela fila (planejador), pra próxima vaga de material, e não pro dia da semana que sobrou. */
+        const _ehMaterial=_pxCasTrilha(sair)==="material";
+        if(cabeAlvo&&diaLivre&&!_ehMaterial&&String(sair.publish_date||"").slice(0,10)!==_vaga){
           const de=String(sair.publish_date||"").slice(0,10);
           const n=await pxCascataAplicar({moves:[{id:sair.id,title:sair.title||"",de:de,para:_vaga,client:sair.client,unit:sair.bioter_unit||""}],lixeira:[],travou:[],semana:""},null,"troca de lugar",
-            "trocou de lugar com \""+String(prot.title||"").slice(0,50)+"\", que foi posto à mão em "+_pxCasBr(de),{sufixo:" — ficou com a vaga que ele deixou"});
+            "trocou de lugar com \""+String(prot.title||"").slice(0,50)+"\", que foi posto à mão em "+_pxCasBr(String(prot.publish_date||"").slice(0,10)),{sufixo:" — ficou com a vaga que ele deixou"});
           _vaga="";
           if(n){ total+=n; continue; }
         }
@@ -21440,6 +21466,7 @@ async function pxCascataVarrer(protegerId,opts){
       if(!n) break;
       total+=n;
     }
+    _PX_CAS_HOJE_OK=null;   // (05/10) a exceção de hoje vale só pra troca do card arrastado
     /* 2ª passada (22/09/2026): semana ABAIXO da cadência. Antes só existia a conta de quem
        passou do teto; semana com post faltando ficava assim pra sempre. */
     try{ total+=await pxCascataVarrerCurtas(); }catch(_e){ console.warn("[cascata curtas]",_e); }
@@ -21447,7 +21474,7 @@ async function pxCascataVarrer(protegerId,opts){
     try{ total+=await pxCascataEspacar(); }catch(_e){ console.warn("[cascata espacar]",_e); }
     return total;
   }catch(e){ console.warn("[cascata varrer]",e); return 0; }
-  finally{ _PX_CAS_PROTEGIDO=_protAntes; }
+  finally{ _PX_CAS_PROTEGIDO=_protAntes; _PX_CAS_HOJE_OK=null; }
 }
 /* ═══ VARREDURA DE SEMANA CURTA (22/09/2026, Rodrigo) ══════════════════════════════
    "não pode acontecer isso" — a Bioter Glória ficou com 1 post na semana de 06/12 porque o
