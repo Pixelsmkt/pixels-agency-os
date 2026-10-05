@@ -36180,7 +36180,6 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 const users=ids.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
                 const podeEditar=!!isApprover;
                 if(users.length===0&&!podeEditar)return null;
-                const aqui=podeEditar&&metaAberto&&metaAberto.id===current.id&&metaAberto.campo==="resp";
                 const _elegiveis=TEAM.filter(u=>(typeof _cardPodeSerResp==="function")?_cardPodeSerResp(u):true);
                 const _ROLE_SETOR={designer:"design",editor:"video",coordinator:"social",gestor:"trafego"};
                 const _trocar=(uid)=>{
@@ -36196,41 +36195,30 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   const nomes=(arr)=>arr.map(id=>{const u=TEAM.find(x=>x.id===id);return u?u.name.split(" ")[0]:id;}).join(", ");
                   salvarMetaCard(current,{assignees:prox,assignee:prox[0]||"",sector:setor},"respons\u00e1veis",nomes(ids),nomes(prox),false);
                 };
-                const caixa=(<div style={{display:"inline-flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid "+(aqui?"#7c3aed":"#e9ecf3"),borderRadius:99,padding:users.length?"4px 15px 4px 5px":"9px 16px",boxShadow:aqui?"0 0 0 3px rgba(124,58,237,.13)":"0 1px 2px rgba(15,23,42,.04)",transition:"border-color .12s,box-shadow .12s"}}>
-                  {users.length>0&&<div style={{display:"flex",alignItems:"center"}}>
-                    {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
-                      style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-9,zIndex:3-i,flexShrink:0}}>
-                      <UserAvatar user={u} size={40} border={false}/>
-                    </div>))}
-                  </div>}
-                  {users.length>3&&<span style={{color:C.td,fontSize:12,fontWeight:700}}>+{users.length-3}</span>}
-                  <span style={{color:users.length?"#0f172a":"#94a3b8",fontSize:15,fontWeight:600,marginLeft:users.length?3:0}}>{users.length?users.map(u=>u.name.split(" ")[0]).join(", "):"Sem responsável"}</span>
-                  {podeEditar&&<Ico n="edit" size={13} color="#94a3b8"/>}
-                </div>);
-                return(<div style={{position:"relative",zIndex:aqui?61:1}}>
-                  {podeEditar
-                    ? <button type="button" onClick={()=>setMetaAberto(aqui?null:{id:current.id,campo:"resp"})}
-                        title="Clique pra trocar os responsáveis — salva no card"
-                        style={{display:"block",background:"none",border:"none",padding:0,margin:0,font:"inherit",color:"inherit",cursor:"pointer"}}>{caixa}</button>
-                    : caixa}
-                  {aqui&&(<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 8px)",left:0,zIndex:62,background:"#fff",border:"1px solid #e9ecf3",borderRadius:16,boxShadow:"0 16px 38px rgba(15,23,42,.18)",padding:12,width:"min(430px, calc(100vw - 48px))",boxSizing:"border-box"}}>
-                    <div style={{fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,color:"#94a3b8",marginBottom:9}}>Quem fica responsável</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(112px,1fr))",gap:7}}>
-                      {_elegiveis.map(u=>{
-                        const sel=ids.indexOf(u.id)>=0;
-                        return <button key={u.id} type="button" onClick={()=>_trocar(u.id)}
-                          style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"10px 6px 9px",background:sel?"#f5efff":"#fff",border:"1.5px solid "+(sel?"#7c3aed":"#eef1f6"),borderRadius:13,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",position:"relative"}}
-                          onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.borderColor="#cbd5e1";}}
-                          onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.borderColor="#eef1f6";}}>
-                          <span style={{position:"relative",display:"inline-flex",opacity:sel?1:.78}}>
-                            <UserAvatar user={u} size={40} border={false}/>
-                            {sel&&<span style={{position:"absolute",right:-3,bottom:-3,width:17,height:17,borderRadius:"50%",background:"#7c3aed",border:"2px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n="check" size={9} color="#fff"/></span>}
-                          </span>
-                          <span style={{fontSize:11.5,fontWeight:sel?800:600,color:sel?"#5b21b6":"#475569",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.name.split(" ")[0]}</span>
-                        </button>;
-                      })}
+                // 05/10/2026 — Gustavo: "colocar já todos lado a lado... só um clique".
+                // Quem aprova vê todos os elegíveis numa fileira; um clique liga/desliga.
+                if(!podeEditar){
+                  return(<div style={{display:"inline-flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #e9ecf3",borderRadius:99,padding:"4px 15px 4px 5px"}}>
+                    <div style={{display:"flex",alignItems:"center"}}>
+                      {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name} style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-9,zIndex:3-i,flexShrink:0}}><UserAvatar user={u} size={40} border={false}/></div>))}
                     </div>
-                  </div>)}
+                    <span style={{color:"#0f172a",fontSize:15,fontWeight:600}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                  </div>);
+                }
+                return(<div title="Clique pra ligar/desligar o responsável — salva no card" style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:6}}>
+                  {_elegiveis.map(u=>{
+                    const sel=ids.indexOf(u.id)>=0;
+                    return <button key={u.id} type="button" onClick={()=>_trocar(u.id)} title={(sel?"Tirar ":"Colocar ")+u.name}
+                      style={{display:"inline-flex",alignItems:"center",gap:7,padding:"3px 13px 3px 3px",background:sel?"#f5efff":"#fff",border:"1.5px solid "+(sel?"#7c3aed":"#eef1f6"),borderRadius:99,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",boxShadow:sel?"0 0 0 3px rgba(124,58,237,.10)":"none"}}
+                      onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.borderColor="#cbd5e1";}}
+                      onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.borderColor="#eef1f6";}}>
+                      <span style={{position:"relative",display:"inline-flex",opacity:sel?1:.55,filter:sel?"none":"grayscale(.6)"}}>
+                        <UserAvatar user={u} size={30} border={false}/>
+                        {sel&&<span style={{position:"absolute",right:-3,bottom:-3,width:14,height:14,borderRadius:"50%",background:"#7c3aed",border:"2px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n="check" size={7} color="#fff"/></span>}
+                      </span>
+                      <span style={{fontSize:12.5,fontWeight:sel?800:600,color:sel?"#5b21b6":"#64748b",whiteSpace:"nowrap"}}>{u.name.split(" ")[0]}</span>
+                    </button>;
+                  })}
                 </div>);
               })()}
             </div>
