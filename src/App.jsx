@@ -34252,6 +34252,78 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // O QUE A IA VAI REESCREVER (15/09/2026): "ambos" | "briefing" | "legenda".
   // Só aparece no Ajustar copy — nova abordagem e refazer do zero trocam a copy inteira.
   const [refazerAlvo,setRefazerAlvo]=useState("ambos");
+  /* (05/10/2026, Gustavo) "permita arrastar essa box de ajustar copy… ou melhor, coloca na sidebar direita".
+     No computador o painel Ajustar copy / Refazer do zero abre NA SIDEBAR, no lugar dos botões — sem fundo
+     escuro, a copy fica toda visível pra ler enquanto escreve. No celular continua janela. */
+  function _refazerUI(docked){
+    if(!refazerModal) return null;
+      const _aj=refazerModal.tipo==="ajuste";
+      const _ab=refazerModal.tipo==="abordagem";
+      const _grad=(_aj||_ab)?"linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)":"linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)";
+      const _sombra=(_aj||_ab)?"0 4px 14px rgba(109,40,217,.40)":"0 4px 14px rgba(3,105,161,.40)";
+      const _nVers=(function(){const _v=refazerModal.task&&refazerModal.task.copyVersoes;return Array.isArray(_v)?_v.length:0;})();
+      const _tit=_aj?"Ajustar copy":(_ab?"Testar nova abordagem":"Refazer do zero");
+      const _sub=_aj?"Você diz o que mudar — ele reescreve":(_ab?"Mesmo assunto, outro jeito de contar":"Assunto e abordagem novos");
+      const _lbl=_aj?"O que precisa ajustar?":(_ab?"O que mudar na abordagem?":"Por que não funcionou?");
+      const _ph=_aj
+        ? "Ex.: tira o storytelling, seja direto; o título tá genérico; não cita obra, é pra homenagear o cliente; troca o assunto, esse já saiu mês passado…"
+        : _ab
+        ? "Ex.: começa com uma pergunta em vez de afirmação; menos técnico; foca no custo e não no processo; puxa mais pro lado emocional…"
+        : "Ex.: esse assunto já saiu mês passado; não combina com o momento do cliente; muito genérico…";
+      const _fechar=()=>{setRefazerModal(null);setRefazerText("");setRefazerAlvo("ambos");};
+    return (
+        <div onClick={e=>e.stopPropagation()} style={docked?{background:"#fff",borderRadius:16,width:"100%",border:"1px solid #ddd6fe",boxShadow:"0 10px 30px rgba(109,40,217,.16)",overflow:"hidden",position:"sticky",top:8,zIndex:6}:{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
+          <div style={{background:_grad,padding:docked?"14px 16px":"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="8" width="16" height="12" rx="3.2"/><path d="M12 8V5"/><circle cx="12" cy="3.6" r="1.5" fill="#fff" stroke="none"/><circle cx="9" cy="13.6" r="1.5" fill="#fff" stroke="none"/><circle cx="15" cy="13.6" r="1.5" fill="#fff" stroke="none"/><path d="M9.6 17.2h4.8"/><path d="M2 13v2.5M22 13v2.5"/></svg>
+              </div>
+              <div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{_tit}</div>
+                <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>{_sub}</div>
+              </div>
+            </div>
+            <button onClick={_fechar} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
+          </div>
+          <div style={{padding:docked?"16px":"20px 22px",display:"flex",flexDirection:"column",gap:12}}>
+            {/* O QUE AJUSTAR (15/09/2026): quase sempre só um dos dois está ruim.
+                Reescrever o par gasta tempo, crédito e mexe no que já estava aprovado. */}
+            {_aj&&(<div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:7}}>O que ajustar</div>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                {[{id:"ambos",l:"Os dois"},{id:"briefing",l:"Só o briefing"},{id:"legenda",l:"Só a legenda"}].map(function(o){
+                  const on=refazerAlvo===o.id;
+                  return <button key={o.id} onClick={()=>setRefazerAlvo(o.id)}
+                    style={{background:on?"#f5f3ff":"#fff",border:"1px solid "+(on?"#7c3aed":C.b1),color:on?"#6d28d9":C.ts,
+                            borderRadius:999,padding:"7px 15px",fontSize:12.5,fontWeight:on?700:600,cursor:"pointer",
+                            fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}>{o.l}</button>;
+                })}
+              </div>
+              <div style={{color:C.td,fontSize:11,marginTop:7,lineHeight:1.45}}>
+                {refazerAlvo==="briefing"?"A legenda atual fica intacta.":(refazerAlvo==="legenda"?"O briefing atual fica intacto.":"Briefing e legenda são reescritos juntos.")}
+              </div>
+            </div>)}
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{_lbl}</div>
+            <textarea value={refazerText} onChange={e=>setRefazerText(e.target.value)}
+              autoFocus rows={docked?7:5} placeholder={_ph}
+              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 13px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+            <div style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:11.5,lineHeight:1.5}}>
+              O card <strong>não sai daqui</strong>: o Claude reescreve na hora e a copy troca nesta tela. A versão atual fica guardada — dá pra voltar nela a qualquer momento pelas setas de versão.
+              {_aj&&<> Pra mudar de assunto, é só pedir aqui.</>}
+              {_aj&&_nVers>1&&<><br/><strong>Ele já recebeu os {_nVers-1} pedidos anteriores deste card</strong> — não vai repetir o que você já apontou.</>}
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
+              <button onClick={_fechar}
+                style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+              <button onClick={()=>{pedirRefacaoClaude(refazerModal.task,refazerModal.tipo,refazerText,false,_aj?refazerAlvo:"ambos");_fechar();}}
+                style={{background:_grad,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:_sombra,display:"inline-flex",alignItems:"center",gap:6}}>
+                <Ico n="check" size={13} color="#fff"/>{_aj?(refazerAlvo==="briefing"?"Ajustar briefing":(refazerAlvo==="legenda"?"Ajustar legenda":"Ajustar os dois")):(_ab?"Pedir nova abordagem":"Pedir refação")}
+              </button>
+            </div>
+          </div>
+        </div>
+    );
+  }
   // Nome de quem escreveu a copy, pro histórico e pras notificações não mentirem
   // quando o provedor for a OpenAI (14/09/2026).
   const _pxNomeIA=function(){
@@ -35206,6 +35278,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      Só preenche o que está EM BRANCO — valor marcado à mão nunca é trocado. Fica
      registrado na timeline do card ("automático pela avaliação"). Fora desta tela
      nada muda, de propósito: é aqui que o controle do pagamento é feito. */
+  // (05/10/2026) Painel Ajustar copy na sidebar: trocou de card → fecha (senão ajustaria o card anterior).
+  useEffect(function(){ setRefazerModal(function(m){ return (m&&m.task&&current&&String(m.task.id)!==String(current.id))?null:m; }); },[current&&current.id]);
   const _autoMetaFeito=useRef({});
   useEffect(function(){
     if(!current||!current.id||!isApprover||!setTasks) return;
@@ -36806,7 +36880,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           })()}
 
           {/* Action buttons — FIXOS NO TOPO (sticky) */}
-          {isApprover?(<div style={isMob
+          {isApprover&&!isMob&&tab==="copys"&&refazerModal?_refazerUI(true):isApprover?(<div style={isMob
               // Mobile: barra de ações FIXA no rodapé (antes ficava no fim da página, depois de tudo)
               ? {position:"fixed",left:0,right:0,bottom:0,zIndex:60,background:C.card,borderRadius:"16px 16px 0 0",padding:"10px 12px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",borderTop:"1px solid "+C.b1,boxShadow:"0 -8px 24px rgba(15,23,42,0.12)",display:"grid",gridTemplateColumns:(tab==="publicacao"||tab==="video")?"1fr 1fr":"1fr",gap:8}
               : {position:"sticky",top:8,zIndex:5,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1,boxShadow:"0 2px 12px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:8}}>
@@ -37485,75 +37559,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     </div>}
 
     {/* ── Modal Refazer / Testar nova abordagem (o Claude reescreve) ── */}
-    {refazerModal&&(()=>{
-      const _aj=refazerModal.tipo==="ajuste";
-      const _ab=refazerModal.tipo==="abordagem";
-      const _grad=(_aj||_ab)?"linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)":"linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)";
-      const _sombra=(_aj||_ab)?"0 4px 14px rgba(109,40,217,.40)":"0 4px 14px rgba(3,105,161,.40)";
-      const _nVers=(function(){const _v=refazerModal.task&&refazerModal.task.copyVersoes;return Array.isArray(_v)?_v.length:0;})();
-      const _tit=_aj?"Ajustar copy":(_ab?"Testar nova abordagem":"Refazer do zero");
-      const _sub=_aj?"Você diz o que mudar — ele reescreve":(_ab?"Mesmo assunto, outro jeito de contar":"Assunto e abordagem novos");
-      const _lbl=_aj?"O que precisa ajustar?":(_ab?"O que mudar na abordagem?":"Por que não funcionou?");
-      const _ph=_aj
-        ? "Ex.: tira o storytelling, seja direto; o título tá genérico; não cita obra, é pra homenagear o cliente; troca o assunto, esse já saiu mês passado…"
-        : _ab
-        ? "Ex.: começa com uma pergunta em vez de afirmação; menos técnico; foca no custo e não no processo; puxa mais pro lado emocional…"
-        : "Ex.: esse assunto já saiu mês passado; não combina com o momento do cliente; muito genérico…";
-      const _fechar=()=>{setRefazerModal(null);setRefazerText("");setRefazerAlvo("ambos");};
-      return (<div onClick={e=>{if(e.target===e.currentTarget)_fechar();}}
+    {refazerModal&&(isMob||tab!=="copys")&&(<div onClick={e=>{if(e.target===e.currentTarget){setRefazerModal(null);setRefazerText("");setRefazerAlvo("ambos");}}}
         style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-        <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
-          <div style={{background:_grad,padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="8" width="16" height="12" rx="3.2"/><path d="M12 8V5"/><circle cx="12" cy="3.6" r="1.5" fill="#fff" stroke="none"/><circle cx="9" cy="13.6" r="1.5" fill="#fff" stroke="none"/><circle cx="15" cy="13.6" r="1.5" fill="#fff" stroke="none"/><path d="M9.6 17.2h4.8"/><path d="M2 13v2.5M22 13v2.5"/></svg>
-              </div>
-              <div>
-                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{_tit}</div>
-                <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>{_sub}</div>
-              </div>
-            </div>
-            <button onClick={_fechar} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
-          </div>
-          <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:12}}>
-            {/* O QUE AJUSTAR (15/09/2026): quase sempre só um dos dois está ruim.
-                Reescrever o par gasta tempo, crédito e mexe no que já estava aprovado. */}
-            {_aj&&(<div>
-              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:7}}>O que ajustar</div>
-              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-                {[{id:"ambos",l:"Os dois"},{id:"briefing",l:"Só o briefing"},{id:"legenda",l:"Só a legenda"}].map(function(o){
-                  const on=refazerAlvo===o.id;
-                  return <button key={o.id} onClick={()=>setRefazerAlvo(o.id)}
-                    style={{background:on?"#f5f3ff":"#fff",border:"1px solid "+(on?"#7c3aed":C.b1),color:on?"#6d28d9":C.ts,
-                            borderRadius:999,padding:"7px 15px",fontSize:12.5,fontWeight:on?700:600,cursor:"pointer",
-                            fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}>{o.l}</button>;
-                })}
-              </div>
-              <div style={{color:C.td,fontSize:11,marginTop:7,lineHeight:1.45}}>
-                {refazerAlvo==="briefing"?"A legenda atual fica intacta.":(refazerAlvo==="legenda"?"O briefing atual fica intacto.":"Briefing e legenda são reescritos juntos.")}
-              </div>
-            </div>)}
-            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{_lbl}</div>
-            <textarea value={refazerText} onChange={e=>setRefazerText(e.target.value)}
-              autoFocus rows={5} placeholder={_ph}
-              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 13px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
-            <div style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:11.5,lineHeight:1.5}}>
-              O card <strong>não sai daqui</strong>: o Claude reescreve na hora e a copy troca nesta tela. A versão atual fica guardada — dá pra voltar nela a qualquer momento pelas setas de versão.
-              {_aj&&<> Pra mudar de assunto, é só pedir aqui.</>}
-              {_aj&&_nVers>1&&<><br/><strong>Ele já recebeu os {_nVers-1} pedidos anteriores deste card</strong> — não vai repetir o que você já apontou.</>}
-            </div>
-            <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
-              <button onClick={_fechar}
-                style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-              <button onClick={()=>{pedirRefacaoClaude(refazerModal.task,refazerModal.tipo,refazerText,false,_aj?refazerAlvo:"ambos");_fechar();}}
-                style={{background:_grad,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:_sombra,display:"inline-flex",alignItems:"center",gap:6}}>
-                <Ico n="check" size={13} color="#fff"/>{_aj?(refazerAlvo==="briefing"?"Ajustar briefing":(refazerAlvo==="legenda"?"Ajustar legenda":"Ajustar os dois")):(_ab?"Pedir nova abordagem":"Pedir refação")}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>);
-    })()}
+      {_refazerUI(false)}
+    </div>)}
 
     {/* ── Modal Editar copy (titulo + legenda + briefing inline) ── */}
     {editCopy&&(()=>{
