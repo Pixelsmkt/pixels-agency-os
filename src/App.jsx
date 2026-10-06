@@ -118554,7 +118554,7 @@ function _evLinha(receita, fala, kit){
     });
   });
   for(let k=0;k<blocos.length-1;k++){ if(blocos[k+1].a - blocos[k].b < 0.3) blocos[k].b = blocos[k+1].a; }
-  return { segs:segs, fimCortes:fimCortes, total:total, destaques:destaques, tarja:tarja, blocos:blocos, transicao:r.transicao||"corte" };
+  return { segs:segs, fimCortes:fimCortes, total:total, destaques:destaques, tarja:tarja, blocos:blocos, transicao:r.transicao||"corte", tela_final:r.tela_final||{} };
 }
 
 /* ── desenho (o mesmo no player e no Exportar) ── */
@@ -118729,7 +118729,9 @@ function _evMotor(canvas, o){
       desenharLogo(); desenharTarja(); desenharDestaques(); desenharLegenda();
       if(esperando && !o.original){ cx.save(); cx.fillStyle = "rgba(0,0,0,.35)"; _evRet(cx, W/2-70, H/2-70, 140, 140, 70); cx.fill(); cx.restore(); }
     }
-    if(L.total > L.fimCortes && t >= L.fimCortes - 0.3) desenharFinal(_evClamp((t - (L.fimCortes - 0.3))/0.3, 0, 1));
+    if(L.total > L.fimCortes && t >= L.fimCortes - 0.3){ const zF = _evpZoomFinal(t, L.fimCortes, L.total, L.tela_final);   // v57
+      cx.save(); if(zF !== 1){ cx.translate(W / 2, H / 2); cx.scale(zF, zF); cx.translate(-W / 2, -H / 2); }
+      desenharFinal(_evClamp((t - (L.fimCortes - 0.3))/0.3, 0, 1)); cx.restore(); }
   }
   function tick(){
     if(!vivo) return;
@@ -123924,6 +123926,14 @@ function _evpNivelDb(buf){
   }catch(_){ return null; }
 }
 const _EVP_VOZ_DB = -18, _EVP_ALVO_MUS = -31;      // voz nivelada a −18 dB; música na fala uns 13 dB abaixo
+/* v57 (06/10/2026): TELA FINAL COM ZOOM SUAVE (pedido do sócio: "a tela final dos clientes sempre precisa dar um zoom suave até terminar").
+   Da 1ª até a última imagem da tela final ela cresce devagar (padrão 8%, curva suave). projeto.tela_final.zoom = 0 a 0,2 (0 = sem zoom). */
+function _evpZoomFinal(t, ini, fim, tf){
+  const z = tf && tf.zoom != null && isFinite(Number(tf.zoom)) ? Math.max(0, Math.min(0.2, Number(tf.zoom))) : 0.08;
+  if(z <= 0 || !(fim > ini)) return 1;
+  const k = Math.max(0, Math.min(1, (t - ini) / (fim - ini)));
+  return 1 + z * (0.5 - 0.5 * Math.cos(Math.PI * k));
+}
 /* v54 (06/10/2026): muita faixa começa quase muda (1 a 2 s de entrada). No gancho do BioTer isso deixou 0,25 s de silêncio total entre
    duas falas no 1º segundo. Sem "ini" escolhido à mão, a música começa onde a faixa já tem som de verdade (≥ 1/4 do nível típico dela),
    procurando nos primeiros 8 s. */
@@ -126253,7 +126263,9 @@ function _evpMotor(canvas, o){
       desenharAbertura();
       socoGancho();
     }
-    if(calc.total > calc.fimCortes && t >= calc.fimCortes - 0.3) desenharFinal(_evClamp((t - (calc.fimCortes - 0.3))/0.3, 0, 1));
+    if(calc.total > calc.fimCortes && t >= calc.fimCortes - 0.3){ const zF = _evpZoomFinal(t, calc.fimCortes, calc.total, calc.tela_final);   // v57: zoom suave até o fim
+      cx.save(); if(zF !== 1){ cx.translate(W / 2, H / 2); cx.scale(zF, zF); cx.translate(-W / 2, -H / 2); }
+      desenharFinal(_evClamp((t - (calc.fimCortes - 0.3))/0.3, 0, 1)); cx.restore(); }
     if(evmRefazer){ evmRefazer = false; desenhar(); return; }          // v31: o motion falhou neste quadro — refaz sem ele
     if(o.onDesenho) o.onDesenho(cx, t);
   }
@@ -130974,6 +130986,8 @@ function _EvpPainelMenu(q){
         <_EvpTelaFinalSel p={p} kit={kit} base={q.base} mudar={mudar}/>
         <_EvpSlider ctl={ctl} rotulo="Duração" v={_evpNum(p.tela_final && p.tela_final.dur, 3)} min={0} max={10} step={0.5} padrao={3}
           fmt={function(v){ return v ? String(v).replace(".", ",") + " s" : "sem tela final"; }} aplicar={function(np, v){ np.tela_final = Object.assign({}, np.tela_final, { dur:v }); }}/>
+        <_EvpSlider ctl={ctl} rotulo="Zoom suave até o fim" v={Math.round(100 * (p.tela_final && p.tela_final.zoom != null ? _evpNum(p.tela_final.zoom, 0.08) : 0.08))} min={0} max={20} step={1} padrao={8}
+          fmt={function(v){ return v ? v + "% maior no fim" : "sem zoom"; }} aplicar={function(np, v){ np.tela_final = Object.assign({}, np.tela_final, { zoom:Math.round(v) / 100 }); }}/>
         </div>); };
 
   /* ── Efeitos (sons + transições) ── */
