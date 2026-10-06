@@ -113592,9 +113592,10 @@ async function pxPropostasDaSolicitacao(opts){
          "- SE CITOU: "+_metade+" das "+quantos+" propostas são SOBRE ESSE CASO (o que vai ser feito lá, por que, o problema daquele lugar, o processo, a equipe em campo, o antes/depois, o resultado esperado — usando só o que o pedido diz, sem inventar dado) e as outras "+(quantos-_metade)+" são sobre o ASSUNTO GERAL. Marque cada uma com FOCO: especifico ou FOCO: geral.\n"+
          "- SE NÃO CITOU: todas sobre o assunto, com FOCO: geral.\n\n";
     }
-    u+="TAREFA: escreva EXATAMENTE "+quantos+" propostas de "+(G?G.titulo.toUpperCase()+" ("+G.sub+")":"conteúdo")+" — todas desse formato, nenhum outro.\n"+
-       "- Comece pelo que o cliente pediu explicitamente e cubra cada ideia dele que caiba neste formato. Depois complete até "+quantos+" com desdobramentos do MESMO assunto: outro ângulo, dúvida do público, bastidor, passo a passo, mito x verdade, prova/resultado, chamada pra ação.\n"+
-       "- As "+quantos+" têm que ser diferentes entre si (assunto ou ângulo) — nada de variação do mesmo título.\n\n";
+    if(opts.quantosLivre) u+="QUANTIDADE: escreva QUANTAS o pedido da equipe acima disser (ex.: \"3 roteiros\" = 3). Se não disser número, escreva 5. Nunca mais de "+_SW_MAX_PROPOSTAS+".\n\n";
+    u+="TAREFA: escreva "+(opts.quantosLivre?"as":("EXATAMENTE "+quantos))+" propostas de "+(G?G.titulo.toUpperCase()+" ("+G.sub+")":"conteúdo")+" — todas desse formato, nenhum outro.\n"+
+       "- Comece pelo que "+(opts.quantosLivre?"a equipe pediu acima":"o cliente pediu explicitamente e cubra cada ideia dele que caiba neste formato")+". Depois complete até "+(opts.quantosLivre?"a quantidade pedida":quantos)+" com desdobramentos do MESMO assunto: outro ângulo, dúvida do público, bastidor, passo a passo, mito x verdade, prova/resultado, chamada pra ação.\n"+
+       "- "+(opts.quantosLivre?"Todas":("As "+quantos))+" têm que ser diferentes entre si (assunto ou ângulo) — nada de variação do mesmo título.\n\n";
   }
 
   u+="TIPO (só o id): "+(grupo==="video"?"video":grupo==="carrossel"?"carrossel":grupo==="arte"?"arte":"o id do formato")+".\n\n";
@@ -113801,19 +113802,20 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
   /* v2: uma chamada por linha (vídeos, artes, carrosséis), em paralelo. grupos = ids de _SW_GRUPOS.
      Se uma linha falhar, as outras ficam; só dá erro se nenhuma vier. */
   const _gerarPara=async function(pauta,pedido,rodada,grupos,qtd,extra){
-    const n=Math.max(1,Math.min(_SW_MAX_PROPOSTAS,Number(qtd)||_SW_POR_LINHA));
+    const _livre=qtd==="livre";   // (06/10) "Pedir mais": a quantidade vem do texto do pedido
+    const n=_livre?_SW_MAX_PROPOSTAS:Math.max(1,Math.min(_SW_MAX_PROPOSTAS,Number(qtd)||_SW_POR_LINHA));
     const gs=(grupos&&grupos.length)?grupos:_SW_GRUPOS.map(function(g){return g.id;});
     /* (06/10/2026, Gustavo) primeira leva: 10 vídeos (5 do caso específico + 5 do assunto), 5 artes, 5 carrosséis */
     const nDe=function(g){ return (!(grupos&&grupos.length)&&!qtd&&g==="video")?_SW_VIDEOS_INICIAL:n; };
     await _upd("pautas",pauta.id,{status:"gerando",erro:null});
     const nomesG=gs.map(function(id){ const g=_SW_GRUPOS.find(function(x){return x.id===id;}); return g?g.titulo.toLowerCase():id; });
-    setPasso("IA escrevendo "+(gs.length>1?(gs.reduce(function(a,g){return a+nDe(g);},0))+" propostas ("+nomesG.join(", ")+")":("mais "+n+" "+nomesG[0]))+(extra?" do seu pedido":"")+" pra "+_nome()+"…");
+    setPasso("IA escrevendo "+(gs.length>1?(gs.reduce(function(a,g){return a+nDe(g);},0))+" propostas ("+nomesG.join(", ")+")":(_livre?nomesG[0]:("mais "+n+" "+nomesG[0])))+(extra?" do seu pedido":"")+" pra "+_nome()+"…");
     const rEx=await sb.from("pauta_propostas").select("titulo,ordem").eq("pauta_id",pauta.id);
     const existentes=(rEx.data||[]);
     let ordemIni=existentes.reduce(function(a,p){return Math.max(a,Number(p.ordem)||0);},0);
     const res=await Promise.allSettled(gs.map(function(g){
       return pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:pauta.contexto,
-        transcricao:pedido.transcricao,fichas:pedido.fichas,existentes:existentes.map(function(p){return p.titulo;}),quantos:nDe(g),grupo:g,pedidoExtra:extra||""});
+        transcricao:pedido.transcricao,fichas:pedido.fichas,existentes:existentes.map(function(p){return p.titulo;}),quantos:nDe(g),quantosLivre:_livre,grupo:g,pedidoExtra:extra||""});
     }));
     const novas=[], erros=[];
     for(let i=0;i<res.length;i++){
@@ -114149,7 +114151,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       {_bl("solic.nova")&&<button type="button" disabled={!!passo} onClick={function(){ setForm(form?null:{titulo:"",texto:"",files:[]}); }} style={_btn(!!passo)}>
         <Ico n="sparkles" size={14} color="#fff"/> {form?"Fechar":"Nova solicitação"}</button>}
       {/* (06/10/2026, Gustavo) mais conteúdo a partir da MESMA solicitação, descrevendo o que quer */}
-      {_bl("solic.nova")&&aberta&&<button type="button" disabled={!!passo||!!ocupado} onClick={function(){ setMaisForm(maisForm?null:{texto:"",qtd:5,grupo:"video"}); setForm(null); }}
+      {_bl("solic.nova")&&aberta&&<button type="button" disabled={!!passo||!!ocupado} onClick={function(){ setMaisForm(maisForm?null:{texto:"",grupo:"video"}); setForm(null); }}
         title="Gera mais propostas a partir desta mesma solicitação — você descreve o que quer (quantos, formato, enfoque)"
         style={Object.assign({},_btn(!!passo||!!ocupado),{background:maisForm?"#0f172a":"#fff",color:maisForm?"#fff":_SW_AC,border:"1.5px solid "+(maisForm?"#0f172a":_SW_AC),boxShadow:"none"})}>
         <Ico n="plus" size={14} color={maisForm?"#fff":_SW_AC}/> {maisForm?"Fechar":"Pedir mais desta solicitação"}</button>}
@@ -114193,20 +114195,15 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
             style={{display:"inline-flex",alignItems:"center",gap:7,background:on?g.cor:"#fff",color:on?"#fff":"#334155",border:"1.5px solid "+(on?g.cor:"#e2e8f0"),borderRadius:99,padding:"7px 14px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>
             <span style={{display:"inline-flex",transform:"scale(.8)"}}>{g.icone}</span>{g.id==="video"?"Roteiro de vídeo":g.id==="arte"?"Copy pra arte":"Carrossel"}</button>; })}
         </div></div>
-      <div><div style={_lbl}>Quantos</div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[1,2,3,5,8,10].map(function(n){ const on=maisForm.qtd===n; return <button key={n} type="button" onClick={function(){ setMaisForm(Object.assign({},maisForm,{qtd:n})); }}
-            style={{minWidth:40,background:on?"#0f172a":"#fff",color:on?"#fff":"#334155",border:"1.5px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:10,padding:"7px 10px",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF}}>{n}</button>; })}
-        </div></div>
-      <div><div style={_lbl}>O que você quer (enfoque, assunto, detalhe)</div>
+      <div><div style={_lbl}>O que você quer — quantos, enfoque, assunto, detalhe</div>
         <textarea autoFocus value={maisForm.texto} onChange={function(e){ setMaisForm(Object.assign({},maisForm,{texto:e.target.value})); }} rows={4}
-          placeholder={"Ex.: roteiros sobre a obra da adutora em Tenente Portela que a equipe vai visitar dia 14 — um da chegada da equipe, um do levantamento com RTK, um do resultado…"}
+          placeholder={"Ex.: 3 roteiros sobre a obra da adutora em Tenente Portela que a equipe visita dia 14 — um da chegada da equipe, um do levantamento com RTK, um do resultado. (Sem número, vêm 5; no máximo 10.)"}
           style={Object.assign({},_inp,{resize:"vertical"})}/></div>
       <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
         <button type="button" onClick={function(){ setMaisForm(null); }} style={_btnSec}>Cancelar</button>
         <button type="button" disabled={!!ocupado||String(maisForm.texto||"").trim().length<5}
-          onClick={function(){ _gerarDeNovo(maisForm.grupo,maisForm.qtd,String(maisForm.texto||"").trim()); }}
-          style={_btn(!!ocupado||String(maisForm.texto||"").trim().length<5)}>{ocupado==="pedirmais"?<><Spin/> Gerando…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar {maisForm.qtd} {maisForm.grupo==="video"?(maisForm.qtd===1?"roteiro":"roteiros"):maisForm.grupo==="arte"?(maisForm.qtd===1?"copy de arte":"copys de arte"):(maisForm.qtd===1?"carrossel":"carrosséis")}</>}</button>
+          onClick={function(){ _gerarDeNovo(maisForm.grupo,"livre",String(maisForm.texto||"").trim()); }}
+          style={_btn(!!ocupado||String(maisForm.texto||"").trim().length<5)}>{ocupado==="pedirmais"?<><Spin/> Gerando…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar {maisForm.grupo==="video"?"roteiros":maisForm.grupo==="arte"?"copys de arte":"carrosséis"}</>}</button>
       </div>
     </div>}
 
