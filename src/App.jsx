@@ -119304,12 +119304,8 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
 
       {t && ed && ed.existe && ed.receita && linha && kit && (ed.status==="pronto" || ed.status==="exportado" || ed.status==="aprovado") && !passo && (
         <div>
-          <div style={{marginTop:14,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:_evF(12.5,isMob),color:_EV.sub}}>
-            <b style={{color:_EV.texto}}>O que a IA fez:</b>
-            <span style={{flex:"1 1 300px",minWidth:0}}>{ed.receita.explicacao || "—"}</span>
-            {ed.status==="exportado" && <span style={{padding:"3px 9px",borderRadius:99,background:_EV.verdeClaro,fontWeight:800,color:_EV.verde}}>✓ exportado no card</span>}
-            <span style={{color:_EV.fraco}}>Versão {(ed.versoes||[]).length} · por {ed.atualizado_por||ed.criado_por||"—"} · IA neste vídeo: R$ {Number(ed.custo_brl||0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</span>
-          </div>
+          {/* v49 (06/10/2026): o "O que a IA fez" foi para dentro do editor (_EvpResumoIA: faixa + mapa + resumo); no celular continua o texto */}
+          {isMob && <div style={{marginTop:14,fontSize:_evF(12.5,isMob),color:_EV.sub}}><b style={{color:_EV.texto}}>O que a IA fez:</b> {ed.receita.explicacao || "—"}</div>}
           <_EvEditor key={ed.id} t={t} ed={ed} kit={kit} base={base} musicas={musicas} isMob={isMob}
             onRecarregar={function(){ setRec(function(n){ return n+1; }); }} onAjustar={ajustar} ajustando={ajustando}
             erroAjuste={erroAjuste} limparErroAjuste={function(){ setErroAjuste(null); }}
@@ -126398,6 +126394,23 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const enviadoRef = useRef(null);         // JSON do último projeto enviado (salvar / aplicar prévia)
   const salvoJsonRef = useRef(salvoJson); salvoJsonRef.current = salvoJson;
   const [novaVersao, setNovaVersao] = useState(null);   // { p, sj, j, por, em }
+  /* v49 (06/10/2026): LARGURA DAS COLUNAS — arraste a borda da Biblioteca (esquerda) e do painel da direita; o Estúdio lembra (por navegador) */
+  const gradeRef = useRef(null);
+  const [larEsq, setLarEsq] = useState(function(){ return _evpLarLer("esq"); });
+  const [larDir, setLarDir] = useState(function(){ return _evpLarLer("dir"); });
+  const [arrastandoLar, setArrastandoLar] = useState(null);
+  const larRef = useRef({ e:300, d:350 }); larRef.current = { e:larEsq, d:larDir };
+  useEffect(function(){      // v49: tela menor (ou janela redimensionada) → as colunas encolhem até o mínimo para o vídeo nunca sumir
+    const g = gradeRef.current; if(!g || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(function(){
+      const sobra = g.clientWidth - _EVP_LAR_GRADE_FIXO - _EVP_LAR_MEIO_MIN, at = larRef.current;
+      let e = at.e, d = at.d, excesso = e + d - sobra; if(excesso <= 0) return;
+      const tiraD = Math.min(excesso, Math.max(0, d - _EVP_LAR.dir.min)); d -= tiraD; excesso -= tiraD;     // primeiro o painel da direita, depois a Biblioteca
+      const tiraE = Math.min(excesso, Math.max(0, e - _EVP_LAR.esq.min)); e -= tiraE;
+      if(e !== at.e) setLarEsq(Math.round(e)); if(d !== at.d) setLarDir(Math.round(d));
+    });
+    ro.observe(g); return function(){ ro.disconnect(); };
+  }, [!!gradeRef.current]);
   useEffect(function(){
     const j = JSON.stringify(inicial), sj = JSON.stringify(salvo), atual = JSON.stringify(pRef.current);
     if(j === baseRef.current){ setSalvoJson(sj); return; }                                         // recarregou sem mudar a receita (ex.: exportou)
@@ -127698,6 +127711,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={descartarRascunho} style={Object.assign(_evpBtn(), {padding:"5px 10px"})}>Voltar para a última versão salva</button>
         </div>
       )}
+      <_EvpResumoIA ed={ed} p={p} calc={calc} irPara={irPara}/>      {/* v49: "O que a IA fez" organizado (faixa + mapa + resumo) */}
       {novaVersao && (      /* v48 (06/10/2026): E2-1 / E2-4 — a versão nova não troca a tela sozinha */
         <div role="alert" style={Object.assign({}, _EVP_PAINEL, {padding:"8px 12px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontSize:12.5,fontWeight:600,flexShrink:0,borderColor:"rgba(234,179,8,.55)",background:_EVP_COR.aviso})}>
           <span style={{color:_EVX.amarelo}}><_EvpIco n="alerta"/></span>
@@ -127708,7 +127722,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       )}
 
       {/* ── meio: ícones · painel do menu · vídeo · ajustes ou IA ── */}
-      <div style={{flex:1,minHeight:0,display:"grid",gridTemplateColumns:"76px 300px minmax(0,1fr) 350px",gap:10}}>
+      <div ref={gradeRef} style={{flex:1,minHeight:0,display:"grid",gridTemplateColumns:"76px " + larEsq + "px minmax(0,1fr) " + larDir + "px",gap:10,position:"relative",userSelect:arrastandoLar ? "none" : undefined}}>
+        <_EvpAlcaLargura lado="esq" gradeRef={gradeRef} lar={larEsq} setLar={setLarEsq} outra={larDir} setArrastando={setArrastandoLar} ativo={arrastandoLar === "esq"}/>
+        <_EvpAlcaLargura lado="dir" gradeRef={gradeRef} lar={larDir} setLar={setLarDir} outra={larEsq} setArrastando={setArrastandoLar} ativo={arrastandoLar === "dir"}/>
         <div data-coluna-menu={menuAntigo ? "antigo" : "biblioteca"} style={Object.assign({}, _EVP_PAINEL, {padding:"8px 6px",display:"flex",flexDirection:"column",gap:3,overflow:"auto"})}>
           {/* v41: Biblioteca (padrão) × menu antigo (atrás de "Mais…" na barra de ferramentas, por 1 semana) */}
           {menuAntigo && <button onClick={function(){ setMenu("bib-midia"); }} title="Voltar para a Biblioteca" style={Object.assign({}, bMenu(false), { color:_EVP_COR.roxo })}><_EvpIco n="voltar" s={18}/>Biblioteca</button>}
@@ -130049,6 +130065,244 @@ async function _evpFotosNaFala(ctx){
 }
 
 /* ─── painel da esquerda: muda conforme o menu de cima ─── */
+/* v49 (06/10/2026): "O QUE A IA FEZ" ORGANIZADO (pedido do Vini: "quero algo bonito e não jogado assim").
+   Fechado: 1 faixa (quem, quando, custo, nota do diretor e 5 números). Aberto: mapa do vídeo (roteiro × apoio × cortes × motion na
+   mesma régua), detalhe da parte clicada, "por que ficou assim" (até 5 frases curtas), o que ficou de fora e o RESUMO da edição.
+   Tudo sai do que a IA já devolve na receita (ordem, diretor, tomadas, apoio, música, motivos_corte) + o projeto atual (R$ 0).
+   O texto inteiro de antes continua em "Ler relatório completo". */
+const _EVP_RES_CORES = ["#f472b6", "#fbbf24", "#60a5fa", "#a78bfa", "#4ade80", "#2dd4bf", "#fb923c"];
+const _evpResNorm = function(s){ return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); };
+function _evpResPartes(rec, calc){
+  const est = rec && rec.ordem && typeof rec.ordem.estrutura === "string" ? rec.ordem.estrutura : "";
+  const pedacos = est.split(/\s*(?:→|->)\s*/).map(function(x){ return x.trim(); }).filter(Boolean).slice(0, 7);
+  if(pedacos.length < 2) return [];
+  const palavras = [];
+  ((calc && calc.blocos) || []).forEach(function(b){ (b.words || []).forEach(function(w){ palavras.push({ n:_evpResNorm(w.p), a:Number(w.a) || 0 }); }); });
+  palavras.sort(function(x, y){ return x.a - y.a; });
+  const achar = function(frase, depois){
+    const alvo = _evpResNorm(frase).split(" ").filter(function(x){ return x.length > 1; }).slice(0, 3);
+    if(!alvo.length) return null;
+    for(let i = 0; i < palavras.length; i++){
+      if(palavras[i].a + 0.01 < depois) continue;
+      let ok = true; for(let k = 0; k < alvo.length && ok; k++){ const w = palavras[i + k]; ok = !!w && (w.n === alvo[k] || w.n.indexOf(alvo[k]) === 0 || alvo[k].indexOf(w.n) === 0); }
+      if(ok) return palavras[i].a;
+    }
+    return null;
+  };
+  const total = (calc && calc.total) || 0;
+  let ult = 0;
+  const partes = pedacos.map(function(txt, i){
+    const m = /^([^:"“]{2,40}):\s*(.*)$/.exec(txt);
+    const nome = m ? m[1].trim() : "Parte " + (i + 1);
+    const resto = m ? m[2] : txt;
+    const frases = (resto.match(/["“]([^"”]{2,160})["”]/g) || []).map(function(q){ return q.replace(/^["“]|["”]$/g, ""); });
+    let t = null;
+    for(let k = 0; k < frases.length && t == null; k++) t = achar(frases[k], ult);
+    if(t != null) ult = t;
+    return { nome:nome.charAt(0).toUpperCase() + nome.slice(1), frases:frases.length ? frases : [resto.replace(/["“”]/g, "").trim()].filter(Boolean), t:t, cor:_EVP_RES_CORES[i % _EVP_RES_CORES.length] };
+  });
+  // sem tempo achado: reparte o tempo que sobra entre os vizinhos (fica sempre em ordem)
+  for(let i = 0; i < partes.length; i++){
+    if(partes[i].t != null) continue;
+    let a = i - 1; while(a >= 0 && partes[a].t == null) a--;
+    let b = i + 1; while(b < partes.length && partes[b].t == null) b++;
+    const ta = a >= 0 ? partes[a].t : 0, tb = b < partes.length ? partes[b].t : total;
+    partes[i].t = ta + (tb - ta) * (i - a) / (b - a);
+  }
+  partes[0].t = 0;
+  for(let i = 1; i < partes.length; i++) if(partes[i].t < partes[i - 1].t) partes[i].t = partes[i - 1].t;
+  partes.forEach(function(x, i){ x.t1 = i + 1 < partes.length ? partes[i + 1].t : total; });
+  return partes.filter(function(x){ return x.t1 - x.t > 0.05; });
+}
+const _evpResCurto = function(s, n){ s = String(s || "").replace(/\s+/g, " ").trim(); if(s.length <= n) return s; const c = s.slice(0, n), i = c.lastIndexOf(" "); return (i > n * 0.6 ? c.slice(0, i) : c).replace(/[,;:–—-]+$/, "") + "…"; };
+const _evpResSeg = function(t){ return (Math.round(t * 10) / 10).toLocaleString("pt-BR") + " s"; };
+const _evpResMMSS = function(t){ t = Math.max(0, Math.round(t)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+function _evpResDados(ed, p, calc){
+  const rec = (ed && ed.receita) || {}, total = (calc && calc.total) || 0;
+  const aps = ((p && p.imagens) || []).filter(function(x){ return x && x.cheia === true && !x.off && Number(x.t1) > Number(x.t0); })
+    .map(function(x){ return { t0:Number(x.t0), t1:Number(x.t1), motivo:x.motivo || "", camada:x.camada }; }).sort(function(a, b){ return a.t0 - b.t0; });
+  let coberto = 0, fimAt = -1;
+  aps.forEach(function(x){ const a = Math.max(x.t0, fimAt), b = Math.min(x.t1, total); if(b > a) coberto += b - a; fimAt = Math.max(fimAt, x.t1); });
+  const pctApoio = total > 0 ? Math.round(coberto / total * 100) : 0;
+  const cortes = ((calc && calc.clips) || []).slice(1).map(function(c){ return Number(c.t0) || 0; });
+  const motion = ((p && p.motion && p.motion.itens) || []).filter(function(x){ return x && Number(x.t1) > Number(x.t0); }).map(function(x){ return { t0:Number(x.t0), t1:Number(x.t1), modelo:x.modelo }; });
+  const vol = p && p.musica ? Number(p.musica.vol != null ? p.musica.vol : 0.3) : null;
+  const partes = _evpResPartes(rec, calc);
+  const nota = rec.diretor && isFinite(Number(rec.diretor.nota)) ? Number(rec.diretor.nota) : null;
+  const fora = [];
+  (Array.isArray(rec.motivos_corte) ? rec.motivos_corte : []).forEach(function(m){
+    if(!m || m.por !== "ia" || !m.texto) return; const tx = _evpResCurto(m.texto, 70);
+    if(fora.every(function(f){ return f.texto !== tx; })) fora.push({ texto:tx, nota:m.nota || "" }); });
+  const porque = [];
+  if(rec.ordem && rec.ordem.motivo) porque.push({ ic:"🧭", txt:_evpResCurto(rec.ordem.motivo, 150) });
+  if(aps.length) porque.push({ ic:"🎞", txt:aps.length + " cena(s) de apoio cobrem " + pctApoio + "% do vídeo" + (rec.apoio_resumo && rec.apoio_resumo.com_batida ? ", trocando na batida da música" : "") + (aps[0].motivo ? ". Ex.: " + _evpResCurto(aps[0].motivo, 80) : "") + "." });
+  if(rec.tomadas) porque.push({ ic:"✂", txt:_evpResCurto(rec.tomadas, 150) });
+  if(vol != null) porque.push({ ic:"🎵", txt:"Música em " + Math.round(vol * 100) + "% embaixo da fala" + (rec.musica && rec.musica.abaixa ? "; abaixa quando tem voz e sobe nos respiros" : "") + "." });
+  if(rec.diretor && rec.diretor.revisao) porque.push({ ic:"✅", txt:"Revisão: " + _evpResCurto(String(rec.diretor.revisao).split(";")[0], 120) + "." });
+  const nomes = partes.map(function(x){ return x.nome.toLowerCase(); });
+  const resumo = rec.resumo ? String(rec.resumo) : [
+    "Vídeo de " + Math.round(total) + " s" + (nomes.length ? " no caminho " + nomes.join(" → ") : "") +
+      (rec.ordem && rec.ordem.fonte === "card" ? ", na ordem da legenda do card" : rec.ordem && rec.ordem.fonte === "roteiro" ? ", seguindo o roteiro do cliente" : "") + ".",
+    aps.length ? "O rosto aparece em " + Math.max(0, 100 - pctApoio) + "% do tempo e " + aps.length + " cena(s) de apoio cobrem o resto." : "",
+    rec.diretor && rec.diretor.resumo ? String(rec.diretor.resumo).replace(/\s+$/, "").replace(/([^.!?])$/, "$1.") : "",
+    fora.length ? "Ficou de fora: \"" + fora[0].texto + "\"" + (fora[0].nota ? " (" + _evpResCurto(fora[0].nota, 60) + ")" : "") + "." : "",
+    nota != null ? "Nota " + nota + "/10" + (/pronto para publicar/i.test((rec.diretor && rec.diretor.resumo) || "") ? "." : nota >= 8 ? " — pronto para publicar." : nota >= 6 ? " — vale revisar antes de publicar." : " — precisa de ajustes.") : ""
+  ].filter(Boolean).join(" ");
+  return { rec:rec, total:total, aps:aps, pctApoio:pctApoio, cortes:cortes, motion:motion, vol:vol, partes:partes, nota:nota, fora:fora, porque:porque.slice(0, 5), resumo:resumo };
+}
+function _EvpResumoIA({ ed, p, calc, irPara }){
+  const lerAberto = function(){ try { return window.localStorage.getItem("evp_resumo_aberto") === "1"; } catch(_e){ return false; } };
+  const [aberto, setAberto] = useState(lerAberto);
+  const [parteSel, setParteSel] = useState(0);
+  const [apSel, setApSel] = useState(null);
+  const [relatorio, setRelatorio] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const d = useMemo(function(){ return _evpResDados(ed, p, calc); }, [ed && ed.receita, p && p.imagens, p && p.motion, p && p.musica, calc && calc.total, calc && calc.clips, calc && calc.blocos]);
+  if(!ed || !ed.receita) return null;
+  const alternar = function(){ const v = !aberto; setAberto(v); try { window.localStorage.setItem("evp_resumo_aberto", v ? "1" : "0"); } catch(_e){} };
+  const nV = (ed.versoes || []).length || 1, quem = ed.atualizado_por || ed.criado_por || "—";
+  const quando = ed.receita_em || ed.atualizado_em ? new Date(ed.receita_em || ed.atualizado_em).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "";
+  const custo = "R$ " + Number(ed.custo_brl || 0).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const corNota = d.nota == null ? null : d.nota >= 8 ? ["var(--evx-verde)", _EVP_COR.ok] : d.nota >= 6 ? ["var(--evx-amarelo)", _EVP_COR.aviso] : ["var(--evx-verm)", _EVP_COR.erro];
+  const stat = function(ic, k, v){ return <div key={k} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 10px 5px 6px",borderRadius:10,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha}}>
+    <span style={{width:22,height:22,borderRadius:7,background:_EVP_COR.linha2,display:"grid",placeItems:"center",fontSize:11.5}}>{ic}</span>
+    <span style={{lineHeight:1.1}}><span style={{display:"block",fontSize:9.5,color:_EVP_COR.fraco,fontWeight:700}}>{k}</span><b style={{fontSize:12.5,color:_EVP_COR.ink}}>{v}</b></span></div>; };
+  const stats = [stat("🙂", "Rosto", Math.max(0, 100 - d.pctApoio) + "%"), stat("🎞", "Apoio", d.aps.length + " cena" + (d.aps.length === 1 ? "" : "s")),
+    stat("✂", "Cortes", d.cortes.length), d.vol != null ? stat("🎵", "Música", Math.round(d.vol * 100) + "%") : null, stat("✦", "Motion", d.motion.length)].filter(Boolean);
+  const X = function(t){ return d.total > 0 ? Math.max(0, Math.min(100, t / d.total * 100)) : 0; };
+  const parte = d.partes[parteSel] || null;
+  const dentro = function(a, b){ return function(x){ const t0 = x.t0 != null ? x.t0 : x; return t0 >= a - 0.01 && t0 < b; }; };
+  const linhaMapa = function(rot, filhos){ return <div style={{display:"flex",alignItems:"center",gap:10,height:26}}>
+    <span style={{width:62,flex:"none",textAlign:"right",fontSize:10.5,color:_EVP_COR.fraco,fontWeight:700}}>{rot}</span>
+    <div style={{position:"relative",flex:1,height:"100%"}}><div style={{position:"absolute",left:0,right:0,top:12,height:2,background:_EVP_COR.linha2,borderRadius:2}}/>{filhos}</div></div>; };
+  const copiar = function(){ try { navigator.clipboard.writeText(d.resumo).then(function(){ setCopiado(true); setTimeout(function(){ setCopiado(false); }, 1600); }); } catch(_e){} };
+  const detalheAp = apSel != null ? d.aps[apSel] : null;
+  return (
+    <div style={Object.assign({}, _EVP_PAINEL, {flexShrink:0,overflow:"hidden"})}>
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",padding:"9px 12px",background:"linear-gradient(90deg, " + _EVP_COR.roxoSoft + ", transparent 60%)"}}>
+        <span style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#8b5cf6,#6d28d9)",display:"grid",placeItems:"center",color:"#fff",flex:"none"}}><_EvpIco n="ia" s={16}/></span>
+        <div style={{lineHeight:1.25,minWidth:150}}><b style={{fontSize:13.5,color:_EVP_COR.ink}}>A IA montou a versão {nV}</b>
+          <div style={{fontSize:11,color:_EVP_COR.sub}}>por {quem}{quando ? " · " + quando : ""} · {custo}</div></div>
+        {d.nota != null && <span title={(d.rec.diretor && d.rec.diretor.resumo) || ""} style={{display:"inline-flex",alignItems:"center",gap:7,fontSize:12,fontWeight:800,padding:"5px 11px",borderRadius:99,background:corNota[1],color:corNota[0]}}>
+          {d.nota}/10 <span style={{width:40,height:5,borderRadius:9,background:"rgba(127,127,127,.25)",overflow:"hidden",display:"inline-block"}}><span style={{display:"block",height:"100%",width:(d.nota * 10) + "%",background:corNota[0]}}/></span>
+          {d.nota >= 8 ? "pronto para publicar" : d.nota >= 6 ? "vale revisar" : "precisa de ajustes"}</span>}
+        {ed.status === "exportado" && <span style={{fontSize:11.5,fontWeight:800,padding:"4px 9px",borderRadius:99,background:_EVP_COR.ok,color:"var(--evx-verde)"}}>✓ no card</span>}
+        <div style={{flex:1}}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{stats}</div>
+        <button onClick={alternar} aria-expanded={aberto} style={Object.assign(_evpBtn("suave"), {padding:"7px 12px",fontWeight:700})}>{aberto ? "Fechar ▴" : "Ver como a IA editou ▾"}</button>
+      </div>
+      {aberto && (
+        <div style={{borderTop:"1px solid " + _EVP_COR.linha}}>
+          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 300px"}}>
+            <div style={{padding:"12px 14px 10px",borderRight:"1px solid " + _EVP_COR.linha,minWidth:0}}>
+              {d.partes.length > 0 && linhaMapa("Roteiro", d.partes.map(function(x, i){ const on = i === parteSel && apSel == null;
+                return <button key={i} onClick={function(){ setParteSel(i); setApSel(null); irPara(x.t); }} title={x.nome + " · " + _evpResMMSS(x.t) + " – " + _evpResMMSS(x.t1)}
+                  style={{position:"absolute",top:1,height:24,left:"calc(" + X(x.t) + "% + 1px)",width:"calc(" + (X(x.t1) - X(x.t)) + "% - 3px)",borderRadius:7,cursor:"pointer",font:"inherit",
+                    display:"flex",alignItems:"center",justifyContent:"space-between",gap:4,padding:"0 7px",overflow:"hidden",whiteSpace:"nowrap",
+                    background:x.cor + (on ? "44" : "1f"),border:(on ? "2px" : "1px") + " solid " + x.cor + (on ? "" : "77"),color:"color-mix(in srgb, " + x.cor + " 70%, var(--evp-ink))",fontSize:11,fontWeight:800}}>
+                  <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{i + 1}. {x.nome}</span><span style={{fontSize:9.5,fontWeight:600,opacity:.75}}>{_evpResMMSS(x.t)}</span></button>; }))}
+              {linhaMapa("Apoio", d.aps.map(function(x, i){ const on = apSel === i;
+                return <button key={i} onClick={function(){ setApSel(i); irPara(x.t0); }} title={(x.motivo || "Imagem de apoio") + " · " + _evpResSeg(x.t0)}
+                  style={{position:"absolute",top:6,height:14,left:X(x.t0) + "%",width:"max(6px, calc(" + (X(x.t1) - X(x.t0)) + "% - 2px))",borderRadius:5,cursor:"pointer",padding:0,
+                    background:on ? "#3b82f6" : "rgba(59,130,246,.35)",border:"1px solid #3b82f6",boxShadow:on ? "0 0 0 3px rgba(59,130,246,.25)" : "none"}}/>; }))}
+              {linhaMapa("Cortes", d.cortes.map(function(t, i){ return <span key={i} title={"Corte em " + _evpResSeg(t)} onClick={function(){ irPara(t); }}
+                style={{position:"absolute",top:7,left:"calc(" + X(t) + "% - 6px)",width:12,height:12,borderRadius:"50%",background:"#fbbf24",boxShadow:"0 0 0 3px rgba(251,191,36,.18)",cursor:"pointer"}}/>; }))}
+              {linhaMapa("Motion", d.motion.map(function(x, i){ return <span key={i} title={"Motion (" + (x.modelo || "") + ") · " + _evpResSeg(x.t0)} onClick={function(){ irPara(x.t0); }}
+                style={{position:"absolute",top:7,left:"calc(" + X(x.t0) + "% - 6px)",width:12,height:12,borderRadius:"50%",background:"#a78bfa",boxShadow:"0 0 0 3px rgba(167,139,250,.2)",cursor:"pointer"}}/>; }))}
+              <div style={{display:"flex",gap:10,marginTop:2}}><span style={{width:62,flex:"none"}}/>
+                <div style={{position:"relative",flex:1,height:13}}>{[0, 0.25, 0.5, 0.75, 1].map(function(f){ return <span key={f} style={{position:"absolute",left:(f * 100) + "%",transform:"translateX(" + (f === 1 ? "-100%" : f === 0 ? "0" : "-50%") + ")",fontSize:9.5,color:_EVP_COR.fraco,fontFamily:_EVP_MONO}}>{_evpResMMSS(d.total * f)}</span>; })}</div></div>
+              {(detalheAp || parte) && (
+                <div style={{marginTop:10,display:"flex",gap:12,alignItems:"flex-start",padding:"10px 12px",borderRadius:11,background:_EVP_COR.azul,border:"1px solid " + _EVP_COR.azulLinha}}>
+                  {detalheAp ? <>
+                    <div style={{fontSize:10.5,fontWeight:800,color:"#60a5fa",textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap"}}>Apoio<br/><span style={{fontWeight:600,color:_EVP_COR.sub}}>{_evpResMMSS(detalheAp.t0)} – {_evpResMMSS(detalheAp.t1)}</span></div>
+                    <div style={{fontSize:13,color:_EVP_COR.ink,lineHeight:1.45}}><b>Por quê:</b> {detalheAp.motivo || "a IA não registrou o motivo desta cena."}</div>
+                  </> : <>
+                    <div style={{fontSize:10.5,fontWeight:800,color:parte.cor,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap"}}>{parteSel + 1} · {parte.nome}<br/><span style={{fontWeight:600,color:_EVP_COR.sub}}>{_evpResMMSS(parte.t)} – {_evpResMMSS(parte.t1)}</span></div>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:700,color:_EVP_COR.ink,lineHeight:1.35}}>{parte.frases.map(function(f){ return "“" + f + "”"; }).join(" · ")}</div>
+                      <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:4}}>{(function(){ const f = dentro(parte.t, parte.t1);
+                        const na = d.aps.filter(f).length, nc = d.cortes.filter(f).length, nm = d.motion.filter(f).length;
+                        return [na ? "🎞 " + na + " cena(s) de apoio" : "🙂 só rosto", nc ? "✂ " + nc + " corte(s)" : null, nm ? "✦ " + nm + " peça(s) de motion" : null].filter(Boolean).join(" · "); })()}</div>
+                    </div></>}
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:9,fontSize:11.5,flexWrap:"wrap"}}>
+                <span style={{color:"var(--evx-verm)"}}>{d.fora.length ? "⚠ Ficou de fora: " + d.fora.slice(0, 2).map(function(f){ return "“" + f.texto + "”"; }).join(" · ") : ""}</span>
+                <button onClick={function(){ setRelatorio(!relatorio); }} style={{border:0,background:"transparent",color:_EVP_COR.roxo,cursor:"pointer",font:"inherit",fontWeight:700}}>{relatorio ? "Esconder relatório completo ▴" : "Ler relatório completo ›"}</button>
+              </div>
+              {relatorio && <div style={{marginTop:8,padding:"10px 12px",borderRadius:10,background:_EVP_COR.faixa,border:"1px solid " + _EVP_COR.linha,fontSize:12,lineHeight:1.55,color:_EVP_COR.sub,whiteSpace:"pre-wrap",maxHeight:220,overflow:"auto"}}>{d.rec.explicacao || "—"}</div>}
+            </div>
+            <div style={{padding:"12px 14px"}}>
+              <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:_EVP_COR.fraco,marginBottom:8}}>Por que ficou assim</div>
+              {d.porque.map(function(x, i){ return <div key={i} style={{display:"flex",gap:8,fontSize:12,color:_EVP_COR.ink,lineHeight:1.42,marginBottom:7}}>
+                <span style={{width:20,height:20,flex:"none",borderRadius:6,background:_EVP_COR.linha2,display:"grid",placeItems:"center",fontSize:11}}>{x.ic}</span><span>{x.txt}</span></div>; })}
+              {!d.porque.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Esta edição não trouxe os motivos (versão antiga).</div>}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:12,alignItems:"flex-start",padding:"11px 14px 12px",borderTop:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
+            <span style={{width:28,height:28,flex:"none",borderRadius:8,background:_EVP_COR.roxoSoft,display:"grid",placeItems:"center",fontSize:13}}>📝</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:_EVP_COR.roxo,marginBottom:3}}>Resumo da edição</div>
+              <div style={{fontSize:13,lineHeight:1.6,color:_EVP_COR.ink}}>{d.resumo}</div>
+            </div>
+            <button onClick={copiar} style={Object.assign(_evpBtn(), {padding:"6px 11px",flex:"none"})}>{copiado ? "✓ Copiado" : "📋 Copiar"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* v49 (06/10/2026): ALÇA PARA ALARGAR AS COLUNAS do Estúdio (pedido do Vini: "quero poder arrastar a janela para aumentar o espaço").
+   lado "esq" = Biblioteca (entre ela e o vídeo) · lado "dir" = painel de ajustes / Assistente de IA. O vídeo nunca fica com menos de 380 px.
+   Dois cliques voltam ao padrão. A largura fica guardada neste navegador (localStorage, com try/catch). */
+const _EVP_LAR = { esq:{ padrao:300, min:240, max:620 }, dir:{ padrao:350, min:300, max:620 } };
+const _EVP_LAR_GRADE_FIXO = 76 + 30;          // coluna dos ícones + 3 espaços de 10 px
+const _EVP_LAR_MEIO_MIN = 380;
+function _evpLarLer(lado){
+  const c = _EVP_LAR[lado]; let v = null;
+  try { v = Number(window.localStorage.getItem("evp_largura_" + lado)); } catch(_e){ v = null; }
+  return v && isFinite(v) ? Math.round(Math.min(c.max, Math.max(c.min, v))) : c.padrao;
+}
+function _evpLarGravar(lado, v){ try { window.localStorage.setItem("evp_largura_" + lado, String(Math.round(v))); } catch(_e){} }
+function _EvpAlcaLargura({ lado, gradeRef, lar, setLar, outra, setArrastando, ativo }){
+  const [sobre, setSobre] = useState(false);
+  const c = _EVP_LAR[lado];
+  const limite = function(v){
+    const g = gradeRef.current, total = g ? g.clientWidth : 1400;
+    const maxPeloVideo = total - _EVP_LAR_GRADE_FIXO - outra - _EVP_LAR_MEIO_MIN;
+    return Math.round(Math.max(c.min, Math.min(c.max, maxPeloVideo, v)));
+  };
+  const comecar = function(e){
+    if(e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    const x0 = e.clientX, l0 = lar; let ult = l0;
+    setArrastando(lado);
+    const mover = function(ev){ const dx = ev.clientX - x0; ult = limite(lado === "esq" ? l0 + dx : l0 - dx); setLar(ult); };
+    const soltar = function(){ window.removeEventListener("pointermove", mover); window.removeEventListener("pointerup", soltar); window.removeEventListener("pointercancel", soltar);
+      document.body.style.cursor = ""; setArrastando(null); _evpLarGravar(lado, ult); };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", mover); window.addEventListener("pointerup", soltar); window.addEventListener("pointercancel", soltar);
+  };
+  const padrao = function(){ const v = limite(c.padrao); setLar(v); _evpLarGravar(lado, v); };
+  const teclado = function(e){ const passo = e.shiftKey ? 40 : 16;
+    if(e.key === "ArrowLeft" || e.key === "ArrowRight"){ e.preventDefault(); const mais = (e.key === "ArrowRight") === (lado === "esq"); const v = limite(lar + (mais ? passo : -passo)); setLar(v); _evpLarGravar(lado, v); }
+    else if(e.key === "Enter" || e.key === "Home"){ e.preventDefault(); padrao(); } };
+  const pos = lado === "esq" ? { left:76 + 10 + lar + 1 } : { right:lar + 1 };   // no meio do espaço de 10 px entre as colunas
+  const aceso = ativo || sobre;
+  return (
+    <div role="separator" aria-orientation="vertical" aria-label={lado === "esq" ? "Largura da Biblioteca" : "Largura do painel da direita"}
+      aria-valuenow={lar} aria-valuemin={c.min} aria-valuemax={c.max} tabIndex={0}
+      title="Arraste para alargar ou estreitar · 2 cliques voltam ao tamanho padrão"
+      onPointerDown={comecar} onDoubleClick={padrao} onKeyDown={teclado}
+      onMouseEnter={function(){ setSobre(true); }} onMouseLeave={function(){ setSobre(false); }}
+      style={Object.assign({ position:"absolute", top:0, bottom:0, width:8, zIndex:6, cursor:"col-resize", display:"flex", justifyContent:"center", touchAction:"none", outline:"none" }, pos)}>
+      <div style={{ width:aceso ? 3 : 2, height:"100%", borderRadius:3, background:aceso ? _EVP_COR.roxo : "transparent", transition:"background .15s, width .15s" }}/>
+      <div style={{ position:"absolute", top:"50%", transform:"translateY(-50%)", width:6, height:34, borderRadius:4, background:aceso ? _EVP_COR.roxo : _EVP_COR.linha2, opacity:aceso ? 1 : 0.9 }}/>
+    </div>
+  );
+}
+
 function _EvpPainelMenu(q){
   const { menu, p, calc, sel, setSel, mudar, irPara, tempo, infoClipe, clipes, addClipe, addTexto, addSfx, kit } = q;
   const ctl = _evpUsarCtl(q.pRef, q.setP, q.confirmar, mudar);
@@ -130762,19 +131016,21 @@ function _EvpMusicas(q){
             <div style={{display:"flex",gap:6,marginTop:8}}><button onClick={salvarEdicao} aria-label="Salvar dados da música" style={_evpBtn("primario")}>Salvar</button><button onClick={function(){ setEditando(null); }} style={_evpBtn()}>Cancelar</button></div>
           </div>);
         return (
-          <div key={m.id} style={{display:"flex",gap:8,alignItems:"center",padding:"7px 8px",borderRadius:10,border:"1px solid " + (em ? _EVP_COR.roxo : _EVP_COR.linha),background:em ? _EVP_COR.roxoSoft : _EVP_COR.campo,marginBottom:6}}>
+          <div key={m.id} style={{display:"flex",flexWrap:"wrap",gap:"6px 8px",alignItems:"center",padding:"7px 8px",borderRadius:10,border:"1px solid " + (em ? _EVP_COR.roxo : _EVP_COR.linha),background:em ? _EVP_COR.roxoSoft : _EVP_COR.campo,marginBottom:6}}>
             <button onClick={function(){ ouvir(m); }} aria-label={toc ? "Parar" : "Ouvir"} title={toc ? "Parar" : "Ouvir"} style={{width:30,height:30,borderRadius:9,border:"1px solid " + _EVP_COR.linha,background:toc ? _EVP_COR.ink : _EVP_COR.campo,color:toc ? _EVP_COR.campo : _EVP_COR.ink,display:"grid",placeItems:"center",cursor:"pointer",flexShrink:0}}>
               <_EvpIco n={toc ? "pause" : "play"} s={14}/></button>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.nome}</div>
+            <div style={{flex:"1 1 120px",minWidth:120}}>      {/* v49: o nome nunca some — os botões descem para a 2ª linha quando falta espaço */}
+              <div title={m.nome} style={{fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.nome}</div>
               <div style={{fontSize:10.5,color:_EVP_COR.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {[m.genero, ((_EV_CLIMAS.find(function(c){ return c.id === m.clima; }) || {}).label), m.bpm ? m.bpm + " BPM" : null, m.duracao ? _evTempo(m.duracao).replace(/\.\d$/, "") : null, m.fonte].filter(Boolean).join(" · ")}</div>
             </div>
             {m.nota != null && <span title="Quanto combina com o objetivo" style={{fontFamily:_EVP_MONO,fontSize:10.5,fontWeight:700,padding:"2px 6px",borderRadius:6,background:m.nota >= 60 ? _EVP_COR.ok : m.nota >= 35 ? _EVP_COR.aviso : _EVP_COR.linha2,color:m.nota >= 60 ? _EV.verde : m.nota >= 35 ? _EV.amarelo : _EVP_COR.sub}}>{m.nota}%</span>}
+            <div style={{display:"flex",gap:6,alignItems:"center",marginLeft:"auto",flexShrink:0}}>
             <button onClick={function(){ favMus(m.id); }} aria-label={"Favorita: " + m.nome} title="Favorita (fica no começo da lista)" style={{border:0,background:"transparent",cursor:"pointer",fontSize:15,padding:2,color:favM.indexOf(m.id) >= 0 ? "#eab308" : _EVP_COR.fraco}}>★</button>
             <button onClick={function(){ setEditando(Object.assign({}, m, { objetivos:m.objetivos || [] })); }} aria-label="Editar dados" title="Editar pegada, clima, objetivos" style={Object.assign(_evpBtn("icone"), {padding:5})}><_EvpIco n="lapis" s={14}/></button>
             <button onClick={function(){ setMusica(em ? null : m.id); }} style={Object.assign(em ? _evpBtn("suave") : _evpBtn(), {padding:"5px 8px",fontSize:11.5})}>{em ? <span style={{display:"flex",gap:4,alignItems:"center"}}><_EvpIco n="check" s={13}/>Em uso</span> : "Usar"}</button>
             {q.addTrilha && <button onClick={function(){ q.addTrilha(m); }} title="Somar como trilha extra, em outro canal (A5), a partir da agulha" style={Object.assign(_evpBtn(), {padding:"5px 7px",fontSize:11.5})}>+ Trilha</button>}
+            </div>
           </div>);
       })}
       {!lista.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Nenhuma música com esse filtro.</div>}
