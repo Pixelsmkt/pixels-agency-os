@@ -113426,7 +113426,7 @@ function SwLegenda({txt,cor}){
   </div>;
 }
 const _SW_GRUPOS=[
-  {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"60 segundos · roteiro de fala pro cliente gravar", cor:"#db2777",
+  {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"60 segundos · roteiro de fala pro cliente gravar", cor:"#a140ff",   // roxo Pixels (tom exato, 06/10)
    icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="M16.5 10.2l5-3v9.6l-5-3z"/></svg>},
   {id:"arte",      tipo:"arte",      titulo:"Artes estáticas", sub:"título + texto na arte",                  cor:"#0891b2",
    icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="M21 15.5l-5-5L5 21"/></svg>},
