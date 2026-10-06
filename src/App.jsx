@@ -113732,7 +113732,7 @@ function SwRolagemDupla({children,style,cor}){
   const sync=function(de,para){ if(de&&para&&Math.abs(para.scrollLeft-de.scrollLeft)>=1) para.scrollLeft=de.scrollLeft; };
   return <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
     {sobra&&<div ref={cimaRef} onScroll={function(){ sync(cimaRef.current,baixoRef.current); }}
-      style={{overflowX:"auto",overflowY:"hidden",height:12,scrollbarColor:(cor||"#94a3b8")+" transparent"}}>
+      style={{overflowX:"auto",overflowY:"hidden"}}>
       <div style={{width:larg,height:1}}/>
     </div>}
     <div ref={baixoRef} onScroll={function(){ sync(baixoRef.current,cimaRef.current); }} style={style}>{children}</div>
