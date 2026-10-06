@@ -118401,6 +118401,9 @@ function _evUuid(){ try{ if(window.crypto && crypto.randomUUID) return crypto.ra
   const h = "0123456789abcdef"; let s = ""; for(let i=0;i<32;i++) s += h[Math.floor(Math.random()*16)];
   return s.slice(0,8)+"-"+s.slice(8,12)+"-4"+s.slice(13,16)+"-8"+s.slice(17,20)+"-"+s.slice(20,32); }
 function _evToast(tipo, msg){ try{ if(typeof pixelsToast!=="undefined" && pixelsToast && pixelsToast[tipo]) pixelsToast[tipo](msg); }catch(_){} }
+/* v51: AVISO DE DISCORDO — o pedido contrariava uma lição/regra/princípio: a IA fez mesmo assim e avisa (o sócio decide) */
+function _evAvisoConhTxt(a){ return (a.ref || "") + (a.titulo ? " (" + a.titulo + ")" : "") + " — " + (a.motivo || ""); }
+function _evAvisarConhecimento(d){ try{ ((d && d.avisos_conhecimento) || []).slice(0, 2).forEach(function(a){ _evToast("warning", "⚠ A IA fez, mas avisa: " + _evAvisoConhTxt(a)); }); }catch(_){} }
 function _evErroFn(res){ // mensagem de erro de functions.invoke
   return (async function(){
     if(res && res.error && res.error._traduzido) return res.error.message || "erro";      // v48 (06/10/2026): E2-14 — já veio traduzida pelo _evInvocar
@@ -119259,7 +119262,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     try{
       const res = await _evInvocar("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:p }, extra && typeof extra === "object" ? extra : {}) });   // v13: correções da linha do tempo
       if(res.error) throw new Error(await _evErroFn(res));
-      setPedido(""); _evToast("success", "Ajuste feito — versão " + ((res.data && res.data.versao) || "nova") + (res.data && res.data.aviso_modelo ? " · " + res.data.aviso_modelo : "")); setRec(function(n){ return n+1; }); ok = true;
+      setPedido(""); _evToast("success", "Ajuste feito — versão " + ((res.data && res.data.versao) || "nova") + (res.data && res.data.aviso_modelo ? " · " + res.data.aviso_modelo : "")); _evAvisarConhecimento(res.data); setRec(function(n){ return n+1; }); ok = true;
     }catch(e){       // v48 (06/10/2026): E2-3 — toast + aviso dentro do assistente (antes ia só para o setErro de fora, escondido atrás do editor)
       const msg = String((e && e.message) || e);
       setErroAjuste({ msg:msg, pedido:p, em:Date.now() }); _evToast("error", "O ajuste com IA não saiu: " + msg);
@@ -127448,7 +127451,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       const d = res.data || {}; if(!d.projeto) throw new Error("a IA não devolveu a prévia");
       const ant = pRef.current, np = _evpNormalizar(_evpCopia(d.projeto), clipes);
       confirmar(ant, np);
-      setPrevia({ pedido:x, explicacao:d.explicacao || "", modelo:d.modelo || "", aviso:d.aviso_modelo || "", custo:d.custo_brl, antes:ant, mudou:_evpOQueMudou(ant, np) });
+      setPrevia({ pedido:x, explicacao:d.explicacao || "", modelo:d.modelo || "", aviso:d.aviso_modelo || "", avisosConh:d.avisos_conhecimento || [], custo:d.custo_brl, antes:ant, mudou:_evpOQueMudou(ant, np) });
       setPedido(""); _evToast("info", "Prévia pronta: dê o play e escolha Aplicar ou Descartar");
     }catch(e){ _evToast("error", "A prévia falhou: " + ((e && e.message) || e)); }
     setSimulando(false);
@@ -128016,6 +128019,7 @@ function _EvpPreviaIA({ previa, aplicar, descartar, aplicando }){
       {previa.explicacao && <div style={{fontSize:12,color:_EVP_COR.sub,marginTop:4,lineHeight:1.45}}>{previa.explicacao}</div>}
       {previa.mudou && previa.mudou.length > 0 && <ul style={{margin:"4px 0 0",paddingLeft:16,color:_EVP_COR.sub,fontSize:11.5}}>{previa.mudou.slice(0, 8).map(function(m, k){ return <li key={k}>{m}</li>; })}</ul>}
       {previa.aviso && <div style={{fontSize:11,color:"#a16207",marginTop:4}}>{previa.aviso}</div>}
+      {(previa.avisosConh || []).map(function(a, i){ return <div key={i} style={{fontSize:11.5,lineHeight:1.4,marginTop:5,padding:"5px 8px",borderRadius:8,background:_EVP_COR.aviso,color:_EVP_COR.ink}}>⚠ <b>A IA fez, mas avisa:</b> {_evAvisoConhTxt(a)}</div>; })}
       <div style={{display:"flex",gap:6,marginTop:8}}>
         <button onClick={aplicar} disabled={aplicando} style={Object.assign(_evpBtn("primario", !aplicando), {padding:"6px 12px",fontSize:12})}>{aplicando ? "Aplicando…" : "Aplicar (vira versão)"}</button>
         <button onClick={descartar} disabled={aplicando} style={Object.assign(_evpBtn(), {padding:"6px 12px",fontSize:12})}>Descartar</button>
@@ -130270,6 +130274,11 @@ function _EvpResumoIA({ ed, p, calc, irPara }){
               {d.porque.map(function(x, i){ return <div key={i} style={{display:"flex",gap:8,fontSize:12,color:_EVP_COR.ink,lineHeight:1.42,marginBottom:7}}>
                 <span style={{width:20,height:20,flex:"none",borderRadius:6,background:_EVP_COR.linha2,display:"grid",placeItems:"center",fontSize:11}}>{x.ic}</span><span>{x.txt}</span></div>; })}
               {!d.porque.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Esta edição não trouxe os motivos (versão antiga).</div>}
+              {(d.rec.avisos_conhecimento || []).length > 0 && <div style={{marginTop:10,padding:"8px 10px",borderRadius:10,background:_EVP_COR.aviso,border:"1px solid rgba(234,179,8,.45)"}}>
+                <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:"var(--evx-amarelo)",marginBottom:4}}>⚠ A IA fez o pedido, mas avisa</div>
+                {d.rec.avisos_conhecimento.slice(0, 4).map(function(a, i){ return <div key={i} style={{fontSize:12,lineHeight:1.42,color:_EVP_COR.ink,marginTop:i ? 5 : 0}}><b>{a.ref}{a.titulo ? " · " + a.titulo : ""}</b> — {a.motivo}</div>; })}
+                <div style={{fontSize:11,color:_EVP_COR.sub,marginTop:5}}>Se foi de propósito, está certo. Se esse jeito deve valer sempre, ensine no ✋ Corrigir.</div>
+              </div>}
               {(d.rec.licoes_usadas || []).length > 0 && <div style={{marginTop:10,paddingTop:9,borderTop:"1px dashed " + _EVP_COR.linha}}>
                 <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:_EVP_COR.fraco,marginBottom:6}}>O que a IA usou do conhecimento</div>
                 {d.rec.licoes_usadas.slice(0, 8).map(function(x, i){ const og = _evpLicaoOrigem(x.origem);
@@ -133884,6 +133893,8 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
 
 
 
+/* ═══ v51 (06/10/2026): EVOLUÇÃO + AVISO DE DISCORDO — "📈 A IA está melhorando?" na aba Conhecimento (SQL v49) e, quando o pedido
+   contraria o conhecimento, a IA faz e avisa (toast no ajuste, na prévia e no "Por que ficou assim"). Servidor v71. ═══ */
 /* ═══ v50 (06/10/2026): CONHECIMENTO II — o painel mostra também as 33 REGRAS (agora com o porquê, 📏 R7…) e o LIVRO DO EDITOR (📖 P-01…P-62,
    com fontes e confiança); filtros por origem e busca; "O que a IA usou do conhecimento" no "Por que ficou assim" (licoes_usadas do servidor v70);
    no Corrigir, se a correção já era regra ou princípio do livro, aparece "a IA não aplicou o que já sabia" (o erro voltou). SQL v48. ═══ */
@@ -134000,6 +134011,89 @@ function _EvpEntendido({ x, muda, cliente, edId, info, aoMudarLicoes }){
 }
 
 /* ═══ aba "Conhecimento de edição" (página da Edição de vídeo) ═══ */
+/* v51 (06/10/2026): EVOLUÇÃO DO CONHECIMENTO — "a IA está melhorando?" (SQL v49: criacao_conhecimento_evolucao).
+   Por semana: vídeos, versões por vídeo (1 = acertou de primeira), nota do diretor, correções, prontos, quantas vezes a IA citou o
+   conhecimento e quantos avisos de discordo. Cada coluna tem a própria escala (mini barras de uma cor só; o número fica escrito ao lado).
+   Sugestões por lição: o erro voltou → reescrever · lida e sem erro → pode virar firme · lida e nunca citada → ver se está clara. */
+const _EV_SUG = { reescrever:["⟲", "O erro voltou — reescreva", "#b91c1c", "#fef2f2"], firmar:["✓", "Pode virar firme", "#15803d", "#f0fdf4"], clareza:["?", "A IA lê e não usa — veja se está clara", "#a16207", "#fefce8"] };
+function _EvEvolucao({ isMob, rec, onFirmar, onEditar }){
+  const [dados, setDados] = useState(null);
+  const [aberto, setAberto] = useState(true);
+  useEffect(function(){ let vivo = true;
+    (async function(){ try{ const r = await window._sb.rpc("criacao_conhecimento_evolucao", { p_semanas:8 }); if(vivo) setDados(r.error ? { erro:r.error.message } : (r.data || {})); }
+      catch(e){ if(vivo) setDados({ erro:String((e && e.message) || e) }); } })();
+    return function(){ vivo = false; }; }, [rec]);
+  const caixa = { background:"#fff", border:"1px solid " + _EV.linha, borderRadius:14, padding:isMob ? 12 : 16, marginTop:12 };
+  if(!dados) return <div style={Object.assign({}, caixa, { color:_EV.sub, fontSize:13 })}>Carregando a evolução…</div>;
+  if(dados.erro) return /criacao_conhecimento_evolucao/.test(dados.erro) ? <div style={Object.assign({}, caixa, { color:_EV.sub, fontSize:13 })}>Falta rodar a SQL v49 (evolução).</div> : null;
+  const sem = dados.semanas || [], lic = dados.licoes || [];
+  const ult = sem[sem.length - 1] || null, ant = sem.length > 1 ? sem[sem.length - 2] : null;
+  const fmt = function(v, d){ return v == null ? "—" : Number(v).toLocaleString("pt-BR", { maximumFractionDigits:d == null ? 1 : d }); };
+  const dia = function(iso){ const p = String(iso || "").split("-"); return p.length === 3 ? p[2] + "/" + p[1] : iso; };
+  const delta = function(k, melhorMenor){ if(!ult || !ant || ult[k] == null || ant[k] == null) return null; const d = Number(ult[k]) - Number(ant[k]); if(Math.abs(d) < 0.05) return { t:"igual à semana anterior", c:_EV.sub, i:"→" };
+    const bom = melhorMenor ? d < 0 : d > 0; return { t:(d > 0 ? "+" : "−") + fmt(Math.abs(d)) + " vs. semana anterior", c:bom ? _EV.verde : _EV.verm, i:bom ? "▲ melhorou" : "▼ piorou" }; };
+  const kpi = function(rot, v, dl, dica){ return <div key={rot} title={dica} style={{padding:"10px 12px",borderRadius:12,border:"1px solid " + _EV.linha,background:"#fff",minWidth:0}}>
+    <div style={{fontSize:11,color:_EV.sub,fontWeight:700}}>{rot}</div><div style={{fontSize:22,fontWeight:800,color:_EV.texto,marginTop:2}}>{v}</div>
+    {dl && <div style={{fontSize:11,fontWeight:700,color:dl.c,marginTop:2}}>{dl.i} <span style={{fontWeight:500,color:_EV.sub}}>{dl.t}</span></div>}</div>; };
+  const cols = [["videos", "Vídeos", 0, "Vídeos montados na semana"], ["versoes_por_video", "Versões por vídeo", 1, "Quantas versões cada vídeo precisou (1 = a IA acertou de primeira). Menor é melhor."],
+    ["nota_diretor", "Nota do diretor", 1, "Média da nota que a 2ª IA deu antes de gravar (0 a 10)"], ["correcoes", "Correções", 0, "Trechos marcados no ✋ Corrigir"],
+    ["prontos", "Prontos", 0, "Vídeos exportados ou aprovados"], ["citacoes", "Usou o conhecimento", 0, "Vezes que a IA citou uma lição, regra ou princípio do livro"], ["avisos", "Avisos", 0, "Vezes que a IA fez o pedido mas avisou que contrariava o conhecimento"]];
+  const maxDe = {}; cols.forEach(function(c){ maxDe[c[0]] = c[0] === "nota_diretor" ? 10 : Math.max(1, ...sem.map(function(x){ return Number(x[c[0]]) || 0; })); });
+  const barra = function(x, c){ const v = x[c[0]]; const pct = v == null ? 0 : Math.max(0, Math.min(100, Number(v) / maxDe[c[0]] * 100));
+    return <td key={c[0]} title={c[1] + " na semana de " + dia(x.sem) + ": " + fmt(v, c[2])} style={{padding:"6px 8px",borderTop:"1px solid " + _EV.linha2}}>
+      <div style={{display:"flex",alignItems:"center",gap:7}}><div style={{flex:1,minWidth:40,height:8,borderRadius:4,background:_EV.linha2,overflow:"hidden"}}>
+        {pct > 0 && <div style={{width:pct + "%",height:"100%",background:_EV.roxo,borderRadius:"0 4px 4px 0"}}/>}</div>
+        <span style={{fontSize:12,fontWeight:700,color:_EV.texto,minWidth:24,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{fmt(v, c[2])}</span></div></td>; };
+  const sugs = lic.filter(function(l){ return l.sugestao; }), citadas = lic.filter(function(l){ return l.citada > 0; }).sort(function(a, b){ return b.citada - a.citada; }).slice(0, 6);
+  const pode = !!dados.pode_aprovar;
+  return (
+    <div style={caixa}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{fontWeight:800,fontSize:_evF(15,isMob)}}>📈 A IA está melhorando?</div>
+        <span style={{fontSize:12,color:_EV.sub}}>últimas {sem.length} semana(s)</span>
+        <button onClick={function(){ setAberto(!aberto); }} style={{marginLeft:"auto",border:0,background:"none",color:_EV.roxo,fontWeight:700,cursor:"pointer",font:"inherit",fontSize:12.5}}>{aberto ? "esconder ▴" : "mostrar ▾"}</button>
+      </div>
+      {aberto && <>
+        <div style={{display:"grid",gridTemplateColumns:isMob ? "repeat(2,minmax(0,1fr))" : "repeat(4,minmax(0,1fr))",gap:8,marginTop:10}}>
+          {kpi("Versões por vídeo", ult ? fmt(ult.versoes_por_video) : "—", delta("versoes_por_video", true), "1 = a IA acertou de primeira. Menor é melhor.")}
+          {kpi("Nota do diretor", ult && ult.nota_diretor != null ? fmt(ult.nota_diretor) + "/10" : "—", delta("nota_diretor", false), "Média da semana atual")}
+          {kpi("Usou o conhecimento", ult ? fmt(ult.citacoes, 0) + "×" : "—", null, "Citações de lições, regras e livro nesta semana")}
+          {kpi("Precisam de atenção", String(sugs.length), null, "Lições com sugestão abaixo")}
+        </div>
+        {sem.length > 0 && <div style={{overflowX:"auto",marginTop:12}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:isMob ? 640 : 0}}>
+            <thead><tr><th style={{textAlign:"left",padding:"4px 8px",color:_EV.sub,fontWeight:700}}>Semana de</th>
+              {cols.map(function(c){ return <th key={c[0]} title={c[3]} style={{textAlign:"left",padding:"4px 8px",color:_EV.sub,fontWeight:700,whiteSpace:"nowrap"}}>{c[1]}</th>; })}</tr></thead>
+            <tbody>{sem.slice().reverse().map(function(x){ return <tr key={x.sem}><td style={{padding:"6px 8px",borderTop:"1px solid " + _EV.linha2,fontWeight:700,whiteSpace:"nowrap"}}>{dia(x.sem)}</td>{cols.map(function(c){ return barra(x, c); })}</tr>; })}</tbody>
+          </table>
+          <div style={{fontSize:11,color:_EV.fraco,marginTop:4}}>Cada coluna tem a própria escala. Passe o mouse para ver o valor e o que a coluna mede. A citação do conhecimento começou em 06/10 (servidor v70).</div>
+        </div>}
+        <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr" : "minmax(0,3fr) minmax(0,2fr)",gap:12,marginTop:14}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:_EV.sub,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>Sugestões (quem decide é o sócio)</div>
+            {!sugs.length && <div style={{fontSize:12.5,color:_EV.sub}}>Nada pedindo atenção agora.</div>}
+            {sugs.slice(0, 8).map(function(l){ const sg = _EV_SUG[l.sugestao] || _EV_SUG.clareza;
+              return <div key={l.id} style={{display:"flex",gap:8,alignItems:"center",padding:"7px 9px",borderRadius:10,border:"1px solid " + _EV.linha,marginBottom:6,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:99,color:sg[2],background:sg[3],whiteSpace:"nowrap"}}>{sg[0]} {sg[1]}</span>
+                <span style={{fontSize:12.5,minWidth:0,flex:"1 1 160px"}}><b>{l.ref}</b> · {l.titulo} <span style={{color:_EV.fraco}}>· lida {l.lida}× · citada {l.citada}× · voltou {l.recorrencias}×</span></span>
+                {pode && l.sugestao === "firmar" && <button onClick={function(){ onFirmar(l.id); }} style={{font:"inherit",fontSize:12,padding:"4px 10px",borderRadius:99,border:"1px solid " + _EV.linha,background:"#fff",cursor:"pointer"}}>✓ Firme</button>}
+                {pode && l.sugestao !== "firmar" && <button onClick={function(){ onEditar(l.id); }} style={{font:"inherit",fontSize:12,padding:"4px 10px",borderRadius:99,border:"1px solid " + _EV.linha,background:"#fff",cursor:"pointer"}}>✏ Reescrever</button>}
+              </div>; })}
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:_EV.sub,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>O que a IA mais usa</div>
+            {!citadas.length && <div style={{fontSize:12.5,color:_EV.sub}}>Aparece aqui a partir das próximas montagens (a IA passou a citar o que usa no servidor v70).</div>}
+            {citadas.map(function(l){ const og = _evpLicaoOrigem(l.origem), mx = citadas[0].citada || 1;
+              return <div key={l.id} title={og[1] + " · citada " + l.citada + "×"} style={{marginBottom:7}}>
+                <div style={{fontSize:12,display:"flex",gap:6}}><span style={{fontWeight:800,color:og[2]}}>{og[0]} {l.ref}</span><span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.titulo}</span><b>{l.citada}×</b></div>
+                <div style={{height:6,borderRadius:3,background:_EV.linha2,marginTop:3}}><div style={{width:(l.citada / mx * 100) + "%",height:"100%",borderRadius:"0 3px 3px 0",background:_EV.roxo}}/></div></div>; })}
+          </div>
+        </div>
+      </>}
+    </div>
+  );
+}
+
 function _EvConhecimento({ isMob }){
   const [cliente, setCliente] = useState("");
   const [tema, setTema] = useState("");
@@ -134048,6 +134142,8 @@ function _EvConhecimento({ isMob }){
             return <div key={k[0]} style={{padding:"9px 11px",borderRadius:11,border:"1px solid " + _EV.linha,background:"#fff"}}><div style={{fontSize:11,color:_EV.sub,fontWeight:700}}>{k[0]}</div><div style={{fontSize:20,fontWeight:800}}>{k[1]}</div></div>; })}
         </div>
       </div>
+      <_EvEvolucao isMob={isMob} rec={rec} onFirmar={function(id){ const l = todas.find(function(x){ return x.id === id; }); if(l) mudarStatus(l, "firme"); }}
+        onEditar={function(id){ const l = todas.find(function(x){ return x.id === id; }); if(!l) return; setOrigem(""); setTema(""); setBusca(_evpLicaoCod(l)); setAberta(l.id); setEditando(Object.assign({}, l)); }}/>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginTop:14}}>
         <button onClick={function(){ setOrigem(""); setTema(""); }} style={chip(!origem)}>Tudo {total}</button>
         {["correcao", "regra", "livro"].map(function(o){ const og = _evpLicaoOrigem(o); return <button key={o} onClick={function(){ setOrigem(origem === o ? "" : o); setTema(""); }} style={chip(origem === o)}>{og[0]} {{ correcao:"Correções", regra:"Regras da agência", livro:"Livro do editor" }[o]} {porOrigem[o] || 0}</button>; })}
