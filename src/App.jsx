@@ -47854,6 +47854,10 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
       placeholder="O que a IA deve fazer (opcional). Ex.: reels de 30 s, legenda grande, começa pela fala do produtor"
       style={{width:"100%",boxSizing:"border-box",marginTop:8,border:"1px solid #e9d5ff",borderRadius:9,padding:"7px 10px",fontSize:11.5,fontFamily:"inherit",resize:"vertical"}}/>}
     {txt&&<div style={{marginTop:6,fontSize:11.5,color:cor,fontWeight:600,lineHeight:1.45}}>{txt}</div>}
+    {ed&&ed.final&&ed.final_drive&&(ed.final_drive.url===ed.final.url)&&<div style={{marginTop:4,fontSize:11,color:ed.final_drive.erro?"#b45309":"#0e7490",fontWeight:600}}>
+      {ed.final_drive.link?<span>📁 Vídeo final também no Drive · <a href={ed.final_drive.pasta||ed.final_drive.link} target="_blank" rel="noopener noreferrer" style={{color:"#0891b2"}}>abrir a pasta "Vídeo final" ↗</a></span>
+        :"⏳ Subindo o vídeo final para o Drive"+(ed.final_drive.tentativas?" (tentativa "+ed.final_drive.tentativas+": "+String(ed.final_drive.erro||"").slice(0,80)+")":"")}
+    </div>}
     {gravadoBox}
     {!txt&&!pastaBox&&!gravadoBox&&<div style={{marginTop:6,fontSize:11,color:"#94a3b8"}}>{temVideo?"A IA edita os vídeos de Materiais seguindo o briefing e o Kit do cliente. Pode fechar o card depois de mandar.":"Anexe os vídeos brutos em Materiais (ou pelo Link de envio / Link do Drive) e mande para a IA."}</div>}
   </div>;
