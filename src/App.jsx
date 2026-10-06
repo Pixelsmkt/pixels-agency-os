@@ -2604,6 +2604,14 @@ function _pricesFor(designerId, refMonth){
   const _ov = (DESIGNER_PRICE_OVERRIDES && DESIGNER_PRICE_OVERRIDES[designerId]) || {};
   return Object.assign(_p, _ov);
 }
+/* (06/10/2026, Gustavo) "Folder" virou MATERIAL GRÁFICO (o id interno continua "folder" pra não
+   mexer no histórico) e o valor do freela é PERSONALIZADO por card — varia muito conforme o material.
+   Card com tasks.valor_personalizado → paga esse valor; sem valor → preço de tabela (R$30). */
+function pxValorTaskPagamento(t,prices,chave){
+  if(chave==="folder"&&t){ const v=t.valorPersonalizado!=null?t.valorPersonalizado:t.valor_personalizado; if(v!==null&&v!==undefined&&v!==""&&!isNaN(Number(v))) return Number(v); }
+  return Number((prices||{})[chave])||0;
+}
+if(typeof window!=="undefined"){ window.pxValorTaskPagamento=pxValorTaskPagamento; }
 // contentType → [chave de contagem, chave da lista de tasks]
 const _CT_BUCKET = {
   foto:["fotoObra","tasksFotoObra"], arte:["arte","tasksArte"],
@@ -2748,7 +2756,7 @@ function pxCriarParcelamento(freelaId, startMonth, total, n, motivo){
 /* Quanto ainda falta da dívida DEPOIS desta parcela (pra mostrar "restam R$ X"). */
 function pxParcRestante(parc){ if(!parc) return 0; var r=(Number(parc.total)||0)-(Number(parc.valor)||0)*(Number(parc.i)||0); return r>0?Math.round(r*100)/100:0; }
 function calcDesignerPayments(tasks, designerId, refMonth){
-  const out = { total:0, fotoObra:0, arte:0, carrossel:0, folder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
+  const out = { total:0, fotoObra:0, arte:0, carrossel:0, folder:0, valorFolder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
                 tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
   (tasks||[]).forEach(t=>{
     if(!t)return;
@@ -2788,7 +2796,9 @@ function calcDesignerPayments(tasks, designerId, refMonth){
       out[_b[0]]++; out[_b[1]].push(t);
       // Preço do mês DA TASK — sem isso, "Todos os meses" somaria tudo pela
       // tabela vigente hoje e o reajuste de 09/2026 vazaria pro passado.
-      out.total += Number(_pricesFor(designerId, effectiveMonth)[_b[0]])||0;
+      const _vT = pxValorTaskPagamento(t, _pricesFor(designerId, effectiveMonth), _b[0]);
+      out.total += _vT;
+      if(_b[0]==="folder") out.valorFolder += _vT;
     } else { out.naoClassificado++; out.tasksOutros.push(t); }
   });
   // Preços de referência pra UI (mês selecionado; sem seleção, o mês corrente)
@@ -3005,7 +3015,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         const _pc=c._prices||DESIGNER_PRICES;   // preços do mês/designer, não a tabela base
         const items=r.isEditor
           ?[{l:"Vídeo",n:c.video,p:_pc.video},{l:"Corte",n:c.corte,p:_pc.corte},{l:"V. dinâmico",n:c.videoComplexo,p:_pc.videoComplexo},{l:"V. básico",n:c.videoFeira,p:_pc.videoFeira}]
-          :[{l:"Ajuste de template",n:c.fotoObra,p:_pc.fotoObra},{l:"Arte única",n:c.arte,p:_pc.arte},{l:"Carrossel",n:c.carrossel,p:_pc.carrossel},{l:"Folder",n:c.folder,p:_pc.folder}];
+          :[{l:"Ajuste de template",n:c.fotoObra,p:_pc.fotoObra},{l:"Arte única",n:c.arte,p:_pc.arte},{l:"Carrossel",n:c.carrossel,p:_pc.carrossel},{l:"Material gráfico",n:c.folder,p:_pc.folder,v:c.valorFolder}];
         // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
         const hasAny=items.some(function(it){return it.n>0;});
         return <div key={fr.id} style={{background:"linear-gradient(180deg,"+accent+"08 0%, #fff 60%)",border:"1px solid "+accent+"22",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 4px 14px "+accent+"10, 0 1px 3px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
@@ -3033,9 +3043,9 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
                 <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
                   <span style={{background:has?accent:"#f1f5f9",color:has?"#fff":"#94a3b8",fontWeight:800,fontSize:11.5,padding:"2px 8px",borderRadius:6,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0,minWidth:24,textAlign:"center"}}>{it.n}×</span>
                   <span style={{color:has?"#0f172a":"#94a3b8",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span>
-                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>· {fmtBRL(it.p).replace(",00","")}/un</span>
+                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>· {it.v!=null?"valor por card":(fmtBRL(it.p).replace(",00","")+"/un")}</span>
                 </div>
-                <span style={{color:has?"#16a34a":"#cbd5e1",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{fmtBRL(it.n*it.p).replace(",00","")}</span>
+                <span style={{color:has?"#16a34a":"#cbd5e1",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{fmtBRL(it.v!=null?it.v:it.n*it.p).replace(",00","")}</span>
               </div>;
             })}
 
@@ -3339,7 +3349,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         {key:"tasksFotoObra",  label:"Ajuste de template",  price:_pd.fotoObra,      color:"#ec4899"},
         {key:"tasksArte",      label:"Arte única",          price:_pd.arte,          color:"#a140ff"},
         {key:"tasksCarrossel", label:"Carrossel",           price:_pd.carrossel,     color:"#7c3aed"},
-        {key:"tasksFolder",    label:"Folder",              price:_pd.folder,        color:"#0891b2"},
+        {key:"tasksFolder",    label:"Material gráfico",    price:_pd.folder,        color:"#0891b2", custom:true},
         {key:"tasksVideo",     label:"Vídeo",               price:_pd.video,         color:"#2563eb"},
         {key:"tasksCorte",     label:"Corte de vídeo",      price:_pd.corte,         color:"#0284c7"},
         {key:"tasksVideoComplexo",label:"Vídeo dinâmico",   price:_pd.videoComplexo, color:"#7e22ce"},
@@ -3376,14 +3386,14 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
             {_CAT.map(function(cat){
               const arr=_c[cat.key]||[];
               if(arr.length===0) return null;
-              const subtotal=arr.length*cat.price;
+              const subtotal=cat.custom?arr.reduce(function(a,t){return a+pxValorTaskPagamento(t,_pd,"folder");},0):arr.length*cat.price;
               return <div key={cat.key} style={{marginBottom:18}}>
                 {/* Cabeçalho da categoria */}
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:cat.color+"10",borderRadius:9,marginBottom:6}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{background:cat.color,color:"#fff",padding:"3px 8px",borderRadius:6,fontSize:10.5,fontWeight:800,letterSpacing:.3}}>{arr.length}x</span>
                     <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{cat.label}</span>
-                    {cat.price>0&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>· R$ {cat.price}/un</span>}
+                    {cat.custom?<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>· valor de cada card</span>:cat.price>0&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>· R$ {cat.price}/un</span>}
                   </div>
                   <span style={{color:"#16a34a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{fmtBRL(subtotal)}</span>
                 </div>
@@ -3435,7 +3445,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
                           <span style={{background:"#f1f5f9",color:"#64748b",padding:"1px 6px",borderRadius:4,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{_st}</span>
                         </div>
                       </div>
-                      <span style={{color:"#16a34a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{cat.price>0?fmtBRL(cat.price):"—"}</span>
+                      <span style={{color:"#16a34a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{cat.custom?fmtBRL(pxValorTaskPagamento(t,_pd,"folder")):(cat.price>0?fmtBRL(cat.price):"—")}</span>
                     </div>;
                   })}
                 </div>
@@ -5939,7 +5949,7 @@ const PX_TIPOS_CONTEUDO=[
   {id:"foto",           label:"Ajuste de template", grupo:"design", quando:"só trocar foto e/ou texto num template que já existe; nada é criado do zero"},
   {id:"arte",           label:"Arte única",         grupo:"design", quando:"uma peça estática só, criada do zero"},
   {id:"carrossel",      label:"Carrossel",          grupo:"design", quando:"o conteúdo precisa de várias lâminas em sequência"},
-  {id:"folder",         label:"Folder",             grupo:"design", quando:"material impresso ou PDF de várias páginas, pra entregar ou imprimir"},
+  {id:"folder",         label:"Material gráfico",   grupo:"design", quando:"folder, catálogo, cartão, banner, material impresso ou PDF — valor do freela definido no card"},
   {id:"corte",          label:"Corte de vídeo",     grupo:"video",  quando:"já existe um vídeo gravado e é só cortar, legendar ou adaptar"},
   {id:"video_feira",    label:"Vídeo básico",       grupo:"video",  quando:"vídeo simples, pouca edição — registro de feira, bastidor, recado rápido"},
   {id:"video",          label:"Vídeo",              grupo:"video",  quando:"vídeo editado de verdade, com roteiro, cenas e trilha"},
@@ -29186,7 +29196,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       const types={
                         arte:{label:"Arte única",icon:"image"},
                         carrossel:{label:"Carrossel",icon:"layers"},
-                        folder:{label:"Folder",icon:"file-text"},
+                        folder:{label:"Material gráfico",icon:"file-text"},
                         video:{label:"Vídeo",icon:"play"},
                         video_complexo:{label:"Vídeo dinâmico",icon:"film"},
                         video_feira:{label:"Vídeo básico",icon:"flag"},
@@ -36384,7 +36394,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               corpo=_o.join("\n").replace(/\n{3,}/g,"\n\n").trim();
             }catch(_){}
             const _ct=String((current&&(current.contentType||current.content_type))||"");
-            const _CT={arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",folder:"Folder",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",video_short:"Short",corte:"Corte de vídeo"};
+            const _CT={arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",folder:"Material gráfico",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",video_short:"Short",corte:"Corte de vídeo"};
             const _nLam=(corpo.match(/^\*L[âa]mina\s*\d+/gim)||[]).length;
             const _uni=(cl&&cl.id==="bioter"&&typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit).map(function(u){return u.label;}).join(", "):"";
             const _cli=cl?(String(cl.name||cl.id)+(_uni?(" · "+_uni):"")):"";
@@ -36529,7 +36539,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                  Quem não aprova continua só lendo, e bloco sem valor nem aparece. */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
-              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Folder",icon:"file-text"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Material gráfico",icon:"file-text"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"}};
               const ctCfg=CT_MAP[ct];
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
@@ -36591,7 +36601,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const _matVal=_matPed?("Solicitado ao cliente"+(_matInfo&&_matInfo.quem?" · "+_matInfo.quem:"")+(_matInfo&&_matInfo.quando?" · "+_matInfo.quando.slice(0,5):"")):"";
               const linhas=[
                 {key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD),color:"#0ea5e9"},
-                {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed"},
+                {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?(ctCfg.label+((ct==="folder"&&current.valorPersonalizado!=null&&current.valorPersonalizado!=="")?(" · R$ "+String(current.valorPersonalizado).replace(".",",")):"")):"",color:"#7c3aed"},
                 {key:"dl", icon:"clock", rot:"Entrega",val:fmtBR(dl),color:"#f97316"},
                 {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"},
                 {key:"saida",icon:_musModo?"music":"send",rot:"Como esta peça sai",val:_saidaVal,color:"#db2777"},
@@ -36668,7 +36678,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                       {(typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).map(function(o){
                         const sel=ct===o.id; const cfg=CT_MAP[o.id]||{icon:"image"};
                         return <button key={o.id} type="button" title={o.quando||""}
-                          onClick={()=>salvarMetaCard(current,{contentType:o.id},"tipo de conteúdo",ctCfg?ctCfg.label:"",o.label)}
+                          onClick={()=>salvarMetaCard(current,{contentType:o.id},"tipo de conteúdo",ctCfg?ctCfg.label:"",o.label,o.id!=="folder")}
                           style={{display:"flex",alignItems:"center",gap:10,width:"100%",background:sel?"#f5efff":"transparent",border:"none",borderRadius:10,padding:"9px 10px",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:sel?800:600,color:sel?"#5b21b6":"#334155",textAlign:"left"}}
                           onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.background="#f7f8fb";}}
                           onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.background="transparent";}}>
@@ -36677,6 +36687,26 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                           {sel&&<Ico n="check" size={13} color="#7c3aed"/>}
                         </button>;
                       })}
+                      {/* (06/10/2026, Gustavo) Material gráfico: valor do freela é digitado no card. */}
+                      {ct==="folder"&&(<div style={{margin:"6px 4px 3px",padding:"9px 10px",background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10}}>
+                        <div style={{fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,color:"#0f766e",marginBottom:6}}>Valor do freela neste card</div>
+                        <span style={{display:"flex",alignItems:"center",gap:5,background:"#fff",border:"1px solid #cbd5e1",borderRadius:8,padding:"6px 10px"}}>
+                          <span style={{fontSize:13,fontWeight:700,color:"#64748b"}}>R$</span>
+                          <input key={"vp-"+current.id} type="text" inputMode="decimal" autoFocus
+                            defaultValue={(current.valorPersonalizado!=null&&current.valorPersonalizado!=="")?String(current.valorPersonalizado).replace(".",","):""}
+                            placeholder={String((typeof DESIGNER_PRICES!=="undefined"&&DESIGNER_PRICES.folder)||30)+" (tabela)"}
+                            onKeyDown={e=>{ if(e.key==="Enter") e.currentTarget.blur(); }}
+                            onBlur={e=>{
+                              const _n=String(e.target.value||"").replace(/[^0-9.,]/g,"").replace(/\./g,"").replace(",",".").trim();
+                              const _v=(_n!==""&&!isNaN(Number(_n)))?Number(_n):null;
+                              const _ant=(current.valorPersonalizado!=null&&current.valorPersonalizado!=="")?Number(current.valorPersonalizado):null;
+                              if(_v===_ant) return;
+                              const _f=(x)=>x==null?"tabela":("R$ "+String(x).replace(".",","));
+                              salvarMetaCard(current,{valorPersonalizado:_v},"valor do material gráfico",_f(_ant),_f(_v),false);
+                            }}
+                            style={{border:"none",outline:"none",width:"100%",fontSize:14,fontWeight:800,color:"#0f172a",background:"transparent",fontFamily:"inherit"}}/>
+                        </span>
+                      </div>)}
                     </div>)}
 
                     {/* Como esta peça sai — os MESMOS interruptores do cartão (PxComoSaiLinhas).
@@ -48085,6 +48115,8 @@ function _cardPodeSerResp(u){
   const [client,setClient]=useState(task.client||"");
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
   const [contentType,setContentType]=useState(task.contentType||"");
+  // (06/10/2026, Gustavo) Material gráfico: valor do freela digitado no card (varia por material).
+  const [valorPers,setValorPers]=useState((task.valorPersonalizado!=null&&task.valorPersonalizado!=="")?String(task.valorPersonalizado):"");
   // (14/09/2026) Somente story: o post vai pro story e nao tem arte de feed pra produzir.
   // O campo ja existia no banco (vinha so do editor de data comemorativa); agora da pra
   // marcar no proprio cartao. Story NAO ocupa o dia no planejamento e a IA nao escreve legenda.
@@ -48827,8 +48859,10 @@ function _cardPodeSerResp(u){
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
+      const _vpNum = String(valorPers||"").replace(/\./g,"").replace(",",".").trim();
+      const nextValorPers = canEditContentType ? ((nextContentType==="folder"&&_vpNum!==""&&!isNaN(Number(_vpNum)))?Number(_vpNum):null) : (t.valorPersonalizado!=null?t.valorPersonalizado:null);
       const _asFinal=somenteStory?["vinicius"]:assignees;   // (25/09/2026) story = só o Vinicius
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:_asFinal[0],assignees:_asFinal,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:_asFinal[0],assignees:_asFinal,watchers,sector,client,priority,contentType:nextContentType,valorPersonalizado:nextValorPers,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -48863,6 +48897,9 @@ function _cardPodeSerResp(u){
           priority: priority || null,
           content_type: (typeof canEditContentType!=="undefined" && canEditContentType) ? (contentType||null) : (_prevTask.contentType||null),
           reference_month: (typeof isAdmin!=="undefined" && isAdmin) ? (referenceMonth||null) : (_prevTask.referenceMonth||null),
+          valor_personalizado: (typeof canEditContentType!=="undefined" && canEditContentType)
+            ? (function(){ const _ct=contentType||""; const _n=String(valorPers||"").replace(/\./g,"").replace(",",".").trim(); return (_ct==="folder"&&_n!==""&&!isNaN(Number(_n)))?Number(_n):null; })()
+            : ((_prevTask.valorPersonalizado!=null&&_prevTask.valorPersonalizado!=="")?Number(_prevTask.valorPersonalizado):null),
           deadline: deadline || null,
           publish_date: publishDate || null,
           publish_time: publishTime || null,
@@ -53343,7 +53380,7 @@ function _cardPodeSerResp(u){
                 {id:"foto",label:"Ajuste de template",icon:"camera"},
                 {id:"arte",label:"Arte única",icon:"image"},
                 {id:"carrossel",label:"Carrossel",icon:"layers"},
-                {id:"folder",label:"Folder",icon:"file-text"},
+                {id:"folder",label:"Material gráfico",icon:"file-text"},
                 /* Linha 2: Vídeo — Corte de vídeo, Vídeo básico, Vídeo, Vídeo dinâmico */
                 {id:"corte",label:"Corte de vídeo",icon:"scissors"},
                 {id:"video_feira",label:"Vídeo básico",icon:"flag"},
@@ -53365,6 +53402,19 @@ function _cardPodeSerResp(u){
                 </button>;
               })}
             </div>
+            {/* (06/10/2026, Gustavo) Material gráfico: valor do freela é do card, não de tabela. */}
+            {contentType==="folder"&&(<div style={{marginTop:8,display:"flex",alignItems:"center",gap:10,background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"8px 12px"}}>
+              <Ico n="dollar" size={14} color="#0f766e"/>
+              <span style={{fontSize:12,fontWeight:700,color:"#0f766e",whiteSpace:"nowrap"}}>Valor do freela</span>
+              <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fff",border:"1px solid #cbd5e1",borderRadius:8,padding:"4px 9px",flex:"0 1 150px"}}>
+                <span style={{fontSize:12.5,fontWeight:700,color:"#64748b"}}>R$</span>
+                <input type="text" inputMode="decimal" value={valorPers} disabled={!(canEdit&&canEditContentType)}
+                  onChange={function(e){ setValorPers(e.target.value.replace(/[^0-9.,]/g,"")); }}
+                  placeholder={String((typeof DESIGNER_PRICES!=="undefined"&&DESIGNER_PRICES.folder)||30)}
+                  style={{border:"none",outline:"none",width:"100%",fontSize:13.5,fontWeight:800,color:"#0f172a",background:"transparent",fontFamily:"inherit"}}/>
+              </span>
+              <span style={{fontSize:11,color:"#64748b",lineHeight:1.3}}>{String(valorPers||"").trim()?"vale só pra este card":"vazio = tabela (R$ "+((typeof DESIGNER_PRICES!=="undefined"&&DESIGNER_PRICES.folder)||30)+")"}</span>
+            </div>)}
           </div>
 
           {/* ── Como esta peça sai ── story / música / não publica ──
@@ -59018,6 +59068,7 @@ const rowToTask = (r) => ({
   bioterUnit:   r.bioter_unit  || "",
   contentType:  r.content_type || "",
   referenceMonth: r.reference_month || "",
+  valorPersonalizado: (r.valor_personalizado===null||r.valor_personalizado===undefined)?null:Number(r.valor_personalizado),
   paidAt:       r.paid_at        || null,
   score:        r.score        ?? null,
   ajustar:      !!r.ajustar,
@@ -59079,6 +59130,7 @@ const taskToRow = (t) => ({
   bioter_unit:    t.bioterUnit   || "",
   content_type:   t.contentType  || null,
   // (05/10/2026, Gustavo) Short não passa por edição → não tem mês de pagamento (só fica se já foi pago).
+  valor_personalizado: (t.valorPersonalizado===null||t.valorPersonalizado===undefined||t.valorPersonalizado===""||isNaN(Number(t.valorPersonalizado)))?null:Number(t.valorPersonalizado),
   reference_month: ((typeof pxEhShort==="function"&&pxEhShort(t)&&!t.paidAt&&!t.paid_at)?null:(t.referenceMonth || null)),
   paid_at:        t.paidAt         || null,
   score:          t.score        ?? null,
@@ -73617,7 +73669,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
       video_feira:"Vídeo básico",         // legacy
       video_short:"Short",
       foto:"Foto de obra",
-      folder:"Folder",
+      folder:"Material gráfico",
       corte:"Corte de vídeo",
       corte_video:"Corte de vídeo",
       ajuste_template:"Ajuste de template",
@@ -74454,7 +74506,7 @@ const TIPOS_DEMANDA_CLIENTE = [
   {id:"carrossel",   label:"Carrossel",          routesFluxo:true,  contentType:"carrossel", ico:"image"},
   {id:"video",       label:"Vídeo",              routesFluxo:true,  contentType:"",          ico:"film"},
   {id:"banner",      label:"Banner",             routesFluxo:true,  contentType:"banner",    ico:"image"},
-  {id:"folder",      label:"Folder",             routesFluxo:true,  contentType:"folder",    ico:"image"},
+  {id:"folder",      label:"Material gráfico",   routesFluxo:true,  contentType:"folder",    ico:"image"},
   {id:"trafego",     label:"Tráfego pago",       routesFluxo:false, contentType:"trafego"},
   {id:"material",    label:"Material",           routesFluxo:false, contentType:"material"},
   {id:"operacional", label:"Operacional",        routesFluxo:false, contentType:"operacional"},
@@ -74748,7 +74800,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       video_short: {label:"Short",       color:"#dc2626", icon:"film"},
       foto:        {label:"Ajuste de template",color:"#ea580c", icon:"image"},
       banner:      {label:"Banner",      color:"#0891b2", icon:"image"},
-      folder:      {label:"Folder",      color:"#0e7490", icon:"image"},
+      folder:      {label:"Material gráfico", color:"#0e7490", icon:"image"},
       material:    {label:"Material",    color:"#475569", icon:"package"},
       trafego:     {label:"Tráfego",     color:"#f59e0b", icon:"megaphone"},
       operacional: {label:"Operacional", color:"#10b981", icon:"settings"},
@@ -94206,7 +94258,7 @@ function _dcTipoLabel(t){
   const ct = String(t.contentType||t.tipo||"").toLowerCase();
   if(ct==="arte") return "Arte única";
   if(ct==="carrossel") return "Carrossel";
-  if(ct==="folder") return "Folder";
+  if(ct==="folder") return "Material gráfico";
   if(ct==="foto") return "Ajuste de template";
   if(ct==="video"||ct==="vídeo") return "Vídeo";
   if(ct==="corte") return "Corte de vídeo";
@@ -94478,7 +94530,7 @@ function DashColabV2(props){
         {label:"Ajuste de template",    count:calc.fotoObra||0,      price:(calc._prices||DESIGNER_PRICES).fotoObra,      tasks:calc.tasksFotoObra||[]},
         {label:"Arte única",      count:calc.arte||0,          price:(calc._prices||DESIGNER_PRICES).arte,          tasks:calc.tasksArte||[]},
         {label:"Carrossel",       count:calc.carrossel||0,     price:(calc._prices||DESIGNER_PRICES).carrossel,     tasks:calc.tasksCarrossel||[]},
-        {label:"Folder",          count:calc.folder||0,        price:(calc._prices||DESIGNER_PRICES).folder,        tasks:calc.tasksFolder||[]},
+        {label:"Material gráfico", count:calc.folder||0,       price:(calc._prices||DESIGNER_PRICES).folder,        tasks:calc.tasksFolder||[], v:calc.valorFolder},
       ];
 
   // ── Status geral do mês ──
@@ -94625,13 +94677,13 @@ function DashColabV2(props){
       {/* Breakdown por tipo — cards glass */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat("+breakdown.length+",1fr)",gap:10,marginBottom:20}}>
         {breakdown.map(function(b,i){
-          const subtotal = b.count * b.price;
+          const subtotal = b.v!=null ? b.v : b.count * b.price;
           const has = b.count>0;
           return <div key={i} style={{background:has?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.03)",backdropFilter:"blur(10px)",border:"1px solid "+(has?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.06)"),borderRadius:14,padding:"14px 16px",opacity:has?1:0.5,transition:"all .2s"}}>
             <div style={{color:has?"#cbd5e1":"#64748b",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>{b.label}</div>
             <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:6}}>
               <span style={{color:has?"#fff":"#475569",fontWeight:900,fontSize:26,fontFeatureSettings:"'tnum'",letterSpacing:-1}}>{b.count}</span>
-              <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>× {_dcFmtBRL(b.price)}</span>
+              <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{b.v!=null?"valor por card":("× "+_dcFmtBRL(b.price))}</span>
             </div>
             <div style={{color:has?"#4ade80":"#475569",fontWeight:800,fontSize:14.5,marginTop:6,fontFeatureSettings:"'tnum'",letterSpacing:-.3}}>{_dcFmtBRL2(subtotal)}</div>
           </div>;
