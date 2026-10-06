@@ -126396,10 +126396,16 @@ const _EVP_TEMAS = {
     "--evp-ok":"rgba(34,197,94,.13)", "--evx-verde":"#4ade80", "--evx-amarelo":"#facc15", "--evx-verm":"#f87171", "--evp-azul":"rgba(59,130,246,.13)", "--evp-azulLinha":"rgba(59,130,246,.38)", "--evp-knob":"#2c3450", "--evp-sombra":"0 14px 34px -22px rgba(0,0,0,.75)",
     "--tl-fundo":"#0f1320", "--tl-regua":"#0b0e18", "--tl-nome":"#121628", "--tl-linha":"#20263e", "--tl-texto":"#e6e8f2", "--tl-sub":"#858cab", "--tl-pista":"#0c0f1c", "--tl-botao":"#1b2136", colorScheme:"dark" } };
 /* v41: ordem de cima para baixo (a área com rolagem segue esta lista pelo "order" do CSS; o DOM continua na ordem antiga) */
-const _EVP_FAIXAS = [ { id:"video", label:"Vídeo", icone:"editar", h:62 }, { id:"fala", label:"Fala", icone:"fala", h:40 }, { id:"musica", label:"Música", icone:"musica", h:34 },
-                      { id:"narracao", label:"Narração", icone:"gravar", h:30 }, { id:"sfx", label:"Efeitos", icone:"efeitos", h:30 }, { id:"textos", label:"Textos", icone:"texto", h:40 },
-                      { id:"imagens", label:"Imagens", icone:"figurinha", h:30 }, { id:"motion", label:"Motion", icone:"motion", h:28 },   /* v35 */
-                      { id:"legenda", label:"Legenda", icone:"legenda", h:30 } ];
+/* v56 (06/10/2026): linha do tempo IGUAL AO PREMIERE (pedido do sócio) — IMAGEM EM CIMA, SOM EMBAIXO, com uma divisória entre os dois.
+   Em cima, a faixa mais alta é a que fica na frente na tela (V5 Motion … V1 Vídeo); embaixo, A1 Fala logo abaixo do vídeo, depois Música, Narração e Efeitos. */
+//   v56b: a LEGENDA fica lá embaixo, depois do som (como era — o sócio preferiu), separada por outra divisória.
+const _EVP_FAIXAS = [ { id:"motion", label:"Motion", icone:"motion", h:28, tag:"V4" },
+                      { id:"textos", label:"Textos", icone:"texto", h:40, tag:"V3" }, { id:"imagens", label:"Imagens", icone:"figurinha", h:30, tag:"V2" },
+                      { id:"video", label:"Vídeo", icone:"editar", h:62, tag:"V1", divisoria:true },
+                      { id:"fala", label:"Fala", icone:"fala", h:40, tag:"A1" }, { id:"musica", label:"Música", icone:"musica", h:34, tag:"A2" },
+                      { id:"narracao", label:"Narração", icone:"gravar", h:30, tag:"A3" }, { id:"sfx", label:"Efeitos", icone:"efeitos", h:30, tag:"A4", divisoria:true },
+                      { id:"legenda", label:"Legenda", icone:"legenda", h:30, tag:"CC" } ];
+const _EVP_DIVISORIA = "3px solid #475569";      // v56: entre imagem (em cima) e som (embaixo)
 const _EVP_MENUS = [ { id:"midia", label:"Mídia", icone:"midia" }, { id:"editar", label:"Editar", icone:"editar" }, { id:"audio", label:"Áudio", icone:"audio" }, { id:"texto", label:"Texto", icone:"texto" },
                      { id:"motion", label:"Motion", icone:"motion" },   /* v35: painel do motion */
                      { id:"musica", label:"Música", icone:"musica" }, { id:"imagem", label:"Imagem", icone:"imagem" }, { id:"efeitos", label:"Efeitos", icone:"efeitos" },
@@ -132015,7 +132021,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
     return ({ legenda:28, video:E(64), fala:E(44), musica:E(44) })[id] || 28;
   };
   const ordemFaixa = function(id){ const i = _EVP_FAIXAS.findIndex(function(f){ return f.id === id; }); return i < 0 ? 50 : i + 1; };   // v41: ordem visual (régua = 0)
-  const faixaEstilo = function(id){ return { position:"relative", height:alturaFaixa(id), order:ordemFaixa(id), flexShrink:0, boxSizing:"border-box", borderBottom:"1px solid " + _EVP_TL.linha, background:id === "video" ? "rgba(0,0,0,.18)" : "transparent",   /* v41: border-box = alinha com a coluna de nomes */
+  const faixaEstilo = function(id){ return { position:"relative", height:alturaFaixa(id), order:ordemFaixa(id), flexShrink:0, boxSizing:"border-box", borderBottom:id === "video" || id === "sfx" ? _EVP_DIVISORIA : "1px solid " + _EVP_TL.linha, background:id === "video" ? "rgba(0,0,0,.18)" : "transparent",   /* v41: border-box = alinha com a coluna de nomes */
     backgroundImage:p.travas && p.travas[id] ? "repeating-linear-gradient(135deg, rgba(148,163,184,.13) 0 6px, transparent 6px 12px)" : undefined }; };
   const bloco = function(cor, on){ return { position:"absolute", top:3, bottom:3, borderRadius:7, background:cor, color:"#fff", fontSize:11.5, fontWeight:700, overflow:"hidden",
     whiteSpace:"nowrap", textOverflow:"ellipsis", boxSizing:"border-box", padding:"0 8px", display:"flex", alignItems:"center", gap:5, cursor:"grab",
@@ -132079,7 +132085,8 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
         <div style={{width:124,flexShrink:0,borderRight:"1px solid "+_EVP_TL.linha,background:_EVP_TL.nome,alignSelf:"flex-start",minHeight:"100%"}}>
           <div style={{height:_EVP_REGUA,borderBottom:"1px solid "+_EVP_TL.linha,background:_EVP_TL.regua}}/>
           {_EVP_FAIXAS.map(function(f){ const c = ctrlFaixa[f.id];
-            return <div key={f.id} style={{height:alturaFaixa(f.id),borderBottom:"1px solid "+_EVP_TL.linha,display:"flex",alignItems:"center",gap:7,padding:"0 6px 0 11px",fontSize:12,fontWeight:700,color:_EVP_TL.sub,boxSizing:"border-box"}}>
+            return <div key={f.id} style={{height:alturaFaixa(f.id),borderBottom:f.divisoria ? _EVP_DIVISORIA : "1px solid "+_EVP_TL.linha,display:"flex",alignItems:"center",gap:7,padding:"0 6px 0 8px",fontSize:12,fontWeight:700,color:_EVP_TL.sub,boxSizing:"border-box"}}>
+              {f.tag && <span style={{fontSize:9.5,fontWeight:800,fontFamily:_EVP_MONO,color:f.tag[0] === "V" ? "#93c5fd" : f.tag[0] === "A" ? "#86efac" : "#fcd34d",opacity:0.85,minWidth:16}}>{f.tag}</span>}
               <_EvpIco n={f.icone} s={14}/>{f.label}
               {c && <button onClick={c.fn} title={c.dica} aria-label={c.dica} style={{font:"inherit",marginLeft:"auto",width:24,height:22,borderRadius:6,border:0,background:c.on ? "transparent" : "rgba(239,68,68,.2)",color:c.on ? _EVP_TL.sub : "#fca5a5",cursor:"pointer",display:"grid",placeItems:"center"}}>
                 <_EvpIco n={c.on ? c.ico[0] : c.ico[1]} s={14}/></button>}
