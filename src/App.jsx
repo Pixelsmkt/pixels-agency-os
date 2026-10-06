@@ -105393,6 +105393,12 @@ const PB_MEM_ETIQUETAS = [
   {id:"publico",   label:"Público",   cor:"#0d9488", dica:"quem ele quer alcançar"},
   {id:"evitar",    label:"Evitar",    cor:"#dc2626", dica:"o que ele não quer ver"},
 ];
+/* (06/10/2026, Gustavo) respostas do cliente em Portal › Sugestões de conteúdo — só pra MOSTRAR certo
+   em Feedbacks (não entram no seletor de etiqueta): recusou com motivo / aceitou e disse por quê. */
+const PB_MEM_ETIQUETAS_PORTAL = [
+  {id:"recusa",  label:"Não fez sentido", cor:"#b91c1c"},
+  {id:"aprovou", label:"Cliente gostou",  cor:"#16a34a"},
+];
 /* Canais de onde vem o feedback — vira a tag da Origem. "Outro" abre campo livre.
    (22/09/2026) "Interno" entrou porque o bloco deixou de ser só do cliente: sócio e
    equipe também registram feedback aqui. */
@@ -105423,7 +105429,7 @@ function _pbParseOrigem(txt){
 }
 function _pbMemEtq(tipo){
   const k=String(tipo||"").split(":")[1]||"";
-  return PB_MEM_ETIQUETAS.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"};
+  return PB_MEM_ETIQUETAS.find(function(e){return e.id===k;})||PB_MEM_ETIQUETAS_PORTAL.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"};
 }
 /* ═══ MATERIAIS DO CLIENTE (22/09/2026, Rodrigo) ═══════════════════════════════════
    "preciso subir os arquivos (materiais da Bioter, folders e manuais dos produtos) pra que
@@ -108332,7 +108338,7 @@ function PortalFeedbacksCliente({cl, unit, isMob, cor}){
       setItens(function(p){ return (p||[]).filter(function(x){return x.id!==it.id;}); });
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra apagar: "+((e&&e.message)||e),5000); }
   };
-  const _etqDe=function(tipo){ const k=String(tipo||"").split(":")[1]||""; return ETQ.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"}; };
+  const _etqDe=function(tipo){ const k=String(tipo||"").split(":")[1]||""; return ETQ.find(function(e){return e.id===k;})||PB_MEM_ETIQUETAS_PORTAL.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"}; };
   const _data=function(x){ try{ return new Date(x).toLocaleDateString("pt-BR"); }catch(_){ return ""; } };
   const _uniLabel=function(u){ if(!u) return ""; const x=(typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS.find(function(y){return y.id===u;}):null; return x?(x.pickerLabel||x.label):u; };
   const _sel=ETQ.find(function(e){return e.id===etq;})||ETQ[0]||{};
@@ -113156,10 +113162,11 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
      (fica guardada como descartada, nada apagado) e o motivo vai pro cérebro do cliente.
      Tudo numa rpc só: portal_proposta_responder (security definer). */
   const [recusando,setRecusando]=useState(null);   // {p, motivo}
+  const [aceitando,setAceitando]=useState(null);   // (06/10/2026) {p, texto} — feedback POSITIVO opcional ao aceitar
   const [respondendo,setRespondendo]=useState("");
   const _quemP=(currentClientUser&&currentClientUser.name)||(cl&&cl.name)||"Cliente";
   const _semPrecP=function(t){ return String(t||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim(); };
-  const _responder=async function(p,aceitar,motivo){
+  const _responder=async function(p,aceitar,motivo,elogio){
     if(!sb||respondendo) return;
     if(!aceitar&&!String(motivo||"").trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Conta pra gente por que não faz sentido."); return; }
     setRespondendo(p.id);
@@ -113168,6 +113175,9 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
       const r=await sb.rpc("portal_proposta_responder",{p_id:p.id,p_aceitar:!!aceitar,p_motivo:aceitar?null:String(motivo).trim(),p_quem:_quemP,
         p_video:_swEhVideo(p.content_type),p_desc_html:(aceitar&&_h)?_h(_semPrecP(p.briefing)):null,p_leg_html:(aceitar&&_h)?_h(p.legenda||""):null});
       if(r.error) throw r.error;
+      /* (06/10/2026, Gustavo) por que gostou → Playbook › Feedbacks (memoria:aprovou). Não obrigatório. */
+      if(aceitar&&String(elogio||"").trim()){ try{ await sb.rpc("portal_proposta_feedback_positivo",{p_id:p.id,p_texto:String(elogio).trim(),p_quem:_quemP}); }catch(_){} }
+      setAceitando(null);
       if(aceitar) setProps(function(l){ return (l||[]).map(function(x){ return x.id===p.id?Object.assign({},x,{status:"aceita",cliente_resposta:"aceita",cliente_respondido_em:new Date().toISOString()}):x; }); });
       else setProps(function(l){ return (l||[]).filter(function(x){ return x.id!==p.id; }); });
       setRecusando(null);
@@ -113260,6 +113270,26 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
         </div>
       </div>
     </div>}
+    {aceitando&&<div onClick={function(){ if(!respondendo) setAceitando(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,padding:isMob?18:22,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 24px 60px rgba(15,23,42,.3)",fontFamily:_RT_FF}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>O que você gostou nessa?</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5}}>"{aceitando.p.titulo}" vai pra produção. Se quiser, conta o que acertou — as próximas ideias vêm ainda mais no seu jeito. Não é obrigatório.</div>
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {["Assunto certeiro","Tem a cara da empresa","Linguagem do nosso cliente","Fácil de gravar","Mostra o nosso trabalho"].map(function(m){ const on=String(aceitando.texto||"").indexOf(m)>=0; return <button key={m} type="button"
+            onClick={function(){ const atual=String(aceitando.texto||"").trim(); setAceitando(Object.assign({},aceitando,{texto:on?atual.replace(m,"").replace(/^[\s.;-]+|[\s.;-]+$/g,"").replace(/\s*;\s*;\s*/g,"; "):(atual?atual+"; "+m:m)})); }}
+            style={{background:on?"#ecfdf5":"#fff",color:on?"#047857":"#475569",border:"1px solid "+(on?"#6ee7b7":"#e2e8f0"),borderRadius:99,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{m}</button>; })}
+        </div>
+        <textarea autoFocus value={aceitando.texto||""} onChange={function(e){ setAceitando(Object.assign({},aceitando,{texto:e.target.value})); }} rows={3} placeholder="Escreva com suas palavras (opcional)"
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",fontSize:13.5,fontFamily:_RT_FF,resize:"vertical",outline:"none"}}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+          <button type="button" disabled={!!respondendo} onClick={function(){ _responder(aceitando.p,true,null,""); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 16px",color:"#475569",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Pular e aceitar</button>
+          <button type="button" disabled={!!respondendo} onClick={function(){ _responder(aceitando.p,true,null,aceitando.texto); }}
+            style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:11,padding:"10px 18px",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF}}>{respondendo?"Enviando…":(String(aceitando.texto||"").trim()?"Aceitar e enviar":"Aceitar")}</button>
+        </div>
+      </div>
+    </div>}
     {recusando&&<div onClick={function(){ if(!respondendo) setRecusando(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:460,padding:isMob?18:22,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 24px 60px rgba(15,23,42,.3)"}}>
         <div>
@@ -113349,7 +113379,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
                 </div>
                 :<div style={{display:"flex",flexDirection:"column",gap:5}}>
                   <div style={{display:"flex",gap:8}}>
-                    <button type="button" disabled={!!viewerIsPixels||!!respondendo} onClick={function(){ _responder(p,true); }}
+                    <button type="button" disabled={!!viewerIsPixels||!!respondendo} onClick={function(){ setAceitando({p:p,texto:""}); }}
                       title={viewerIsPixels?"Só o cliente responde (você está vendo como Pixels)":"Aceitar: a Pixels produz esse conteúdo"}
                       style={{flex:1,background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:11,padding:"11px 10px",color:"#fff",fontSize:13.5,fontWeight:800,cursor:viewerIsPixels?"default":"pointer",fontFamily:_RT_FF,boxShadow:"0 4px 12px rgba(22,163,74,.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,opacity:viewerIsPixels?.8:1}}>
                       <span style={{width:22,height:22,borderRadius:99,background:"rgba(255,255,255,.22)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>{respondendo===p.id?"Enviando…":"Aceitar"}</button>
