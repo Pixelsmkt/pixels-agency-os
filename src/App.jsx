@@ -113276,12 +113276,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
           <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>O que você gostou nessa?</div>
           <div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5}}>"{aceitando.p.titulo}" vai pra produção. Se quiser, conta o que acertou — as próximas ideias vêm ainda mais no seu jeito. Não é obrigatório.</div>
         </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {["Assunto certeiro","Tem a cara da empresa","Linguagem do nosso cliente","Fácil de gravar","Mostra o nosso trabalho"].map(function(m){ const on=String(aceitando.texto||"").indexOf(m)>=0; return <button key={m} type="button"
-            onClick={function(){ const atual=String(aceitando.texto||"").trim(); setAceitando(Object.assign({},aceitando,{texto:on?atual.replace(m,"").replace(/^[\s.;-]+|[\s.;-]+$/g,"").replace(/\s*;\s*;\s*/g,"; "):(atual?atual+"; "+m:m)})); }}
-            style={{background:on?"#ecfdf5":"#fff",color:on?"#047857":"#475569",border:"1px solid "+(on?"#6ee7b7":"#e2e8f0"),borderRadius:99,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{m}</button>; })}
-        </div>
-        <textarea autoFocus value={aceitando.texto||""} onChange={function(e){ setAceitando(Object.assign({},aceitando,{texto:e.target.value})); }} rows={3} placeholder="Escreva com suas palavras (opcional)"
+        <textarea autoFocus value={aceitando.texto||""} onChange={function(e){ setAceitando(Object.assign({},aceitando,{texto:e.target.value})); }} rows={3} placeholder="Ex.: gostei porque fala do jeito que o nosso cliente fala e mostra a obra de verdade… (opcional)"
           style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",fontSize:13.5,fontFamily:_RT_FF,resize:"vertical",outline:"none"}}/>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
           <button type="button" disabled={!!respondendo} onClick={function(){ _responder(aceitando.p,true,null,""); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 16px",color:"#475569",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Pular e aceitar</button>
