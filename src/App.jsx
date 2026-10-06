@@ -2623,6 +2623,34 @@ const _CT_BUCKET = {
 // "reprovado" entra porque o material foi produzido — paga igual.
 // Sócio pode reprovar quem reprova é o cliente; produção já gastou hora/recurso.
 const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
+/* ─── (06/10/2026 · Bloco A, pacote 2) UMA regra só de status e de datas ─────────────
+   Antes cada tela tinha a sua lista de "abertas" e cada uma lia data de um jeito:
+   "Em aberto" 836 × 479 na lista, "Solicitadas no mês" quase zero, "Concluídas do mês"
+   só com o que ainda estava em Aprovadas, aprovado no dia 1º caindo no mês anterior. */
+// Fora do "em aberto": já entregue, parado ou recusado.
+// interno_aprovado continua ABERTO ("Pronta pra executar"); rascunhos também (fila da Hellen).
+const PX_STATUS_FECHADOS = ["aprovado","agendado","publicado","pausado","reprovado","interno_executado"];
+// Entregue (para "Concluídas"): aprovado internamente ou pelo cliente, agendado, publicado.
+const PX_STATUS_ENTREGUES = ["aprovado","aprovacao_final","agendado","publicado","interno_aprovado","interno_executado"];
+function pxCardAberto(t){ return !!t&&!t.deletedAt&&!t._isDraft&&PX_STATUS_FECHADOS.indexOf(t.status)<0; }
+function pxCardEntregue(t){ return !!t&&!t.deletedAt&&PX_STATUS_ENTREGUES.indexOf(t.status)>=0; }
+// Hoje em Brasília, "aaaa-mm-dd" (antes: toISOString = dia em UTC, que depois das 21h já é amanhã)
+function pxHojeISO(){
+  try{ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()); }
+  catch(_){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+}
+// Lê qualquer data do app no horário local. Aceita "aaaa-mm-dd" (meio-dia local, nunca vira o dia anterior),
+// ISO completo, "dd/mm/aaaa" e "dd/mm/aaaa às hh:mm". Devolve sempre um Date (inválido se não deu).
+function pxDataLocal(v){
+  if(v===null||v===undefined||v==="") return new Date(NaN);
+  if(v instanceof Date) return v;
+  const s=String(v).trim();
+  let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\D+?(\d{1,2})[:h](\d{2}))?/);
+  if(m) return new Date(+m[3],+m[2]-1,+m[1],m[4]!==undefined?+m[4]:12,m[5]!==undefined?+m[5]:0,0);
+  m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return new Date(+m[1],+m[2]-1,+m[3],12,0,0);
+  return new Date(s);
+}
 /* ─── Ajustes manuais de pagamento (bônus/desconto por freelancer+mês) ───
    Guardado em team_data tipo='pagamento_ajustes' como { "freelaId:YYYY-MM": {valor,motivo,...} }.
    Cache global síncrono pra calcDesignerPayments incluir em TODOS os lugares
@@ -9185,7 +9213,8 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   const adminCardPerms=(()=>{try{const s=localStorage.getItem("pixels-perms-"+(CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch{return DEFAULT_PERMS;}})();
   const allTasks=propTasks||[];
   const active=allTasks.filter(t=>!t.deletedAt);
-  const ativas=active.filter(t=>t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
+  // (06/10/2026 · A-26) regra única de "aberto"; rascunho ainda não é demanda pra atraso/sobrecarga
+  const ativas=active.filter(t=>pxCardAberto(t)&&t.status!=="rascunhos");
   const hojeStr=(()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
   const hoje=new Date();hoje.setHours(0,0,0,0);
   const ha7d=new Date(hoje);ha7d.setDate(hoje.getDate()-7);
@@ -9193,14 +9222,16 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   const daqui7d=new Date(hoje);daqui7d.setDate(hoje.getDate()+7);
 
   // ═══ Demandas CLIENTES (kanban normal) ═══
-  const clientStatuses=["demanda","alteracao_copy","preencher_material","recebida","execucao","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
+  // (06/10/2026 · A-23) faltavam ajustes e aprovacao_final
+  const clientStatuses=["demanda","alteracao_copy","preencher_material","recebida","execucao","ajustes","avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"];
   const clientTasks=active.filter(t=>clientStatuses.includes(t.status));
-  const clientAtivas=clientTasks.filter(t=>t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
+  const clientAtivas=clientTasks.filter(pxCardAberto);
 
   // ═══ Demandas INTERNAS ═══
-  const internStatuses=["interno_demanda","interno_execucao","interno_avaliacao","interno_aprovado","interno_executado"];
+  // (06/10/2026 · A-23) faltavam triagem e aguardando cliente; "Aprovada" interna = pronta pra executar (aberta)
+  const internStatuses=["interno_demanda","interno_triagem","interno_execucao","interno_aguardando","interno_avaliacao","interno_aprovado","interno_executado"];
   const internTasks=active.filter(t=>internStatuses.includes(t.status));
-  const internAtivas=internTasks.filter(t=>t.status!=="interno_aprovado"&&t.status!=="interno_executado");
+  const internAtivas=internTasks.filter(pxCardAberto);
 
   // ═══ Solicitações do PORTAL (origem=portal) ═══
   const portalRequests=active.filter(t=>t.origem==="portal");
@@ -9256,9 +9287,9 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   // ═══ Produtividade da equipe (últimos 30d) — reusa hoje/ha30d já declarados acima
   const equipeStats=TEAM.filter(u=>u.level>1).map(u=>{
     const done30d=active.filter(t=>{
-      if(t.status!=="aprovado"||!t.completedAt)return false;
+      if(!pxCardEntregue(t)||!t.completedAt)return false;   // (06/10/2026) antes só "aprovado": o que já foi publicado sumia
       if(t.assignee!==u.id&&!(t.assignees||[]).includes(u.id))return false;
-      return new Date(t.completedAt)>=ha30d;
+      return pxDataLocal(t.completedAt)>=ha30d;
     }).length;
     const activeNow=ativas.filter(t=>t.assignee===u.id||(t.assignees||[]).includes(u.id)).length;
     const lateNow=atrasadas.filter(t=>t.assignee===u.id||(t.assignees||[]).includes(u.id)).length;
@@ -9273,7 +9304,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       const arr=Array(days).fill(0);
       (allTasks||[]).forEach(t=>{
         if(!t.completedAt)return;
-        const d=new Date(t.completedAt);d.setHours(0,0,0,0);
+        const d=pxDataLocal(t.completedAt);if(isNaN(d))return;d.setHours(0,0,0,0);
         const diff=Math.floor((today-d)/86400000);
         if(diff>=0&&diff<days)arr[days-1-diff]++;
       });
@@ -9327,7 +9358,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     const done30d=todas.filter(t=>{
       if(t.status!=="aprovado"&&t.status!=="interno_aprovado"&&t.status!=="interno_executado"&&t.status!=="publicado")return false;
       if(!t.completedAt)return false;
-      return new Date(t.completedAt)>=ha30d;
+      return pxDataLocal(t.completedAt)>=ha30d;
     }).length;
     const prazoPct=emAtv.length>0?Math.round(((emAtv.length-atras.length-urg.length)/emAtv.length)*100):100;
     const saudeC=prazoPct>=80?"#16a34a":prazoPct>=60?"#eab308":"#dc2626";
@@ -9364,7 +9395,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   const aprovadasTotal=active.filter(t=>t.status==="aprovado"||t.status==="interno_aprovado").length;
   const publicadasMes=active.filter(t=>{
     if(t.status!=="publicado"||!t.completedAt)return false;
-    const d=new Date(t.completedAt);
+    const d=pxDataLocal(t.completedAt);
     return d.getFullYear()===hoje.getFullYear()&&d.getMonth()===hoje.getMonth();
   }).length;
 
@@ -9382,7 +9413,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     return active.filter(t=>{
       if(t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="interno_aprovado"&&t.status!=="interno_executado")return false;
       if(!t.completedAt)return false;
-      const d=new Date(t.completedAt);
+      const d=pxDataLocal(t.completedAt);
       return d>=start&&d<end;
     }).length;
   });
@@ -10486,11 +10517,12 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   const mesAtual=now.getMonth();
   const anoAtual=now.getFullYear();
   const isCEO=effectiveUser.level===1;
-  // Concluídas do mês — aprovadas com completedAt no mês
+  // Concluídas do mês — entregues (aprovado, aprovado pelo cliente, agendado, publicado) com completedAt no mês
+  // (06/10/2026 · A-35) antes só "aprovado": em setembro contava 23 de 104
   const conclMes=active.filter(t=>{
-    if(t.status!=="aprovado"||!t.completedAt)return false;
+    if(!pxCardEntregue(t)||!t.completedAt)return false;
     if(!isCEO&&!((t.assignees||[t.assignee]).includes(effectiveUser.id)))return false;
-    const d=new Date(t.completedAt);
+    const d=pxDataLocal(t.completedAt);
     return d.getMonth()===mesAtual&&d.getFullYear()===anoAtual;
   }).length;
   // Solicitadas do mês — criadas no mês
@@ -10499,14 +10531,16 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     if(!t.createdAt)return false;
     // createdAt é string pt-BR ou ISO
     try{
-      const d=new Date(t.createdAt.includes("/")?t.createdAt.split("/").reverse().join("-"):t.createdAt);
+      const d=pxDataLocal(t.createdAt);   // (06/10/2026 · A-25) "01/06/2026 às 04:15" virava data inválida
       return d.getMonth()===mesAtual&&d.getFullYear()===anoAtual;
     }catch{return false;}
   }).length;
   // Em aberto
+  // (06/10/2026 · A-24) mesma regra da lista de prioridades (antes contava publicado, agendado e pausado)
   const emAberto=active.filter(t=>{
-    if(isCEO)return t.status!=="aprovado";
-    return t.status!=="aprovado"&&(t.assignees||[t.assignee]).includes(effectiveUser.id);
+    if(!pxCardAberto(t))return false;
+    if(isCEO)return true;
+    return (t.assignees||[t.assignee]).includes(effectiveUser.id);
   }).length;
 
   // ── CAPA: paleta grafite-first ─────────────────────────────────
@@ -20902,11 +20936,6 @@ function _pxCasGrupo(t){
    Aqui o id fica guardado durante a varredura inteira — as três passadas e tudo que elas
    chamam — em vez de ser empurrado por meia dúzia de assinaturas. Sempre zerado no fim. */
 let _PX_CAS_PROTEGIDO=null;
-/* (05/10/2026, Gustavo) "passei o Audrey Biodigestor Chapecó pra segunda (hoje), por que não arrastou
-   o Foto de obra pra frente?" Card de HOJE nunca anda na cascata — mas quando a pessoa ARRASTA um card
-   pra cima de outro da mesma unidade no mesmo dia, o que já estava lá tem que sair, mesmo sendo hoje
-   (regra de 24/09: quem anda é o outro card que estava lá). Esta é a única exceção: o id liberado. */
-let _PX_CAS_HOJE_OK=null;
 /* ═══ MEXEU NA DATA À MÃO, A DATA FICA (24/09/2026, Rodrigo) ═══════════════════════
    "Hellen arrastou post de sábado pra quinta.. mas jogou de volta pra sábado por conta da
     organização automática.. se ela arrastou pra quinta um card, você deveria ter jogado o
@@ -20989,8 +21018,7 @@ function _pxCasMovivel(t,hoje,novoId){
   if(st==="publicado"||st==="reprovado"||st==="pausado") return false;
   if(_pxNaoEhPublicacao(t)) return false;
   const iso=String(t.publish_date||"").slice(0,10);
-  if(!iso||iso<hoje) return false;
-  if(iso===hoje&&!(_PX_CAS_HOJE_OK&&String(t.id)===String(_PX_CAS_HOJE_OK))) return false;   // hoje só o liberado (05/10)
+  if(!iso||iso<=hoje) return false;
   // (17/09, Vinicius) Foto de obra e Short PODEM andar — feira/urgente vale mais que o grupo das
   // três unidades. Só a unidade afetada mexe; as outras ficam. Collab continua travado.
   // (17/09, Vinicius) Collab que NÃO é comemorativa ANDA — pela fila de quartas de collab.
@@ -21459,22 +21487,6 @@ async function pxCascataVarrer(protegerId,opts){
         .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
       if(!r||r.error) break;
       _pxCasProtegidosManuais(r.data||[]);
-      /* (05/10) o card que já estava NO MESMO DIA (e na mesma unidade) do card arrastado é o primeiro a sair */
-      let _prefSair=null;
-      if(protegerId){
-        const _pr=(r.data||[]).find(function(x){ return String(x.id)===String(protegerId); });
-        const _dia=_pr?String(_pr.publish_date||"").slice(0,10):"";
-        if(_dia&&_dia>=hoje){
-          const _alvP=_pxColAlvos(_pr);
-          const _col=(r.data||[]).filter(function(x){
-            if(String(x.id)===String(protegerId)||String(x.publish_date||"").slice(0,10)!==_dia) return false;
-            if(x.status==="publicado"||x.status==="reprovado"||x.status==="pausado"||_pxNaoEhPublicacao(x)) return false;
-            if(_pxCasTrilha(x)==="fixa"||_pxCasTrilha(x)==="collab") return false;
-            return _pxColAlvos(x).some(function(a){ return _alvP.indexOf(a)>=0; });
-          })[0];
-          if(_col){ _prefSair=String(_col.id); if(_dia===hoje) _PX_CAS_HOJE_OK=_prefSair; }
-        }
-      }
       const porSemana={};
       (r.data||[]).forEach(function(x){
         const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
@@ -21539,7 +21551,6 @@ async function pxCascataVarrer(protegerId,opts){
              passada só, em vez de uma volta por unidade. */
           // (collab sobrando na semana já foi tratado acima, antes da conta de cadência)
           // (24/09) sai primeiro quem NÃO tem data marcada à mão (o do fim da semana); marcado à mão só cede pro mais novo
-          if(!sair&&_prefSair) sair=ordenados.find(function(x){ return String(x.id)===_prefSair&&_pxCasMovivel(x,hoje,null); })||null;   // (05/10)
           if(!sair) sair=ordenados.filter(function(x){ return _pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"; }).sort(function(p,q){ return _pxCasCmpSaida(p,q); })[0]||null;
           if(!sair) continue;
           /* A âncora é só o ponto de partida (semana + alvo) do planejador e ele recusa data
@@ -21561,13 +21572,10 @@ async function pxCascataVarrer(protegerId,opts){
         const cabeAlvo=!!prot&&alvosS.length>0&&alvosS.every(function(a){ return alvosP.indexOf(a)>=0; });
         const noDia=(r.data||[]).filter(function(x){ return String(x.publish_date||"").slice(0,10)===_vaga&&String(x.id)!==String(sair.id); });
         const diaLivre=!_pxColConta(noDia,alvosS[0]).length&&alvosS.every(function(a){ return !_pxColConta(noDia,a).length; });
-        /* (05/10) Foto de obra e Short (trilha material) não trocam de lugar: são a grade das segundas —
-           vão pela fila (planejador), pra próxima vaga de material, e não pro dia da semana que sobrou. */
-        const _ehMaterial=_pxCasTrilha(sair)==="material";
-        if(cabeAlvo&&diaLivre&&!_ehMaterial&&String(sair.publish_date||"").slice(0,10)!==_vaga){
+        if(cabeAlvo&&diaLivre&&String(sair.publish_date||"").slice(0,10)!==_vaga){
           const de=String(sair.publish_date||"").slice(0,10);
           const n=await pxCascataAplicar({moves:[{id:sair.id,title:sair.title||"",de:de,para:_vaga,client:sair.client,unit:sair.bioter_unit||""}],lixeira:[],travou:[],semana:""},null,"troca de lugar",
-            "trocou de lugar com \""+String(prot.title||"").slice(0,50)+"\", que foi posto à mão em "+_pxCasBr(String(prot.publish_date||"").slice(0,10)),{sufixo:" — ficou com a vaga que ele deixou"});
+            "trocou de lugar com \""+String(prot.title||"").slice(0,50)+"\", que foi posto à mão em "+_pxCasBr(de),{sufixo:" — ficou com a vaga que ele deixou"});
           _vaga="";
           if(n){ total+=n; continue; }
         }
@@ -21580,7 +21588,6 @@ async function pxCascataVarrer(protegerId,opts){
       if(!n) break;
       total+=n;
     }
-    _PX_CAS_HOJE_OK=null;   // (05/10) a exceção de hoje vale só pra troca do card arrastado
     /* 2ª passada (22/09/2026): semana ABAIXO da cadência. Antes só existia a conta de quem
        passou do teto; semana com post faltando ficava assim pra sempre. */
     try{ total+=await pxCascataVarrerCurtas(); }catch(_e){ console.warn("[cascata curtas]",_e); }
@@ -21588,7 +21595,7 @@ async function pxCascataVarrer(protegerId,opts){
     try{ total+=await pxCascataEspacar(); }catch(_e){ console.warn("[cascata espacar]",_e); }
     return total;
   }catch(e){ console.warn("[cascata varrer]",e); return 0; }
-  finally{ _PX_CAS_PROTEGIDO=_protAntes; _PX_CAS_HOJE_OK=null; }
+  finally{ _PX_CAS_PROTEGIDO=_protAntes; }
 }
 /* ═══ VARREDURA DE SEMANA CURTA (22/09/2026, Rodrigo) ══════════════════════════════
    "não pode acontecer isso" — a Bioter Glória ficou com 1 post na semana de 06/12 porque o
@@ -28570,7 +28577,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         ...x,
         status:newStatus,
         colEnteredAt:new Date().toISOString(),
-        completedAt:(newStatus==="aprovado"||newStatus==="publicado")?new Date().toISOString().split("T")[0]:x.completedAt,
+        completedAt:(newStatus==="aprovado"||newStatus==="publicado")?pxHojeISO():x.completedAt,
         timeline:[...(x.timeline||[]),entry],
         ..._stripped,
       };
@@ -30668,9 +30675,10 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
       });
       if(paradas.length>0){
         setNotifs(p=>{
-          const jaNotif=p.some(n=>n.type==="radar_paradas"&&n.at===now.toLocaleDateString("pt-BR"));
+          const _dia=now.toLocaleDateString("pt-BR"); // (06/10/2026 · A-15) compara pelo campo "dia", não pelo "at" (que é sempre "Agora")
+          const jaNotif=p.some(n=>n.type==="radar_paradas"&&(n.dia===_dia||n.at===_dia));
           if(jaNotif)return p;
-          return [{id:"rp_"+Date.now(),read:false,type:"radar_paradas",icon:"⏳",
+          return [{id:"rp_"+Date.now(),dia:_dia,read:false,type:"radar_paradas",icon:"⏳",
             title:`${paradas.length} demanda${paradas.length>1?"s":""} interna${paradas.length>1?"s":""} parada${paradas.length>1?"s":""}`,
             body:`Cards sem movimentação há 2+ dias: ${paradas.slice(0,3).map(t=>t.title).join(", ")}${paradas.length>3?"...":""}`,
             user:"Sistema",at:"Agora",category:"radar",targetUsers:["vinicius","gustavo"]},...p];
@@ -30678,9 +30686,10 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
       }
       if(aguardando.length>0){
         setNotifs(p=>{
-          const jaNotif=p.some(n=>n.type==="radar_aprovacao"&&n.at===now.toLocaleDateString("pt-BR"));
+          const _dia=now.toLocaleDateString("pt-BR");
+          const jaNotif=p.some(n=>n.type==="radar_aprovacao"&&(n.dia===_dia||n.at===_dia));
           if(jaNotif)return p;
-          return [{id:"ra_"+Date.now(),read:false,type:"radar_aprovacao",icon:"◫",
+          return [{id:"ra_"+Date.now(),dia:_dia,read:false,type:"radar_aprovacao",icon:"◫",
             title:`${aguardando.length} demanda${aguardando.length>1?"s":""} aguardando aprovação`,
             body:`Aguardando há 2+ dias: ${aguardando.slice(0,3).map(t=>t.title).join(", ")}${aguardando.length>3?"...":""}`,
             user:"Sistema",at:"Agora",category:"radar",targetUsers:["vinicius","gustavo"]},...p];
@@ -34592,7 +34601,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     }
   },[filtroTipo,filtroCli,copyQueue.length,copyQueueTudo.length]);
   // Ajuste queue: cards marcados para ajuste
-  const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
+  // (06/10/2026 · A-3) a marca "ajustar" fica no card como histórico (retrabalho); a fila só mostra o que ainda não foi entregue.
+  // Antes: 167 cards (135 já publicados); agora só os que ainda estão em produção/avaliação.
+  const _AJ_FORA=["aprovado","aprovacao_final","agendado","publicado","reprovado","pausado"];
+  const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&_AJ_FORA.indexOf(t.status)<0&&!t.status?.startsWith("interno_")));
   // Publication queue: cards in "avaliacao" — separada por tipo (design vs vídeo)
   // Vinicius pediu (2026-06): cards de vídeo/corte vão pra sub-aba "Avaliação de vídeo".
   // Fonte única: pxIsVideoTask (00b_preview_util.jsx) — mesma regra na tela e no badge do menu.
@@ -35149,7 +35161,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
     // FIX 8: usa apenas setTasks (wrapper sincroniza com Supabase via syncTasks).
     // O update direto no _sb era redundante e podia gerar race condition.
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:pxHojeISO(),timeline:newTl}:t));
     // Notify everyone + specific notification to social media assignees
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
 
@@ -35215,7 +35227,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const toStatus="reprovado";
     const fromLabel=task.status==="aprovacao_final"?"Aprovado pelo cliente":"Avaliação";
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Reprovadas",from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor,note:motivo?("Motivo: "+motivo):undefined}];
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl,reprovacaoMotivo:motivo||t.reprovacaoMotivo||""}:t));
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:pxHojeISO(),timeline:newTl,reprovacaoMotivo:motivo||t.reprovacaoMotivo||""}:t));
 
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
 
@@ -37778,7 +37790,7 @@ function saveAllAlerts(alerts){
 }
 function loadActiveAlertsFor(uid){
   return loadAllAlerts()
-    .filter(a=>(a.forUid===uid||a.forUid==="all")&&!a.resolvedAt)
+    .filter(a=>(a.forUid===uid||a.forUid==="all")&&!a.resolvedAt&&!((a.resolvidoPor||[]).indexOf(uid)>=0))
     .sort((a,b)=>{
       // Urgente > Atenção > Lembrete; depois mais recente primeiro
       const lv={urgente:0,atencao:1,lembrete:2};
@@ -37786,22 +37798,96 @@ function loadActiveAlertsFor(uid){
       return new Date(b.createdAt)-new Date(a.createdAt);
     });
 }
+/* ── (06/10/2026 · Bloco A-2) Alertas gravados no BANCO ─────────────────────
+   Antes o alerta ficava só no localStorage de quem criou e nunca chegava em
+   ninguém. Agora: tabela px_alertas (+ px_alertas_resolvidos = quem já clicou
+   "Li e resolvi"). O localStorage continua como cópia local (cache), então as
+   telas não mudaram. Se a SQL v44 ainda não rodou, tudo segue como antes.     */
+function _pxAlMe(){ try{ const id=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:null; return (id&&String(id).charAt(0)!=="_")?String(id):null; }catch(_){ return null; } }
+async function pxAlertasSync(){
+  const sb=(typeof window!=="undefined")?window._sb:null; const me=_pxAlMe();
+  if(!sb||!me) return;
+  if(window.__pxAlSyncRodando) return;
+  window.__pxAlSyncRodando=true;
+  try{
+    const desde=new Date(Date.now()-60*86400000).toISOString();
+    const r=await sb.from("px_alertas").select("id,para,de,mensagem,nivel,criado_em,apagado").gte("criado_em",desde).order("criado_em",{ascending:false}).limit(300);
+    if(r.error){ if(!window.__pxAlAvisouErro){ window.__pxAlAvisouErro=true; console.warn("[alertas] banco indisponível (rodou a SQL v44?):",r.error.message); } return; }
+    const rows=r.data||[];
+    const noBanco={}; rows.forEach(function(x){ noBanco[x.id]=x; });
+    const local=loadAllAlerts();
+    // 1) Sobe os alertas antigos que só existiam neste navegador (criados por mim, ainda ativos)
+    for(const a of local){
+      if(!a||noBanco[a.id]||a._noBanco||a.resolvedAt||a.fromUid!==me) continue;
+      const ins=await sb.from("px_alertas").insert({id:a.id,para:a.forUid||"all",de:me,mensagem:String(a.message||""),nivel:a.level||"atencao",criado_em:a.createdAt||new Date().toISOString()});
+      if(!ins.error){ noBanco[a.id]={id:a.id,para:a.forUid||"all",de:me,mensagem:a.message,nivel:a.level,criado_em:a.createdAt,apagado:false}; rows.push(noBanco[a.id]); }
+    }
+    // 2) Quem já resolveu
+    const ids=rows.map(function(x){return x.id;});
+    const porAl={};
+    if(ids.length){
+      const r2=await sb.from("px_alertas_resolvidos").select("alerta_id,quem").in("alerta_id",ids);
+      if(!r2.error)(r2.data||[]).forEach(function(x){ (porAl[x.alerta_id]=porAl[x.alerta_id]||[]).push(x.quem); });
+    }
+    // 3) Lista nova = banco + (alertas locais de outra pessoa que não dá pra subir — ficam como estavam)
+    const lista=rows.filter(function(x){return !x.apagado;}).map(function(x){
+      return {id:x.id,forUid:x.para,fromUid:x.de,message:x.mensagem,level:x.nivel||"atencao",createdAt:x.criado_em,resolvedAt:null,resolvidoPor:porAl[x.id]||[],_noBanco:true};
+    });
+    local.forEach(function(a){ if(a&&!noBanco[a.id]&&!a._noBanco) lista.push(a); });
+    lista.sort(function(x,y){ return new Date(y.createdAt)-new Date(x.createdAt); });
+    if(JSON.stringify(lista)!==JSON.stringify(local)) saveAllAlerts(lista);
+  }catch(e){ console.warn("[alertas] sync:",e&&e.message); }
+  finally{ window.__pxAlSyncRodando=false; }
+}
+/* Liga uma vez por página: busca agora, a cada 60 s (aba visível) e na hora pelo tempo real. */
+function pxAlertasLigar(){
+  if(typeof window==="undefined"||window.__pxAlLigado) return;
+  const sb=window._sb; if(!sb||!_pxAlMe()) return;
+  window.__pxAlLigado=true;
+  pxAlertasSync();
+  setInterval(function(){ if(!document.hidden) pxAlertasSync(); },60000);
+  try{ sb.channel("px-alertas-"+_pxAlMe()).on("postgres_changes",{event:"*",schema:"public",table:"px_alertas"},function(){ pxAlertasSync(); }).subscribe(); }catch(_){}
+  document.addEventListener("visibilitychange",function(){ if(!document.hidden) pxAlertasSync(); });
+}
 function createAlert({forUid,fromUid,message,level}){
   const alerts=loadAllAlerts();
-  alerts.push({
+  const novo={
     id:"alert-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
     forUid,fromUid,message,level:level||"atencao",
     createdAt:new Date().toISOString(),
-  });
+  };
+  alerts.push(novo);
   saveAllAlerts(alerts);
+  const sb=window._sb;
+  if(sb&&fromUid===_pxAlMe()){
+    sb.from("px_alertas").insert({id:novo.id,para:forUid||"all",de:fromUid,mensagem:String(message||""),nivel:novo.level,criado_em:novo.createdAt})
+      .then(function(r){
+        if(r.error){ console.warn("[alertas] não gravou no banco:",r.error.message); if(typeof pixelsToast!=="undefined"&&!/does not exist|schema cache/i.test(r.error.message||"")) pixelsToast.error("O alerta não foi enviado: "+r.error.message,6000); return; }
+        pxAlertasSync();
+      });
+  }
 }
 function resolveAlert(id){
   const alerts=loadAllAlerts();
   const idx=alerts.findIndex(a=>a.id===id);
-  if(idx>=0){alerts[idx].resolvedAt=new Date().toISOString();saveAllAlerts(alerts);}
+  if(idx<0) return;
+  const me=_pxAlMe();
+  if(alerts[idx]._noBanco&&me){
+    const lst=alerts[idx].resolvidoPor||[];
+    if(lst.indexOf(me)<0) alerts[idx].resolvidoPor=lst.concat([me]);
+    saveAllAlerts(alerts);
+    const sb=window._sb;
+    if(sb) sb.from("px_alertas_resolvidos").insert({alerta_id:id,quem:me}).then(function(r){ if(r.error&&!/duplicate/i.test(r.error.message||"")) console.warn("[alertas] resolver:",r.error.message); });
+  }else{
+    alerts[idx].resolvedAt=new Date().toISOString();saveAllAlerts(alerts);
+  }
 }
 function deleteAlertForever(id){
+  const a=loadAllAlerts().find(x=>x.id===id);
   saveAllAlerts(loadAllAlerts().filter(a=>a.id!==id));
+  const sb=window._sb;
+  if(a&&a._noBanco&&sb) sb.from("px_alertas").update({apagado:true,apagado_em:new Date().toISOString(),apagado_por:_pxAlMe()}).eq("id",id)
+    .then(function(r){ if(r.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui remover o alerta: "+r.error.message,6000); pxAlertasSync(); } });
 }
 function timeAgoBR(iso){
   const diff=Date.now()-new Date(iso).getTime();
@@ -37861,6 +37947,8 @@ function DashboardAlerts({userId,isMob}){
   const [welcomeModalAlerts,setWelcomeModalAlerts]=useState([]);
   const prevAlertIdsRef=useRef(new Set(alerts.map(a=>a.id)));
 
+  // (06/10/2026) liga a busca dos alertas no banco
+  useEffect(()=>{ try{ pxAlertasLigar(); pxAlertasSync(); }catch(_){} },[]);
   // Recarrega alertas quando mudam (via evento)
   useEffect(()=>{
     const refresh=()=>{
@@ -37870,6 +37958,10 @@ function DashboardAlerts({userId,isMob}){
       const newOnes=newList.filter(a=>!prevIds.has(a.id));
       if(newOnes.length>0){
         playBellSound();
+        // (06/10/2026) alerta que chegou agora pelo banco abre em destaque, como na entrada
+        const lastSeen=getLastSeen(userId);
+        const naoVistos=newOnes.filter(a=>new Date(a.createdAt).getTime()>lastSeen&&a.fromUid!==userId);
+        if(naoVistos.length>0) setWelcomeModalAlerts(p=>{ const ja=new Set(p.map(x=>x.id)); return p.concat(naoVistos.filter(x=>!ja.has(x.id))); });
       }
       prevAlertIdsRef.current=new Set(newList.map(a=>a.id));
       setAlerts(newList);
@@ -38038,7 +38130,7 @@ const SEED_NOTIFS=[];
 function PageNotificacoes({isMob, notifs, setNotifs}){
   const [expanded,setExpanded]=useState({}); // which panels show "ver mais"
   const markRead=(id)=>{if(setNotifs)setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));};
-  const markAllCat=(cat)=>{if(setNotifs)setNotifs(p=>p.map(n=>n.category===cat?{...n,read:true}:n));};
+  const markAllCat=(cat)=>{if(setNotifs)setNotifs(p=>p.map(n=>_painelDe(n)===cat?{...n,read:true}:n));};
 
   // ═══ Alertas: gerenciado via perm "criarAlerta". Sócios e coordenadores sempre podem (fallback). ═══
   const _alertPerms=(typeof ACCESS_STORE!=="undefined"?(ACCESS_STORE[CURRENT_USER.id]||{}):{});
@@ -38048,6 +38140,7 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
   const [alertTarget,setAlertTarget]=useState("all");
   const [alertLevel,setAlertLevel]=useState("atencao");
   const refreshAlerts=()=>setAllAlerts(loadAllAlerts());
+  useEffect(()=>{ try{ pxAlertasLigar(); pxAlertasSync(); }catch(_){} },[]);
   useEffect(()=>{
     const h=()=>refreshAlerts();
     window.addEventListener("pixels-alerts-changed",h);
@@ -38074,6 +38167,15 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
     return nt.targetUsers.indexOf(CURRENT_USER.id)>=0;
   };
   const ALL_NOTIFS=[...(notifs||[]),...SEED_NOTIFS].filter(_isForMe);
+  // (06/10/2026 · Bloco A-14) Antes só apareciam as categorias demanda/pendencia/chat/recado
+  // e a maioria das notificações (radar, interno, agendamento, ajuste...) não caía em painel nenhum.
+  const _painelDe=(n)=>{
+    const c=String((n&&n.category)||""), t=String((n&&n.type)||"");
+    if(c==="demanda"||c==="pendencia"||c==="chat"||c==="recado") return c;
+    if(/ajust|altera|reprov|urgente|pendenc/i.test(t)) return "pendencia";
+    if(c==="radar"||c==="interno"||c==="agendamento"||c==="reuniao"||/demanda|aprov|public|agend|interno|radar|copy/i.test(t)) return "demanda";
+    return "outros";
+  };
 
   const PANELS=[
     {
@@ -38091,6 +38193,10 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
     {
       id:"recado",label:"Recados da Empresa",icon:"📢",color:C.a,
       desc:"Comunicados e avisos da agência para a equipe",
+    },
+    {
+      id:"outros",label:"Outros avisos",icon:"🔔",color:"#0ea5e9",
+      desc:"Gestão, comercial, ferramentas e o que não cai nos outros painéis",
     },
   ];
 
@@ -38211,6 +38317,8 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
                     </span>
                     <span style={{color:"#475569",fontSize:10,fontWeight:700}}>→ {target}</span>
                     <span style={{color:"#94a3b8",fontSize:9}}>· {from?.name.split(" ")[0]||"?"} · há {timeAgoBR(a.createdAt)}</span>
+                    {(a.resolvidoPor||[]).length>0&&<span style={{color:"#16a34a",fontSize:9,fontWeight:700}}>· ✓ lido por {(a.resolvidoPor||[]).map(function(u){const m=TEAM.find(x=>x.id===u);return m?m.name.split(" ")[0]:u;}).join(", ")}</span>}
+                    {!a._noBanco&&<span title="Este alerta ainda não foi enviado ao banco" style={{color:"#ea580c",fontSize:9,fontWeight:700}}>· só neste computador</span>}
                   </div>
                   <div style={{color:"#1e293b",fontSize:12,fontWeight:500,lineHeight:1.4}}>{a.message}</div>
                 </div>
@@ -38232,7 +38340,7 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
     {/* 4 panels grid */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
       {PANELS.map(panel=>{
-        const items=ALL_NOTIFS.filter(n=>n.category===panel.id);
+        const items=ALL_NOTIFS.filter(n=>_painelDe(n)===panel.id);
         const unread=items.filter(n=>!n.read).length;
         const isExpanded=expanded[panel.id];
         const visible=isExpanded?items:items.slice(0,10);
@@ -47055,19 +47163,27 @@ function _pxLastFile(list){
 
 function getMonthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`; }
 
+// (06/10/2026 · A-23) faltavam 5 status: 47 cards ativos sumiam do Radar
 const FLUXO_COLS = [
   {id:"demanda",   label:"Demandas",                  color:"#a140ff"},
+  {id:"alteracao_copy",    label:"Alteração de copy",  color:"#ea580c"},
+  {id:"preencher_material",label:"Preencher material", color:"#f97316"},
   {id:"recebida",  label:"Recebidas",                 color:"#ff6eb4"},
   {id:"execucao",  label:"Em execução",               color:"#ffd000"},
+  {id:"ajustes",   label:"Ajustes",                   color:"#ca8a04"},
   {id:"avaliacao", label:"Concluídas para avaliação", color:"#ff7200"},
   {id:"aprovado",  label:"Aprovadas",                 color:"#00e5a0"},
+  {id:"aprovacao_final",   label:"Aprovado pelo cliente", color:"#059669"},
   {id:"agendado",  label:"Agendadas",                 color:"#4db8ff"},
   {id:"publicado", label:"Publicadas",                color:"#a78bfa"},
+  {id:"reprovado", label:"Reprovadas",                color:"#94a3b8"},
 ];
 
 const INTERNAS_COLS_RADAR = [
   {id:"interno_demanda",   label:"Demandas",               color:"#6366f1"},
+  {id:"interno_triagem",   label:"Em triagem",             color:"#818cf8"},
   {id:"interno_execucao",  label:"Em execução",            color:"#f97316"},
+  {id:"interno_aguardando",label:"Aguardando cliente",     color:"#0ea5e9"},
   {id:"interno_avaliacao", label:"Aguardando aprovação",   color:"#eab308"},
   {id:"interno_aprovado",  label:"Aprovadas",              color:"#22c55e"},
   {id:"interno_executado", label:"Executadas",             color:"#8b5cf6"},
@@ -47116,15 +47232,11 @@ function PageRadarEntrega({ tasks, isMob }) {
 
   // ── Helpers ──
   // Melhoria 1: fallback createdAt → colEnteredAt → publishDate
+  // (06/10/2026 · A-4) antes tentava new Date() primeiro e "03/09/2026" virava 9 de março
   const parseData = (s) => {
     if(!s) return null;
-    // Tenta ISO primeiro (ex: "2026-04-08T14:30:00.000Z") — Demandas Internas
-    let d = new Date(s);
-    if(!isNaN(d)) return d;
-    // Tenta formato pt-BR "08/04/2026" ou "08/04/2026 às 14:30" — Fluxo de Demandas
-    const match = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    if(match) return new Date(`${match[3]}-${match[2]}-${match[1]}T00:00:00`);
-    return null;
+    const d = pxDataLocal(s);
+    return isNaN(d) ? null : d;
   };
 
   const dataEntrada = (t) => {
@@ -47157,7 +47269,7 @@ function PageRadarEntrega({ tasks, isMob }) {
 
   const calcTempo = (t) => {
     const ini=parseData(t.createdAt);
-    const fim=t.completedAt?new Date(t.completedAt):null;
+    const fim=t.completedAt?pxDataLocal(t.completedAt):null;
     if(!ini||!fim||isNaN(ini)||isNaN(fim))return null;
     const d=Math.round((fim-ini)/86400000);
     return d>=0?d:null;
@@ -47202,7 +47314,7 @@ function PageRadarEntrega({ tasks, isMob }) {
 
   const fmtDataCard = (t) => {
     const opts = {day:"2-digit",month:"2-digit"};
-    const d = t.completedAt   ? new Date(t.completedAt)
+    const d = t.completedAt   ? pxDataLocal(t.completedAt)
             : t.publishDate   ? new Date(t.publishDate+"T00:00:00")
             : t.colEnteredAt  ? new Date(t.colEnteredAt)
             : parseData(t.createdAt); // usa parseData para suportar formato pt-BR
@@ -55071,7 +55183,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
   const _h=now.getHours();
   const greeting=_h<12?"Bom dia":_h<18?"Boa tarde":"Boa noite";
 
-  const active=tasks.filter(t=>!t.deletedAt&&t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado");
+  const active=tasks.filter(pxCardAberto);   // (06/10/2026) regra única de "aberto" — igual à capa
   const sorted=sortByPriority(active);
   const main=sorted[0]||null;
   const next=sorted.slice(1,6);
@@ -55094,7 +55206,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       const arr=Array(days).fill(0);
       (tasks||[]).forEach(t=>{
         if(!t.completedAt)return;
-        const d=new Date(t.completedAt);d.setHours(0,0,0,0);
+        const d=pxDataLocal(t.completedAt);if(isNaN(d))return;d.setHours(0,0,0,0);
         const diff=Math.floor((today-d)/86400000);
         if(diff>=0&&diff<days)arr[days-1-diff]++;
       });
@@ -55208,9 +55320,9 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     const inicio=new Date(hoje);inicio.setDate(hoje.getDate()-7);
     const rank=_equipeSuperv.map(u=>{
       const done=(allTasks||[]).filter(t=>{
-        if(t.status!=="aprovado"||!t.completedAt)return false;
+        if(!pxCardEntregue(t)||!t.completedAt)return false;
         if(t.assignee!==u.id&&!(t.assignees||[]).includes(u.id))return false;
-        const d=new Date(t.completedAt);
+        const d=pxDataLocal(t.completedAt);
         return d>=inicio;
       }).length;
       return {user:u,done};
@@ -55278,7 +55390,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
   const handleDone=(t)=>{
     if(isViewing)return;
-    setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"avaliacao",colEnteredAt:new Date().toISOString(),completedAt:now.toISOString().split("T")[0]}:x));
+    setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"avaliacao",colEnteredAt:new Date().toISOString(),completedAt:pxHojeISO()}:x));
   };
 
   const saveWidgets=(w)=>{
@@ -59751,6 +59863,92 @@ export default function AgencyOS(){
       if(typeof _saveNotifsLS==="function")_saveNotifsLS(notifs);
     }catch(_){}
   },[notifs]);
+  /* ── (06/10/2026 · Bloco A-1) AVISOS ENTRE PESSOAS NO BANCO (tabela px_avisos) ──────────
+     Antes a notificação com destinatário (ajuste pedido, copy reprovada, card aprovado...)
+     ficava só no navegador de quem clicou: o destinatário nunca recebia.
+     Agora: toda notificação nova com targetUsers (e que não seja "Sistema") vira uma linha
+     por destinatário no banco; cada pessoa lê as suas (na entrada, a cada 2 min e na hora,
+     pelo tempo real) e o "lido" volta para o banco. Sem a SQL v44, nada muda. */
+  const _pxAvVistos=useRef(null);
+  const _pxAvLidos=useRef({});
+  useEffect(()=>{
+    const lista=Array.isArray(notifs)?notifs:[];
+    if(_pxAvVistos.current===null){
+      _pxAvVistos.current=new Set(lista.map(n=>String(n&&n.id)));
+      lista.forEach(n=>{ if(n&&n._dbId) _pxAvLidos.current[n._dbId]=!!n.read; });
+      return;
+    }
+    const me=(typeof window!=="undefined"&&window._pixelsUser)?String(window._pixelsUser):null;
+    const novos=[], lidosAgora=[];
+    lista.forEach(n=>{
+      if(!n) return;
+      const id=String(n.id);
+      if(!_pxAvVistos.current.has(id)){
+        _pxAvVistos.current.add(id);
+        if(!n._dbId&&n.user!=="Sistema"&&Array.isArray(n.targetUsers)&&n.targetUsers.length>0) novos.push(n);
+      }
+      if(n._dbId){
+        const antes=_pxAvLidos.current[n._dbId];
+        if(n.read&&antes===false) lidosAgora.push(n._dbId);
+        _pxAvLidos.current[n._dbId]=!!n.read;
+      }
+    });
+    const sb=window._sb;
+    if(!sb||!me||me.charAt(0)==="_") return;
+    const rows=[];
+    novos.forEach(n=>{
+      const dados={};
+      ["type","category","icon","title","body","user","at","taskId","task","clientId","link"].forEach(k=>{ if(n[k]!==undefined&&(typeof n[k]!=="object"||n[k]===null)) dados[k]=n[k]; });
+      Array.from(new Set(n.targetUsers.map(String))).forEach(u=>{
+        if(!u||u===me) return;
+        rows.push({para:u,de:me,origem_id:String(n.id),tipo:n.type?String(n.type):null,categoria:n.category?String(n.category):null,
+          titulo:String(n.title||"").slice(0,300),corpo:String(n.body||"").slice(0,2000),icone:n.icon?String(n.icon):null,dados:dados});
+      });
+    });
+    if(rows.length) sb.from("px_avisos").insert(rows).then(r=>{ if(r&&r.error) console.warn("[avisos] não gravou no banco:",r.error.message); });
+    if(lidosAgora.length) sb.from("px_avisos").update({lido:true,lido_em:new Date().toISOString()}).in("id",lidosAgora).then(r=>{ if(r&&r.error) console.warn("[avisos] marcar lido:",r.error.message); });
+  },[notifs]);
+  useEffect(()=>{
+    if(authState!=="app") return;
+    let vivo=true, ch=null;
+    const me=(typeof window!=="undefined"&&window._pixelsUser)?String(window._pixelsUser):null;
+    const sb=window._sb;
+    if(!sb||!me||me.charAt(0)==="_") return;
+    try{ if(typeof pxAlertasLigar==="function") pxAlertasLigar(); }catch(_){}
+    const _fmt=(iso)=>{ try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } };
+    const carregar=()=>{
+      sb.from("px_avisos").select("id,de,tipo,categoria,titulo,corpo,icone,dados,lido,criado_em").eq("para",me).order("criado_em",{ascending:false}).limit(100)
+        .then(r=>{
+          if(!vivo||!r||r.error||!Array.isArray(r.data)) return;
+          setNotifs(p=>{
+            const atual=Array.isArray(p)?p:[];
+            const porId={}; atual.forEach((n,i)=>{ if(n&&n._dbId) porId[n._dbId]=i; });
+            let mudou=false; const novos=[]; const copia=atual.slice();
+            r.data.forEach(row=>{
+              if(porId[row.id]!==undefined){
+                const i=porId[row.id];
+                if(row.lido&&!copia[i].read){ copia[i]={...copia[i],read:true}; mudou=true; }
+                return;
+              }
+              const d=row.dados||{};
+              const deU=(typeof TEAM!=="undefined")?TEAM.find(u=>u.id===row.de):null;
+              novos.push({...d,id:"db_"+row.id,_dbId:row.id,read:!!row.lido,type:row.tipo||d.type,category:row.categoria||d.category,
+                icon:row.icone||d.icon||"🔔",title:row.titulo||d.title||"",body:row.corpo||d.body||"",
+                user:d.user||(deU?deU.name:row.de)||"",at:_fmt(row.criado_em),targetUsers:[me],_criadoEm:row.criado_em});
+            });
+            if(!novos.length&&!mudou) return p;
+            novos.forEach(n=>{ _pxAvLidos.current[n._dbId]=!!n.read; if(_pxAvVistos.current) _pxAvVistos.current.add(String(n.id)); });
+            return novos.concat(copia).slice(0,150);
+          });
+        });
+    };
+    carregar();
+    try{ ch=sb.channel("px-avisos-"+me).on("postgres_changes",{event:"INSERT",schema:"public",table:"px_avisos",filter:"para=eq."+me},()=>carregar()).subscribe(); }catch(_){}
+    const iv=setInterval(()=>{ if(!document.hidden) carregar(); },120000);
+    const _vis=()=>{ if(!document.hidden) carregar(); };
+    document.addEventListener("visibilitychange",_vis);
+    return()=>{ vivo=false; clearInterval(iv); document.removeEventListener("visibilitychange",_vis); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[authState,loggedUser]);
   const [viewingAs,setViewingAs]   = useState(null);
   // Ver como cliente: usa o mesmo mecanismo de authState/clientPortalData que o login real
   // Salva o profile do cliente e a marca isPreview pra sabermos que é impersonation
@@ -60321,7 +60519,7 @@ export default function AgencyOS(){
           if(new Date(t.publishDate+"T"+(t.publishTime||"00:00")+":00")<=now){
             changed=true;
             const entry={type:"status",fromLabel:"Agendadas",toLabel:"Publicadas",from:"agendado",to:"publicado",at:now.toISOString(),atFmt:now.toLocaleDateString("pt-BR"),user:"Sistema"};
-            return {...t,status:"publicado",completedAt:now.toISOString().split("T")[0],colEnteredAt:now.toISOString(),timeline:[...(t.timeline||[]),entry]};
+            return {...t,status:"publicado",completedAt:pxHojeISO(),colEnteredAt:now.toISOString(),timeline:[...(t.timeline||[]),entry]};
           }
           return t;
         });
