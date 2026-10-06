@@ -130270,6 +130270,13 @@ function _EvpResumoIA({ ed, p, calc, irPara }){
               {d.porque.map(function(x, i){ return <div key={i} style={{display:"flex",gap:8,fontSize:12,color:_EVP_COR.ink,lineHeight:1.42,marginBottom:7}}>
                 <span style={{width:20,height:20,flex:"none",borderRadius:6,background:_EVP_COR.linha2,display:"grid",placeItems:"center",fontSize:11}}>{x.ic}</span><span>{x.txt}</span></div>; })}
               {!d.porque.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>Esta edição não trouxe os motivos (versão antiga).</div>}
+              {(d.rec.licoes_usadas || []).length > 0 && <div style={{marginTop:10,paddingTop:9,borderTop:"1px dashed " + _EVP_COR.linha}}>
+                <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:_EVP_COR.fraco,marginBottom:6}}>O que a IA usou do conhecimento</div>
+                {d.rec.licoes_usadas.slice(0, 8).map(function(x, i){ const og = _evpLicaoOrigem(x.origem);
+                  return <div key={i} title={og[1]} style={{display:"flex",gap:7,fontSize:12,lineHeight:1.4,color:_EVP_COR.ink,marginBottom:6}}>
+                    <span style={{flex:"none",padding:"1px 6px",borderRadius:99,fontSize:10.5,fontWeight:800,color:og[2],background:og[3],height:"fit-content"}}>{og[0]} {x.ref}</span>
+                    <span>{x.titulo ? <b>{x.titulo}</b> : null}{x.titulo && x.como ? " — " : ""}{x.como}</span></div>; })}
+              </div>}
             </div>
           </div>
           <div style={{display:"flex",gap:12,alignItems:"flex-start",padding:"11px 14px 12px",borderTop:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
@@ -133877,6 +133884,9 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
 
 
 
+/* ═══ v50 (06/10/2026): CONHECIMENTO II — o painel mostra também as 33 REGRAS (agora com o porquê, 📏 R7…) e o LIVRO DO EDITOR (📖 P-01…P-62,
+   com fontes e confiança); filtros por origem e busca; "O que a IA usou do conhecimento" no "Por que ficou assim" (licoes_usadas do servidor v70);
+   no Corrigir, se a correção já era regra ou princípio do livro, aparece "a IA não aplicou o que já sabia" (o erro voltou). SQL v48. ═══ */
 /* ═══ v49 (06/10/2026): CORRIGIR QUE ENSINA + CONHECIMENTO DE EDIÇÃO ═══
    Pedido do Vini: "quero que ela entenda, compreenda e aprenda… vira conhecimento, não regra fixa… porque eu também posso errar".
    1) O sócio aponta (C marca começo/fim ou "Marcar aqui") e escreve o que está errado.
@@ -133887,6 +133897,10 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
    4) As lições entram no aprendizado da montagem, do ajuste e do motion (servidor). Aba "Conhecimento de edição" mostra e cuida delas. */
 const _EVP_LICAO_TEMAS = [["apoio","Apoio / B-roll"],["corte","Corte"],["ritmo","Ritmo"],["rosto","Rosto"],["texto","Texto"],["legenda","Legenda"],["som","Som"],["musica","Música"],
   ["motion","Motion"],["cor","Cor"],["gancho","Gancho"],["cta","Chamada (CTA)"],["outro","Outro"]];
+/* v50: de onde veio o conhecimento — correção do sócio, regra aprovada da agência ou o Livro do editor (pesquisa) */
+const _EVP_LICAO_ORIGEM = { correcao:["✏", "Correção", "#7c3aed", "rgba(124,58,237,.12)"], regra:["📏", "Regra da agência", "#0369a1", "rgba(14,165,233,.13)"], livro:["📖", "Livro do editor", "#b45309", "rgba(245,158,11,.14)"] };
+const _evpLicaoOrigem = function(o){ return _EVP_LICAO_ORIGEM[o] || _EVP_LICAO_ORIGEM.correcao; };
+const _evpLicaoCod = function(l){ return (l && l.codigo) || ("L" + (l && l.id)); };
 const _evpLicaoTema = function(id){ const t = _EVP_LICAO_TEMAS.find(function(x){ return x[0] === id; }); return t ? t[1] : "Outro"; };
 const _EVP_LICAO_ST = { observando:["observando", "#a16207", "rgba(234,179,8,.14)"], firme:["firme", "#15803d", "rgba(34,197,94,.14)"], revisar:["o erro voltou", "#b91c1c", "rgba(239,68,68,.13)"], arquivada:["arquivada", "#64748b", "rgba(100,116,139,.13)"] };
 /* a chave nova aparece em Gerenciar acessos › Criação (sem mexer no 00_clientes_data.jsx: o catálogo é global e este módulo vem depois) */
@@ -133960,7 +133974,7 @@ function _EvpEntendido({ x, muda, cliente, edId, info, aoMudarLicoes }){
       {d.concorda === false && d.conflito && <div style={{marginTop:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.aviso,border:"1px solid rgba(234,179,8,.45)",fontSize:12,lineHeight:1.45,color:_EVP_COR.ink}}>
         <b>⚠ A IA discorda:</b> {d.conflito}</div>}
       {igual && !lc && <div style={{marginTop:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.erro,fontSize:12,lineHeight:1.45,color:_EVP_COR.ink}}>
-        <b>Essa lição já existe:</b> L{igual.id} · {igual.titulo}. O erro voltou.
+        <b>{igual.origem === "livro" ? "Isso já está no Livro do editor:" : igual.origem === "regra" ? "Isso já é regra da agência:" : "Essa lição já existe:"}</b> {_evpLicaoCod(igual)} · {igual.titulo}. A IA não aplicou o que já sabia (o erro voltou).
         <div style={{marginTop:6}}><button onClick={voltou} disabled={salvando || !pode} style={Object.assign(_evpBtn("suave", !salvando && pode), {padding:"4px 10px",fontSize:11.5})}>Registrar que o erro voltou</button></div></div>}
       {editar && <div style={{marginTop:8}}>
         <select value={v.tema} onChange={function(e){ setTxt(Object.assign({}, v, { tema:e.target.value })); }} style={Object.assign({}, campo, { width:"auto" })}>{_EVP_LICAO_TEMAS.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}</select>
@@ -133989,6 +134003,8 @@ function _EvpEntendido({ x, muda, cliente, edId, info, aoMudarLicoes }){
 function _EvConhecimento({ isMob }){
   const [cliente, setCliente] = useState("");
   const [tema, setTema] = useState("");
+  const [origem, setOrigem] = useState("");                     // v50: correção · regra · livro
+  const [busca, setBusca] = useState("");
   const [verArq, setVerArq] = useState(false);
   const [dados, setDados] = useState(null);
   const [rec, setRec] = useState(0);
@@ -134001,8 +134017,14 @@ function _EvConhecimento({ isMob }){
   const clientes = ((typeof CLIENTS !== "undefined" && Array.isArray(CLIENTS)) ? CLIENTS : []).filter(function(c){ return c && c.id; });
   const nomeCli = function(id){ const c = clientes.find(function(x){ return x.id === id; }); return c ? (c.name || c.id) : id; };
   const todas = (dados && dados.licoes) || [];
-  const lista = todas.filter(function(l){ return (!tema || l.tema === tema) && (!cliente || !l.client_id || l.client_id === cliente); });
-  const porTema = {}; todas.forEach(function(l){ porTema[l.tema] = (porTema[l.tema] || 0) + 1; });
+  const bq = String(busca || "").trim().toLowerCase();
+  const ordO = { correcao:0, regra:1, livro:2 }, ordS = { revisar:0, observando:1, firme:2, arquivada:3 };
+  const lista = todas.filter(function(l){ return (!tema || l.tema === tema) && (!origem || (l.origem || "correcao") === origem) && (!cliente || !l.client_id || l.client_id === cliente)
+      && (!bq || [l.codigo, "l" + l.id, l.titulo, l.principio, l.como_reconhecer, l.excecoes, l.aplicacao].join(" ").toLowerCase().indexOf(bq) >= 0); })
+    .sort(function(a, b){ return ((ordO[a.origem || "correcao"] || 0) - (ordO[b.origem || "correcao"] || 0)) || ((ordS[a.status] || 0) - (ordS[b.status] || 0))
+      || ((Number(a.regra_id) || 0) - (Number(b.regra_id) || 0)) || String(a.codigo || "").localeCompare(String(b.codigo || "")) || (b.id - a.id); });
+  const porTema = {}; todas.filter(function(l){ return !origem || (l.origem || "correcao") === origem; }).forEach(function(l){ porTema[l.tema] = (porTema[l.tema] || 0) + 1; });
+  const porOrigem = {}; todas.forEach(function(l){ const o = l.origem || "correcao"; porOrigem[o] = (porOrigem[o] || 0) + 1; });
   const mudarStatus = async function(l, st){
     try{ const r = await window._sb.rpc("criacao_licao_status", { p_id:l.id, p_status:st, p_caso:null }); if(r.error) throw new Error(r.error.message); setRec(function(n){ return n + 1; }); }
     catch(e){ _evToast("error", "Não mudou: " + ((e && e.message) || e)); } };
@@ -134020,13 +134042,18 @@ function _EvConhecimento({ isMob }){
     <div style={{marginTop:16}}>
       <div style={Object.assign({}, caixa, { background:"linear-gradient(135deg,#f5f3ff,#fff 55%)" })}>
         <div style={{fontWeight:800,fontSize:_evF(16,isMob)}}>🧠 Conhecimento de edição</div>
-        <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4,lineHeight:1.5}}>O que a IA aprendeu com as correções de vocês. Não é lista de regras: cada lição tem o <b>princípio</b> (o porquê), <b>como reconhecer</b> e as <b>exceções</b>. A IA lê isso a cada montagem e ajuste e decide com critério. Para ensinar: no Estúdio, <b>✋ Corrigir</b> → aponte o erro → <b>Pedir para a IA entender</b> → aprove.</div>
+        <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4,lineHeight:1.5}}>Tudo o que a IA sabe de edição, em três fontes: <b>✏ correções</b> de vocês no Estúdio, <b>📏 regras</b> aprovadas da agência (agora com o porquê) e o <b>📖 Livro do editor</b> (62 princípios pesquisados com editores de referência, normas e plataformas). Não é lista de regras: cada item tem o <b>princípio</b> (o porquê), <b>como reconhecer</b> e as <b>exceções</b>. A IA lê tudo a cada montagem e ajuste, cita o código do que usou e o diretor confere o vídeo contra isso. Quando dois se chocam: correção do cliente &gt; regra &gt; correção para todos &gt; livro.</div>
         <div style={{display:"grid",gridTemplateColumns:isMob ? "repeat(2,1fr)" : "repeat(5,1fr)",gap:8,marginTop:12}}>
-          {[["Lições", total], ["Firmes", firmes], ["O erro voltou", revisar], ["Lidas pela IA", lidas], ["Erros repetidos", voltas]].map(function(k){
+          {[["No conhecimento", total], ["Firmes", firmes], ["O erro voltou", revisar], ["Lidas pela IA", lidas], ["Erros repetidos", voltas]].map(function(k){
             return <div key={k[0]} style={{padding:"9px 11px",borderRadius:11,border:"1px solid " + _EV.linha,background:"#fff"}}><div style={{fontSize:11,color:_EV.sub,fontWeight:700}}>{k[0]}</div><div style={{fontSize:20,fontWeight:800}}>{k[1]}</div></div>; })}
         </div>
       </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",margin:"14px 0 10px"}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginTop:14}}>
+        <button onClick={function(){ setOrigem(""); setTema(""); }} style={chip(!origem)}>Tudo {total}</button>
+        {["correcao", "regra", "livro"].map(function(o){ const og = _evpLicaoOrigem(o); return <button key={o} onClick={function(){ setOrigem(origem === o ? "" : o); setTema(""); }} style={chip(origem === o)}>{og[0]} {{ correcao:"Correções", regra:"Regras da agência", livro:"Livro do editor" }[o]} {porOrigem[o] || 0}</button>; })}
+        <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar (ex.: música, P-18, R27)" style={Object.assign({}, campo, { width:isMob ? "100%" : 260, marginTop:0, marginLeft:isMob ? 0 : "auto" })}/>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",margin:"10px 0 10px"}}>
         <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, campo, { width:"auto", marginTop:0 })}>
           <option value="">Todos os clientes (só globais e de cada um)</option>{clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name || c.id}</option>; })}</select>
         <button onClick={function(){ setTema(""); }} style={chip(!tema)}>Todos os temas</button>
@@ -134035,13 +134062,15 @@ function _EvConhecimento({ isMob }){
       </div>
       {!dados && <div style={{padding:24,textAlign:"center",color:_EV.sub}}>Carregando…</div>}
       {dados && dados.erro && <div style={Object.assign({}, caixa, { color:_EV.verm })}>{/function .*does not exist|criacao_licoes/.test(dados.erro) ? "Falta rodar a SQL v47 (Conhecimento de edição)." : dados.erro}</div>}
-      {dados && !dados.erro && !lista.length && <div style={Object.assign({}, caixa, { textAlign:"center", color:_EV.sub })}>Nenhuma lição ainda{tema ? " neste tema" : ""}. Elas nascem no Estúdio, no ✋ Corrigir.</div>}
+      {dados && !dados.erro && !lista.length && <div style={Object.assign({}, caixa, { textAlign:"center", color:_EV.sub })}>{bq || tema || origem ? "Nada encontrado com esse filtro." : "Nenhuma lição ainda. Elas nascem no Estúdio, no ✋ Corrigir."}</div>}
       <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr" : "repeat(2,minmax(0,1fr))",gap:10}}>
         {lista.map(function(l){ const st = _EVP_LICAO_ST[l.status] || _EVP_LICAO_ST.observando, ab = aberta === l.id, ed = editando && editando.id === l.id ? editando : null;
           const podeMexer = dados.pode_aprovar && (l.client_id || dados.socio);
           return <div key={l.id} style={Object.assign({}, caixa, { padding:12 })}>
             <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-              <div style={{flex:1,minWidth:0}}><div style={{fontSize:11,color:_EV.sub,fontWeight:700}}>L{l.id} · {_evpLicaoTema(l.tema)} · {l.client_id ? "🏷 " + nomeCli(l.client_id) : "🌎 Todos os clientes"}</div>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:11,color:_EV.sub,fontWeight:700,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{padding:"1px 7px",borderRadius:99,fontWeight:800,color:_evpLicaoOrigem(l.origem)[2],background:_evpLicaoOrigem(l.origem)[3]}}>{_evpLicaoOrigem(l.origem)[0]} {_evpLicaoCod(l)}</span>
+                <span>{_evpLicaoTema(l.tema)} · {l.client_id ? "🏷 " + nomeCli(l.client_id) : "🌎 Todos os clientes"}</span></div>
                 <div style={{fontWeight:800,fontSize:14,marginTop:2}}>{l.titulo}</div></div>
               <span style={{fontSize:10.5,fontWeight:800,padding:"3px 9px",borderRadius:99,color:st[1],background:st[2],whiteSpace:"nowrap"}}>{st[0]}</span>
             </div>
@@ -134049,10 +134078,14 @@ function _EvConhecimento({ isMob }){
                 {[["titulo", "Título", 1], ["principio", "Princípio (o porquê)", 4], ["como_reconhecer", "Como reconhecer", 2], ["excecoes", "Exceções", 2]].map(function(f){
                   return <label key={f[0]} style={{display:"block",marginTop:8,fontSize:11,fontWeight:800,color:_EV.sub}}>{f[1]}<textarea rows={f[2]} value={ed[f[0]] || ""} onChange={function(e){ const n = Object.assign({}, ed); n[f[0]] = e.target.value; setEditando(n); }} style={campo}/></label>; })}
                 <div style={{display:"flex",gap:6,marginTop:8}}><button onClick={salvarEd} style={{font:"inherit",fontSize:13,fontWeight:700,padding:"7px 14px",borderRadius:9,border:0,background:_EV.roxo,color:"#fff",cursor:"pointer"}}>Salvar</button><button onClick={function(){ setEditando(null); }} style={{font:"inherit",fontSize:13,fontWeight:600,padding:"7px 14px",borderRadius:9,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.texto,cursor:"pointer"}}>Cancelar</button></div></div>
-             : <div style={{fontSize:13,lineHeight:1.5,marginTop:6}}>{l.principio}</div>}
+             : <div style={Object.assign({fontSize:13,lineHeight:1.5,marginTop:6}, ab ? {} : {display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical",overflow:"hidden"})}>{l.principio}</div>}
             {!ed && ab && <div style={{marginTop:8,fontSize:12.5,lineHeight:1.5}}>
               {l.como_reconhecer && <div style={{marginTop:6}}><b style={{color:"#2563eb"}}>Como reconhecer:</b> {l.como_reconhecer}</div>}
               {l.excecoes && <div style={{marginTop:6}}><b style={{color:_EV.amarelo}}>Exceções:</b> {l.excecoes}</div>}
+              {l.aplicacao && <div style={{marginTop:6}}><b style={{color:"#b45309"}}>No vídeo vertical curto:</b> {l.aplicacao}</div>}
+              {(l.confianca || (l.fontes || []).length > 0) && <div style={{marginTop:8}}><b>Fontes</b>{l.confianca ? <span style={{color:_EV.sub}}> · {l.confianca}</span> : null}
+                {(l.fontes || []).slice(0, 6).map(function(f, i){ return <div key={i} style={{marginTop:2}}>↗ <a href={f.url} target="_blank" rel="noopener noreferrer" style={{color:_EV.roxo}}>{f.nome || f.url}</a></div>; })}</div>}
+              {l.nota_pesquisa && <div style={{marginTop:8,padding:"6px 8px",borderRadius:8,background:_EV.linha2,fontSize:12}}><b>Nota da pesquisa</b> <span style={{color:_EV.fraco}}>(só a equipe vê; a IA não lê)</span>: {l.nota_pesquisa}</div>}
               {(l.casos || []).length > 0 && <div style={{marginTop:8}}><b>Casos ({l.casos.length}):</b>{(l.casos || []).slice(-5).reverse().map(function(c, i){
                 return <div key={i} style={{marginTop:4,padding:"6px 8px",borderRadius:8,background:c.voltou ? _EV.vermClaro : _EV.linha2,fontSize:12}}>{c.voltou ? "↺ voltou · " : ""}{c.pedido || "—"}{c.o_que_aconteceu ? " — " + c.o_que_aconteceu : ""}<span style={{color:_EV.fraco}}> · {c.por || ""}</span></div>; })}</div>}
             </div>}
