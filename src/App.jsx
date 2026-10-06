@@ -123146,6 +123146,7 @@ const _EVP_SFX_AUTO_CAT = [
   { id:"citacao", label:"Citação", tipo:"brilho", vol:0.28, pri:3 },
   { id:"selo", label:"Selo", tipo:"pop", vol:0.42, pri:3 },
   { id:"transicao", label:"Transições rápidas", tipo:"whoosh", vol:0.5, pri:5 },
+  { id:"gancho", label:"Gancho (1ª peça do vídeo)", tipo:"impacto", vol:0.8, pri:6 },      // v55: o começo precisa de uma pancada
 ];
 const _EVP_SFX_AUTO_TRANS = { marca:"whoosh", zoom_entra:"whoosh", zoom_sai:"whoosh", giro:"whoosh", empurrar:"whoosh", whip:"swish", deslizar:"swish",
   chicote_mov:"swish", profundidade:"whoosh", mascara:"whoosh" };   // = TRANS_SOM do servidor (v43; v34 junção: + 3 transições novas)
@@ -123196,6 +123197,12 @@ function _evpSfxAuto(p, calc, todos){
     else if(it.modelo === "selo") quer("selo", t0 + 0.05);
     // modelo que não conhecemos: sem som
   });
+  /* v55 (06/10/2026): GANCHO — o sócio: "o início não tem nada que prende a atenção, não tem efeito sonoro". A 1ª peça do motion que entra
+     no 1º segundo ganha uma pancada (impacto) na 1ª palavra; os sons dos primeiros 3 s não abaixam sob a fala e saem 20% mais fortes. */
+  if(mo && Array.isArray(mo.itens) && (calc.formato || "9x16") === "9x16"){
+    const pri = mo.itens.filter(function(it){ return it && ok(it.t0) && it.t0 <= 1.0; }).sort(function(a, b){ return a.t0 - b.t0; })[0];
+    if(pri){ const tw = pri.modelo === "kinetic" && Array.isArray(pri.tempos) && ok(pri.tempos[0]) ? pri.tempos[0] : pri.t0 + 0.05; quer("gancho", Math.max(0, tw - 0.03)); }
+  }
   /* transições rápidas: entre clipes e na entrada/saída do apoio em tela cheia (no meio da transição, como o servidor) */
   (calc.clips || []).forEach(function(c, i){ if(!i || !c || !c.trans || c.trans === "corte" || c.off || !ok(c.t0)) return; const som = _EVP_SFX_AUTO_TRANS[c.trans]; if(!som) return;
     quer("transicao", c.t0 + _evpTransDur(c) / 2, { padrao:som }); });
@@ -123227,7 +123234,8 @@ function _evpSfxAuto(p, calc, todos){
   aceitos.sort(function(a, b){ return a.t0 - b.t0; }).forEach(function(x){
     const k = conta[x.tipo] = (conta[x.tipo] || 0) + 1; x.v = (k - 1) % 4;
     const fim = x.t0 + Math.min(0.5, x.dur); x.fala = palavras.some(function(w){ return w[0] < fim && w[1] > x.t0; });
-    x.vol = Math.round(x.base * (1 - 0.06 * (x.v % 2)) * vol * (x.fala ? _EVP_SFX_AUTO_DUCK : 1) * 1000) / 1000; });
+    const noGancho = x.ev < 3.0;                                                                   // v55: no gancho não abaixa e sai mais forte
+    x.vol = Math.round(x.base * (1 - 0.06 * (x.v % 2)) * vol * (x.fala && !noGancho ? _EVP_SFX_AUTO_DUCK : 1) * (noGancho && x.cat !== "gancho" ? 1.2 : 1) * 1000) / 1000; });
   const r = todos ? lista.sort(function(a, b){ return (a.t0 != null ? a.t0 : a.ev) - (b.t0 != null ? b.t0 : b.ev); }) : aceitos;
   return r.filter(function(x){ return todos || !x.motivo; });
 }
@@ -124553,7 +124561,9 @@ function kinetic(it, t){
   const pout = prog(t, it.t1 - 0.25, 0.25); if(t < it.t0 || pout >= 1) return;
   X.save(); X.globalAlpha = 1 - EIN(pout);
   const n = it.palavras.length, passo = n > 3 ? 170 : 190, y00 = n > 3 ? 700 : 840;
-  const g = X.createRadialGradient(540, y00 + passo * (n - 1) / 2, 0, 540, y00 + passo * (n - 1) / 2, 760); g.addColorStop(0, "rgba(8,5,16,.6)"); g.addColorStop(1, "rgba(8,5,16,0)"); if(!SO_CONT){ X.fillStyle = g; X.fillRect(-DX, 300, W, 1200); }   // v38
+  // v55 (06/10/2026): a sombra atrás das palavras é a TELA INTEIRA, por igual (pedido do sócio). Antes era um degradê redondo num retângulo
+  //   de 300 a 1500 px: aparecia uma faixa clara em cima e outra embaixo, com o meio escuro. Entra em 0,25 s e sai junto com as palavras.
+  if(!SO_CONT){ X.save(); X.globalAlpha *= EASE(prog(t, it.t0, 0.25)); X.fillStyle = "rgba(8,5,16,.45)"; X.fillRect(-DX, -DY, W, H); X.restore(); }
   it.palavras.forEach((p, i) => { const ti = it.tempos[i] - 0.06, pp = prog(t, ti, 0.4); if(pp <= 0) return;
     const f = ajusta(p, i === 0 ? (n > 3 ? 132 : 150) : (n > 3 ? 156 : 176), "Anton", W - 2 * SAFE.lado - 70, { esp: 2 }, 1, 0.3);
     const m = mola(pp), tam = f.tam, y = y00 + i * passo, w = f.w;
@@ -126155,7 +126165,7 @@ function _evpMotor(canvas, o){
     const a = atrA.getContext("2d", { willReadFrequently:true }), b = atrB.getContext("2d", { willReadFrequently:true });
     a.clearRect(0, 0, w, h); a.drawImage(atrCv, 0, 0, w, h); b.clearRect(0, 0, w, h); b.drawImage(pessoa, 0, 0, w, h);
     const da = a.getImageData(0, 0, w, h).data, db = b.getImageData(0, 0, w, h).data; let nt = 0, nc = 0;
-    for(let i = 3; i < da.length; i += 4){ if(da[i] > 110){ nt++; if(db[i] > 140) nc++; } }
+    for(let i = 3; i < da.length; i += 4){ if(da[i] > 200){ nt++; if(db[i] > 140) nc++; } }     // > 200: só letra e faixa (a sombra da tela inteira tem 115)
     return nt > 40 ? nc / nt : 0;
   }
   function textoAtrasLegivel(t){        // true = pode ficar atrás · false = vem para a frente
@@ -126166,6 +126176,20 @@ function _evpMotor(canvas, o){
     let c = 0; try{ c = coberturaAtras(t); }catch(_){ c = 0; }
     if(c > ATRAS_MAX){ atrFrente.set(k, true); return false; }
     return true;
+  }
+  /* v55 (06/10/2026): GANCHO VISUAL — quando o motion começa no 1º segundo, a tela inteira (vídeo + texto) entra com um "soco":
+     começa 14% maior e assenta em 0,35 s. É o que segura o dedo no Reels. */
+  let socoCv = null;
+  function socoGancho(){
+    const m = calc.motion; if(!(evmLiga() && !evmErro && m && Array.isArray(m.itens))) return;
+    const pri = m.itens.filter(function(x){ return x && x.t0 <= 1.0; }).sort(function(a, b){ return a.t0 - b.t0; })[0]; if(!pri) return;
+    const t0 = pri.modelo === "kinetic" && Array.isArray(pri.tempos) && isFinite(pri.tempos[0]) ? Math.max(0, pri.tempos[0] - 0.06) : pri.t0;
+    const k = (t - t0) / 0.35; if(k < 0 || k >= 1) return;
+    const z = 1 + 0.14 * Math.pow(1 - k, 2);
+    if(!socoCv){ socoCv = document.createElement("canvas"); } if(socoCv.width !== canvas.width || socoCv.height !== canvas.height){ socoCv.width = canvas.width; socoCv.height = canvas.height; }
+    const g = socoCv.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, socoCv.width, socoCv.height); g.drawImage(canvas, 0, 0);
+    cx.save(); cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
+    const w = canvas.width * z, h = canvas.height * z; cx.drawImage(socoCv, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h); cx.restore();
   }
   function recortarPessoa(fu){        // pessoa (sem fundo) em "pessoa" · v22: borda macia (suave) e recuperar bordas (exp)
     if(!mascara) return false;
@@ -126222,6 +126246,7 @@ function _evpMotor(canvas, o){
       if(mo && !motFeito){ try{ _EVM.sobre(cx, t, emPalco); }catch(e){ evmFalhou(e); } }
       if(!o.semLegenda && legP) desenharLegenda({ k:0.72, yMin:H * 0.693 });   // v48 (06/10/2026): regra #12 — com cartão/CTA a legenda fica menor e embaixo (por cima da proteção escura)
       desenharAbertura();
+      socoGancho();
     }
     if(calc.total > calc.fimCortes && t >= calc.fimCortes - 0.3) desenharFinal(_evClamp((t - (calc.fimCortes - 0.3))/0.3, 0, 1));
     if(evmRefazer){ evmRefazer = false; desenhar(); return; }          // v31: o motion falhou neste quadro — refaz sem ele
