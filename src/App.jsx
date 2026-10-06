@@ -123916,6 +123916,22 @@ function _evpNivelDb(buf){
   }catch(_){ return null; }
 }
 const _EVP_VOZ_DB = -18, _EVP_ALVO_MUS = -31;      // voz nivelada a −18 dB; música na fala uns 13 dB abaixo
+/* v54 (06/10/2026): muita faixa começa quase muda (1 a 2 s de entrada). No gancho do BioTer isso deixou 0,25 s de silêncio total entre
+   duas falas no 1º segundo. Sem "ini" escolhido à mão, a música começa onde a faixa já tem som de verdade (≥ 1/4 do nível típico dela),
+   procurando nos primeiros 8 s. */
+const _evpIntroCache = new WeakMap();
+function _evpIntroMusica(buf){
+  if(!buf || !buf.getChannelData) return 0;
+  if(_evpIntroCache.has(buf)) return _evpIntroCache.get(buf);
+  let r = 0;
+  try{
+    const d = buf.getChannelData(0), sr = buf.sampleRate, h = Math.max(1, Math.round(sr * 0.05)), n = Math.min(d.length, Math.round(sr * 60)), rms = [];
+    for(let i = 0; i + h <= n; i += h){ let q = 0; for(let j = i; j < i + h; j += 4) q += d[j] * d[j]; rms.push(Math.sqrt(q / (h / 4))); }
+    const ord = rms.slice().sort(function(a, b){ return a - b; }), tip = ord[Math.floor(ord.length * 0.5)] || 0;
+    if(tip > 0.003){ const lim = Math.min(160, rms.length); for(let k = 0; k < lim; k++){ if(rms[k] >= tip * 0.25){ r = Math.max(0, k * 0.05 - 0.05); break; } } }
+  }catch(_){ r = 0; }
+  _evpIntroCache.set(buf, r); return r;
+}
 /* nível real da música no vídeo: onde tem fala (abaixada) e onde não tem */
 function _evpMusNaFala(mu, nivel){ if(!mu || nivel == null) return null; const v = Math.max(0.0001, _evpNum(mu.vol, 0.15)), ab = mu.duck === false ? 1 : _evpNum(mu.abaixa, 0.45);
   return { fala:Math.round((nivel + 20*Math.log10(v*ab)) * 10) / 10, solta:Math.round((nivel + 20*Math.log10(v)) * 10) / 10 }; }
@@ -124990,7 +125006,8 @@ function selo(it, t){
   const fT = ajusta(it.texto, 94, "Anton", 760, { esp: 1 }, 1, 0.5), aT = metr("H", fT.tam, "Anton").a;
   const fS = it.sub ? ajusta(tech() ? it.sub.toUpperCase() : it.sub, tech() ? 28 : 46, famS, 760, oS, 1, 0.6) : null, aS = fS ? metr("H", fS.tam, famS, "", oS.estilo).a : 0;
   const px = tech() ? 70 : 52, py = 34, w = Math.max(fT.w, fS ? fS.w : 0) + px * 2, h = py + aT + (fS ? 24 + aS : 0) + py + (est === "clean" ? 6 : 0);
-  const cy = it.pos === "meio" ? YM : SAFE.topo + 46 + h / 2, ang = (est === "clean" ? -0.025 : -0.05) - 0.3 * (1 - m) + Math.sin((t - it.t0) * 1.6) * 0.006 * EASE(prog(t, it.t0 + 0.6, 0.6));
+  // v54: com rosto na tela o selo do topo ficava na testa (BioTer, 24 s): desce para baixo do rosto, como os cartões (TOPO_ROSTO)
+  const cy = it.pos === "meio" ? YM : API.rosto ? Math.min(TOPO_ROSTO + 40 + h / 2, SAFE.base - 24 - h / 2) : SAFE.topo + 46 + h / 2, ang = (est === "clean" ? -0.025 : -0.05) - 0.3 * (1 - m) + Math.sin((t - it.t0) * 1.6) * 0.006 * EASE(prog(t, it.t0 + 0.6, 0.6));
   const raio = est === "clean" ? h / 2 : est === "impacto" ? 0 : tech() ? 4 : 18, k = m * (1 - 0.15 * sai);
   X.save(); X.globalAlpha = cl(pin * 3, 0, 1) * (1 - sai); X.translate(540, cy); X.rotate(ang); X.scale(k, k);
   const r2 = Object.assign({}, rp, { raio: raio });
@@ -125087,7 +125104,8 @@ API.escondeLegenda = function(t){
 };
 /* v48 (06/10/2026): regra #12 — com número, lista, antes/depois, citação ou CTA na tela a legenda NÃO some: fica menor e embaixo do cartão (o motor desenha) */
 API.legendaPequena = function(t){
-  return R.itens.some((i) => i.modelo === "cta" && t >= i.t0) || R.itens.some((i) => _EVM_ESCONDE.indexOf(i.modelo) >= 0 && t >= i.t0 - 0.05 && t < i.t1);
+  return R.itens.some((i) => i.modelo === "cta" && t >= i.t0) || R.itens.some((i) => _EVM_ESCONDE.indexOf(i.modelo) >= 0 && t >= i.t0 - 0.05 && t < i.t1)
+    || (API.rosto && R.itens.some((i) => i.modelo === "selo" && i.pos !== "meio" && t >= i.t0 - 0.05 && t < i.t1));      // v54: selo embaixo → legenda menor, abaixo dele
 };
 API.sobre = function(ctx, t, emPalco){
   X = ctx; X.save(); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1; X.globalCompositeOperation = "source-over";
@@ -125113,7 +125131,8 @@ function _evmNormalizar(m, total){
   const N = function(v){ v = Number(v); return isFinite(v) ? Math.round(v * 1000) / 1000 : null; };
   /* v33: corta no fim da palavra (antes cortava no meio) — o motor diminui/quebra a linha para caber */
   const S = function(v, max){ if(typeof v !== "string" && typeof v !== "number") return ""; const s0 = String(v).replace(/\s+/g, " ").trim(); if(s0.length <= max) return s0;
-    const c0 = s0.slice(0, max + 1), i = c0.lastIndexOf(" "); if(i < max * 0.5) return s0.slice(0, max).trim();
+    const c0 = s0.slice(0, max + 1), i = c0.lastIndexOf(" ");
+    if(i < max * 0.5){ if(s0.length <= Math.round(max * 1.35)) return s0; if(i > 0) return s0.slice(0, i).trim(); const j = s0.indexOf(" ", max); return (j > 0 && j <= max * 1.6 ? s0.slice(0, j) : s0.slice(0, max)).trim(); }   // v54: nunca corta no meio da palavra ("automatizad")
     const ps = c0.slice(0, i).trim().split(" "); while(ps.length > 1 && /^(a|o|e|é|de|da|do|das|dos|com|que|para|pra|em|no|na|nos|nas|um|uma|sua|seu|suas|seus|por|ao|à|as|os|se|mais|muito|tão)$/i.test(ps[ps.length - 1])) ps.pop();
     return ps.join(" ").replace(/[,;:–—-]+$/, ""); };          // não termina em "de", "com", "que"…
   const lim = isFinite(Number(total)) && Number(total) > 0 ? Number(total) : 600;
@@ -125517,7 +125536,7 @@ function _evpMotor(canvas, o){
     // música (abaixa sozinha quando tem fala)
     const mu = calc.musica;
     if(mu && musBuf && !mu.mudo && !mu.off){                                                                             // v41: desligada (Shift+E) não toca
-      const vM = Math.max(0.5, Math.min(2, _evpNum(mu.vel, 1))), t0M = _evpNum(mu.t0, 0), iniM = _evpNum(mu.ini, 0);     // v41: velocidade da música
+      const vM = Math.max(0.5, Math.min(2, _evpNum(mu.vel, 1))), t0M = _evpNum(mu.t0, 0), iniM = _evpNum(mu.ini, 0) || (mu.pulaIntro === false || !(envVoz && envVoz.length) ? 0 : _evpIntroMusica(musBuf));     // v41: velocidade da música · v54: pula o começo mudo da faixa
       const fim = _evpNum(mu.dur, 0) > 0 ? Math.min(calc.total, t0M + _evpNum(mu.dur, 0)) : calc.total;                  // v41: duração (sem dur = até o fim)
       const bufM = (vM !== 1 && mu.tom !== false) ? (_evpTomTrecho(musBuf, iniM, Math.min(musBuf.duration, iniM + Math.max(0.5, fim - t0M) * vM), vM) || musBuf) : musBuf;   // v41: manter o tom
       const esticado = bufM !== musBuf;
@@ -126120,6 +126139,34 @@ function _evpMotor(canvas, o){
     segOcupado = true; const de = Math.round(t * 30);
     _evpSegmentar(vl).then(function(m){ if(m){ mascara = m; mascaraDe = de; mascaraFonte = "mp"; } }).catch(function(){}).finally(function(){ segOcupado = false; });
   }
+  /* v54 (06/10/2026): TEXTO ATRÁS DA PESSOA SÓ SE DER PARA LER. No BioTer o gancho "PROTEGER…" ficou atrás da cabeça e virou "PRO…ER".
+     Mede quanto do texto do motion a pessoa cobre (em 1/8 do tamanho, rápido); passou de ATRAS_MAX → o texto vem para a FRENTE até o
+     fim daquela peça (decisão fixa por peça: não fica piscando atrás/frente). */
+  const ATRAS_MAX = 0.12;
+  let atrFrente = new Map(), atrMot = null, atrCv = null, atrA = null, atrB = null;
+  function chaveAtras(t){ const m = calc.motion; const it = m && Array.isArray(m.itens) ? m.itens.find(function(x){ return x && _EVP_MOT_ATRAS.indexOf(x.modelo) >= 0 && t >= x.t0 && t <= x.t1; }) : null; return it ? it.modelo + "@" + it.t0 : ""; }
+  function coberturaAtras(t){
+    const cw = canvas.width, ch = canvas.height, w = Math.max(16, Math.round(cw / 8)), h = Math.max(16, Math.round(ch / 8));
+    if(!atrCv){ atrCv = document.createElement("canvas"); atrA = document.createElement("canvas"); atrB = document.createElement("canvas"); }
+    if(atrCv.width !== cw || atrCv.height !== ch){ atrCv.width = cw; atrCv.height = ch; }
+    if(atrA.width !== w || atrA.height !== h){ atrA.width = atrB.width = w; atrA.height = atrB.height = h; }
+    const g = atrCv.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, cw, ch);
+    try{ _EVM.preparar(g, calc.motion, evmInfo()); _EVM.sobre(g, t, null); } finally { _EVM.preparar(cx, calc.motion, evmInfo()); }
+    const a = atrA.getContext("2d", { willReadFrequently:true }), b = atrB.getContext("2d", { willReadFrequently:true });
+    a.clearRect(0, 0, w, h); a.drawImage(atrCv, 0, 0, w, h); b.clearRect(0, 0, w, h); b.drawImage(pessoa, 0, 0, w, h);
+    const da = a.getImageData(0, 0, w, h).data, db = b.getImageData(0, 0, w, h).data; let nt = 0, nc = 0;
+    for(let i = 3; i < da.length; i += 4){ if(da[i] > 110){ nt++; if(db[i] > 140) nc++; } }
+    return nt > 40 ? nc / nt : 0;
+  }
+  function textoAtrasLegivel(t){        // true = pode ficar atrás · false = vem para a frente
+    if(atrMot !== calc.motion){ atrMot = calc.motion; atrFrente = new Map(); }
+    const k = chaveAtras(t); if(!k) return true;
+    if(atrFrente.get(k)) return false;
+    if(!recortarPessoa()) return true;
+    let c = 0; try{ c = coberturaAtras(t); }catch(_){ c = 0; }
+    if(c > ATRAS_MAX){ atrFrente.set(k, true); return false; }
+    return true;
+  }
   function recortarPessoa(fu){        // pessoa (sem fundo) em "pessoa" · v22: borda macia (suave) e recuperar bordas (exp)
     if(!mascara) return false;
     /* v48 (06/10/2026): E2-6 — borda proporcional ao tamanho do pixel do MODELO (o MediaPipe devolve a máscara já no tamanho do quadro, mas ela
@@ -126165,8 +126212,11 @@ function _evpMotor(canvas, o){
       if(mo){ try{ _EVM.preparar(cx, calc.motion, evmInfo()); emPalco = _EVM.palco(cx, canvas, t); }
         catch(e){ evmFalhou(e); mo = false; } }
       if(!ocultos) (calc.textos||[]).forEach(function(x0){ if(t < x0.t0 || t > x0.t1) return; const x = _evpTrkAplicar(x0, t, calc, proj); const itG = _evgDoTexto(kit, x); desenharTextoItem(x, itG); });   // v26
-      if(mo && motAtras0 && !emPalco && mascara){ try{ _EVM.sobre(cx, t, emPalco); motFeito = true; }catch(e){ evmFalhou(e); } }   // v47: o texto do motion vai ATRÁS da pessoa
-      if(atras && !ocultos && !emPalco && recortarPessoa()) cx.drawImage(pessoa, 0, 0);     // a pessoa passa na frente do texto (no palco o vídeo está no quadro)
+      let motAtras = motAtras0;
+      if(mo && motAtras && !emPalco && mascara && !textoAtrasLegivel(t)) motAtras = false;   // v54: a pessoa cobriria o texto → texto na frente
+      const atrasAgora = motAtras || (calc.textos||[]).some(function(x){ return x.atras && t >= x.t0 && t <= x.t1; });
+      if(mo && motAtras && !emPalco && mascara){ try{ _EVM.sobre(cx, t, emPalco); motFeito = true; }catch(e){ evmFalhou(e); } }   // v47: o texto do motion vai ATRÁS da pessoa
+      if(atrasAgora && !ocultos && !emPalco && recortarPessoa()) cx.drawImage(pessoa, 0, 0);     // a pessoa passa na frente do texto (no palco o vídeo está no quadro)
       let escLeg = false, legP = false; if(mo){ try{ escLeg = _EVM.escondeLegenda(t); legP = !escLeg && _EVM.legendaPequena(t); }catch(e){ evmFalhou(e); } }
       if(!o.semLegenda && !escLeg && !legP) desenharLegenda();       // exportar sem a legenda gravada (para subir o .srt separado) · v31: o motion esconde a legenda quando ocupa a tela
       if(mo && !motFeito){ try{ _EVM.sobre(cx, t, emPalco); }catch(e){ evmFalhou(e); } }
