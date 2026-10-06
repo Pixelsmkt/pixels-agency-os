@@ -34693,8 +34693,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       if(typeof pixelsToast!=="undefined") pixelsToast.warning("Não dá pra aprovar ainda. Falta marcar: "+_faltas.join(", ")+".",5000);
       return;
     }
-    const _dest=(destino==="recebida")?"recebida":"preencher_material";
-    const _lbl=(_dest==="recebida")?"Demandas":"Preencher material";
+    /* (06/10/2026, Gustavo) SHORT: "não é Aprovar e ir pra Demanda, é só Aprovar — não é feito nada depois,
+       vai direto pro calendário" → destino "aprovado". */
+    const _dest=(destino==="aprovado")?"aprovado":(destino==="recebida")?"recebida":"preencher_material";
+    const _lbl=(_dest==="aprovado")?"Aprovado":(_dest==="recebida")?"Demandas":"Preencher material";
     const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const _now=new Date().toISOString();
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:_dest,ajustar:false,colEnteredAt:_now,timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:_lbl,from:"demanda",to:_dest,at:_now,atFmt:nowFmt(),user:actor}]}:t));
@@ -37050,7 +37052,16 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               {/* APROVAR TEM DOIS CAMINHOS. O de cima (verde cheio, 15/09/2026) é o
                   atalho pra quando o card já tem o material pronto — vira demanda direto.
                   O de baixo para em "Preencher material" até alguém anexar as imagens. */}
-              {_bl("copys.aprovar_demanda")&&<button onClick={()=>approveCopy(current,"recebida")}
+{((typeof pxEhShort==="function")&&pxEhShort(current))
+                ? (_bl("copys.aprovar_demanda")&&<button onClick={()=>approveCopy(current,"aprovado")}
+                  title="Short não passa por design nem edição: aprovou, vai direto pro calendário (coluna Aprovado)."
+                  style={{opacity:_faltasParaAprovar(current).length?.45:1,width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"12px 14px",fontSize:13.5,fontWeight:800,cursor:"pointer",boxShadow:"0 2px 8px "+C.gr+"33",transition:"all .15s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
+                  Aprovar
+                </button>)
+                : <>
+                            {_bl("copys.aprovar_demanda")&&<button onClick={()=>approveCopy(current,"recebida")}
                 title="O card já tem o material. Pula a etapa de imagens e vira demanda pro freelancer."
                 style={{opacity:_faltasParaAprovar(current).length?.45:1,width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
@@ -37064,6 +37075,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.gr+"66";}}>
                 Aprovar copy → Preencher material
               </button>}
+              </>}
               {_bl("copys.ajuste")&&<button onClick={()=>setAjusteModal(current)}
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
