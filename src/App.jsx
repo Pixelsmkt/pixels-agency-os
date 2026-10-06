@@ -29209,7 +29209,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       const types={
                         arte:{label:"Arte única",icon:"image"},
                         carrossel:{label:"Carrossel",icon:"layers"},
-                        folder:{label:"Material gráfico",icon:"file-text"},
+                        folder:{label:"Folder",icon:"file-text"},
                         video:{label:"Vídeo",icon:"play"},
                         video_complexo:{label:"Vídeo dinâmico",icon:"film"},
                         video_feira:{label:"Vídeo básico",icon:"flag"},
