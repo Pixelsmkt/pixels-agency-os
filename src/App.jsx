@@ -113716,6 +113716,29 @@ async function pxPropostasDaSolicitacao(opts){
 }
 if(typeof window!=="undefined"){ window.pxPropostasDaSolicitacao=pxPropostasDaSolicitacao; }
 
+/* (06/10/2026, Gustavo) "barra de rolagem pra direita no topo também — tem só no rodapé da seção".
+   Barra fina em cima, sincronizada com a de baixo; some quando tudo cabe. */
+function SwRolagemDupla({children,style,cor}){
+  const cimaRef=useRef(null), baixoRef=useRef(null);
+  const [larg,setLarg]=useState(0), [sobra,setSobra]=useState(false);
+  useEffect(function(){
+    const el=baixoRef.current; if(!el) return;
+    const medir=function(){ setLarg(el.scrollWidth); setSobra(el.scrollWidth>el.clientWidth+2); };
+    medir();
+    let ro=null; try{ ro=new ResizeObserver(medir); ro.observe(el); Array.prototype.forEach.call(el.children,function(c){ ro.observe(c); }); }catch(_){}
+    window.addEventListener("resize",medir);
+    return function(){ try{ if(ro) ro.disconnect(); }catch(_){} window.removeEventListener("resize",medir); };
+  });
+  const sync=function(de,para){ if(de&&para&&Math.abs(para.scrollLeft-de.scrollLeft)>=1) para.scrollLeft=de.scrollLeft; };
+  return <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
+    {sobra&&<div ref={cimaRef} onScroll={function(){ sync(cimaRef.current,baixoRef.current); }}
+      style={{overflowX:"auto",overflowY:"hidden",height:12,scrollbarColor:(cor||"#94a3b8")+" transparent"}}>
+      <div style={{width:larg,height:1}}/>
+    </div>}
+    <div ref={baixoRef} onScroll={function(){ sync(baixoRef.current,cimaRef.current); }} style={style}>{children}</div>
+  </div>;
+}
+
 /* ─── A ABA ───────────────────────────────────────────────────────────── */
 function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setUnit, nomeCl, bl}){
   const sb=(typeof window!=="undefined")?window._sb:null;
@@ -114134,7 +114157,9 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           {desc&&p.cliente_resposta==="recusada"&&p.cliente_motivo&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"6px 9px",color:"#991b1b",fontSize:pxFonte(11.5,isMob),lineHeight:1.45,marginBottom:6}}><b>Motivo{p.cliente_respondido_por?(" ("+p.cliente_respondido_por+")"):""}:</b> {p.cliente_motivo}</div>}
           {ed?<input value={ed.titulo} onChange={function(e){ setEditando(Object.assign({},ed,{titulo:e.target.value})); }} style={Object.assign({},_inp,{fontWeight:800})}/>
              :<div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>}
-          {p.de_onde_veio&&!ed&&<div style={{color:"#64748b",fontSize:12,marginTop:4,fontStyle:"italic"}}>{p.de_onde_veio}</div>}
+          {/* (06/10/2026, Gustavo) "tira esse subtítulo de onde foi tirado o contexto" — fica guardado, só não aparece.
+               Resta só a marquinha quando a proposta é do caso específico (obra/visita citada). */}
+          {!ed&&String(p.de_onde_veio||"").indexOf("📍")===0&&<div style={{marginTop:5}}><span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f5efff",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>📍 Caso específico</span></div>}
         </div>
       </div>
       {ed?<>
@@ -114380,9 +114405,11 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
                   style={Object.assign({},_mini,{background:"#fff",color:g.cor,borderColor:"#fff",display:"inline-flex",alignItems:"center",gap:6,opacity:(!!ocupado||trabalhando)&&!busyG?.6:1})}>{busyG?<><Spin/> Gerando…</>:(falta?("Completar "+_SW_POR_LINHA+" (+"+falta+")"):("+"+_SW_POR_LINHA+" "+g.titulo.toLowerCase()))}</button>}
               </div>
               {doG.length
-                ?<div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(300px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
+                ?(isMob?<div style={{display:"grid",gridTemplateColumns:"1fr",gap:12}}>
                   {doG.map(function(p){ return _renderProposta(p); })}
-                </div>
+                </div>:<SwRolagemDupla cor={g.cor} style={{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(300px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
+                  {doG.map(function(p){ return _renderProposta(p); })}
+                </SwRolagemDupla>)
                 :<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:12.5,borderStyle:"dashed"})}>Nenhuma proposta de {g.titulo.toLowerCase()} neste pedido ainda{_bl("solic.nova")?" — use o \"+"+_SW_POR_LINHA+"\" acima.":"."}</div>}
             </div>;
           })}
