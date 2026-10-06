@@ -2632,6 +2632,12 @@ const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
 const PX_STATUS_FECHADOS = ["aprovado","agendado","publicado","pausado","reprovado","interno_executado"];
 // Entregue (para "Concluídas"): aprovado internamente ou pelo cliente, agendado, publicado.
 const PX_STATUS_ENTREGUES = ["aprovado","aprovacao_final","agendado","publicado","interno_aprovado","interno_executado"];
+/* (06/10/2026 · A-27) Quem FEZ a ação é sempre quem está logado. No "Ver como Ellen" o sócio
+   continua sendo o autor na timeline e no approved_by (antes ficava registrado como se fosse a Ellen). */
+function pxAutorNome(u){
+  try{ const n=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:null; if(n&&n!=="Sem acesso") return n; }catch(_){}
+  return (u&&u.name)||"";
+}
 function pxCardAberto(t){ return !!t&&!t.deletedAt&&!t._isDraft&&PX_STATUS_FECHADOS.indexOf(t.status)<0; }
 function pxCardEntregue(t){ return !!t&&!t.deletedAt&&PX_STATUS_ENTREGUES.indexOf(t.status)>=0; }
 // Hoje em Brasília, "aaaa-mm-dd" (antes: toISOString = dia em UTC, que depois das 21h já é amanhã)
@@ -9210,7 +9216,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   useEffect(()=>{try{localStorage.setItem("pixels-pay-month",payMonth);}catch(e){}},[payMonth]);
   useEffect(()=>{try{localStorage.setItem("pixels-dash-tab",activeTab);}catch(e){}},[activeTab]);
   const setTasks=propSetTasks||(()=>{});
-  const adminCardPerms=(()=>{try{const s=localStorage.getItem("pixels-perms-"+(CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch{return DEFAULT_PERMS;}})();
+  const adminCardPerms=(()=>{try{const s=(typeof ACCESS_STORE!=="undefined")?ACCESS_STORE[(CURRENT_USER).id]:null;return s?{...DEFAULT_PERMS,...s}:DEFAULT_PERMS;}catch{return DEFAULT_PERMS;}})();   // (06/10/2026 · A-10) permissão vem do banco (ACCESS_STORE), não do localStorage, que dava pra editar no navegador
   const allTasks=propTasks||[];
   const active=allTasks.filter(t=>!t.deletedAt);
   // (06/10/2026 · A-26) regra única de "aberto"; rascunho ainda não é demanda pra atraso/sobrecarga
@@ -30722,14 +30728,14 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
     const now=new Date().toISOString();
     const fromCol=INTERNO_COLS.find(c=>c.id===task.status);
     const toCol=INTERNO_COLS.find(c=>c.id===colId);
-    const tl=[...(task.timeline||[]),{type:"status",from:task.status,to:colId,fromLabel:fromCol?.label||task.status,toLabel:toCol?.label||colId,at:now,atFmt:nowFmtInt(),user:effectiveUser.name}];
+    const tl=[...(task.timeline||[]),{type:"status",from:task.status,to:colId,fromLabel:fromCol?.label||task.status,toLabel:toCol?.label||colId,at:now,atFmt:nowFmtInt(),user:pxAutorNome(effectiveUser)}];
     const updated={...task,status:colId,colEnteredAt:now,timeline:tl};
     if(colId==="interno_executado"){
       updated.completedAt = now;
       updated.priority = ""; // Concluída: some com Urgente/Alta/Média/Baixa (não polui visual)
     }
     if(colId==="interno_avaliacao"&&setNotifs){
-      setNotifs(p=>[{id:"ni_"+Date.now(),read:false,type:"interno_avaliacao",icon:"◫",title:"Demanda interna aguarda aprovação",body:`"${task.title}" foi enviada para avaliação.`,user:effectiveUser.name,at:"Agora",category:"interno"},...p]);
+      setNotifs(p=>[{id:"ni_"+Date.now(),read:false,type:"interno_avaliacao",icon:"◫",title:"Demanda interna aguarda aprovação",body:`"${task.title}" foi enviada para avaliação.`,user:pxAutorNome(effectiveUser),at:"Agora",category:"interno"},...p]);
     }
     if(setTasks) setTasks(p=>p.map(t=>t.id===taskId?updated:t));
     if(drawer&&drawer.id===taskId) setDrawer(updated);
@@ -30739,7 +30745,8 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
         payload.completed_at = now;
         payload.priority = "";
       }
-      window._sb.from("tasks").update(payload).eq("id",taskId).then(()=>{}).catch(err=>console.error("moveTaskTo supabase:",err));
+      // (06/10/2026 · A-9) antes o erro do banco era ignorado e a tela mostrava o card movido
+      window._sb.from("tasks").update(payload).eq("id",taskId).then(r=>{ if(r&&r.error){ console.error("moveTaskTo supabase:",r.error); if(typeof pixelsToast!=="undefined") pixelsToast.error("O card não foi movido no servidor: "+r.error.message,6000); } }).catch(err=>console.error("moveTaskTo supabase:",err));
     }
   };
 
@@ -30766,20 +30773,33 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
       else setTasks(p=>p.map(t=>t.id===card.id?card:t));
     }
     if(window._sb){
+      // (06/10/2026 · A-5/A-9) card que já existe: grava SÓ os campos deste formulário (antes zerava
+      // comentários, anexos, tags e seguidores no banco). Card novo: linha completa, como antes.
+      if(!isNew){
+        window._sb.from("tasks").update({
+          title:card.title,status:card.status,
+          assignee:card.assignees?.[0]||"",assignees:card.assignees||[],
+          priority:card.priority,deadline:card.deadline||null,deadline_time:card.deadlineTime||null,
+          description:card.desc||"",checklist:card.checklist||[],
+          timeline:card.timeline||[],client:card.client||"interno",
+          col_entered_at:card.colEnteredAt||null,bioter_unit:card.bioterUnit||"",
+          interno_tipo:card.internoTipo||"outro",sprint_bucket:card.sprintBucket||"proxima",
+        }).eq("id",card.id).then(r=>{ if(r&&r.error){ console.error("saveCard supabase:",r.error); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou no servidor: "+r.error.message,6000); } }).catch(err=>console.error("saveCard supabase:",err));
+      }else
       window._sb.from("tasks").upsert({
         id:card.id,title:card.title,status:card.status,
         assignee:card.assignees?.[0]||"",assignees:card.assignees||[],
         priority:card.priority,deadline:card.deadline||null,deadline_time:card.deadlineTime||null,
         description:card.desc||"",checklist:card.checklist||[],
         timeline:card.timeline||[],client:card.client||"interno",origem:card.origem||"interno",sector:"",
-        created_by:card.createdBy||effectiveUser.id,
+        created_by:card.createdBy||((typeof CURRENT_USER!=="undefined"&&CURRENT_USER.id&&String(CURRENT_USER.id).charAt(0)!=="_")?CURRENT_USER.id:effectiveUser.id),
         col_entered_at:card.colEnteredAt||null,
         tags:[],comments:[],files:[],watchers:[],cover:null,
         ajustar:false,is_alteracao:false,score:null,
         publish_date:null,publish_time:"09:00",bioter_unit:card.bioterUnit||"",
         interno_tipo:card.internoTipo||"outro",
         sprint_bucket:card.sprintBucket||"proxima",
-      },{onConflict:"id"}).then(()=>{}).catch(err=>console.error("saveCard supabase:",err));
+      },{onConflict:"id"}).then(r=>{ if(r&&r.error){ console.error("saveCard supabase:",r.error); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou no servidor: "+r.error.message,6000); } }).catch(err=>console.error("saveCard supabase:",err));
     }
     if(isNew&&(card.origem==="solicitacao_cliente"||card.origem==="portal")&&setNotifs){
       const clientName=card.client&&card.client!=="interno"?CLIENTS.find(c=>c.id===card.client)?.name||card.client:"sem cliente";
@@ -30788,8 +30808,8 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
         id:"radar_"+Date.now(),read:false,
         type:"radar_demanda",icon:"⚡",
         title:`Nova demanda extra — ${clientName}`,
-        body:`${origemLabel} · "${card.title}" foi registrada por ${effectiveUser.name}`,
-        user:effectiveUser.name,at:"Agora",category:"radar",
+        body:`${origemLabel} · "${card.title}" foi registrada por ${pxAutorNome(effectiveUser)}`,
+        user:pxAutorNome(effectiveUser),at:"Agora",category:"radar",
         targetUsers:["vinicius","gustavo"],
       },...p]);
     }
@@ -30805,7 +30825,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
     }
     const now=new Date().toISOString();
     if(setTasks) setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:now}:t));
-    if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("deleteCard supabase:",err));
+    if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(r=>{ if(r&&r.error){ console.error("deleteCard supabase:",r.error); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não excluiu no servidor: "+r.error.message,6000); } }).catch(err=>console.error("deleteCard supabase:",err));
     setOpenCard(null);
     setDrawer(null);
   };
@@ -34675,7 +34695,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     }
     const _dest=(destino==="recebida")?"recebida":"preencher_material";
     const _lbl=(_dest==="recebida")?"Demandas":"Preencher material";
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const _now=new Date().toISOString();
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:_dest,ajustar:false,colEnteredAt:_now,timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:_lbl,from:"demanda",to:_dest,at:_now,atFmt:nowFmt(),user:actor}]}:t));
     pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",
@@ -34690,7 +34710,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
   const markAjustar=(task,comentario)=>{
     if(!isApprover)return;
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const cmtTxt=String(comentario||"").trim();
     const now=new Date().toISOString();
     // Move pra nova coluna "Alteração de copy" + grava comentário do sócio (se houver)
@@ -34826,7 +34846,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
   const pedirRefacaoClaude=async(task,tipo,feedback,lote,alvo)=>{
     if(!isApprover)return;
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const txt=String(feedback||"").trim();
     const ehAbord=tipo==="abordagem";
     const ehAjuste=tipo==="ajuste";
@@ -34986,7 +35006,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   /* Volta a copy do card para uma versão guardada. Não apaga nada: só troca o que está no ar. */
   const restaurarVersaoCopy=(task,idx)=>{
     if(!isApprover)return;
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const now=new Date().toISOString();
     if(setTasks)setTasks(p=>p.map(t=>{
       if(t.id!==task.id)return t;
@@ -35006,7 +35026,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   // ── PAUSAR copy: manda pro status "pausado" (calendário mostra ícone vermelho pausa) ──
   const pausarCopy=(task)=>{
     if(!isApprover)return;
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const now=new Date().toISOString();
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
       ...t,
@@ -35035,7 +35055,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const reprovarCopy=(task,motivo)=>{
     if(!isApprover)return;
     motivo=String(motivo||"").trim();
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const now=new Date().toISOString();
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
       ...t,
@@ -35060,7 +35080,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     if(!isApprover)return;
     const txt=String(texto||"").trim();
     if(!txt)return;
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const now=new Date().toISOString();
     if(setTasks)setTasks(p=>p.map(t=>{
       if(t.id!==task.id)return t;
@@ -35083,7 +35103,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   // move automaticamente pra "demanda" (Avaliação de copys). Sem clique extra.
   const editCopyField=(task,field,value)=>{
     if(!isApprover)return;
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const now=new Date().toISOString();
     const isCopyField=field==="title"||field==="caption"||field==="desc";
     if(setTasks)setTasks(p=>p.map(t=>{
@@ -35119,7 +35139,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      TODA mudança grava linha de timeline com o de/para. */
   const salvarMetaCard=(task,patch,oQue,deTxt,paraTxt,fechar)=>{
     if(!isApprover)return;
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const now=new Date().toISOString();
     if(setTasks)setTasks(p=>p.map(t=>{
       if(t.id!==task.id)return t;
@@ -35157,7 +35177,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const toStatus=isInterna?"interno_aprovado":"aprovado";
     const fromLabel=isInterna?"Concluído para avaliação (Interna)":"Avaliação";
     const toLabel=isInterna?"Aprovadas (Interna)":"Aprovadas";
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
     // FIX 8: usa apenas setTasks (wrapper sincroniza com Supabase via syncTasks).
     // O update direto no _sb era redundante e podia gerar race condition.
@@ -35190,7 +35210,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             approved_by:actor,
           }));
         if(rows.length>0){
-          sb.from("demand_history").upsert(rows,{onConflict:"task_id,assignee_id"})
+          // (06/10/2026 · A-16) histórico IMUTÁVEL de verdade: se o card já tem linha (aprovado antes), não regrava
+          // a data nem o tipo — antes uma reaprovação em outubro tirava o card de setembro, já fechado.
+          sb.from("demand_history").upsert(rows,{onConflict:"task_id,assignee_id",ignoreDuplicates:true})
             .then(({error})=>{if(error)console.warn("[demand_history] upsert:",error.message);})
             .catch(e=>console.warn("[demand_history] exception:",e?.message||e));
         }
@@ -35223,7 +35245,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const rejectPub=(task,motivo)=>{
     if(!isApprover)return;
     motivo=String(motivo||"").trim();
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const toStatus="reprovado";
     const fromLabel=task.status==="aprovacao_final"?"Aprovado pelo cliente":"Avaliação";
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Reprovadas",from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor,note:motivo?("Motivo: "+motivo):undefined}];
@@ -35255,7 +35277,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             approved_by:actor,
           }));
         if(rows.length>0){
-          sb.from("demand_history").upsert(rows,{onConflict:"task_id,assignee_id"})
+          // (06/10/2026 · A-16) histórico IMUTÁVEL de verdade: se o card já tem linha (aprovado antes), não regrava
+          // a data nem o tipo — antes uma reaprovação em outubro tirava o card de setembro, já fechado.
+          sb.from("demand_history").upsert(rows,{onConflict:"task_id,assignee_id",ignoreDuplicates:true})
             .then(({error})=>{if(error)console.warn("[demand_history reprov] upsert:",error.message);})
             .catch(e=>console.warn("[demand_history reprov] exception:",e?.message||e));
         }
@@ -35280,7 +35304,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Ajustes";
     const newFiles=[...(task.files||[]),...(drawingFiles||[]),...(audioFiles||[])];
     const newComments=[...(task.comments||[]),...(comments||[])];
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
     // FIX 8: removido update direto no _sb (era redundante, causava race condition).
     // setTasks já sincroniza com Supabase pelo wrapper syncTasks.
@@ -35319,7 +35343,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const task=copyDirectionTask;
     if(!task)return;
     const direction=(copyDirectionText||"").trim();
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const fromLabel=task.status==="avaliacao"?"Concluídas para avaliação":(task.status==="aprovado"?"Aprovado":task.status);
     const nowIso=new Date().toISOString();
     const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Alteração de copy",from:task.status,to:"alteracao_copy",at:nowIso,atFmt:nowFmt(),user:actor,note:direction?("Devolvido pra Hellen ajustar a copy: "+direction):"Devolvido pra Hellen ajustar a copy (via aprovação)"}];
@@ -35401,7 +35425,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const k=String(current.id); if(_autoMetaFeito.current[k]) return;
     _autoMetaFeito.current[k]=true;
     const patch={}; const tls=[];
-    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const now=new Date().toISOString();
     if(!current.contentType&&!current.content_type&&/foto\s*de\s*obra/i.test(String(current.title||""))){
       patch.contentType="foto";
@@ -37811,15 +37835,17 @@ async function pxAlertasSync(){
   window.__pxAlSyncRodando=true;
   try{
     const desde=new Date(Date.now()-60*86400000).toISOString();
-    const r=await sb.from("px_alertas").select("id,para,de,mensagem,nivel,criado_em,apagado").gte("criado_em",desde).order("criado_em",{ascending:false}).limit(300);
+    const r=await sb.from("px_alertas").select("id,para,de,mensagem,nivel,criado_em,apagado").gte("criado_em",desde).order("criado_em",{ascending:false}).limit(120);
     if(r.error){ if(!window.__pxAlAvisouErro){ window.__pxAlAvisouErro=true; console.warn("[alertas] banco indisponível (rodou a SQL v44?):",r.error.message); } return; }
     const rows=r.data||[];
     const noBanco={}; rows.forEach(function(x){ noBanco[x.id]=x; });
     const local=loadAllAlerts();
     // 1) Sobe os alertas antigos que só existiam neste navegador (criados por mim, ainda ativos)
+    window.__pxAlRecusados=window.__pxAlRecusados||new Set();
     for(const a of local){
-      if(!a||noBanco[a.id]||a._noBanco||a.resolvedAt||a.fromUid!==me) continue;
+      if(!a||noBanco[a.id]||a._noBanco||a.resolvedAt||a.fromUid!==me||window.__pxAlRecusados.has(a.id)) continue;
       const ins=await sb.from("px_alertas").insert({id:a.id,para:a.forUid||"all",de:me,mensagem:String(a.message||""),nivel:a.level||"atencao",criado_em:a.createdAt||new Date().toISOString()});
+      if(ins.error){ window.__pxAlRecusados.add(a.id); console.warn("[alertas] banco recusou o alerta antigo:",ins.error.message); }
       if(!ins.error){ noBanco[a.id]={id:a.id,para:a.forUid||"all",de:me,mensagem:a.message,nivel:a.level,criado_em:a.createdAt,apagado:false}; rows.push(noBanco[a.id]); }
     }
     // 2) Quem já resolveu
@@ -48839,7 +48865,7 @@ function _cardPodeSerResp(u){
     if(publishTime!==task.publishTime)changed.push("horário de publicação");
     if(caption!==task.caption)changed.push("texto da legenda");
     if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))changed.push("checklist");
-    if(changed.length>0)tl.push({type:"edit",label:`Editado: ${changed.join(", ")}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
+    if(changed.length>0)tl.push({type:"edit",label:`Editado: ${changed.join(", ")}`,at:new Date().toISOString(),atFmt:nowFmt(),user:pxAutorNome(user)});
     // ── Validação de datas removida ──
     // Antes: bloqueava salvar quando prazo >= data/hora de publicação (só sócios bypassavam).
     // User pediu pra tirar bloqueio (editores precisavam subir arquivos e ficavam presos).
@@ -48917,10 +48943,41 @@ function _cardPodeSerResp(u){
       const _chegou=(cleanedFiles||[]).some(function(f){ return _ehMat(f)&&!_antes.has(String(f.id||f.url)); });
       if(_chegou){
         _agInfoNext=false;
-        tl.push({type:"edit",label:"Material recebido — pedido ao cliente encerrado",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
+        tl.push({type:"edit",label:"Material recebido — pedido ao cliente encerrado",at:new Date().toISOString(),atFmt:nowFmt(),user:pxAutorNome(user)});
       }
     }
     setAguardandoInfo(_agInfoNext);
+    /* (06/10/2026 · Bloco A-6/A-7) UMA conta só para o que vai ao banco.
+       Antes o estado gravava o mês de pagamento automático e as tags-espelho, e a gravação direta
+       gravava os valores crus: dependia de qual chegava por último (17 cards pagos ficaram sem mês).
+       E os arquivos que outra pessoa subiu com este card aberto sumiam ao salvar. */
+    const _pxTagsFinal=function(t){
+      let nt=isAdmin?(tags||[]):((t&&t.tags)||[]);
+      const _TAG_STORY="Somente story", _TAG_NAOPUB="Não publica";
+      nt=(nt||[]).filter(function(_x){return String(_x)!==_TAG_STORY&&String(_x)!==_TAG_NAOPUB;});
+      if(somenteStory) nt=nt.concat([_TAG_STORY]);
+      if(naoPublica)   nt=nt.concat([_TAG_NAOPUB]);
+      return nt;
+    };
+    const _pxRefMesFinal=function(t){
+      let _m = isAdmin ? (referenceMonth||null) : ((t&&t.referenceMonth)||null);
+      const _tinha = !!(((t&&t.referenceMonth)||"")+"").trim();
+      const _zerou = isAdmin && _tinha && !_m;
+      const _prod = (assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);});
+      if(_prod){ if(!_m && !_zerou && typeof pxMesPagamentoAuto==="function") _m = pxMesPagamentoAuto(); }
+      else _m = null;
+      return _m;
+    };
+    const _pxChaveArq=function(f){ return f?String(f.id||f.url||""):""; };
+    // arquivos que estavam no card quando o modal abriu
+    const _arqAbertura=new Set(((task&&task.files)||[]).map(_pxChaveArq));
+    // final = o que está no modal + o que outra pessoa acrescentou depois que o modal abriu
+    const _removidos=(typeof window!=="undefined"&&window.__pxArqRemovidos)||new Set();
+    const _pxArqFinal=function(atuais){
+      const noModal=new Set((cleanedFiles||[]).map(_pxChaveArq));
+      const deOutros=(atuais||[]).filter(function(f){ const k=_pxChaveArq(f); return k&&!_arqAbertura.has(k)&&!noModal.has(k)&&!_removidos.has(k)&&!_removidos.has(String(f&&f.url||"")); });
+      return (cleanedFiles||[]).concat(deOutros);
+    };
     setTasks(prev=>{
       // Guard: se a task ainda NÃO está em prev (race entre createDraft + openCard + save rápido),
       // insere um objeto base a partir do task prop pra garantir que o map abaixo encontre.
@@ -48942,39 +48999,23 @@ function _cardPodeSerResp(u){
       // adminTag e tags só são salvos se o usuário atual for admin (level 1).
       // Caso contrário, preserva os valores antigos pra evitar que não-admin sobrescreva.
       const nextAdminTag = isAdmin ? (adminTag||"").trim() : (t.adminTag||"");
-      let nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
       // A tag "Somente story" é espelho do campo, não é etiqueta livre: acompanha o
       // interruptor mesmo quando quem salva não é sócio (tags livres seguem só-admin).
-      const _TAG_STORY="Somente story", _TAG_NAOPUB="Não publica";
-      nextTags = (nextTags||[]).filter(function(_x){return String(_x)!==_TAG_STORY&&String(_x)!==_TAG_NAOPUB;});
-      if(somenteStory) nextTags = nextTags.concat([_TAG_STORY]);
-      if(naoPublica)   nextTags = nextTags.concat([_TAG_NAOPUB]);
+      const nextTags = _pxTagsFinal(t);
       // referenceMonth: só pode ser alterado por admin (sócio). Se não-admin salvar, preserva valor antigo.
       // Auto-fill: se responsável é freelancer pago por demanda (André/Maria/Guilherme) E o mês tá vazio,
       // calcula automaticamente (dia>10 vira mês seguinte). Se NÃO tem freelancer, deixa vazio mesmo se o user tentou setar.
       // MAS: se o admin ZEROU manualmente nessa sessão (task tinha valor antes, agora tá vazio), respeita a decisão dele
       // — não força re-preencher. Isso permite tirar mês de pagamento de cards Pausados/Reprovados sem que a automação volte.
-      let _autoRefMonth = isAdmin ? (referenceMonth||null) : (t.referenceMonth||null);
-      const _hadRefMonthBefore = !!(t.referenceMonth||"").trim();
-      const _clearedByAdmin = isAdmin && _hadRefMonthBefore && !_autoRefMonth;
-      // Vazio? preenche sozinho (dia >= 10 → mês seguinte), pra qualquer responsável.
-      // Respeita quando o admin zerou de propósito nesta sessão.
-      // Mês de pagamento só existe quando há EQUIPE DE PRODUÇÃO (pago por demanda) no card.
-      const _temProducao = (assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);});
-      if(_temProducao){
-        if(!_autoRefMonth && !_clearedByAdmin && typeof pxMesPagamentoAuto==="function"){
-          _autoRefMonth = pxMesPagamentoAuto();
-        }
-      } else {
-        _autoRefMonth = null; // sem equipe de produção → sem mês de pagamento
-      }
-      const nextReferenceMonth = _autoRefMonth;
+      // Vazio? preenche sozinho (dia >= 10 → mês seguinte); respeita quando o admin zerou de propósito;
+      // sem equipe de produção (pago por demanda) → sem mês de pagamento. Conta única: _pxRefMesFinal.
+      const nextReferenceMonth = _pxRefMesFinal(t);
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
       const _vpNum = String(valorPers||"").replace(/\./g,"").replace(",",".").trim();
       const nextValorPers = canEditContentType ? ((nextContentType==="folder"&&_vpNum!==""&&!isNaN(Number(_vpNum)))?Number(_vpNum):null) : (t.valorPersonalizado!=null?t.valorPersonalizado:null);
       const _asFinal=somenteStory?["vinicius"]:assignees;   // (25/09/2026) story = só o Vinicius
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:_asFinal[0],assignees:_asFinal,watchers,sector,client,priority,contentType:nextContentType,valorPersonalizado:nextValorPers,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:_asFinal[0],assignees:_asFinal,watchers,sector,client,priority,contentType:nextContentType,valorPersonalizado:nextValorPers,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:_pxArqFinal(t.files),timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -48995,7 +49036,11 @@ function _cardPodeSerResp(u){
         })();
         // UPSERT (nao .update): cria row se ainda nao existe no Supabase (fix criar 2x pelo calendario)
         // Draft do calendario existe so no state local ate o save. .update nao acha, upsert insere.
-        window._sb.from("tasks").upsert({
+        // (06/10/2026 · A-7) antes de gravar, lê os arquivos que estão no banco agora e mantém os de outras pessoas
+        const _sbG=window._sb;
+        _sbG.from("tasks").select("files").eq("id",String(task.id)).maybeSingle().then(function(_rf){
+          const _filesBanco=(_rf&&!_rf.error&&_rf.data&&Array.isArray(_rf.data.files))?_rf.data.files:(_prevTask.files||[]);
+          return _sbG.from("tasks").upsert({
           id: task.id,
           title: formattedTitle,
           // Status: pega do _prevTask (que ja foi atualizado por _moveTo se user trocou coluna via seletor)
@@ -49003,12 +49048,12 @@ function _cardPodeSerResp(u){
           col_entered_at: _prevTask.colEnteredAt || task.colEnteredAt || new Date().toISOString(),
           created_at: _prevTask.createdAt || task.createdAt || null,
           created_by: _prevTask.createdBy || task.createdBy || (user&&user.name) || null,
-          assignee: assignees[0] || "",
-          assignees: assignees || [],
+          assignee: (somenteStory?["vinicius"]:(assignees||[]))[0] || "",      // (06/10/2026 · A-6) igual ao estado
+          assignees: somenteStory?["vinicius"]:(assignees || []),
           watchers: watchers || [],
           priority: priority || null,
           content_type: (typeof canEditContentType!=="undefined" && canEditContentType) ? (contentType||null) : (_prevTask.contentType||null),
-          reference_month: (typeof isAdmin!=="undefined" && isAdmin) ? (referenceMonth||null) : (_prevTask.referenceMonth||null),
+          reference_month: _pxRefMesFinal(_prevTask),   // (06/10/2026 · A-6) mesmo mês automático do estado
           valor_personalizado: (typeof canEditContentType!=="undefined" && canEditContentType)
             ? (function(){ const _ct=contentType||""; const _n=String(valorPers||"").replace(/\./g,"").replace(",",".").trim(); return (_ct==="folder"&&_n!==""&&!isNaN(Number(_n)))?Number(_n):null; })()
             : ((_prevTask.valorPersonalizado!=null&&_prevTask.valorPersonalizado!=="")?Number(_prevTask.valorPersonalizado):null),
@@ -49019,15 +49064,18 @@ function _cardPodeSerResp(u){
           caption: captionFinal || "",
           cover: cover || null,
           bioter_unit: (client==="bioter") ? (bioterUnit||null) : null,
-          files: cleanedFiles || [],
+          files: _pxArqFinal(_filesBanco),
           timeline: _mergedTl,
           comments: _mergedCmts,
           checklist: checklist || [],
           client: client || null,
           sector: sector || null,
           admin_tag: (typeof isAdmin!=="undefined" && isAdmin) ? ((adminTag||"").trim()||null) : (_prevTask.adminTag||null),
-          tags: (typeof isAdmin!=="undefined" && isAdmin) ? (tags||[]) : (_prevTask.tags||[]),
-        }, {onConflict:"id"})
+          tags: _pxTagsFinal(_prevTask),   // (06/10/2026 · A-6) com as tags-espelho, igual ao estado
+          somente_story: !!somenteStory,
+          nao_publica: !!naoPublica,
+        }, {onConflict:"id"});
+        })
           .then(function(r){
             if(r && r.error){
               console.warn("[save persist error]", r.error.message||r.error);
@@ -49069,7 +49117,7 @@ function _cardPodeSerResp(u){
     // Conteúdo: tanto "execucao" quanto "ajustes" vão pra "avaliacao"
     const fromStatus=task.status;
     const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em execução";
-    const newTlEntry={type:"status",fromLabel,toLabel:"Concluídas para avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    const newTlEntry={type:"status",fromLabel,toLabel:"Concluídas para avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:pxAutorNome(user)};
     // Updater functional + merge — preserva alterações concorrentes de outros usuários
     setTasks(prev=>prev.map(t=>{
       if(t.id!==task.id)return t;
@@ -49103,7 +49151,7 @@ function _cardPodeSerResp(u){
     const _eraAjuste=(function(){ const c=(comments||[]).find(function(x){return x&&x.id===cid;}); return !!(c&&String(c.text||"").indexOf("AJUSTE NECESSARIO: ")===0); })();
     const _tl={type:"system",label:_eraAjuste?"Solicitação de ajuste editada":"Comentário editado",at:_nowD.toISOString(),
       atFmt:_nowD.toLocaleDateString("pt-BR")+" "+_nowD.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
-      user:user.name, note:(_antes?("Antes: "+_antes.slice(0,300)+(_antes.length>300?"…":"")+"\n"):"")+"Depois: "+txt.slice(0,300)+(txt.length>300?"…":"")};
+      user:pxAutorNome(user), note:(_antes?("Antes: "+_antes.slice(0,300)+(_antes.length>300?"…":"")+"\n"):"")+"Depois: "+txt.slice(0,300)+(txt.length>300?"…":"")};
     setComments(p=>p.map(_apply));
     setTasks(prev=>prev.map(t=>t.id===task.id?Object.assign({},t,{comments:(t.comments||[]).map(_apply),timeline:[...(t.timeline||[]),_tl]}):t));
     setEditingCmtId(null);setEditingCmtText("");
@@ -49173,7 +49221,7 @@ function _cardPodeSerResp(u){
       const mentionedIds=TEAM.filter(u=>mentions.some(m=>u.name.toLowerCase().startsWith(m)||u.id.toLowerCase().startsWith(m))).map(u=>u.id);
       // ID com randomness — evita colisão se 2 comentários cliquem no mesmo ms
       const cid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`c-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
-      const c={id:cid,user:user.name,av:user.av,color:user.color,text:txt,type:type||"text",time:nowFmt(),mentions:mentionedIds};
+      const c={id:cid,user:pxAutorNome(user),av:user.av,color:user.color,text:txt,type:type||"text",time:nowFmt(),mentions:mentionedIds};
       const newComments=[...comments,c];
       setComments(newComments);
       setComment("");
@@ -49774,7 +49822,7 @@ function _cardPodeSerResp(u){
         // (mostra "Subiu vídeo.mp4" + quem + quando no histórico do card)
         try{
           const kind=mime.startsWith("video/")?"vídeo":mime.startsWith("image/")?"imagem":mime.startsWith("audio/")?"áudio":"arquivo";
-          const entry={type:"file_upload",label:`Subiu ${kind}: ${file.name}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+          const entry={type:"file_upload",label:`Subiu ${kind}: ${file.name}`,at:new Date().toISOString(),atFmt:nowFmt(),user:pxAutorNome(user)};
           setTasks&&setTasks(prev=>prev.map(t=>t.id===task.id?{...t,timeline:[...(t.timeline||[]),entry]}:t));
         }catch(e){console.warn("[uploadOne] timeline log:",e?.message||e);}
       }catch(err){
@@ -49797,7 +49845,7 @@ function _cardPodeSerResp(u){
      Salvar): quem marcou pode fechar o card e a estrategista já vê. Quem/quando ficam na timeline. */
   const _marcarPedidoMaterial=function(v){
     const _now=new Date().toISOString();
-    const _e={type:"edit",label:v?"Material solicitado pro cliente":"Desmarcou: material solicitado pro cliente",at:_now,atFmt:nowFmt(),user:user.name};
+    const _e={type:"edit",label:v?"Material solicitado pro cliente":"Desmarcou: material solicitado pro cliente",at:_now,atFmt:nowFmt(),user:pxAutorNome(user)};
     setAguardandoInfo(!!v);
     if(typeof setTasks==="function"){
       setTasks(function(prev){
@@ -49840,6 +49888,8 @@ function _cardPodeSerResp(u){
       pixelsConfirm("Remover \""+(att.name||"este arquivo")+"\" do card?",{danger:true,okText:"Remover",cancelText:"Cancelar"}).then(function(y){ if(y) removeAttachment(id,true); });
       return;
     }
+    // (06/10/2026) guarda o que foi removido nesta tela, pro Salvar não trazer de volta como "arquivo de outra pessoa"
+    try{ window.__pxArqRemovidos=window.__pxArqRemovidos||new Set(); window.__pxArqRemovidos.add(String(id)); if(att&&att.url) window.__pxArqRemovidos.add(String(att.url)); }catch(_){}
     // Remove do estado IMEDIATAMENTE (UI responsiva)
     setAttachments(p=>p.filter(a=>a.id!==id));
     // ── Histórico: registra exclusão de arquivo na timeline do card ──
@@ -49848,7 +49898,7 @@ function _cardPodeSerResp(u){
       try{
         const mime=att.type||"";
         const kind=mime.startsWith("video/")?"vídeo":mime.startsWith("image/")?"imagem":mime.startsWith("audio/")?"áudio":"arquivo";
-        const entry={type:"file_delete",label:`Removeu ${kind}: ${att.name}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+        const entry={type:"file_delete",label:`Removeu ${kind}: ${att.name}`,at:new Date().toISOString(),atFmt:nowFmt(),user:pxAutorNome(user)};
         setTasks&&setTasks(prev=>prev.map(t=>t.id===task.id?{...t,timeline:[...(t.timeline||[]),entry]}:t));
       }catch(e){console.warn("[removeAttachment] timeline log:",e?.message||e);}
     }
@@ -50160,7 +50210,7 @@ function _cardPodeSerResp(u){
     const cid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`c-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
     const att={id:aid,name:`Áudio ${nowFmt()}.webm`,type:"audio/webm",url:audioURL,size:0,addedAt:nowFmt(),addedBy:user.name};
     setAttachments(p=>[...p,att]);
-    const c={id:cid,user:user.name,av:user.av,color:user.color,text:"",type:"audio",audioUrl:audioURL,time:nowFmt()};
+    const c={id:cid,user:pxAutorNome(user),av:user.av,color:user.color,text:"",type:"audio",audioUrl:audioURL,time:nowFmt()};
     setComments(p=>[...p,c]);
     setAudioURL(null);
   };
@@ -50255,7 +50305,7 @@ function _cardPodeSerResp(u){
   );
 
   const moveToExecucao=()=>{
-    const newEntry={type:"status",fromLabel:"Demandas",toLabel:"Em execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    const newEntry={type:"status",fromLabel:"Demandas",toLabel:"Em execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:pxAutorNome(user)};
     // Updater functional — pega timeline mais recente do `prev` e só anexa a entrada nova
     setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"execucao",colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newEntry]}:t));
     setShowMovePrompt(false);
@@ -50796,7 +50846,7 @@ function _cardPodeSerResp(u){
                   }
                   const _now=new Date().toISOString();
                   const _newCol=(typeof KANBAN_COLS!=="undefined"?KANBAN_COLS:[]).find(function(c){return c.id===newId;});
-                  const _tlEntry={type:"status",fromLabel:col.label,toLabel:_newCol&&_newCol.label||newId,from:task.status,to:newId,at:_now,atFmt:nowFmt(),user:user.name,note:"Movido por "+user.name+": "+col.label+" → "+(_newCol&&_newCol.label||newId)};
+                  const _tlEntry={type:"status",fromLabel:col.label,toLabel:_newCol&&_newCol.label||newId,from:task.status,to:newId,at:_now,atFmt:nowFmt(),user:pxAutorNome(user),note:"Movido por "+user.name+": "+col.label+" → "+(_newCol&&_newCol.label||newId)};
                   // Update local (otimista)
                   setTasks(function(prev){
                     return (prev||[]).map(function(t){
@@ -50926,7 +50976,7 @@ function _cardPodeSerResp(u){
                     ajustar:false,
                     isAlteracao:false,
                     colEnteredAt:_now,
-                    timeline:[...(t.timeline||[]),{type:"edit",label:user.name+" ajustou a copy",at:_now,atFmt:nowFmt(),user:user.name},{type:"status",fromLabel:"Alteração de copy",toLabel:"Copys",from:"alteracao_copy",to:"demanda",at:_now,atFmt:nowFmt(),user:user.name,note:"Reenviada pra Avaliação de copys por "+user.name}]
+                    timeline:[...(t.timeline||[]),{type:"edit",label:user.name+" ajustou a copy",at:_now,atFmt:nowFmt(),user:pxAutorNome(user)},{type:"status",fromLabel:"Alteração de copy",toLabel:"Copys",from:"alteracao_copy",to:"demanda",at:_now,atFmt:nowFmt(),user:pxAutorNome(user),note:"Reenviada pra Avaliação de copys por "+user.name}]
                   }:t));
                   onClose();
                 }}
@@ -55177,7 +55227,8 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
   // Resolve perms for the current user (to pass to CardModal)
   // Deps incluem o user ID — quando muda (view-as ou troca de conta), recalcula
   const dashCardPerms=useMemo(()=>{
-    try{const s=localStorage.getItem("pixels-perms-"+(currentUser||CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch(e){return DEFAULT_PERMS;}
+    // (06/10/2026 · A-10) permissão vem do banco (ACCESS_STORE, atualizado a cada 60 s), não do localStorage
+    try{const s=(typeof ACCESS_STORE!=="undefined")?ACCESS_STORE[(currentUser||CURRENT_USER).id]:null;return s?{...DEFAULT_PERMS,...s}:DEFAULT_PERMS;}catch(e){return DEFAULT_PERMS;}
   },[currentUser?.id]);
   const now=new Date();
   const _h=now.getHours();
@@ -60203,6 +60254,33 @@ export default function AgencyOS(){
   };
 
   // ── Sync para Supabase ────────────────────────────────────
+  /* (06/10/2026 · Bloco A-8) GRAVA SÓ O QUE MUDOU.
+     Antes cada mudança mandava a LINHA INTEIRA do card (POST merge-duplicates): quem salvava
+     por último apagava o que o outro tinha acabado de mudar em outro campo.
+     Agora: card novo (ou rascunho que virou card) → linha inteira, como antes;
+     card que já existe → PATCH só com as colunas que mudaram nesta tela.
+     Se o PATCH não achar a linha (card que nunca chegou ao banco), cai na linha inteira. */
+  const _pxSyncPatch = async (tok, itens) => {
+    const falhas=[];
+    await Promise.all(itens.map(async (it)=>{
+      try{
+        const id=String(it.t.id);
+        const r=await fetch(`${SB_URL}/rest/v1/tasks?id=eq.${encodeURIComponent(id)}`,{
+          method:"PATCH",
+          headers:{...authHeaders(tok),"Prefer":"return=minimal,count=exact"},
+          body:JSON.stringify(it.cols)
+        });
+        if(!r.ok){ let b=""; try{ b=await r.text(); }catch(_){} console.warn("[sync] PATCH "+r.status+":",b.slice(0,300)); falhas.push(it); return; }
+        const cr=r.headers.get("content-range")||"";
+        const tot=cr.indexOf("/")>=0?cr.split("/")[1]:"";
+        if(tot==="0"){
+          const r2=await fetch(`${SB_URL}/rest/v1/tasks`,{method:"POST",headers:{...authHeaders(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify([taskToRow(it.t)])});
+          if(!r2.ok) falhas.push(it);
+        }
+      }catch(e){ console.warn("[sync] PATCH exceção:",e&&e.message); falhas.push(it); }
+    }));
+    return falhas;
+  };
   const syncTasks = async (changedTasks, retry=0) => {
     const tok = tokenRef.current||getToken();
     if(!tok){
@@ -60211,16 +60289,34 @@ export default function AgencyOS(){
       return;
     }
     tokenRef.current = tok;
-    const ids = changedTasks.map(t=>String(t.id));
+    // Aceita o jeito antigo (lista de cards = linha inteira) e o novo ({__px, t, cols})
+    const _itens = (changedTasks||[]).map(x=>(x&&x.__px)?x:{__px:true,t:x,cols:null});
+    const ids = _itens.map(it=>String(it.t.id));
     // Safety: limpa pending após 15s (evita trava permanente)
     const safetyTimer = setTimeout(()=>ids.forEach(id=>pendingRef.current.delete(id)),15000);
     try{
-      const rows = changedTasks.map(taskToRow);
-      const res = await fetch(`${SB_URL}/rest/v1/tasks`,{
+      const _parciais=_itens.filter(it=>it.cols&&Object.keys(it.cols).length>0);
+      const _inteiros=_itens.filter(it=>!it.cols);
+      let _falhasP=[];
+      if(_parciais.length) _falhasP=await _pxSyncPatch(tok,_parciais);
+      const rows = _inteiros.map(it=>taskToRow(it.t));
+      const res = rows.length ? await fetch(`${SB_URL}/rest/v1/tasks`,{
         method:"POST",
         headers:{...authHeaders(tok),"Prefer":"resolution=merge-duplicates,return=minimal"},
         body:JSON.stringify(rows)
-      });
+      }) : {ok:true};
+      if(res.ok&&_falhasP.length){
+        // só os PATCH que falharam voltam pra fila de novas tentativas; os que gravaram saem da espera
+        clearTimeout(safetyTimer);
+        const _okIds=ids.filter(id=>!_falhasP.some(f=>String(f.t.id)===id));
+        setTimeout(()=>_okIds.forEach(id=>pendingRef.current.delete(id)),5000);
+        if(retry<3){ setTimeout(()=>syncTasks(_falhasP,retry+1),1500*Math.pow(2,retry)); }
+        else{
+          _falhasP.forEach(it=>pendingRef.current.delete(String(it.t.id)));
+          if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao salvar no servidor. Clique Salvar novamente.",6000);
+        }
+        return;
+      }
       if(res.ok){
         clearTimeout(safetyTimer);
         setTimeout(()=>ids.forEach(id=>pendingRef.current.delete(id)),5000);
@@ -60250,6 +60346,8 @@ export default function AgencyOS(){
       } else {
         clearTimeout(safetyTimer);
         ids.forEach(id=>pendingRef.current.delete(id));
+        // (06/10/2026 · A-8) antes a falha de internet desistia calada
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexão: a última mudança não foi salva no servidor. Confira a internet e salve de novo.",7000);
       }
     }
   };
@@ -60281,8 +60379,20 @@ export default function AgencyOS(){
         if(!t._isDraft) _allSync.push(t);
       });
       if(_allSync.length>0){
-        _allSync.forEach(t=>pendingRef.current.add(String(t.id)));
-        syncTasks(_allSync);
+        // (06/10/2026 · A-8) card que já existia → só as colunas que mudaram; novo/rascunho → linha inteira
+        const _itens=[];
+        _allSync.forEach(t=>{
+          const old=prev.find(p=>String(p.id)===String(t.id));
+          if(!old||old._isDraft){ _itens.push({__px:true,t,cols:null}); return; }
+          let a0,b0; try{ a0=taskToRow(old); b0=taskToRow(t); }catch(_){ _itens.push({__px:true,t,cols:null}); return; }
+          const cols={};
+          Object.keys(b0).forEach(k=>{ if(k!=="id"&&JSON.stringify(a0[k])!==JSON.stringify(b0[k])) cols[k]=b0[k]; });
+          if(Object.keys(cols).length>0) _itens.push({__px:true,t,cols});
+        });
+        if(_itens.length>0){
+          _itens.forEach(it=>pendingRef.current.add(String(it.t.id)));
+          syncTasks(_itens);
+        }
       }
       clearTimeout(saveTimer.current);
       saveTimer.current=setTimeout(()=>{
@@ -110156,11 +110266,14 @@ function CDemandas({cl, canEdit, selUnit}){
     });
     if(!sb) return;
     try{
-      await sb.from("client_demandas")
+      // (06/10/2026 · A-9) o supabase-js não lança erro: devolve {error}. E sem permissão ele "atualiza" 0 linhas calado.
+      const _r=await sb.from("client_demandas")
         .update({tarefas:d.tarefas, updated_at:new Date().toISOString()})
-        .eq("id",d.id);
+        .eq("id",d.id).select("id");
+      if(_r&&_r.error) throw _r.error;
+      if(_r&&Array.isArray(_r.data)&&_r.data.length===0) throw new Error("não gravou (sem permissão ou a demanda não existe mais)");
     }catch(e){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando tarefas.",4000);
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando tarefas: "+((e&&e.message)||""),5000);
       _carregar();
     }
   };
@@ -110173,11 +110286,14 @@ function CDemandas({cl, canEdit, selUnit}){
     });
     if(!sb) return;
     try{
-      await sb.from("client_demandas")
+      // (06/10/2026 · A-9) o supabase-js não lança erro: devolve {error}. E sem permissão ele "atualiza" 0 linhas calado.
+      const _r=await sb.from("client_demandas")
         .update({status:novo, updated_at:new Date().toISOString()})
-        .eq("id",d.id);
+        .eq("id",d.id).select("id");
+      if(_r&&_r.error) throw _r.error;
+      if(_r&&Array.isArray(_r.data)&&_r.data.length===0) throw new Error("não gravou (sem permissão ou a demanda não existe mais)");
     }catch(e){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status.",4000);
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status: "+((e&&e.message)||""),5000);
       _carregar();
     }
   };
@@ -110240,10 +110356,12 @@ function CDemandas({cl, canEdit, selUnit}){
     }
     if(!ok) return;
     try{
-      await sb.from("client_demandas").delete().eq("id",d.id);
+      const _r=await sb.from("client_demandas").delete().eq("id",d.id).select("id");   // (06/10/2026 · A-9)
+      if(_r&&_r.error) throw _r.error;
+      if(_r&&Array.isArray(_r.data)&&_r.data.length===0) throw new Error("não excluiu (sem permissão)");
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Excluída definitivamente.");
       _carregar();
-    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000); }
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo: "+((e&&e.message)||""),5000); _carregar(); }
   };
 
   /* ── Filtro por unidade (Bioter) ── */
@@ -110561,11 +110679,14 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     });
     if(!sb) return;
     try{
-      await sb.from("client_demandas")
+      // (06/10/2026 · A-9) o supabase-js não lança erro: devolve {error}. E sem permissão ele "atualiza" 0 linhas calado.
+      const _r=await sb.from("client_demandas")
         .update({tarefas:d.tarefas, updated_at:new Date().toISOString()})
-        .eq("id",d.id);
+        .eq("id",d.id).select("id");
+      if(_r&&_r.error) throw _r.error;
+      if(_r&&Array.isArray(_r.data)&&_r.data.length===0) throw new Error("não gravou (sem permissão ou a demanda não existe mais)");
     }catch(e){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando tarefas.",4000);
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando tarefas: "+((e&&e.message)||""),5000);
       _carregar();
     }
   };
@@ -110636,11 +110757,14 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     });
     if(!sb) return;
     try{
-      await sb.from("client_demandas")
+      // (06/10/2026 · A-9) o supabase-js não lança erro: devolve {error}. E sem permissão ele "atualiza" 0 linhas calado.
+      const _r=await sb.from("client_demandas")
         .update({status:novo, updated_at:new Date().toISOString()})
-        .eq("id",d.id);
+        .eq("id",d.id).select("id");
+      if(_r&&_r.error) throw _r.error;
+      if(_r&&Array.isArray(_r.data)&&_r.data.length===0) throw new Error("não gravou (sem permissão ou a demanda não existe mais)");
     }catch(e){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status.",4000);
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status: "+((e&&e.message)||""),5000);
       _carregar();
     }
   };
@@ -110703,10 +110827,12 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     }
     if(!ok) return;
     try{
-      await sb.from("client_demandas").delete().eq("id",d.id);
+      const _r=await sb.from("client_demandas").delete().eq("id",d.id).select("id");   // (06/10/2026 · A-9)
+      if(_r&&_r.error) throw _r.error;
+      if(_r&&Array.isArray(_r.data)&&_r.data.length===0) throw new Error("não excluiu (sem permissão)");
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Excluída definitivamente.");
       _carregar();
-    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000); }
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo: "+((e&&e.message)||""),5000); _carregar(); }
   };
 
   const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[])
