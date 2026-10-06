@@ -132465,11 +132465,17 @@ function _evmUsarEditor(o){
     const corpo = op === "tirar" ? { tirar:true } : { pedido:("motion estilo " + est + (cor ? ", motion na cor " + cor : "") + (extra ? ". " + extra : "")).slice(0, 1500) };
     const r = await _evmChamar(ed.id, corpo, op === "tirar" ? "Tirando o motion…" : "A IA está fazendo o motion graphics… (até 2 minutos)");
     if(r.ok && onRecarregar) onRecarregar(); return r.ok; };
+  /* v56 (06/10/2026): ✨ MELHORAR SÓ ESTA PEÇA (servidor v73: ação "motion" com "peca") — as outras peças não mudam */
+  const pedirIAPeca = async function(i, texto){
+    if(soVer || (ia && ia.estado === "fazendo")) return false;
+    if(alterado){ const ok = await salvar(); if(!ok) return false; }
+    const r = await _evmChamar(ed.id, { peca:i, pedido:String(texto || "").trim().slice(0, 600) }, "A IA está melhorando só esta peça… (até 2 minutos)");
+    if(r.ok && onRecarregar) onRecarregar(); return r.ok; };
   const ctrlFaixa = { on:!!mo, ico:["olho", "olhoFechado"], dica:mo ? "Motion ligado: clique para desligar neste vídeo" : guardado ? "Motion desligado: clique para ligar" : "Este vídeo ainda não tem motion",
     fn:function(){ if(mo) ligar(false); else if(guardado) ligar(true); else _evToast("info", "Este vídeo ainda não tem motion: adicione no menu Motion ou peça ✨ à IA."); } };
   return { p:p, calc:calc, sel:sel, mo:mo, guardado:guardado, itens:itens, fim:fim, ia:ia, kit:kit, tempo:tempo, irPara:irPara, soVer:soVer, ctl:ctl,
     selecionar:selecionar, mudarPeca:mudarPeca, vivo:vivo, fimVivo:ctl.fim, add:add, duplicar:duplicar, apagar:apagar, ligar:ligar, mudarGeral:mudarGeral, arraste:arraste,
-    pedirIA:pedirIA, ctrlFaixa:ctrlFaixa, setSel:setSel, alterado:!!alterado, limparErro:function(){ _evmAvisar(ed.id, null); } };
+    pedirIA:pedirIA, pedirIAPeca:pedirIAPeca, ctrlFaixa:ctrlFaixa, setSel:setSel, alterado:!!alterado, limparErro:function(){ _evmAvisar(ed.id, null); } };
 }
 
 /* prévia pequena de cada estilo (só CSS, na cor do motion) */
@@ -132736,11 +132742,29 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
   </div>;
   return (
     <div style={caixa} data-evm-inspetor={it.modelo}>{cab}{corpo}{lugarCor}
+      <_EvmMelhorarPeca evm={evm} i={i}/>
       <div style={{display:"flex",gap:6,marginTop:14,paddingTop:10,borderTop:"1px solid " + _EVP_COR.linha2}}>
         <button onClick={function(){ evm.irPara(it.t0 + Math.min(0.8, (it.t1 - it.t0) / 2)); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}><_EvpIco n="play" s={13}/>Ver</button>
         <button onClick={function(){ evm.duplicar(i); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}><_EvpIco n="duplicar" s={13}/>Duplicar</button>
         <button onClick={function(){ evm.apagar(i); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px",color:_EV.verm,marginLeft:"auto"})}><_EvpIco n="apagar" s={13}/>Apagar</button></div>
     </div>);
+}
+
+/* v56: caixinha "✨ Melhorar esta peça com IA" no inspetor da peça */
+function _EvmMelhorarPeca({ evm, i }){
+  const [aberto, setAberto] = useState(false), [txt, setTxt] = useState("");
+  const fazendo = !!(evm.ia && evm.ia.estado === "fazendo");
+  return <div data-evm-melhorar="1" style={{marginTop:12,padding:10,borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
+    <button onClick={function(){ setAberto(!aberto); }} disabled={fazendo || evm.soVer} aria-expanded={aberto} style={Object.assign(_evpBtn("primario", !fazendo), {width:"100%",justifyContent:"center",fontSize:12})}>✨ Melhorar esta peça com IA</button>
+    {aberto && !fazendo && <div style={{marginTop:8}}>
+      <textarea value={txt} onChange={function(e){ setTxt(e.target.value); }} onKeyDown={function(e){ e.stopPropagation(); }} rows={2} maxLength={400} aria-label="O que melhorar nesta peça (opcional)"
+        placeholder="Opcional: o que melhorar (ex.: título mais curto e forte; destacar o número; trocar por uma lista)"
+        style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"7px 9px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,fontSize:12,background:_EVP_COR.campo,color:_EVP_COR.ink,resize:"vertical",userSelect:"text"}}/>
+      <div style={{fontSize:11,color:_EVP_COR.sub,margin:"6px 0 8px",lineHeight:1.45}}>Só esta peça muda; as outras ficam exatamente como estão. Leva até 2 minutos, custa uns R$ 3 e vira uma versão nova (dá para voltar).</div>
+      <button onClick={function(){ evm.pedirIAPeca(i, txt).then(function(ok){ if(ok){ setAberto(false); setTxt(""); } }); }} style={Object.assign(_evpBtn("primario"), {width:"100%",justifyContent:"center"})}>✨ Melhorar só esta</button>
+    </div>}
+    {fazendo && <div role="status" style={{marginTop:6,fontSize:11.5,color:_EVP_COR.roxo,fontWeight:700}}>{evm.ia.oque}</div>}
+  </div>;
 }
 
 /* ─── FAIXA MOTION na linha do tempo: um bloco por peça (tarja e selo na sub-linha de baixo, podem ficar junto de outra) ─── */
