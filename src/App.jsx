@@ -113332,7 +113332,8 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
             <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600}}>{g.id==="video"?"roteiro de 60 segundos pra você gravar":g.sub}</span>
           </span>
         </div>
-        <div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(280px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
+        {/* (06/10/2026, Gustavo) barra de rolagem também no topo — mesma SwRolagemDupla (sem eco) da aba da agência */}
+        <SwRolagemDupla mob={isMob} style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(280px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
           {doG.map(function(p){
             const ab=true;   /* (30/09, Gustavo) portal: tudo aberto, sem "Ver tudo" */
             const _copiar=function(){ const t=p.titulo+"\n\n"+String(p.briefing||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim()+(String(p.legenda||"").trim()?("\n\nLegenda:\n"+p.legenda):""); if(typeof _rtCopiar==="function") _rtCopiar(t,"Copiado — é só colar no WhatsApp"); };
@@ -113371,7 +113372,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
               </div>
             </div>;
           })}
-        </div>
+        </SwRolagemDupla>
       </div>;
     })}
     {abaP==="avaliar"&&typeof PortalIdeiasPixels==="function"&&<PortalIdeiasPixels cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!!viewerIsPixels} embutido={true}/>}
@@ -113730,7 +113731,7 @@ if(typeof window!=="undefined"){ window.pxPropostasDaSolicitacao=pxPropostasDaSo
 
 /* (06/10/2026, Gustavo) "barra de rolagem pra direita no topo também — tem só no rodapé da seção".
    Barra fina em cima, sincronizada com a de baixo; some quando tudo cabe. */
-function SwRolagemDupla({children,style,cor}){
+function SwRolagemDupla({children,style,cor,mob}){
   /* v2 (06/10, Gustavo: "na barra de cima fica travando, voltando, queda de fps"): as duas barras se
      corrigiam uma à outra (eco) e a medição rodava a cada render. Agora quem está sendo arrastada manda
      e o eco da outra é ignorado; a cópia vai num requestAnimationFrame; medição só ao redimensionar. */
@@ -113755,7 +113756,7 @@ function SwRolagemDupla({children,style,cor}){
     raf.current=requestAnimationFrame(function(){ if(Math.abs(para.scrollLeft-de.scrollLeft)>=1) para.scrollLeft=de.scrollLeft; });
   };
   return <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
-    {sobra&&<div ref={cimaRef} onScroll={function(){ rolou(cimaRef.current,baixoRef.current); }}
+    {sobra&&!mob&&<div ref={cimaRef} onScroll={function(){ rolou(cimaRef.current,baixoRef.current); }}
       style={{overflowX:"auto",overflowY:"hidden",scrollBehavior:"auto"}}>
       <div style={{width:larg,height:1}}/>
     </div>}
