@@ -114204,6 +114204,16 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           <button type="button" disabled={!!ocupado} onClick={function(){ setRefazendo({id:p.id,pedido:""}); }} style={_mini}>Refazer essa</button>
           {_bl("solic.nova")?<button type="button" disabled={!!ocupado} onClick={function(){ _trocar(p); }} title="Descarta esta e a IA escreve outra ideia do mesmo formato no lugar" style={Object.assign({},_mini,{color:"#b91c1c"})}>{busy?"Trocando…":"Trocar"}</button>
             :<button type="button" disabled={!!ocupado} onClick={function(){ _descartar(p); }} style={Object.assign({},_mini,{color:"#b91c1c"})}>Descartar</button>}
+          {/* (06/10/2026, Gustavo) "Excluir" — tira a proposta da tela sem gerar outra no lugar. Regra do app:
+               nada é apagado do banco — vai pras descartadas (sai do portal também) e dá pra voltar em "Ver descartadas". */}
+          {_bl("solic.nova")&&<button type="button" disabled={!!ocupado} title="Exclui esta proposta (sai da tela e do portal; fica em Ver descartadas)"
+            onClick={function(){
+              const _ok=function(){ _descartar(p); _toast("success","Proposta excluída. Se precisar, ela está em \"Ver descartadas\".",3000); };
+              if(typeof pixelsConfirm==="function") pixelsConfirm("Excluir \u201c"+(p.titulo||"esta proposta")+"\u201d?",{danger:true,okText:"Excluir",cancelText:"Cancelar"}).then(function(y){ if(y) _ok(); });
+              else _ok();
+            }}
+            style={Object.assign({},_mini,{color:"#fff",background:"#b91c1c",borderColor:"#b91c1c",display:"inline-flex",alignItems:"center",gap:5})}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>Excluir</button>}
         </>}
       </div>}
     </div>;
