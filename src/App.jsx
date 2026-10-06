@@ -124702,6 +124702,7 @@ function palco(it, t, im){
   const s = palcoEstado(it, t); if(s <= 0) return false;
   const c = palcoCard(it), rx = lerp(0, c.x, s), ry = lerp(0, c.y, s), rw = lerp(W, c.w, s), rh = lerp(H, c.h, s), raio = c.metade ? 0 : (tech() ? 6 : R.estilo === "impacto" ? 12 : 34) * s;
   const cy = c.metade ? SAFE.topo + 34 : c.y;                                  // v53: topo do texto (na metade, o texto fica em cima do vídeo)
+  const temBaixo = (it.dentro || []).some((d) => d.modelo === "fluxo" || d.modelo === "contadores");    // v56d
   const claro = it.fundo === "claro" && !tech() && R.estilo !== "impacto";     // v33: Impacto é sempre escuro
   if(!SO_CONT){ if(claro) fundoClaro(t, 1); else fundoEscuro(t, 1); }          // v38: medindo a caixa, só o conteúdo
   const escuro = !claro, tinta = escuro ? "#ffffff" : R.marca.tinta, sub = tech() ? R.tom.t3 : escuro ? R.tom.t1 : R.marca.pri;
@@ -124734,7 +124735,7 @@ function palco(it, t, im){
   fT.linhas.forEach((ln, i) => linhaSobe(prog(t, c0 + 0.08 + i * 0.07, 0.55), col.x - 3, yT(i), ln, fT.tam, "Anton", tinta, { esp: 1 }));
   fS.linhas.forEach((ln, i) => linhaSobe(prog(t, c0 + 0.16 + i * 0.07, 0.55), col.x, yS(i), ln, fS.tam, "ISerif", sub, { estilo: "italic" })); }
   if(it.rodape){ const fRo = ajusta(it.rodape, 22, "Inter", W - 2 * SAFE.lado - 8, { peso: 700, esp: 3 }, 1, 0.6);          // v33: rodapé dentro da área segura (era SAFE.base + 92)
-    linhaSobe(prog(t, c0 + 0.5, 0.5), SAFE.lado + 4, c.metade ? c.y - 26 : SAFE.base - 12, it.rodape, fRo.tam, "Inter", escuro ? cT(.75) : "#6b6478", { peso: 700, esp: 3 }); }
+    linhaSobe(prog(t, c0 + 0.5, 0.5), SAFE.lado + 4, c.metade ? cy + (temBaixo ? 362 + 150 + 40 : 330 + 44) : SAFE.base - 12, it.rodape, fRo.tam, "Inter", escuro ? cT(.75) : "#6b6478", { peso: 700, esp: 3 }); }
   if(it.marcaDagua){ const md = EASE(prog(t, c0 + 0.2, 0.9)); X.save(); X.globalAlpha *= 0.06 * md; X.font = fonte(380, "Anton"); X.fillStyle = escuro ? "#ffffff" : R.marca.pri;
     X.fillText(it.marcaDagua, SAFE.lado - 30 - ((t - it.t0) * 14) % 400, c.metade ? c.y - 30 : SAFE.base + 520); X.restore(); }
   (it.dentro || []).forEach((d) => {
@@ -124745,7 +124746,10 @@ function palco(it, t, im){
   });
   X.restore();
   // v53: na metade a legenda fica na faixa roxa logo acima do vídeo (embaixo, até a área do Reels, ela cairia em cima do rosto)
-  const leg = c.metade ? (c.y >= 900 ? { y: c.y - 36, tam: 44, maxW: W - 2 * SAFE.lado } : { y: c.y - 70, tam: 50, maxW: W - 2 * SAFE.lado }) : null;
+  // v56d: com RODAPÉ a faixa de cima fica cheia (no BioTer o rodapé e a legenda se embolaram): a legenda desce para o topo do vídeo.
+  //   it.leg_dy = ajuste à mão (px, o sócio puxa para cima/baixo no inspetor); sempre dentro da área segura.
+  let leg = c.metade ? (it.rodape ? { y: c.y + 78, tam: 46, maxW: W - 2 * SAFE.lado } : c.y >= 900 ? { y: c.y - 36, tam: 44, maxW: W - 2 * SAFE.lado } : { y: c.y - 70, tam: 50, maxW: W - 2 * SAFE.lado }) : null;
+  if(it.leg_dy){ const b0 = leg || { y: ry + rh - 56, tam: 40, maxW: rw - 36, cx: rx + rw / 2 }; leg = Object.assign({}, b0, { y: cl(b0.y + it.leg_dy, SAFE.topo + 40, SAFE.base - 10) }); }
   if(SO_CONT) return { card: { x: rx, y: ry, w: rw, h: rh }, s, leg };              // v38: medindo a caixa do conteúdo
   // o vídeo dentro do quadro
   X.save(); if(s > 0.02){ X.shadowColor = "rgba(0,0,0," + (0.45 * s) + ")"; X.shadowBlur = 60 * s; X.shadowOffsetY = 26 * s; X.fillStyle = "#000"; ret(rx, ry, rw, rh, raio); X.fill(); } X.restore();
@@ -125123,7 +125127,7 @@ API.sobre = function(ctx, t, emPalco){
   R.itens.forEach((it) => { if(it.modelo === "manchete" || it.modelo === "tarja" || it.modelo === "kinetic") des(it); });
   R.itens.forEach((it) => { if(_EVM_ESCONDE.indexOf(it.modelo) >= 0) des(it); });                     // v34: numero, lista, antesdepois, citacao
   R.itens.forEach((it) => { if(it.modelo === "selo") des(it); });                                      // v34: o selo fica por cima
-  if(emPalco && emPalco.s > 0.6) legenda(t, emPalco.leg ? { cx: W / 2, y: emPalco.leg.y, tam: emPalco.leg.tam, maxW: emPalco.leg.maxW }       // v53: palco "metade"
+  if(emPalco && emPalco.s > 0.6) legenda(t, emPalco.leg ? { cx: emPalco.leg.cx || W / 2, y: emPalco.leg.y, tam: emPalco.leg.tam, maxW: emPalco.leg.maxW }       // v53: palco "metade" · v56d: + ajuste à mão
     : { cx: emPalco.card.x + emPalco.card.w / 2, y: emPalco.card.y + emPalco.card.h - 56, tam: 40, maxW: emPalco.card.w - 36 });
   const ctaIt = R.itens.find((i) => i.modelo === "cta"); if(ctaIt) des(ctaIt);
   R.itens.forEach((it) => { if(it.modelo === "palco" && it.entrada === "marca") comPeca(it, false, () => marcaWipe(it.t0, t)); });
@@ -125208,6 +125212,7 @@ function _evmNormalizar(m, total){
     /* v38: lugar arrastado no player (fração da tela; o Estúdio já prende na área segura) e cor só desta peça */
     const dl = function(v){ if(typeof v !== "number" || !isFinite(v)) return 0; return Math.round(Math.max(-0.5, Math.min(0.5, v)) * 1000) / 1000; };
     const pdx = dl(it.dx), pdy = dl(it.dy); if(pdx) o.dx = pdx; if(pdy) o.dy = pdy;
+    if(o.modelo === "palco" && typeof it.leg_dy === "number" && isFinite(it.leg_dy) && Math.round(it.leg_dy)) o.leg_dy = Math.round(Math.max(-400, Math.min(400, it.leg_dy)));   // v56d: legenda do palco puxada à mão (px)
     const pe = (typeof it.esc === "number" && isFinite(it.esc)) ? Math.round(Math.max(0.5, Math.min(2, it.esc)) * 100) / 100 : 1; if(pe !== 1) o.esc = pe;   // v38b: tamanho
     const pc = typeof it.cor === "string" ? it.cor.trim() : ""; if(/^#[0-9a-fA-F]{6}$/.test(pc)) o.cor = pc.toLowerCase();
     if(it.abaixo_rosto === true && _EVM_ESCONDE.indexOf(o.modelo) >= 0) o.abaixo_rosto = true;      // v48 (06/10/2026): C3 — marca do servidor v48 (o cartão desce para baixo do rosto)
@@ -132684,6 +132689,13 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
       gra = ds.find(function(d){ return d.modelo === "grafico"; }), cts = ds.find(function(d){ return d.modelo === "contadores"; });
     const md = function(modelo, fn){ return function(o){ const d = (o.dentro || []).find(function(x){ return x.modelo === modelo; }); if(d) fn(d, o); }; };
     corpo = <div>{C("rotulo", "Linha de cima", 34)}{C("titulo", "Título", 24, true)}{C("sub", "Subtítulo (itálico)", 40)}{C("rodape", "Rodapé", 46)}{C("marcaDagua", "Marca d'água (fundo)", 14)}
+      {sec("Legenda durante o palco")}
+      <div data-evm-legdy="1" style={{display:"flex",gap:6,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+        <button onClick={function(){ evm.mudarPeca(i, function(o){ o.leg_dy = Math.max(-400, (o.leg_dy || 0) - 20); }); }} style={Object.assign(_evpBtn(), {padding:"5px 10px",fontSize:12})}>▲ Subir</button>
+        <button onClick={function(){ evm.mudarPeca(i, function(o){ o.leg_dy = Math.min(400, (o.leg_dy || 0) + 20); }); }} style={Object.assign(_evpBtn(), {padding:"5px 10px",fontSize:12})}>▼ Descer</button>
+        {it.leg_dy ? <button onClick={function(){ evm.mudarPeca(i, function(o){ delete o.leg_dy; }); }} style={Object.assign(_evpBtn(), {padding:"5px 10px",fontSize:12})}>Voltar ao automático</button> : null}
+        <span style={{fontSize:11,color:_EVP_COR.sub}}>{it.leg_dy ? (it.leg_dy > 0 ? "▼ " : "▲ ") + Math.abs(it.leg_dy) + " px" : "automático"}</span>
+      </div>
       {sec("Quadro do vídeo")}{chips([["esquerda", "Vídeo à esquerda"], ["direita", "Vídeo à direita"]], it.lado, function(v){ evm.mudarPeca(i, function(o){ o.lado = v; }); })}
       {chips([["escuro", "Fundo escuro"], ["claro", "Fundo claro"]], it.fundo, function(v){ evm.mudarPeca(i, function(o){ o.fundo = v; }); })}
       <_EvpInterruptor on={it.entrada === "marca"} onChange={function(v){ evm.mudarPeca(i, function(o){ if(v) o.entrada = "marca"; else delete o.entrada; }); }} label="Entrar com a faixa da marca"/>
