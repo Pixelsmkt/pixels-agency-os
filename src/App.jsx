@@ -122365,8 +122365,7 @@ function _evpSfxAuto(p, calc, todos){
     }
     else if(it.modelo === "cta"){ quer("cta", t0 + 0.05);
       if(ok(it.marca_t) && it.marca_t - t0 >= 0.5){ quer("logo", it.marca_t + 0.15); if(tech && it.sub) quer("digitar", it.marca_t - 0.05); } }
-    else if(it.modelo === "numero"){ [0.2, 0.47, 0.74].forEach(function(k){ if(t0 + k < t1 - 0.1) quer("numero", t0 + k); });   // v34 junção: a conta vai de t0+0,2 a t0+1,1 (= _EVM numero)
-      if(t1 - t0 >= 1.2) quer("numero_fim", t0 + 1.1, { padrao:/R\$/.test(String(it.prefixo || "")) ? "moeda" : "pop" }); }
+    else if(it.modelo === "numero"){ if(t1 - t0 >= 0.6) quer("numero_fim", t0 + 0.2, { padrao:/R\$/.test(String(it.prefixo || "")) ? "moeda" : "pop" }); }   // v47: sem contagem (o número já entra pronto)
     else if(it.modelo === "lista"){ const its = (Array.isArray(it.itens) ? it.itens : []).slice(0, 4); let ant = t0;   // v34 junção: sem tempo = a mesma cascata do normalizador
       its.forEach(function(q, i){ let tq = q && dentro(q.t) ? q.t : t0 + Math.min(0.3 + 0.4 * i, (t1 - t0) * (0.1 + 0.6 * i / its.length)); if(tq < ant) tq = ant; ant = tq; if(tq < t1) quer("lista", tq); }); }
     else if(it.modelo === "antesdepois"){ const d = t1 - t0, tD = t0 + Math.min(Math.max(0.7, Math.min(1.6, d * 0.4)), d * 0.5);   // v34 junção: = _EVM antesdepois (o "depois" entra em tD)
@@ -123000,6 +122999,20 @@ async function _evpPrepararReverso(c, url, prog){
   return r.prom;
 }
 
+/* v47 (06/10/2026): texto grande do motion com a pessoa falando na tela (sem apoio em tela cheia por cima) vai ATRÁS dela;
+   realce = 18% de escuro só enquanto um texto grande do motion está na tela (entra e sai em 0,2 s). Desligar: motion.atras / motion.realce = false. */
+const _EVP_MOT_ATRAS = ["kinetic", "citacao"], _EVP_MOT_REALCE = ["kinetic", "citacao", "cta", "manchete"];
+function _evpMotionAtras(calc, t){
+  const m = calc && calc.motion; if(!m || m.atras === false || !Array.isArray(m.itens)) return false;
+  if(!m.itens.some(function(x){ return x && _EVP_MOT_ATRAS.indexOf(x.modelo) >= 0 && t >= x.t0 && t <= x.t1; })) return false;
+  return !(calc.imagens || []).some(function(x){ return x && x.cheia && t >= x.t0 && t < x.t1; });
+}
+function _evpRealceAlfa(m, t){
+  if(!m || m.realce === false || !Array.isArray(m.itens)) return 0;
+  let a = 0; m.itens.forEach(function(x){ if(!x || _EVP_MOT_REALCE.indexOf(x.modelo) < 0 || t < x.t0 || t > x.t1) return;
+    a = Math.max(a, 0.18 * Math.max(0, Math.min(1, (t - x.t0) / 0.2, (x.t1 - t) / 0.2))); });
+  return a;
+}
 /* ─── RECORTAR A PESSOA (IA de segmentação que roda no navegador: MediaPipe, Apache-2.0) ─── */
 const _EVP_MP_SEG = (typeof window !== "undefined" && window.__EVP_MP_SEG) || "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/";
 let _evpSeg = null, _evpSegEstado = "nao", _evpSegResolver = null;
@@ -123905,7 +123918,7 @@ function cta(it, t){
    numero, lista, antesdepois e citacao ficam no meio da tela (cartão + proteção escura atrás) e escondem a legenda; o selo é uma etiqueta e não esconde.
    Todos cabem na área segura: o texto diminui e quebra em linhas (ajusta). Entrada 0,5 s, cascata ≤ 100 ms, saída 0,3 s. ══ */
 const LC = W - 2 * SAFE.lado - 40, YM = 770;                  // largura do cartão (910) e o meio da área do texto (270 a 1250)
-const topoDe = (h) => cl(YM - h / 2, SAFE.topo + 24, SAFE.base - 24 - h);
+const topoDe = (h) => API.rosto ? cl(SAFE.base - 24 - h, SAFE.topo + 24, SAFE.base - 24 - h) : cl(YM - h / 2, SAFE.topo + 24, SAFE.base - 24 - h);   // v47: com rosto na tela o cartão desce (sai da frente do rosto)
 const largura = (cont, pad, min) => Math.min(LC, Math.max(min, Math.ceil(cont) + 2 * pad));     // o cartão abraça o texto (frase curta = cartão menor), centrado
 /* a "roupa" do cartão em cada estilo: Editorial = cartão branco · Tech = HUD escuro · Clean = vidro escuro liso · Impacto = bloco na cor, cantos retos, sombra dura */
 function roupa(){ const e = R.estilo, m = R.marca;
@@ -123955,8 +123968,8 @@ function numero(it, t){
   const yN = y + 70 + aN, yB = yN + 40, yR = yB + (est === "impacto" ? 10 : 6) + 46 + aR;
   X.save(); protege(v.e * (1 - v.s)); entra(v, y + h / 2);
   cartao(x, y, CW, h, rp);
-  const k = 1 - Math.pow(1 - prog(t, it.t0 + 0.2, 0.9), 3), s = numFmt(it.valor * k, dec), tot = largT(s, T);   // conta de 0 ao valor em 0,9 s (desacelera no fim)
-  const pop = 1 + 0.045 * Math.sin(Math.PI * prog(t, it.t0 + 1.08, 0.32));           // assenta com um "tum" quando chega no valor
+  const k = EOUT(prog(t, it.t0 + 0.2, 0.6)), s = fim, tot = largT(s, T);   // v47: o número já entra com o valor final (contar mostrava "+13" antes do "+29"); k = só a barra
+  const pop = 1 + 0.045 * Math.sin(Math.PI * prog(t, it.t0 + 0.2, 0.32));           // assenta com um "tum" quando entra
   const grupo = (dx, dy, cor, o2) => { let q = 540 - tot / 2 + dx;
     if(pre){ const mp = metr(pre, T * kP, "Anton"); texto(q, (simb ? yN - aN / 2 + (mp.a - mp.d) / 2 : yN - aN + mp.a) + dy, pre, T * kP, "Anton", cor, o2); q += wPre(T); }
     q += numTx(q, yN + dy, s, T, "Anton", cor, o2);
@@ -125135,7 +125148,8 @@ function _evpMotor(canvas, o){
       desenharVideo();
       const cAt = calc.clips[_evpClipEm(calc, Math.min(t, Math.max(0, calc.fimCortes - 0.001)))];
       const fundo = cAt && cAt.fundo && cAt.fundo.modo !== "nenhum" ? cAt.fundo : null;
-      const atras = (calc.textos||[]).some(function(x){ return x.atras && t >= x.t0 && t <= x.t1; });
+      const motAtras0 = _evpMotionAtras(calc, t);                                   // v47: texto do motion atrás da pessoa
+      const atras = motAtras0 || (calc.textos||[]).some(function(x){ return x.atras && t >= x.t0 && t <= x.t1; });
       const precisaSeg = (cAt && cAt.masc && cAt.masc.some(function(m){ return m.tipo === "pessoa"; })) || (calc.imagens || []).some(function(x){ return x.camada === "ajuste" && x.forma === "pessoa" && t >= x.t0 && t <= x.t1; });
       if(fundo || atras || precisaSeg){ _evpSegCarregar(); pedirMascara(); }
       if(fundo && recortarPessoa(fundo)){      // troca o fundo: desfocado, cor, imagem ou vídeo (v22)
@@ -125149,15 +125163,18 @@ function _evpMotor(canvas, o){
       desenharLogo();
       const ocultos = calc.faixas && calc.faixas.textos && calc.faixas.textos.oculta;
       desenharImagens();
+      if(evmLiga() && !evmErro){ const aR = _evpRealceAlfa(calc.motion, t); if(aR > 0){ cx.save(); cx.fillStyle = "rgba(0,0,0," + aR.toFixed(3) + ")"; cx.fillRect(0, 0, W, H); cx.restore(); } }   // v47: realce 18% só com texto grande
       // v31: motion — o palco troca a tela pelo fundo + infográfico com o vídeo dentro do quadro (antes dos textos, que ficam por cima)
-      let mo = evmLiga() && !evmErro, emPalco = null;
+      let mo = evmLiga() && !evmErro, emPalco = null, motFeito = false;
+      _EVM.rosto = !(calc.imagens || []).some(function(x){ return x && x.cheia && t >= x.t0 && t < x.t1; });   // v47: rosto na tela = sem apoio em tela cheia
       if(mo){ try{ _EVM.preparar(cx, calc.motion, evmInfo()); emPalco = _EVM.palco(cx, canvas, t); }
         catch(e){ evmFalhou(e); mo = false; } }
       if(!ocultos) (calc.textos||[]).forEach(function(x0){ if(t < x0.t0 || t > x0.t1) return; const x = _evpTrkAplicar(x0, t, calc, proj); const itG = _evgDoTexto(kit, x); desenharTextoItem(x, itG); });   // v26
+      if(mo && motAtras0 && !emPalco && mascara){ try{ _EVM.sobre(cx, t, emPalco); motFeito = true; }catch(e){ evmFalhou(e); } }   // v47: o texto do motion vai ATRÁS da pessoa
       if(atras && !ocultos && !emPalco && recortarPessoa()) cx.drawImage(pessoa, 0, 0);     // a pessoa passa na frente do texto (no palco o vídeo está no quadro)
       let escLeg = false; if(mo){ try{ escLeg = _EVM.escondeLegenda(t); }catch(e){ evmFalhou(e); } }
       if(!o.semLegenda && !escLeg) desenharLegenda();       // exportar sem a legenda gravada (para subir o .srt separado) · v31: o motion esconde a legenda quando ocupa a tela
-      if(mo){ try{ _EVM.sobre(cx, t, emPalco); }catch(e){ evmFalhou(e); } }
+      if(mo && !motFeito){ try{ _EVM.sobre(cx, t, emPalco); }catch(e){ evmFalhou(e); } }
       desenharAbertura();
     }
     if(calc.total > calc.fimCortes && t >= calc.fimCortes - 0.3) desenharFinal(_evClamp((t - (calc.fimCortes - 0.3))/0.3, 0, 1));
