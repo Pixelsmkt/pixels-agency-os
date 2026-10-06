@@ -52310,7 +52310,7 @@ function _cardPodeSerResp(u){
                     </label>}
                   </div>
                   {/* (03/10/2026, Frente D) Enviar para edição (IA) + "editar sozinho quando o material chegar" — só card de vídeo salvo */}
-                  {!task._isDraft&&typeof pxIsVideoTask==="function"&&pxIsVideoTask({...task,contentType:contentType})&&
+                  {!task._isDraft&&_bl("ia.edicao_video")&&typeof pxIsVideoTask==="function"&&pxIsVideoTask({...task,contentType:contentType})&&
                     <PxEnviarEdicaoIA task={task} tags={tags} setTags={setTags} setTasks={setTasks} canEdit={_matCanEdit} temVideo={vidMat.length>0}/>}
                   {totalMat===0&&(<div style={{background:"#ecfeff",border:"1.5px dashed #a5f3fc",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
                     <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #cffafe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#22d3ee",marginBottom:10,boxShadow:"0 1px 3px rgba(8,145,178,0.06)"}}><Ico n="paperclip" size={20}/></div>
@@ -52673,7 +52673,7 @@ function _cardPodeSerResp(u){
 
           {/* HISTÓRICO */}
           {activeTab==="activity"&&<div>
-            <PxGastoIACard taskId={task&&task.id}/>
+            {_bl("ia.gasto")&&<PxGastoIACard taskId={task&&task.id}/>}
             <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:16}}>Histórico de Atividade</div>
             {timeline_all.length===0&&<div style={{textAlign:"center",padding:"24px",color:"#cbd5e1",fontSize:12}}>
               <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={28}/></div>Nenhuma atividade ainda
@@ -53184,7 +53184,7 @@ function _cardPodeSerResp(u){
                 </button>;
               })}
               {/* (05/10/2026) 🤖 Agente de IA: a IA entra na fila e o PC cria a pasta de brutos no Drive (Cliente / mês ou unidade / card · código) */}
-              {typeof pxIsVideoTask==="function"&&pxIsVideoTask({...task,contentType:contentType})&&(function(){
+              {_bl("ia.edicao_video")&&typeof pxIsVideoTask==="function"&&pxIsVideoTask({...task,contentType:contentType})&&(function(){
                 const _TAG=(typeof _PX_TAG_EDICAO_IA!=="undefined")?_PX_TAG_EDICAO_IA:"Edição pela IA";
                 const _tg=Array.isArray(tags)?tags:[];
                 const sel=agenteIAPend||_tg.indexOf(_TAG)>=0;
