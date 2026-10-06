@@ -4060,8 +4060,8 @@ const NAV=[
   {id:"planejamento",icon:"◬", label:"Planejamento"},
   {id:"roteiros",   icon:"roteiros", label:"Conteúdos"}, // (06/10/2026, Gustavo) entre Planejamento e Scripts (antes: fim de ESTRATÉGIA, 29/09)
   {id:"scripts",icon:"◇", label:"Scripts"},
-  {id:"matriz",icon:"▦", label:"Matriz de Responsabilidades"},
   {id:"playbooks",icon:"◇", label:"Playbooks"},
+  {id:"matriz",icon:"▦", label:"Matriz de Responsabilidades"}, // (06/10/2026, Gustavo) último item de ESTRATÉGIA
   // Pixels IA DESLIGADA por enquanto (26/08 — "tá super fraca") — religa descomentando
   //{id:"ia",         icon:"◎", label:"Pixels IA",children:[
   //  {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
