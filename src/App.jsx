@@ -47583,7 +47583,7 @@ async function pxRoteiro60(task, clienteNome){
            :"- Mantenha o assunto e os fatos do briefing: é a mesma ideia, agora falada. O final convida a falar com a empresa, do jeito que a legenda faz.\n")+
     "\nFormato exato da resposta (sem introdução, sem comentário no fim):\n"+
     "Cena 1 — Abertura\n(fala)\n\nCena 2 — Desenvolvimento\n(fala)\n\nCena 3 — Fechamento\n(fala)";
-  const data=await askClaude({model:PX_IA_MODELO,max_tokens:1600,system:sys,messages:[{role:"user",content:usr}]});
+  const data=await askClaude({model:PX_IA_MODELO,max_tokens:1600,system:sys,messages:[{role:"user",content:usr}],origem:"roteiro",card:(task&&task.id)?String(task.id):undefined});
   const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   if(!txt) throw new Error("A IA não devolveu roteiro. Tente de novo.");
   return txt;
@@ -52644,6 +52644,7 @@ function _cardPodeSerResp(u){
 
           {/* HISTÓRICO */}
           {activeTab==="activity"&&<div>
+            <PxGastoIACard taskId={task&&task.id}/>
             <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:16}}>Histórico de Atividade</div>
             {timeline_all.length===0&&<div style={{textAlign:"center",padding:"24px",color:"#cbd5e1",fontSize:12}}>
               <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={28}/></div>Nenhuma atividade ainda
@@ -54345,6 +54346,167 @@ function _pxBtnAcaoSt(bg,rgb,isMobile){
     fontFamily:"'Inter',system-ui,sans-serif",fontWeight:650,fontSize:13,letterSpacing:-.15,cursor:"pointer",whiteSpace:"nowrap",
     display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,lineHeight:1,flex:isMobile?1:undefined,
     boxShadow:"0 1px 2px rgba("+rgb+",0.20), 0 4px 12px rgba("+rgb+",0.22)",transition:"transform .12s, box-shadow .12s"};
+}
+
+
+/* ═══ GASTOS E CRÉDITOS IA (05/10/2026, v41) ═══
+   • PxGastoIACard: no cartão (aba Histórico) — "IA neste cartão: R$ X (copy R$ · vídeo R$)".
+   • PageGastosCreditosIA: Gestão › Gastos e créditos IA (só sócios) — gasto de hoje/mês, teto diário, saldo estimado
+     (lança a recarga e o saldo que aparece na Anthropic/OpenAI), por tela, pessoa, modelo, cartão e as últimas chamadas.
+   Banco: criacao_ia_gasto_card · criacao_ia_creditos · criacao_ia_recarga · criacao_ia_teto (SQL v41). Edge ask-claude v17 / ask-openai v10 registram. */
+const _PX_IA_ORIGENS = { copy_ajuste:"Copy · ajustar", copy_refazer:"Copy · refazer do zero", copy_abordagem:"Copy · outra abordagem",
+  legendas:"Legendas", briefing:"Briefing", pauta:"Sugerir pauta", desrepete:"Legenda sem repetir", traducao:"Tradução (Paraguay)",
+  organizar_ajuste:"Organizar pedido de ajuste", roteiro:"Roteiro de vídeo", brief_campanha:"Brief de campanha", outros:"Outras telas" };
+function _pxIaOrigemNome(o){ return _PX_IA_ORIGENS[o] || String(o || "Outras telas"); }
+function _pxBRL(v){ const n = Number(v) || 0; return "R$ " + n.toFixed(2).replace(".", ","); }
+function _pxUSD(v, casas){ const n = Number(v) || 0; return "US$ " + n.toFixed(casas == null ? 2 : casas).replace(".", ","); }
+
+function PxGastoIACard({ taskId }){
+  const [g, setG] = useState(null);
+  useEffect(function(){
+    if(!taskId || !window._sb) return; let vivo = true;
+    window._sb.rpc("criacao_ia_gasto_card", { p_task:String(taskId) }).then(function(r){ if(vivo && !r.error) setG(r.data || null); }).catch(function(){});
+    return function(){ vivo = false; };
+  }, [taskId]);
+  if(!g || !(Number(g.total_brl) > 0)) return null;
+  const partes = [];
+  if(Number(g.copy_brl) > 0) partes.push("textos " + _pxBRL(g.copy_brl));
+  if(Number(g.video_brl) > 0) partes.push("vídeo " + _pxBRL(g.video_brl));
+  return <div title={(g.por_origem || []).map(function(o){ return _pxIaOrigemNome(o.origem) + ": " + o.n + "× · " + _pxUSD(o.usd, 3); }).join("\n")}
+    style={{marginBottom:14,padding:"8px 12px",borderRadius:10,background:"#f5f3ff",border:"1px solid #ddd6fe",fontSize:12,color:"#4c1d95",fontWeight:600,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    💰 IA neste cartão: <b style={{fontWeight:800}}>{_pxBRL(g.total_brl)}</b>
+    {partes.length > 0 && <span style={{fontWeight:500,color:"#6d28d9"}}>({partes.join(" · ")})</span>}
+  </div>;
+}
+
+function PageGastosCreditosIA({ isMob }){
+  const [d, setD] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [rec, setRec] = useState(0);
+  const [form, setForm] = useState(null);       // {provedor, valor, saldo, obs}
+  const [teto, setTeto] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  useEffect(function(){
+    if(!window._sb) return; let vivo = true; setErro(null);
+    window._sb.rpc("criacao_ia_creditos", { p_dias:30 }).then(function(r){
+      if(!vivo) return;
+      if(r.error){ setErro(/permiss/i.test(r.error.message || "") ? "Só os sócios veem esta tela." : /function|does not exist|schema cache/i.test(r.error.message || "") ? "Falta colar a SQL v41 no Supabase." : "Não consegui carregar agora."); return; }
+      setD(r.data || {}); setTeto(String((r.data && r.data.teto_dia_usd) != null ? r.data.teto_dia_usd : ""));
+    }).catch(function(){ if(vivo) setErro("Não consegui carregar agora."); });
+    return function(){ vivo = false; };
+  }, [rec]);
+  const toast = function(t, m){ if(typeof pixelsToast !== "undefined" && pixelsToast[t]) pixelsToast[t](m, 4000); };
+  const salvarRecarga = async function(){
+    if(!form || salvando) return;
+    const v = Number(String(form.valor || "0").replace(",", ".")) || 0, s = String(form.saldo || "").trim() === "" ? null : Number(String(form.saldo).replace(",", "."));
+    if(s == null && !v){ toast("error", "Informe o valor recarregado ou o saldo que aparece no painel."); return; }
+    setSalvando(true);
+    const r = await window._sb.rpc("criacao_ia_recarga", { p_provedor:form.provedor, p_valor:v, p_saldo:s, p_obs:form.obs || null });
+    setSalvando(false);
+    if(r.error){ toast("error", "Não salvei: " + r.error.message); return; }
+    toast("success", "Lançado."); setForm(null); setRec(function(n){ return n + 1; });
+  };
+  const salvarTeto = async function(){
+    const v = Number(String(teto).replace(",", "."));
+    if(!(v >= 0)){ toast("error", "Teto inválido."); return; }
+    const r = await window._sb.rpc("criacao_ia_teto", { p_usd:v });
+    if(r.error){ toast("error", "Não salvei: " + r.error.message); return; }
+    toast("success", v > 0 ? "Teto diário: " + _pxUSD(v) : "Sem teto diário."); setRec(function(n){ return n + 1; });
+  };
+  const C = { borda:"#e8edf3", sub:"#64748b", texto:"#0f172a", roxo:"#7c3aed", fundo:"#f8fafc" };
+  const card = { background:"#fff", border:"1px solid " + C.borda, borderRadius:14, padding:isMob ? 12 : 16 };
+  const tit = { fontSize:11, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:.7, marginBottom:8 };
+  const num = { fontSize:isMob ? 20 : 24, fontWeight:800, color:C.texto, letterSpacing:-.5 };
+  const btn = { border:"1px solid " + C.borda, background:"#fff", borderRadius:9, padding:"7px 12px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" };
+  const tabela = function(titulo, linhas, cols){
+    return <div style={card}>
+      <div style={tit}>{titulo}</div>
+      {(!linhas || !linhas.length) ? <div style={{fontSize:12,color:C.sub}}>Ainda nada registrado.</div> :
+        <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr>{cols.map(function(c){ return <th key={c.k} style={{textAlign:c.dir ? "right" : "left",padding:"5px 6px",color:C.sub,fontWeight:700,borderBottom:"1px solid " + C.borda,whiteSpace:"nowrap"}}>{c.l}</th>; })}</tr></thead>
+          <tbody>{linhas.map(function(x, i){ return <tr key={i}>{cols.map(function(c){ return <td key={c.k} style={{textAlign:c.dir ? "right" : "left",padding:"5px 6px",borderBottom:"1px solid #f1f5f9",color:C.texto,whiteSpace:c.quebra ? "normal" : "nowrap"}}>{c.f ? c.f(x) : x[c.k]}</td>; })}</tr>; })}</tbody>
+        </table></div>}
+    </div>;
+  };
+  if(erro) return <div style={{padding:24,color:"#b91c1c",fontWeight:600}}>{erro}</div>;
+  if(!d) return <div style={{padding:24,color:C.sub}}>Carregando…</div>;
+  const dolar = Number(d.dolar) || 5;
+  const maxDia = Math.max.apply(null, [0.01].concat((d.por_dia || []).map(function(x){ return Number(x.usd) || 0; })));
+  const sAn = d.saldo && d.saldo.anthropic, sOa = d.saldo && d.saldo.openai;
+  const pctHoje = Number(d.teto_dia_usd) > 0 ? Math.min(100, Math.round(100 * Number(d.hoje_usd) / Number(d.teto_dia_usd))) : null;
+  return <div style={{padding:isMob ? 12 : 24,display:"flex",flexDirection:"column",gap:14,maxWidth:1200}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{fontSize:isMob ? 18 : 22,fontWeight:800,color:C.texto}}>💳 Gastos e créditos IA</div>
+      <span style={{flex:1}}/>
+      <button style={btn} onClick={function(){ setRec(function(n){ return n + 1; }); }}>Atualizar</button>
+      <button style={Object.assign({}, btn, {background:C.roxo,color:"#fff",border:"none"})} onClick={function(){ setForm({ provedor:"anthropic", valor:"", saldo:"", obs:"" }); }}>Lançar recarga / saldo</button>
+    </div>
+    <div style={{fontSize:12,color:C.sub,lineHeight:1.5}}>Copy, ficha, planejamento e roteiro (IA do app) + edição de vídeo. Valores em dólar são os da Anthropic/OpenAI; em reais, com o dólar de {_pxBRL(dolar).replace("R$ ","R$ ")}. Os preços por modelo são estimados — confira com o painel da Anthropic e ajuste em ia_precos_json se precisar.</div>
+
+    {form && <div style={Object.assign({}, card, {borderColor:"#c4b5fd",background:"#faf5ff"})}>
+      <div style={tit}>Lançar recarga ou saldo atual</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+        <label style={{fontSize:12}}>Onde<br/><select value={form.provedor} onChange={function(e){ setForm(Object.assign({}, form, { provedor:e.target.value })); }} style={{padding:6,borderRadius:8,border:"1px solid " + C.borda}}><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI (GPT)</option></select></label>
+        <label style={{fontSize:12}}>Recarreguei (US$)<br/><input value={form.valor} onChange={function(e){ setForm(Object.assign({}, form, { valor:e.target.value })); }} placeholder="0" style={{width:90,padding:6,borderRadius:8,border:"1px solid " + C.borda}}/></label>
+        <label style={{fontSize:12}}>Saldo que aparece agora (US$)<br/><input value={form.saldo} onChange={function(e){ setForm(Object.assign({}, form, { saldo:e.target.value })); }} placeholder="ex.: 14,22" style={{width:110,padding:6,borderRadius:8,border:"1px solid " + C.borda}}/></label>
+        <label style={{fontSize:12,flex:1,minWidth:140}}>Obs.<br/><input value={form.obs} onChange={function(e){ setForm(Object.assign({}, form, { obs:e.target.value })); }} style={{width:"100%",boxSizing:"border-box",padding:6,borderRadius:8,border:"1px solid " + C.borda}}/></label>
+        <button style={Object.assign({}, btn, {background:C.roxo,color:"#fff",border:"none"})} disabled={salvando} onClick={salvarRecarga}>{salvando ? "Salvando…" : "Salvar"}</button>
+        <button style={btn} onClick={function(){ setForm(null); }}>Cancelar</button>
+      </div>
+      <div style={{fontSize:11,color:C.sub,marginTop:6}}>O "saldo estimado" parte do último saldo informado e desconta o que o app registrou depois. Informe o saldo de vez em quando para acertar.</div>
+    </div>}
+
+    <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr 1fr" : "repeat(4, 1fr)",gap:10}}>
+      <div style={card}><div style={tit}>Hoje (IA do app)</div><div style={num}>{_pxUSD(d.hoje_usd)}</div>
+        <div style={{fontSize:12,color:C.sub}}>{_pxBRL(Number(d.hoje_usd) * dolar)}{pctHoje != null ? " · " + pctHoje + "% do teto" : ""}</div>
+        {pctHoje != null && <div style={{height:6,borderRadius:99,background:"#f1f5f9",marginTop:6,overflow:"hidden"}}><div style={{height:"100%",width:pctHoje + "%",background:pctHoje >= 90 ? "#dc2626" : pctHoje >= 70 ? "#f59e0b" : C.roxo}}/></div>}</div>
+      <div style={card}><div style={tit}>Este mês (IA do app)</div><div style={num}>{_pxUSD(d.mes_usd)}</div><div style={{fontSize:12,color:C.sub}}>{_pxBRL(Number(d.mes_usd) * dolar)}</div></div>
+      <div style={card}><div style={tit}>Vídeo este mês</div><div style={num}>{_pxBRL(d.video_mes_brl)}</div><div style={{fontSize:12,color:C.sub}}>teto {_pxBRL(d.video_teto_mes_brl)}/mês</div></div>
+      <div style={card}><div style={tit}>Saldo estimado</div>
+        <div style={{fontSize:13,fontWeight:700,color:C.texto,lineHeight:1.6}}>
+          Anthropic: {sAn ? <span style={{color:Number(sAn.estimado) < 5 ? "#dc2626" : C.texto}}>{_pxUSD(sAn.estimado)}</span> : <span style={{color:C.sub,fontWeight:500}}>informe o saldo</span>}<br/>
+          OpenAI: {sOa ? <span style={{color:Number(sOa.estimado) < 5 ? "#dc2626" : C.texto}}>{_pxUSD(sOa.estimado)}</span> : <span style={{color:C.sub,fontWeight:500}}>informe o saldo</span>}
+        </div>
+        {sAn && Number(sAn.estimado) < 5 && <div style={{fontSize:11,color:"#dc2626",fontWeight:700,marginTop:4}}>⚠️ Recarregue a Anthropic</div>}
+      </div>
+    </div>
+
+    <div style={card}>
+      <div style={tit}>Teto diário da IA do app</div>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12,color:C.sub}}>
+        US$ <input value={teto} onChange={function(e){ setTeto(e.target.value); }} style={{width:80,padding:6,borderRadius:8,border:"1px solid " + C.borda}}/> por dia
+        <button style={btn} onClick={salvarTeto}>Salvar teto</button>
+        <span>Quando passar, a IA do app (copy, ficha, roteiro…) para até o dia seguinte. 0 = sem teto. O vídeo tem teto próprio.</span>
+      </div>
+    </div>
+
+    <div style={card}>
+      <div style={tit}>Últimos 30 dias (IA do app, US$ por dia)</div>
+      <div style={{display:"flex",alignItems:"flex-end",gap:3,height:90}}>
+        {(d.por_dia || []).map(function(x){ const h = Math.max(2, Math.round(80 * (Number(x.usd) || 0) / maxDia));
+          return <div key={x.dia} title={x.dia.split("-").reverse().join("/") + ": " + _pxUSD(x.usd) + " (" + _pxBRL(Number(x.usd) * dolar) + ")"} style={{flex:1,minWidth:4,height:h,background:C.roxo,borderRadius:"3px 3px 0 0",opacity:.85}}/>; })}
+        {!(d.por_dia || []).length && <div style={{fontSize:12,color:C.sub}}>Ainda nada registrado (começa a contar a partir de hoje).</div>}
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr" : "1fr 1fr",gap:10}}>
+      {tabela("Por tela (este mês)", d.por_origem, [{k:"origem",l:"Tela",f:function(x){ return _pxIaOrigemNome(x.origem); }},{k:"n",l:"Chamadas",dir:1},{k:"usd",l:"Gasto",dir:1,f:function(x){ return _pxUSD(x.usd); }}])}
+      {tabela("Por pessoa (este mês)", d.por_pessoa, [{k:"quem",l:"Quem"},{k:"n",l:"Chamadas",dir:1},{k:"usd",l:"Gasto",dir:1,f:function(x){ return _pxUSD(x.usd); }}])}
+      {tabela("Por modelo (este mês)", d.por_modelo, [{k:"modelo",l:"Modelo"},{k:"n",l:"Chamadas",dir:1},{k:"cache_lida",l:"Da memória",dir:1,f:function(x){ const t = (Number(x.ent) || 0) + (Number(x.cache_lida) || 0); return t ? Math.round(100 * (Number(x.cache_lida) || 0) / t) + "%" : "—"; }},{k:"usd",l:"Gasto",dir:1,f:function(x){ return _pxUSD(x.usd); }}])}
+      {tabela("Cartões que mais gastaram (este mês)", d.por_card, [{k:"titulo",l:"Cartão",quebra:1,f:function(x){ return (x.titulo || x.task_id) + (x.cliente ? " · " + x.cliente : ""); }},{k:"n",l:"Chamadas",dir:1},{k:"usd",l:"Gasto",dir:1,f:function(x){ return _pxUSD(x.usd) + " (" + _pxBRL(Number(x.usd) * dolar) + ")"; }}])}
+    </div>
+    {tabela("Últimas chamadas", d.ultimas, [
+      {k:"em",l:"Quando",f:function(x){ try{ return new Date(x.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } }},
+      {k:"quem",l:"Quem",f:function(x){ return x.quem || "sistema"; }},{k:"origem",l:"Tela",f:function(x){ return _pxIaOrigemNome(x.origem); }},
+      {k:"modelo",l:"Modelo"},{k:"cache",l:"Memória",dir:1,f:function(x){ const t = (Number(x.ent) || 0) + (Number(x.cache) || 0); return t ? Math.round(100 * (Number(x.cache) || 0) / t) + "%" : "—"; }},
+      {k:"usd",l:"Custo",dir:1,f:function(x){ return x.erro ? <span style={{color:"#b91c1c"}} title={x.erro}>{x.status || "erro"}</span> : _pxUSD(x.usd, 3); }}])}
+    {tabela("Recargas e saldos lançados", d.recargas, [
+      {k:"em",l:"Quando",f:function(x){ try{ return new Date(x.em).toLocaleDateString("pt-BR"); }catch(_){ return ""; } }},
+      {k:"provedor",l:"Onde",f:function(x){ return x.provedor === "openai" ? "OpenAI" : "Anthropic"; }},
+      {k:"valor_usd",l:"Recarga",dir:1,f:function(x){ return Number(x.valor_usd) ? _pxUSD(x.valor_usd) : "—"; }},
+      {k:"saldo_informado_usd",l:"Saldo informado",dir:1,f:function(x){ return x.saldo_informado_usd != null ? _pxUSD(x.saldo_informado_usd) : "—"; }},
+      {k:"por",l:"Por"},{k:"obs",l:"Obs.",quebra:1}])}
+  </div>;
 }
 
 const DASHBOARD_WIDGETS=[
