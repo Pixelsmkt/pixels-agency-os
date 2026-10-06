@@ -1726,6 +1726,8 @@ const PX_BLOCOS={
       {key:"demandas.card.ia.legenda",   label:"Gerar / Ajustar legenda",   desc:"Botão roxo da aba Legenda (precisa de Editar cards)"},
       {key:"demandas.card.ia.roteiro",   label:"Transformar em roteiro de vídeo", desc:"Roteiro de 90s a partir do briefing"},
       {key:"demandas.card.ia.traducao",  label:"Tradução do briefing (Paraguay)", desc:"Só aparece em cards da Bioter Paraguay"},
+      {key:"demandas.card.ia.edicao_video", label:"Edição com IA no card", desc:"Botão Edição com IA, Agente de IA, pasta de brutos no Drive e Enviar para o cartão. Padrão: fechado (só sócios)", padrao:(u)=>!!(u&&u.level===1)}, // 05/10/2026
+      {key:"demandas.card.ia.gasto",        label:"Ver quanto a IA gastou no card", desc:"\u201cIA neste cartão: R$\u201d na aba Histórico. Padrão: fechado (só sócios)", padrao:(u)=>!!(u&&u.level===1)}, // 05/10/2026
       {perm:"escanear",                  label:"Escanear Storage",          desc:""},
       {perm:"pixelsIA",                  label:"Pixels IA",                 desc:"Assistente de IA na Linha de produção"},
     ]},
@@ -2062,14 +2064,14 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
   {id:"submenus", label:"Sub-menus", itens:[
     {key:"gestao.financeiro",    label:"Financeiro / DRE",     desc:"Padrão: chave Financeiro ou sócio",
       padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
-    {key:"gestao.projecao",      label:"Projeção financeira",  desc:"Padrão: chave Financeiro ou sócio",
-      padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
+    {key:"gestao.projecao",      label:"Projeção financeira",  desc:"Ver e mexer na projeção. Padrão: só sócios", padrao:_pxSocio}, // 05/10/2026: só sócios (antes: chave Financeiro)
     {key:"gestao.operacao",      label:"Operação",             desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.creditos_ia",   label:"Gastos e créditos IA", desc:"Quanto a IA gastou (hoje, mês, por tela, pessoa e cartão), saldo estimado e teto diário. Padrão: só sócios", padrao:_pxSocio}, // 05/10/2026
+    {key:"gestao.crescimento_materiais", label:"Plano de Crescimento › Materiais do negócio", desc:"Ver e mexer nos materiais do negócio (metas, DRE, planejamento) e nos arquivos deles. Padrão: só sócios", padrao:_pxSocio}, // 05/10/2026
     {key:"gestao.crescimento",   label:"Plano de Crescimento", desc:"Materiais do negócio + diagnóstico da IA (gargalos, melhorias, plano 30/60/90). Padrão: só sócios", padrao:_pxSocio}, // 01/10/2026
     {key:"gestao.eficiencia",    label:"Eficiência e Resultados", desc:"Placar da IA: copy e arte aprovadas de primeira, resultados e vídeos lidos pela IA de cada cliente. Padrão: fechado (só sócios)", padrao:false}, // 27/09/2026 (v2 à noite: placar)
     {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
-    {key:"gestao.administrativo",label:"Administrativo",       desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.administrativo",label:"Administrativo",       desc:"Ver e mexer nos dados da empresa (CNPJ, NF, bancos). Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.whatsapp",      label:"WhatsApp Pixels",      desc:"Ver e responder as mensagens do Guvi. Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.whatsapp_gasto",label:"Gasto do WhatsApp",    desc:"Ver quanto a Meta cobra pelas mensagens (quadradinho no WhatsApp Pixels). Padrão: só sócios", padrao:_pxSocio}, // 26/09/2026
     {key:"gestao.armazenamento", label:"Armazenamento",        desc:"Padrão: só sócios", padrao:_pxSocio},
@@ -84412,6 +84414,14 @@ function _prodConfigDefault(){
    `projecao_financeira` › impostos › "Simples Nacional / ISS (8%)").
    O INSS da folha fica de fora — é custo de pessoal, já está no custo-hora. */
 function _prodImpostoDoFinanceiro(){
+  // (05/10/2026) a Projeção é só dos sócios: a equipe recebe SÓ a % de imposto, pela função do banco
+  const sb=window._sb; if(!sb) return Promise.resolve(null);
+  return sb.rpc("fin_imposto_receita_pct").then(function(r){
+    if(r&&!r.error&&r.data&&r.data.pct!=null) return {pct:Number(r.data.pct), origem:String(r.data.origem||"")};
+    return _prodImpostoDoFinanceiroAntigo();
+  }).catch(function(){ return _prodImpostoDoFinanceiroAntigo(); });
+}
+function _prodImpostoDoFinanceiroAntigo(){
   const sb=window._sb; if(!sb) return Promise.resolve(null);
   return sb.from("app_data").select("value").eq("key","projecao_financeira").maybeSingle().then(function(r){
     try{
