@@ -124640,64 +124640,73 @@ function palcoEstado(it, t){
   const marca = it.entrada === "marca", pin = marca ? (t >= it.t0 ? 1 : 0) : EASE(prog(t, it.t0, 0.6)), pout = EASE(prog(t, it.t1 - 0.5, 0.5));
   return Math.min(pin, 1 - pout);
 }
-function palcoCard(it){ const w = 400, h = 712, y = SAFE.topo + 34;     // v33: era 432×768 (contadores e rodapé passavam da área segura)
+/* v53 (06/10/2026): "Opção A" aprovada pelo dono — sem mapa/gráfico, o vídeo fica EMBAIXO ocupando a largura toda (de y 820/900 até o fim) e o
+   texto em cima, na largura toda (antes: quadro de 400 × 712 do lado, "fica ruim de assistir e fica muito espaço sem nada"). */
+function palcoMetade(it){ return !(it.dentro || []).some((d) => d.modelo === "mapa" || d.modelo === "grafico"); }
+function palcoCard(it){
+  if(palcoMetade(it)){ const y = (it.dentro || []).some((d) => d.modelo === "fluxo" || d.modelo === "contadores") ? 900 : 820; return { x: 0, y, w: W, h: H - y, metade: true }; }
+  const w = 400, h = 712, y = SAFE.topo + 34;     // v33: era 432×768 (contadores e rodapé passavam da área segura)
   return { x: it.lado === "esquerda" ? SAFE.lado - 5 : W - SAFE.lado + 5 - w, y, w, h }; }
 function palco(it, t, im){
   const s = palcoEstado(it, t); if(s <= 0) return false;
-  const c = palcoCard(it), rx = lerp(0, c.x, s), ry = lerp(0, c.y, s), rw = lerp(W, c.w, s), rh = lerp(H, c.h, s), raio = (tech() ? 6 : R.estilo === "impacto" ? 12 : 34) * s;
+  const c = palcoCard(it), rx = lerp(0, c.x, s), ry = lerp(0, c.y, s), rw = lerp(W, c.w, s), rh = lerp(H, c.h, s), raio = c.metade ? 0 : (tech() ? 6 : R.estilo === "impacto" ? 12 : 34) * s;
+  const cy = c.metade ? SAFE.topo + 34 : c.y;                                  // v53: topo do texto (na metade, o texto fica em cima do vídeo)
   const claro = it.fundo === "claro" && !tech() && R.estilo !== "impacto";     // v33: Impacto é sempre escuro
   if(!SO_CONT){ if(claro) fundoClaro(t, 1); else fundoEscuro(t, 1); }          // v38: medindo a caixa, só o conteúdo
   const escuro = !claro, tinta = escuro ? "#ffffff" : R.marca.tinta, sub = tech() ? R.tom.t3 : escuro ? R.tom.t1 : R.marca.pri;
   // conteúdo (entra depois que o quadro encolheu) — cascata
   const c0 = it.entrada === "marca" ? it.t0 + 0.05 : it.t0 + 0.38, sai = 1 - EASE(prog(t, it.t1 - 0.62, 0.26));
-  const col = it.lado === "esquerda" ? { x: c.x + c.w + 46, w: W - SAFE.lado - (c.x + c.w + 46) } : { x: SAFE.lado + 4, w: c.x - SAFE.lado - 50 };
+  const col = c.metade ? { x: SAFE.lado + 4, w: W - 2 * SAFE.lado - 8 } : it.lado === "esquerda" ? { x: c.x + c.w + 46, w: W - SAFE.lado - (c.x + c.w + 46) } : { x: SAFE.lado + 4, w: c.x - SAFE.lado - 50 };
   X.save(); X.globalAlpha = sai; X.translate(DX, DY);                          // v38: o conteúdo do palco anda (o quadro do vídeo fica)
-  X.fillStyle = R.marca.logo; X.fillRect(col.x, c.y + 4, 46 * EOUT(prog(t, c0, 0.3)), 6);
-  /* v33: título e frase cabem na coluna (diminui / quebra em 2 linhas); o bloco não passa de c.y + 330 (embaixo vem o mapa ou o gráfico) */
+  X.fillStyle = R.marca.logo; X.fillRect(col.x, cy + 4, 46 * EOUT(prog(t, c0, 0.3)), 6);
+  /* v33: título e frase cabem na coluna (diminui / quebra em 2 linhas); o bloco não passa de cy + 330 (embaixo vem o mapa ou o gráfico) */
   const tT = it.titulo.length > 7 ? 104 : 138, fT0 = ajusta(it.titulo, tT, "Anton", col.w, { esp: 1 }, 2, 0.75);
   const sTx = tech() ? it.sub.toUpperCase() : it.sub, sT = tech() ? 44 : 92;
   const fS0 = sTx ? ajusta(sTx, sT, tech() ? "Mono" : "ISerif", col.w, tech() ? {} : { estilo: "italic" }, 2, 0.7) : { linhas: [], tam: sT };
   const simples = fT0.linhas.length === 1 && fS0.linhas.length <= 1 && fT0.tam === tT && fS0.tam === sT;
-  let fT = fT0, fS = fS0, yT = () => c.y + 200, yS = () => c.y + (tech() ? 266 : 300);
+  let fT = fT0, fS = fS0, yT = () => cy + 200, yS = () => cy + (tech() ? 266 : 300);
   if(!simples){
     const lt = (f) => alt("Anton", f.tam) * (f.linhas.length - 1), ls = (f) => (tech() ? alt("Mono", f.tam) : alt("ISerif", f.tam)) * Math.max(0, f.linhas.length - 1);
     const altura = (a, b) => a.tam * 0.74 + lt(a) + (b.linhas.length ? (tech() ? 66 : 100) * (b.tam / sT) + ls(b) + b.tam * 0.22 : 0);
     const disp = 330 - 96, h0 = altura(fT0, fS0), kk = h0 > disp ? disp / h0 : 1;
     if(kk < 1){ fT = Object.assign({}, fT0, { tam: Math.floor(fT0.tam * kk) }); fS = Object.assign({}, fS0, { tam: Math.floor(fS0.tam * kk) }); }
-    const b0 = c.y + 96 + fT.tam * 0.74; yT = (i) => b0 + i * alt("Anton", fT.tam);
+    const b0 = cy + 96 + fT.tam * 0.74; yT = (i) => b0 + i * alt("Anton", fT.tam);
     const b1 = yT(fT.linhas.length - 1) + (tech() ? 66 : 100) * (fS.tam / sT); yS = (i) => b1 + i * (tech() ? alt("Mono", fS.tam) : alt("ISerif", fS.tam));
   }
   if(tech()){ const fR = ajusta("// " + it.rotulo.replace(/^\d+ \/ /, ""), 21, "Mono", col.w, {}, 1, 0.5);
-    digita(prog(t, c0, 0.5), col.x, c.y + 56, "// " + it.rotulo.replace(/^\d+ \/ /, ""), fR.tam, "Mono", R.tom.t2, { esp: 0 });
+    digita(prog(t, c0, 0.5), col.x, cy + 56, "// " + it.rotulo.replace(/^\d+ \/ /, ""), fR.tam, "Mono", R.tom.t2, { esp: 0 });
     fT.linhas.forEach((ln, i) => linhaSobe(prog(t, c0 + 0.08 + i * 0.07, 0.55), col.x - 3, yT(i), ln, fT.tam, "Anton", tinta, { esp: 1 }));
     fS.linhas.forEach((ln, i) => digita(prog(t, c0 + 0.2 + i * 0.25, 0.6), col.x, yS(i), ln, fS.tam, "Mono", sub, { esp: 0 })); }
   else {
   const fR = ajusta(it.rotulo, 22, "Inter", col.w, { peso: 700, esp: 3.5 }, 1, 0.5);
-  linhaSobe(prog(t, c0, 0.45), col.x, c.y + 56, it.rotulo, fR.tam, "Inter", escuro ? R.tom.t2 : "#6b6478", { peso: 700, esp: 3.5 });
+  linhaSobe(prog(t, c0, 0.45), col.x, cy + 56, it.rotulo, fR.tam, "Inter", escuro ? R.tom.t2 : "#6b6478", { peso: 700, esp: 3.5 });
   fT.linhas.forEach((ln, i) => linhaSobe(prog(t, c0 + 0.08 + i * 0.07, 0.55), col.x - 3, yT(i), ln, fT.tam, "Anton", tinta, { esp: 1 }));
   fS.linhas.forEach((ln, i) => linhaSobe(prog(t, c0 + 0.16 + i * 0.07, 0.55), col.x, yS(i), ln, fS.tam, "ISerif", sub, { estilo: "italic" })); }
   if(it.rodape){ const fRo = ajusta(it.rodape, 22, "Inter", W - 2 * SAFE.lado - 8, { peso: 700, esp: 3 }, 1, 0.6);          // v33: rodapé dentro da área segura (era SAFE.base + 92)
-    linhaSobe(prog(t, c0 + 0.5, 0.5), SAFE.lado + 4, SAFE.base - 12, it.rodape, fRo.tam, "Inter", escuro ? cT(.75) : "#6b6478", { peso: 700, esp: 3 }); }
+    linhaSobe(prog(t, c0 + 0.5, 0.5), SAFE.lado + 4, c.metade ? c.y - 26 : SAFE.base - 12, it.rodape, fRo.tam, "Inter", escuro ? cT(.75) : "#6b6478", { peso: 700, esp: 3 }); }
   if(it.marcaDagua){ const md = EASE(prog(t, c0 + 0.2, 0.9)); X.save(); X.globalAlpha *= 0.06 * md; X.font = fonte(380, "Anton"); X.fillStyle = escuro ? "#ffffff" : R.marca.pri;
-    X.fillText(it.marcaDagua, SAFE.lado - 30 - ((t - it.t0) * 14) % 400, SAFE.base + 520); X.restore(); }
+    X.fillText(it.marcaDagua, SAFE.lado - 30 - ((t - it.t0) * 14) % 400, c.metade ? c.y - 30 : SAFE.base + 520); X.restore(); }
   (it.dentro || []).forEach((d) => {
-    if(d.modelo === "mapa"){ const box = it.lado === "esquerda" ? { x: col.x, y: c.y + 360, w: col.w, h: 580 } : { x: SAFE.lado - 10, y: c.y + 352, w: c.x - SAFE.lado - 20, h: 560 }; mapa(d, t, prog(t, c0 + 0.25, 0.6), box); }
-    if(d.modelo === "contadores"){ const m2 = it.dentro.find((q) => q.modelo === "mapa"); contadores(d, t, prog(t, c0 + 0.6, 0.6), m2, { x: c.x, y: c.y + c.h + 26, w: c.w, h: 170 }); }
-    if(d.modelo === "fluxo") fluxo(d, t, 1, { x: SAFE.lado, y: c.y + c.h + 40, w: W - 2 * SAFE.lado, h: 150 });
-    if(d.modelo === "grafico") grafico(d, t, prog(t, c0 + 0.3, 0.6), { x: col.x, y: c.y + 372, w: col.w, h: 396 });
+    if(d.modelo === "mapa"){ const box = it.lado === "esquerda" ? { x: col.x, y: cy + 360, w: col.w, h: 580 } : { x: SAFE.lado - 10, y: cy + 352, w: c.x - SAFE.lado - 20, h: 560 }; mapa(d, t, prog(t, c0 + 0.25, 0.6), box); }
+    if(d.modelo === "contadores"){ const m2 = it.dentro.find((q) => q.modelo === "mapa"); contadores(d, t, prog(t, c0 + 0.6, 0.6), m2, c.metade ? { x: SAFE.lado, y: cy + 350, w: W - 2 * SAFE.lado, h: 170 } : { x: c.x, y: c.y + c.h + 26, w: c.w, h: 170 }); }
+    if(d.modelo === "fluxo") fluxo(d, t, 1, { x: SAFE.lado, y: c.metade ? cy + 362 : c.y + c.h + 40, w: W - 2 * SAFE.lado, h: 150 });
+    if(d.modelo === "grafico") grafico(d, t, prog(t, c0 + 0.3, 0.6), { x: col.x, y: cy + 372, w: col.w, h: 396 });
   });
   X.restore();
-  if(SO_CONT) return { card: { x: rx, y: ry, w: rw, h: rh }, s };              // v38: medindo a caixa do conteúdo
+  // v53: na metade a legenda fica na faixa roxa logo acima do vídeo (embaixo, até a área do Reels, ela cairia em cima do rosto)
+  const leg = c.metade ? (c.y >= 900 ? { y: c.y - 36, tam: 44, maxW: W - 2 * SAFE.lado } : { y: c.y - 70, tam: 50, maxW: W - 2 * SAFE.lado }) : null;
+  if(SO_CONT) return { card: { x: rx, y: ry, w: rw, h: rh }, s, leg };              // v38: medindo a caixa do conteúdo
   // o vídeo dentro do quadro
   X.save(); if(s > 0.02){ X.shadowColor = "rgba(0,0,0," + (0.45 * s) + ")"; X.shadowBlur = 60 * s; X.shadowOffsetY = 26 * s; X.fillStyle = "#000"; ret(rx, ry, rw, rh, raio); X.fill(); } X.restore();
   desenharVideo(im, rx, ry, rw, rh, raio, lerp(zoomDoCorte(t), 1.12, s), 0.36);
   if(s > 0.02){ X.save(); const g = X.createLinearGradient(rx, ry, rx + rw, ry + rh); g.addColorStop(0, R.marca.logo); g.addColorStop(1, R.marca.pri);
-    X.strokeStyle = g; X.globalAlpha = s; X.lineWidth = tech() ? 2 : 4; ret(rx, ry, rw, rh, raio); X.stroke();
+    if(c.metade){ X.globalAlpha = s; X.fillStyle = g; X.fillRect(rx, ry - 3, rw, tech() ? 3 : 6); }       // v53: na metade, só uma linha da marca em cima
+    else { X.strokeStyle = g; X.globalAlpha = s; X.lineWidth = tech() ? 2 : 4; ret(rx, ry, rw, rh, raio); X.stroke(); }
     if(tech()){ hud(rx - 12, ry - 12, rw + 24, rh + 24, R.marca.logo, 40, 5); const pi = Math.floor(t * 2) % 2; X.fillStyle = "rgba(10,6,20,.75)"; ret(rx + 16, ry + 16, 104, 38, 4); X.fill();
       X.fillStyle = pi ? "#ff4670" : "rgba(255,70,112,.35)"; X.beginPath(); X.arc(rx + 36, ry + 35, 7, 0, Math.PI * 2); X.fill(); texto(rx + 50, ry + 43, "REC", 22, "Mono", "#ffffff"); }
     const cg = X.createLinearGradient(0, ry + rh - 220, 0, ry + rh); cg.addColorStop(0, "rgba(0,0,0,0)"); cg.addColorStop(1, "rgba(0,0,0,.55)"); X.fillStyle = cg; ret(rx, ry, rw, rh, raio); X.fill();
     X.restore(); }
-  return { card: { x: rx, y: ry, w: rw, h: rh }, s };
+  return { card: { x: rx, y: ry, w: rw, h: rh }, s, leg };
 }
 
 /* ── TRANSIÇÃO "MARCA" (faixas com as cores da marca) ── */
@@ -125061,7 +125070,8 @@ API.sobre = function(ctx, t, emPalco){
   R.itens.forEach((it) => { if(it.modelo === "manchete" || it.modelo === "tarja" || it.modelo === "kinetic") des(it); });
   R.itens.forEach((it) => { if(_EVM_ESCONDE.indexOf(it.modelo) >= 0) des(it); });                     // v34: numero, lista, antesdepois, citacao
   R.itens.forEach((it) => { if(it.modelo === "selo") des(it); });                                      // v34: o selo fica por cima
-  if(emPalco && emPalco.s > 0.6) legenda(t, { cx: emPalco.card.x + emPalco.card.w / 2, y: emPalco.card.y + emPalco.card.h - 56, tam: 40, maxW: emPalco.card.w - 36 });
+  if(emPalco && emPalco.s > 0.6) legenda(t, emPalco.leg ? { cx: W / 2, y: emPalco.leg.y, tam: emPalco.leg.tam, maxW: emPalco.leg.maxW }       // v53: palco "metade"
+    : { cx: emPalco.card.x + emPalco.card.w / 2, y: emPalco.card.y + emPalco.card.h - 56, tam: 40, maxW: emPalco.card.w - 36 });
   const ctaIt = R.itens.find((i) => i.modelo === "cta"); if(ctaIt) des(ctaIt);
   R.itens.forEach((it) => { if(it.modelo === "palco" && it.entrada === "marca") comPeca(it, false, () => marcaWipe(it.t0, t)); });
   X.restore();
@@ -125411,7 +125421,12 @@ function _evpMotor(canvas, o){
     const agora = ac.currentTime + 0.06; relIni = agora; tIni = t;
     // fala (cada clipe)
     const envVoz = [];
-    calc.clips.forEach(function(c){
+    /* v53 (06/10/2026): EMENDA SEM BURACO — antes cada pedaço descia a 0 em 20 ms e o próximo subia de 0 em 15 ms: o ruído de fundo
+       (vento, ambiente) sumia e voltava a cada emenda ("tic"/soluço). Agora, quando dois pedaços de fala se encostam, o de antes continua
+       tocando 30 ms além do corte descendo e o de depois sobe nesses mesmos 30 ms (crossfade): o fundo fica contínuo (Livro do editor P-39). */
+    const XF = 0.03;
+    const encosta = function(a, b){ return !!(a && b && !a.off && !b.off && !a.mudo && !b.mudo && _evpClipeFalaNormal(a) && _evpClipeFalaNormal(b) && Math.abs(b.t0 - a.t1) < 0.01); };
+    calc.clips.forEach(function(c, ic){
       if(c.t1 <= t || c.off) return;                                     // v25: desligado não toca
       if(!_evpClipeFalaNormal(c)){ if(c.reverso && !c.mudo) agendarReverso(c, agora); return; }
       const b = vozDe(c); if(!b) return;
@@ -125424,7 +125439,9 @@ function _evpMotor(canvas, o){
       const g = ac.createGain(); const vol = (c.mudo || fv.mudo) ? 0 : (c.vol==null ? 1 : c.vol) * _evpNum(fv.vol, 1) * ganhoCanal("A1");
       const quando = agora + (ini - t), resta = c.t1 - ini;
       // som suave: entrada (fi) e saída (fo) de cada clipe, a partir de onde começa a tocar
-      const fi = Math.max(0.015, _evpNum(c.fi, 0)), fo = Math.min(Math.max(0.02, _evpNum(c.fo, 0)), Math.max(0.02, resta - 0.01));
+      const xIni = encosta(calc.clips[ic - 1], c), xFim = !bt && encosta(c, calc.clips[ic + 1]);                       // v53: crossfade nas emendas
+      const cauda = xFim ? Math.max(0, Math.min(XF, (b.duration - (off + durSrc)) / Math.max(0.01, c.vel))) : 0;
+      const fi = Math.max(xIni ? XF : 0.015, _evpNum(c.fi, 0)), fo = (cauda > 0.005 && !(_evpNum(c.fo, 0) > 0)) ? 0 : Math.min(Math.max(0.02, _evpNum(c.fo, 0)), Math.max(0.02, resta - 0.01));
       const jaTocou = ini - c.t0, g0 = fi > 0.015 ? vol * Math.min(1, jaTocou / fi) : 0;
       if(c.volPts && c.volPts.length){                                                   // v24: volume com pontos ◆
         const fator = (c.mudo || fv.mudo) ? 0 : _evpNum(fv.vol, 1) * ganhoCanal("A1");
@@ -125432,9 +125449,11 @@ function _evpMotor(canvas, o){
           return _evpVolEm(c.volPts, srcT(c, x), c.vol == null ? 1 : c.vol) * fator * kI * kO; });
       } else {
       g.gain.setValueAtTime(g0, quando); if(jaTocou < fi) g.gain.linearRampToValueAtTime(vol, quando + (fi - jaTocou)); else g.gain.linearRampToValueAtTime(vol, quando + 0.015);
-      g.gain.setValueAtTime(vol, Math.max(quando + 0.02, quando + resta - fo)); g.gain.linearRampToValueAtTime(0, quando + resta);
+      if(cauda > 0.005 && _evpNum(c.fo, 0) <= 0){ g.gain.setValueAtTime(vol, Math.max(quando + 0.02, quando + resta)); g.gain.linearRampToValueAtTime(0, quando + resta + cauda); }   // v53: desce DEPOIS do corte, junto com a subida do próximo
+      else { g.gain.setValueAtTime(vol, Math.max(quando + 0.02, quando + resta - Math.max(0.02, fo))); g.gain.linearRampToValueAtTime(0, quando + resta); }
       }
-      s.connect(g); g.connect(vozIn); s.start(quando, off, Math.max(0.01, durSrc)); fontes.push(s);      // v48: a fala passa pelo Vocal Attacker
+      const caudaSrc = (c.volPts && c.volPts.length) || _evpNum(c.fo, 0) > 0 ? 0 : cauda * c.vel;
+      s.connect(g); g.connect(vozIn); s.start(quando, off, Math.max(0.01, durSrc + caudaSrc)); fontes.push(s);      // v48: a fala passa pelo Vocal Attacker · v53: + cauda do crossfade
       if(!c.mudo && vol > 0) envVoz.push([c.t0, c.t1, c.clipe, c.ini, c.vel]);
     });
     // narrações (gravadas ou locução da IA) e som dos vídeos por cima
