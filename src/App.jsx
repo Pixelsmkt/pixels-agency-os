@@ -47855,6 +47855,7 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
   const [ligando,setLigando]=useState(false);
   const [g,setG]=useState(null);          // (05/10/2026 v39) última gravação (exportar) do PC deste card
   const [enviando,setEnviando]=useState(false);
+  const [tentandoDrive,setTentandoDrive]=useState(false);   // (06/10/2026 v48 · F-17)
   const taskId=task&&task.id;
   const ligado=Array.isArray(tags)&&tags.indexOf(_PX_TAG_EDICAO_IA)>=0;
   const lerBr=function(){
@@ -47899,9 +47900,13 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
   /* estado em uma linha */
   let cor="#64748b", txt="", pronto=false;
   const recente=w&&w.concluido_em?(Date.now()-new Date(w.concluido_em).getTime()<6*3600000):true;
+  /* (06/10/2026 v48 · F-7) o erro do PC só aparece se for MAIS NOVO que a edição que está no card
+     (antes: uma edição boa feita depois — e até enviada ao cartão — ficava 6 h atrás de "❌ O PC não conseguiu") */
+  const _pxMs=function(v){ const n=v?new Date(v).getTime():0; return isNaN(n)?0:n; };
+  const edDepoisDoErro=!!(ed&&w&&Math.max(_pxMs(ed.criado_em),_pxMs(ed.atualizado_em),_pxMs(ed.receita_em))>_pxMs(w.concluido_em||w.criado_em));
   if(w&&w.status==="fila"){ cor="#b45309"; txt="⏳ Na fila do PC do escritório"+(w.pc_ligado===false?" · começa quando o PC estiver ligado":""); }
   else if(w&&w.status==="processando"){ cor="#3730a3"; const pg=w.progresso||{}; txt="🖥️ Preparando no PC "+(w.pc||"")+(pg.total?" · cópias leves "+(pg.feitos||0)+" de "+pg.total:pg.msg?" · "+String(pg.msg).slice(0,80):""); }
-  else if(w&&w.status==="erro"&&recente){ cor="#b91c1c"; txt="❌ O PC não conseguiu: "+String(w.erro||"erro").slice(0,160)+" — pode mandar de novo"; }
+  else if(w&&w.status==="erro"&&recente&&!edDepoisDoErro){ cor="#b91c1c"; txt="❌ O PC não conseguiu: "+String(w.erro||"erro").slice(0,160)+" — pode mandar de novo"; }
   else if(ed&&ed.status==="processando"){ cor="#7c3aed"; txt="✨ A IA está montando o vídeo…"; }
   else if(ed&&ed.status==="erro"){ cor="#b91c1c"; txt="❌ A IA não conseguiu: "+String(ed.erro||"erro").slice(0,160); }
   else if(g&&g.status==="fila"){ cor="#b45309"; txt="⏳ Gravação do vídeo final na fila do PC"+(g.pc_ligado===false?" · começa quando o PC estiver ligado":""); }
@@ -47966,6 +47971,12 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
   const btn={border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"};
   /* (05/10/2026 v39) vídeo gravado (prévia) — só entra no card quando clicar em "Enviar para o cartão" */
   const gx=ed&&ed.exportado&&ed.exportado.url&&!ed.exportado.enviado_em&&!(ed.final&&ed.final.url===ed.exportado.url)?ed.exportado:null;
+  /* (06/10/2026 v48 · F-4) selo no topo do card: vídeo gravado que ainda não foi para o cartão (e há quanto tempo) */
+  const gxHoras=gx&&gx.gravado_em?Math.max(0,Math.floor((Date.now()-new Date(gx.gravado_em).getTime())/3600000)):0;
+  const seloGravado=gx?<span title="O vídeo foi gravado, mas o card ainda não tem ele: assista e clique em Enviar para o cartão"
+    style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:800,color:gxHoras>=2?"#9a3412":"#14532d",
+      background:gxHoras>=2?"#ffedd5":"#dcfce7",border:"1px solid "+(gxHoras>=2?"#fdba74":"#86efac"),borderRadius:99,padding:"3px 9px",whiteSpace:"nowrap"}}>
+    🎬 vídeo gravado esperando envio{gxHoras>=1?" · há "+gxHoras+" h":""}</span>:null;
   const enviarCard=async function(){
     if(enviando||!window._sb||!ed) return;
     if(!window.confirm("Enviar este vídeo para o cartão?\n\nEle vira o Arquivo final, o card vai para Avaliação e a IA escreve a legenda do post.")) return;
@@ -47999,6 +48010,19 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
     </div>;
   })():null;
   const _brFmt=function(iso){ try{ const d=new Date(iso); return d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } };
+  /* (06/10/2026 v48 · F-17) "tentar de novo" o vídeo final no Drive (SQL v46: criacao_final_drive_tentar) */
+  const tentarDrive=async function(e){
+    if(e&&e.preventDefault) e.preventDefault();
+    if(tentandoDrive||!window._sb||!ed) return;
+    setTentandoDrive(true);
+    try{
+      const r=await window._sb.rpc("criacao_final_drive_tentar",{p_id:ed.id});
+      if(r.error) throw new Error(/function|does not exist|schema cache/i.test(String(r.error.message||""))?"falta colar a SQL v46 no Supabase":(r.error.message||"erro"));
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Pedido feito: o PC do escritório tenta subir o vídeo final para o Drive de novo em instantes.",4500);
+      setRec(function(n){return n+1;});
+    }catch(err){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui pedir de novo: "+String((err&&err.message)||err),6000); }
+    setTentandoDrive(false);
+  };
   const pastaBox=(ligado||(br&&br.existe))&&br&&!br.semSql?<div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:"#fff",border:"1px solid "+(br.erro?"#fecaca":"#e9d5ff")}}>
     {!br.existe&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:11.5,color:"#4c1d95"}}>
       📁 Este card ainda não tem pasta de brutos no Drive.
@@ -48041,6 +48065,7 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
       {canEdit&&!andando&&<button onClick={function(){ setAbrirInst(!abrirInst); }} style={Object.assign({},btn,{background:"#fff",color:"#7c3aed",border:"1px solid #e9d5ff",padding:"7px 10px"})}>{abrirInst?"Sem instruções":"Instruções…"}</button>}
       {pronto&&<button onClick={_pxIrParaEdicaoVideo} title="Abre Criação › Edição de vídeo; este card aparece na Fila — clique em Estúdio"
         style={Object.assign({},btn,{background:"#fff",color:"#15803d",border:"1px solid #bbf7d0",padding:"7px 10px"})}>Abrir no Estúdio ↗</button>}
+      {seloGravado}
       <span style={{flex:1}}/>
       {ligado&&<span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,color:"#4c1d95",fontWeight:700}}>
         ✨ Edição com IA ligada
@@ -48053,10 +48078,19 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
       placeholder="O que a IA deve fazer (opcional). Ex.: reels de 30 s, legenda grande, começa pela fala do produtor"
       style={{width:"100%",boxSizing:"border-box",marginTop:8,border:"1px solid #e9d5ff",borderRadius:9,padding:"7px 10px",fontSize:11.5,fontFamily:"inherit",resize:"vertical"}}/>}
     {txt&&<div style={{marginTop:6,fontSize:11.5,color:cor,fontWeight:600,lineHeight:1.45}}>{txt}</div>}
-    {ed&&ed.final&&ed.final_drive&&(ed.final_drive.url===ed.final.url)&&<div style={{marginTop:4,fontSize:11,color:ed.final_drive.erro?"#b45309":"#0e7490",fontWeight:600}}>
-      {ed.final_drive.link?<span>📁 Vídeo final também no Drive · <a href={ed.final_drive.pasta||ed.final_drive.link} target="_blank" rel="noopener noreferrer" style={{color:"#0891b2"}}>abrir a pasta "Vídeo final" ↗</a></span>
-        :"⏳ Subindo o vídeo final para o Drive"+(ed.final_drive.tentativas?" (tentativa "+ed.final_drive.tentativas+": "+String(ed.final_drive.erro||"").slice(0,80)+")":"")}
-    </div>}
+    {ed&&ed.final&&ed.final_drive&&(ed.final_drive.url===ed.final.url)&&(function(){
+      /* (06/10/2026 v48 · F-17) depois de 4 falhas o PC desiste: mostra o erro e o botão "tentar de novo" (antes: "⏳ Subindo…" para sempre) */
+      const fd=ed.final_drive;
+      const desistiu=!fd.link&&(fd.desistiu===true||(fd.erro&&Number(fd.tentativas||0)>=4));
+      if(desistiu) return <div style={{marginTop:4,fontSize:11,color:"#b91c1c",fontWeight:600,lineHeight:1.45}}>
+        ❌ O vídeo final não subiu para o Drive ({fd.tentativas||4} tentativas): {String(fd.erro||"erro").slice(0,120)}. O vídeo continua no card.
+        {canEdit&&<span> · <a href="#" onClick={tentarDrive} style={{color:"#7c3aed",fontWeight:700}}>{tentandoDrive?"pedindo…":"tentar de novo"}</a></span>}
+      </div>;
+      return <div style={{marginTop:4,fontSize:11,color:fd.erro?"#b45309":"#0e7490",fontWeight:600}}>
+        {fd.link?<span>📁 Vídeo final também no Drive · <a href={fd.pasta||fd.link} target="_blank" rel="noopener noreferrer" style={{color:"#0891b2"}}>abrir a pasta "Vídeo final" ↗</a></span>
+          :"⏳ Subindo o vídeo final para o Drive"+(fd.tentativas?" (tentativa "+fd.tentativas+" de 4: "+String(fd.erro||"").slice(0,80)+")":"")}
+      </div>;
+    })()}
     {gravadoBox}
     {!txt&&!pastaBox&&!gravadoBox&&<div style={{marginTop:6,fontSize:11,color:"#94a3b8"}}>{temVideo?"A IA edita os vídeos de Materiais seguindo o briefing e o Kit do cliente. Pode fechar o card depois de mandar.":"Anexe os vídeos brutos em Materiais (ou pelo Link de envio / Link do Drive) e mande para a IA."}</div>}
   </div>;
@@ -48120,7 +48154,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         if(f.type && String(f.type).indexOf("video/")===0) return true;
         return typeof _isVideoUrl==="function" && _isVideoUrl(f.url);
       };
-      const finalVid = files.find(function(f){return _isVid(f) && (!f.tipo || f.tipo==="final") && !f.isAnnotation;});
+      const finalVid = files.find(function(f){return _isVid(f) && (!f.tipo || f.tipo==="final") && !f.isAnnotation && !f.substituido_em;})   // (v48 · F-12) o final atual
+                    || files.find(function(f){return _isVid(f) && (!f.tipo || f.tipo==="final") && !f.isAnnotation;});
       if(finalVid) return finalVid.url;
       const anyVid = files.find(function(f){return _isVid(f) && !f.isAnnotation;});
       return anyVid ? anyVid.url : "";
@@ -50281,7 +50316,10 @@ function _cardPodeSerResp(u){
   const isEdt=(a)=>a.tipo==="editavel";   // (01/10/2026) PSD / .prproj — seção "Arquivo editável"
   // Anexos de "Solicitar ajuste" — flag isRef:true (nao confundir com tipo:"referencia" do briefing)
   const isAdj=(a)=>!!a.isRef && a.tipo!=="referencia" && a.tipo!=="material";
-  const isFin=(a)=>(!a.tipo||a.tipo==="final") && !isAdj(a);
+  // (06/10/2026 v48 · F-12) "Enviar para o cartão" marca o vídeo final anterior com substituido_em (SQL v46):
+  // ele sai do "Arquivo final" e aparece em "versões anteriores" (nada é apagado).
+  const isFin=(a)=>(!a.tipo||a.tipo==="final") && !isAdj(a) && !a.substituido_em;
+  const isAnt=(a)=>(!a.tipo||a.tipo==="final") && !isAdj(a) && !!a.substituido_em;
   const imgRef=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isRef(a));
   const imgFin=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a));
   const imgMat=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isMat(a));
@@ -50297,6 +50335,8 @@ function _cardPodeSerResp(u){
   const vidAdj=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isAdj(a));
   const adjItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a);});
   const vidMat=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isMat(a));
+  const antItems=attachments.filter(a=>(isVid(a)||isImg(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isAnt(a))
+    .sort(function(x,y){ return String(y.substituido_em||"").localeCompare(String(x.substituido_em||"")); });   // (v48 · F-12)
   // Compat: agregados (usados em outros lugares — carrossel, contagens)
   const imgAttachments=[...imgRef,...imgFin];
   const vidAttachments=[...vidRef,...vidFin];
@@ -52424,6 +52464,21 @@ function _cardPodeSerResp(u){
                   })()}
                 </div>);
               })()}
+
+              {/* (06/10/2026 v48 · F-12) VERSÕES ANTERIORES do vídeo final — ficam guardadas, mas não contam como Arquivo final */}
+              {antItems.length>0&&_bl("arq.finais")&&<details style={{marginTop:-8,marginBottom:18,border:"1px solid #e2e8f0",borderRadius:12,padding:"8px 12px",background:"#f8fafc"}}>
+                <summary style={{cursor:"pointer",fontSize:12,fontWeight:700,color:"#475569"}}>🗂️ Versões anteriores do vídeo final ({antItems.length}) — substituídas pelo envio mais novo</summary>
+                <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                  {antItems.map(function(a){
+                    const quando=(function(){ try{ return new Date(a.substituido_em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } })();
+                    return <div key={a.id||a.url} style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:11.5,color:"#334155"}}>
+                      <span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{a.name||"vídeo"}</span>
+                      <span style={{color:"#94a3b8"}}>{(a.addedAt?"enviado "+a.addedAt+" · ":"")+(quando?"substituído "+quando:"")}</span>
+                      <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#0891b2",fontWeight:600,textDecoration:"none"}}>▶ assistir</a>
+                    </div>;
+                  })}
+                </div>
+              </details>}
 
               {/* ── SEÇÃO — ANEXOS DE AJUSTES — imagens/videos subidos na hora de Solicitar ajuste ── */}
               {adjItems.length>0&&_bl("arq.ajustes")&&(()=>{
@@ -117235,7 +117290,7 @@ function _EvVozes({ isMob }){
   const nova = function(){ setEd({ id:null, nome:"", voz:"ash", instrucao:"", genero:"", estilo:"", clientes:[], amostra_url:"", amostra_texto:"Olá! Esta é a voz que vai narrar os vídeos. Fala com clareza, no ritmo certo e com a energia da marca." }); };
   const amostra = async function(){
     if(!ed || gerando) return; setGerando(true);
-    try{ const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"voz_amostra", voz:ed.voz, instrucao:ed.instrucao, texto:ed.amostra_texto } });
+    try{ const res = await _evInvocar("video-editar", { body:{ acao:"voz_amostra", voz:ed.voz, instrucao:ed.instrucao, texto:ed.amostra_texto } });
       if(res.error) throw new Error(await _evErroFn(res)); const d = res.data || {}; if(!d.url) throw new Error("a IA não devolveu o áudio");
       setEd(function(a){ return Object.assign({}, a, { amostra_url:d.url }); }); toast("success", "Amostra pronta" + (d.custo_brl != null ? " · R$ " + String(d.custo_brl).replace(".", ",") : "")); }
     catch(e){ toast("error", "Não gerou: " + ((e && e.message) || e)); }
@@ -118320,10 +118375,52 @@ function _evUuid(){ try{ if(window.crypto && crypto.randomUUID) return crypto.ra
 function _evToast(tipo, msg){ try{ if(typeof pixelsToast!=="undefined" && pixelsToast && pixelsToast[tipo]) pixelsToast[tipo](msg); }catch(_){} }
 function _evErroFn(res){ // mensagem de erro de functions.invoke
   return (async function(){
+    if(res && res.error && res.error._traduzido) return res.error.message || "erro";      // v48 (06/10/2026): E2-14 — já veio traduzida pelo _evInvocar
     let msg = (res && res.error && res.error.message) || "erro";
     try{ const j = await res.error.context.json(); if(j && j.erro) msg = j.erro; }catch(_){}
     return msg;
   })();
+}
+/* v48 (06/10/2026): E2-14 — UM invocador para as funções do servidor (as 22 chamadas do Estúdio passam por aqui).
+   · Prazo de ~200 s (a "montar" tem 420 s, o mesmo prazo que o PC usa): passou disso, para de esperar e diz em português.
+   · UMA nova tentativa, 2,5 s depois, só quando o pedido nem chegou (rede) ou o servidor caiu antes de responder (500/502/503 SEM o
+     JSON {erro} da função). Se a própria função respondeu um erro, ou foi 504/546/prazo (ela pode ter terminado o trabalho), NÃO repete:
+     repetir um "ajustar" que já rodou cobraria a IA duas vezes.
+   · Traduz: codigo SEM_CREDITO (video-editar v48), "credit"/"quota"/429, prazo e rede viram frases simples.
+   Devolve { data, error } igual ao functions.invoke; error.message já traduzida (o _evErroFn só repassa). */
+const _EV_PRAZO_IA = 200000;
+function _evErroTraduzir(msg, codigo, status){
+  const m = String(msg || "");
+  if(codigo === "SEM_CREDITO" || /no credits|credit balance|insufficient_quota|billing|sem cr[eé]dito|sem saldo/i.test(m)) return "Sem saldo na IA: avise o Vini para recarregar (Anthropic/OpenAI). Nada foi feito.";
+  if(codigo === "LIMITE_POR_MINUTO" || status === 429 || /rate.?limit|too many requests/i.test(m)) return "A IA está com pedidos demais agora. Espere 1 minuto e tente de novo.";
+  if(codigo === "PRAZO" || codigo === "SEM_TEMPO" || status === 504 || status === 546 || /tempo esgotado|timed? ?out|wall.?clock|WORKER_LIMIT/i.test(m)) return "A IA demorou demais para responder. O pedido pode ter entrado: confira em Versões antes de pedir de novo.";
+  if(/Failed to send|Failed to fetch|NetworkError|Load failed|Relay Error|ERR_NETWORK/i.test(m)) return "Não consegui falar com o servidor. Confira a internet e tente de novo.";
+  if(/non-2xx/i.test(m)) return "O servidor da IA deu erro" + (status ? " (" + status + ")" : "") + ". Tente de novo em instantes.";
+  return m || "erro";
+}
+async function _evInvocar(nome, opcoes, extra){
+  extra = extra || {};
+  const prazo = extra.prazo || (opcoes && opcoes.body && opcoes.body.acao === "montar" ? 420000 : _EV_PRAZO_IA);
+  const uma = async function(){
+    let ac = null, tm = null; try{ ac = typeof AbortController !== "undefined" ? new AbortController() : null; }catch(_){}
+    const estourou = new Promise(function(res){ tm = setTimeout(function(){ try{ if(ac) ac.abort(); }catch(_){} res({ data:null, error:{ message:"tempo esgotado", _prazo:true } }); }, prazo); });
+    try{ const o2 = Object.assign({}, opcoes || {}); if(ac) o2.signal = ac.signal;
+      return await Promise.race([extra.chamar ? extra.chamar(o2) : window._sb.functions.invoke(nome, o2), estourou]); }
+    catch(e){ return { data:null, error:{ message:String((e && e.message) || e), _rede:true } }; }
+    finally{ clearTimeout(tm); }
+  };
+  for(let tent = 0; ; tent++){
+    const res = await uma();
+    if(!res || !res.error) return res || { data:null, error:{ message:"sem resposta", _traduzido:true } };
+    const er = res.error; let msg = er.message || "erro", codigo = "", status = 0, temJson = false;
+    try{ const ctx = er.context; if(ctx){ status = Number(ctx.status) || 0; const j = await (ctx.clone ? ctx.clone() : ctx).json();
+      if(j && typeof j === "object"){ temJson = true; if(j.erro) msg = String(j.erro); if(j.codigo) codigo = String(j.codigo); } } }catch(_){}
+    const rede = !!er._rede || er.name === "FunctionsFetchError" || (!status && /Failed to send|Failed to fetch|NetworkError|Load failed/i.test(msg));
+    const caiu = !temJson && (status === 500 || status === 502 || status === 503);
+    if(tent === 0 && !er._prazo && codigo !== "SEM_CREDITO" && (rede || caiu)){ await new Promise(function(r){ setTimeout(r, 2500); }); continue; }
+    const cod = er._prazo ? "PRAZO" : codigo;
+    return { data:res.data || null, error:{ message:_evErroTraduzir(er._prazo ? "tempo esgotado" : msg, cod, status), codigo:cod, status:status, _traduzido:true } };
+  }
 }
 function _evNorm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,""); }
 function _evClamp(x, a, b){ return x < a ? a : x > b ? b : x; }
@@ -118734,7 +118831,8 @@ async function _evPrepararMontar(t, setPasso, extra){
   setPasso(narrado ? "A IA está gerando a narração e montando os vídeos em cima dela… leva de 1 a 3 minutos. Pode continuar usando o app."
                    : "A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
   const modM = _evpModeloLer();                                   // v20: modelo escolhido no Estúdio (sem = padrão da agência)
-  const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(modM ? { modelo:modM } : {}), ...(extra || {}) } });
+  const res = await _evInvocar("video-editar", { body:{ acao:"montar" } }, { chamar:function(o2){      // v48: E2-14 (prazo de 420 s, nova tentativa, erro traduzido)
+    return window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(modM ? { modelo:modM } : {}), ...(extra || {}) }, signal:o2.signal }); } });
   if(res.error) throw new Error(await _evErroFn(res));
   return res.data || {};
 }
@@ -118782,7 +118880,7 @@ function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = d
     .catch(function(e){ _evToast("error", "Não salvou: " + ((e && e.message) || e)); setLigado(!v); }); };
   const escrever = async function(){
     if(ocupado) return; setOcupado("texto");
-    try{ const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"narracao_texto", task_id:t.id, segundos:60, atual:texto } });
+    try{ const res = await _evInvocar("video-editar", { body:{ acao:"narracao_texto", task_id:t.id, segundos:60, atual:texto } });
       if(res.error) throw new Error(await _evErroFn(res)); const d = res.data || {}; if(!d.texto) throw new Error("a IA não devolveu o texto");
       setTexto(d.texto); await salvar({ ligado:true, texto:d.texto, voz_id:vozId || null }); setLigado(true);
       _evToast("success", "Texto pronto" + (d.custo_brl != null ? " · R$ " + String(d.custo_brl).replace(".", ",") : "") + ". Confira e clique em Gerar a voz."); }
@@ -118794,7 +118892,7 @@ function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = d
     if(tx.length > 1500){ _evToast("warning", "Máximo de 1.500 letras."); return; }
     setOcupado("voz");
     try{ await salvar({ ligado:true, texto:tx, voz_id:vozId || null }); setLigado(true);
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"narracao_card", task_id:t.id } });
+      const res = await _evInvocar("video-editar", { body:{ acao:"narracao_card", task_id:t.id } });
       if(res.error) throw new Error(await _evErroFn(res)); const d = res.data || {}; if(!d.narracao) throw new Error("a IA não devolveu a voz");
       setNc(d.narracao); _evToast("success", "Voz pronta (" + _evTempo(Number(d.narracao.dur) || 0).replace(/\.\d$/, "") + ")" + (d.custo_brl != null ? " · R$ " + String(d.custo_brl).replace(".", ",") : "") + ". A edição vai usar esta voz."); }
     catch(e){ _evToast("error", "Não gerou a voz: " + ((e && e.message) || e)); }
@@ -118805,7 +118903,7 @@ function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = d
   const gerarAmostra = async function(){
     if(!vozSel || ocupado) return; setOcupado("amostra");
     try{ const txA = vozSel.amostra_texto || "Olá! Esta é a voz que vai narrar os vídeos. Fala com clareza, no ritmo certo e com a energia da marca.";
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"voz_amostra", voz:vozSel.voz, instrucao:vozSel.instrucao || "", texto:txA } });
+      const res = await _evInvocar("video-editar", { body:{ acao:"voz_amostra", voz:vozSel.voz, instrucao:vozSel.instrucao || "", texto:txA } });
       if(res.error) throw new Error(await _evErroFn(res)); const u = res.data && res.data.url; if(!u) throw new Error("sem áudio");
       setAmostras(function(a){ const o = Object.assign({}, a); o[vozSel.id] = u; return o; });
       window._sb.rpc("criacao_voz_salvar", { p_id:vozSel.id, p_dados:{ nome:vozSel.nome, voz:vozSel.voz, instrucao:vozSel.instrucao || "", genero:vozSel.genero || "", estilo:vozSel.estilo || "",
@@ -119056,10 +119154,11 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
   const [rec, setRec] = useState(0);
   const [pedido, setPedido] = useState("");
   const [ajustando, setAjustando] = useState(false);
+  const [erroAjuste, setErroAjuste] = useState(null);   // v48 (06/10/2026): E2-3 — o erro do "Ajustar com IA" aparece DENTRO do assistente (o editor em tela cheia cobria o de fora)
   const [exp, setExp] = useState(null);       // { fase, pct, msg, url }
   const soVer = !!isMob;
 
-  useEffect(function(){ setEd(null); setErro(null); setPedido(""); setExp(null); }, [taskId]);
+  useEffect(function(){ setEd(null); setErro(null); setPedido(""); setExp(null); setErroAjuste(null); }, [taskId]);
   useEffect(function(){
     if(!window._sb || !t) return; let vivo = true;
     window._sb.rpc("criacao_edicao", { p_task:t.id }).then(function(r){
@@ -119128,12 +119227,15 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
 
   const ajustar = async function(texto, extra){
     const p = String(typeof texto === "string" ? texto : pedido).trim(); if(!p || !ed || !ed.id || ajustando) return false;
-    setAjustando(true); setErro(null); let ok = false;
+    setAjustando(true); setErro(null); setErroAjuste(null); let ok = false;
     try{
-      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:p }, extra && typeof extra === "object" ? extra : {}) });   // v13: correções da linha do tempo
+      const res = await _evInvocar("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:p }, extra && typeof extra === "object" ? extra : {}) });   // v13: correções da linha do tempo
       if(res.error) throw new Error(await _evErroFn(res));
       setPedido(""); _evToast("success", "Ajuste feito — versão " + ((res.data && res.data.versao) || "nova") + (res.data && res.data.aviso_modelo ? " · " + res.data.aviso_modelo : "")); setRec(function(n){ return n+1; }); ok = true;
-    }catch(e){ setErro(String((e && e.message) || e)); }
+    }catch(e){       // v48 (06/10/2026): E2-3 — toast + aviso dentro do assistente (antes ia só para o setErro de fora, escondido atrás do editor)
+      const msg = String((e && e.message) || e);
+      setErroAjuste({ msg:msg, pedido:p, em:Date.now() }); _evToast("error", "O ajuste com IA não saiu: " + msg);
+    }
     setAjustando(false);
     return ok;
   };
@@ -119142,7 +119244,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     window._sb.rpc("criacao_edicao_versao", { p_id:ed.id, p_n:n }).then(function(r){
       if(r.error){ _evToast("error", "Não voltou: " + (r.error.message||"erro")); return; }
       _evToast("success", "Voltou para a versão " + n); setRec(function(x){ return x+1; });
-    });
+    }).catch(function(e){ _evToast("error", "Não voltou para a versão " + n + ": " + ((e && e.message) || "sem conexão")); });   // v48 (06/10/2026): E2-17
   };
 
   const linha = useMemo(function(){ return (ed && ed.receita && kit) ? _evLinha(ed.receita, ed.fala, kit) : null; }, [ed, kit]);
@@ -119210,6 +119312,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
           </div>
           <_EvEditor key={ed.id} t={t} ed={ed} kit={kit} base={base} musicas={musicas} isMob={isMob}
             onRecarregar={function(){ setRec(function(n){ return n+1; }); }} onAjustar={ajustar} ajustando={ajustando}
+            erroAjuste={erroAjuste} limparErroAjuste={function(){ setErroAjuste(null); }}
             onRefazer={montar} onVoltarVersao={voltarVersao} onMusicasMudou={function(){ setRecMus(function(n){ return n+1; }); }}/>
         </div>
       )}
@@ -122094,6 +122197,7 @@ function _evpNormalizar(p, clipes){
   if(p.motion){ const mo = _evmNormalizar(p.motion); if(mo) p.motion = mo; else delete p.motion; }      // v31: motion graphics
   if(p.motionDesligado){ const md = p.motion ? null : _evmNormalizar(p.motionDesligado); if(md) p.motionDesligado = md; else delete p.motionDesligado; }   // v35: motion desligado (guardado)
   if(p.anuncio){ const an = _evpAnuncioLimpo(p.anuncio, clipes); if(an) p.anuncio = an; else delete p.anuncio; }   // v35: modo anúncio
+  if(p.vocal_attacker) p.vocal_attacker = _evpVaCfg(p.vocal_attacker);                                             // v48 (06/10/2026): Vocal Attacker (contrato C6)
   return p;
 }
 
@@ -122596,6 +122700,180 @@ async function _evpTratar(clipe, opcoes){
   m.tratado[chave] = out; _evpAvisar();
   return out;
 }
+
+/* ═══ v48 (06/10/2026): VOCAL ATTACKER — compressor de voz (pedido do dono, inspirado no Single-band Compressor do Premiere) ═══
+   Configuração no projeto (contrato C6): p.vocal_attacker = { ativo, intensidade 0–100, threshold −22, ratio 4, attack_ms 8, release_ms 120,
+   makeup "auto", lufs −14, true_peak −1 }. O PC lê o mesmo campo para a normalização final (−14 LUFS / −1 dBTP, ffmpeg) no arquivo gravado.
+   Aqui o processamento é em TEMPO REAL e é o MESMO na prévia, na gravação no navegador e na passada de áudio do PC (todas usam o _evpMotor).
+   CADEIA DA VOZ (fala dos clipes + narrações; a música e os efeitos não passam por ela):
+     1) NIVELADOR — no buffer da fala, uma vez por áudio (cache): ganho lento pelo RMS de ~400 ms SÓ dos trechos com voz.
+        Por que no buffer e não num nó: ele precisa olhar para a frente (subir um pouco antes da frase baixa começar) e conhecer o "chão" de
+        ruído do arquivo inteiro; um nó em tempo real só veria o passado (e exigiria AudioWorklet num arquivo à parte). O resultado é idêntico
+        na prévia e na gravação. Voz = janela de 50 ms acima de max(chão + 10 dB, −50 dBFS), segurando 200 ms (as pausas entre palavras
+        continuam "voz"). Alvo −20 dBFS RMS, sobe no máximo 12 dB e desce no máximo 8 dB. No silêncio o ganho NÃO sobe: vira um expansor leve
+        (abaixa o ruído o mesmo tanto que o resto da cadeia vai subir), então o ruído de fundo fica onde estava.
+     2) highpass 80 Hz — tira ronco/vento/batida no microfone, que fariam o compressor "bombear".
+     3) DynamicsCompressorNode — threshold, ratio, attack e release do projeto; knee 6 dB (entrada suave na compressão).
+     4) makeup — "auto": o próprio DynamicsCompressorNode já devolve parte do ganho (makeup interno da especificação) e o resto vem do GANHO
+        FINAL medido (abaixo); com um número (dB), aplica esse número.
+   SAÍDA (voz + música + efeitos):
+     · GANHO FINAL: ao abrir/alterar, a voz processada passa UMA vez por um OfflineAudioContext com o mesmo grafo (passos 2–3), a loudness
+       integrada é medida (BS.1770-4: filtro K = shelf +4 dB/1,68 kHz + passa-altas 38 Hz, blocos de 400 ms, gate −70 LUFS e −10 LU) e o
+       ganho que leva a mixagem a −14 LUFS fica guardado. A saída é estéreo com a voz igual nos 2 lados → conta +3 dB (BS.1770 soma os canais).
+     · LIMITER: DynamicsCompressorNode ratio 20, attack 1 ms, knee 0, threshold = true_peak − 0,5 dB; depois dele, um WaveShaper 4×
+       sobreamostrado que é linear até true_peak − 2 dB e encosta suave (tanh) em true_peak − 0,3 dB: nunca clipa duro e o pico real fica ≤ −1 dBTP.
+   INTENSIDADE (0–100%): escala os parâmetros em vez de misturar seco/processado. O DynamicsCompressorNode atrasa o som (lookahead de ~6 ms
+     no Chrome); somar a voz seca com a processada daria filtro pente (voz "de lata"). Escalando: 0% = threshold 0 dB, ratio 1:1 e nivelador/
+     expansor desligados (só o volume final vai ao alvo); 100% = o preset. O meio é previsível (threshold × k, ratio 1 + (ratio − 1) × k). */
+const _EVP_VA_PADRAO = { ativo:false, intensidade:100, threshold:-22, ratio:4, attack_ms:8, release_ms:120, makeup:"auto", lufs:-14, true_peak:-1 };
+function _evpVaCfg(v){
+  v = v && typeof v === "object" ? v : {};
+  const n = function(x, d, a, b){ if(x == null || x === "") return d; x = Number(x); return isFinite(x) ? Math.min(b, Math.max(a, x)) : d; };
+  const mk = v.makeup === "auto" || v.makeup == null || v.makeup === "" || !isFinite(Number(v.makeup)) ? "auto" : n(v.makeup, 0, -12, 24);
+  return { ativo:v.ativo === true, intensidade:n(v.intensidade, 100, 0, 100), threshold:n(v.threshold, -22, -60, 0), ratio:n(v.ratio, 4, 1, 20),
+    attack_ms:n(v.attack_ms, 8, 0.5, 200), release_ms:n(v.release_ms, 120, 10, 1000), makeup:mk, lufs:-14, true_peak:-1 };   /* v48: fixos (−14 LUFS / −1 dBTP), iguais ao PC */
+}
+function _evpVaEfetivo(c){ const k = c.intensidade / 100;
+  return { k:k, thr:c.threshold * k, ratio:1 + (c.ratio - 1) * k, attack:c.attack_ms / 1000, release:c.release_ms / 1000, knee:6 }; }
+/* 1) nivelador: curva de ganho (dB) a cada 10 ms. k = intensidade (0–1); profDb = quanto o silêncio desce (expansor) */
+function _evpVaCurva(x, sr, k, profDb){
+  const hop = Math.max(1, Math.round(sr * 0.01)), n = Math.max(1, Math.ceil(x.length / hop));
+  const e = new Float64Array(n);
+  for(let b = 0; b < n; b++){ let s = 0; const i0 = b * hop, i1 = Math.min(x.length, i0 + hop); for(let i = i0; i < i1; i++) s += x[i] * x[i]; e[b] = s / Math.max(1, i1 - i0); }
+  const P = new Float64Array(n + 1); for(let b = 0; b < n; b++) P[b + 1] = P[b] + e[b];
+  const curto = new Float64Array(n);                                                        // energia de 50 ms (centrada)
+  for(let b = 0; b < n; b++){ const a = Math.max(0, b - 2), z = Math.min(n, b + 3); curto[b] = (P[z] - P[a]) / (z - a); }
+  const ord = Array.from(curto).filter(function(v){ return v > 1e-12; }).sort(function(a, b){ return a - b; });
+  const chao = ord.length ? ord[Math.floor(ord.length * 0.15)] : 0, lim = Math.max(chao * 10, 1e-5);   // +10 dB acima do chão · mínimo −50 dBFS
+  const voz0 = new Uint8Array(n); for(let b = 0; b < n; b++) voz0[b] = curto[b] > lim ? 1 : 0;
+  const voz = new Uint8Array(n), SEG = 20;                                                   // segura 200 ms antes e depois
+  for(let b = 0, u = -1e9; b < n; b++){ if(voz0[b]) u = b; if(b - u <= SEG) voz[b] = 1; }
+  for(let b = n - 1, u = 1e9; b >= 0; b--){ if(voz0[b]) u = b; if(u - b <= SEG) voz[b] = 1; }
+  const Pv = new Float64Array(n + 1), Cv = new Float64Array(n + 1);
+  for(let b = 0; b < n; b++){ Pv[b + 1] = Pv[b] + (voz0[b] ? e[b] : 0); Cv[b + 1] = Cv[b] + voz0[b]; }
+  const ALVO = 0.01, R = 20, g = new Float64Array(n);                                        // −20 dBFS RMS · janela de 400 ms
+  for(let b = 0; b < n; b++){
+    if(!voz[b]){ g[b] = -Math.max(0, profDb || 0); continue; }
+    const a = Math.max(0, b - R), z = Math.min(n, b + R + 1), c = Cv[z] - Cv[a];
+    g[b] = c > 0 ? Math.max(-8, Math.min(12, 10 * Math.log10(ALVO / Math.max(1e-12, (Pv[z] - Pv[a]) / c)))) * k : 0;
+  }
+  const al = 1 - Math.exp(-0.01 / 0.08);                                                    // suaviza ida e volta (zero-fase, ~80 ms)
+  for(let b = 1; b < n; b++) g[b] = g[b - 1] + (g[b] - g[b - 1]) * al;
+  for(let b = n - 2; b >= 0; b--) g[b] = g[b + 1] + (g[b] - g[b + 1]) * al;
+  return { g:g, hop:hop };
+}
+function _evpVaNivelar(x, sr, k, profDb){
+  if(!(k > 0) && !(profDb > 0)) return x;
+  const cv = _evpVaCurva(x, sr, k, profDb), g = cv.g, hop = cv.hop, n = g.length, y = new Float32Array(x.length);
+  for(let b = 0; b < n; b++){
+    const g0 = Math.pow(10, g[b] / 20), g1 = Math.pow(10, g[Math.min(n - 1, b + 1)] / 20), i0 = b * hop, i1 = Math.min(x.length, i0 + hop);
+    for(let i = i0; i < i1; i++) y[i] = x[i] * (g0 + (g1 - g0) * (i - i0) / hop);
+  }
+  return y;
+}
+const _evpVaCache = new WeakMap();          // AudioBuffer → { chave, buf } (só a última combinação, para não dobrar a memória)
+function _evpVaNivelado(buf, k, profDb){
+  if(!buf || !(k > 0)) return buf;
+  const chave = Math.round(k * 100) + "|" + Math.round((profDb || 0) * 2) / 2, c = _evpVaCache.get(buf);
+  if(c && c.chave === chave) return c.buf;
+  const out = new AudioBuffer({ length:buf.length, numberOfChannels:buf.numberOfChannels, sampleRate:buf.sampleRate });
+  for(let ch = 0; ch < buf.numberOfChannels; ch++) out.copyToChannel(_evpVaNivelar(buf.getChannelData(ch), buf.sampleRate, k, profDb), ch);
+  _evpVaCache.set(buf, { chave:chave, buf:out });
+  return out;
+}
+/* 2–4) o grafo da voz: highpass 80 Hz → compressor → makeup. atualizar(cfg, quando) muda os parâmetros sem estalo. */
+function _evpVaCadeia(ctx, cfg){
+  const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 80; hp.Q.value = -3.01;   // Q em dB no highpass (−3 dB = Butterworth, sem pico)
+  const cp = ctx.createDynamicsCompressor(), mk = ctx.createGain();
+  hp.connect(cp); cp.connect(mk);
+  const atualizar = function(c, quando){ const e = _evpVaEfetivo(c);
+    const pos = function(par, v){ try{ if(quando == null) par.value = v; else par.setTargetAtTime(v, quando, 0.03); }catch(_){ try{ par.value = v; }catch(__){} } };
+    pos(cp.threshold, e.thr); pos(cp.ratio, e.ratio); pos(cp.knee, e.knee); pos(cp.attack, e.attack); pos(cp.release, e.release);
+    pos(mk.gain, c.makeup === "auto" ? 1 : Math.pow(10, c.makeup / 20)); };
+  atualizar(cfg, null);
+  return { entrada:hp, saida:mk, comp:cp, atualizar:atualizar };
+}
+/* o grafo do motor (prévia, gravação no navegador e passada de áudio do PC) — a mesma função roda no teste de áudio (testes/va_teste.html):
+   vozIn → seca (desligado) | cadeia → master · master → ganho final → limiter → segurança → saída. aplicar(ligado, cfg, medição, imediato). */
+function _evpVaGrafo(ac, master, lim, saida, cfg){
+  const vozIn = ac.createGain(), seca = ac.createGain(), molhada = ac.createGain(), fin = ac.createGain(), posLim = ac.createGain(), seg = ac.createWaveShaper(), cad = _evpVaCadeia(ac, cfg);
+  vozIn.connect(seca); seca.connect(master); vozIn.connect(cad.entrada); cad.saida.connect(molhada); molhada.connect(master);
+  master.connect(fin); fin.connect(lim); lim.connect(posLim); posLim.connect(seg); seg.connect(saida);
+  let tpCurva = null;
+  const aplicar = function(on, c, med, imediato){
+    const T = imediato ? null : ac.currentTime;
+    const pos = function(par, v){ try{ if(T == null) par.value = v; else par.setTargetAtTime(v, T, 0.015); }catch(_){ try{ par.value = v; }catch(__){} } };
+    pos(seca.gain, on ? 0 : 1); pos(molhada.gain, on ? 1 : 0); cad.atualizar(c, T);
+    pos(fin.gain, on && med && isFinite(med.finalDb) ? Math.pow(10, med.finalDb / 20) : 1);
+    try{
+      /* o DynamicsCompressorNode SOMA um makeup próprio (especificação: (1/ganho em 0 dBFS)^0,6 → +0,86 dB com −1,5 dB/20:1): ligado, o posLim tira
+         esse ganho depois do limiter — senão o pico passaria do teto (no teste, desligado, o pico real fica em −0,2 dBTP por causa dele). Desligado: igual a antes. */
+      if(on){ const thr = c.true_peak - 1; lim.threshold.value = thr; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.08;
+        pos(posLim.gain, Math.pow(10, -_evpVaMakeupInterno(thr, 20) / 20));
+        if(tpCurva !== c.true_peak){ seg.curve = _evpVaCurvaSeg(c.true_peak); tpCurva = c.true_peak; } seg.oversample = "4x"; }
+      else { lim.threshold.value = -1.5; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1; pos(posLim.gain, 1); if(tpCurva != null){ seg.curve = null; tpCurva = null; } seg.oversample = "none"; }
+    }catch(_){}
+  };
+  const desligar = function(){ [vozIn, seca, molhada, fin, posLim, seg, cad.saida, cad.comp, cad.entrada].forEach(function(nd){ try{ nd.disconnect(); }catch(_){} }); };
+  return { vozIn:vozIn, aplicar:aplicar, desligar:desligar, cadeia:cad };
+}
+/* makeup automático que o DynamicsCompressorNode aplica (Web Audio 1.0: (1 / ganho da curva em 0 dBFS)^0,6), em dB, com knee 0 */
+function _evpVaMakeupInterno(thr, ratio){ return -0.6 * thr * (1 - 1 / ratio); }
+/* WaveShaper de segurança: linear até tp − 0,8 dB, encosta suave (tanh) em tp − 0,25 dB (4× sobreamostrado no nó). O limiter (tp − 1 dB) faz o trabalho;
+   isto só pega a sobra do ataque de 1 ms — nunca clipa duro. */
+function _evpVaCurvaSeg(tp){
+  const N = 8193, c = new Float32Array(N), a = Math.pow(10, (tp - 0.8) / 20), m = Math.pow(10, (tp - 0.25) / 20);
+  for(let i = 0; i < N; i++){ const x = i / (N - 1) * 2 - 1, ax = Math.abs(x); c[i] = ax <= a ? x : Math.sign(x) * (a + (m - a) * Math.tanh((ax - a) / (m - a))); }
+  return c;
+}
+/* BS.1770-4: loudness integrada (LUFS) de canais Float32Array (mesma taxa). Filtro K com os coeficientes do libebur128 para qualquer taxa. */
+function _evpLufs(canais, sr){
+  const kf = function(x){
+    const y = new Float64Array(x.length);
+    let K = Math.tan(Math.PI * 1681.974450955533 / sr); const Vh = Math.pow(10, 3.999843853973347 / 20), Vb = Math.pow(Vh, 0.4996667741545416), Q = 0.7071752369554196;
+    let a0 = 1 + K / Q + K * K; const b0 = (Vh + Vb * K / Q + K * K) / a0, b1 = 2 * (K * K - Vh) / a0, b2 = (Vh - Vb * K / Q + K * K) / a0, a1 = 2 * (K * K - 1) / a0, a2 = (1 - K / Q + K * K) / a0;
+    K = Math.tan(Math.PI * 38.13547087602444 / sr); const Q2 = 0.5003270373238773; a0 = 1 + K / Q2 + K * K; const c1 = 2 * (K * K - 1) / a0, c2 = (1 - K / Q2 + K * K) / a0;
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0, u1 = 0, u2 = 0, w1 = 0, w2 = 0;
+    for(let i = 0; i < x.length; i++){ const v = x[i], s = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = v; y2 = y1; y1 = s;
+      const h = s - 2 * u1 + u2 - c1 * w1 - c2 * w2; u2 = u1; u1 = s; w2 = w1; w1 = h; y[i] = h; }
+    return y; };
+  const fs = canais.map(kf), len = canais[0].length, blk = Math.round(sr * 0.4), hop = Math.round(sr * 0.1), zs = [];
+  if(len < blk) return -Infinity;
+  const P = fs.map(function(y){ const p = new Float64Array(y.length + 1); for(let i = 0; i < y.length; i++) p[i + 1] = p[i] + y[i] * y[i]; return p; });
+  for(let i = 0; i + blk <= len; i += hop){ let z = 0; P.forEach(function(p){ z += (p[i + blk] - p[i]) / blk; }); zs.push(z); }
+  const L = function(z){ return -0.691 + 10 * Math.log10(Math.max(1e-20, z)); };
+  const g1 = zs.filter(function(z){ return L(z) > -70; }); if(!g1.length) return -Infinity;
+  const rel = L(g1.reduce(function(a, b){ return a + b; }, 0) / g1.length) - 10;
+  const g2 = g1.filter(function(z){ return L(z) > rel; }); if(!g2.length) return -Infinity;
+  return L(g2.reduce(function(a, b){ return a + b; }, 0) / g2.length);
+}
+/* mede a voz usada (segs: [{ buf, ini, fim, vol }] em segundos do arquivo) → { lufs (voz mono), finalDb, silDb, profDb, lufsSaida } */
+async function _evpVaMedir(segs, cfg, o){
+  o = o || {}; const ef = _evpVaEfetivo(cfg); if(!segs || !segs.length) return null;
+  const sr = segs[0].buf.sampleRate, max = Math.round(sr * 150), partes = []; let tot = 0;
+  for(const s of segs){ if(tot >= max) break;
+    const x = s.buf.getChannelData(0), a = Math.max(0, Math.floor(s.ini * sr)), z = Math.min(x.length, Math.floor(s.fim * sr), a + max - tot); if(z - a < sr * 0.05) continue;
+    const pad = Math.round(sr * 0.5), a2 = Math.max(0, a - pad), z2 = Math.min(x.length, z + pad);      // nivela com um pouco de contexto
+    const lv = _evpVaNivelar(x.subarray(a2, z2), sr, ef.k, 0).subarray(a - a2, a - a2 + (z - a));
+    partes.push({ d:lv, vol:_evpNum(s.vol, 1) }); tot += z - a; }
+  if(tot < sr * 0.5) return null;
+  const nTom = Math.round(sr * 0.6), N = tot + nTom + Math.round(sr * 0.05);
+  const oc = new OfflineAudioContext(1, N, sr), b = oc.createBuffer(1, N, sr), xb = b.getChannelData(0);
+  let p0 = 0; partes.forEach(function(q){ for(let i = 0; i < q.d.length; i++) xb[p0 + i] = q.d[i] * q.vol; p0 += q.d.length; });
+  const aT = Math.pow(10, -60 / 20) * Math.SQRT2;                                           // tom de 1 kHz a −60 dBFS RMS: o ganho que o silêncio/ruído recebe
+  for(let i = 0; i < nTom; i++) xb[tot + i] = aT * Math.sin(2 * Math.PI * 1000 * i / sr);
+  const src = oc.createBufferSource(); src.buffer = b; const ch = _evpVaCadeia(oc, cfg); src.connect(ch.entrada); ch.saida.connect(oc.destination); src.start();
+  const y = (await oc.startRendering()).getChannelData(0);
+  const lufs = _evpLufs([y.subarray(0, tot)], sr);
+  const i0 = tot + Math.round(sr * 0.25), i1 = tot + nTom; let si = 0, so = 0; for(let i = i0; i < i1; i++){ si += xb[i] * xb[i]; so += y[i] * y[i]; }
+  const silDb = si > 0 && so > 0 ? 10 * Math.log10(so / si) : 0;
+  const canais = o.canais || 2, mais = 10 * Math.log10(canais);
+  const finalDb = isFinite(lufs) ? Math.max(-12, Math.min(24, cfg.lufs - (lufs + mais))) : 0;
+  const profDb = Math.max(0, Math.min(18, silDb + finalDb)) * ef.k;
+  return { lufs:lufs, finalDb:finalDb, silDb:silDb, profDb:profDb, lufsSaida:isFinite(lufs) ? lufs + mais + finalDb : null, seg:tot / sr };
+}
+let _evpBufN = 0; const _evpBufIds = new WeakMap();
+function _evpBufId(b){ if(!b) return 0; let i = _evpBufIds.get(b); if(!i){ i = ++_evpBufN; _evpBufIds.set(b, i); } return i; }
 
 /* REDUZIR ECO DA SALA: abaixa a "cauda" que fica soando depois de cada palavra (expansor que segue o pico recente)
    + tira um pouco do "som de caixa" (médios graves, onde a sala mais ressoa). Não inventa voz: só limpa o rabo do eco. */
@@ -123472,7 +123750,7 @@ function _evpRealceAlfa(m, t){
 }
 /* ─── RECORTAR A PESSOA (IA de segmentação que roda no navegador: MediaPipe, Apache-2.0) ─── */
 const _EVP_MP_SEG = (typeof window !== "undefined" && window.__EVP_MP_SEG) || "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/";
-let _evpSeg = null, _evpSegEstado = "nao", _evpSegResolver = null;
+let _evpSeg = null, _evpSegEstado = "nao", _evpSegResolver = null, _evpSegModelo = 1;
 function _evpSegPronto(){ return _evpSegEstado === "pronto"; }
 function _evpSegCarregar(){
   if(_evpSegEstado !== "nao") return;
@@ -123481,7 +123759,7 @@ function _evpSegCarregar(){
   sc.onload = function(){
     try{
       _evpSeg = new window.SelfieSegmentation({ locateFile:function(f){ return _EVP_MP_SEG + f; } });
-      _evpSeg.setOptions({ modelSelection:1, selfieMode:false });
+      _evpSeg.setOptions({ modelSelection:_evpSegModelo, selfieMode:false });
       _evpSeg.onResults(function(res){ const fn = _evpSegResolver; _evpSegResolver = null; if(fn) fn(res && res.segmentationMask); });
       _evpSeg.initialize().then(function(){ _evpSegEstado = "pronto"; _evpAvisar(); }).catch(function(){ _evpSegEstado = "erro"; _evpAvisar(); });
     }catch(_){ _evpSegEstado = "erro"; _evpAvisar(); }
@@ -123489,8 +123767,13 @@ function _evpSegCarregar(){
   sc.onerror = function(){ _evpSegEstado = "erro"; _evpAvisar(); };
   document.head.appendChild(sc);
 }
+/* v48 (06/10/2026): E2-6 / N-17 — no vídeo EM PÉ usa o modelo 0 (geral, 256×256) em vez do 1 (paisagem, 144×256): no 1080×1920 cada linha
+   da máscara vira ~7,5 px (eram ~13 px). Deitado continua o 1. A troca só acontece quando a forma do quadro muda (o MediaPipe recarrega o modelo). */
+function _evpSegBorda(W, H){ const r = _evpSegModelo === 0 ? { w:256, h:256 } : { w:256, h:144 }; return _evClamp(0.9 * Math.max(H / r.h, W / r.w), 2, 10); }
+function _evpSegModeloPara(fonte){ const w = Number(fonte && (fonte.videoWidth || fonte.width)) || 0, h = Number(fonte && (fonte.videoHeight || fonte.height)) || 0; return h > w ? 0 : 1; }
 function _evpSegmentar(fonte){
   if(!_evpSeg || _evpSegEstado !== "pronto") return Promise.resolve(null);
+  const md = _evpSegModeloPara(fonte); if(md !== _evpSegModelo){ _evpSegModelo = md; try{ _evpSeg.setOptions({ modelSelection:md, selfieMode:false }); }catch(_){} }
   return new Promise(function(ok){
     _evpSegResolver = ok;
     _evpSeg.send({ image:fonte }).catch(function(){ if(_evpSegResolver === ok){ _evpSegResolver = null; ok(null); } });
@@ -123839,7 +124122,7 @@ const _EVM_ICONES = {"arrow-up-right":["M17 7l-10 10","M8 7l9 0l0 9"],"award":["
 const _EVM_AMSUL = {"152":[[[-78.8,-33.65],[-78.99,-33.66],[-78.88,-33.58],[-78.8,-33.65]],[[-70.42,-18.35],[-70.18,-18.32],[-69.93,-18.21],[-69.8,-17.99],[-69.85,-17.7],[-69.51,-17.51],[-69.31,-17.94],[-69.09,-18.05],[-69.14,-18.14],[-68.97,-18.97],[-68.46,-19.43],[-68.7,-19.72],[-68.56,-19.97],[-68.6,-20.05],[-68.76,-20.09],[-68.69,-20.31],[-68.76,-20.42],[-68.49,-20.63],[-68.56,-20.72],[-68.56,-20.9],[-68.43,-20.95],[-68.2,-21.3],[-68.19,-21.62],[-68.08,-21.98],[-67.99,-22.06],[-67.88,-22.49],[-67.88,-22.82],[-67.58,-22.89],[-67.2,-22.82],[-67.01,-23],[-67.35,-24.03],[-68.25,-24.39],[-68.56,-24.75],[-68.56,-24.84],[-68.38,-25.09],[-68.5,-25.16],[-68.59,-25.42],[-68.41,-26.15],[-68.58,-26.35],[-68.59,-26.47],[-68.32,-26.88],[-68.32,-26.97],[-68.59,-27.14],[-68.71,-27.11],[-68.85,-27.15],[-69.17,-27.92],[-69.66,-28.41],[-69.83,-29.1],[-70.03,-29.32],[-69.93,-29.77],[-69.96,-30.08],[-69.84,-30.17],[-69.96,-30.36],[-70.15,-30.36],[-70.35,-30.9],[-70.31,-31.02],[-70.39,-31.12],[-70.52,-31.15],[-70.58,-31.57],[-70.45,-31.84],[-70.25,-31.96],[-70.36,-32.08],[-70.32,-32.27],[-70.17,-32.47],[-70.12,-32.81],[-70.02,-32.88],[-70.09,-33.03],[-70.08,-33.2],[-70.02,-33.27],[-69.82,-33.28],[-69.89,-33.73],[-69.85,-34.22],[-70.05,-34.3],[-70.29,-34.73],[-70.39,-35.15],[-70.56,-35.25],[-70.47,-35.33],[-70.41,-35.52],[-70.4,-36.06],[-70.72,-36.28],[-70.75,-36.39],[-71.06,-36.52],[-71.19,-36.84],[-71.12,-37.12],[-71.2,-37.3],[-71.13,-37.44],[-71.17,-37.76],[-71.03,-38.04],[-70.97,-38.45],[-70.85,-38.54],[-70.95,-38.74],[-71.4,-38.93],[-71.42,-39.29],[-71.54,-39.6],[-71.72,-39.64],[-71.64,-39.89],[-71.66,-40.02],[-71.82,-40.18],[-71.7,-40.34],[-71.8,-40.44],[-71.94,-40.79],[-71.87,-40.89],[-71.91,-41.65],[-71.75,-42.05],[-71.86,-42.15],[-72.03,-42.15],[-72.11,-42.25],[-72.05,-42.47],[-72.14,-42.58],[-72.1,-43.07],[-71.78,-43.17],[-71.75,-43.24],[-71.91,-43.35],[-71.91,-43.44],[-71.75,-43.59],[-71.74,-43.7],[-71.79,-43.75],[-71.68,-43.93],[-71.81,-44.11],[-71.82,-44.38],[-71.21,-44.44],[-71.16,-44.56],[-71.26,-44.76],[-72.06,-44.77],[-72.04,-44.9],[-71.6,-44.98],[-71.35,-45.23],[-71.35,-45.33],[-71.51,-45.51],[-71.75,-45.58],[-71.75,-45.84],[-71.63,-45.95],[-71.88,-46.16],[-71.76,-46.32],[-71.7,-46.65],[-71.94,-46.83],[-71.91,-47.2],[-72.04,-47.24],[-72.34,-47.49],[-72.52,-47.88],[-72.51,-47.97],[-72.33,-48.11],[-72.29,-48.23],[-72.36,-48.37],[-72.61,-48.52],[-72.61,-48.79],[-73.03,-49.01],[-73.15,-49.19],[-73.14,-49.3],[-73.46,-49.31],[-73.58,-49.58],[-73.47,-49.79],[-73.53,-49.91],[-73.5,-50.12],[-73.38,-50.23],[-73.15,-50.74],[-72.51,-50.61],[-72.34,-50.68],[-72.28,-50.91],[-72.38,-51.1],[-72.3,-51.3],[-72.41,-51.54],[-71.95,-51.88],[-71.97,-51.96],[-69.96,-52.01],[-68.46,-52.29],[-68.44,-52.36],[-69.24,-52.21],[-69.45,-52.27],[-69.62,-52.46],[-70.8,-52.77],[-70.98,-53.37],[-70.95,-53.57],[-70.99,-53.78],[-71.3,-53.88],[-72.18,-53.63],[-72.38,-53.47],[-72.41,-53.35],[-72.3,-53.25],[-71.94,-53.23],[-71.85,-53.29],[-71.83,-53.4],[-71.89,-53.52],[-71.79,-53.48],[-71.74,-53.23],[-71.29,-53.03],[-71.16,-52.89],[-71.23,-52.81],[-71.39,-52.76],[-72.28,-53.13],[-72.49,-53.29],[-72.55,-53.46],[-73.05,-53.24],[-72.92,-53.12],[-72.91,-52.94],[-72.83,-52.82],[-72.68,-52.75],[-72.63,-52.82],[-72.45,-52.81],[-72.12,-52.65],[-71.98,-52.65],[-71.55,-52.64],[-71.51,-52.61],[-71.81,-52.54],[-72.23,-52.52],[-72.44,-52.63],[-72.5,-52.56],[-72.71,-52.54],[-72.8,-52.71],[-73.02,-52.89],[-73.02,-53.02],[-73.12,-53.07],[-73.34,-53.06],[-73.64,-52.84],[-73.24,-52.71],[-73.07,-52.53],[-73.12,-52.49],[-73.18,-52.49],[-73.24,-52.62],[-73.38,-52.6],[-73.59,-52.69],[-74.01,-52.64],[-74.04,-52.4],[-74.15,-52.38],[-74.26,-52.11],[-73.83,-52.23],[-73.7,-52.2],[-73.68,-52.08],[-73.53,-52.15],[-73.26,-52.16],[-72.79,-51.95],[-72.69,-51.99],[-72.57,-52.2],[-72.72,-52.36],[-72.63,-52.37],[-72.52,-52.25],[-72.63,-52.01],[-72.5,-51.85],[-72.54,-51.71],[-72.76,-51.57],[-73.17,-51.45],[-72.65,-51.7],[-72.58,-51.74],[-72.6,-51.8],[-72.93,-51.86],[-73.38,-52.07],[-73.52,-52.04],[-73.75,-51.79],[-73.97,-51.78],[-74.19,-51.68],[-74.07,-51.58],[-73.93,-51.62],[-73.9,-51.33],[-73.94,-51.27],[-74.81,-51.06],[-75.09,-50.68],[-74.68,-50.66],[-74.65,-50.62],[-74.77,-50.47],[-74.64,-50.36],[-74.36,-50.49],[-74.14,-50.82],[-73.81,-50.94],[-73.82,-50.84],[-73.74,-50.7],[-73.62,-50.65],[-73.69,-50.57],[-73.65,-50.49],[-73.98,-50.83],[-74.2,-50.61],[-74.18,-50.49],[-73.95,-50.51],[-74.43,-50.35],[-74.63,-50.19],[-74.34,-49.98],[-73.96,-49.99],[-74.32,-49.78],[-74.29,-49.6],[-74.1,-49.56],[-73.83,-49.61],[-74.09,-49.43],[-74.01,-49.09],[-73.94,-49.02],[-74.03,-49.03],[-74.22,-49.5],[-74.37,-49.4],[-74.34,-48.6],[-74.01,-48.48],[-74.17,-48.43],[-74.34,-48.49],[-74.48,-48.46],[-74.58,-48.27],[-74.58,-48],[-73.85,-48.04],[-73.53,-48.2],[-73.39,-48.15],[-73.61,-47.99],[-73.72,-47.66],[-73.94,-47.93],[-74.23,-47.97],[-74.35,-47.94],[-74.37,-47.83],[-74.66,-47.7],[-74.53,-47.57],[-74.24,-47.68],[-74.13,-47.59],[-74.48,-47.43],[-74.16,-47.18],[-74.21,-47.08],[-74.15,-46.97],[-74.31,-46.79],[-74.45,-46.77],[-74.51,-46.89],[-75,-46.74],[-75.05,-46.63],[-74.98,-46.51],[-75.54,-46.7],[-75.39,-46.86],[-75.43,-46.93],[-75.63,-46.86],[-75.71,-46.7],[-75.66,-46.61],[-74.93,-46.16],[-75.07,-46.01],[-75.07,-45.88],[-74.16,-45.77],[-74.08,-45.68],[-74.12,-45.5],[-73.96,-45.4],[-73.82,-45.45],[-73.96,-45.84],[-74.06,-45.95],[-74.02,-46.06],[-74.08,-46.13],[-74.39,-46.22],[-74.09,-46.22],[-73.97,-46.15],[-73.88,-45.85],[-73.73,-45.81],[-73.71,-46.07],[-73.81,-46.38],[-73.95,-46.53],[-73.85,-46.57],[-73.66,-46.3],[-73.59,-45.9],[-73.59,-45.78],[-73.76,-45.7],[-73.78,-45.63],[-73.73,-45.48],[-73.55,-45.48],[-73.27,-45.35],[-72.93,-45.45],[-73.23,-45.26],[-73.45,-45.24],[-73.41,-45.1],[-73.36,-44.98],[-73.08,-44.92],[-72.74,-44.73],[-72.68,-44.59],[-72.66,-44.44],[-73.27,-44.17],[-73.22,-43.9],[-73.07,-43.86],[-73,-43.63],[-73.1,-43.46],[-73.08,-43.32],[-72.94,-43.21],[-72.88,-43.05],[-72.76,-43.04],[-72.85,-42.67],[-72.77,-42.51],[-72.63,-42.51],[-72.77,-42.26],[-72.63,-42.2],[-72.43,-42.43],[-72.41,-42.39],[-72.5,-41.98],[-72.74,-42],[-72.82,-41.91],[-72.66,-41.74],[-72.36,-41.65],[-72.32,-41.5],[-72.43,-41.65],[-72.54,-41.69],[-72.95,-41.51],[-73.24,-41.78],[-73.73,-41.74],[-73.62,-41.58],[-73.86,-41.45],[-73.98,-40.97],[-73.67,-39.96],[-73.41,-39.79],[-73.25,-39.42],[-73.23,-39.22],[-73.52,-38.51],[-73.46,-38.04],[-73.66,-37.7],[-73.6,-37.48],[-73.66,-37.34],[-73.6,-37.19],[-73.37,-37.22],[-73.22,-37.17],[-73.12,-36.69],[-73.01,-36.64],[-72.87,-36.39],[-72.78,-35.98],[-72.59,-35.76],[-72.63,-35.59],[-72.22,-35.1],[-72.06,-34.62],[-72,-34.17],[-71.83,-33.82],[-71.66,-33.65],[-71.64,-33.52],[-71.74,-33.09],[-71.59,-32.97],[-71.45,-32.66],[-71.42,-32.39],[-71.51,-32.21],[-71.71,-30.76],[-71.67,-30.33],[-71.4,-30.14],[-71.31,-29.65],[-71.33,-29.44],[-71.48,-29.2],[-71.52,-28.93],[-71.31,-28.67],[-71.19,-28.38],[-71.09,-27.81],[-70.93,-27.59],[-70.9,-27.19],[-70.65,-26.33],[-70.63,-25.99],[-70.71,-25.78],[-70.45,-25.25],[-70.57,-24.64],[-70.51,-23.89],[-70.39,-23.57],[-70.59,-23.37],[-70.59,-23.25],[-70.56,-23.06],[-70.45,-23.03],[-70.33,-22.85],[-70.09,-21.49],[-70.2,-20.73],[-70.16,-19.71],[-70.27,-19.27],[-70.36,-18.4],[-70.42,-18.35]],[[-68.63,-52.65],[-68.65,-54.85],[-69.08,-54.91],[-69.49,-54.86],[-69.72,-54.71],[-70.03,-54.82],[-70.28,-54.75],[-70.5,-54.81],[-71.44,-54.62],[-71.9,-54.6],[-71.93,-54.53],[-71.8,-54.43],[-71.57,-54.5],[-71.39,-54.4],[-71.08,-54.44],[-70.8,-54.33],[-70.7,-54.35],[-70.7,-54.49],[-70.31,-54.53],[-70.3,-54.49],[-70.54,-54.3],[-70.76,-54.24],[-70.86,-54.11],[-70.87,-53.88],[-70.65,-53.82],[-70.7,-53.73],[-70.53,-53.63],[-70.38,-53.99],[-70.63,-54],[-70.53,-54.14],[-70.25,-54.28],[-70.17,-54.38],[-69.74,-54.31],[-69.36,-54.44],[-69.31,-54.57],[-69.04,-54.41],[-69.99,-54.11],[-70.09,-54.01],[-70.15,-53.76],[-69.39,-53.5],[-69.36,-53.42],[-69.64,-53.33],[-70.09,-53.42],[-70.33,-53.38],[-70.46,-53.21],[-70.44,-53.09],[-70.13,-52.94],[-70.38,-52.75],[-70.19,-52.72],[-69.94,-52.82],[-69.5,-52.49],[-69.41,-52.49],[-69.17,-52.67],[-68.79,-52.58],[-68.63,-52.65]],[[-67.08,-55.15],[-67.26,-55.28],[-67.4,-55.27],[-67.5,-55.18],[-67.74,-55.26],[-68.1,-55.21],[-68.3,-54.98],[-68.11,-54.93],[-67.25,-54.98],[-67.11,-55.06],[-67.08,-55.15]],[[-73.77,-43.35],[-74.12,-43.36],[-74.39,-43.23],[-74.21,-42.88],[-74.17,-42.27],[-74.02,-41.89],[-74.06,-41.82],[-73.73,-41.88],[-73.53,-41.9],[-73.42,-42.19],[-73.44,-42.28],[-73.53,-42.31],[-73.47,-42.47],[-73.79,-42.59],[-73.44,-42.94],[-73.54,-43.07],[-73.75,-43.16],[-73.77,-43.35]],[[-74.48,-49.15],[-74.52,-49.62],[-74.46,-49.69],[-74.57,-49.99],[-74.76,-50.01],[-74.88,-49.73],[-74.72,-49.42],[-74.96,-49.53],[-75.07,-49.85],[-75.55,-49.79],[-75.52,-49.62],[-75.34,-49.63],[-75.31,-49.49],[-75.47,-49.36],[-75.33,-49.27],[-75.09,-49.27],[-75.09,-49.19],[-75.21,-49.15],[-75.18,-49.08],[-74.95,-48.96],[-74.97,-48.79],[-74.79,-48.7],[-74.55,-48.77],[-74.48,-49.15]],[[-75.51,-48.76],[-75.62,-48.77],[-75.65,-48.59],[-75.52,-48.33],[-75.56,-48.07],[-75.39,-48.02],[-75.16,-48.43],[-75.16,-48.62],[-75.51,-48.76]],[[-74.39,-52.92],[-73.45,-53.14],[-73.14,-53.35],[-73.58,-53.3],[-73.87,-53.1],[-74.27,-53.08],[-74.71,-52.77],[-74.57,-52.77],[-74.39,-52.92]],[[-74.57,-48.59],[-74.92,-48.63],[-75.01,-48.54],[-75.25,-48.03],[-74.98,-47.92],[-74.83,-47.85],[-74.85,-48.02],[-74.6,-48.37],[-74.57,-48.59]],[[-72.92,-53.48],[-72.88,-53.58],[-72.48,-53.59],[-72.2,-53.81],[-72.41,-54],[-72.87,-54.13],[-72.96,-54.07],[-72.78,-53.95],[-72.76,-53.86],[-73.04,-53.83],[-73.08,-54],[-73.21,-53.99],[-73.31,-53.94],[-73.31,-53.73],[-73.47,-53.74],[-73.64,-53.57],[-73.85,-53.55],[-73.69,-53.43],[-73.45,-53.41],[-73.1,-53.51],[-73.11,-53.42],[-73.05,-53.39],[-72.92,-53.48]],[[-74.82,-51.63],[-74.78,-51.82],[-74.65,-51.87],[-74.53,-51.99],[-74.7,-52.28],[-74.85,-52.27],[-75.11,-51.79],[-74.91,-51.74],[-74.91,-51.65],[-74.82,-51.63]],[[-69.7,-54.92],[-68.9,-55.02],[-68.46,-54.96],[-68.4,-55.04],[-68.61,-55.16],[-68.28,-55.25],[-68.33,-55.33],[-68.09,-55.48],[-68.05,-55.64],[-68.23,-55.6],[-68.34,-55.5],[-68.87,-55.45],[-68.93,-55.35],[-68.89,-55.24],[-69.3,-55.17],[-69.36,-55.3],[-69.18,-55.48],[-69.24,-55.48],[-69.64,-55.32],[-69.68,-55.22],[-69.82,-55.24],[-69.99,-55.13],[-69.89,-54.88],[-69.7,-54.92]],[[-71.39,-54.03],[-71.02,-54.11],[-71.01,-54.25],[-71.12,-54.37],[-71.47,-54.23],[-71.67,-54.23],[-71.95,-54.3],[-71.97,-54.21],[-72.21,-54.05],[-72.15,-53.94],[-72,-53.88],[-71.39,-54.03]],[[-73.73,-44.39],[-73.98,-44.49],[-74,-44.59],[-73.83,-44.84],[-73.73,-45.12],[-73.75,-45.27],[-73.85,-45.34],[-74.01,-45.35],[-74.1,-45.32],[-74.09,-45.2],[-74.62,-44.65],[-74.48,-44.59],[-74.5,-44.47],[-74.1,-44.39],[-74.08,-44.19],[-73.99,-44.14],[-73.9,-44.14],[-73.7,-44.27],[-73.73,-44.39]],[[-72.99,-44.78],[-73.23,-44.86],[-73.4,-44.77],[-73.45,-44.64],[-73.28,-44.49],[-73.27,-44.39],[-73.21,-44.34],[-72.78,-44.51],[-72.99,-44.78]],[[-75.04,-44.89],[-75.12,-44.87],[-75.11,-44.8],[-75.04,-44.89]],[[-75.3,-50.68],[-75.33,-50.77],[-75.44,-50.74],[-75.48,-50.65],[-75.43,-50.48],[-75.12,-50.51],[-75.29,-50.6],[-75.3,-50.68]],[[-75.11,-48.84],[-75.26,-49.07],[-75.51,-49.23],[-75.64,-49.2],[-75.49,-49.08],[-75.54,-48.99],[-75.64,-48.94],[-75.53,-48.84],[-75.12,-48.77],[-75.11,-48.84]],[[-75.11,-47.84],[-75.18,-47.85],[-75.26,-47.76],[-75,-47.69],[-74.91,-47.76],[-75.11,-47.84]],[[-74.67,-43.61],[-74.84,-43.6],[-74.75,-43.54],[-74.67,-43.61]],[[-73.63,-44.82],[-73.69,-44.83],[-73.82,-44.61],[-73.69,-44.55],[-73.63,-44.82]],[[-74.56,-51.28],[-74.62,-51.4],[-75.05,-51.4],[-75.19,-51.57],[-75.29,-51.62],[-75.3,-51.56],[-75.15,-51.28],[-75.04,-51.32],[-74.61,-51.21],[-74.56,-51.28]],[[-75.06,-50.3],[-75.25,-50.38],[-75.45,-50.34],[-75.33,-50.01],[-74.88,-50.11],[-74.84,-50.2],[-75.06,-50.3]],[[-73.81,-43.83],[-73.79,-43.88],[-73.96,-43.92],[-74.12,-43.89],[-74.14,-43.82],[-73.86,-43.78],[-73.81,-43.83]],[[-74.14,-51.93],[-74.43,-51.85],[-74.45,-51.73],[-74.13,-51.87],[-74.14,-51.93]],[[-74.31,-45.69],[-74.46,-45.76],[-74.68,-45.74],[-74.69,-45.66],[-74.49,-45.43],[-74.5,-45.28],[-74.31,-45.17],[-74.31,-45.46],[-74.23,-45.61],[-74.31,-45.69]],[[-67.57,-55.89],[-67.83,-55.83],[-67.55,-55.83],[-67.51,-55.84],[-67.57,-55.89]],[[-66.47,-55.23],[-66.61,-55.27],[-66.62,-55.21],[-66.52,-55.17],[-66.44,-55.19],[-66.47,-55.23]],[[-70.99,-54.87],[-70.8,-54.97],[-70.42,-54.91],[-70.28,-55.07],[-70.48,-55.18],[-70.6,-55.08],[-70.81,-55.08],[-71.2,-54.89],[-71.43,-54.91],[-71.37,-54.83],[-70.99,-54.87]],[[-67.29,-55.78],[-67.56,-55.73],[-67.45,-55.64],[-67.37,-55.59],[-67.29,-55.78]]],"170":[[[-71.32,11.86],[-71.96,11.67],[-72.25,11.2],[-72.45,11.11],[-72.69,10.84],[-72.87,10.49],[-73.01,9.79],[-73.37,9.19],[-73.06,9.26],[-72.96,9.14],[-72.8,9.11],[-72.66,8.63],[-72.42,8.38],[-72.36,8.15],[-72.45,7.97],[-72.47,7.52],[-72.39,7.42],[-72.21,7.37],[-72.01,7.03],[-71.13,6.99],[-70.74,7.09],[-70.13,6.95],[-69.43,6.12],[-69.27,6.1],[-68.94,6.2],[-68.47,6.16],[-67.86,6.29],[-67.48,6.18],[-67.47,5.93],[-67.57,5.83],[-67.64,5.56],[-67.83,5.27],[-67.86,4.51],[-67.66,3.86],[-67.31,3.42],[-67.83,2.89],[-67.86,2.79],[-67.62,2.79],[-67.21,2.39],[-66.88,1.22],[-67.08,1.18],[-67.09,1.62],[-67.4,2.12],[-67.56,2.07],[-67.82,1.79],[-67.93,1.75],[-68.19,1.99],[-68.25,1.85],[-68.18,1.72],[-69.32,1.72],[-69.54,1.77],[-69.85,1.71],[-69.85,1.06],[-69.31,1.05],[-69.16,0.86],[-69.15,0.64],[-69.28,0.63],[-69.47,0.73],[-70.05,0.58],[-70.07,-0.14],[-69.92,-0.32],[-69.63,-0.51],[-69.61,-0.76],[-69.45,-1],[-69.4,-1.2],[-69.96,-4.24],[-70.34,-3.82],[-70.53,-3.87],[-70.74,-3.78],[-70.07,-2.7],[-70.92,-2.22],[-71.11,-2.25],[-71.2,-2.31],[-71.4,-2.33],[-71.75,-2.15],[-71.98,-2.33],[-72.22,-2.4],[-72.39,-2.43],[-72.63,-2.35],[-72.94,-2.39],[-73.15,-2.28],[-73.13,-2.08],[-73.2,-1.83],[-73.5,-1.69],[-73.52,-1.45],[-73.67,-1.25],[-74.25,-0.97],[-74.42,-0.58],[-74.8,-0.2],[-74.94,-0.19],[-75.14,-0.05],[-75.29,-0.11],[-75.78,0.09],[-76.07,0.35],[-76.27,0.44],[-76.39,0.41],[-76.43,0.26],[-76.5,0.23],[-76.83,0.25],[-77.4,0.39],[-77.47,0.64],[-77.65,0.72],[-77.7,0.84],[-77.83,0.83],[-78.31,1.05],[-78.68,1.28],[-79.03,1.62],[-78.96,1.75],[-78.79,1.85],[-78.58,1.77],[-78.55,1.92],[-78.63,2.06],[-78.59,2.36],[-78.42,2.48],[-78.06,2.51],[-77.87,2.73],[-77.81,2.72],[-77.67,2.88],[-77.69,3.04],[-77.56,3.08],[-77.42,3.34],[-77.36,3.35],[-77.08,3.91],[-77.16,3.86],[-77.26,3.89],[-77.28,4.06],[-77.36,3.94],[-77.43,4.06],[-77.41,4.25],[-77.52,4.21],[-77.35,4.4],[-77.29,4.72],[-77.37,5.32],[-77.54,5.54],[-77.25,5.78],[-77.47,6.18],[-77.47,6.28],[-77.4,6.27],[-77.37,6.57],[-77.44,6.69],[-77.52,6.69],[-77.9,7.23],[-77.74,7.54],[-77.76,7.7],[-77.59,7.54],[-77.54,7.57],[-77.35,7.71],[-77.34,7.84],[-77.2,7.97],[-77.48,8.5],[-77.39,8.64],[-76.85,8.09],[-76.92,7.97],[-76.79,7.93],[-76.74,8],[-76.77,8.31],[-76.92,8.57],[-76.28,8.99],[-76.03,9.37],[-75.64,9.45],[-75.6,9.54],[-75.68,9.73],[-75.54,10.2],[-75.71,10.14],[-75.55,10.33],[-75.45,10.61],[-74.84,11.11],[-74.33,11],[-74.49,10.93],[-74.52,10.86],[-74.4,10.77],[-74.14,11.32],[-73.31,11.3],[-72.72,11.71],[-72.28,11.89],[-72.14,12.19],[-71.71,12.42],[-71.49,12.43],[-71.26,12.33],[-71.14,12.05],[-71.32,11.86]],[[-78.12,2.54],[-78.19,2.56],[-78.18,2.65],[-78.12,2.54]]],"188":[[[-82.57,9.58],[-82.64,9.51],[-82.8,9.59],[-82.94,9.45],[-82.94,9.06],[-82.73,8.92],[-82.92,8.74],[-82.86,8.45],[-83.03,8.34],[-82.88,8.07],[-83.12,8.35],[-83.16,8.59],[-83.47,8.71],[-83.3,8.51],[-83.29,8.41],[-83.54,8.45],[-83.74,8.61],[-83.61,8.8],[-83.64,9.03],[-83.74,9.15],[-84.22,9.46],[-84.58,9.57],[-84.66,9.65],[-84.64,9.79],[-84.71,9.9],[-85.24,10.24],[-85.24,10.11],[-84.89,9.82],[-85.11,9.58],[-85.32,9.81],[-85.63,9.9],[-85.8,10.13],[-85.83,10.4],[-85.66,10.64],[-85.67,10.74],[-85.91,10.9],[-85.75,10.99],[-85.62,11.18],[-84.91,10.95],[-84.7,11.05],[-84.35,10.98],[-84.17,10.78],[-83.92,10.74],[-83.71,10.79],[-83.64,10.92],[-83.35,10.32],[-82.78,9.67],[-82.57,9.58]]],"212":[[[-61.28,15.25],[-61.38,15.23],[-61.48,15.53],[-61.46,15.63],[-61.28,15.53],[-61.28,15.25]]],"218":[[[-75.29,-0.11],[-75.48,-0.16],[-75.63,-0.12],[-75.26,-0.59],[-75.25,-0.95],[-75.41,-0.92],[-75.57,-1.53],[-76.09,-2.13],[-76.68,-2.56],[-77.86,-2.98],[-78.18,-3.35],[-78.16,-3.46],[-78.23,-3.49],[-78.35,-3.4],[-78.42,-3.78],[-78.68,-4.33],[-78.69,-4.56],[-78.91,-4.71],[-78.92,-4.86],[-79.03,-4.97],[-79.33,-4.93],[-79.5,-4.67],[-79.52,-4.54],[-79.64,-4.46],[-79.8,-4.48],[-80.14,-4.3],[-80.38,-4.46],[-80.48,-4.43],[-80.35,-4.21],[-80.49,-4.17],[-80.49,-4.01],[-80.3,-4],[-80.19,-3.91],[-80.23,-3.74],[-80.27,-3.42],[-80.33,-3.39],[-79.96,-3.16],[-79.73,-2.58],[-79.82,-2.36],[-79.84,-2.07],[-79.93,-2.55],[-80.03,-2.56],[-80.01,-2.35],[-80.29,-2.71],[-80.69,-2.4],[-80.84,-2.35],[-80.96,-2.19],[-80.77,-2.08],[-80.76,-1.82],[-80.83,-1.63],[-80.8,-1.38],[-80.9,-1.08],[-80.84,-0.98],[-80.55,-0.85],[-80.46,-0.59],[-80.28,-0.62],[-80.38,-0.58],[-80.48,-0.37],[-80.05,0.16],[-80.09,0.79],[-80.03,0.83],[-79.74,0.98],[-79.61,0.97],[-78.9,1.21],[-78.83,1.3],[-78.86,1.46],[-78.18,0.97],[-77.83,0.83],[-77.7,0.84],[-77.65,0.72],[-77.47,0.64],[-77.4,0.39],[-76.83,0.25],[-76.5,0.23],[-76.43,0.26],[-76.39,0.41],[-76.27,0.44],[-76.07,0.35],[-75.78,0.09],[-75.29,-0.11]],[[-80.13,-2.97],[-80.27,-3],[-80.25,-2.81],[-80.15,-2.7],[-79.91,-2.72],[-80.09,-2.85],[-80.13,-2.97]],[[-78.91,1.25],[-78.99,1.29],[-78.92,1.35],[-78.91,1.25]],[[-90.33,-0.77],[-90.54,-0.68],[-90.53,-0.58],[-90.27,-0.49],[-90.19,-0.54],[-90.19,-0.66],[-90.33,-0.77]],[[-89.42,-0.91],[-89.54,-0.95],[-89.61,-0.89],[-89.42,-0.72],[-89.32,-0.68],[-89.26,-0.73],[-89.42,-0.91]],[[-91.42,-0.46],[-91.61,-0.44],[-91.65,-0.28],[-91.46,-0.26],[-91.4,-0.32],[-91.42,-0.46]],[[-90.42,-1.34],[-90.52,-1.3],[-90.48,-1.22],[-90.43,-1.24],[-90.38,-1.29],[-90.42,-1.34]],[[-91.27,0.02],[-91.18,-0.22],[-90.97,-0.42],[-90.96,-0.59],[-90.8,-0.75],[-90.91,-0.94],[-91.13,-1.02],[-91.37,-1.02],[-91.5,-0.86],[-91.33,-0.71],[-91.14,-0.62],[-91.12,-0.56],[-91.37,-0.29],[-91.43,-0.02],[-91.55,-0.05],[-91.6,0],[-91.49,0.1],[-91.36,0.13],[-91.27,0.02]],[[-90.58,-0.33],[-90.81,-0.33],[-90.87,-0.27],[-90.82,-0.19],[-90.67,-0.19],[-90.55,-0.28],[-90.58,-0.33]]],"222":[[[-89.36,14.42],[-89.06,14.33],[-88.71,14.03],[-88.51,13.98],[-88.48,13.85],[-88.15,13.99],[-87.99,13.88],[-87.73,13.84],[-87.78,13.52],[-87.74,13.45],[-87.84,13.39],[-87.82,13.28],[-87.88,13.22],[-88.18,13.16],[-88.69,13.28],[-88.51,13.18],[-89.28,13.48],[-89.8,13.56],[-90.1,13.74],[-90.05,13.9],[-89.55,14.24],[-89.57,14.39],[-89.36,14.42]]],"238":[[[-58.85,-51.27],[-58.43,-51.32],[-58.38,-51.37],[-58.52,-51.42],[-58.51,-51.48],[-58.27,-51.57],[-58.26,-51.42],[-57.92,-51.4],[-57.81,-51.52],[-57.96,-51.58],[-57.79,-51.64],[-57.84,-51.71],[-58.22,-51.82],[-58.68,-51.94],[-58.65,-52.1],[-59.2,-52.02],[-59.07,-52.17],[-59.34,-52.2],[-59.4,-52.31],[-59.53,-52.24],[-59.65,-52.14],[-59.54,-51.97],[-59.57,-51.92],[-59.06,-51.69],[-59.1,-51.49],[-58.89,-51.36],[-58.92,-51.27],[-58.85,-51.27]],[[-60.29,-51.46],[-60.14,-51.48],[-59.92,-51.39],[-59.79,-51.45],[-59.46,-51.41],[-59.39,-51.36],[-59.27,-51.43],[-59.92,-51.97],[-60.24,-51.99],[-60.35,-52.14],[-60.51,-52.19],[-60.69,-52.19],[-60.96,-52.06],[-60.24,-51.77],[-60.28,-51.72],[-60.5,-51.76],[-60.58,-51.71],[-60.24,-51.64],[-60.51,-51.49],[-60.57,-51.36],[-60.29,-51.46]],[[-61.02,-51.79],[-60.87,-51.79],[-60.95,-51.95],[-61.03,-51.94],[-61.14,-51.84],[-61.02,-51.79]],[[-58.44,-52.01],[-58.43,-52.1],[-58.54,-52.03],[-58.44,-52.01]],[[-60.11,-51.4],[-60.28,-51.36],[-60.27,-51.28],[-60.17,-51.27],[-60.07,-51.31],[-60.11,-51.4]],[[-59.68,-52.23],[-59.77,-52.24],[-59.79,-52.16],[-59.68,-52.18],[-59.68,-52.23]]],"239":[[[-37.1,-54.07],[-36.7,-54.11],[-36.61,-54.19],[-36.65,-54.26],[-36.45,-54.31],[-36.33,-54.25],[-36.07,-54.55],[-35.89,-54.56],[-35.91,-54.71],[-35.8,-54.76],[-36.08,-54.87],[-36.25,-54.78],[-36.51,-54.51],[-36.74,-54.47],[-36.89,-54.34],[-37.5,-54.16],[-37.63,-54.17],[-37.69,-54.08],[-37.62,-54.04],[-38.02,-54.01],[-37.38,-53.98],[-37.1,-54.07]]],"250":[[[-60.83,14.49],[-60.86,14.43],[-61.06,14.47],[-61.09,14.53],[-61.01,14.6],[-61.14,14.65],[-61.21,14.85],[-61.13,14.87],[-60.93,14.75],[-60.83,14.49]],[[-61.59,16.01],[-61.67,15.96],[-61.76,16.06],[-61.79,16.3],[-61.75,16.36],[-61.55,16.27],[-61.59,16.01]],[[-61.23,15.89],[-61.31,15.9],[-61.27,16],[-61.21,15.96],[-61.23,15.89]],[[-54.62,2.33],[-54.4,2.46],[-54.2,2.82],[-54.2,3.14],[-54.01,3.45],[-53.99,3.59],[-54.35,4.05],[-54.47,4.92],[-54.33,5.19],[-54.09,5.41],[-53.92,5.77],[-53.85,5.78],[-53.46,5.56],[-52.9,5.43],[-52.29,4.94],[-52.32,4.77],[-52.22,4.86],[-52.06,4.72],[-51.96,4.51],[-52,4.35],[-51.88,4.63],[-51.83,4.64],[-51.65,4.06],[-51.77,3.99],[-52.33,3.18],[-52.56,2.57],[-52.7,2.36],[-53.01,2.18],[-53.23,2.21],[-53.33,2.34],[-53.51,2.25],[-53.77,2.35],[-54.13,2.12],[-54.62,2.33]]],"308":[[[-61.72,12.01],[-61.78,12.01],[-61.71,12.19],[-61.61,12.22],[-61.63,12.05],[-61.72,12.01]]],"320":[[[-92.23,14.54],[-92.16,14.69],[-92.16,14.96],[-92.08,15.07],[-92.21,15.28],[-91.74,16.07],[-90.45,16.07],[-90.42,16.39],[-90.63,16.51],[-90.71,16.71],[-91.41,17.26],[-90.99,17.25],[-90.99,17.82],[-89.16,17.82],[-89.24,15.89],[-88.89,15.89],[-88.6,15.76],[-88.54,15.85],[-88.6,15.95],[-88.23,15.73],[-88.98,15.14],[-89.14,15.07],[-89.22,14.87],[-89.17,14.61],[-89.36,14.42],[-89.57,14.39],[-89.55,14.24],[-90.05,13.9],[-90.1,13.74],[-90.61,13.93],[-91.15,13.93],[-91.38,13.99],[-92.23,14.54]]],"328":[[[-60.74,5.2],[-61.39,5.94],[-61.13,6.21],[-61.18,6.65],[-60.87,6.79],[-60.72,6.77],[-60.35,7],[-60.32,7.13],[-60.58,7.16],[-60.63,7.21],[-60.6,7.32],[-60.72,7.54],[-60.51,7.81],[-60.38,7.83],[-60.03,8.05],[-59.96,8.19],[-59.85,8.25],[-59.83,8.31],[-60.02,8.55],[-59.84,8.37],[-59.67,8.36],[-59.48,8.25],[-58.81,7.74],[-58.48,7.33],[-58.48,7.04],[-58.58,6.84],[-58.67,6.39],[-58.42,6.85],[-58.3,6.88],[-57.98,6.79],[-57.54,6.33],[-57.34,6.27],[-57.19,6.1],[-57.2,5.55],[-57.32,5.34],[-57.21,5.19],[-57.33,5.02],[-57.71,4.99],[-57.88,4.88],[-57.92,4.82],[-57.85,4.67],[-58.06,4.17],[-58.03,4],[-57.83,3.68],[-57.65,3.52],[-57.65,3.39],[-57.3,3.38],[-57.21,2.96],[-57.2,2.85],[-56.71,2.04],[-56.48,1.94],[-56.84,1.88],[-57.12,2.01],[-57.32,1.96],[-57.54,1.73],[-57.98,1.65],[-58.03,1.52],[-58.34,1.59],[-58.39,1.48],[-58.51,1.44],[-58.51,1.29],[-58.69,1.28],[-58.79,1.21],[-59.23,1.38],[-59.74,1.87],[-59.76,2.27],[-59.89,2.36],[-59.99,2.69],[-59.97,2.99],[-59.83,3.35],[-59.86,3.59],[-59.68,3.7],[-59.55,3.93],[-59.74,4.23],[-59.7,4.38],[-59.83,4.48],[-60.15,4.53],[-60.03,4.74],[-59.99,5.08],[-60.14,5.24],[-60.74,5.2]]],"340":[[[-83.16,14.99],[-83.54,14.98],[-83.63,14.88],[-84.15,14.72],[-84.24,14.75],[-84.46,14.64],[-84.65,14.66],[-84.86,14.81],[-84.98,14.75],[-85.04,14.61],[-85.16,14.53],[-85.18,14.34],[-85.68,13.98],[-85.73,13.86],[-85.99,13.97],[-86.04,14.05],[-86.33,13.77],[-86.76,13.75],[-86.71,13.31],[-86.87,13.27],[-86.96,13.05],[-87.06,12.99],[-87.34,12.98],[-87.33,13.08],[-87.41,13.13],[-87.49,13.35],[-87.81,13.4],[-87.73,13.48],[-87.78,13.52],[-87.73,13.84],[-87.99,13.88],[-88.15,13.99],[-88.48,13.85],[-88.51,13.98],[-88.71,14.03],[-89.06,14.33],[-89.36,14.42],[-89.17,14.61],[-89.22,14.87],[-89.14,15.07],[-88.98,15.14],[-88.23,15.73],[-88.13,15.7],[-87.88,15.88],[-87.62,15.91],[-87.49,15.79],[-87.28,15.83],[-86.91,15.76],[-86.36,15.78],[-85.93,15.95],[-85.99,16.02],[-85.48,15.9],[-84.97,15.99],[-84.56,15.8],[-84.43,15.83],[-84.52,15.87],[-84.26,15.82],[-83.77,15.44],[-84.08,15.51],[-84.1,15.4],[-83.93,15.39],[-83.76,15.22],[-83.59,15.27],[-83.5,15.22],[-83.65,15.37],[-83.37,15.24],[-83.29,15.08],[-83.16,14.99]]],"484":[[[-117.13,32.53],[-114.72,32.72],[-114.84,32.51],[-111.04,31.33],[-108.22,31.33],[-108.21,31.78],[-106.44,31.77],[-106.15,31.45],[-104.92,30.58],[-104.68,30.13],[-104.62,29.85],[-104.4,29.57],[-103.26,29],[-103.09,29.04],[-102.89,29.22],[-102.73,29.64],[-102.34,29.87],[-101.99,29.8],[-101.55,29.81],[-101.38,29.74],[-100.76,29.18],[-100.33,28.5],[-100.3,28.33],[-99.76,27.73],[-99.51,27.55],[-99.46,27.06],[-99.23,26.76],[-99.11,26.45],[-98.28,26.11],[-97.8,26.04],[-97.38,25.87],[-97.15,25.96],[-97.22,25.59],[-97.51,25.01],[-97.67,24.39],[-97.74,23.76],[-97.75,22.94],[-97.84,22.51],[-97.76,22.11],[-97.58,21.81],[-97.31,21.56],[-97.41,21.27],[-97.38,21.57],[-97.59,21.76],[-97.75,22.03],[-97.64,21.6],[-97.52,21.48],[-97.12,20.62],[-96.46,19.87],[-96.29,19.34],[-95.78,18.81],[-95.92,18.82],[-95.63,18.69],[-95.7,18.78],[-95.18,18.7],[-95.01,18.57],[-94.8,18.52],[-94.55,18.17],[-94.19,18.2],[-93.55,18.43],[-92.89,18.47],[-92.71,18.61],[-92.44,18.67],[-91.98,18.72],[-91.88,18.64],[-91.91,18.53],[-91.53,18.46],[-91.27,18.62],[-91.28,18.72],[-91.37,18.81],[-91.34,18.9],[-91.45,18.83],[-91.44,18.89],[-90.96,19.15],[-90.74,19.35],[-90.69,19.73],[-90.49,19.95],[-90.49,20.56],[-90.35,21.01],[-89.82,21.28],[-88.88,21.41],[-88.47,21.57],[-88.01,21.6],[-87.25,21.45],[-87.19,21.55],[-87.37,21.57],[-87.04,21.59],[-86.82,21.42],[-86.77,21.15],[-86.92,20.79],[-87.42,20.23],[-87.46,19.82],[-87.59,19.78],[-87.69,19.64],[-87.64,19.55],[-87.43,19.58],[-87.48,19.44],[-87.66,19.35],[-87.66,19.26],[-87.55,19.32],[-87.5,19.29],[-87.85,18.27],[-88.04,18.48],[-88.01,18.73],[-88.07,18.83],[-88.2,18.72],[-88.3,18.47],[-88.52,18.45],[-88.81,17.96],[-88.9,17.91],[-89.05,18],[-89.14,17.97],[-89.16,17.82],[-90.99,17.82],[-90.99,17.25],[-91.41,17.26],[-90.71,16.71],[-90.63,16.51],[-90.42,16.39],[-90.45,16.07],[-91.74,16.07],[-92.21,15.28],[-92.08,15.07],[-92.16,14.96],[-92.16,14.69],[-92.23,14.54],[-92.92,15.24],[-93.92,16.05],[-94.37,16.28],[-94.43,16.23],[-94,16.02],[-94.66,16.2],[-94.59,16.32],[-94.62,16.35],[-94.79,16.29],[-94.79,16.36],[-94.9,16.42],[-95.02,16.28],[-94.8,16.21],[-95.13,16.18],[-95.46,15.98],[-96.21,15.69],[-96.51,15.65],[-97.18,15.91],[-97.75,15.97],[-98.14,16.21],[-98.52,16.31],[-98.76,16.53],[-99.69,16.72],[-100.03,16.92],[-100.85,17.2],[-101.6,17.65],[-101.92,17.96],[-102.22,17.96],[-102.7,18.06],[-103.44,18.33],[-103.91,18.83],[-104.94,19.31],[-105.48,19.98],[-105.67,20.38],[-105.54,20.5],[-105.26,20.58],[-105.33,20.75],[-105.51,20.81],[-105.24,21.12],[-105.21,21.49],[-105.43,21.62],[-105.65,21.99],[-105.64,22.33],[-105.79,22.63],[-106.4,23.2],[-106.94,23.88],[-107.77,24.47],[-107.53,24.36],[-107.51,24.49],[-107.95,24.62],[-108.01,24.78],[-108.28,25.08],[-108.14,25.02],[-108.05,25.07],[-108.7,25.38],[-108.79,25.54],[-109.03,25.48],[-109.07,25.55],[-108.97,25.59],[-108.88,25.73],[-109.08,25.62],[-109.31,25.63],[-109.39,25.73],[-109.42,26.03],[-109.2,26.3],[-109.12,26.25],[-109.28,26.53],[-109.48,26.71],[-109.76,26.7],[-109.94,27.08],[-110.28,27.16],[-110.48,27.32],[-110.62,27.65],[-110.53,27.86],[-110.92,27.89],[-111.12,27.97],[-111.47,28.38],[-111.68,28.47],[-112.16,29.02],[-112.22,29.27],[-112.38,29.35],[-112.41,29.54],[-112.74,29.98],[-112.82,30.3],[-113.11,30.79],[-113.12,31.05],[-113.04,31.09],[-113.05,31.18],[-113.62,31.35],[-113.63,31.47],[-113.76,31.56],[-113.95,31.63],[-114,31.52],[-114.15,31.51],[-114.93,31.9],[-114.79,31.65],[-114.88,31.16],[-114.76,30.96],[-114.63,30.51],[-114.63,30.16],[-114.37,29.83],[-113.76,29.37],[-113.55,29.1],[-113.5,28.93],[-113.38,28.95],[-113.32,28.81],[-113.2,28.8],[-113.09,28.51],[-112.87,28.42],[-112.73,27.83],[-112.33,27.52],[-112.19,27.19],[-112,27.08],[-112.01,26.97],[-111.88,26.84],[-111.86,26.68],[-111.7,26.58],[-111.82,26.76],[-111.79,26.88],[-111.57,26.71],[-111.33,26.13],[-111.29,25.79],[-111.15,25.57],[-111.03,25.53],[-110.89,25.14],[-110.69,24.87],[-110.74,24.59],[-110.66,24.34],[-110.37,24.1],[-110.3,24.2],[-110.32,24.31],[-110.26,24.34],[-109.81,23.94],[-109.68,23.66],[-109.51,23.6],[-109.42,23.48],[-109.5,23.16],[-109.82,22.92],[-110,22.89],[-110.18,23.34],[-110.36,23.61],[-110.63,23.74],[-111.04,24.11],[-111.68,24.56],[-111.8,24.54],[-111.85,24.67],[-112.07,24.84],[-112.13,25.04],[-112.07,25.57],[-112.18,25.91],[-112.38,26.21],[-112.66,26.32],[-113.02,26.58],[-113.12,26.72],[-113.15,26.95],[-113.27,26.79],[-113.6,26.72],[-113.84,26.97],[-114.45,27.22],[-114.54,27.43],[-114.99,27.74],[-115.04,27.84],[-114.57,27.78],[-114.3,27.87],[-114.3,27.77],[-114.07,27.68],[-114.18,27.83],[-114.16,27.92],[-114.27,27.93],[-114.18,28.01],[-114.05,28.43],[-114.14,28.6],[-114.94,29.35],[-115.17,29.43],[-115.67,29.76],[-115.81,29.96],[-115.81,30.3],[-115.99,30.41],[-116.06,30.8],[-116.3,30.97],[-116.33,31.2],[-116.66,31.56],[-116.72,31.73],[-116.62,31.76],[-116.62,31.85],[-116.85,32],[-117.13,32.53]]],"528":[[[-68.2,12.14],[-68.25,12.03],[-68.35,12.23],[-68.37,12.3],[-68.22,12.23],[-68.2,12.14]]],"531":[[[-68.75,12.06],[-69,12.14],[-69.15,12.3],[-69.12,12.37],[-69.01,12.23],[-68.83,12.16],[-68.75,12.06]]],"533":[[[-69.9,12.45],[-70.07,12.55],[-70.05,12.6],[-69.9,12.45]]],"558":[[[-83.16,14.99],[-83.28,14.81],[-83.34,14.9],[-83.41,14.83],[-83.3,14.75],[-83.19,14.34],[-83.41,14],[-83.57,13.32],[-83.51,12.41],[-83.59,12.4],[-83.63,12.46],[-83.59,12.71],[-83.75,12.5],[-83.65,12.29],[-83.68,12.02],[-83.77,12.06],[-83.83,11.86],[-83.71,11.82],[-83.65,11.64],[-83.87,11.3],[-83.77,11.01],[-83.64,10.92],[-83.66,10.84],[-83.81,10.74],[-84.17,10.78],[-84.35,10.98],[-84.7,11.05],[-84.91,10.95],[-85.59,11.19],[-85.74,11.06],[-85.96,11.33],[-86.47,11.74],[-86.76,12.16],[-87.67,12.9],[-87.67,12.97],[-87.58,13.04],[-87.43,12.92],[-87.01,13.01],[-86.92,13.22],[-86.71,13.31],[-86.76,13.75],[-86.33,13.77],[-86.04,14.05],[-85.99,13.97],[-85.73,13.86],[-85.68,13.98],[-85.18,14.34],[-85.16,14.53],[-85.04,14.61],[-84.98,14.75],[-84.86,14.81],[-84.54,14.63],[-84.24,14.75],[-83.87,14.79],[-83.63,14.88],[-83.54,14.98],[-83.16,14.99]]],"591":[[[-77.37,8.66],[-77.48,8.5],[-77.2,7.97],[-77.34,7.84],[-77.35,7.71],[-77.54,7.57],[-77.59,7.54],[-77.76,7.7],[-77.74,7.54],[-77.9,7.23],[-78.17,7.54],[-78.42,8.06],[-78.29,8.09],[-78.28,8.25],[-78.14,8.39],[-77.76,8.13],[-78.01,8.32],[-78.1,8.5],[-78.22,8.4],[-78.4,8.51],[-78.41,8.36],[-78.51,8.63],[-79.09,9],[-79.51,8.97],[-79.69,8.85],[-79.81,8.64],[-79.75,8.6],[-80.46,8.21],[-80.46,8.08],[-80.07,7.67],[-80.01,7.5],[-80.07,7.45],[-80.29,7.43],[-80.44,7.27],[-80.84,7.22],[-81.06,7.9],[-81.16,7.85],[-81.22,7.62],[-81.27,7.63],[-81.5,7.72],[-81.73,8.14],[-81.97,8.22],[-82.16,8.19],[-82.23,8.31],[-82.78,8.3],[-82.87,8.25],[-82.88,8.07],[-83.03,8.34],[-82.86,8.45],[-82.92,8.74],[-82.73,8.92],[-82.94,9.06],[-82.94,9.45],[-82.8,9.59],[-82.64,9.51],[-82.57,9.58],[-82.37,9.43],[-82.34,9.21],[-82.19,9.19],[-82.24,9.03],[-82.08,8.93],[-81.78,8.96],[-81.9,9.14],[-81.55,8.83],[-81.36,8.78],[-80.84,8.89],[-80.55,9.08],[-80.13,9.21],[-79.58,9.6],[-79.11,9.54],[-78.93,9.43],[-78.5,9.41],[-78.08,9.24],[-77.37,8.66]],[[-78.9,8.27],[-78.92,8.23],[-78.96,8.33],[-78.91,8.46],[-78.86,8.45],[-78.84,8.35],[-78.9,8.27]],[[-81.6,7.33],[-81.85,7.45],[-81.75,7.62],[-81.6,7.33]],[[-82.23,9.38],[-82.24,9.33],[-82.32,9.42],[-82.28,9.43],[-82.23,9.38]],[[-79.07,8.25],[-79.11,8.21],[-79.09,8.3],[-79.07,8.25]]],"600":[[[-58.16,-20.16],[-57.83,-21],[-57.94,-21.49],[-57.96,-22.11],[-57.72,-22.1],[-57.57,-22.18],[-56.94,-22.27],[-56.63,-22.23],[-56.45,-22.08],[-56.25,-22.27],[-55.85,-22.31],[-55.62,-22.67],[-55.65,-22.89],[-55.52,-23.42],[-55.54,-23.58],[-55.46,-23.69],[-55.42,-23.95],[-55.08,-24],[-54.63,-23.81],[-54.24,-24.05],[-54.32,-24.13],[-54.28,-24.31],[-54.44,-25.12],[-54.61,-25.43],[-54.68,-26.31],[-54.83,-26.65],[-55.13,-26.89],[-55.43,-27.01],[-55.72,-27.41],[-56.16,-27.32],[-56.44,-27.55],[-56.61,-27.47],[-57.11,-27.47],[-58.17,-27.27],[-58.6,-27.31],[-58.62,-27.13],[-58.32,-26.86],[-58.19,-26.63],[-58.2,-26.38],[-58.11,-26.18],[-57.89,-26.01],[-57.75,-25.7],[-57.57,-25.53],[-57.65,-25.33],[-57.96,-25.05],[-58.37,-24.96],[-59.19,-24.56],[-59.89,-24.09],[-60.5,-23.96],[-61.03,-23.75],[-61.21,-23.56],[-61.8,-23.18],[-62.21,-22.61],[-62.65,-22.23],[-62.28,-21.07],[-62.28,-20.56],[-61.92,-20.06],[-61.76,-19.65],[-60.01,-19.3],[-59.09,-19.29],[-58.18,-19.82],[-58.16,-20.16]]],"604":[[[-69.96,-4.24],[-70.05,-4.33],[-70.24,-4.3],[-70.4,-4.15],[-70.8,-4.17],[-70.97,-4.35],[-71.84,-4.5],[-72.35,-4.79],[-72.7,-5.07],[-72.89,-5.12],[-72.98,-5.63],[-73.24,-6.1],[-73.14,-6.47],[-73.76,-6.91],[-73.81,-7.08],[-73.72,-7.31],[-73.96,-7.38],[-74,-7.56],[-73.72,-7.78],[-73.78,-7.94],[-73.64,-8.07],[-73.55,-8.35],[-73.36,-8.48],[-73.3,-8.65],[-72.97,-8.99],[-72.97,-9.12],[-73.21,-9.41],[-72.81,-9.41],[-72.38,-9.51],[-72.17,-9.84],[-72.18,-10],[-71.24,-9.97],[-70.54,-9.44],[-70.59,-9.54],[-70.57,-9.71],[-70.64,-9.82],[-70.64,-11.01],[-70.53,-10.95],[-70.39,-11.06],[-70.29,-11.06],[-69.96,-10.93],[-69.58,-10.95],[-68.69,-12.5],[-68.76,-12.69],[-68.98,-12.88],[-68.98,-13.5],[-69.08,-13.68],[-68.87,-14.17],[-69,-14.27],[-69.01,-14.38],[-69.36,-14.8],[-69.37,-14.96],[-69.17,-15.24],[-69.42,-15.64],[-69.22,-16.15],[-68.84,-16.34],[-69.03,-16.48],[-69.02,-16.64],[-69.2,-16.77],[-69.44,-17.09],[-69.63,-17.2],[-69.51,-17.51],[-69.85,-17.7],[-69.8,-17.99],[-69.93,-18.21],[-70.18,-18.32],[-70.42,-18.35],[-71.34,-17.68],[-71.44,-17.37],[-72.11,-17],[-72.47,-16.71],[-73.73,-16.2],[-74.15,-15.91],[-75.11,-15.41],[-75.53,-14.9],[-75.93,-14.63],[-76.17,-14.23],[-76.29,-14.13],[-76.3,-13.95],[-76.38,-13.86],[-76.26,-13.8],[-76.18,-13.52],[-76.23,-13.37],[-76.5,-12.98],[-76.83,-12.35],[-77.04,-12.17],[-77.15,-12.06],[-77.22,-11.66],[-77.63,-11.29],[-77.74,-10.84],[-78.19,-10.09],[-78.76,-8.62],[-79.01,-8.21],[-79.38,-7.84],[-79.76,-7.07],[-80.11,-6.65],[-81.14,-6.06],[-81.16,-5.88],[-81.09,-5.81],[-80.93,-5.84],[-80.88,-5.63],[-81.17,-5.17],[-81.11,-5.03],[-81.34,-4.67],[-81.23,-4.23],[-80.8,-3.73],[-80.33,-3.39],[-80.27,-3.42],[-80.18,-3.88],[-80.3,-4],[-80.49,-4.01],[-80.49,-4.17],[-80.35,-4.21],[-80.48,-4.43],[-80.38,-4.46],[-80.14,-4.3],[-79.8,-4.48],[-79.64,-4.46],[-79.52,-4.54],[-79.5,-4.67],[-79.33,-4.93],[-79.03,-4.97],[-78.92,-4.86],[-78.91,-4.71],[-78.69,-4.56],[-78.68,-4.33],[-78.42,-3.78],[-78.35,-3.4],[-78.23,-3.49],[-78.16,-3.46],[-78.18,-3.35],[-77.86,-2.98],[-76.68,-2.56],[-76.09,-2.13],[-75.57,-1.53],[-75.41,-0.92],[-75.25,-0.95],[-75.26,-0.59],[-75.63,-0.12],[-75.34,-0.14],[-75.18,-0.04],[-74.94,-0.19],[-74.8,-0.2],[-74.46,-0.52],[-74.25,-0.97],[-73.67,-1.25],[-73.52,-1.45],[-73.5,-1.69],[-73.2,-1.83],[-73.13,-2.08],[-73.15,-2.28],[-72.94,-2.39],[-72.63,-2.35],[-72.39,-2.43],[-72.22,-2.4],[-71.98,-2.33],[-71.75,-2.15],[-71.4,-2.33],[-70.97,-2.21],[-70.09,-2.66],[-70.07,-2.75],[-70.74,-3.78],[-70.53,-3.87],[-70.34,-3.82],[-69.96,-4.24]]],"662":[[[-60.9,13.82],[-60.95,13.72],[-61.06,13.78],[-61,14.01],[-60.91,14.09],[-60.9,13.82]]],"670":[[[-61.17,13.16],[-61.28,13.21],[-61.18,13.36],[-61.12,13.29],[-61.17,13.16]],[[-61.23,12.99],[-61.24,13.01],[-61.2,13.05],[-61.23,12.99]]],"740":[[[-54.16,5.36],[-54.45,5.01],[-54.45,4.48],[-54.35,4.05],[-53.99,3.59],[-54.01,3.45],[-54.2,3.14],[-54.2,2.82],[-54.4,2.46],[-54.54,2.34],[-54.66,2.33],[-54.72,2.44],[-54.88,2.45],[-54.98,2.6],[-55.38,2.44],[-55.73,2.41],[-55.98,2.52],[-56.14,2.26],[-55.91,2.04],[-55.93,1.89],[-56.02,1.84],[-56.71,2.04],[-56.98,2.51],[-57.21,2.88],[-57.3,3.38],[-57.65,3.39],[-57.65,3.52],[-57.83,3.68],[-58.06,4.1],[-57.85,4.67],[-57.92,4.82],[-57.71,4.99],[-57.31,5.05],[-57.21,5.21],[-57.32,5.34],[-57.18,5.53],[-57.06,5.94],[-56.97,5.99],[-56.46,5.94],[-55.94,5.8],[-55.9,5.7],[-55.91,5.89],[-55.83,5.96],[-54.83,5.99],[-54.36,5.91],[-54.05,5.81],[-54.05,5.61],[-54.16,5.36]]],"780":[[[-60.76,11.18],[-60.8,11.21],[-60.71,11.28],[-60.56,11.32],[-60.55,11.26],[-60.76,11.18]],[[-61.01,10.13],[-61.17,10.08],[-61.9,10.07],[-61.5,10.27],[-61.47,10.54],[-61.5,10.64],[-61.65,10.72],[-61.59,10.75],[-60.92,10.84],[-61.03,10.67],[-60.97,10.32],[-61.01,10.13]]],"858":[[[-53.37,-33.74],[-53.79,-34.38],[-54.17,-34.67],[-54.9,-34.93],[-55.67,-34.77],[-56.25,-34.9],[-56.46,-34.77],[-56.85,-34.68],[-57.17,-34.45],[-57.87,-34.45],[-58.4,-33.91],[-58.44,-33.72],[-58.36,-33.18],[-58.22,-33.13],[-58.09,-32.97],[-58.2,-32.47],[-58.12,-32.25],[-58.19,-31.92],[-57.99,-31.62],[-58.03,-31.42],[-57.89,-31.2],[-57.9,-30.97],[-57.81,-30.86],[-57.87,-30.59],[-57.65,-30.23],[-57.61,-30.19],[-57.55,-30.26],[-57.21,-30.28],[-57.12,-30.15],[-56.83,-30.11],[-56.04,-30.78],[-56,-31.08],[-55.81,-31.04],[-55.6,-30.85],[-55.17,-31.28],[-55.04,-31.28],[-54.9,-31.39],[-54.59,-31.49],[-54.22,-31.86],[-53.76,-32.06],[-53.6,-32.4],[-53.12,-32.74],[-53.53,-33.17],[-53.53,-33.66],[-53.37,-33.74]]],"862":[[[-60.82,9.14],[-60.94,9.11],[-60.82,9.21],[-60.73,9.2],[-60.82,9.14]],[[-63.85,11.13],[-63.82,11],[-63.92,10.89],[-64.4,10.98],[-64.21,11.09],[-64.03,11],[-63.89,11.17],[-63.85,11.13]],[[-65.21,10.91],[-65.36,10.91],[-65.41,10.94],[-65.38,10.97],[-65.21,10.91]],[[-61,8.87],[-61.06,8.85],[-61.07,8.95],[-60.89,9.05],[-60.86,8.95],[-61,8.87]],[[-60.02,8.55],[-59.83,8.31],[-59.85,8.25],[-59.96,8.19],[-60.03,8.05],[-60.38,7.83],[-60.51,7.81],[-60.72,7.54],[-60.6,7.32],[-60.63,7.21],[-60.58,7.16],[-60.32,7.13],[-60.35,7],[-60.72,6.77],[-60.87,6.79],[-61.14,6.69],[-61.2,6.59],[-61.13,6.21],[-61.39,5.94],[-60.67,5.16],[-60.63,4.89],[-60.91,4.69],[-61,4.54],[-61.28,4.52],[-61.56,4.29],[-62.15,4.1],[-62.41,4.16],[-62.71,4.02],[-62.76,3.67],[-62.86,3.59],[-62.97,3.59],[-63.34,3.94],[-63.53,3.89],[-64.02,3.93],[-64.19,4.13],[-64.58,4.14],[-64.79,4.28],[-64.82,4.23],[-64.67,4.01],[-64.22,3.59],[-64.22,3.21],[-64.01,2.67],[-64.05,2.5],[-63.39,2.41],[-63.39,2.22],[-63.46,2.14],[-64.01,1.93],[-64.11,1.62],[-64.2,1.53],[-64.31,1.46],[-64.49,1.45],[-64.73,1.25],[-65.1,1.11],[-65.47,0.69],[-65.55,0.69],[-65.52,0.84],[-65.68,0.98],[-66.06,0.79],[-66.3,0.75],[-66.43,0.82],[-66.88,1.22],[-67.21,2.39],[-67.62,2.79],[-67.86,2.79],[-67.83,2.89],[-67.31,3.42],[-67.66,3.86],[-67.86,4.51],[-67.83,5.27],[-67.64,5.56],[-67.57,5.83],[-67.47,5.93],[-67.48,6.18],[-67.86,6.29],[-68.47,6.16],[-68.94,6.2],[-69.27,6.1],[-69.43,6.12],[-70.09,6.94],[-70.74,7.09],[-71.13,6.99],[-72.01,7.03],[-72.21,7.37],[-72.39,7.42],[-72.47,7.52],[-72.45,7.97],[-72.36,8.15],[-72.42,8.38],[-72.66,8.63],[-72.8,9.11],[-72.96,9.14],[-73.06,9.26],[-73.37,9.19],[-73.01,9.79],[-72.87,10.49],[-72.69,10.84],[-72.45,11.11],[-72.25,11.2],[-71.96,11.67],[-71.32,11.86],[-71.49,11.72],[-71.96,11.57],[-71.95,11.41],[-71.83,11.19],[-71.64,11.01],[-71.73,10.99],[-71.6,10.66],[-71.66,10.44],[-71.96,10.11],[-72.11,9.82],[-71.98,9.55],[-71.76,9.34],[-71.78,9.25],[-71.69,9.07],[-71.54,9.05],[-71.24,9.16],[-71.08,9.35],[-71.05,9.71],[-71.26,10.14],[-71.39,10.26],[-71.55,10.78],[-71.46,10.84],[-71.47,10.96],[-70.23,11.37],[-70.1,11.52],[-69.89,11.44],[-69.81,11.47],[-69.82,11.67],[-70.19,11.62],[-70.29,11.89],[-70.2,12.1],[-70,12.18],[-69.86,12.05],[-69.76,11.68],[-69.63,11.48],[-69.23,11.52],[-68.83,11.43],[-68.4,11.16],[-68.27,10.88],[-68.32,10.81],[-68.3,10.69],[-68.14,10.49],[-67.87,10.47],[-66.99,10.61],[-66.25,10.63],[-66.11,10.57],[-66.09,10.47],[-65.85,10.26],[-65.13,10.07],[-64.85,10.1],[-64.19,10.46],[-63.83,10.45],[-63.73,10.5],[-63.86,10.56],[-64.25,10.54],[-64.3,10.64],[-63.5,10.64],[-62.7,10.75],[-62.24,10.7],[-61.88,10.74],[-62.38,10.55],[-62.91,10.53],[-62.69,10.29],[-62.66,10.2],[-62.74,10.06],[-62.6,10.12],[-62.6,10.22],[-62.55,10.2],[-62.32,9.78],[-62.22,9.88],[-62.15,9.82],[-62.16,9.98],[-62.08,9.98],[-61.91,9.87],[-61.74,9.63],[-61.77,9.81],[-61.62,9.82],[-61.59,9.89],[-61.31,9.63],[-61.01,9.56],[-60.79,9.36],[-61.02,9.15],[-61.25,8.6],[-61.62,8.6],[-61.3,8.41],[-60.8,8.59],[-60.48,8.55],[-60.34,8.63],[-60.02,8.55]]],"076":[[[-66.88,1.22],[-66.35,0.77],[-66.06,0.79],[-65.68,0.98],[-65.52,0.84],[-65.55,0.69],[-65.47,0.69],[-65.1,1.11],[-64.73,1.25],[-64.49,1.45],[-64.31,1.46],[-64.2,1.53],[-64.11,1.62],[-64.01,1.93],[-63.43,2.16],[-63.39,2.41],[-64.05,2.5],[-64.01,2.67],[-64.22,3.21],[-64.22,3.59],[-64.67,4.01],[-64.82,4.23],[-64.79,4.28],[-64.58,4.14],[-64.19,4.13],[-64.02,3.93],[-63.53,3.89],[-63.34,3.94],[-62.97,3.59],[-62.86,3.59],[-62.76,3.67],[-62.71,4.02],[-62.47,4.14],[-62.15,4.1],[-61.56,4.29],[-61.28,4.52],[-61,4.54],[-60.91,4.69],[-60.63,4.89],[-60.63,5.08],[-60.74,5.2],[-60.65,5.22],[-60.14,5.24],[-59.99,5.08],[-60.03,4.74],[-60.15,4.53],[-59.83,4.48],[-59.7,4.38],[-59.74,4.23],[-59.55,3.93],[-59.68,3.7],[-59.86,3.59],[-59.83,3.35],[-59.97,2.99],[-59.99,2.69],[-59.89,2.36],[-59.76,2.27],[-59.76,1.9],[-59.67,1.84],[-59.67,1.75],[-59.54,1.7],[-59.23,1.38],[-58.97,1.3],[-58.86,1.2],[-58.51,1.29],[-58.51,1.44],[-58.39,1.48],[-58.34,1.59],[-58.03,1.52],[-57.98,1.65],[-57.6,1.7],[-57.37,1.94],[-57.12,2.01],[-56.84,1.88],[-56.48,1.94],[-55.96,1.86],[-55.91,2.04],[-56.14,2.26],[-55.96,2.52],[-55.73,2.41],[-55.38,2.44],[-54.98,2.6],[-54.88,2.45],[-54.72,2.44],[-54.66,2.33],[-54.13,2.12],[-53.77,2.35],[-53.51,2.25],[-53.33,2.34],[-53.23,2.21],[-52.97,2.18],[-52.65,2.43],[-52.33,3.18],[-51.77,3.99],[-51.65,4.06],[-51.55,4.31],[-51.46,4.31],[-51.22,4.09],[-51.08,3.67],[-51.05,3.28],[-50.68,2.21],[-50.72,2.13],[-50.61,2.1],[-50.46,1.83],[-50.19,1.79],[-49.96,1.66],[-49.88,1.42],[-49.9,1.16],[-50.29,0.84],[-50.76,0.22],[-50.97,0.13],[-51.1,-0.03],[-51.28,-0.08],[-51.4,-0.39],[-51.7,-0.76],[-51.72,-1.02],[-51.92,-1.18],[-51.98,-1.37],[-52.23,-1.36],[-52.66,-1.55],[-52.31,-1.56],[-52.2,-1.64],[-51.95,-1.59],[-50.9,-0.94],[-50.84,-1.04],[-50.92,-1.12],[-50.68,-1.64],[-50.69,-1.76],[-50.4,-2.01],[-50,-1.83],[-49.72,-1.93],[-49.32,-1.73],[-49.64,-2.66],[-49.46,-2.5],[-49.21,-1.92],[-48.99,-1.83],[-48.71,-1.49],[-48.6,-1.49],[-48.46,-1.61],[-48.45,-1.52],[-48.35,-1.48],[-48.47,-1.39],[-48.41,-1.23],[-48.45,-1.15],[-48.31,-1.04],[-48.32,-0.96],[-48.12,-0.74],[-48.03,-0.71],[-47.96,-0.77],[-47.81,-0.66],[-47.69,-0.73],[-47.56,-0.67],[-47.42,-0.77],[-47.44,-0.65],[-47.27,-0.65],[-47.13,-0.75],[-46.81,-0.78],[-46.62,-0.97],[-46.22,-1.03],[-46.22,-1.1],[-46.05,-1.1],[-45.64,-1.35],[-45.46,-1.36],[-45.33,-1.72],[-45.18,-1.51],[-45.08,-1.47],[-44.72,-1.73],[-44.78,-1.8],[-44.65,-1.75],[-44.54,-2.05],[-44.66,-2.23],[-44.76,-2.26],[-44.66,-2.37],[-44.58,-2.23],[-44.44,-2.17],[-44.38,-2.37],[-44.52,-2.41],[-44.59,-2.57],[-44.72,-3.2],[-44.44,-2.94],[-44.31,-2.54],[-44.23,-2.47],[-44.11,-2.49],[-44.22,-2.75],[-44.19,-2.81],[-43.93,-2.58],[-43.45,-2.5],[-43.38,-2.38],[-42.94,-2.46],[-42.25,-2.79],[-42,-2.81],[-41.88,-2.75],[-41.48,-2.92],[-40.47,-2.8],[-39.97,-2.86],[-39.02,-3.39],[-38.69,-3.65],[-38.48,-3.72],[-38.05,-4.22],[-37.63,-4.59],[-37.3,-4.71],[-37.18,-4.91],[-36.86,-4.97],[-36.59,-5.1],[-35.98,-5.05],[-35.55,-5.13],[-35.39,-5.25],[-35.24,-5.57],[-34.83,-7.02],[-34.81,-7.29],[-34.88,-7.75],[-34.84,-7.97],[-34.97,-8.41],[-35.16,-8.93],[-35.6,-9.54],[-35.76,-9.7],[-35.89,-9.69],[-35.85,-9.77],[-35.89,-9.85],[-36.4,-10.48],[-36.94,-10.82],[-37.09,-11.05],[-37.18,-11.07],[-37.18,-11.19],[-37.32,-11.38],[-37.36,-11.4],[-37.36,-11.25],[-37.47,-11.65],[-37.69,-12.1],[-38.24,-12.84],[-38.4,-12.97],[-38.5,-12.96],[-38.53,-12.76],[-38.69,-12.62],[-38.75,-12.75],[-38.85,-12.79],[-38.76,-12.91],[-38.84,-13.15],[-39.03,-13.36],[-39.09,-13.59],[-39.03,-13.56],[-38.99,-13.61],[-39.05,-14.04],[-39.01,-14.1],[-38.94,-14.03],[-39.06,-14.65],[-38.88,-15.86],[-39.2,-17.18],[-39.16,-17.7],[-39.49,-17.99],[-39.65,-18.25],[-39.74,-18.64],[-39.7,-19.28],[-39.78,-19.57],[-40,-19.74],[-40.39,-20.57],[-40.79,-20.91],[-40.96,-21.24],[-41.05,-21.5],[-41,-22],[-41.7,-22.31],[-41.98,-22.58],[-41.94,-22.79],[-42.04,-22.95],[-42.96,-22.97],[-43.08,-22.9],[-43.09,-22.72],[-43.16,-22.73],[-43.24,-22.79],[-43.22,-22.99],[-43.9,-23.1],[-43.97,-23.06],[-43.68,-23.01],[-43.86,-22.91],[-44.15,-23.01],[-44.64,-23.06],[-44.67,-23.21],[-44.57,-23.27],[-44.95,-23.38],[-45.33,-23.6],[-45.46,-23.8],[-45.97,-23.79],[-46.87,-24.24],[-47.14,-24.49],[-47.99,-25.04],[-47.91,-25.07],[-47.93,-25.17],[-48.2,-25.42],[-48.24,-25.4],[-48.18,-25.31],[-48.4,-25.27],[-48.48,-25.44],[-48.65,-25.44],[-48.73,-25.37],[-48.69,-25.49],[-48.4,-25.6],[-48.54,-25.82],[-48.67,-25.84],[-48.58,-25.94],[-48.62,-26.18],[-48.75,-26.27],[-48.65,-26.41],[-48.68,-26.7],[-48.56,-27.2],[-48.64,-27.56],[-48.62,-28.08],[-48.8,-28.44],[-48.8,-28.58],[-49.5,-29.08],[-50.04,-29.8],[-50.3,-30.43],[-50.75,-31.07],[-51.15,-31.48],[-52.04,-32.12],[-52.06,-31.83],[-51.89,-31.87],[-51.68,-31.78],[-51.27,-31.48],[-51.17,-31.34],[-51.16,-31.12],[-50.98,-31.09],[-50.94,-30.9],[-50.69,-30.7],[-50.72,-30.43],[-50.58,-30.44],[-50.56,-30.25],[-51.03,-30.37],[-51.04,-30.26],[-51.18,-30.21],[-51.3,-30.04],[-51.28,-30.24],[-51.16,-30.36],[-51.25,-30.47],[-51.28,-30.75],[-51.36,-30.67],[-51.51,-31.11],[-51.97,-31.38],[-52.2,-31.89],[-52.13,-32.17],[-52.34,-32.44],[-52.65,-33.14],[-53.37,-33.74],[-53.52,-33.68],[-53.51,-33.11],[-53.12,-32.74],[-53.6,-32.4],[-53.76,-32.06],[-54.22,-31.86],[-54.59,-31.49],[-54.9,-31.39],[-55.04,-31.28],[-55.17,-31.28],[-55.6,-30.85],[-55.81,-31.04],[-56,-31.08],[-56.04,-30.78],[-56.83,-30.11],[-57.12,-30.15],[-57.21,-30.28],[-57.55,-30.26],[-57.61,-30.19],[-56.77,-29.42],[-55.89,-28.37],[-55.69,-28.38],[-55.73,-28.2],[-55.24,-27.9],[-55.1,-27.87],[-54.91,-27.71],[-54.83,-27.55],[-54.33,-27.42],[-54.16,-27.25],[-53.84,-27.12],[-53.72,-26.88],[-53.75,-26.75],[-53.67,-26.29],[-53.89,-25.67],[-54.15,-25.52],[-54.45,-25.62],[-54.61,-25.58],[-54.61,-25.43],[-54.44,-25.12],[-54.28,-24.31],[-54.32,-24.13],[-54.24,-24.05],[-54.63,-23.81],[-55.08,-24],[-55.42,-23.95],[-55.46,-23.69],[-55.54,-23.58],[-55.52,-23.42],[-55.65,-22.89],[-55.62,-22.67],[-55.8,-22.35],[-56.25,-22.27],[-56.45,-22.08],[-56.63,-22.23],[-56.94,-22.27],[-57.57,-22.18],[-57.72,-22.1],[-57.96,-22.11],[-57.94,-21.49],[-57.83,-21],[-58.16,-20.16],[-57.86,-19.98],[-58.13,-19.74],[-57.8,-19.08],[-57.72,-19.04],[-57.73,-18.92],[-57.78,-18.91],[-57.57,-18.28],[-57.49,-18.22],[-57.59,-18.12],[-57.83,-17.51],[-57.99,-17.51],[-58.39,-17.23],[-58.48,-16.7],[-58.35,-16.49],[-58.34,-16.28],[-58.54,-16.33],[-60.18,-16.27],[-60.24,-15.48],[-60.58,-15.1],[-60.27,-15.09],[-60.3,-14.62],[-60.48,-14.18],[-60.4,-14.02],[-60.51,-13.79],[-61.08,-13.49],[-61.79,-13.53],[-62.12,-13.16],[-62.76,-13],[-63.02,-12.81],[-63.07,-12.67],[-63.35,-12.68],[-63.69,-12.48],[-63.94,-12.53],[-64.42,-12.44],[-64.51,-12.25],[-64.99,-11.98],[-65.09,-11.74],[-65.18,-11.75],[-65.18,-11.65],[-65.39,-11.25],[-65.32,-11.02],[-65.45,-10.51],[-65.3,-10.15],[-65.31,-9.87],[-65.4,-9.71],[-65.56,-9.8],[-65.93,-9.79],[-66.57,-9.9],[-67.11,-10.27],[-67.42,-10.39],[-67.72,-10.68],[-68.07,-10.7],[-68.31,-10.97],[-68.62,-11.11],[-69.23,-10.96],[-69.96,-10.93],[-70.34,-11.07],[-70.53,-10.95],[-70.64,-11.01],[-70.64,-9.82],[-70.57,-9.71],[-70.6,-9.62],[-70.54,-9.44],[-71.24,-9.97],[-72.14,-10.01],[-72.17,-9.84],[-72.38,-9.51],[-72.81,-9.41],[-73.21,-9.41],[-72.97,-9.12],[-72.97,-8.99],[-73.3,-8.65],[-73.36,-8.48],[-73.55,-8.35],[-73.64,-8.07],[-73.78,-7.94],[-73.72,-7.78],[-74,-7.56],[-73.96,-7.38],[-73.72,-7.31],[-73.81,-7.08],[-73.76,-6.91],[-73.14,-6.47],[-73.24,-6.1],[-72.98,-5.63],[-72.89,-5.12],[-72.7,-5.07],[-72.35,-4.79],[-71.84,-4.5],[-70.97,-4.35],[-70.8,-4.17],[-70.4,-4.15],[-70.24,-4.3],[-69.97,-4.3],[-69.4,-1.2],[-69.45,-1],[-69.61,-0.76],[-69.63,-0.51],[-69.92,-0.32],[-70.07,-0.14],[-70.05,0.58],[-69.47,0.73],[-69.28,0.63],[-69.15,0.64],[-69.16,0.86],[-69.31,1.05],[-69.85,1.06],[-69.85,1.71],[-69.54,1.77],[-69.32,1.72],[-68.18,1.72],[-68.25,1.85],[-68.19,1.99],[-67.93,1.75],[-67.82,1.79],[-67.56,2.07],[-67.4,2.12],[-67.09,1.62],[-67.08,1.18],[-66.88,1.22]],[[-49.63,-0.23],[-49.12,-0.16],[-48.52,-0.25],[-48.38,-0.35],[-48.5,-0.66],[-48.57,-0.69],[-48.57,-0.89],[-48.84,-1.23],[-48.83,-1.39],[-49.04,-1.51],[-49.17,-1.41],[-49.23,-1.6],[-49.41,-1.55],[-49.51,-1.51],[-49.59,-1.71],[-49.8,-1.79],[-50.07,-1.7],[-50.51,-1.79],[-50.6,-1.7],[-50.76,-1.24],[-50.73,-1.13],[-50.58,-1.14],[-50.59,-1.07],[-50.71,-1.08],[-50.78,-1.01],[-50.79,-0.91],[-50.65,-0.27],[-50.25,-0.12],[-49.63,-0.23]],[[-44.13,-23.14],[-44.32,-23.21],[-44.36,-23.17],[-44.24,-23.07],[-44.13,-23.14]],[[-48.58,-26.4],[-48.67,-26.29],[-48.54,-26.17],[-48.5,-26.22],[-48.58,-26.4]],[[-45.26,-23.89],[-45.26,-23.94],[-45.45,-23.9],[-45.3,-23.73],[-45.23,-23.83],[-45.26,-23.89]],[[-44.5,-2.94],[-44.6,-3.04],[-44.57,-2.79],[-44.5,-2.73],[-44.5,-2.94]],[[-38.75,-13.1],[-38.79,-13.06],[-38.68,-12.97],[-38.67,-12.88],[-38.6,-12.99],[-38.75,-13.1]],[[-38.9,-13.47],[-38.98,-13.52],[-39.02,-13.45],[-38.91,-13.4],[-38.9,-13.47]],[[-44.88,-1.32],[-44.97,-1.39],[-45.01,-1.34],[-44.98,-1.27],[-44.88,-1.32]],[[-49.74,0.27],[-49.7,0.22],[-49.84,0.01],[-50,-0.03],[-50.29,0.03],[-50.34,0.13],[-50.27,0.23],[-49.88,0.3],[-49.74,0.27]],[[-50.3,1.94],[-50.46,1.91],[-50.51,2.03],[-50.49,2.13],[-50.42,2.16],[-50.34,2.14],[-50.3,1.94]],[[-50.65,-0.13],[-50.93,-0.33],[-51.04,-0.23],[-51,-0.11],[-50.77,-0.04],[-50.67,-0.06],[-50.65,-0.13]],[[-49.44,-0.11],[-49.71,-0.14],[-49.83,-0.09],[-49.6,0.06],[-49.4,0.06],[-49.38,-0.05],[-49.44,-0.11]],[[-50.43,0.14],[-50.45,-0.01],[-50.63,0.05],[-50.61,0.21],[-50.45,0.33],[-50.42,0.56],[-50.35,0.58],[-50.33,0.26],[-50.43,0.14]],[[-50.15,0.39],[-50.26,0.36],[-50.28,0.52],[-50.25,0.59],[-50.11,0.6],[-50.06,0.64],[-50.04,0.52],[-50.15,0.39]],[[-51.83,-1.43],[-51.94,-1.45],[-51.68,-1.09],[-51.68,-0.86],[-51.55,-0.65],[-51.26,-0.54],[-51.16,-0.67],[-51.28,-1.02],[-51.64,-1.34],[-51.83,-1.43]],[[-48.49,-27.77],[-48.56,-27.81],[-48.54,-27.57],[-48.42,-27.4],[-48.38,-27.45],[-48.49,-27.77]]],"068":[[[-69.51,-17.51],[-69.63,-17.2],[-69.44,-17.09],[-69.2,-16.77],[-69.02,-16.64],[-69.03,-16.48],[-68.84,-16.34],[-69.22,-16.15],[-69.42,-15.64],[-69.17,-15.24],[-69.37,-14.96],[-69.36,-14.8],[-69.01,-14.38],[-69,-14.27],[-68.87,-14.17],[-69.08,-13.68],[-68.98,-13.5],[-68.98,-12.88],[-68.76,-12.69],[-68.69,-12.5],[-69.58,-10.95],[-68.85,-11.01],[-68.73,-11.12],[-68.62,-11.11],[-68.31,-10.97],[-68.07,-10.7],[-67.72,-10.68],[-67.42,-10.39],[-67.11,-10.27],[-66.57,-9.9],[-65.93,-9.79],[-65.56,-9.8],[-65.4,-9.71],[-65.31,-9.87],[-65.3,-10.15],[-65.45,-10.51],[-65.34,-10.89],[-65.39,-11.18],[-65.32,-11.44],[-65.21,-11.58],[-65.18,-11.75],[-65.09,-11.74],[-64.99,-11.98],[-64.51,-12.25],[-64.42,-12.44],[-63.94,-12.53],[-63.69,-12.48],[-63.35,-12.68],[-63.07,-12.67],[-63.02,-12.81],[-62.76,-13],[-62.12,-13.16],[-61.79,-13.53],[-61.08,-13.49],[-60.51,-13.79],[-60.4,-14.02],[-60.48,-14.18],[-60.3,-14.62],[-60.27,-15.09],[-60.58,-15.1],[-60.38,-15.32],[-60.24,-15.48],[-60.18,-16.27],[-58.54,-16.33],[-58.34,-16.28],[-58.35,-16.49],[-58.48,-16.7],[-58.39,-17.23],[-57.99,-17.51],[-57.83,-17.51],[-57.59,-18.12],[-57.49,-18.22],[-57.57,-18.28],[-57.78,-18.91],[-57.73,-18.92],[-57.72,-19.04],[-57.8,-19.08],[-58.13,-19.74],[-57.86,-19.98],[-58.16,-20.16],[-58.18,-19.82],[-59.09,-19.29],[-60.01,-19.3],[-61.76,-19.65],[-61.92,-20.06],[-62.28,-20.56],[-62.28,-21.07],[-62.65,-22.23],[-62.83,-22],[-63.86,-22.01],[-63.97,-22.07],[-64.27,-22.6],[-64.32,-22.83],[-64.6,-22.23],[-64.99,-22.11],[-65.77,-22.1],[-66.1,-21.83],[-66.22,-21.8],[-66.36,-22.11],[-66.71,-22.22],[-66.8,-22.41],[-67.03,-22.55],[-67.2,-22.82],[-67.58,-22.89],[-67.88,-22.82],[-67.88,-22.49],[-67.99,-22.06],[-68.08,-21.98],[-68.19,-21.62],[-68.2,-21.3],[-68.43,-20.95],[-68.56,-20.9],[-68.56,-20.72],[-68.49,-20.63],[-68.76,-20.42],[-68.69,-20.31],[-68.76,-20.09],[-68.6,-20.05],[-68.56,-19.97],[-68.7,-19.72],[-68.46,-19.43],[-68.97,-18.97],[-69.14,-18.14],[-69.09,-18.05],[-69.31,-17.94],[-69.51,-17.51]]],"084":[[[-89.16,17.82],[-89.14,17.97],[-89.05,18],[-88.9,17.91],[-88.81,17.96],[-88.52,18.45],[-88.3,18.47],[-88.35,18.36],[-88.13,18.35],[-88.08,18.23],[-88.27,17.61],[-88.2,17.52],[-88.29,17.31],[-88.26,16.96],[-88.31,16.63],[-88.4,16.49],[-88.56,16.29],[-88.7,16.25],[-88.88,16.02],[-88.89,15.89],[-89.23,15.89],[-89.16,17.82]]],"052":[[[-59.49,13.08],[-59.61,13.1],[-59.65,13.3],[-59.59,13.32],[-59.43,13.15],[-59.49,13.08]]],"032":[[[-57.61,-30.19],[-57.87,-30.59],[-57.81,-30.86],[-57.9,-30.97],[-57.89,-31.2],[-58.03,-31.42],[-57.99,-31.62],[-58.19,-31.92],[-58.12,-32.25],[-58.22,-32.56],[-58.17,-32.96],[-58.25,-33.08],[-58.42,-33.11],[-58.55,-33.66],[-58.39,-34.19],[-58.52,-34.3],[-58.28,-34.68],[-57.55,-35.02],[-57.17,-35.36],[-57.16,-35.51],[-57.35,-35.72],[-57.34,-36.03],[-57.08,-36.3],[-56.75,-36.35],[-56.67,-36.85],[-57.09,-37.45],[-57.4,-37.75],[-57.55,-38.09],[-58.18,-38.44],[-59.83,-38.84],[-61.11,-38.99],[-61.85,-38.96],[-62.34,-38.8],[-62.38,-38.85],[-62.3,-38.99],[-62.3,-39.24],[-62.05,-39.37],[-62.18,-39.38],[-62.08,-39.46],[-62.13,-39.83],[-62.29,-39.89],[-62.4,-40.2],[-62.39,-40.46],[-62.25,-40.67],[-62.39,-40.89],[-62.96,-41.11],[-63.62,-41.16],[-64.85,-40.81],[-64.81,-40.76],[-64.87,-40.74],[-65.13,-40.88],[-65.16,-41.11],[-65.02,-41.57],[-65.06,-41.97],[-64.99,-42.1],[-64.54,-42.26],[-64.57,-42.42],[-64.42,-42.43],[-64.1,-42.39],[-64.06,-42.27],[-64.23,-42.22],[-63.79,-42.11],[-63.63,-42.28],[-63.62,-42.7],[-63.69,-42.81],[-64.04,-42.88],[-64.13,-42.86],[-64.32,-42.57],[-64.49,-42.51],[-64.97,-42.67],[-65.03,-42.76],[-64.32,-42.97],[-64.84,-43.19],[-65.25,-43.57],[-65.31,-43.79],[-65.24,-44.05],[-65.31,-44.16],[-65.29,-44.36],[-65.36,-44.48],[-65.65,-44.66],[-65.7,-44.8],[-65.6,-44.88],[-65.64,-45.01],[-66.19,-44.97],[-66.58,-45.18],[-66.94,-45.26],[-67.26,-45.58],[-67.6,-46.05],[-67.51,-46.44],[-66.78,-47.01],[-65.85,-47.16],[-65.74,-47.35],[-65.77,-47.57],[-65.89,-47.7],[-66.22,-47.83],[-65.93,-47.83],[-65.81,-47.94],[-66.39,-48.34],[-67.13,-48.69],[-67.47,-48.95],[-67.69,-49.25],[-67.78,-49.86],[-67.91,-49.98],[-68.26,-50.1],[-68.49,-49.98],[-68.67,-49.75],[-68.66,-49.94],[-68.98,-50],[-68.6,-50.01],[-68.42,-50.16],[-68.94,-50.38],[-69.09,-50.58],[-69.15,-50.86],[-69.36,-51.03],[-69.2,-50.99],[-69.06,-51.3],[-69.06,-51.55],[-69.46,-51.58],[-68.96,-51.68],[-68.4,-52.31],[-68.44,-52.36],[-68.46,-52.29],[-69.96,-52.01],[-71.92,-51.99],[-71.97,-51.96],[-71.95,-51.88],[-72.41,-51.54],[-72.3,-51.3],[-72.38,-51.1],[-72.28,-50.91],[-72.34,-50.68],[-72.51,-50.61],[-73.15,-50.74],[-73.38,-50.23],[-73.5,-50.12],[-73.53,-49.91],[-73.47,-49.79],[-73.58,-49.58],[-73.55,-49.46],[-73.46,-49.31],[-73.14,-49.3],[-73.15,-49.19],[-73.03,-49.01],[-72.61,-48.79],[-72.61,-48.52],[-72.36,-48.37],[-72.29,-48.23],[-72.33,-48.11],[-72.51,-47.97],[-72.52,-47.88],[-72.34,-47.49],[-72.04,-47.24],[-71.91,-47.2],[-71.94,-46.83],[-71.7,-46.65],[-71.76,-46.32],[-71.88,-46.16],[-71.63,-45.95],[-71.75,-45.84],[-71.75,-45.58],[-71.51,-45.51],[-71.35,-45.33],[-71.35,-45.23],[-71.6,-44.98],[-72.04,-44.9],[-72.06,-44.77],[-71.26,-44.76],[-71.16,-44.56],[-71.21,-44.44],[-71.82,-44.38],[-71.81,-44.11],[-71.68,-43.93],[-71.79,-43.75],[-71.74,-43.7],[-71.75,-43.59],[-71.91,-43.44],[-71.91,-43.35],[-71.75,-43.24],[-71.78,-43.17],[-72.05,-43.1],[-72.15,-42.99],[-72.14,-42.58],[-72.05,-42.47],[-72.11,-42.25],[-72.03,-42.15],[-71.86,-42.15],[-71.75,-42.05],[-71.91,-41.65],[-71.87,-40.89],[-71.94,-40.79],[-71.8,-40.44],[-71.7,-40.34],[-71.8,-40.25],[-71.8,-40.13],[-71.66,-40.02],[-71.64,-39.89],[-71.72,-39.64],[-71.54,-39.6],[-71.42,-39.29],[-71.4,-38.93],[-70.95,-38.74],[-70.85,-38.54],[-70.97,-38.45],[-71.03,-38.04],[-71.17,-37.76],[-71.13,-37.44],[-71.2,-37.3],[-71.12,-37.12],[-71.19,-36.84],[-71.06,-36.52],[-70.75,-36.39],[-70.72,-36.28],[-70.4,-36.06],[-70.41,-35.52],[-70.47,-35.33],[-70.56,-35.25],[-70.39,-35.15],[-70.29,-34.73],[-70.05,-34.3],[-69.85,-34.22],[-69.89,-33.73],[-69.82,-33.28],[-70.02,-33.27],[-70.08,-33.2],[-70.09,-33.03],[-70.02,-32.88],[-70.12,-32.81],[-70.17,-32.47],[-70.32,-32.27],[-70.36,-32.08],[-70.25,-31.96],[-70.45,-31.84],[-70.58,-31.57],[-70.52,-31.15],[-70.39,-31.12],[-70.31,-31.02],[-70.35,-30.9],[-70.17,-30.39],[-69.96,-30.36],[-69.84,-30.17],[-69.96,-30.08],[-69.93,-29.77],[-70.03,-29.32],[-69.83,-29.1],[-69.66,-28.41],[-69.17,-27.92],[-68.85,-27.15],[-68.71,-27.11],[-68.59,-27.14],[-68.32,-26.97],[-68.32,-26.88],[-68.59,-26.47],[-68.58,-26.35],[-68.41,-26.15],[-68.6,-25.49],[-68.54,-25.24],[-68.38,-25.09],[-68.56,-24.84],[-68.51,-24.63],[-68.25,-24.39],[-67.35,-24.03],[-67.01,-23],[-67.2,-22.82],[-67.03,-22.55],[-66.8,-22.41],[-66.71,-22.22],[-66.36,-22.11],[-66.22,-21.8],[-66.1,-21.83],[-65.77,-22.1],[-64.99,-22.11],[-64.6,-22.23],[-64.32,-22.83],[-64.27,-22.6],[-63.92,-22.03],[-62.83,-22],[-62.62,-22.29],[-62.21,-22.61],[-61.93,-23.06],[-61.21,-23.56],[-61.03,-23.75],[-60.5,-23.96],[-59.89,-24.09],[-59.19,-24.56],[-58.37,-24.96],[-58.14,-24.98],[-57.82,-25.14],[-57.59,-25.41],[-57.57,-25.53],[-57.75,-25.7],[-57.89,-26.01],[-58.11,-26.18],[-58.2,-26.38],[-58.19,-26.63],[-58.32,-26.86],[-58.62,-27.13],[-58.6,-27.31],[-58.17,-27.27],[-57.11,-27.47],[-56.61,-27.47],[-56.44,-27.55],[-56.16,-27.32],[-55.72,-27.41],[-55.43,-27.01],[-55.14,-26.93],[-54.75,-26.53],[-54.63,-26.01],[-54.61,-25.58],[-54.45,-25.62],[-54.15,-25.52],[-53.89,-25.67],[-53.67,-26.29],[-53.75,-26.75],[-53.72,-26.88],[-53.84,-27.12],[-54.16,-27.25],[-54.33,-27.42],[-54.83,-27.55],[-54.91,-27.71],[-55.1,-27.87],[-55.24,-27.9],[-55.73,-28.2],[-55.69,-28.38],[-55.89,-28.37],[-56.77,-29.42],[-57.61,-30.19]],[[-68.65,-54.85],[-68.63,-52.65],[-68.34,-52.9],[-68.24,-53.08],[-68.33,-53.02],[-68.43,-53.06],[-68.52,-53.18],[-68.49,-53.26],[-68.16,-53.31],[-68.01,-53.56],[-67.5,-53.92],[-66.67,-54.31],[-65.99,-54.6],[-65.75,-54.65],[-65.25,-54.64],[-65.18,-54.68],[-65.25,-54.79],[-65.47,-54.91],[-65.95,-54.92],[-66.51,-55.03],[-67.13,-54.9],[-68.22,-54.82],[-68.65,-54.85]],[[-64.55,-54.72],[-63.82,-54.73],[-64.03,-54.79],[-64.32,-54.8],[-64.64,-54.9],[-64.76,-54.83],[-64.55,-54.72]],[[-61.88,-39.17],[-61.86,-39.23],[-61.92,-39.23],[-62.08,-39.11],[-61.88,-39.17]]]};
 const _EVM_MODELOS = ["manchete", "tarja", "kinetic", "palco", "cta", "numero", "lista", "antesdepois", "citacao", "selo"];   // v34: +5 modelos
 const _EVM_NOVOS = ["numero", "lista", "antesdepois", "citacao", "selo"];                // v34: no máximo 1 de cada na tela por vez
-const _EVM_ESCONDE = ["numero", "lista", "antesdepois", "citacao"];                       // v34: escondem a legenda normal (o selo não)
+const _EVM_ESCONDE = ["numero", "lista", "antesdepois", "citacao"];                       // v34: escondiam a legenda normal · v48: regra #12 — a legenda fica menor e embaixo (legendaPequena); o selo não mexe nela
 const _EVM_DENTRO = ["mapa", "contadores", "fluxo", "grafico"];
 const _EVM_FONTES = [["Anton", "400", ""], ["Instrument Serif", "400", "italic"], ["Inter", "500", ""], ["Inter", "700", ""], ["Inter", "800", ""], ["JetBrains Mono", "500", ""]];
 let _evmFontesProm = null;
@@ -124342,14 +124625,17 @@ function wordmark(cx, y, tam, cor, k){
 function cta(it, t){
   if(t < it.t0) return; const pin = prog(t, it.t0, 0.6), m = mola(pin), fimVideo = INFO.fim;
   const fim = EASE(prog(t, fimVideo - 0.05, 0.6));            // depois que a fala acaba: fecha numa tela de marca
-  if(!SO_CONT){ X.save(); X.fillStyle = "rgba(10,6,20," + (0.45 * EASE(pin) + 0.5 * fim) + ")"; X.fillRect(-DX, -DY, W, H); X.restore(); }   // v38: fica parado na tela
+  /* v48 (06/10/2026): C3 / E2-7 — com o rosto na tela e a pessoa ainda falando, o CTA vira uma TARJA BAIXA (260 × 0,69 ≈ 180 px de altura, centro em y 1120),
+     sem escurecer o rosto. Quando a fala acaba (fim → 1) ele sobe e vira a tela de marca de sempre. */
+  const baixo = API.rosto ? 1 - fim : 0, kB = 1 - 0.31 * baixo;
+  if(!SO_CONT){ X.save(); X.fillStyle = "rgba(10,6,20," + (0.45 * EASE(pin) * (1 - baixo) + 0.5 * fim) + ")"; X.fillRect(-DX, -DY, W, H); X.restore(); if(baixo > 0) protegeBaixo(EASE(pin) * baixo, 1120 - 90); }   // v38: fica parado na tela
   /* v33: tudo acima da área de baixo do Reels (a logo final passava de SAFE.base); título longo quebra em 2 linhas, frase longa também */
   const subTx = tech() ? it.sub.toUpperCase() : it.sub;
   const fT = ajusta(it.titulo, 82, "Anton", 900 - 52 - 180, { esp: 1 }, 2, 0.8);
   const fS = subTx ? (tech() ? ajusta(subTx, 44, "Mono", W - 2 * SAFE.lado - 20, {}, 2, 0.7) : ajusta(subTx, 70, "ISerif", W - 2 * SAFE.lado - 20, { estilo: "italic" }, 2, 0.7)) : { linhas: [], tam: 0 };
   const lS = tech() ? alt("Mono", fS.tam) : alt("ISerif", fS.tam), extraS = Math.max(0, fS.linhas.length - 1) * lS;
-  const cx = 540, cy = 800 - extraS - fim * 120, w = 900, h = 260;
-  X.save(); X.translate(cx, cy); X.scale(0.88 + 0.12 * m, 0.88 + 0.12 * m); X.globalAlpha = cl(pin * 2, 0, 1);
+  const cx = 540, cy = lerp(800 - extraS - fim * 120, 1120, baixo), w = 900, h = 260;
+  X.save(); X.translate(cx, cy); X.scale((0.88 + 0.12 * m) * kB, (0.88 + 0.12 * m) * kB); X.globalAlpha = cl(pin * 2, 0, 1);
   const g = X.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2); g.addColorStop(0, R.marca.pri); g.addColorStop(1, R.marca.logo);
   if(tech()){ X.shadowColor = cL(.9); X.shadowBlur = 50; X.fillStyle = "rgba(12,7,26,.92)"; ret(-w / 2, -h / 2, w, h, 8); X.fill(); X.shadowBlur = 0;
     X.strokeStyle = g; X.lineWidth = 4; X.stroke(); hud(-w / 2 - 14, -h / 2 - 14, w + 28, h + 28, R.marca.logo, 40, 5); }
@@ -124364,11 +124650,11 @@ function cta(it, t){
   const ic = icone("arrow-up-right", R.marca.pri, 2.6), bx = w / 2 - 96, pul = 1 + 0.06 * Math.sin(t * 7);
   X.save(); X.translate(bx, 0); X.scale(pul, pul); X.fillStyle = "#ffffff"; X.beginPath(); X.arc(0, 0, 58, 0, Math.PI * 2); X.fill(); if(ic.complete) X.drawImage(ic, -32, -32, 64, 64); X.restore();
   X.restore();
-  const k = prog(t, it.marca_t - 0.05, 0.6); if(k > 0){
+  const k = prog(t, it.marca_t - 0.05, 0.6); if(k > 0 && baixo < 0.99){ X.save(); X.globalAlpha *= 1 - baixo;      // v48: na tarja baixa a frase e a marca esperam a fala acabar
     fS.linhas.forEach((ln, i) => { const yy = cy + 250 + i * lS;
       if(tech()) digita(k, 540 - medir(ln, fS.tam, "Mono") / 2, yy, ln, fS.tam, "Mono", R.tom.t3, {});
       else linhaSobe(k, 540 - medir(ln, fS.tam, "ISerif", "", "italic") / 2, yy, ln, fS.tam, "ISerif", R.tom.t1, { estilo: "italic" }); });
-    wordmark(540, cy + 400 + extraS, 132, "#ffffff", EASE(prog(t, it.marca_t + 0.15, 0.6))); }
+    wordmark(540, cy + 400 + extraS, 132, "#ffffff", EASE(prog(t, it.marca_t + 0.15, 0.6))); X.restore(); }
 }
 
 /* ══ v34: 5 MODELOS NOVOS — numero · lista · antesdepois · citacao · selo (o mesmo formato no Estúdio e no servidor)
@@ -124376,6 +124662,15 @@ function cta(it, t){
    Todos cabem na área segura: o texto diminui e quebra em linhas (ajusta). Entrada 0,5 s, cascata ≤ 100 ms, saída 0,3 s. ══ */
 const LC = W - 2 * SAFE.lado - 40, YM = 770;                  // largura do cartão (910) e o meio da área do texto (270 a 1250)
 const topoDe = (h) => API.rosto ? cl(SAFE.base - 24 - h, SAFE.topo + 24, SAFE.base - 24 - h) : cl(YM - h / 2, SAFE.topo + 24, SAFE.base - 24 - h);   // v47: com rosto na tela o cartão desce (sai da frente do rosto)
+/* v48 (06/10/2026): contrato C3 — cartão com abaixo_rosto: true (o servidor v48 marca quando o rosto fica atrás do cartão) é desenhado ABAIXO do rosto:
+   topo em 1000 px (o rosto fica em ~0,42 × 1920 ≈ 806 px) e, se não couber até SAFE.base, a escala diminui (nunca sobe para cima do rosto).
+   A proteção escura vira só embaixo (protegeBaixo), para não escurecer o rosto. */
+const TOPO_ROSTO = 1000;
+const abaixo = (it, h) => { if(!it || !it.abaixo_rosto) return null; const cabe = SAFE.base - 16 - TOPO_ROSTO; return { y: TOPO_ROSTO, k: Math.min(1, cabe / Math.max(1, h)) }; };
+function encolhe(ab){ if(!ab || ab.k >= 1) return; X.translate(540, ab.y); X.scale(ab.k, ab.k); X.translate(-540, -ab.y); }
+function protegeBaixo(a, y0){ if(a <= 0 || SO_CONT) return; X.save(); X.globalAlpha *= a; X.translate(-DX, -DY);
+  const ya = Math.max(0, y0 - 170), g = X.createLinearGradient(0, ya, 0, H); g.addColorStop(0, "rgba(8,5,16,0)"); g.addColorStop(0.22, "rgba(8,5,16,.40)"); g.addColorStop(1, "rgba(8,5,16,.50)");
+  X.fillStyle = g; X.fillRect(0, ya, W, H - ya); X.restore(); }
 const largura = (cont, pad, min) => Math.min(LC, Math.max(min, Math.ceil(cont) + 2 * pad));     // o cartão abraça o texto (frase curta = cartão menor), centrado
 /* a "roupa" do cartão em cada estilo: Editorial = cartão branco · Tech = HUD escuro · Clean = vidro escuro liso · Impacto = bloco na cor, cantos retos, sombra dura */
 function roupa(){ const e = R.estilo, m = R.marca;
@@ -124421,9 +124716,9 @@ function numero(it, t){
   const fR = tech() ? ajusta("// " + it.rotulo.toUpperCase(), 38, "Mono", MW, {}, 2, 0.8) : ajusta(it.rotulo, 66, "ISerif", MW, oR, 2, 0.75);
   const lR = alt(famR, fR.tam), aN = metr("0", T, "Anton").a, aR = metr("H", fR.tam, famR, "", oR.estilo).a;
   CW = largura(Math.max(largT(fim, T), fR.w), pad, 560); x = 540 - CW / 2;
-  const h = 70 + aN + 40 + (est === "impacto" ? 10 : 6) + 46 + aR + (fR.linhas.length - 1) * lR + 64, y = topoDe(h);
+  const h = 70 + aN + 40 + (est === "impacto" ? 10 : 6) + 46 + aR + (fR.linhas.length - 1) * lR + 64, ab = abaixo(it, h), y = ab ? ab.y : topoDe(h);   // v48: C3
   const yN = y + 70 + aN, yB = yN + 40, yR = yB + (est === "impacto" ? 10 : 6) + 46 + aR;
-  X.save(); protege(v.e * (1 - v.s)); entra(v, y + h / 2);
+  X.save(); if(ab) protegeBaixo(v.e * (1 - v.s), y); else protege(v.e * (1 - v.s)); encolhe(ab); entra(v, y + h / 2);
   cartao(x, y, CW, h, rp);
   const k = EOUT(prog(t, it.t0 + 0.2, 0.6)), s = fim, tot = largT(s, T);   // v47: o número já entra com o valor final (contar mostrava "+13" antes do "+29"); k = só a barra
   const pop = 1 + 0.045 * Math.sin(Math.PI * prog(t, it.t0 + 0.2, 0.32));           // assenta com um "tum" quando entra
@@ -124455,8 +124750,8 @@ function lista(it, t){
   const lT = fT ? alt(famT, fT.tam) : 0, aT = fT ? metr("H", fT.tam, famT).a : 0, hT = fT ? aT + (fT.linhas.length - 1) * lT + 46 : 0;
   const alts = fits.map((f) => Math.max(D, aI + (f.linhas.length - 1) * lI + 14)), gR = 26;
   CW = largura(Math.max(fT ? fT.w : 0, D + gI + Math.max(...fits.map((f) => f.w * tI / f.tam))), pad, 600); x = 540 - CW / 2;
-  const h = pad + 22 + hT + alts.reduce((a, b) => a + b, 0) + gR * (n - 1) + pad, y = topoDe(h);
-  X.save(); protege(v.e * (1 - v.s)); entra(v, y + h / 2);
+  const h = pad + 22 + hT + alts.reduce((a, b) => a + b, 0) + gR * (n - 1) + pad, ab = abaixo(it, h), y = ab ? ab.y : topoDe(h);   // v48: C3
+  X.save(); if(ab) protegeBaixo(v.e * (1 - v.s), y); else protege(v.e * (1 - v.s)); encolhe(ab); entra(v, y + h / 2);
   cartao(x, y, CW, h, rp);
   X.fillStyle = rp.acento; X.fillRect(x + pad, y + pad - 18, 54 * EOUT(prog(t, it.t0 + 0.05, 0.4)), 6);
   if(fT) fT.linhas.forEach((ln, i) => { const yy = y + pad + 22 + aT + i * lT, p = prog(t, it.t0 + 0.1 + i * 0.07, 0.5);
@@ -124489,8 +124784,8 @@ function antesdepois(it, t){
   const fR = it.rotulo ? ajusta(tech() ? "// " + it.rotulo.toUpperCase() : it.rotulo, tech() ? 30 : est === "impacto" ? 46 : 31, famR, LC - 56, oR, 1, 0.6) : null, aR = fR ? metr("H", fR.tam, famR, oR.peso).a : 0;
   CW = largura(Math.max(fA.w, fD.w, 150, fR ? fR.w + 56 - 2 * pad : 0), pad, 560); x = 540 - CW / 2;
   const hA = pad + aTag + 30 + aA + (fA.linhas.length - 1) * lA + pad, hD = pad + aTag + 34 + aD + (fD.linhas.length - 1) * lD + pad + 4, G = 124;
-  const tot = (fR ? aR + 34 : 0) + hA + G + hD, y = topoDe(tot), yA = y + (fR ? aR + 34 : 0), yD = yA + hA + G;
-  X.save(); protege(v.e * (1 - v.s)); entra(v, y + tot / 2);
+  const tot = (fR ? aR + 34 : 0) + hA + G + hD, ab = abaixo(it, tot), y = ab ? ab.y : topoDe(tot), yA = y + (fR ? aR + 34 : 0), yD = yA + hA + G;   // v48: C3
+  X.save(); if(ab) protegeBaixo(v.e * (1 - v.s), y); else protege(v.e * (1 - v.s)); encolhe(ab); entra(v, y + tot / 2);
   if(fR){ X.fillStyle = rp.acento === "#ffffff" ? R.marca.pri : rp.acento; X.fillRect(x, y + aR / 2 - 3, 40 * EOUT(prog(t, it.t0, 0.35)), 6);
     if(tech()) digita(prog(t, it.t0 + 0.05, 0.45), x + 56, y + aR, fR.linhas[0], fR.tam, "Mono", R.tom.t2, {});
     else linhaSobe(prog(t, it.t0 + 0.05, 0.45), x + 56, y + aR, fR.linhas[0], fR.tam, famR, "#ffffff", oR); }
@@ -124538,9 +124833,9 @@ function citacao(it, t){
   const fA = it.autor ? ajusta(tech() ? it.autor.toUpperCase() : it.autor, tech() ? 26 : est === "impacto" ? 36 : 29, famA, MW - 64, oA, 1, 0.6) : null, aA = fA ? metr("H", fA.tam, famA, oA.peso).a : 0;
   CW = largura(Math.max(fC.w, fA ? fA.w + 64 : 0), pad, 600); x = 540 - CW / 2;
   const inkQ = Math.max(40, mQ.a + Math.min(0, mQ.d));                                   // altura da tinta das aspas (ficam acima da linha de base)
-  const h = pad + inkQ + 34 + aC + (fC.linhas.length - 1) * lC + (fA ? 58 + aA : 0) + pad, y = topoDe(h);
+  const h = pad + inkQ + 34 + aC + (fC.linhas.length - 1) * lC + (fA ? 58 + aA : 0) + pad, ab = abaixo(it, h), y = ab ? ab.y : topoDe(h);   // v48: C3
   const yQ = y + pad - 8 + mQ.a, yC = y + pad + inkQ + 34 + aC, yA = yC + (fC.linhas.length - 1) * lC + 58 + aA;
-  X.save(); protege(v.e * (1 - v.s)); entra(v, y + h / 2);
+  X.save(); if(ab) protegeBaixo(v.e * (1 - v.s), y); else protege(v.e * (1 - v.s)); encolhe(ab); entra(v, y + h / 2);
   cartao(x, y, CW, h, rp);
   const mq = mola(prog(t, it.t0 + 0.04, 0.6)); X.save(); X.translate(x + pad, yQ - mQ.a * 0.5); X.scale(mq, mq); X.rotate((1 - mq) * -0.25); X.globalAlpha *= cl(mq * 2, 0, 1);
   texto(-6, mQ.a * 0.5, "“", tQ, famQ, est === "impacto" ? "#ffffff" : tech() ? R.marca.logo : R.marca.pri, Object.assign({ sombra: tech() ? cL(.9) : null, sb: 26, sy: 1 }, oQ)); X.restore();
@@ -124584,7 +124879,7 @@ function selo(it, t){
 let DX = 0, DY = 0, SO_CONT = false, SEM_DESL = false, SEM_ESC = false;
 const _centroC = new WeakMap();
 function centroDe(it){                       // v38b: centro da peça no tamanho natural (para o zoom crescer "no lugar")
-  const k = it.modelo + "|" + it.t0 + "|" + it.t1 + "|" + (it.titulo || it.nome || it.texto || "") + "|" + (it.pos || "") + "|" + (it.lado || "");
+  const k = it.modelo + "|" + it.t0 + "|" + it.t1 + "|" + (it.titulo || it.nome || it.texto || "") + "|" + (it.pos || "") + "|" + (it.lado || "") + "|" + (it.abaixo_rosto ? 1 : 0);   // v48: C3
   const c = _centroC.get(it); if(c && c.k === k) return c;
   const i = R && R.itens ? R.itens.indexOf(it) : -1; if(i < 0) return null;
   SEM_ESC = true; let b = null; try{ b = caixaDe(i, Math.min(it.t0 + 0.7, it.t1 - 0.05), true); } catch(_){} finally { SEM_ESC = false; }
@@ -124654,9 +124949,12 @@ API.palco = function(ctx, tela, t){
   const r = comPeca(p, false, () => palco(p, t, _snap)); X.restore(); return r || null;     // v38: cor e lugar da peça
 };
 API.escondeLegenda = function(t){
-  return R.itens.some((i) => (i.modelo === "kinetic" || i.modelo === "tarja") && t >= i.t0 - 0.05 && t < i.t1) || R.itens.some((i) => i.modelo === "cta" && t >= i.t0)
-    || R.itens.some((i) => i.modelo === "palco" && palcoEstado(i, t) > 0.05)
-    || R.itens.some((i) => _EVM_ESCONDE.indexOf(i.modelo) >= 0 && t >= i.t0 - 0.05 && t < i.t1);          // v34
+  return R.itens.some((i) => (i.modelo === "kinetic" || i.modelo === "tarja") && t >= i.t0 - 0.05 && t < i.t1)
+    || R.itens.some((i) => i.modelo === "palco" && palcoEstado(i, t) > 0.05);
+};
+/* v48 (06/10/2026): regra #12 — com número, lista, antes/depois, citação ou CTA na tela a legenda NÃO some: fica menor e embaixo do cartão (o motor desenha) */
+API.legendaPequena = function(t){
+  return R.itens.some((i) => i.modelo === "cta" && t >= i.t0) || R.itens.some((i) => _EVM_ESCONDE.indexOf(i.modelo) >= 0 && t >= i.t0 - 0.05 && t < i.t1);
 };
 API.sobre = function(ctx, t, emPalco){
   X = ctx; X.save(); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1; X.globalCompositeOperation = "source-over";
@@ -124749,6 +125047,7 @@ function _evmNormalizar(m, total){
     const pdx = dl(it.dx), pdy = dl(it.dy); if(pdx) o.dx = pdx; if(pdy) o.dy = pdy;
     const pe = (typeof it.esc === "number" && isFinite(it.esc)) ? Math.round(Math.max(0.5, Math.min(2, it.esc)) * 100) / 100 : 1; if(pe !== 1) o.esc = pe;   // v38b: tamanho
     const pc = typeof it.cor === "string" ? it.cor.trim() : ""; if(/^#[0-9a-fA-F]{6}$/.test(pc)) o.cor = pc.toLowerCase();
+    if(it.abaixo_rosto === true && _EVM_ESCONDE.indexOf(o.modelo) >= 0) o.abaixo_rosto = true;      // v48 (06/10/2026): C3 — marca do servidor v48 (o cartão desce para baixo do rosto)
     itens.push(o);
   });
   if(!itens.length) return null;
@@ -124836,7 +125135,38 @@ function _evpMotor(canvas, o){
   const saida = o.saida || ac.destination;
   const master = ac.createGain(); const lim = ac.createDynamicsCompressor();
   lim.threshold.value = -1.5; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
-  master.connect(lim); lim.connect(saida);
+  /* v48 (06/10/2026): VOCAL ATTACKER (ver _evpVaCadeia) — a fala e as narrações entram em vozIn e vão SECAS (desligado / "Comparar" / ouvir antes)
+     ou pela cadeia (highpass → compressor → makeup). Na saída: ganho final (medido para −14 LUFS) → limiter → segurança de pico → saída.
+     Desligado, o caminho é o mesmo de antes (ganho final 1, limiter −1,5 dB / 2 ms, sem curva). */
+  let va = _evpVaCfg(o.projeto && o.projeto.vocal_attacker), vaBypass = false, vaMed = null, vaChave = "", vaSeq = 0, vaProm = null;
+  const vaG = _evpVaGrafo(ac, master, lim, saida, va), vozIn = vaG.vozIn;
+  function vaLigado(){ return va.ativo && !vaBypass && !audioAntes; }
+  function aplicarVa(imediato){ vaG.aplicar(vaLigado(), va, vaMed, imediato); }
+  /* a voz que vai para o vídeo (trechos usados de cada bruto/narração) — é o que a medição de loudness ouve */
+  function vaSegs(){
+    const out = [];
+    (calc.clips || []).forEach(function(c){ if(c.off || c.mudo || !_evpClipeFalaNormal(c)) return; const b = o.vozes && o.vozes[c.clipe]; if(!b) return;
+      const a = _evpSrcT(c, c.t0), z = _evpSrcT(c, c.t1); out.push({ buf:b, ini:Math.min(a, z), fim:Math.max(a, z), vol:c.vol == null ? 1 : _evpNum(c.vol, 1) }); });
+    (calc.narracoes || []).forEach(function(n){ if(n.mudo || n.musica) return; const b = o.narr && o.narr[n.id]; if(!b) return;
+      const vN = Math.max(0.5, Math.min(2, _evpNum(n.vel, 1))), base = (n.fonte === "clipe" ? _evpNum(n.ini, 0) : 0) + _evpNum(n.corte, 0), sobra = Math.max(0, (b.duration - base) / vN);
+      const toca = (n.fonte === "clipe" || n.cortado) ? Math.min(sobra, _evpNum(n.dur, sobra)) : sobra; out.push({ buf:b, ini:base, fim:Math.min(b.duration, base + toca * vN), vol:_evpNum(n.vol, 1) }); });
+    return out;
+  }
+  function medirVa(){
+    if(!va.ativo){ vaChave = ""; vaMed = null; aplicarVa(); return Promise.resolve(); }
+    const segs = vaSegs(), chave = JSON.stringify([va.intensidade, va.threshold, va.ratio, va.attack_ms, va.release_ms, va.makeup, va.lufs,
+      segs.map(function(q){ return [_evpBufId(q.buf), Math.round(q.ini * 100), Math.round(q.fim * 100), q.vol]; })]);
+    if(chave === vaChave && vaProm) return vaProm;
+    vaChave = chave; const meu = ++vaSeq;
+    vaProm = new Promise(function(r){ setTimeout(r, 30); }).then(function(){ return meu === vaSeq ? _evpVaMedir(segs, va, { canais:2 }) : null; }).then(function(r){
+      if(meu !== vaSeq || !vivo) return;
+      vaMed = r || { lufs:null, finalDb:0, silDb:0, profDb:0, lufsSaida:null };
+      const k = _evpVaEfetivo(va).k; segs.forEach(function(q){ try{ _evpVaNivelado(q.buf, k, vaMed.profDb); }catch(_){} });     // deixa o nivelado pronto antes de tocar
+      aplicarVa(); if(tocando) agendar();
+      if(o.onVocal) try{ o.onVocal(vaMed); }catch(_){}
+    }).catch(function(e){ if(meu === vaSeq && o.onVocal) try{ o.onVocal({ erro:String((e && e.message) || e) }); }catch(_){} });
+    return vaProm;
+  }
   try{ ((o.projeto && o.projeto.sfx) || []).forEach(function(x){ if(x && x.url) _evpSfxUrl(ac, x.url); }); }catch(_){}     // v24: sons importados já carregando
   let fontes = [], relIni = 0, tIni = 0, musBuf = null;
   const sfxBuf = {};
@@ -124858,6 +125188,7 @@ function _evpMotor(canvas, o){
     const xs = Math.round(W * comparar); cx.drawImage(cmpC, xs, 0, W - xs, H, xs, 0, W - xs, H);
   }
   let audioAntes = false;         // v24: ouvir o som sem tratamento
+  aplicarVa(true); medirVa();     // v48: Vocal Attacker (a medição entra no "pronto": a gravação só começa com o ganho final certo)
   let ocupadoV = true;            // v20: algum vídeo ainda buscando o quadro (o revisor espera)
   const estD = { n:0, soma:0, max:0, lentos:0 };   // v19: tempo de desenho de cada quadro (teste de velocidade)
   /* DESEMPENHO (29/09): parado, só redesenha quando algo muda (e 4×/s de reserva para imagens/fontes que chegam);
@@ -124893,7 +125224,8 @@ function _evpMotor(canvas, o){
   function mirar(c, tt){ const v = el(c); const a = srcT(c, tt); v._alvo = a; if(v.readyState >= 1 && Math.abs(v.currentTime - a) > 0.04){ try{ v.currentTime = a; }catch(_){} } }
 
   const pronto = new Promise(function(res){
-    let falta = 5; const um = function(){ falta--; if(falta<=0) res(); };
+    let falta = 6; const um = function(){ falta--; if(falta<=0) res(); };
+    let vaOk = false; const vaFeito = function(){ if(vaOk) return; vaOk = true; um(); }; (vaProm || Promise.resolve()).then(vaFeito, vaFeito); setTimeout(vaFeito, 12000);   // v48: medição do Vocal Attacker
     // imagens por cima: espera carregar (no máximo 8 s)
     let imgOk = false; const imgFeito = function(){ if(imgOk) return; imgOk = true; um(); };
     Promise.all((calc.imagens||[]).filter(function(x){ return x.url && (x.camada || "imagem") === "imagem"; }).map(function(x){ return new Promise(function(r){ const im = imagem(x.url); if(im.complete) r(); else { im.addEventListener("load", r, { once:true }); im.addEventListener("error", r, { once:true }); } }); })).then(imgFeito, imgFeito);
@@ -124915,7 +125247,8 @@ function _evpMotor(canvas, o){
 
   /* ─── áudio: agenda tudo a partir do tempo t ─── */
   function pararAudio(){ fontes.forEach(function(s){ try{ s.stop(); }catch(_){} try{ s.disconnect(); }catch(_){} }); fontes = []; }
-  function vozDe(c){ if(audioAntes){ const m0 = _evpMidia[c.clipe]; if(m0 && m0.audio) return m0.audio; } return (o.vozes && o.vozes[c.clipe]) || null; }
+  function vozDe(c, cru){ if(audioAntes){ const m0 = _evpMidia[c.clipe]; if(m0 && m0.audio) return m0.audio; } const b = (o.vozes && o.vozes[c.clipe]) || null;
+    return !cru && b && vaLigado() ? _evpVaNivelado(b, _evpVaEfetivo(va).k, vaMed ? vaMed.profDb : 0) : b; }       // v48: Vocal Attacker = fala nivelada
   /* v11: MIXER — ganho do canal (solo: só os canais marcados tocam). A1/A2/A4 têm o volume no próprio lugar (fala, música, efeitos). */
   function ganhoCanal(id){
     const cs = calc.canais || {}; const solo = Object.keys(cs).some(function(k){ return /^A/.test(k) && cs[k] && cs[k].solo; });
@@ -124952,13 +125285,14 @@ function _evpMotor(canvas, o){
       g.gain.setValueAtTime(g0, quando); if(jaTocou < fi) g.gain.linearRampToValueAtTime(vol, quando + (fi - jaTocou)); else g.gain.linearRampToValueAtTime(vol, quando + 0.015);
       g.gain.setValueAtTime(vol, Math.max(quando + 0.02, quando + resta - fo)); g.gain.linearRampToValueAtTime(0, quando + resta);
       }
-      s.connect(g); g.connect(master); s.start(quando, off, Math.max(0.01, durSrc)); fontes.push(s);
+      s.connect(g); g.connect(vozIn); s.start(quando, off, Math.max(0.01, durSrc)); fontes.push(s);      // v48: a fala passa pelo Vocal Attacker
       if(!c.mudo && vol > 0) envVoz.push([c.t0, c.t1, c.clipe, c.ini, c.vel]);
     });
     // narrações (gravadas ou locução da IA) e som dos vídeos por cima
     const trilhas = [];                     // v11: trilhas extras (música em outro canal) abaixam na fala igual à música principal
     (calc.narracoes||[]).forEach(function(n){
-      const b = o.narr && o.narr[n.id]; if(!b || n.mudo) return;                                                        // v41: mudo não toca
+      const b0n = o.narr && o.narr[n.id]; if(!b0n || n.mudo) return;                                                        // v41: mudo não toca
+      const b = !n.musica && vaLigado() ? _evpVaNivelado(b0n, _evpVaEfetivo(va).k, vaMed ? vaMed.profDb : 0) : b0n;          // v48: narração = voz (Vocal Attacker)
       const vN = Math.max(0.5, Math.min(2, _evpNum(n.vel, 1)));                                                           // v41: velocidade 0,5–2×
       const base = (n.fonte === "clipe" ? _evpNum(n.ini, 0) : 0) + _evpNum(n.corte, 0);          // v24: som separado do clipe / começo cortado
       const sobra = Math.max(0, (b.duration - base) / vN);                                                                // v41: o que resta do arquivo, em segundos da linha do tempo
@@ -124974,7 +125308,7 @@ function _evpMotor(canvas, o){
       if((n.volPts && n.volPts.length) || fiN > 0 || foN > 0) _evpAgendarGanho(g, quando, ini, fim, function(x){
         const kI = fiN > 0 ? Math.min(1, Math.max(0, (x - n.t0) / fiN)) : 1, kO = foN > 0 ? Math.min(1, Math.max(0, (fim - x) / foN)) : 1;
         return _evpVolEm(n.volPts, x - n.t0, _evpNum(n.vol, 1)) * kCanal * kI * kO; });                                  // v24: volume com pontos ◆
-      s.connect(g); g.connect(master); s.start(quando, off, Math.max(0.01, (fim - ini) * (bt ? 1 : vN))); fontes.push(s);
+      s.connect(g); g.connect(n.musica ? master : vozIn); s.start(quando, off, Math.max(0.01, (fim - ini) * (bt ? 1 : vN))); fontes.push(s);   // v48: narração de voz → Vocal Attacker
       if(n.musica){ if(n.duck) trilhas.push({ g:g, ini:ini, fim:fim, quando:quando, vol:vBase }); }
       else envVoz.push([n.t0, fim, n.fonte === "clipe" ? n.clipe : "narr:" + n.id, base, vN]);
     });
@@ -125088,7 +125422,7 @@ function _evpMotor(canvas, o){
   /* som ao contrário: o trecho da fala tocado de trás para frente */
   const revCache = {};
   function agendarReverso(c, agora){
-    const b = vozDe(c); if(!b) return;
+    const b = vozDe(c, true); if(!b) return;
     const k = c.clipe + "@" + c.ini + "-" + c.fim;
     if(!revCache[k]){ const sr = b.sampleRate, a0 = Math.floor(c.ini * sr), a1 = Math.min(b.length, Math.floor(c.fim * sr)); const n = Math.max(1, a1 - a0);
       const r = ac.createBuffer(1, n, sr), src = b.getChannelData(0), dst = r.getChannelData(0); for(let i=0;i<n;i++) dst[i] = src[a1 - 1 - i] || 0; revCache[k] = r; }
@@ -125321,7 +125655,7 @@ function _evpMotor(canvas, o){
     cx.drawImage(txC, 0, 0); cx.restore();
     caixas.slice(n0).forEach(function(c){ c.x += tf.dx * W; c.y += tf.dy * H; });
   }
-  function desenharLegenda(){
+  function desenharLegenda(modo){      // v48: modo { k, yMin } = legenda menor e embaixo (regra #12, com cartão do motion na tela)
     let b = null; for(let k=0;k<calc.blocos.length;k++){ const x = calc.blocos[k]; if(t >= x.a && t < x.b){ b = x; break; } }
     if(!b) return;
     const lg = calc.legenda || {}, tam = b.tam > 0 ? b.tam : (_evpNum(lg.tam, 1) || 1);                  // v18: pedaço pode ter tamanho próprio
@@ -125356,7 +125690,8 @@ function _evpMotor(canvas, o){
       for(let k=0;k<li;k++) n0 += linhas[k].length;
       linhas = [linhas[li]];
     }
-    const yc = _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), dxL = W * _evpNum(lg.dx, 0);
+    const kL = modo ? modo.k : 1, yc = modo ? Math.max(_evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), modo.yMin) : _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), dxL = W * _evpNum(lg.dx, 0);
+    if(kL !== 1){ cx.translate(W / 2 + dxL, yc); cx.scale(kL, kL); cx.translate(-(W / 2 + dxL), -yc); }
     const anim = lg.anim || "nenhuma";
     // animação do bloco inteiro: "sobe" (entra de baixo com fade)
     let dyB = 0, alB = 1;
@@ -125365,7 +125700,7 @@ function _evpMotor(canvas, o){
     const sp = cx.measureText(" ").width; let n = n0;
     // área da legenda na tela (para clicar e ARRASTAR na prévia)
     (function(){ const larg = Math.max.apply(null, linhas.map(function(l){ return l.reduce(function(s2, w, k){ return s2 + cx.measureText(w.p).width + (k ? sp : 0); }, 0); }).concat([40]));
-      caixas.push({ id:"legenda", tipo:"legenda", x:(W - larg)/2 + dxL - 20, y:yc - linhas.length*lh/2 - 10, w:larg + 40, h:linhas.length*lh + 20 }); })();
+      caixas.push({ id:"legenda", tipo:"legenda", x:W/2 + dxL - (larg/2 + 20) * kL, y:yc - (linhas.length*lh/2 + 10) * kL, w:(larg + 40) * kL, h:(linhas.length*lh + 20) * kL }); })();
     const marcasL = _evpLegMarcas([(base && base.nome) || "", kit.nome || ""].concat(kit._nomes || [], lg.nomes || []));   // v35: número, marca, verbo de ação
     const chaveAuto = lg.chaves !== "nao", chave = function(w){ return _evpLegChave(w.p, marcasL); };
     const kw = function(w, atual){ return chaveAuto && !atual && !ehCor(w.corT) && chave(w); };
@@ -125583,6 +125918,7 @@ function _evpMotor(canvas, o){
   let caixas = [];            // onde cada texto está na tela (para clicar, arrastar e escrever direto no vídeo)
   /* recorte da pessoa (IA de segmentação no navegador): pede a máscara do quadro atual; usa a última que chegou */
   let segPedido = false;            // v42: modo quadro a quadro — o quadro() calcula a máscara DESTE quadro e espera
+  let semRecorte = 0;               // v48: N-16 — quadros que precisavam do recorte e ficaram sem ele
   function pedirMascara(){
     if(o.quadroAQuadro){ segPedido = true; return; }
     if(segOcupado || !_evpSegPronto()) return;
@@ -125591,7 +125927,10 @@ function _evpMotor(canvas, o){
   }
   function recortarPessoa(fu){        // pessoa (sem fundo) em "pessoa" · v22: borda macia (suave) e recuperar bordas (exp)
     if(!mascara) return false;
-    const bs = fu ? _evClamp(_evpNum(fu.suave, 2), 0, 16) : 2, ex = fu ? _evClamp(_evpNum(fu.exp, 0), 0, 12) : 0;
+    /* v48 (06/10/2026): E2-6 — borda proporcional ao tamanho do pixel do MODELO (o MediaPipe devolve a máscara já no tamanho do quadro, mas ela
+       nasce em 256×256 ou 144×256): ≈ 0,9 pixel do modelo, de 2 a 10 px → 256 linhas para 1920 = ~6,7 px. Quem escolheu "suave" no fundo continua mandando. */
+    const bsAuto = _evpSegBorda(W, H);
+    const bs = fu && fu.suave != null ? _evClamp(_evpNum(fu.suave, 2), 0, 16) : bsAuto, ex = fu ? _evClamp(_evpNum(fu.exp, 0), 0, 12) : 0;
     px2.save(); px2.clearRect(0, 0, W, H); px2.filter = bs > 0.2 ? "blur(" + bs + "px)" : "none"; px2.drawImage(mascara, 0, 0, W, H);
     if(ex > 0.5){ [[ex, 0], [-ex, 0], [0, ex], [0, -ex]].forEach(function(d){ px2.drawImage(mascara, d[0], d[1], W, H); }); }
     px2.filter = "none";
@@ -125629,9 +125968,10 @@ function _evpMotor(canvas, o){
       if(!ocultos) (calc.textos||[]).forEach(function(x0){ if(t < x0.t0 || t > x0.t1) return; const x = _evpTrkAplicar(x0, t, calc, proj); const itG = _evgDoTexto(kit, x); desenharTextoItem(x, itG); });   // v26
       if(mo && motAtras0 && !emPalco && mascara){ try{ _EVM.sobre(cx, t, emPalco); motFeito = true; }catch(e){ evmFalhou(e); } }   // v47: o texto do motion vai ATRÁS da pessoa
       if(atras && !ocultos && !emPalco && recortarPessoa()) cx.drawImage(pessoa, 0, 0);     // a pessoa passa na frente do texto (no palco o vídeo está no quadro)
-      let escLeg = false; if(mo){ try{ escLeg = _EVM.escondeLegenda(t); }catch(e){ evmFalhou(e); } }
-      if(!o.semLegenda && !escLeg) desenharLegenda();       // exportar sem a legenda gravada (para subir o .srt separado) · v31: o motion esconde a legenda quando ocupa a tela
+      let escLeg = false, legP = false; if(mo){ try{ escLeg = _EVM.escondeLegenda(t); legP = !escLeg && _EVM.legendaPequena(t); }catch(e){ evmFalhou(e); } }
+      if(!o.semLegenda && !escLeg && !legP) desenharLegenda();       // exportar sem a legenda gravada (para subir o .srt separado) · v31: o motion esconde a legenda quando ocupa a tela
       if(mo && !motFeito){ try{ _EVM.sobre(cx, t, emPalco); }catch(e){ evmFalhou(e); } }
+      if(!o.semLegenda && legP) desenharLegenda({ k:0.72, yMin:H * 0.693 });   // v48 (06/10/2026): regra #12 — com cartão/CTA a legenda fica menor e embaixo (por cima da proteção escura)
       desenharAbertura();
     }
     if(calc.total > calc.fimCortes && t >= calc.fimCortes - 0.3) desenharFinal(_evClamp((t - (calc.fimCortes - 0.3))/0.3, 0, 1));
@@ -125708,12 +126048,15 @@ function _evpMotor(canvas, o){
     relIniAudio: function(){ return relIni; },          // v42: hora do AudioContext em que o tempo do vídeo começou (sincronia do som no quadro a quadro)
     pause: function(){ segurar(false); tocando = false; pararAudio(); Object.keys(els).forEach(function(k){ try{ els[k].pause(); }catch(_){} }); Object.keys(els2).forEach(function(k){ try{ els2[k].pause(); }catch(_){} }); },
     seek: function(nt){ marcar(); t = _evClamp(Number(nt)||0, 0, calc.total); const i = _evpClipEm(calc, Math.min(t, Math.max(0, calc.fimCortes - 0.001))); if(calc.clips[i]) mirar(calc.clips[i], t); if(tocando) agendar(); },
-    atualizar: function(novoCalc, novoProj, vozes, narr){ marcar(); if(novoCalc && calc && novoCalc.motion !== calc.motion) evmErro = false; calc = novoCalc; proj = novoProj; if(novoProj && novoProj.motion) _evmFontes().then(function(){ try{ marcar(); }catch(_){} }); try{ _evpFontesCarregar((novoProj && novoProj.fontes) || [], function(){ marcar(); }); }catch(_){} try{ ((novoProj && novoProj.clips) || []).forEach(function(c){ if(c && c.cor && c.cor.lut && c.cor.lut.url) _evpLutCarregar(c.cor.lut.url); }); }catch(_){} if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
+    atualizar: function(novoCalc, novoProj, vozes, narr){ marcar(); if(novoCalc && calc && novoCalc.motion !== calc.motion) evmErro = false; calc = novoCalc; proj = novoProj; if(novoProj && novoProj.motion) _evmFontes().then(function(){ try{ marcar(); }catch(_){} }); try{ _evpFontesCarregar((novoProj && novoProj.fontes) || [], function(){ marcar(); }); }catch(_){} try{ ((novoProj && novoProj.clips) || []).forEach(function(c){ if(c && c.cor && c.cor.lut && c.cor.lut.url) _evpLutCarregar(c.cor.lut.url); }); }catch(_){} if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); va = _evpVaCfg(novoProj && novoProj.vocal_attacker); aplicarVa(); medirVa(); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
     setTratados: function(tr){ o.tratados = tr; marcar(); },
     setAntes: function(v){ antes = !!v; marcar(); },
     setComparar: function(v){ comparar = Number(v) || 0; marcar(); },   // v25                  // v19
-    setAudioAntes: function(v){ audioAntes = !!v; if(tocando) agendar(); },   // v24
+    setAudioAntes: function(v){ audioAntes = !!v; aplicarVa(); if(tocando) agendar(); },   // v24
+    setVocalBypass: function(v){ vaBypass = !!v; aplicarVa(); if(tocando) agendar(); },      // v48: "Comparar" do Vocal Attacker (original × processado)
+    get vocal(){ return { cfg:va, med:vaMed, ligado:vaLigado() }; },
     get ocupado(){ return ocupadoV; },                                  // v20
+    get semRecorte(){ return semRecorte; },                             // v48: N-16
     get estatisticas(){ return { quadros:estD.n, media:estD.n ? estD.soma / estD.n : 0, max:estD.max, lentos:estD.lentos }; },
     volumeGeral: function(v){ try{ master.gain.setValueAtTime(v, ac.currentTime); }catch(_){ master.gain.value = v; } },   // 0 = mudo (gravando narração)
     /* v42 · GRAVAÇÃO QUADRO A QUADRO (o.quadroAQuadro): leva TODOS os vídeos ao quadro exato do tempo nt, espera cada um ficar pronto
@@ -125741,8 +126084,10 @@ function _evpMotor(canvas, o){
       segPedido = false; desenharTudo();
       if(segPedido){                                    // recorte da pessoa: a máscara é DESTE quadro (no tempo real usava a última que chegou)
         _evpSegCarregar();
-        for(let k = 0; k < 600 && !_evpSegPronto(); k++) await new Promise(function(r){ setTimeout(r, 50); });
-        if(_evpSegPronto()){ try{ const m = await _evpSegmentar(vl); if(m){ mascara = m; mascaraDe = Math.round(t * 1000); } }catch(_){} }
+        for(let k = 0; k < 600 && !_evpSegPronto() && _evpSegEstado !== "erro"; k++) await new Promise(function(r){ setTimeout(r, 50); });   // v48: N-16 — se o MediaPipe deu erro, não espera 30 s a cada quadro
+        let mOk = false;
+        if(_evpSegPronto()){ try{ const m = await _evpSegmentar(vl); if(m){ mascara = m; mascaraDe = Math.round(t * 1000); mOk = true; } }catch(_){} }
+        if(!mOk) semRecorte++;                          // v48 (06/10/2026): N-16 — a gravação marca na conferência ("recorte não carregou")
         segPedido = false; desenharTudo();
       }
       return true;
@@ -125751,7 +126096,7 @@ function _evpMotor(canvas, o){
       if(vFinal){ try{ vFinal.pause(); vFinal.removeAttribute("src"); vFinal.load(); }catch(_){} vFinal = null; }
       Object.keys(els).forEach(function(k){ const v = els[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
       Object.keys(els2).forEach(function(k){ const v = els2[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
-      try{ master.disconnect(); lim.disconnect(); }catch(_){} if(!o.ctx) try{ ac.close(); }catch(_){} },
+      vaSeq++; try{ master.disconnect(); lim.disconnect(); vaG.desligar(); }catch(_){} if(!o.ctx) try{ ac.close(); }catch(_){} },
   };
 }
 
@@ -125768,11 +126113,11 @@ const _EVP_TL = { fundo:"var(--tl-fundo)", regua:"var(--tl-regua)", nome:"var(--
 const _EVP_TEMAS = {
   claro:{ "--evp-fundo":"#eef0f6", "--evp-painel":"#ffffff", "--evp-campo":"#ffffff", "--evp-palco":"#ffffff", "--evp-linha":"#e3e5ef", "--evp-linha2":"#eef0f6", "--evp-faixa":"#f6f7fb",
     "--evp-ink":"#0b1020", "--evp-sub":"#5b6478", "--evp-fraco":"#8f98ab", "--evp-roxo":"#7c3aed", "--evp-roxoSoft":"#f3eefe", "--evp-aviso":"#fdf3e1", "--evp-erro":"#fdeceb",
-    "--evp-ok":"#e8f6ed", "--evp-azul":"#eff6ff", "--evp-azulLinha":"#bfdbfe", "--evp-knob":"#dfe2ec", "--evp-sombra":"0 1px 0 rgba(16,24,40,.03), 0 12px 32px -20px rgba(76,29,149,.25)",
+    "--evp-ok":"#e8f6ed", "--evx-verde":"#15803d", "--evx-amarelo":"#a16207", "--evx-verm":"#b91c1c", "--evp-azul":"#eff6ff", "--evp-azulLinha":"#bfdbfe", "--evp-knob":"#dfe2ec", "--evp-sombra":"0 1px 0 rgba(16,24,40,.03), 0 12px 32px -20px rgba(76,29,149,.25)",
     "--tl-fundo":"#151a2b", "--tl-regua":"#10141f", "--tl-nome":"#191e31", "--tl-linha":"#252b42", "--tl-texto":"#e6e8f2", "--tl-sub":"#8b92ad", "--tl-pista":"#11152a", "--tl-botao":"#20263d", colorScheme:"light" },
   escuro:{ "--evp-fundo":"#0a0d18", "--evp-painel":"#121728", "--evp-campo":"#1a2034", "--evp-palco":"#0e1221", "--evp-linha":"#262d47", "--evp-linha2":"#1d2339", "--evp-faixa":"#0f1426",
     "--evp-ink":"#e9ebf7", "--evp-sub":"#a3aac4", "--evp-fraco":"#6f7794", "--evp-roxo":"#a78bfa", "--evp-roxoSoft":"rgba(139,92,246,.17)", "--evp-aviso":"rgba(234,179,8,.13)", "--evp-erro":"rgba(239,68,68,.14)",
-    "--evp-ok":"rgba(34,197,94,.13)", "--evp-azul":"rgba(59,130,246,.13)", "--evp-azulLinha":"rgba(59,130,246,.38)", "--evp-knob":"#2c3450", "--evp-sombra":"0 14px 34px -22px rgba(0,0,0,.75)",
+    "--evp-ok":"rgba(34,197,94,.13)", "--evx-verde":"#4ade80", "--evx-amarelo":"#facc15", "--evx-verm":"#f87171", "--evp-azul":"rgba(59,130,246,.13)", "--evp-azulLinha":"rgba(59,130,246,.38)", "--evp-knob":"#2c3450", "--evp-sombra":"0 14px 34px -22px rgba(0,0,0,.75)",
     "--tl-fundo":"#0f1320", "--tl-regua":"#0b0e18", "--tl-nome":"#121628", "--tl-linha":"#20263e", "--tl-texto":"#e6e8f2", "--tl-sub":"#858cab", "--tl-pista":"#0c0f1c", "--tl-botao":"#1b2136", colorScheme:"dark" } };
 /* v41: ordem de cima para baixo (a área com rolagem segue esta lista pelo "order" do CSS; o DOM continua na ordem antiga) */
 const _EVP_FAIXAS = [ { id:"video", label:"Vídeo", icone:"editar", h:62 }, { id:"fala", label:"Fala", icone:"fala", h:40 }, { id:"musica", label:"Música", icone:"musica", h:34 },
@@ -125924,6 +126269,10 @@ const _EVP_ICONES = {
   fala2:'<path d="M4 6h16M4 10h10M4 14h16M4 18h7"/>', silencio:'<path d="M4 12h3M17 12h3"/><path d="M9 8v8M15 8v8"/>', licenca:'<path d="M12 3.5 5 6.5v5c0 4.3 3 7.6 7 9 4-1.4 7-4.7 7-9v-5z"/><path d="M9 12l2 2 4-4"/>',
 };
 _EVP_ICONES.megafone = '<path d="M4 10v4a1 1 0 0 0 1 1h2l6 4V5L7 9H5a1 1 0 0 0-1 1z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>';   // v35
+_EVP_ICONES.sino = '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>';   // v48 (Exportar): avisar quando terminar
+_EVP_ICONES.seta_baixo = '<path d="M6 9l6 6 6-6"/>';   // v48
+_EVP_ICONES.vocal = '<path d="M3 12h2.5l2-5 3 10 2.5-7 2 4H21"/><path d="M3 5.5h18M3 18.5h18" stroke-dasharray="1.6 2.4"/>';   // v48: Vocal Attacker (onda entre os limites)
+_EVP_ICONES.celular = '<rect x="7" y="3" width="10" height="18" rx="2.2"/><path d="M11 17.5h2"/>';   // v48: versão leve (WhatsApp)
 function _EvpIco({ n, s, w, style }){
   return <svg width={s||18} height={s||18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w||1.8} strokeLinecap="round" strokeLinejoin="round"
     aria-hidden="true" style={Object.assign({ flexShrink:0, display:"block" }, style||{})} dangerouslySetInnerHTML={{ __html:_EVP_ICONES[n] || "" }}/>;
@@ -125990,13 +126339,16 @@ async function _evpDetectarBpm(buf){
   return Math.round(bpm);
 }
 
-function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou, pcAuto }){
+function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou, pcAuto, erroAjuste, limparErroAjuste }){
   _evpUsarMidia();
   const clipes = ed.clipes || [];
   const infoClipe = useMemo(function(){ const m = {}; clipes.forEach(function(c, i){ m[c.id] = Object.assign({ n:i+1, cor:_EV_CORES_CLIPE[i%12] }, c); }); return m; }, [ed.id]);
-  /* versão salva × rascunho salvo sozinho (se o rascunho for mais novo que a última versão, continua dele) */
-  const salvo = useMemo(function(){ return _evpProjetoDeReceita(ed.receita, clipes); }, [ed.id, ed.atualizado_em]);
-  const temRasc = !!(ed.rascunho && Array.isArray(ed.rascunho.clips) && ed.rascunho.clips.length && ed.rascunho_em && (!ed.atualizado_em || new Date(ed.rascunho_em) > new Date(ed.atualizado_em)));
+  /* versão salva × rascunho salvo sozinho (se o rascunho for mais novo que a última versão, continua dele)
+     v48 (06/10/2026): E2-1 + contrato C2 — "mais novo" é rascunho_em > (receita_em || atualizado_em). receita_em = quando a RECEITA mudou de verdade;
+     exportar (no navegador ou no PC) mexe no atualizado_em mas NÃO no receita_em — antes, depois de exportar, o rascunho virava "velho" e sumia da tela. */
+  const receitaEm = ed.receita_em || ed.atualizado_em;
+  const salvo = useMemo(function(){ return _evpProjetoDeReceita(ed.receita, clipes); }, [ed.id, ed.atualizado_em, ed.receita_em]);
+  const temRasc = !!(ed.rascunho && Array.isArray(ed.rascunho.clips) && ed.rascunho.clips.length && ed.rascunho_em && (!receitaEm || new Date(ed.rascunho_em) > new Date(receitaEm)));
   const inicial = useMemo(function(){ return temRasc ? _evpNormalizar(_evpCopia(ed.rascunho), clipes) : salvo; }, [salvo, temRasc]);
   const [p, setP] = useState(inicial);
   const [salvoJson, setSalvoJson] = useState(JSON.stringify(salvo));
@@ -126039,18 +126391,39 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   pRef.current = p;
   const soVer = !!isMob;
 
+  /* v48 (06/10/2026): E2-1 + E2-4 + C2 — chegou uma versão nova de fora (IA, motion, PC, outra pessoa) enquanto a pessoa tem mudança não salva:
+     NUNCA troca a tela sozinha. Mostra "Tem uma versão mais nova — [Ver a nova] [Manter a minha]". Sem mudança local, troca como antes.
+     A volta do próprio salvar (o que foi ENVIADO, E2-8) não conta como versão de fora: mantém o que a pessoa mexeu durante o salvamento. */
+  const baseRef = useRef(null);            // JSON do que a tela carregou por último (versão ou rascunho)
+  const enviadoRef = useRef(null);         // JSON do último projeto enviado (salvar / aplicar prévia)
+  const salvoJsonRef = useRef(salvoJson); salvoJsonRef.current = salvoJson;
+  const [novaVersao, setNovaVersao] = useState(null);   // { p, sj, j, por, em }
   useEffect(function(){
-    const j = JSON.stringify(inicial);
-    setSalvoJson(JSON.stringify(salvo));
-    if(j === JSON.stringify(pRef.current)) return;     // acabou de salvar: mantém o desfazer
+    const j = JSON.stringify(inicial), sj = JSON.stringify(salvo), atual = JSON.stringify(pRef.current);
+    if(j === baseRef.current){ setSalvoJson(sj); return; }                                         // recarregou sem mudar a receita (ex.: exportou)
+    if(j === atual || (enviadoRef.current && j === enviadoRef.current)){ baseRef.current = j; setSalvoJson(sj); return; }   // acabou de salvar: mantém o desfazer e o que mexeu depois
+    if(baseRef.current != null && !soVer && atual !== salvoJsonRef.current){                        // tem mudança não salva: pergunta
+      setNovaVersao({ p:inicial, sj:sj, j:j, por:ed.atualizado_por || "", em:receitaEm || null }); return; }
+    baseRef.current = j; setSalvoJson(sj); setNovaVersao(null);
     setP(inicial); setDesf([]); setRefaz([]); setSel(null);
   }, [inicial]);
+  const verNovaVersao = function(){
+    const nv = novaVersao; if(!nv) return;
+    const minha = pRef.current; baseRef.current = nv.j; setSalvoJson(nv.sj); setNovaVersao(null);
+    setDesf(function(d){ return d.concat([minha]).slice(-120); }); setRefaz([]); setSel(null); setP(nv.p);        // Ctrl+Z volta para a sua
+    _evToast("info", "Abriu a versão nova. Ctrl+Z volta para a sua.");
+  };
+  const manterMinha = function(){
+    const nv = novaVersao; if(!nv) return;
+    baseRef.current = nv.j; setSalvoJson(nv.sj); setNovaVersao(null);                                  // a sua fica na tela e o salvar sozinho grava como rascunho
+    _evToast("info", "Ficou a sua edição. A versão nova continua em Versões.");
+  };
   const pJson = useMemo(function(){ return JSON.stringify(p); }, [p]);
   const alterado = pJson !== salvoJson;
 
   /* SALVAR SOZINHO: 2,5 s depois da última mudança grava o rascunho no banco (não vira versão) */
   useEffect(function(){
-    if(soVer || !window._sb) return;
+    if(soVer || !window._sb || pcAuto) return;      // v48 (06/10/2026): E2-2 — o Estúdio escondido do PC nunca grava rascunho por cima do da pessoa
     if(!alterado){ setAuto(function(a){ return a && (a.estado === "pendente" || a.estado === "salvando") ? { estado:"versao" } : a; }); return; }
     setAuto(function(a){ return Object.assign({}, a || {}, { estado:"pendente" }); });
     const tm = setTimeout(function(){
@@ -126064,7 +126437,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   }, [p, salvoJson]);
   const descartarRascunho = function(){
     setP(salvo); setDesf([]); setRefaz([]); setSel(null); setAvisoRasc(null); setAuto(null);
-    if(window._sb) window._sb.rpc("criacao_edicao_rascunho", { p_id:ed.id, p_projeto:null }).then(function(){}).catch(function(){});
+    if(window._sb) window._sb.rpc("criacao_edicao_rascunho", { p_id:ed.id, p_projeto:null }).then(function(r){        // v48 (06/10/2026): E2-16 — confere o erro
+      if(r && r.error) _evToast("error", "Não consegui apagar o rascunho no banco (" + (r.error.message || "erro") + "): ele pode voltar na próxima vez que abrir.");
+    }).catch(function(){ _evToast("error", "Sem conexão: o rascunho pode voltar na próxima vez que abrir este vídeo."); });
   };
 
   /* v11: NOMES do cliente (a legenda nunca erra) + paleta de TODOS os clientes (cor da legenda por trecho — colab) */
@@ -126148,21 +126523,25 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
 
   /* narrações (gravadas ou da IA): mesmo tratamento de áudio da fala */
   const [narr, setNarr] = useState({});
+  /* v48 (06/10/2026): T-8 — o PC só começa a gravar depois que as narrações carregaram; a que não carregar vira motivo de falha */
+  const [narrCarregando, setNarrCarregando] = useState(true), [narrFalha, setNarrFalha] = useState(null);
   const chaveNarr = (p.narracoes || []).map(function(n){ return n.id + ":" + (n.url || n.clipe); }).join("|") + "|" + audioKey;
   useEffect(function(){
-    let vivo = true;
+    let vivo = true; setNarrCarregando(true);
+    const falhas = [], nomeN = function(n, i){ return n.nome || (n.ia ? "locução da IA" : "narração") + " " + (i + 1); };
     (async function(){
       const out = {};
-      for(const n of (p.narracoes || [])){
+      for(const [i, n] of (p.narracoes || []).entries()){
+        const vale = !n.mudo && !n.off;
         if(n.fonte === "clipe"){ const inf = clipes.find(function(c){ return c.id === n.clipe; }); if(!inf) continue;      // v24: som separado do clipe
-          const a0 = await _evpAudio(n.clipe, _evLeve(inf)); if(!a0) continue; const b0 = await _evpTratar(n.clipe, p.audio); if(b0) out[n.id] = b0; continue; }
-        const a = await _evpAudio("narr:" + n.id, n.url); if(!a) continue;
+          const a0 = await _evpAudio(n.clipe, _evLeve(inf)); if(!a0){ if(vale) falhas.push(nomeN(n, i)); continue; } const b0 = await _evpTratar(n.clipe, p.audio); if(b0) out[n.id] = b0; else if(vale) falhas.push(nomeN(n, i)); continue; }
+        const a = await _evpAudio("narr:" + n.id, n.url); if(!a){ if(vale) falhas.push(nomeN(n, i)); continue; }
         const b = n.musica ? a : await _evpTratar("narr:" + n.id, { ruido:!!p.audio.ruido && !n.ia, voz:!!p.audio.voz && !n.ia, eco:!!p.audio.eco && !n.ia, nivelar:!!p.audio.nivelar,
           hum:n.ia ? 0 : p.audio.hum, cliques:!n.ia && !!p.audio.cliques, pops:!n.ia && !!p.audio.pops, eq:p.audio.eq });   // v11: trilha extra (música) sem limpeza de voz
-        if(b) out[n.id] = b;
+        if(b) out[n.id] = b; else if(vale) falhas.push(nomeN(n, i));
       }
-      if(vivo) setNarr(out);
-    })().catch(function(){});
+      if(vivo){ setNarr(out); setNarrFalha(falhas.length ? falhas.join(", ") : null); setNarrCarregando(false); }
+    })().catch(function(e){ if(vivo){ setNarrFalha("erro ao abrir: " + String((e && e.message) || e).slice(0, 80)); setNarrCarregando(false); } });
     return function(){ vivo = false; };
   }, [chaveNarr]);
   /* ao contrário: guarda os quadros do trecho (uma vez) */
@@ -126223,8 +126602,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       onTempo:function(tt, toc, esp){       // tocando: a tela (linha do tempo, painéis) atualiza 20×/s — o vídeo continua a 60
         const agora = performance.now(), ult = tempoUi.current;
         if(!toc || !ult.toc || agora - ult.em > 50 || !!esp !== ult.esp){ tempoUi.current = { em:agora, toc:toc, esp:!!esp }; setTempo(tt); setTocando(toc); setEsperando(!!esp); } },
-      onFim:function(){ setTocando(false); } });
-    motorRef.current = m; m.seek(tempo);
+      onFim:function(){ setTocando(false); }, onVocal:function(r){ setVaMed(r); } });          // v48: medição do Vocal Attacker
+    motorRef.current = m; m.seek(tempo); setVaMed(m.vocal && m.vocal.med);
     return function(){ m.destruir(); motorRef.current = null; };
   }, [chaveMotor, kit]);
   useEffect(function(){ if(motorRef.current) motorRef.current.atualizar(calc, p, vozes, narr); }, [calc, vozes, narr]);
@@ -126895,7 +127274,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     setGerandoVoz(true); let ok = false;
     try{
       const falado = _evAplicarPronuncia(tx, kit && kit.pronuncias);          // v15: nomes difíceis do jeito que se fala (só no áudio)
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"locucao", id:ed.id, texto:falado, voz:voz, instrucao:jeito || "" } });
+      const res = await _evInvocar("video-editar", { body:{ acao:"locucao", id:ed.id, texto:falado, voz:voz, instrucao:jeito || "" } });
       if(res.error) throw new Error(await _evErroFn(res));
       const d = res.data || {}; if(!d.url) throw new Error("a IA não devolveu o áudio");
       const r = await fetch(d.url); if(!r.ok) throw new Error("não consegui baixar o áudio (" + r.status + ")");
@@ -126921,7 +127300,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     setTraduzindo(true); let ok = false;
     try{
       const blocos = {}; calc.blocos.forEach(function(b){ blocos[b.words[0].chave] = b.words.map(function(w){ return w.p; }).join(" "); });
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"traduzir", id:ed.id, idioma:idioma, blocos:blocos } });
+      const res = await _evInvocar("video-editar", { body:{ acao:"traduzir", id:ed.id, idioma:idioma, blocos:blocos } });
       if(res.error) throw new Error(await _evErroFn(res));
       const tr = (res.data && res.data.blocos) || {}, n = Object.keys(tr).filter(function(k){ return blocos[k] != null; }).length;
       if(!n) throw new Error("a IA não devolveu a tradução");
@@ -126982,6 +127361,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   });
   /* v24: antes/depois do SOM (botão do menu Áudio) */
   useEffect(function(){ const f = function(e){ const m = motorRef.current; if(m && m.setAudioAntes) m.setAudioAntes(!!(e && e.detail)); }; window.addEventListener("evp-audio-antes", f); return function(){ window.removeEventListener("evp-audio-antes", f); }; }, []);
+  /* v48 (06/10/2026): Vocal Attacker — "Comparar" (original × processado) e a medição de loudness que o motor devolve */
+  const [vaMed, setVaMed] = useState(null);
+  useEffect(function(){ const f = function(e){ const m = motorRef.current; if(m && m.setVocalBypass) m.setVocalBypass(!!(e && e.detail)); }; window.addEventListener("evp-va-comparar", f); return function(){ window.removeEventListener("evp-va-comparar", f); }; }, []);
   /* v19: antes/depois — solta a tecla B (ou o botão do painel Cor) e a cor volta */
   useEffect(function(){
     const solta = function(e){ if(e.key === "b" || e.key === "B"){ const m = motorRef.current; if(m && m.setAntes) m.setAntes(false); } };
@@ -126994,11 +127376,12 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(salvando || soVer) return false;
     setSalvando(true); let ok = false;
     try{
-      const r = await window._sb.rpc("criacao_edicao_salvar", { p_id:ed.id, p_projeto:pRef.current });
+      const enviado = pRef.current, enviadoJ = JSON.stringify(enviado);       // v48 (06/10/2026): E2-8 — marca como salvo o que foi ENVIADO (não o que mudou durante o salvamento)
+      const r = await window._sb.rpc("criacao_edicao_salvar", { p_id:ed.id, p_projeto:enviado });
       if(r.error) throw new Error(r.error.message);
       _evToast("success", "Versão " + ((r.data && r.data.versao) || "nova") + " salva");
       try{ localStorage.removeItem("pxev-rascunho-" + ed.id); }catch(_){}
-      setSalvoJson(JSON.stringify(pRef.current)); setAvisoRasc(null);
+      enviadoRef.current = enviadoJ; setSalvoJson(enviadoJ); setAvisoRasc(null); setNovaVersao(null);
       ok = true;
       if(onRecarregar) onRecarregar();
     }catch(e){ _evToast("error", "Não salvou: " + ((e && e.message) || e)); }
@@ -127018,7 +127401,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const pedirPrevia = async function(x){
     setSimulando(true);
     try{
-      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:x, simular:true }, modeloIA ? { modelo:modeloIA } : {}) });
+      const res = await _evInvocar("video-editar", { body:Object.assign({ acao:"ajustar", id:ed.id, pedido:x, simular:true }, modeloIA ? { modelo:modeloIA } : {}) });
       if(res.error) throw new Error(await _evErroFn(res));
       const d = res.data || {}; if(!d.projeto) throw new Error("a IA não devolveu a prévia");
       const ant = pRef.current, np = _evpNormalizar(_evpCopia(d.projeto), clipes);
@@ -127032,9 +127415,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     const pv = previa; if(!pv || aplicandoPrev) return;
     setAplicandoPrev(true);
     try{
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"aplicar_previa", id:ed.id, projeto:pRef.current, pedido:pv.pedido, explicacao:pv.explicacao, modelo:pv.modelo || null, custo_brl:pv.custo } });
+      const enviado = pRef.current, enviadoJ = JSON.stringify(enviado);       // v48 (06/10/2026): E2-8
+      const res = await _evInvocar("video-editar", { body:{ acao:"aplicar_previa", id:ed.id, projeto:enviado, pedido:pv.pedido, explicacao:pv.explicacao, modelo:pv.modelo || null, custo_brl:pv.custo } });
       if(res.error) throw new Error(await _evErroFn(res));
-      setSalvoJson(JSON.stringify(pRef.current)); try{ localStorage.removeItem("pxev-rascunho-" + ed.id); }catch(_){}
+      enviadoRef.current = enviadoJ; setSalvoJson(enviadoJ); try{ localStorage.removeItem("pxev-rascunho-" + ed.id); }catch(_){}
       setPrevia(null); _evToast("success", "Aplicado — versão " + ((res.data && res.data.versao) || "nova"));
       if(onRecarregar) onRecarregar();
     }catch(e){ _evToast("error", "Não aplicou: " + ((e && e.message) || e)); }
@@ -127051,7 +127435,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     try{
       const q = await _evpTirarQuadros(m, cv, calc.total, setPassoRev);
       setPassoRev("A IA está conferindo " + q.n + " quadros…");
-      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"revisar_quadros", id:ed.id, folhas:q.folhas, quadro_seg:q.quadro_seg, duracao:Math.round(calc.total * 100) / 100 }, modeloIA ? { modelo:modeloIA } : {}) });
+      const res = await _evInvocar("video-editar", { body:Object.assign({ acao:"revisar_quadros", id:ed.id, folhas:q.folhas, quadro_seg:q.quadro_seg, duracao:Math.round(calc.total * 100) / 100 }, modeloIA ? { modelo:modeloIA } : {}) });
       if(res.error) throw new Error(await _evErroFn(res));
       setRevIA((res.data && res.data.revisor) || null);
     }catch(e){ _evToast("error", "A revisão falhou: " + ((e && e.message) || e)); }
@@ -127111,7 +127495,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(alterado){ const ok = await salvar(); if(!ok) return; }
     setEnsinando(true);
     try{
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"aprender", id:ed.id } });
+      const res = await _evInvocar("video-editar", { body:{ acao:"aprender", id:ed.id } });
       if(res.error) throw new Error(await _evErroFn(res));
       const d = res.data || {};
       if(!d.regras) _evToast("info", d.motivo ? "Nada novo para aprender: " + d.motivo : "A IA não achou nada novo para aprender neste vídeo.");
@@ -127215,7 +127599,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       Q("sfx", "Efeito sonoro", "efeitos", { sub:"sfx" }), Q("gravar", gravando ? "Parar gravação" : "Gravar narração", "gravar", { dica:"Gravar narração na agulha (microfone)", acao:function(){ gravarNarracao(false); } }),
       Q("locucao", "Locução IA", "robo", { sub:"locucao" }),
       Q("importar", "Importar som", "enviar", { dica:"Enviar áudio pronto (MP3/WAV) — entra como narração na agulha", arquivo:{ accept:"audio/*,.mp3,.wav,.m4a", fn:enviarAudioPronto } }),
-      Q("mixer", "Mixer", "volume", { sub:"mixer" }), Q("limpeza", "Limpeza da fala", "audio", { sub:"limpeza" }), Q("sfxauto", "Sons automáticos", "batida", { sub:"sfxauto" }) ];
+      Q("mixer", "Mixer", "volume", { sub:"mixer" }), Q("limpeza", "Limpeza da fala", "audio", { sub:"limpeza" }), Q("vocal", "Vocal Attacker", "vocal", { dica:"Compressor de voz: nivela, comprime e deixa em −14 LUFS", sub:"vocal" }), Q("sfxauto", "Sons automáticos", "batida", { sub:"sfxauto" }) ];
     if(id === "texto") return [ Q("destaque", "Destaque", "texto", { acao:function(){ addTexto("destaque"); } }), Q("texto", "Texto na tela", "texto", { acao:function(){ addTexto("texto"); } }),
       Q("tarja", "Tarja", "legenda", { acao:function(){ addTexto("tarja"); } }), Q("galeria", "Da galeria", "camadas", { dica:"GC e elementos do kit (Biblioteca › Galeria)", acao:function(){ abrirBib("bib-kit"); } }),
       Q("lista", "Textos do vídeo (" + (p.textos || []).length + ")", "lapis", { sub:"lista" }) ];
@@ -127258,7 +127642,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     enviarAudioPronto, aplicarCorrecoes, ajustando, marcaCorr, marcarCorrecao, marcarPontoCorr, focoCorr, setFocoCorr, cortar, duplicar, apagar, metodoRuido, tratandoAudio, pedirEstab,
     onMusicasMudou, setFerr, pRef, setP, confirmar, addImagem, addMarca, tirarTrechos, fala:ed.fala, modelos, salvarModelo, aplicarModelo, voltarTrechos, pintarTrechos, corrigirTexto,
     addNome, coresCli, nomesKit, clipesTodos:clipes, addTrilha, gerarCapa, capaUrl, t, edId:ed.id, onRecarregar, tratandoTudo:Object.keys(medindoAcao).length, trat, addSobre, addDesfoque,
-    addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt };
+    addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt, vaMed, tocando };   // v48: Vocal Attacker
   return (
     <div style={raiz} data-tema={tema} onDragEnter={function(e){ if(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0){ e.preventDefault(); setSoltando(true); } }}>
       {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
@@ -127312,6 +127696,14 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           Continuando a edição salva sozinha {avisoRasc.por ? "por " + avisoRasc.por + " " : ""}às {new Date(avisoRasc.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}.
           <button onClick={function(){ setAvisoRasc(null); }} style={Object.assign(_evpBtn("suave"), {padding:"5px 10px"})}>Continuar</button>
           <button onClick={descartarRascunho} style={Object.assign(_evpBtn(), {padding:"5px 10px"})}>Voltar para a última versão salva</button>
+        </div>
+      )}
+      {novaVersao && (      /* v48 (06/10/2026): E2-1 / E2-4 — a versão nova não troca a tela sozinha */
+        <div role="alert" style={Object.assign({}, _EVP_PAINEL, {padding:"8px 12px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontSize:12.5,fontWeight:600,flexShrink:0,borderColor:"rgba(234,179,8,.55)",background:_EVP_COR.aviso})}>
+          <span style={{color:_EVX.amarelo}}><_EvpIco n="alerta"/></span>
+          <span style={{flex:"1 1 320px",minWidth:0,color:_EVP_COR.ink}}>Tem uma versão mais nova (da IA/do PC){novaVersao.por ? " · " + novaVersao.por : ""}{novaVersao.em ? " às " + new Date(novaVersao.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : ""}. Você mexeu na edição enquanto isso.</span>
+          <button onClick={verNovaVersao} style={Object.assign(_evpBtn("primario"), {padding:"5px 10px"})}>Ver a nova</button>
+          <button onClick={manterMinha} style={Object.assign(_evpBtn(), {padding:"5px 10px"})}>Manter a minha</button>
         </div>
       )}
 
@@ -127420,7 +127812,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
             ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
             mostrarAntes={mostrarAntes} setMostrarAntes={setMostrarAntes} simulando={simulando}
-            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido} p={p} calc={calc} mudar={mudar}/>
+            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido} p={p} calc={calc} mudar={mudar}
+            erroAjuste={erroAjuste} limparErroAjuste={limparErroAjuste}/>
         )}
         </div></div>
       </div>
@@ -127443,7 +127836,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
             vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
             onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
-            prontoPC={!!pcAuto && dicPronto && !tratandoAudio && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)
+            narrFalha={narrFalha}
+            prontoPC={!!pcAuto && dicPronto && !tratandoAudio && !narrCarregando && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)
               && !precisaFoco.length && !Object.keys(medindoFoco).length}/>
         </div>
       </div>
@@ -127466,12 +127860,12 @@ function _EvpModeloIA({ ocupado }){
   const [aberto, setAberto] = useState(false);
   const carregar = function(){
     if(!window._sb || !window._sb.functions) return;
-    window._sb.functions.invoke("video-editar", { body:{ acao:"modelos" } }).then(function(r){ if(!r.error && r.data && r.data.ok) setInfo(r.data); }).catch(function(){});
+    _evInvocar("video-editar", { body:{ acao:"modelos" } }).then(function(r){ if(!r.error && r.data && r.data.ok) setInfo(r.data); }).catch(function(){});
   };
   useEffect(carregar, []);
   const testar = async function(){
     if(testando) return; setTestando(true); setTestes(null);
-    try{ const r = await window._sb.functions.invoke("video-editar", { body:{ acao:"testar_modelos" } }); if(r.error) throw new Error(await _evErroFn(r)); setTestes((r.data && r.data.testes) || []); }
+    try{ const r = await _evInvocar("video-editar", { body:{ acao:"testar_modelos" } }); if(r.error) throw new Error(await _evErroFn(r)); setTestes((r.data && r.data.testes) || []); }
     catch(e){ _evToast("error", "Não testou: " + ((e && e.message) || e)); }
     setTestando(false);
   };
@@ -127479,7 +127873,7 @@ function _EvpModeloIA({ ocupado }){
     if(!modelo || definindo) return;
     if(!window.confirm("Usar o " + _evpModeloNome(modelo) + " como padrão da agência? Vale para o Guvi, o PC e quem não escolheu modelo.")) return;
     setDefinindo(true);
-    try{ const r = await window._sb.functions.invoke("video-editar", { body:{ acao:"definir_modelo", modelo:modelo } }); if(r.error) throw new Error(await _evErroFn(r));
+    try{ const r = await _evInvocar("video-editar", { body:{ acao:"definir_modelo", modelo:modelo } }); if(r.error) throw new Error(await _evErroFn(r));
       _evToast("success", "Padrão da agência: " + _evpModeloNome(modelo)); carregar(); }
     catch(e){ _evToast("error", "Não mudou o padrão: " + ((e && e.message) || e)); }
     setDefinindo(false);
@@ -128329,6 +128723,92 @@ function _EvpAudioExtra({ au, mudar }){
   </div>);
 }
 
+/* ─── v48 (06/10/2026): VOCAL ATTACKER — painel (menu Áudio › Limpeza da fala, logo abaixo da limpeza). UM preset; liga/desliga; intensidade;
+   "Comparar" (segure = original; ou clique em A/B para alternar); ajustes avançados. Grava em p.vocal_attacker (contrato C6). ─── */
+function _evpVaFmt(v, casas){ const n = Number(v); if(!isFinite(n)) return "—"; return (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(casas == null ? 1 : casas).replace(".", ","); }
+function _EvpVocalAttacker({ p, mudar, med, tocando }){
+  const cfg = _evpVaCfg(p && p.vocal_attacker), chave = JSON.stringify(cfg);
+  const [loc, setLoc] = useState(cfg);                       // enquanto arrasta (grava no projeto ao soltar: um passo só no desfazer)
+  useEffect(function(){ setLoc(cfg); }, [chave]);
+  const [avanc, setAvanc] = useState(false), [ab, setAb] = useState(false), [segurando, setSegurando] = useState(false);
+  const gravar = function(o){ mudar(function(np){ np.vocal_attacker = _evpVaCfg(Object.assign({}, _EVP_VA_PADRAO, np.vocal_attacker || {}, o)); }); };
+  const comparar = function(v){ try{ window.dispatchEvent(new CustomEvent("evp-va-comparar", { detail:!!v })); }catch(_){} };
+  useEffect(function(){ return function(){ comparar(false); }; }, []);
+  useEffect(function(){ if(!cfg.ativo && ab){ setAb(false); comparar(false); } }, [cfg.ativo]);
+  const original = ab || segurando, on = cfg.ativo;
+  const linhaAj = function(rot, campo, min, max, passo, fmt, dica){ const v = loc[campo];
+    return <label key={campo} title={dica} style={{display:"grid",gridTemplateColumns:"64px minmax(0,1fr) 74px",gap:8,alignItems:"center",fontSize:12,marginBottom:6}}>
+      <span style={{fontWeight:700,color:_EVP_COR.sub}}>{rot}</span>
+      <input type="range" min={min} max={max} step={passo} value={v} disabled={!on} aria-label={rot}
+        onChange={function(e){ const n = Object.assign({}, loc); n[campo] = Number(e.target.value); setLoc(n); }}
+        onPointerUp={function(){ const o = {}; o[campo] = loc[campo]; gravar(o); }} onKeyUp={function(){ const o = {}; o[campo] = loc[campo]; gravar(o); }}
+        style={{width:"100%",accentColor:_EVP_COR.roxoFixo,opacity:on ? 1 : 0.5}}/>
+      <span style={{fontFamily:_EVP_MONO,fontSize:11,fontWeight:700,color:_EVP_COR.ink,textAlign:"right",whiteSpace:"nowrap"}}>{fmt(v)}</span>
+    </label>; };
+  const medTxt = !on ? null : !med ? "Medindo a voz…" : med.erro ? "Não consegui medir a voz: " + med.erro
+    : med.lufs == null ? "Sem fala para medir neste vídeo." : "Voz " + _evpVaFmt(med.lufs + 3.01).replace("+", "") + " LUFS → saída " + _evpVaFmt(med.lufsSaida).replace("+", "") + " LUFS · pico ≤ " + _evpVaFmt(cfg.true_peak).replace("+", "") + " dBTP";
+  return (
+    <div style={{border:"1px solid " + (on ? "rgba(124,58,237,.45)" : _EVP_COR.linha),borderRadius:12,padding:"10px 10px 8px",background:on ? "linear-gradient(180deg, " + _EVP_COR.roxoSoft + ", transparent 70%)" : _EVP_COR.faixa,marginTop:10,marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:9}}>
+        <span style={{width:30,height:30,borderRadius:9,display:"grid",placeItems:"center",flexShrink:0,color:"#fff",background:on ? "linear-gradient(135deg,#7c3aed,#db2777)" : _EVP_COR.knob}}><_EvpIco n="vocal" s={17}/></span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:800,color:_EVP_COR.ink,display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}><span>Vocal Attacker</span>
+            <span style={{fontSize:9,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",padding:"2px 6px",borderRadius:99,background:on ? "rgba(124,58,237,.16)" : _EVP_COR.linha2,color:on ? _EVP_COR.roxo : _EVP_COR.fraco}}>preset</span></div>
+          <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:1,lineHeight:1.35}}>Nivela, comprime e deixa a voz em −14 LUFS.</div>
+        </div>
+        <span role="switch" aria-checked={on} aria-label="Ligar o Vocal Attacker" tabIndex={0}
+          onKeyDown={function(e){ if(e.key === " " || e.key === "Enter"){ e.preventDefault(); gravar({ ativo:!on }); } }} onClick={function(){ gravar({ ativo:!on }); }}
+          style={{width:38,height:22,borderRadius:99,background:on ? "linear-gradient(135deg," + _EVP_COR.roxo + "," + _EVP_COR.roxo2 + ")" : _EVP_COR.knob,position:"relative",flexShrink:0,cursor:"pointer",transition:"background .15s"}}>
+          <span style={{position:"absolute",top:2,left:on ? 18 : 2,width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.25)",transition:"left .15s"}}/></span>
+      </div>
+
+      <div style={{marginTop:10,opacity:on ? 1 : 0.55}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",fontSize:12,fontWeight:700,color:_EVP_COR.sub}}>
+          <span>Intensidade</span><span style={{fontFamily:_EVP_MONO,fontSize:13,fontWeight:800,color:on ? _EVP_COR.roxo : _EVP_COR.fraco}}>{Math.round(loc.intensidade)}%</span></div>
+        <input type="range" min={0} max={100} step={1} value={loc.intensidade} disabled={!on} aria-label="Intensidade do Vocal Attacker"
+          onChange={function(e){ setLoc(Object.assign({}, loc, { intensidade:Number(e.target.value) })); }}
+          onPointerUp={function(){ gravar({ intensidade:loc.intensidade }); }} onKeyUp={function(){ gravar({ intensidade:loc.intensidade }); }}
+          style={{width:"100%",accentColor:_EVP_COR.roxoFixo,margin:"4px 0 0"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:_EVP_COR.fraco,marginTop:-2}}><span>só o volume final</span><span>preset inteiro</span></div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:6,marginTop:10}}>
+        <button disabled={!on} onPointerDown={function(e){ if(!on) return; try{ e.currentTarget.setPointerCapture(e.pointerId); }catch(_){} setSegurando(true); comparar(true); }}
+          onPointerUp={function(){ if(!segurando) return; setSegurando(false); comparar(ab); }} onPointerCancel={function(){ setSegurando(false); comparar(ab); }}
+          title="Segure com o vídeo tocando: ouve a voz ORIGINAL; solte para voltar ao processado"
+          style={Object.assign(_evpBtn(original ? "primario" : "suave", on), {justifyContent:"center",padding:"7px 10px"})}><_EvpIco n="ouvir" s={15}/>{segurando ? "Ouvindo o original…" : "Comparar (segure)"}</button>
+        <div role="radiogroup" aria-label="Ouvir" style={{display:"inline-flex",padding:2,borderRadius:10,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha,opacity:on ? 1 : 0.5}}>
+          {[[true, "A", "Original"], [false, "B", "Processado"]].map(function(q){ const sel = ab === q[0];
+            return <button key={q[1]} role="radio" aria-checked={sel} aria-label={q[1] + ": " + q[2]} disabled={!on} title={q[2]} onClick={function(){ setAb(q[0]); comparar(q[0]); }}
+              style={{font:"inherit",fontSize:11.5,fontWeight:800,padding:"5px 9px",borderRadius:8,border:0,cursor:on ? "pointer" : "default",background:sel ? "linear-gradient(135deg," + _EVP_COR.roxoFixo + "," + _EVP_COR.roxo2 + ")" : "transparent",color:sel ? "#fff" : _EVP_COR.sub}}>{q[1]}</button>; })}
+        </div>
+      </div>
+      {on && <div style={{fontSize:11,color:original ? _EVX.amarelo : _EVP_COR.sub,fontWeight:700,marginTop:6,display:"flex",gap:5,alignItems:"center"}}>
+        <span style={{width:6,height:6,borderRadius:99,background:"currentColor",flexShrink:0}}/>{original ? "Tocando o ORIGINAL (sem o Vocal Attacker)" : tocando ? "Tocando com o Vocal Attacker" : "Dê o play para ouvir"}</div>}
+      {medTxt && <div style={{fontSize:11,color:_EVP_COR.sub,marginTop:4,fontFamily:_EVP_MONO,lineHeight:1.4}}>{medTxt}</div>}
+
+      <button onClick={function(){ setAvanc(!avanc); }} aria-expanded={avanc}
+        style={{font:"inherit",display:"flex",alignItems:"center",gap:5,border:0,background:"transparent",color:_EVP_COR.sub,fontSize:12,fontWeight:700,cursor:"pointer",padding:"8px 0 2px"}}>
+        <_EvpIco n="seta_baixo" s={14} style={{transform:avanc ? "rotate(180deg)" : "rotate(-90deg)",transition:"transform .15s"}}/>Ajustes avançados</button>
+      {avanc && <div style={{marginTop:6}}>
+        {linhaAj("Threshold", "threshold", -40, -6, 1, function(v){ return _evpVaFmt(v, 0) + " dB"; }, "A partir de onde comprime (preset −22 dB)")}
+        {linhaAj("Ratio", "ratio", 1, 12, 0.5, function(v){ return String(v).replace(".", ",") + ":1"; }, "Quanto comprime acima do threshold (preset 4:1)")}
+        {linhaAj("Attack", "attack_ms", 1, 50, 1, function(v){ return Math.round(v) + " ms"; }, "Rapidez para segurar o pico (preset 8 ms)")}
+        {linhaAj("Release", "release_ms", 30, 400, 5, function(v){ return Math.round(v) + " ms"; }, "Rapidez para soltar (preset 120 ms)")}
+        <div style={{display:"grid",gridTemplateColumns:"64px minmax(0,1fr)",gap:8,alignItems:"center",fontSize:12,marginBottom:8}}>
+          <span style={{fontWeight:700,color:_EVP_COR.sub,whiteSpace:"nowrap"}}>Makeup</span>
+          <div role="radiogroup" aria-label="Makeup em dB" style={{display:"flex",gap:4}}>
+            {[["auto", "Auto"], [0, "0 dB"], [3, "+3"], [6, "+6"]].map(function(q){ const sel = String(cfg.makeup) === String(q[0]);
+              return <button key={q[1]} role="radio" aria-checked={sel} disabled={!on} onClick={function(){ gravar({ makeup:q[0] }); }} style={Object.assign(_evpChip(sel), {padding:"3px 4px",fontSize:10.5,flex:"1 1 0",justifyContent:"center",minWidth:0,whiteSpace:"nowrap",boxShadow:"none",opacity:on ? 1 : 0.5})} title={q[0] === "auto" ? "Automático (o volume final leva ao alvo)" : q[1] + " dB a mais na voz"}>{q[1]}</button>; })}
+          </div>
+        </div>
+        <button disabled={!on} onClick={function(){ gravar(Object.assign({}, _EVP_VA_PADRAO, { ativo:true })); }} style={Object.assign(_evpBtn(null, on), {width:"100%",justifyContent:"center",padding:"6px 10px",fontSize:11.5,marginTop:2})}>Voltar ao preset Vocal Attacker</button>
+        <div style={{fontSize:10.5,color:_EVP_COR.fraco,marginTop:6,lineHeight:1.45}}>A intensidade escala o preset (0% = só o volume final). O PC confere −14 LUFS / −1 dBTP no arquivo gravado.</div>
+      </div>}
+    </div>
+  );
+}
+
 /* ─── v24: EFEITOS SONOROS — busca, favoritos, ambiente, importar, colocar sozinho nas transições ─── */
 function _evpLerLista(k){ try{ const v = JSON.parse(localStorage.getItem(k) || "[]"); return Array.isArray(v) ? v : []; }catch(_){ return []; } }
 function _evpGravarLista(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(_){} }
@@ -128340,8 +128820,14 @@ function _EvpSfxMenu({ addSfx, mudar, p, calc, tempo, t, linhaBtn, parte }){
   const b = _evNorm(busca);
   const lista = todos.filter(function(s){ return !b || _evNorm(s.label).indexOf(b) >= 0; }).sort(function(x, y){ return (favs.indexOf(y.id) >= 0 ? 1 : 0) - (favs.indexOf(x.id) >= 0 ? 1 : 0); });
   const fav = function(id){ const n = favs.indexOf(id) >= 0 ? favs.filter(function(z){ return z !== id; }) : favs.concat([id]); setFavs(n); _evpGravarLista("pxev-sfx-fav", n); };
-  const ouvir = function(s){ try{ const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC(); const tocar = function(buf){ const src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination); src.start(); setTimeout(function(){ try{ src.stop(); ac.close(); }catch(_){} }, 3500); };
-    if(s.url){ fetch(s.url).then(function(r){ return r.arrayBuffer(); }).then(function(ab){ return ac.decodeAudioData(ab); }).then(tocar).catch(function(){}); } else tocar(_evpSfxBuffer(ac, s.id)); }catch(_){} };
+  /* v48 (06/10/2026): E2-21 — "ouvir" usa o cache dos sons (_evpSfxUrl: baixa uma vez só) e fecha o AudioContext também quando dá erro */
+  const ouvir = function(s){ let ac = null; try{ const AC = window.AudioContext || window.webkitAudioContext; ac = new AC();
+    const fechar = function(){ try{ ac.close(); }catch(_){} };
+    const tocar = function(buf){ if(!buf){ fechar(); _evToast("warning", "Não consegui abrir este som."); return; }
+      try{ const src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination); src.start(); setTimeout(function(){ try{ src.stop(); }catch(_){} fechar(); }, 3500); }catch(_){ fechar(); } };
+    if(s.url){ window.__pxAcSfx = window.__pxAcSfx || new AC(); const it = _evpSfxUrl(window.__pxAcSfx, s.url);
+      (it.prom || Promise.resolve(it)).then(function(o){ tocar(o && o.buf); }).catch(function(){ tocar(null); }); }
+    else tocar(_evpSfxBuffer(ac, s.id)); }catch(_){ try{ if(ac) ac.close(); }catch(__){} } };
   const importar = async function(e){
     const f = e.target.files && e.target.files[0]; e.target.value = ""; if(!f) return;
     if(!/^audio\//.test(f.type || "") && !/\.(mp3|wav|m4a|ogg|aac)$/i.test(f.name)){ _evToast("warning", "Use MP3, WAV, M4A ou OGG."); return; }
@@ -128818,7 +129304,7 @@ function _EvpFalaIA({ fala, edId, calc, infoClipe, irPara }){
     if(modo === "assunto" && !assunto.trim()){ _evToast("warning", "Escreva o assunto (ex.: preço, entrega, garantia)."); return; }
     setCarregando(modo); setRes(null);
     try{
-      const r = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"fala_ia", id:edId, modo:modo, pergunta:assunto.trim().slice(0, 200), frases:frases.map(function(f){ return { k:f.k, t:f.t }; }) }, modeloIA ? { modelo:modeloIA } : {}) });
+      const r = await _evInvocar("video-editar", { body:Object.assign({ acao:"fala_ia", id:edId, modo:modo, pergunta:assunto.trim().slice(0, 200), frases:frases.map(function(f){ return { k:f.k, t:f.t }; }) }, modeloIA ? { modelo:modeloIA } : {}) });
       if(r.error) throw new Error(await _evErroFn(r));
       setRes(Object.assign({ modo:modo }, r.data || {}));
     }catch(e){ _evToast("error", "A IA não respondeu: " + ((e && e.message) || e)); }
@@ -128892,7 +129378,7 @@ function _EvpBanco({ aberto, onFechar, cliente, taskId, onUsarImagem }){
   const analisar = async function(x){
     const r = await _evpMidiaQuadros(x.copia || x.url, x.tipo);
     if(!x.qualidade) await salvar(x, Object.assign({ qualidade:Object.assign({}, r.qualidade, { medido_em:new Date().toISOString(), w:r.w, h:r.h }) }, r.duracao ? { duracao:String(r.duracao) } : {}));
-    const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"midia_analisar", id:x.id, folha:r.folha }, modeloIA ? { modelo:modeloIA } : {}) });
+    const res = await _evInvocar("video-editar", { body:Object.assign({ acao:"midia_analisar", id:x.id, folha:r.folha }, modeloIA ? { modelo:modeloIA } : {}) });
     if(res.error) throw new Error(await _evErroFn(res));
     trocar({ id:x.id, analise:res.data.analise, analisado_em:new Date().toISOString(), tags:Array.from(new Set((x.tags || []).concat(res.data.analise.tags || []))) });
     return res.data;
@@ -129118,7 +129604,7 @@ function _EvpNarrVoz({ x, edId, mudar, infoClipe, cliente, p }){
     if(tx.length > 1500){ _evToast("warning", "Máximo de 1.500 letras na narração."); return; }
     setGerando(true);
     try{
-      const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"narracao_refazer", id:edId, texto:tx, jeito:jeito.trim() }, vozSel ? { voz_id:vozSel.id } : { voz:vozLivre }) });
+      const res = await _evInvocar("video-editar", { body:Object.assign({ acao:"narracao_refazer", id:edId, texto:tx, jeito:jeito.trim() }, vozSel ? { voz_id:vozSel.id } : { voz:vozLivre }) });
       if(res.error) throw new Error(await _evErroFn(res));
       const d = res.data || {}; if(!d.url || !Array.isArray(d.palavras)) throw new Error("a IA não devolveu a narração");
       try{ delete _evpMidia["narr:" + x.id]; }catch(_){}          // o áudio novo é carregado de novo (mesmo id: a legenda e a faixa continuam)
@@ -129171,7 +129657,7 @@ function _EvpNarrVoz({ x, edId, mudar, infoClipe, cliente, p }){
 const _EVP_SUGESTOES = ["Tirar os silêncios e os \"éé\"", "Deixar mais dinâmico, cortes mais rápidos", "Fazer uma versão de 30 segundos", "Destacar o nome da cidade",
   "Legenda amarela estilo karaokê", "Filtro quente em tudo", "Música mais baixa na fala", "Começar pela frase mais forte"];
 function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFerr, clipAg, infoClipe, edId, ed, onVoltarVersao, previa, aplicarPrevia, descartarPrevia, aplicandoPrev,
-                          mostrarAntes, setMostrarAntes, simulando, revIA, revisando, passoRev, revisarIA, irPara, usarPedido, p, calc, mudar }){
+                          mostrarAntes, setMostrarAntes, simulando, revIA, revisando, passoRev, revisarIA, irPara, usarPedido, p, calc, mudar, erroAjuste, limparErroAjuste }){
   /* v8 (29/09): pedido por voz — grava no microfone, a OpenAI (whisper) escreve, o texto entra na caixa para conferir antes de mandar */
   const [voz, setVoz] = useState(null);              // null | "gravando" | "escrevendo"
   const [segVoz, setSegVoz] = useState(0);
@@ -129200,7 +129686,7 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
       setVoz("escrevendo");
       try{
         const b64 = await new Promise(function(ok, falha){ const fr = new FileReader(); fr.onload = function(){ ok(String(fr.result).split(",")[1] || ""); }; fr.onerror = falha; fr.readAsDataURL(blob); });
-        const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"transcrever_pedido", id:edId || null, audio:b64, mime:tipo } });
+        const res = await _evInvocar("video-editar", { body:{ acao:"transcrever_pedido", id:edId || null, audio:b64, mime:tipo } });
         if(res.error) throw new Error(await _evErroFn(res));
         const tx = String((res.data && res.data.texto) || "").trim();
         if(!tx) _evToast("warning", "Não entendi o áudio. Tente falar mais perto do microfone.");
@@ -129223,6 +129709,13 @@ function _EvpAssistente({ pedido, setPedido, pedirIA, ajustando, iaRef, abrirFer
         onKeyDown={function(e){ e.stopPropagation(); if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); pedirIA(); } }}
         placeholder="Peça um ajuste… (Ctrl + Enter envia)"
         style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:12,border:"1px solid "+_EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,fontSize:13,resize:"vertical",userSelect:"text"}}/>
+      {erroAjuste && !ajustando && <div role="alert" style={{marginTop:6,padding:"9px 10px",borderRadius:10,background:_EVP_COR.erro,border:"1px solid rgba(239,68,68,.35)",fontSize:12,lineHeight:1.45,color:_EVP_COR.ink}}>
+        {/* v48 (06/10/2026): E2-3 — o erro do "Ajustar com IA" aparece aqui dentro (o editor em tela cheia escondia o de fora) */}
+        <div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{color:_EVX.verm,marginTop:1}}><_EvpIco n="alerta" s={15}/></span>
+          <div style={{flex:1,minWidth:0}}><b style={{color:_EVX.verm}}>O ajuste com IA não saiu.</b> {erroAjuste.msg}</div>
+          {limparErroAjuste && <button onClick={limparErroAjuste} aria-label="Fechar o aviso" style={{font:"inherit",border:0,background:"transparent",color:_EVP_COR.sub,cursor:"pointer",padding:0}}><_EvpIco n="fechar" s={14}/></button>}</div>
+        {erroAjuste.pedido && !pedido.trim() && <button onClick={function(){ setPedido(erroAjuste.pedido); if(iaRef.current) iaRef.current.focus(); }} style={Object.assign(_evpBtn("suave"), {marginTop:6,padding:"4px 9px",fontSize:11.5})}>Pôr o pedido de volta na caixa</button>}
+      </div>}
       <button onClick={falarPedido} disabled={ajustando || voz === "escrevendo"} aria-pressed={voz === "gravando"} title="Fale o pedido; clique de novo para parar (até 2 minutos)"
         style={Object.assign(_evpBtn(voz === "gravando" ? null : "suave", !ajustando && voz !== "escrevendo"), {width:"100%",justifyContent:"center",marginTop:6},
           voz === "gravando" ? { background:"#fee2e2", color:"#b91c1c", borderColor:"#fecaca" } : {})}>
@@ -129778,6 +130271,7 @@ function _EvpPainelMenu(q){
           {q.tratandoAudio ? "Processando o áudio…" : q.metodoRuido === "estudio" ? "Voz de estúdio (IA no PC) aplicada" : au.ruido && q.metodoRuido === "rnnoise" ? "Ruído tirado com IA (RNNoise)" : au.ruido && q.metodoRuido === "porta" ? "Ruído reduzido (modo simples: a IA de ruído não carregou)" : "Áudio pronto"}
         </div>
         </div>); };
+  S.vocal = function(){ return <_EvpVocalAttacker p={p} mudar={mudar} med={q.vaMed} tocando={q.tocando}/>; };      // v48 (06/10/2026): Vocal Attacker
   S.titNarr = function(){ return <div style={_EVP_TIT}>Narração</div>; };
   S.gravar = function(){ return (<div style={{border:"1px solid " + (q.gravando ? "#f3b5b0" : _EVP_COR.linha),borderRadius:12,padding:10,background:q.gravando ? "#fff6f5" : _EVP_COR.faixa,marginBottom:10}}>
           <button onClick={function(){ q.gravarNarracao(ouvirGravando); }} disabled={q.subindoNarr != null} aria-label={q.gravando ? "Parar gravação" : "Gravar narração"}
@@ -129998,7 +130492,7 @@ function _EvpPainelMenu(q){
   const COMP = {
     midia:["cabMidia", "banco", "brutos", "novos", "fotos"],
     editar:["cabEditar", "ordem", "tres", "cortarFala", "ritmo", "marcadores", "comentarios", "modelo", "atalhos"],
-    audio:["cabAudio", "limpeza", "titNarr", "gravar", "locucao", "narracoes", "titMixer", "mixer", "dicaVol"],
+    audio:["cabAudio", "limpeza", "vocal", "titNarr", "gravar", "locucao", "narracoes", "titMixer", "mixer", "dicaVol"],
     texto:["cabTexto", "textos3", "galeria", "listaTextos", "mostrarTextos"],
     imagem:["cabImagem", "formato", "camadas", "sobre", "filtros", "todos", "voltarCor", "abertura", "formas", "figurinhas", "enviarImg", "capa", "final"],
     efeitos:["cabEfeitos", "titSfx", "sfx", "transTodos", "luz"],
@@ -130008,7 +130502,7 @@ function _EvpPainelMenu(q){
     "bib-kit":["cabKit", "galeria"], "bib-vozes":["cabVozes", "vozesCliente", "narracoes"],
     "ferr:midia:sobre":["sobre"], "ferr:imagem:sobre":["sobre"],
     "ferr:cortar:silencios":["silencios"], "ferr:cortar:ritmo":["ritmo"], "ferr:cortar:ordem":["ordem"], "ferr:cortar:comentarios":["comentarios"],
-    "ferr:audio:sfx":["sfx"], "ferr:audio:locucao":["locucao"], "ferr:audio:mixer":["mixer", "dicaVol"], "ferr:audio:limpeza":["limpeza"], "ferr:audio:sfxauto":["sfxauto"],
+    "ferr:audio:sfx":["sfx"], "ferr:audio:locucao":["locucao"], "ferr:audio:mixer":["mixer", "dicaVol"], "ferr:audio:limpeza":["limpeza", "vocal"], "ferr:audio:vocal":["vocal"], "ferr:audio:sfxauto":["sfxauto"],
     "ferr:texto:lista":["listaTextos", "mostrarTextos"],
     "ferr:imagem:camadas":["camadas"], "ferr:imagem:formato":["formato"], "ferr:imagem:todos":["todos"], "ferr:imagem:abertura":["abertura"], "ferr:imagem:final":["final"], "ferr:imagem:capa":["capa"],
     "ferr:cor:filtros":["filtros", "voltarCor"],
@@ -131321,7 +131815,7 @@ async function _evmChamar(id, corpo, oque){
   _evmAvisar(id, { estado:"fazendo", oque:oque || "Fazendo o motion graphics…", desde:Date.now() });
   let msg = "";
   try{
-    const res = await window._sb.functions.invoke("video-editar", { body:Object.assign({ acao:"motion", id:id }, corpo || {}) });
+    const res = await _evInvocar("video-editar", { body:Object.assign({ acao:"motion", id:id }, corpo || {}) });
     if(res.error){ msg = await _evErroFn(res); if(!msg || msg === "erro" || /non-2xx|Failed to send|Failed to fetch|Relay Error|NetworkError|Load failed|fetch/i.test(msg)) msg = "Não consegui falar com o servidor. Confira a internet e tente de novo."; throw new Error(msg); }
     const d = res.data || {}; if(d.ok === false) throw new Error(d.erro || "O motion não saiu. O vídeo continua como estava.");
     _evmAvisar(id, null); _evToast("success", "✨ " + (d.explicacao ? String(d.explicacao).slice(0, 160) : "Motion graphics pronto") + (d.versao ? " · versão " + d.versao : ""));
@@ -134396,7 +134890,7 @@ async function _evpLegendaPedir(o){
   const body = { acao:"legenda_post", id:o.ed.id, fala_final:_evpLegendaFala(o.calc), gravar:!!o.gravar };
   if(o.modo === "alterar"){ body.modo = "alterar"; body.pedido = String(o.pedido || ""); body.legenda_atual = String(o.legendaAtual || ""); }
   if(o.forcar) body.forcar = true;
-  const r = await window._sb.functions.invoke("video-editar", { body:body });
+  const r = await _evInvocar("video-editar", { body:body });
   if(r && r.error){ let msg = r.error.message || "erro"; try{ if(r.error.context && r.error.context.json){ const j = await r.error.context.json(); if(j && j.erro) msg = j.erro; } }catch(_){} throw new Error(msg); }
   const d = r && r.data; if(!d || !d.ok) throw new Error((d && d.erro) || "a IA não devolveu a legenda");
   return d;
@@ -134486,12 +134980,17 @@ function _EvpLegendaPost({ ed, t, calc, pcAuto, auto, isMob }){
 }
 
 function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, vozes, narr, tratados, logoUrl, exp, setExp, alterado, salvar, trat, precisaEstab, mudar, onFeito, isMob,
-                       vozesTratadas, tirarTrechos, fala, setSel, irPara, pcAuto, prontoPC }){
+                       vozesTratadas, tirarTrechos, fala, setSel, irPara, pcAuto, prontoPC, narrFalha }){
   const [qualidade, setQualidade] = useState(function(){ try{ return localStorage.getItem("pxev-qualidade") || "alta"; }catch(_){ return "alta"; } });
   const BPS = { alta:12000000, padrao:8000000, leve:4000000 };
   const [comLegenda, setComLegenda] = useState(true);
-  const [soAudio, setSoAudio] = useState(false);
+  // v48 (Exportar novo): "Só o áudio" virou um botão próprio em Mais opções → exportar({ soAudio:true })
+  const [soAudio, setSoAudio] = useState(false);        // marco v6 (exportar só o áudio): agora marca a gravação de áudio em andamento (o botão mostra "Gravando o áudio…")
   const cvRef = useRef(null);
+  /* v48 (06/10/2026): E2-18 — os endereços locais (blob:) do vídeo/áudio gravado neste navegador são liberados na próxima gravação e ao fechar o editor */
+  const blobsRef = useRef([]);
+  const soltarBlobs = function(){ blobsRef.current.forEach(function(u){ try{ URL.revokeObjectURL(u); }catch(_){} }); blobsRef.current = []; };
+  useEffect(function(){ return soltarBlobs; }, []);
   const parar = useRef(null);
   // o que o PC ainda está fazendo para este vídeo (estabilizar, melhorar a imagem, voz de estúdio)
   const usadosIds = []; (projeto.clips || []).forEach(function(c){ if(usadosIds.indexOf(c.clipe) < 0) usadosIds.push(c.clipe); });
@@ -134511,7 +135010,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
   const conf = useMemo(function(){ return _evpConferir(projeto, calc, { fala:fala, vozes:vozesTratadas, musInfo:musInfo, pendPC:pendPC, kit:kit, motivos:(ed.receita && ed.receita.motivos_corte) || [],
     driveDe:_evDriveDe(t && t.files), clipes:ed.clipes || [], receita:ed.receita || null, corEst:corEst, fotos:_evpFotosDoCard(t && t.files) }); }, [projeto, calc, vozesTratadas, musInfo, pendPC.length, kit, t && t.files, corEst, _evpAnuncioOlhado.v]);
   const nErro = conf.filter(function(x){ return x.nivel === "erro"; }).length, nAviso = conf.filter(function(x){ return x.nivel === "aviso"; }).length;
-  const [verConf, setVerConf] = useState(false);
+  const [verConf, setVerConf] = useState(null);       // v48: null = abre sozinho quando tem ponto em vermelho
   const agir = function(a){
     if(!a) return;
     if(/^rev_/.test(String(a.id))){ _evpRevAgir(a, { mudar:mudar, irPara:irPara, fala:fala, clipes:ed.clipes || [], projeto:projeto, receita:ed.receita }); return; }   // v35
@@ -134528,13 +135027,14 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
   };
   const exportar = async function(o){
     o = (o && typeof o === "object" && !o.nativeEvent && !o.target) ? o : {};     // v8: o PC passa {qualidade, legenda}
-    const qual = o.qualidade || qualidade, leg = o.legenda != null ? !!o.legenda : comLegenda, audioSo = o.qualidade ? false : soAudio;
+    const qual = o.qualidade || qualidade, leg = o.legenda != null ? !!o.legenda : comLegenda, audioSo = o.qualidade ? false : !!o.soAudio;
     if(exp && exp.fase && exp.fase !== "feito" && exp.fase !== "erro") return;
     if(faltaLicenca){ _evToast("warning", "Marque que a música do Envato foi registrada neste projeto."); return; }
     if(soNoPC && !audioSo){ _evToast("info", driveUsados.length ? "Os originais estão no Drive: a gravação é no PC do escritório, em FullHD." : "Vídeo pesado: a gravação é no PC do escritório, em FullHD (o original não abre no navegador)."); exportarNoPC(); return; }
     const mimeAudio = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find(function(x){ try{ return window.MediaRecorder && MediaRecorder.isTypeSupported(x); }catch(_){ return false; } });
     const mime = audioSo ? mimeAudio : _evMimeGravacao();
     if(!mime || !HTMLCanvasElement.prototype.captureStream){ setExp({ fase:"erro", msg:"Este navegador não grava vídeo. Use o Google Chrome no computador." }); return; }
+    soltarBlobs(); setSoAudio(audioSo);            // v48 (06/10/2026): E2-18 — a cópia local da gravação anterior sai da memória
     if(alterado && !pcAuto){           // no PC: exporta o que a pessoa salvou (medições feitas lá entram só na gravação)
       setExp({ fase:"preparando", pct:0, msg:"Salvando a edição antes de exportar…" });
       const ok = await salvar(); if(!ok){ setExp({ fase:"erro", msg:"Não consegui salvar a edição. Tente salvar e exporte de novo." }); return; }
@@ -134569,6 +135069,8 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
             setExp({ fase:"gravando", pct:pc, msg:"Quadro a quadro (" + fps + " fps): " + (k + 1) + " de " + N + " · faltam ~" + _evMin(falta) }); }
         }
         if(await envio === false) throw new Error("o PC parou de receber os quadros");
+        const semRecorte = Number(mq.semRecorte) || 0;    // v48 (06/10/2026): N-16 — quadros que precisavam do recorte da pessoa e saíram sem ele
+        if(semRecorte && pcAuto.onEstado) pcAuto.onEstado({ fase:"aviso", msg:"Conferência: recorte não carregou em " + semRecorte + " quadro(s) — o texto que era atrás da pessoa saiu na frente" });
         mq.destruir(); mq = null; try{ acq.close(); }catch(_){} acq = null;
         const r1 = await window.__pcQuadros.fim(); if(!r1 || !r1.ok) throw new Error((r1 && r1.erro) || "o PC não fechou o vídeo");
         // o SOM: passada em tempo real só de áudio (não desenha nada — não tem o que travar na imagem)
@@ -134604,9 +135106,10 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
         const nomeQ = String((t.title || "video") + "-editado" + _evpAnuncioSufixo(projeto)).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) + ".mp4";
         const pathQ = "tasks/" + t.id + "/" + Date.now() + "-estudio-" + Math.random().toString(36).slice(2, 10) + ".mp4";
         const pubQ = window._sb.storage.from("agency-files").getPublicUrl(pathQ).data.publicUrl;
-        const rq = await window._sb.rpc("criacao_edicao_final", { p_id:ed.id, p_file:{ url:pubQ, storagePath:pathQ, name:nomeQ, type:"video/mp4", size:r2.size || 0, fps:fps, w:W, h:H, duracao:Math.round(totq * 100) / 100 } });
+        const confEst = semRecorte ? { ok:false, motivo:"recorte não carregou", quadros:semRecorte } : { ok:true };     // v48: N-16 (o PC guarda junto da conferência dele)
+        const rq = await window._sb.rpc("criacao_edicao_final", { p_id:ed.id, p_file:{ url:pubQ, storagePath:pathQ, name:nomeQ, type:"video/mp4", size:r2.size || 0, fps:fps, w:W, h:H, duracao:Math.round(totq * 100) / 100, conferencia_estudio:confEst } });
         if(rq.error) throw new Error("o vídeo ficou pronto, mas não gravou: " + (rq.error.message || ""));
-        setExp({ fase:"feito", msg:"Pronto! Gravado quadro a quadro em " + fps + " fps (" + N + " quadros), sem travadas.", feitoEm:Date.now() });
+        setExp({ fase:"feito", msg:"Pronto! Gravado quadro a quadro em " + fps + " fps (" + N + " quadros), sem travadas." + (semRecorte ? " Atenção: o recorte da pessoa não carregou em " + semRecorte + " quadro(s)." : ""), feitoEm:Date.now(), conferencia:confEst });
         if(onFeito) onFeito();
         return;
       }catch(eq){
@@ -134644,17 +135147,17 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       await acabou;
       parar.current = null;
       motor.destruir(); motor = null; try{ ac.close(); }catch(_){}
-      if(cancelado){ setExp(null); return; }
+      if(cancelado){ setSoAudio(false); setExp(null); return; }
       const tipo = mime.split(";")[0], ext = audioSo ? (tipo.indexOf("mp4") >= 0 ? "m4a" : "webm") : tipo.indexOf("mp4") >= 0 ? "mp4" : "webm";
       const blob = new Blob(partes, { type:tipo });
       if(audioSo){                       // só o áudio: baixa no computador (não vai para o card)
         const nomeA = String((t.title || "video") + "-audio").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) + "." + ext;
-        const urlA = URL.createObjectURL(blob), a = document.createElement("a"); a.href = urlA; a.download = nomeA; document.body.appendChild(a); a.click(); setTimeout(function(){ try{ a.remove(); }catch(_){} }, 1000);
+        const urlA = URL.createObjectURL(blob), a = document.createElement("a"); blobsRef.current.push(urlA); setSoAudio(false); a.href = urlA; a.download = nomeA; document.body.appendChild(a); a.click(); setTimeout(function(){ try{ a.remove(); }catch(_){} }, 1000);
         setExp({ fase:"feito", msg:"Áudio pronto (" + Math.max(1, Math.round(blob.size/1048576)) + " MB). Baixou no computador — não foi para o card.", url:urlA, nome:nomeA });
         return;
       }
       const nome = String((t.title || "video") + "-editado" + _evpAnuncioSufixo(projeto)).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) + "." + ext;
-      const local = URL.createObjectURL(blob);
+      const local = URL.createObjectURL(blob); blobsRef.current.push(local);
       setExp({ fase:"enviando", pct:0, msg:"Enviando para o card… (" + Math.round(blob.size/1048576) + " MB)", url:local, nome:nome });
       const path = "tasks/" + t.id + "/" + Date.now() + "-estudio-" + Math.random().toString(36).slice(2, 10) + "." + ext;
       const file = new File([blob], nome, { type:tipo });
@@ -134680,7 +135183,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     }catch(e){
       try{ if(rec && rec.state !== "inactive") rec.stop(); }catch(_){}
       try{ if(motor) motor.destruir(); }catch(_){} try{ if(ac) ac.close(); }catch(_){}
-      parar.current = null;
+      parar.current = null; setSoAudio(false);
       setExp({ fase:"erro", msg:String((e && e.message) || e) });
     }
   };
@@ -134702,7 +135205,12 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       if(alterado){ const ok = await salvar(); if(!ok) throw new Error("não consegui salvar a edição antes"); }
       const r = await window._sb.rpc("criacao_exportar_pc", { p_edicao:ed.id, p_opcoes:{ qualidade:qualidade, legenda:comLegenda } });
       if(r.error) throw new Error(r.error.message || "erro");
-      _evToast("success", (r.data && r.data.ja_existia) ? "Já está na fila do PC." : "Pedido na fila do PC do escritório. Pode fechar esta tela.");
+      /* v48 (06/10/2026): E2-10 — o aviso confere se o PC está ligado (o RPC pode devolver pc_online; se não devolver, pergunta o status na hora) */
+      const d = r.data || {};
+      let ligado = d.pc_online != null ? !!d.pc_online : d.pc_ligado != null ? !!d.pc_ligado : null;
+      if(ligado == null){ try{ const st = await window._sb.rpc("criacao_exportar_pc_status", { p_edicao:ed.id }); if(st && !st.error && st.data){ setPcSt(st.data); if(st.data.pc_online != null) ligado = !!st.data.pc_online; } }catch(_){} }
+      if(ligado === false) _evToast("warning", (d.ja_existia ? "Já está na fila do PC, mas" : "Foi para a fila, mas") + " o PC do escritório parece desligado: ligue o Pixels 01 e abra o start_video_pc.bat. A gravação começa quando ele ligar.");
+      else _evToast("success", d.ja_existia ? "Já está na fila do PC." : ligado ? "Pedido na fila do PC do escritório (ligado). Pode fechar esta tela." : "Pedido na fila do PC do escritório. Não consegui ver se ele está ligado: o andamento aparece aqui.");
       olharPC();
     }catch(e){ _evToast("error", "Não pediu ao PC: " + ((e && e.message) || e)); }
     setPedindoPC(false);
@@ -134713,135 +135221,456 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     if(!pcAuto || autoFoi.current) return;
     if(pendPC.length){ if(pcAuto.onEstado) pcAuto.onEstado({ fase:"esperando_pc", msg:"O PC ainda está tratando " + pendPC.length + " vídeo(s)" }); return; }
     if(!prontoPC) return;
+    if(narrFalha){       // v48 (06/10/2026): T-8 — a narração/locução não carregou: falha com o motivo em vez de gravar sem a voz
+      autoFoi.current = true;
+      if(pcAuto.onEstado) pcAuto.onEstado({ fase:"erro", msg:"a narração não carregou (" + String(narrFalha).slice(0, 160) + "): não gravei para o vídeo não sair sem a locução" });
+      return;
+    }
     if(nErro > 0 && pcAuto.onEstado) pcAuto.onEstado({ fase:"aviso", msg:"Conferência com " + nErro + " ponto(s) em vermelho — exportando mesmo assim (pedido da pessoa)" });
     autoFoi.current = true;
     const op = pcAuto.opcoes || {};
     exportar({ qualidade:op.qualidade || "alta", legenda:op.legenda !== false });
-  }, [pcAuto, prontoPC, pendPC.length]);
+  }, [pcAuto, prontoPC, pendPC.length, narrFalha]);
   useEffect(function(){ if(pcAuto && pcAuto.onEstado && exp) pcAuto.onEstado(exp); }, [exp]);
 
-  const aviso = function(cor, fundo, icone, txt){ return <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:fundo,color:cor,fontSize:12,fontWeight:700,display:"flex",gap:8,alignItems:"flex-start"}}><_EvpIco n={icone} s={15}/><span>{txt}</span></div>; };
+  /* ═══ v48 · EXPORTAR NOVO (06/10/2026): passo a passo (Conferir → Gravar → Enviar), UM botão principal, andamento grande,
+     resultado em cartão, aviso quando terminar e histórico do PC. A lógica de gravar (exportar / exportarNoPC / olharPC) é a mesma de antes. ═══ */
+  const [maisOp, setMaisOp] = useState(false);
+  const [verHist, setVerHist] = useState(false);
+  const [enviadoUrl, setEnviadoUrl] = useState(null);
+  const [avisar, setAvisar] = useState(function(){ try{ return !!(window.Notification && Notification.permission === "granted"); }catch(_){ return false; } });
+  const [agora, setAgora] = useState(function(){ return Date.now(); });
+  const tRef = useRef({ chave:"", desde:0, inicio:0 });
+  const fimRef = useRef({ fase:"", pc:"" });
+  useEffect(function(){ if(pcAuto || !(ativo || pcAtivo)) return; setAgora(Date.now()); const iv = setInterval(function(){ setAgora(Date.now()); }, 1000); return function(){ clearInterval(iv); }; }, [ativo, pcAtivo]);
+  // andamento NESTE navegador (exp)
+  const etapaNav = ativo ? _evxEtapa(exp.fase, exp.msg, null) : null;
+  const navPct = !ativo || exp.fase === "preparando" || /Juntando/i.test(String(exp.msg || "")) ? null : Math.max(0, Math.min(100, Math.round(Number(exp.pct) || 0)));
+  const chaveNav = ativo ? exp.fase + "|" + String(etapaNav.txt).replace(/\d+/g, "#") : "";
+  useEffect(function(){ const r = tRef.current; if(!chaveNav){ r.chave = ""; r.inicio = 0; r.desde = 0; return; }
+    if(!r.inicio) r.inicio = Date.now(); if(r.chave !== chaveNav){ r.chave = chaveNav; r.desde = Date.now(); } }, [chaveNav]);
+  const navPassou = tRef.current.desde ? (agora - tRef.current.desde) / 1000 : 0;
+  const navEta = navPct != null && navPct >= 3 && navPct < 100 && navPassou > 3 ? navPassou / navPct * (100 - navPct) : null;
+  // andamento NO PC (criacao_exportar_pc_status → video_pc_trabalhos.resultado: fase, pct, feitos/total, eta_s, em — batimento a cada ~45 s)
+  const pcR = (pcItem && pcItem.resultado) || {};
+  const pcEtapa = !pcAtivo ? null : pcItem.status === "fila"
+    ? { txt:"Na fila do PC", det:(pcSt && pcSt.pc_online ? "Esperando o PC pegar o pedido" : "PC sem sinal agora — começa quando ele ligar") + (pcItem.pedido_por ? " · pedido por " + pcItem.pedido_por : "") + (pcItem.erro ? " · " + String(pcItem.erro).slice(0, 140) : "") }
+    : (pcR.fase || pcR.msg ? _evxEtapa(pcR.fase, pcR.msg, pcR) : { txt:"Começando no PC", det:"" });
+  const pcPct = !pcAtivo || pcItem.status !== "processando" ? null
+    : pcR.fase === "gravando" && !/Juntando/i.test(String(pcR.msg || "")) ? Math.max(0, Math.min(100, Math.round(Number(pcR.pct) || 0)))
+    : (pcR.fase === "enviando" || pcR.fase === "conferindo" || /Juntando|conferindo/i.test(String(pcR.msg || ""))) ? null
+    : (Number(pcR.total) > 0 && Number(pcR.feitos) < Number(pcR.total)) ? Math.round(Number(pcR.feitos) / Number(pcR.total) * 100) : null;
+  const pcEm = pcR.em ? Date.parse(pcR.em) : 0;
+  const pcEta = pcAtivo && pcItem.status === "processando" && Number(pcR.eta_s) > 0 && pcEm ? Math.max(0, Number(pcR.eta_s) - (agora - pcEm) / 1000) : null;
+  const pcDesde = pcItem && pcItem.criado_em ? Date.parse(pcItem.criado_em) : 0;
+  // título da aba mostra o andamento (dá para ver com a aba em segundo plano)
+  const tituloPct = pcAuto ? "" : ativo ? (navPct != null ? navPct + "%" : "…") : pcAtivo ? (pcPct != null ? pcPct + "%" : pcItem.status === "fila" ? "fila" : "…") : "";
+  useEffect(function(){ if(pcAuto) return; try{ const base = document.title.replace(/⏺ [^·]{1,14}· /, "");
+    document.title = tituloPct ? base.replace(/^(\(\d+\)\s*)?/, function(m0){ return m0 + "⏺ " + tituloPct + " · "; }) : base; }catch(_){} }, [tituloPct]);
+  useEffect(function(){ return function(){ try{ document.title = document.title.replace(/⏺ [^·]{1,14}· /, ""); }catch(_){} }; }, []);
+  // aviso (som + notificação do navegador) quando a gravação terminar — liga no clique
+  useEffect(function(){
+    const f = fimRef.current, fase = (exp && exp.fase) || "", pcK = pcItem ? pcItem.id + ":" + pcItem.status : "";
+    const navAcabou = /^(preparando|gravando|enviando)$/.test(f.fase) && (fase === "feito" || fase === "erro");
+    const ant = String(f.pc || "").split(":");
+    const pcAcabou = !!pcItem && ant[0] === String(pcItem.id) && /^(fila|processando)$/.test(ant[1] || "") && (pcItem.status === "pronto" || pcItem.status === "erro");
+    f.fase = fase; f.pc = pcK;
+    if(pcAuto || !avisar) return;
+    if(navAcabou) _evxAvisarFim(fase === "feito", fase === "feito" ? "Vídeo gravado: " + (t.title || "") : "Não gravou: " + String((exp && exp.msg) || "").slice(0, 120));
+    if(pcAcabou) _evxAvisarFim(pcItem.status === "pronto", pcItem.status === "pronto" ? "O PC " + (pcItem.pc || "") + " terminou: " + (t.title || "") : "O PC não conseguiu: " + String(pcItem.erro || "erro").slice(0, 120));
+  }, [exp && exp.fase, pcItem && pcItem.id, pcItem && pcItem.status]);
+  const trocarAviso = function(){
+    const novo = !avisar; setAvisar(novo);
+    if(!novo) return;
+    try{ if(window.Notification && Notification.permission === "default"){ const pr = Notification.requestPermission(); if(pr && pr.catch) pr.catch(function(){}); } }catch(_){}
+    _evxBip(true);
+    _evToast("info", "Vou avisar com um som" + (window.Notification ? " e uma notificação" : "") + " quando terminar.");
+  };
+
+  // vídeo gravado esperando ir para o cartão + se ele ficou para trás da edição
+  const gx = _evxGravado(ed, exp, enviadoUrl);
+  // v48 (06/10/2026): E2-9 (conferido) — além das versões, conta a receita nova (receita_em, C2) e o rascunho salvo sozinho depois da gravação
+  const ultEdicao = (ed.versoes || []).reduce(function(m, v){ const q = v && v.em ? Date.parse(v.em) : 0; return q > m ? q : m; }, 0);
+  const ultMudanca = Math.max(ultEdicao, ed.receita_em ? Date.parse(ed.receita_em) || 0 : 0, ed.rascunho && ed.rascunho_em ? Date.parse(ed.rascunho_em) || 0 : 0);
+  const gxEm = gx && gx.gravado_em ? Date.parse(gx.gravado_em) : 0;
+  const desatualizado = !!gx && (!!alterado || (!!ultMudanca && !!gxEm && ultMudanca > gxEm + 2000));
+  const noCardJa = !!(ed.final && ed.final.url) || !!enviadoUrl || !!(exp && exp.fase === "feito" && exp.legenda);
+  const pcErro = !!(pcItem && pcItem.status === "erro" && !pcAtivo && !ativo && (!gx || Date.parse(pcItem.concluido_em || 0) > gxEm));
+  const pcPrincipal = !isMob && !pcAuto;
+  const bloqueio = faltaLicenca ? "Marque a licença da música do Envato na conferência." : nErro > 0 ? "Corrija o que está em vermelho na conferência." : "";
+  const dimF = _evpDim(projeto.formato);
+  const mbEst = Math.max(1, Math.round((BPS[qualidade] + 192000) / 8 * calc.total / 1048576));
+  const confAberta = verConf != null ? verConf : (nErro > 0 || faltaLicenca);
+
+  // passo a passo
+  const pConf = { rot:"Conferir", st:(nErro || faltaLicenca) ? "erro" : nAviso ? "aviso" : "ok",
+    sub:nErro ? nErro + " para corrigir" : faltaLicenca ? "falta a licença" : nAviso ? nAviso + " ponto" + (nAviso > 1 ? "s" : "") + " de atenção" : "tudo certo" };
+  const pGrav = (ativo || pcAtivo) ? { rot:"Gravar", st:"andamento", sub:ativo ? (navPct != null ? navPct + "%" : "preparando") : pcItem.status === "fila" ? "na fila do PC" : (pcPct != null ? pcPct + "% no PC" : "no PC") }
+    : (exp && exp.fase === "erro") || pcErro ? { rot:"Gravar", st:"erro", sub:"não gravou" }
+    : gx ? { rot:"Gravar", st:desatualizado ? "aviso" : "ok", sub:desatualizado ? "edição mudou depois" : "gravado" }
+    : noCardJa ? { rot:"Gravar", st:"ok", sub:"feito" } : { rot:"Gravar", st:"atual", sub:"próximo passo" };
+  const pEnv = gx ? { rot:"Enviar para o cartão", st:"atual", sub:"falta enviar" } : noCardJa ? { rot:"Enviar para o cartão", st:"ok", sub:"está no card" } : { rot:"Enviar para o cartão", st:"pendente", sub:"depois de gravar" };
+
+  const faixa = function(cor, fundo, icone, txt, extra){ return <div style={{marginTop:10,padding:"9px 11px",borderRadius:11,background:fundo,color:cor,fontSize:12,fontWeight:700,display:"flex",gap:8,alignItems:"flex-start",lineHeight:1.45}}><_EvpIco n={icone} s={15} style={{marginTop:1}}/><div style={{flex:1,minWidth:0}}>{txt}{extra}</div></div>; };
+  const chip = function(txt, k){ return <span key={k} style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,padding:"2px 8px",borderRadius:99,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{txt}</span>; };
+  const avisoBtn = !pcAuto && (
+    <button onClick={trocarAviso} title={avisar ? "Desligar o aviso" : "Toca um som e mostra uma notificação quando terminar (pode trocar de aba)"}
+      style={Object.assign(_evpBtn(avisar ? "suave" : null), {padding:"5px 9px",fontSize:11.5})}><_EvpIco n={avisar ? "check" : "sino"} s={13}/>{avisar ? "Vou avisar" : "Avisar quando terminar"}</button>);
+  const confItens = conf.filter(function(x){ return x.nivel !== "ok" || x.acao; }).sort(function(a, b){ const o = { erro:0, aviso:1, ok:2 }; return (o[a.nivel] || 0) - (o[b.nivel] || 0); });
+  const confOk = conf.filter(function(x){ return x.nivel === "ok" && !x.acao; });
+  const qualRotulo = { alta:"Alta", padrao:"Padrão", leve:"Leve" };
+
   return (
-    <div style={Object.assign({}, _EVP_PAINEL, {padding:14})}>
-      <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EV.verde}}><_EvpIco n="baixar"/></span>Exportar</div>
-      <div style={{fontSize:12,color:_EVP_COR.sub,marginTop:3,lineHeight:1.5}}>
-        MP4 {_evpDim(projeto.formato).w}×{_evpDim(projeto.formato).h} com os brutos originais, o áudio tratado e a estabilização. Leva o tempo do vídeo (<span style={{fontFamily:_EVP_MONO}}>{_evTempo(calc.total)}</span>) — deixe esta aba aberta na frente.
+    <div style={Object.assign({}, _EVP_PAINEL, {padding:isMob ? 14 : 18})}>
+      <style>{"@keyframes evxListras{from{background-position:0 0,0 0}to{background-position:28px 0,0 0}}@keyframes evxVai{0%{left:-38%}100%{left:100%}}@keyframes evxGira{to{transform:rotate(360deg)}}@keyframes evxPulsa{0%,100%{opacity:1}50%{opacity:.35}}"}</style>
+
+      {/* ── cabeçalho curto ── */}
+      <div style={{display:"flex",alignItems:"center",gap:11,paddingRight:36}}>
+        <span style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg,#16a34a,#0f766e)",color:"#fff",display:"grid",placeItems:"center",flexShrink:0,boxShadow:"0 8px 18px -10px rgba(15,118,110,.8)"}}><_EvpIco n="baixar" s={19}/></span>
+        <div style={{minWidth:0}}>
+          <div style={{fontWeight:800,fontSize:17,color:_EVP_COR.ink,letterSpacing:"-.01em"}}>Exportar</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:4}}>
+            {[ "MP4 · " + dimF.w + "×" + dimF.h, _evTempo(calc.total), "≈ " + mbEst + " MB" ].map(chip)}
+          </div>
+        </div>
       </div>
-      {!ativo && alterado && aviso(_EV.amarelo, _EVP_COR.aviso, "salvar", "Tem alteração sem versão: ao exportar, ela é salva antes como versão nova.")}
-      {!ativo && pendPC.length > 0 && aviso(_EV.amarelo, _EVP_COR.aviso, "pc", "O PC do escritório ainda está tratando " + (pendPC.length === 1 ? "1 vídeo" : pendPC.length + " vídeos") + " (estabilizar, imagem ou voz). Espere para sair na qualidade máxima — ou exporte agora com o que o navegador faz.")}
+
+      {/* ── passo a passo ── */}
+      <_EvxPassos passos={[pConf, pGrav, pEnv]}/>
+
+      {/* ── andamento: NO PC ── */}
+      {pcAtivo && !pcAuto && <_EvxAndamento rotulo={pcItem.status === "fila" ? "Na fila" : "Gravando"} onde={"No PC " + (pcItem.pc || "do escritório")} etapa={pcEtapa} pct={pcPct}
+        eta={pcEta} decorrido={pcDesde ? (agora - pcDesde) / 1000 : null} rotDecorrido="desde o pedido" atualizado={pcEm ? (agora - pcEm) / 1000 : null}
+        rodape={"Pode fechar esta aba: o PC continua sozinho."} extra={avisoBtn}/>}
+
+      {/* ── andamento: NESTE navegador (sempre montado: a tela de gravação precisa existir) ── */}
+      <div style={{display:ativo ? "block" : "none"}}>
+        <_EvxAndamento onde="Neste navegador" etapa={etapaNav || { txt:"", det:"" }} pct={navPct} eta={navEta}
+          decorrido={tRef.current.inicio ? (agora - tRef.current.inicio) / 1000 : null} rotDecorrido="decorrido"
+          aviso={exp && exp.esperando ? "Esperando o vídeo carregar… a gravação pausou e continua sozinha." : ""}
+          rodape={exp && exp.fase === "gravando" ? "Deixe esta aba aberta e na frente até terminar." : "Não feche esta aba."} extra={avisoBtn}
+          tela={<canvas ref={cvRef} width={dimF.w} height={dimF.h} style={{width:dimF.w >= dimF.h ? 96 : 54,height:dimF.w >= dimF.h ? Math.round(96 * dimF.h / dimF.w) : 96,borderRadius:9,background:"#000",flexShrink:0,display:"block"}}/>}
+          cancelar={exp && exp.fase === "gravando" ? function(){ if(parar.current) parar.current(); } : null}/>
+      </div>
+
+      {/* ── erros ── */}
+      {exp && exp.fase === "erro" && faixa(_EV.verm, _EVP_COR.erro, "alerta", <span>Não gravou: <span style={{fontWeight:600}}>{exp.msg}</span></span>)}
+      {pcErro && faixa(_EV.verm, _EVP_COR.erro, "alerta", <span>O PC não conseguiu gravar{pcItem.concluido_em ? " (" + _evxQuando(pcItem.concluido_em) + ")" : ""}.</span>,
+        <div>
+          <div title={pcItem.erro || ""} style={{fontWeight:500,marginTop:2,color:_EVP_COR.sub,wordBreak:"break-word"}}>{String(pcItem.erro || "erro").slice(0, 220)}{String(pcItem.erro || "").length > 220 ? "…" : ""}</div>
+          <button onClick={exportarNoPC} disabled={pedindoPC || !!bloqueio} style={Object.assign(_evpBtn(null, !(pedindoPC || bloqueio)), {marginTop:7,padding:"5px 10px",fontSize:11.5})}><_EvpIco n="refazer" s={13}/>{pedindoPC ? "Pedindo…" : "Pedir de novo ao PC"}</button>
+        </div>)}
+
+      {/* ── resultado: vídeo gravado esperando o cartão ── */}
+      {!pcAuto && <_EvpGravadoEnviar ed={ed} x={gx} dim={dimF} whatsUrl={(gx && gx.whats_url) || (pcItem && pcItem.status === "pronto" && pcItem.resultado && gx && pcItem.resultado.url === gx.url ? pcItem.resultado.whats_url : null)} desatualizado={desatualizado} alterado={alterado} isMob={isMob}
+        onEnviado={function(u){ setEnviadoUrl(u); }} onFeito={onFeito}/>}   {/* v42: Enviar para o cartão · Assistir · Baixar · Copiar link */}
+      {exp && exp.fase === "feito" && !(gx && gx.doExp) && faixa(_EV.verde, _EVP_COR.ok, "check", <span>{exp.msg}</span>,
+        exp.url ? <a href={exp.url} download={exp.nome} style={{color:_EV.verde,marginLeft:6}}>Baixar cópia</a> : null)}
+      {exp && exp.fase === "feito" && exp.legenda && !pcAuto && <_EvpLegendaPost key={exp.feitoEm} ed={ed} t={t} calc={calc} pcAuto={pcAuto} auto={true} isMob={isMob}/>}   {/* v41c */}
+      {exp && exp.fase === "feito" && exp.legendaPC && <div style={{marginTop:6,fontSize:12,color:exp.legendaPC.ok ? _EV.verde : _EV.amarelo,fontWeight:700}}>
+        {exp.legendaPC.ok ? ("📝 Legenda do post " + (exp.legendaPC.no_card ? "escrita e salva no card" : "sugerida (o card já tinha legenda)")) : ("📝 Legenda do post não saiu: " + exp.legendaPC.erro)}</div>}
+      {ed.final && ed.final.url && (!exp || exp.fase !== "feito") && <div style={{marginTop:10,fontSize:12,color:_EV.verde,fontWeight:700,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <_EvpIco n="check" s={14}/>Já tem vídeo final no card{ed.final.addedAt ? " (" + ed.final.addedAt + ")" : ""} · <a href={ed.final.url} target="_blank" rel="noreferrer" style={{color:_EV.verde}}>abrir</a></div>}
+
+      {/* ── 1 · conferir ── */}
       {!ativo && (
-        <div style={{marginTop:10,border:"1px solid " + _EVP_COR.linha,borderRadius:12,overflow:"hidden"}}>
-          <button onClick={function(){ setVerConf(!verConf); }} style={{font:"inherit",width:"100%",display:"flex",alignItems:"center",gap:8,padding:"9px 11px",border:0,background:nErro ? _EVP_COR.erro : nAviso ? _EVP_COR.aviso : _EVP_COR.ok,cursor:"pointer",
-            color:nErro ? _EV.verm : nAviso ? _EV.amarelo : _EV.verde,fontWeight:800,fontSize:12.5,textAlign:"left"}}>
-            <_EvpIco n={nErro || nAviso ? "alerta" : "check"} s={16}/>Conferência: {nErro ? nErro + " para corrigir" : nAviso ? nAviso + " ponto" + (nAviso > 1 ? "s" : "") + " de atenção" : "tudo certo"}
-            <span style={{marginLeft:"auto",fontSize:11.5,fontWeight:700}}>{verConf ? "fechar" : "ver"}</span></button>
-          {verConf && <div style={{padding:"4px 11px 8px"}}>
-            {conf.map(function(x, k){ const cor = x.nivel === "erro" ? _EV.verm : x.nivel === "aviso" ? _EV.amarelo : _EV.verde;
-              return <div key={k} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"7px 0",borderBottom:k < conf.length - 1 ? "1px solid " + _EVP_COR.linha2 : 0}}>
-                <span style={{color:cor,marginTop:1}}><_EvpIco n={x.nivel === "ok" ? "check" : "alerta"} s={15}/></span>
-                <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:700}}>{x.titulo}</div>{x.detalhe && <div style={{fontSize:11.5,color:_EVP_COR.sub}}>{x.detalhe}</div>}</div>
-                {x.acao && <button onClick={function(){ agir(x.acao); }} style={Object.assign(_evpBtn("suave"), {padding:"4px 9px",fontSize:11.5})}>{x.acao.label}</button>}
+        <div style={{marginTop:14,border:"1px solid " + (nErro || faltaLicenca ? "rgba(239,68,68,.45)" : _EVP_COR.linha),borderRadius:13,overflow:"hidden",background:_EVP_COR.campo}}>
+          <button onClick={function(){ setVerConf(!confAberta); }} aria-expanded={confAberta}
+            style={{font:"inherit",width:"100%",display:"flex",alignItems:"center",gap:9,padding:"10px 12px",border:0,background:"transparent",cursor:"pointer",color:_EVP_COR.ink,textAlign:"left"}}>
+            <span style={{color:pConf.st === "erro" ? _EV.verm : pConf.st === "aviso" ? "#eab308" : "#22c55e"}}><_EvpIco n={pConf.st === "ok" ? "check" : "alerta"} s={17}/></span>
+            <b style={{fontSize:13}}>Conferência</b>
+            <span style={{fontSize:11.5,fontWeight:800,padding:"2px 8px",borderRadius:99,background:pConf.st === "erro" ? _EVP_COR.erro : pConf.st === "aviso" ? _EVP_COR.aviso : _EVP_COR.ok,
+              color:pConf.st === "erro" ? _EVX.verm : pConf.st === "aviso" ? _EVX.amarelo : _EVX.verde}}>{pConf.sub}</span>
+            <span style={{marginLeft:"auto",color:_EVP_COR.sub,display:"flex",alignItems:"center",gap:4,fontSize:11.5,fontWeight:700}}>{confAberta ? "fechar" : "ver"}<_EvpIco n="seta_baixo" s={15} style={{transform:confAberta ? "rotate(180deg)" : "none",transition:"transform .15s"}}/></span>
+          </button>
+          {confAberta && <div style={{padding:"0 12px 10px"}}>
+            {envato && <label style={{display:"flex",gap:9,alignItems:"flex-start",padding:"9px 10px",borderRadius:10,margin:"2px 0 6px",cursor:"pointer",
+              background:projeto.musica.licenca_ok ? _EVP_COR.ok : _EVP_COR.aviso,color:projeto.musica.licenca_ok ? _EVX.verde : _EVX.amarelo,fontSize:12,fontWeight:700,lineHeight:1.45}}>
+              <input type="checkbox" checked={!!projeto.musica.licenca_ok} onChange={function(e){ const v = e.target.checked; mudar(function(np){ if(np.musica) np.musica.licenca_ok = v; }); }} style={{accentColor:"#16a34a",marginTop:2,width:15,height:15,flexShrink:0}}/>
+              <span>Registrei a música "{musInfo.nome}" no Envato para este vídeo ({_evNomeCliente(t.client)} · {t.title}).</span>
+            </label>}
+            {confItens.map(function(x, k){ const cor = x.nivel === "erro" ? _EVX.verm : x.nivel === "aviso" ? _EVX.amarelo : _EVX.verde;
+              return <div key={k} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"8px 0",borderTop:k || envato ? "1px solid " + _EVP_COR.linha2 : 0}}>
+                <span style={{width:7,height:7,borderRadius:99,background:cor,marginTop:6,flexShrink:0,boxShadow:"0 0 0 3px " + (x.nivel === "erro" ? "rgba(239,68,68,.16)" : x.nivel === "aviso" ? "rgba(234,179,8,.16)" : "rgba(34,197,94,.16)")}}/>
+                <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:_EVP_COR.ink}}>{x.titulo}</div>{x.detalhe && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:1,lineHeight:1.4}}>{x.detalhe}</div>}</div>
+                {x.acao && <button onClick={function(){ agir(x.acao); }} style={Object.assign(_evpBtn("suave"), {padding:"5px 10px",fontSize:11.5,flexShrink:0})}>{x.acao.label}</button>}
+              </div>; })}
+            {confOk.length > 0 && <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:confItens.length || envato ? "1px solid " + _EVP_COR.linha2 : 0}}>
+              {confOk.map(function(x, k){ return <span key={k} title={x.detalhe || ""} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:_EVP_COR.sub,padding:"3px 8px",borderRadius:99,background:_EVP_COR.ok}}>
+                <span style={{color:_EVX.verde}}><_EvpIco n="check" s={11}/></span>{x.titulo}</span>; })}
+            </div>}
+          </div>}
+        </div>
+      )}
+      {!ativo && pendPC.length > 0 && faixa(_EV.amarelo, _EVP_COR.aviso, "pc", "O PC ainda está tratando " + (pendPC.length === 1 ? "1 vídeo" : pendPC.length + " vídeos") + " (estabilizar, imagem ou voz). Espere para sair na qualidade máxima — ou grave agora com o que o navegador faz.")}
+
+      {/* ── 2 · gravar: UM botão principal ── */}
+      {!ativo && !(pcPrincipal && pcAtivo) && (
+        <div style={{marginTop:12}}>
+          {pcPrincipal
+            ? <button onClick={exportarNoPC} disabled={pedindoPC || pcAtivo || !!bloqueio} title={bloqueio || "O PC do escritório grava quadro a quadro, no FPS dos brutos" + (driveUsados.length ? ", com os originais do Drive" : "") + ". Pode fechar o navegador."}
+                style={Object.assign(_evpBtn(gx && !desatualizado ? "suave" : "verde", !(pedindoPC || pcAtivo || bloqueio)), {width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14.5,borderRadius:12})}>
+                <_EvpIco n="pc" s={18}/>{pedindoPC ? "Pedindo ao PC…" : gx ? "Gravar de novo no PC do escritório" : "Gravar no PC do escritório"}</button>
+            : <button onClick={function(){ exportar(); }} disabled={faltaLicenca || nErro > 0} title={bloqueio}
+                style={Object.assign(_evpBtn(gx && !desatualizado ? "suave" : "verde", !faltaLicenca && !nErro), {width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14.5,borderRadius:12})}>
+                <_EvpIco n={soNoPC ? "pc" : "baixar"} s={18}/>{soNoPC ? "Gravar no PC do escritório" : alterado ? "Salvar e gravar" : gx || ed.final ? "Gravar de novo" : "Gravar o vídeo"}</button>}
+          {bloqueio
+            ? <div style={{fontSize:11.5,color:_EVX.verm,fontWeight:700,marginTop:7,textAlign:"center"}}>{bloqueio}</div>
+            : <div style={{display:"flex",gap:"4px 10px",flexWrap:"wrap",justifyContent:"center",marginTop:8,fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}} aria-label="Previsão do exportar">
+                {pcPrincipal && pcSt && <span style={{display:"inline-flex",alignItems:"center",gap:5,fontWeight:700,color:pcSt.pc_online ? _EVX.verde : _EVX.amarelo}}>
+                  <span style={{width:7,height:7,borderRadius:99,background:"currentColor",animation:pcSt.pc_online ? "none" : "evxPulsa 1.6s ease-in-out infinite"}}/>{pcSt.pc_online ? "PC ligado" : "PC sem sinal — o pedido espera ele ligar"}</span>}
+                {(pcPrincipal || soNoPC) && <span title={prevPC.originais ? "Converte só os " + prevPC.segUsados + " s usados de " + prevPC.originais + " original" + (prevPC.originais === 1 ? "" : "is") + " 4K e grava o vídeo de " + _evTempo(calc.total).replace(/\.\d$/, "") + ". Se o PC já converteu esses trechos antes, ~" + _evMin(prevPC.segJaConvertido) + "." : ""}>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:4}}><_EvpIco n="tempo" s={13}/>~{_evMin(prevPC.seg)}{prevPC.originais && _evMin(prevPC.segJaConvertido) !== _evMin(prevPC.seg) ? " (~" + _evMin(prevPC.segJaConvertido) + " se já converteu)" : ""}</span></span>}
+                {(pcPrincipal || soNoPC) && <span>{driveUsados.length ? "Originais do Drive em Full HD" : pesadosUsados.length ? "Vídeo pesado: Full HD no PC" : "Quadro a quadro, no FPS dos brutos"}</span>}
+                {!(pcPrincipal || soNoPC) && <span>Leva o tempo do vídeo ({_evTempo(calc.total).replace(/\.\d$/, "")}) com esta aba aberta</span>}
+              </div>}
+          {alterado && <div style={{fontSize:11.5,color:_EV.amarelo,fontWeight:700,marginTop:6,textAlign:"center"}}>Tem alteração sem versão: ela é salva como versão nova antes de gravar.</div>}
+
+          {/* ajustes da gravação */}
+          <div style={{display:"flex",gap:"10px 16px",alignItems:"center",flexWrap:"wrap",marginTop:12,padding:"10px 12px",borderRadius:12,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub}}>Qualidade</span>
+              <div role="radiogroup" aria-label="Qualidade" style={{display:"inline-flex",padding:2,borderRadius:10,background:_EVP_COR.painel,border:"1px solid " + _EVP_COR.linha}}>
+                {[["alta","12 Mb/s"],["padrao","8 Mb/s"],["leve","4 Mb/s"]].map(function(q){ const on = qualidade === q[0];
+                  return <button key={q[0]} role="radio" aria-checked={on} onClick={function(){ setQualidade(q[0]); try{ localStorage.setItem("pxev-qualidade", q[0]); }catch(_){} }} title={q[1]}
+                    style={{font:"inherit",fontSize:12,fontWeight:700,padding:"5px 11px",borderRadius:8,border:0,cursor:"pointer",background:on ? "linear-gradient(135deg," + _EVP_COR.roxoFixo + "," + _EVP_COR.roxo2 + ")" : "transparent",color:on ? "#fff" : _EVP_COR.sub}}>{qualRotulo[q[0]]}</button>; })}
+              </div>
+            </div>
+            <div style={{flex:"1 1 180px",minWidth:0,marginBottom:-10}}>
+              <_EvpInterruptor on={comLegenda} onChange={setComLegenda} label="Legenda no vídeo" dica={comLegenda ? "Ligada: sai gravada no vídeo" : "Desligada: use a .srt"}/>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── mais opções (recolhidas) ── */}
+      {!ativo && !pcAuto && (
+        <div style={{marginTop:10}}>
+          <button onClick={function(){ setMaisOp(!maisOp); }} aria-expanded={maisOp} style={{font:"inherit",display:"flex",alignItems:"center",gap:6,border:0,background:"transparent",color:_EVP_COR.sub,fontSize:12,fontWeight:700,cursor:"pointer",padding:"4px 2px"}}>
+            <_EvpIco n="seta_baixo" s={15} style={{transform:maisOp ? "rotate(180deg)" : "rotate(-90deg)",transition:"transform .15s"}}/>Mais opções</button>
+          {maisOp && <div style={{display:"grid",gap:8,marginTop:6}}>
+            {pcPrincipal && <_EvxOpcao icone="baixar" titulo="Gravar neste navegador" dica={soNoPC ? (driveUsados.length ? "Os originais estão no Drive: só o PC do escritório grava em Full HD." : "Vídeo pesado (mais de 150 MB): só o PC do escritório grava.") : "Grava a 30 fps em tempo real (" + _evTempo(calc.total).replace(/\.\d$/, "") + ") — deixe esta aba aberta e na frente."}
+              botao={alterado ? "Salvar e gravar" : "Gravar aqui"} desligado={soNoPC || faltaLicenca || nErro > 0} onClick={function(){ exportar(); }}/>}
+            <_EvxOpcao icone="musica" titulo="Baixar só o áudio" dica="O som final (fala tratada + música + efeitos), gravado neste navegador. Não vai para o card."
+              botao={soAudio ? "Gravando o áudio…" : "Baixar áudio"} desligado={soAudio || faltaLicenca || nErro > 0} onClick={function(){ exportar({ soAudio:true }); }}/>
+            {!isMob && <div style={{padding:"10px 12px",borderRadius:12,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha}}>
+              <div style={{fontSize:12.5,fontWeight:700,color:_EVP_COR.ink,display:"flex",alignItems:"center",gap:8}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="velocidade" s={17}/></span>Velocidade deste computador</div>
+              <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2}}>Mede se ele grava liso neste navegador (cada quadro precisa de menos de 33 ms).</div>
+              <_EvpTesteVelocidade ed={ed} projeto={projeto} calc={calc} kit={kit} base={base} tratados={tratados} logoUrl={logoUrl}/>
+            </div>}
+          </div>}
+        </div>
+      )}
+
+      {/* ── histórico do PC (as 5 últimas gravações desta edição) ── */}
+      {!pcAuto && !isMob && pcSt && pcSt.itens && pcSt.itens.length > 0 && (
+        <div style={{marginTop:6,borderTop:"1px solid " + _EVP_COR.linha2,paddingTop:6}}>
+          <button onClick={function(){ setVerHist(!verHist); }} aria-expanded={verHist} style={{font:"inherit",display:"flex",alignItems:"center",gap:6,border:0,background:"transparent",color:_EVP_COR.sub,fontSize:12,fontWeight:700,cursor:"pointer",padding:"4px 2px"}}>
+            <_EvpIco n="seta_baixo" s={15} style={{transform:verHist ? "rotate(180deg)" : "rotate(-90deg)",transition:"transform .15s"}}/>Últimas gravações no PC ({pcSt.itens.length})</button>
+          {verHist && <div style={{marginTop:4}}>
+            {pcSt.itens.map(function(it){ const r = it.resultado || {}, url = it.status === "pronto" ? (r.url || (r.arquivo && r.arquivo.url)) : null;
+              const st = { pronto:["Gravado", _EVX.verde], erro:["Não gravou", _EVX.verm], fila:["Na fila", _EVX.amarelo], processando:["Gravando", _EVP_COR.roxo] }[it.status] || [it.status, _EVP_COR.sub];
+              const levou = it.concluido_em && it.criado_em ? (Date.parse(it.concluido_em) - Date.parse(it.criado_em)) / 1000 : null;
+              return <div key={it.id} style={{display:"flex",gap:8,alignItems:"center",padding:"7px 2px",borderTop:"1px solid " + _EVP_COR.linha2,fontSize:12}}>
+                <span style={{width:7,height:7,borderRadius:99,background:st[1],flexShrink:0}}/>
+                <span style={{fontWeight:700,color:st[1],minWidth:76}}>{st[0]}</span>
+                <span style={{flex:1,minWidth:0,color:_EVP_COR.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={it.erro || ""}>
+                  {_evxQuando(it.criado_em)}{it.pc ? " · " + it.pc : ""}{levou != null && levou > 0 ? " · levou " + _evMin(levou) : ""}{r.size ? " · " + _evxMB(r.size) : ""}{r.fps ? " · " + Math.round(r.fps) + " fps" : ""}{it.status === "erro" && it.erro ? " · " + it.erro : ""}</span>
+                {url && <a href={url} target="_blank" rel="noreferrer" style={{color:_EVP_COR.roxo,fontWeight:700,textDecoration:"none",flexShrink:0}}>Assistir</a>}
               </div>; })}
           </div>}
         </div>
       )}
-      {!ativo && (
-        <div style={{display:"flex",gap:6,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
-          <span style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub}}>Qualidade:</span>
-          {[["alta","Alta","12 Mb/s"],["padrao","Padrão","8 Mb/s"],["leve","Leve","4 Mb/s"]].map(function(q){
-            return <button key={q[0]} onClick={function(){ setQualidade(q[0]); try{ localStorage.setItem("pxev-qualidade", q[0]); }catch(_){} }} title={q[2]} style={_evpChip(qualidade === q[0])}>{q[1]}</button>; })}
-          <span style={{fontSize:11.5,color:_EVP_COR.fraco,fontFamily:_EVP_MONO}}>≈ {Math.max(1, Math.round(((soAudio ? 0 : BPS[qualidade]) + 192000) / 8 * calc.total / 1048576))} MB</span>
-        </div>
-      )}
-      {!ativo && (
-        <div style={{marginTop:8}}>
-          <_EvpInterruptor on={comLegenda} onChange={setComLegenda} label="Legenda gravada no vídeo" dica="Desligue para subir a legenda separada (.srt) no YouTube ou LinkedIn"/>
-          <_EvpInterruptor on={soAudio} onChange={setSoAudio} label="Só o áudio" dica="Baixa o som final (fala tratada + música + efeitos) no computador. Não vai para o card."/>
-        </div>
-      )}
-      {!ativo && envato && (
-        <label style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:projeto.musica.licenca_ok ? _EVP_COR.ok : _EVP_COR.aviso,color:projeto.musica.licenca_ok ? _EV.verde : _EV.amarelo,fontSize:12,fontWeight:700,display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer"}}>
-          <input type="checkbox" checked={!!projeto.musica.licenca_ok} onChange={function(e){ const v = e.target.checked; mudar(function(np){ if(np.musica) np.musica.licenca_ok = v; }); }} style={{accentColor:_EV.verde,marginTop:2}}/>
-          <span>Registrei a música "{musInfo.nome}" no Envato para este vídeo ({_evNomeCliente(t.client)} · {t.title}).</span>
-        </label>
-      )}
-      <div style={{display:ativo ? "flex" : "none",gap:12,alignItems:"center",marginTop:10}}>
-        <canvas ref={cvRef} width={_evpDim(projeto.formato).w} height={_evpDim(projeto.formato).h} style={{width:_evpDim(projeto.formato).w >= _evpDim(projeto.formato).h ? 128 : 72,height:_evpDim(projeto.formato).w >= _evpDim(projeto.formato).h ? Math.round(128 * _evpDim(projeto.formato).h / _evpDim(projeto.formato).w) : 128,borderRadius:10,background:"#000",flexShrink:0}}/>
+    </div>
+  );
+}
+
+/* ─── v48: peças do Exportar novo ─── */
+const _EVX = { verde:"var(--evx-verde, #4ade80)", amarelo:"var(--evx-amarelo, #facc15)", verm:"var(--evx-verm, #f87171)" };   // cores de texto de status que leem bem nos dois temas
+function _evxMB(b){ const n = Number(b) || 0; return n >= 1073741824 ? (n / 1073741824).toFixed(1).replace(".", ",") + " GB" : Math.max(1, Math.round(n / 1048576)) + " MB"; }
+function _evxQuando(iso){ try{ const d = new Date(iso); if(isNaN(d.getTime())) return ""; return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }); }catch(_){ return ""; } }
+function _evxRelogio(seg){ seg = Math.max(0, Math.round(Number(seg) || 0)); const h = Math.floor(seg / 3600), m = Math.floor(seg % 3600 / 60), s = seg % 60;
+  return (h ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (s < 10 ? "0" : "") + s; }
+function _evxFalta(seg){ seg = Number(seg); if(!isFinite(seg)) return ""; return seg <= 5 ? "quase lá" : seg < 50 ? "falta menos de 1 min" : "faltam ~" + _evMin(seg); }
+/* etapa curta a partir da mensagem que o Estúdio / o PC já mandam (não inventa número: só lê o que veio) */
+function _evxEtapa(fase, msg, r){
+  const m = String(msg || ""), f = String(fase || ""); let x;
+  const limpa = function(s){ return String(s || "").replace(/\s*·\s*faltam.*$/i, "").replace(/[….]+$/, "").trim(); };
+  if((x = m.match(/Quadro a quadro \((\d+) fps\):\s*(\d+) de (\d+)/i))) return { txt:"Gravando quadro " + x[2] + " de " + x[3], det:x[1] + " fps, quadro a quadro" };
+  if(/^Gravando quadro a quadro/i.test(m)) return { txt:"Gravando quadro a quadro", det:limpa(m).replace(/^Gravando quadro a quadro\s*/i, "") };
+  if(/Imagem pronta/i.test(m)) return { txt:"Gravando o som", det:"A imagem já está pronta" + ((x = m.match(/\((\d+) quadros\)/)) ? " (" + x[1] + " quadros)" : "") };
+  if(/Juntando imagem e som/i.test(m)) return { txt:"Juntando imagem e som", det:"" };
+  if(/tempo real/i.test(m)) return { txt:"Gravando em tempo real", det:"30 fps" };
+  if(/Enviando para o card/i.test(m)) return { txt:"Subindo o vídeo", det:(x = m.match(/\((\d+) MB\)/)) ? x[1] + " MB" : "" };
+  if((x = m.match(/^Vídeo (\d+) de (\d+):?\s*(.*)$/i))) return { txt:"Convertendo trechos 4K", det:"Vídeo " + x[1] + " de " + x[2] + (x[3] ? " · " + limpa(x[3]).replace(/\s*\(só os trechos usados\)/, "") : "") };
+  if((x = m.match(/Baixando o vídeo (\d+) de (\d+)/i))) return { txt:"Baixando os vídeos", det:"Vídeo " + x[1] + " de " + x[2] };
+  if(/cópia leve/i.test(m)) return { txt:"Fazendo a cópia leve", det:limpa(m.replace(/^[^:]*:\s*/, "")) };
+  if(/Estabilizando|melhorando o original/i.test(m)) return { txt:"Estabilizando o original", det:limpa(m.replace(/^[^:]*:\s*/, "")) };
+  if(f === "conferindo" || /conferindo/i.test(m)) return { txt:"Conferindo o vídeo final", det:"" };
+  if(/Salvando a edição/i.test(m)) return { txt:"Salvando a edição", det:"" };
+  if(/Abrindo os vídeos/i.test(m)) return { txt:"Abrindo os vídeos", det:"" };
+  if(f === "abrindo" || f === "carregado") return { txt:"Abrindo o Estúdio no PC", det:"" };
+  if(f === "esperando_pc") return { txt:"Esperando o PC tratar os vídeos", det:limpa(m) };
+  if(r && Number(r.total) > 0 && Number(r.feitos) < Number(r.total)) return { txt:"Convertendo trechos 4K", det:(Number(r.feitos) || 0) + " de " + r.total + " vídeos" };
+  const lm = limpa(m);
+  return { txt:lm.slice(0, 60) || (f === "enviando" ? "Subindo" : "Preparando"), det:lm.length > 60 ? lm : "" };   // mensagem nova: mostra inteira embaixo
+}
+/* o vídeo gravado que ainda não foi para o cartão (mesma regra do v42) */
+function _evxGravado(ed, exp, enviadoUrl){
+  const x0 = ed && ed.exportado;
+  const doExp = !!(exp && exp.fase === "feito" && exp.enviar && exp.pub);
+  const mesmo = !!(x0 && doExp && x0.url === exp.pub);
+  const x = doExp ? { url:exp.pub, name:exp.nome, gravado_em:new Date(exp.feitoEm || Date.now()).toISOString(), fps:mesmo ? x0.fps : 30, size:mesmo ? x0.size : null, duracao:mesmo ? x0.duracao : null, doExp:true } : x0;
+  if(!x || !x.url || (enviadoUrl && enviadoUrl === x.url) || (!doExp && x.enviado_em)) return null;
+  if(!doExp && ed.final && ed.final.url === x.url) return null;
+  return x;
+}
+function _evxBip(ok){
+  try{ const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return; const ac = new AC(); const notas = ok ? [660, 880, 1175] : [440, 330];
+    notas.forEach(function(fq, i){ const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = fq; o.connect(g); g.connect(ac.destination);
+      const t0 = ac.currentTime + 0.02 + i * 0.16; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.22, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15); o.start(t0); o.stop(t0 + 0.16); });
+    setTimeout(function(){ try{ ac.close(); }catch(_){} }, 1200);
+  }catch(_){}
+}
+function _evxAvisarFim(ok, corpo){
+  _evxBip(ok);
+  try{ if(window.Notification && Notification.permission === "granted"){ const n = new Notification(ok ? "Pixels · Vídeo gravado" : "Pixels · A gravação parou", { body:corpo || "", tag:"pxev-exportar" });
+    n.onclick = function(){ try{ window.focus(); n.close(); }catch(_){} }; } }catch(_){}
+}
+function _EvxPassos({ passos }){
+  const cor = function(st){ return st === "ok" ? "#22c55e" : st === "aviso" ? "#eab308" : st === "erro" ? "#ef4444" : st === "andamento" || st === "atual" ? _EVP_COR.roxo : null; };
+  const feito = function(st){ return st === "ok" || st === "aviso"; };
+  return (
+    <div style={{position:"relative",display:"grid",gridTemplateColumns:"repeat(" + passos.length + ", 1fr)",marginTop:16}} aria-label="Passo a passo">
+      {passos.slice(0, -1).map(function(p, i){ const w = 100 / passos.length;
+        return <div key={"l" + i} style={{position:"absolute",top:14,left:"calc(" + (w * (i + 0.5)) + "% + 18px)",width:"calc(" + w + "% - 36px)",height:2,borderRadius:2,background:feito(p.st) ? "#22c55e" : _EVP_COR.linha}}/>; })}
+      {passos.map(function(p, i){ const c = cor(p.st);
+        return <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",minWidth:0,padding:"0 4px"}}>
+          <span style={{width:30,height:30,borderRadius:99,display:"grid",placeItems:"center",fontSize:13,fontWeight:800,position:"relative",
+            background:p.st === "ok" ? "#16a34a" : p.st === "aviso" ? "rgba(234,179,8,.16)" : p.st === "erro" ? "rgba(239,68,68,.16)" : p.st === "atual" || p.st === "andamento" ? _EVP_COR.roxoSoft : _EVP_COR.campo,
+            color:p.st === "ok" ? "#fff" : c || _EVP_COR.fraco, border:"2px solid " + (c || _EVP_COR.linha)}}>
+            {p.st === "ok" ? <_EvpIco n="check" s={15} w={2.6}/> : p.st === "aviso" || p.st === "erro" ? "!" : i + 1}
+            {p.st === "andamento" && <span style={{position:"absolute",inset:-6,borderRadius:99,border:"2px solid transparent",borderTopColor:_EVP_COR.roxo,borderRightColor:_EVP_COR.roxo,animation:"evxGira 1s linear infinite"}}/>}
+          </span>
+          <span style={{fontSize:12.5,fontWeight:800,color:p.st === "pendente" ? _EVP_COR.sub : _EVP_COR.ink,marginTop:7,lineHeight:1.2}}>{p.rot}</span>
+          <span style={{fontSize:11,fontWeight:700,color:p.st === "erro" ? _EVX.verm : p.st === "aviso" ? _EVX.amarelo : p.st === "andamento" || p.st === "atual" ? _EVP_COR.roxo : _EVP_COR.fraco,marginTop:2,lineHeight:1.25}}>{p.sub}</span>
+        </div>; })}
+    </div>
+  );
+}
+/* bloco de ANDAMENTO: % grande quando há número de verdade; sem número, a etapa grande e a barra "indo e vindo" */
+function _EvxAndamento({ rotulo, onde, etapa, pct, eta, decorrido, rotDecorrido, atualizado, aviso, rodape, extra, tela, cancelar }){
+  const temPct = pct != null && isFinite(pct);
+  const meta = [];
+  if(decorrido != null && decorrido >= 0) meta.push({ txt:_evxRelogio(decorrido) + " " + (rotDecorrido || "decorrido") });
+  if(eta != null) meta.push({ txt:_evxFalta(eta), forte:true });
+  if(atualizado != null && atualizado >= 0) meta.push({ txt:"atualizado há " + (atualizado < 60 ? Math.round(atualizado) + " s" : _evMin(atualizado)) });
+  return (
+    <div style={{marginTop:14,padding:"14px 16px 13px",borderRadius:16,border:"1px solid rgba(139,92,246,.45)",background:"linear-gradient(160deg, rgba(124,58,237,.16), rgba(79,70,229,.05) 60%), " + _EVP_COR.campo,boxShadow:"0 18px 40px -28px rgba(124,58,237,.9)"}} aria-live="polite" aria-label="Andamento da gravação">
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:_EVP_COR.roxo}}>
+          <span style={{width:7,height:7,borderRadius:99,background:rotulo === "Na fila" ? "#eab308" : "#ef4444",animation:"evxPulsa 1.2s ease-in-out infinite"}}/>{rotulo || "Gravando"} · {onde}</span>
+        <span style={{marginLeft:"auto"}}>{extra}</span>
+      </div>
+      <div style={{display:"flex",gap:14,alignItems:"center",marginTop:10}}>
+        {tela}
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:12.5,fontWeight:700}}>{exp && exp.msg}</div>
-          {exp && exp.esperando && <div style={{fontSize:11.5,color:_EV.amarelo,fontWeight:700,marginTop:3}}>Esperando o vídeo carregar… a gravação pausou e continua sozinha.</div>}
-          {exp && exp.fase !== "preparando" && <div style={{height:8,borderRadius:99,background:_EVP_COR.linha2,marginTop:8,overflow:"hidden"}}>
-            <div style={{height:"100%",width:(exp.pct || 0) + "%",background:"linear-gradient(90deg," + _EVP_COR.roxo + "," + _EVP_COR.roxo2 + ")",transition:"width .3s"}}/></div>}
-          {exp && exp.fase === "gravando" && <button onClick={function(){ if(parar.current) parar.current(); }} style={Object.assign(_evpBtn(), {marginTop:8})}>Cancelar</button>}
+          {temPct
+            ? <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+                <span style={{fontSize:52,fontWeight:800,lineHeight:.95,letterSpacing:"-.03em",color:_EVP_COR.ink,fontVariantNumeric:"tabular-nums"}}>{pct}<span style={{fontSize:26,color:_EVP_COR.sub,marginLeft:2}}>%</span></span>
+                <span style={{fontSize:14,fontWeight:800,color:_EVP_COR.ink,minWidth:0}}>{etapa.txt}</span>
+              </div>
+            : <div style={{fontSize:21,fontWeight:800,color:_EVP_COR.ink,lineHeight:1.2,letterSpacing:"-.01em"}}>{etapa.txt || "Preparando"}</div>}
+          {etapa.det && <div style={{fontSize:12,color:_EVP_COR.sub,marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={etapa.det}>{etapa.det}</div>}
         </div>
       </div>
-      {!ativo && <button onClick={function(){ exportar(); }} disabled={faltaLicenca || nErro > 0} title={nErro ? "Corrija o que está em vermelho na Conferência" : ""} style={Object.assign(_evpBtn("verde", !faltaLicenca && !nErro), {marginTop:10,padding:"10px 16px",fontSize:13.5})}>
-        <_EvpIco n={soNoPC && !soAudio ? "pc" : "baixar"} s={16}/>{soAudio ? "Gravar e baixar o áudio" : soNoPC ? (driveUsados.length ? "Exportar no PC com os originais do Drive" : "Exportar no PC do escritório (FullHD)") : alterado ? "Salvar e exportar" : ed.final ? "Exportar de novo" : "Exportar"}</button>}
-      {!ativo && soNoPC && !soAudio && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.45}}>{driveUsados.length ? (driveUsados.length === 1 ? "1 vídeo tem" : driveUsados.length + " vídeos têm") + " o original no Drive." : (pesadosUsados.length === 1 ? "1 vídeo passa" : pesadosUsados.length + " vídeos passam") + " de 150 MB."} O PC do escritório confere cada vídeo com a cópia leve e grava em Full HD — você pode fechar o navegador.</div>}
-      {!ativo && soNoPC && !soAudio && !pcAtivo && <div style={{marginTop:6,padding:"7px 10px",borderRadius:10,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha,fontSize:12,lineHeight:1.45}} aria-label="Previsão do exportar">
-        <b>⏱ Previsão: ~{_evMin(prevPC.seg)}</b> <span style={{color:_EVP_COR.sub}}>— converte só os {prevPC.segUsados} s usados de {prevPC.originais} original{prevPC.originais === 1 ? "" : "is"} 4K e grava o vídeo de {_evTempo(calc.total).replace(/\.\d$/, "")}. Se o PC já converteu esses trechos antes, ~{_evMin(prevPC.segJaConvertido)}.</span></div>}
-      {!ativo && !soAudio && !isMob && !pcAuto && (
-        <div style={{marginTop:10,padding:"9px 11px",borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo}}>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <button onClick={exportarNoPC} disabled={pedindoPC || pcAtivo || faltaLicenca || nErro > 0} title="O PC do escritório grava o vídeo (quadro a quadro, no FPS dos brutos). Depois você envia para o cartão. Pode fechar o navegador."
-              style={Object.assign(_evpBtn("suave", !(pedindoPC || pcAtivo || faltaLicenca || nErro > 0)), {padding:"8px 12px"})}><_EvpIco n="pc" s={16}/>{pedindoPC ? "Pedindo…" : "Exportar no PC do escritório"}</button>
-            <span style={{fontSize:11.5,fontWeight:700,color:pcSt && pcSt.pc_online ? _EV.verde : _EV.amarelo}}>{!pcSt ? "" : pcSt.pc_online ? "PC ligado" : "PC sem sinal agora — o pedido espera ele ligar"}</span>
-          </div>
-          {pcItem && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,lineHeight:1.5}}>
-            {pcItem.status === "fila" ? "Na fila do PC (pedido por " + (pcItem.pedido_por || "") + ")" + (pcItem.erro ? " · " + pcItem.erro : "") + "."
-              : pcItem.status === "processando" ? (function(){ const r = pcItem.resultado || {};      // v29.3: andamento e quanto falta
-                  const etapa = r.fase === "gravando" ? "gravando " + (r.pct || 0) + "%" : r.total ? "convertendo os originais: " + (r.feitos || 0) + " de " + r.total : (r.msg || "preparando");
-                  return "O PC " + (pcItem.pc || "") + " está " + etapa + (r.eta_s ? " · faltam ~" + _evMin(r.eta_s) : "") + (pcItem.pego_em ? " · começou " + new Date(pcItem.pego_em).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "") + "."; })()
-              : pcItem.status === "pronto" ? "Pronto no PC " + (pcItem.pc || "") + " — vídeo gravado" + (pcItem.resultado && pcItem.resultado.fps ? " em " + pcItem.resultado.fps + " fps" : "") + ". Envie para o cartão aqui embaixo." + (pcItem.resultado && pcItem.resultado.whats_url ? " Tem versão leve para WhatsApp." : "")
-              : pcItem.status === "erro" ? "O PC não conseguiu: " + (pcItem.erro || "erro") : ""}</div>}
-        </div>
-      )}
-      {!ativo && !isMob && !pcAuto && <_EvpTesteVelocidade ed={ed} projeto={projeto} calc={calc} kit={kit} base={base} tratados={tratados} logoUrl={logoUrl}/>}
-      {exp && exp.fase === "erro" && aviso(_EV.verm, _EVP_COR.erro, "alerta", "Não exportou: " + exp.msg)}
-      {exp && exp.fase === "feito" && <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,background:_EVP_COR.ok,color:_EV.verde,fontSize:12.5,fontWeight:700,display:"flex",gap:8,alignItems:"center"}}>
-        <_EvpIco n="check" s={15}/>{exp.msg} {exp.url && <a href={exp.url} download={exp.nome} style={{color:_EV.verde,marginLeft:6}}>Baixar cópia</a>}</div>}
-      {exp && exp.fase === "feito" && exp.legenda && !pcAuto && <_EvpLegendaPost key={exp.feitoEm} ed={ed} t={t} calc={calc} pcAuto={pcAuto} auto={true} isMob={isMob}/>}   {/* v41c */}
-      {!pcAuto && <_EvpGravadoEnviar ed={ed} exp={exp} onFeito={onFeito}/>}   {/* v42: Baixar · Copiar link · Enviar para o cartão */}
-      {exp && exp.fase === "feito" && exp.legendaPC && <div style={{marginTop:6,fontSize:12,color:exp.legendaPC.ok ? _EV.verde : _EV.amarelo,fontWeight:700}}>
-        {exp.legendaPC.ok ? ("📝 Legenda do post " + (exp.legendaPC.no_card ? "escrita e salva no card" : "sugerida (o card já tinha legenda)")) : ("📝 Legenda do post não saiu: " + exp.legendaPC.erro)}</div>}
-      {ed.final && ed.final.url && (!exp || exp.fase !== "feito") && <div style={{marginTop:8,fontSize:12,color:_EV.verde,fontWeight:700,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="check" s={14}/>Já tem vídeo final no card ({ed.final.addedAt || ""}) · <a href={ed.final.url} target="_blank" rel="noreferrer" style={{color:_EV.verde}}>abrir</a></div>}
+      <div style={{position:"relative",height:12,borderRadius:99,background:"rgba(127,127,160,.18)",marginTop:12,overflow:"hidden"}} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={temPct ? pct : undefined}>
+        {temPct
+          ? <div style={{height:"100%",width:Math.max(2, pct) + "%",borderRadius:99,transition:"width .6s ease",
+              backgroundImage:"linear-gradient(45deg, rgba(255,255,255,.16) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.16) 50%, rgba(255,255,255,.16) 75%, transparent 75%, transparent), linear-gradient(90deg,#8b5cf6,#4f46e5)",
+              backgroundSize:"28px 28px, 100% 100%",animation:"evxListras 1s linear infinite"}}/>
+          : <div style={{position:"absolute",top:0,bottom:0,width:"38%",borderRadius:99,background:"linear-gradient(90deg, rgba(139,92,246,.35), #8b5cf6 35%, #6366f1 70%, rgba(99,102,241,.35))",animation:"evxVai 1.3s ease-in-out infinite"}}/>}
+      </div>
+      {aviso && <div style={{fontSize:12,color:_EVX.amarelo,fontWeight:700,marginTop:8}}>{aviso}</div>}
+      <div style={{display:"flex",gap:"4px 10px",flexWrap:"wrap",alignItems:"center",marginTop:9,fontSize:11.5,color:_EVP_COR.sub,fontVariantNumeric:"tabular-nums"}}>
+        {meta.map(function(q, i){ return <span key={i} style={{fontWeight:q.forte ? 800 : 600,color:q.forte ? _EVP_COR.ink : _EVP_COR.sub}}>{q.txt}</span>; })}
+        {rodape && <span style={{marginLeft:"auto",fontWeight:700,color:_EVP_COR.sub}}>{rodape}</span>}
+      </div>
+      {cancelar && <button onClick={cancelar} style={Object.assign(_evpBtn(), {marginTop:10,padding:"6px 12px",fontSize:12})}><_EvpIco n="parar" s={13}/>Cancelar</button>}
+    </div>
+  );
+}
+function _EvxOpcao({ icone, titulo, dica, botao, desligado, onClick }){
+  return (
+    <div style={{display:"flex",gap:10,alignItems:"center",padding:"10px 12px",borderRadius:12,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha}}>
+      <span style={{color:_EVP_COR.roxo,flexShrink:0}}><_EvpIco n={icone} s={17}/></span>
+      <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:_EVP_COR.ink}}>{titulo}</div><div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:1,lineHeight:1.4}}>{dica}</div></div>
+      <button onClick={onClick} disabled={!!desligado} style={Object.assign(_evpBtn(null, !desligado), {padding:"6px 11px",fontSize:12,flexShrink:0})}>{botao}</button>
     </div>
   );
 }
 
 /* v42 · VÍDEO GRAVADO → ENVIAR PARA O CARTÃO. Exportar só grava; o card recebe o Arquivo final aqui (o card vai para Avaliação e a IA
-   escreve a legenda do post). Mostra o último vídeo gravado (navegador, PC do escritório ou Agente de IA) que ainda não foi enviado. */
-function _EvpGravadoEnviar({ ed, exp, onFeito }){
+   escreve a legenda do post). Mostra o último vídeo gravado (navegador, PC do escritório ou Agente de IA) que ainda não foi enviado.
+   v48: cartão com miniatura, data, fps, tamanho, aviso quando a edição mudou depois da gravação e "Link copiado" no botão. */
+function _EvpGravadoEnviar({ ed, x, dim, whatsUrl, desatualizado, alterado, isMob, onEnviado, onFeito }){
   const [enviando, setEnviando] = useState(false);
-  const [enviado, setEnviado] = useState(false);
-  const x0 = ed && ed.exportado;
-  const doExp = exp && exp.fase === "feito" && exp.enviar && exp.pub;
-  const x = doExp ? { url:exp.pub, name:exp.nome, gravado_em:new Date().toISOString(), fps:(x0 && x0.url === exp.pub) ? x0.fps : 30 } : x0;
-  if(!x || !x.url || enviado || (!doExp && x.enviado_em)) return null;
-  if(!doExp && ed.final && ed.final.url === x.url) return null;
-  const quando = (function(){ try{ return new Date(x.gravado_em).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }); }catch(_){ return ""; } })();
+  const [copiado, setCopiado] = useState(false);
+  const [semMini, setSemMini] = useState(false);
+  useEffect(function(){ if(!copiado) return; const tm = setTimeout(function(){ setCopiado(false); }, 2200); return function(){ clearTimeout(tm); }; }, [copiado]);
+  if(!x || !x.url) return null;
+  const quando = _evxQuando(x.gravado_em);
   const enviar = async function(){
     if(enviando || !window._sb) return;
     setEnviando(true);
     try{
       const r = await window._sb.rpc("criacao_edicao_enviar_card", { p_id:ed.id });
       if(r.error) throw new Error(r.error.message || "erro");
-      setEnviado(true);
+      if(onEnviado) onEnviado(x.url);
       _evToast("success", "Enviado para o cartão: virou o Arquivo final, o card foi para Avaliação e a IA está escrevendo a legenda do post.");
       if(onFeito) onFeito();
     }catch(e){ _evToast("error", "Não enviei para o cartão: " + ((e && e.message) || e)); }
     setEnviando(false);
   };
-  const copiar = function(){ try{ navigator.clipboard.writeText(x.url); _evToast("success", "Link copiado: mande para quem vai aprovar."); }catch(_){} };
+  const copiar = function(){
+    const ok = function(){ setCopiado(true); _evToast("success", "Link copiado: mande para quem vai aprovar."); };
+    const reserva = function(){ try{ const ta = document.createElement("textarea"); ta.value = x.url; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select();
+      const foi = document.execCommand("copy"); ta.remove(); if(foi) ok(); else _evToast("error", "Não consegui copiar o link."); }catch(_){ _evToast("error", "Não consegui copiar o link."); } };
+    try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(x.url).then(ok, reserva); else reserva(); }catch(_){ reserva(); }
+  };
+  const w = Number(x.w) || (dim && dim.w) || 1080, h = Number(x.h) || (dim && dim.h) || 1920;
+  const mw = w >= h ? 112 : 56, mh = Math.round(mw * h / w);
+  const origem = x.auto ? "pela IA" : x.pc ? "no PC " + x.pc : x.doExp ? "neste navegador" : x.gravado_por ? "por " + x.gravado_por : "";
+  const metas = [quando, x.fps ? Math.round(Number(x.fps)) + " fps" : "", x.size ? _evxMB(x.size) : "", x.duracao ? _evTempo(x.duracao).replace(/\.\d$/, "") : "", /\.webm$/i.test(x.name || "") ? "WebM" : ""].filter(Boolean);
+  const btn = function(extra){ return Object.assign(_evpBtn(null), {padding:"8px 11px",textDecoration:"none"}, extra || {}); };
   return (
-    <div style={{marginTop:10,padding:"10px 12px",borderRadius:12,border:"1px solid " + _EVP_COR.roxo,background:_EVP_COR.roxoSoft}} aria-label="Vídeo gravado">
-      <div style={{fontSize:12.5,fontWeight:800,color:_EVP_COR.ink,display:"flex",alignItems:"center",gap:6}}>🎬 Vídeo gravado{x.fps ? " · " + x.fps + " fps" : ""}{quando ? " · " + quando : ""}{x.auto ? " · pela IA" : ""}</div>
-      <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:3,lineHeight:1.45}}>Ainda <b>não</b> está no card. Assista, baixe ou mande o link para alguém aprovar. Quando estiver bom: <b>Enviar para o cartão</b>.</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
-        <button onClick={enviar} disabled={enviando} style={Object.assign(_evpBtn("verde", !enviando), {padding:"8px 13px"})}><_EvpIco n="enviar" s={15}/>{enviando ? "Enviando…" : "Enviar para o cartão"}</button>
-        <a href={x.url} target="_blank" rel="noreferrer" style={Object.assign(_evpBtn("suave"), {padding:"8px 12px",textDecoration:"none"})}><_EvpIco n="olho" s={15}/>Assistir</a>
-        <a href={x.url + (x.url.indexOf("?") >= 0 ? "&" : "?") + "download=" + encodeURIComponent(x.name || "video.mp4")} download={x.name || "video.mp4"} style={Object.assign(_evpBtn("suave"), {padding:"8px 12px",textDecoration:"none"})}><_EvpIco n="baixar" s={15}/>Baixar</a>
-        <button onClick={copiar} style={Object.assign(_evpBtn("suave"), {padding:"8px 12px"})}><_EvpIco n="duplicar" s={15}/>Copiar link</button>
+    <div style={{marginTop:14,padding:12,borderRadius:16,border:"1px solid " + (desatualizado ? "rgba(234,179,8,.5)" : "rgba(34,197,94,.45)"),background:desatualizado ? _EVP_COR.aviso : "linear-gradient(160deg, rgba(34,197,94,.13), rgba(15,118,110,.04) 60%), " + _EVP_COR.campo}} aria-label="Vídeo gravado">
+      <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+        <a href={x.url} target="_blank" rel="noreferrer" title="Assistir" style={{position:"relative",width:mw,height:Math.min(mh, 100),borderRadius:10,overflow:"hidden",background:"#05070d",flexShrink:0,display:"block",border:"1px solid " + _EVP_COR.linha}}>
+          {!semMini && <video src={x.url + "#t=0.8"} preload="metadata" muted playsInline onError={function(){ setSemMini(true); }} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+          <span style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#fff"}}><span style={{width:30,height:30,borderRadius:99,background:"rgba(0,0,0,.55)",display:"grid",placeItems:"center"}}><_EvpIco n="play" s={15}/></span></span>
+        </a>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:14.5,fontWeight:800,color:_EVP_COR.ink}}>Vídeo gravado</span>
+            {origem && <span style={{fontSize:11.5,color:_EVP_COR.sub,fontWeight:700}}>{origem}</span>}
+          </div>
+          <div style={{display:"flex",gap:"3px 8px",flexWrap:"wrap",marginTop:4,fontSize:11.5,color:_EVP_COR.sub,fontWeight:600,fontVariantNumeric:"tabular-nums"}}>
+            <span>{metas.join("  ·  ")}</span>
+          </div>
+          {desatualizado
+            ? <div style={{fontSize:12,color:_EVX.amarelo,fontWeight:700,marginTop:7,lineHeight:1.45,display:"flex",gap:6}}><_EvpIco n="alerta" s={14} style={{marginTop:1}}/>
+                <span>{alterado ? "Tem alteração depois desta gravação." : "A edição mudou depois desta gravação."} Grave de novo para levar as mudanças.</span></div>
+            : <div style={{fontSize:12,color:_EVP_COR.sub,marginTop:7,lineHeight:1.45}}>Ainda <b style={{color:_EVP_COR.ink}}>não</b> está no card. Assista e, se estiver bom, envie.</div>}
+        </div>
+      </div>
+      <button onClick={enviar} disabled={enviando} style={Object.assign(_evpBtn(desatualizado ? null : "verde", !enviando), {width:"100%",justifyContent:"center",marginTop:12,padding:"11px 14px",fontSize:14,borderRadius:12})}>
+        <_EvpIco n="enviar" s={16}/>{enviando ? "Enviando…" : desatualizado ? "Enviar mesmo assim para o cartão" : "Enviar para o cartão"}</button>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+        <a href={x.url} target="_blank" rel="noreferrer" style={btn({justifyContent:"center",flex:"1 1 auto"})}><_EvpIco n="olho" s={15}/>Assistir</a>
+        <a href={x.url + (x.url.indexOf("?") >= 0 ? "&" : "?") + "download=" + encodeURIComponent(x.name || "video.mp4")} download={x.name || "video.mp4"} style={btn({justifyContent:"center",flex:"1 1 auto"})}><_EvpIco n="baixar" s={15}/>Baixar</a>
+        <button onClick={copiar} style={btn({justifyContent:"center",flex:"1 1 auto",color:copiado ? _EVX.verde : _EVP_COR.ink})}><_EvpIco n={copiado ? "check" : "duplicar"} s={15}/>{copiado ? "Copiado!" : isMob ? "Link" : "Copiar link"}</button>
+        {whatsUrl && <a href={whatsUrl} target="_blank" rel="noreferrer" title="Versão leve para mandar no WhatsApp" style={btn({justifyContent:"center",flex:"1 1 auto"})}><_EvpIco n="celular" s={15}/>Leve</a>}
       </div>
     </div>
   );
@@ -134949,7 +135778,7 @@ function _EvAprende({ isMob }){
         audio.push({ path:p, ini:r.pedacos[k].ini, fim:r.pedacos[k].fim });
       }
       setRefPasso("A IA está estudando a técnica do vídeo… leva de 30 s a 1 minuto.");
-      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"referencia", nome:f.name || "vídeo de referência", nota:ref.nota, client:ref.cliente || null,
+      const res = await _evInvocar("video-editar", { body:{ acao:"referencia", nome:f.name || "vídeo de referência", nota:ref.nota, client:ref.cliente || null,
         duracao:r.duracao, quadro_seg:quadroSeg, folhas:folhas, audio:audio } });
       if(res.error) throw new Error(await _evErroFn(res));
       const d2 = res.data || {};
@@ -135167,15 +135996,21 @@ function _EvExportarNoPC({ trabalho, onEstado }){
   const t = trabalho.task || {};
   const [ed, setEd] = useState(null), [kit, setKit] = useState(null), [base, setBase] = useState({}), [musicas, setMusicas] = useState(null);
   const avisar = function(o){ try{ if(onEstado) onEstado(o); }catch(_){} };
+  const pcAuto0 = { onEstado:avisar };
   useEffect(function(){
     let vivo = true;
     (async function(){
       try{
-        const r = await window._sb.rpc("criacao_edicao", { p_task:t.id });
+        /* v48 (06/10/2026): N-3 + contrato C4 — abre a edição PELO ID do trabalho (criacao_edicao_por_id), não "a mais nova do card":
+           se nascer outra edição no card enquanto a gravação espera na fila (Refazer, preparar automático, Guvi), a gravação não falha mais.
+           Sem id no trabalho, ou banco/PC ainda sem a função liberada, cai no jeito antigo (com a mesma trava de antes). */
+        let r = trabalho.edicao_id ? await window._sb.rpc("criacao_edicao_por_id", { p_task:t.id, p_id:trabalho.edicao_id }) : null;
+        const semPorId = !r || (r.error && /criacao_edicao_por_id|function|schema cache|n[aã]o liberada|PGRST202/i.test(String(r.error.message || "") + " " + String(r.error.code || "")));
+        if(semPorId){ if(r && pcAuto0.onEstado) pcAuto0.onEstado({ fase:"aviso", msg:"criacao_edicao_por_id indisponível: abrindo a edição mais nova do card" }); r = await window._sb.rpc("criacao_edicao", { p_task:t.id }); }
         if(r.error) throw new Error(r.error.message || "não carregou a edição");
         const e = r.data || {};
         if(!e.existe || !e.receita) throw new Error("este card ainda não tem edição pronta");
-        if(e.id !== trabalho.edicao_id) throw new Error("a edição do card mudou (" + e.id + ")");
+        if(e.id !== trabalho.edicao_id) throw new Error((semPorId ? "a edição do card mudou (" : "o banco devolveu outra edição (") + e.id + ")");
         const un = t.bioterUnit || "";
         const k1 = await window._sb.rpc("criacao_kit", { p_client:t.client, p_unidade:un });
         if(k1.error) throw new Error("kit: " + (k1.error.message || "erro"));
