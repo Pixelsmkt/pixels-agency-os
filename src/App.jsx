@@ -2065,6 +2065,7 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"gestao.projecao",      label:"Projeção financeira",  desc:"Padrão: chave Financeiro ou sócio",
       padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
     {key:"gestao.operacao",      label:"Operação",             desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.creditos_ia",   label:"Gastos e créditos IA", desc:"Quanto a IA gastou (hoje, mês, por tela, pessoa e cartão), saldo estimado e teto diário. Padrão: só sócios", padrao:_pxSocio}, // 05/10/2026
     {key:"gestao.crescimento",   label:"Plano de Crescimento", desc:"Materiais do negócio + diagnóstico da IA (gargalos, melhorias, plano 30/60/90). Padrão: só sócios", padrao:_pxSocio}, // 01/10/2026
     {key:"gestao.eficiencia",    label:"Eficiência e Resultados", desc:"Placar da IA: copy e arte aprovadas de primeira, resultados e vídeos lidos pela IA de cada cliente. Padrão: fechado (só sócios)", padrao:false}, // 27/09/2026 (v2 à noite: placar)
     {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
@@ -3959,6 +3960,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="edicao_arte")        return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.8"/></svg>; // 29/09/2026
   if(id==="edicao_video")       return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 9.5h18M7.5 5l2 4.5M12.5 5l2 4.5M17.5 5l2 4.5"/><path d="M10.5 12.5v4l3.5-2z"/></svg>; // 28/09/2026
+  if(id==="gestao_creditos_ia") return <svg {...p}><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h3"/></svg>; // 05/10/2026
   if(id==="gestao_crescimento") return <svg {...p}><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>; // 01/10/2026
   if(id==="gestao_eficiencia")  return <svg {...p}><path d="M4 20h16"/><rect x="5" y="12" width="3.5" height="6" rx="1"/><rect x="10.25" y="7" width="3.5" height="11" rx="1"/><rect x="15.5" y="10" width="3.5" height="8" rx="1"/></svg>; // 27/09/2026 (v2: placar)
   if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
@@ -4033,6 +4035,7 @@ const NAV=[
     {id:"gestao_projecao",      icon:"▥", label:"Projeção financeira"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_eficiencia",    icon:"▥", label:"Eficiência e Resultados"}, // (27/09/2026) v2: placar da IA + vídeos lidos por cliente
+    {id:"gestao_creditos_ia",   icon:"$", label:"Gastos e créditos IA"}, // (05/10/2026) gasto da IA, saldo e teto — só sócios
     {id:"gestao_crescimento",   icon:"◆", label:"Plano de Crescimento"}, // (01/10/2026) materiais do negócio + diagnóstico da IA — só sócios
     {id:"gestao_time",          icon:"◉", label:"Time"},
     {id:"gestao_administrativo", icon:"▤", label:"Administrativo"},
@@ -4372,11 +4375,14 @@ if(typeof window!=="undefined"){ window.PX_IA_MODELO = PX_IA_MODELO; window.PX_I
 
    Requer: Edge Function "ask-claude" deployada no Supabase.
    Veja SUPABASE_EDGE_FUNCTION.md para instruções de deploy. */
-async function askClaude({model=PX_IA_MODELO,max_tokens=500,system,messages=[]}){
+/* (05/10/2026) Gastos e créditos IA: marca da MEMÓRIA (cache) — tudo antes dela é o material fixo do cliente. */
+const PX_IA_MARCA_CACHE="⟦PX_CACHE⟧";
+async function askClaude({model=PX_IA_MODELO,max_tokens=500,system,messages=[],origem,card}){
   const sb=window._sb;
   if(!sb)throw new Error("Supabase client indisponível");
   const body={model,max_tokens,messages};
   if(system)body.system=system;
+  if(origem)body.origem=String(origem); if(card)body.card=String(card);   // (05/10/2026) registro de gasto por tela e por cartão
   const {data,error}=await sb.functions.invoke("ask-claude",{body});
   if(error){
     // Mensagem amigável se a Edge Function ainda não foi deployada
@@ -4569,7 +4575,7 @@ async function _pxDesrepeteLegenda(leg, briefTxt, py){
     let u="LEGENDA:\n"+leg+"\n\nESTAS FRASES DA LEGENDA ESTÃO IGUAIS AO TEXTO QUE JÁ ESTÁ NA ARTE:\n";
     rep.forEach(function(f){ u+="- “"+f+"”\n"; });
     u+="\nReescreva SÓ esses trechos com outras palavras e outro ângulo, falando do mesmo assunto. Mantenha todo o resto EXATAMENTE igual: as outras frases, os emojis (mesma quantidade e posição), a linha do contato e a linha de hashtags. Mesmo tamanho aproximado.";
-    const data=await askIA({model:PX_IA_MODELO,max_tokens:1400,system:sys,messages:[{role:"user",content:u}]});
+    const data=await askIA({model:PX_IA_MODELO,max_tokens:1400,system:sys,messages:[{role:"user",content:u}],origem:"desrepete",card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
     let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
     txt=txt.replace(/^```(?:text)?\s*/i,"").replace(/```\s*$/,"").replace(/^===+\s*LEGENDA\s*===+\s*/i,"").trim();
     if(txt.length<Math.min(60,leg.length*0.5)) return leg;
@@ -4637,7 +4643,7 @@ function _pxRegrasEmoji(ehComemorativa, clientId, _tem){
    Mesmo desenho do askClaude: a chave fica SÓ no backend (Edge Function
    ask-openai, secret OPENAI_KEY). Recebe e devolve no formato do askClaude
    ({content:[{text}]}) pra nenhum chamador precisar saber quem escreveu. */
-async function askGPT({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]}){
+async function askGPT({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[],origem,card}){
   const sb=window._sb;
   if(!sb)throw new Error("Supabase client indisponível");
   const msgs=[];
@@ -4647,8 +4653,12 @@ async function askGPT({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]
       :((m.content||[]).map(function(b){return b&&b.text||"";}).join("\n"));
     msgs.push({role:m.role||"user",content:c});
   });
-  const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:model,max_tokens:max_tokens,messages:msgs}});
-  if(error)throw new Error("Pixels IA (GPT) indisponível: "+(error.message||"erro"));
+  const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:model,max_tokens:max_tokens,messages:msgs,origem:origem||undefined,card:card?String(card):undefined}});
+  if(error){   // (05/10/2026) devolve o motivo (429 = GPT ocupado por 1 minuto × sem crédito × teto do dia)
+    let _st=0,_j=null; try{ _st=(error.context&&error.context.status)||0; if(error.context&&typeof error.context.json==="function") _j=await error.context.json(); }catch(_){}
+    const _e=_j&&_j.error; const _er=new Error("Pixels IA (GPT) indisponível: "+((_e&&(_e.message||_e))||error.message||"erro"));
+    _er.status=_st; _er.codigo=(_e&&_e.code)||""; throw _er;
+  }
   if(data&&data.error)throw new Error(String(data.error.message||data.error));
   const txt=(((data||{}).choices||[])[0]||{}).message;
   const out=(txt&&txt.content)||"";
@@ -4660,7 +4670,7 @@ async function askGPT({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]
    base64 / image url), converte pro formato da OpenAI e devolve como o askClaude devolve —
    inclusive stop_reason ("max_tokens" quando o GPT parou por limite), pra continuação. Bloco
    "document" (PDF) não existe na OpenAI por URL: quem chama manda as páginas como imagem. */
-async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]}){
+async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[],origem,card}){
   const sb=window._sb;
   if(!sb)throw new Error("Supabase client indisponível");
   const msgs=[];
@@ -4683,7 +4693,7 @@ async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messa
     else msgs.push({role:m.role||"user",content:parts});
   });
   // o modelo é SEMPRE o da OpenAI — quem chama costuma passar o nome do Claude (PX_IA_MODELO_RAPIDO)
-  const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:PX_IA_MODELO_GPT,max_tokens:max_tokens,messages:msgs}});
+  const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:PX_IA_MODELO_GPT,max_tokens:max_tokens,messages:msgs,origem:origem||undefined,card:card?String(card):undefined}});
   if(error)throw new Error("Pixels IA (GPT) indisponível: "+(error.message||"erro"));
   if(data&&data.error)throw new Error(String(data.error.message||data.error));
   const ch=(((data||{}).choices||[])[0])||{};
@@ -4696,10 +4706,21 @@ if(typeof window!=="undefined"){ window.askGPTBlocos=askGPTBlocos; }
 /* Porta única da COPY: tenta o provedor escolhido e cai pro Claude se ele falhar. */
 async function askIA(opts){
   if(PX_IA_PROVEDOR_COPY==="openai"){
-    try{ return await askGPT(Object.assign({},opts,{model:PX_IA_MODELO_GPT})); }
-    catch(e){ console.warn("[askIA] OpenAI falhou, usando o Claude:",(e&&e.message)||e); }
+    /* (05/10/2026) GPT ocupado (limite por minuto, 429) → espera e tenta o GPT de novo (2x). Antes caía direto no
+       Claude Opus com o pedido inteiro — foi o que gastou US$ 5 numa tarde. Sem crédito / teto do dia → não insiste. */
+    for(let _t=0;_t<3;_t++){
+      try{ const _r=await askGPT(Object.assign({},opts,{model:PX_IA_MODELO_GPT})); if(typeof window!=="undefined") window.__pxIaUltimo={nome:"GPT",em:Date.now()}; return _r; }
+      catch(e){
+        if(e&&e.codigo==="teto_diario") throw e;
+        const _ocupado=e&&e.status===429&&e.codigo!=="insufficient_quota";
+        if(_ocupado&&_t<2){ if(typeof pixelsToast!=="undefined"&&pixelsToast.info) pixelsToast.info("O GPT está ocupado — tentando de novo em alguns segundos…",4000); await new Promise(function(r){ setTimeout(r,_t===0?15000:30000); }); continue; }
+        console.warn("[askIA] OpenAI falhou, usando o Claude:",(e&&e.message)||e); break;
+      }
+    }
   }
-  return await askClaude(opts);
+  const _r=await askClaude(opts);
+  if(typeof window!=="undefined") window.__pxIaUltimo={nome:"Claude",em:Date.now()};
+  return _r;
 }
 if(typeof window!=="undefined"){ window.askGPT=askGPT; window.askIA=askIA; }
 
@@ -4752,7 +4773,7 @@ async function pxTraduzirParaPt(opts){
     "\n===BRIEFING===\n(o briefing traduzido)\n===LEGENDA===\n(a legenda traduzida)";
   let u="BRIEFING (español):\n"+(briefing||"(vazio)")+"\n\n";
   u+="LEGENDA (español):\n"+(legenda||"(vazia)")+"\n";
-  const data=await askClaude({model:PX_IA_MODELO_RAPIDO,max_tokens:2200,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askClaude({model:PX_IA_MODELO_RAPIDO,max_tokens:2200,system:sys,messages:[{role:"user",content:u}],origem:"traducao",card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
   let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
   txt=txt.replace(/^[\s>*#=_-]*(BRIEFING|LEGENDA)\s*[:\s>*#=_-]*$/gim,function(_m,p1){return "==="+p1.toUpperCase()+"===";});
   const iB=txt.indexOf("===BRIEFING==="), iL=txt.indexOf("===LEGENDA===");
@@ -5375,8 +5396,9 @@ async function pxOrganizarAjusteIA(opts){
   u+=pxCtxMateriaisTxt(ctx);
   u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
+  u+="\n"+PX_IA_MARCA_CACHE+"\n";   // (05/10/2026) memória da IA
   u+="\nTAREFA: organize o pedido acima em instruções pro "+(ehVideo?"editor":"designer")+". Se o pedido cria conteúdo novo, escreva o texto pronto na voz da marca usando os fatos do cérebro do cliente (materiais oficiais e aprendizado dos produtos) — sem inventar. Se faltar material, diga qual.";
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:1600,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:1600,system:sys,messages:[{role:"user",content:u}],origem:"organizar_ajuste",card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
   let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").replace(/\*\*/g,"").trim();
   if(!txt) throw new Error("A IA não devolveu texto.");
@@ -5434,11 +5456,12 @@ async function pxReescreverCopy(opts){
      :soLeg?"\n===LEGENDA===\n(a legenda aqui — NÃO escreva briefing, ele não vai ser usado)"
      :"\n===BRIEFING===\n(o briefing aqui)\n===LEGENDA===\n(a legenda aqui)");
 
-  let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
-  u+="CARD: "+(task.title||"—")+"\n";
+  let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n\n";
+  // (05/10/2026) MEMÓRIA: o que é deste cartão vai DEPOIS do material fixo do cliente (ver PX_IA_MARCA_CACHE abaixo)
+  let _cab="CARD: "+(task.title||"—")+"\n";
   const dt=String(task.publishDate||task.publish_date||"").slice(0,10);
-  if(dt) u+="PUBLICA EM: "+dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)+"\n";
-  u+="FORMATO: "+(ehVideo?"vídeo":(ehFotoObra?"foto de obra":(ct||"arte")))+(soStory?" (SOMENTE STORY — não escreva legenda)":"")+"\n\n";
+  if(dt) _cab+="PUBLICA EM: "+dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)+"\n";
+  _cab+="FORMATO: "+(ehVideo?"vídeo":(ehFotoObra?"foto de obra":(ct||"arte")))+(soStory?" (SOMENTE STORY — não escreva legenda)":"")+"\n\n";
 
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
   if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
@@ -5452,6 +5475,7 @@ async function pxReescreverCopy(opts){
   u+=pxCtxMateriaisTxt(ctx);
   u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
+  u+="\n"+PX_IA_MARCA_CACHE+"\n"+_cab;   // (05/10/2026) tudo acima vai para a memória da IA
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,3);i++){
@@ -5600,7 +5624,7 @@ async function pxReescreverCopy(opts){
   const _pedidoCitaInativo=pxTextoCitaInativo(pedido,ctx);
   let txt="";
   for(let _tent=0;_tent<2;_tent++){
-    const data=await askIA({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
+    const data=await askIA({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}],origem:"copy_"+tipo,card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
     txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
     const _cita=pxTextoCitaInativo(txt,ctx).filter(function(n){ return _pedidoCitaInativo.indexOf(n)<0; });
     if(!_cita.length) break;
@@ -5795,6 +5819,7 @@ async function pxGerarLegendas(opts){
   u+=pxCtxMateriaisTxt(ctx);
   u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
+  u+="\n"+PX_IA_MARCA_CACHE+"\n";   // (05/10/2026) memória da IA
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,2);i++){
@@ -5884,7 +5909,7 @@ async function pxGerarLegendas(opts){
   if(!soStory) u+=_pxAvisoNaoRepeteArte(_artePx);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: escreva "+(quantas===1?"a legenda":"as "+quantas)+" curta (até 220 caracteres) e sem hashtags.";
 
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:(quantas===1?1400:3000),system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:(quantas===1?1400:3000),system:sys,messages:[{role:"user",content:u}],origem:"legendas",card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Normaliza variações do separador (**OPÇÃO 1**, ### Opcao 1, OPÇÃO 1:) antes de cortar
@@ -6097,7 +6122,7 @@ async function pxSugerirPauta(opts){
      "Título: 3 a 8 palavras, só a primeira letra maiúscula, sem ponto final, sem o nome da empresa. Ângulo: 2 a 3 frases dizendo o que o post mostra e o que resolve pro público — é a instrução pra quem vai escrever o briefing. Chamada: 1 frase de gancho na voz da marca.\n\n"+
      "FORMATO EXATO DA RESPOSTA ("+slots.length+" blocos, na ordem dos cards):\n";
   slots.forEach(function(s){ u+="===CARD "+s.id+"===\nTITULO: …\nPRODUTO: (nome EXATO da lista oficial, ou — se nenhum)\nANGULO: …\nCHAMADA: …\n"; });
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:Math.min(8000,600+slots.length*320),system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:Math.min(8000,600+slots.length*320),system:sys,messages:[{role:"user",content:u}],origem:"pauta",card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
   const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").replace(/\*\*/g,"");
   const out=[];
   const re=/===CARD\s+([^=\n]+?)\s*===([\s\S]*?)(?====CARD|$)/g; let m;
@@ -6199,6 +6224,7 @@ async function pxGerarBriefing(opts){
   u+=pxCtxMateriaisTxt(ctx);
   u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
+  u+="\n"+PX_IA_MARCA_CACHE+"\n";   // (05/10/2026) memória da IA
   { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(foco.length){
     const f=foco[0]; const partes=[];
@@ -6234,7 +6260,7 @@ async function pxGerarBriefing(opts){
   u+="Depois do briefing, acrescente sempre uma última seção \"• O QUE PRECISAMOS\" listando em tópicos o que a equipe precisa ter em mãos pra executar (foto da obra, logo do cliente, take gravado, dado técnico). Se não faltar nada, escreva \"nada além do que já está no card\".\n";
   u+="Não escreva legenda de Instagram aqui — legenda é outra etapa.";
 
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:2600,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:2600,system:sys,messages:[{role:"user",content:u}],origem:"briefing",card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   txt=txt.replace(/^[\s>*#=_-]*(TIPO|PORQUE|POR\s*QUE|BRIEFING)\s*[:\s>*#=_-]*$/gim,function(_m,p1){
@@ -6868,7 +6894,7 @@ function _BriefCampanhaIA({data,color,onSave}){
       const base={}; Object.keys(data||{}).forEach(function(k){ if(k!=="logins") base[k]=data[k]; });
       const sys="Você ajuda o gestor de mídia de uma assessoria de marketing do agro. Recebe o briefing de um cliente (JSON) e sugere respostas para campos de campanha que ainda estão vazios. Use SÓ o que está escrito no briefing — se não der pra deduzir com segurança, devolva vazio. Responda APENAS com JSON, sem comentários, sem aspas duplas dentro dos textos.";
       const u="Campos vazios a sugerir: "+faltam.join(", ")+"\n\nRegras:\n- faixa_etaria: texto no formato \"25 a 55 anos\" ou \"a partir de 30 anos\".\n- sexo: um de "+_BR_CAMPANHA_OPC.sexo.join(" | ")+".\n- localizacao: cidades/regiões onde anunciar, uma por linha.\n- raio_anuncio: um de "+_BR_CAMPANHA_OPC.raio_anuncio.join(" | ")+".\n- segmentacao: perfil de quem compra (o que faz, tipo de produção, tamanho), 1 a 3 linhas.\n- porte: lista com itens de "+_BR_CAMPANHA_OPC.porte.join(" | ")+".\n- quem_decide: quem decide a compra, 1 a 2 linhas.\n- objetivo_anuncio: um de "+_BR_CAMPANHA_OPC.objetivo_anuncio.join(" | ")+" (olhe funil de vendas e processo comercial).\n- meses_fortes: lista com itens de "+_BR_CAMPANHA_OPC.meses_fortes.join(" | ")+" (olhe a sazonalidade; se não houver sazonalidade, lista vazia).\n\nBriefing:\n"+JSON.stringify(base).slice(0,24000)+"\n\nDevolva: {\"campo\": valor, ...} só com os campos pedidos.";
-      const r=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:undefined),max_tokens:1200,system:sys,messages:[{role:"user",content:u}]});
+      const r=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:undefined),max_tokens:1200,system:sys,messages:[{role:"user",content:u}],origem:"brief_campanha",card:(typeof task!=="undefined"&&task&&task.id)?String(task.id):undefined});
       const out=((r&&r.content)||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
       const i=out.indexOf("{"), j=out.lastIndexOf("}"); if(i<0||j<i) throw new Error("a IA não devolveu as sugestões");
       const sug=JSON.parse(out.slice(i,j+1));
@@ -34387,6 +34413,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // Nome de quem escreveu a copy, pro histórico e pras notificações não mentirem
   // quando o provedor for a OpenAI (14/09/2026).
   const _pxNomeIA=function(){
+    // (05/10/2026) quem escreveu DE VERDADE (o GPT ocupado cai no Claude — antes o histórico dizia "GPT" mesmo assim)
+    const _u=(typeof window!=="undefined")&&window.__pxIaUltimo;
+    if(_u&&_u.nome&&Date.now()-_u.em<180000) return _u.nome;
     return (typeof PX_IA_PROVEDOR_COPY!=="undefined"&&PX_IA_PROVEDOR_COPY==="openai")?"GPT":"Claude";
   };
   // Reescrita da IA acontece NA TELA: o card não sai da fila de Copys.
@@ -60490,6 +60519,7 @@ export default function AgencyOS(){
       case "gestao_projecao":      return _menuBloco("gestao.projecao",p);       // era verFinanceiro||sócio
       case "gestao_operacional":   return _menuBloco("gestao.operacao",p);       // era só sócio
       case "gestao_eficiencia":    return _menuBloco("gestao.eficiencia",p);     // (27/09/2026) nasce fechada
+      case "gestao_creditos_ia":   return _menuBloco("gestao.creditos_ia",p);    // (05/10/2026) Gastos e créditos IA — só sócios
       case "gestao_crescimento":   return _menuBloco("gestao.crescimento",p);    // (01/10/2026) Plano de Crescimento — só sócios
       case "edicao_arte":          return _menuBloco("criacao.edicao_arte",p);   // (29/09/2026) Criação › Edição de arte — nasce fechada
       case "edicao_video":         return _menuBloco("criacao.edicao_video",p);  // (28/09/2026) Criação › Edição de vídeo — nasce fechada
@@ -60604,6 +60634,7 @@ export default function AgencyOS(){
       case "gestao_projecao":       return _menuBloco("gestao.projecao",effectivePerms)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
       case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_eficiencia":     return _menuBloco("gestao.eficiencia",effectivePerms)?<PageEficiencia isMob={isMob}/>:<NoPerm/>; // (27/09/2026)
+      case "gestao_creditos_ia":    return _menuBloco("gestao.creditos_ia",effectivePerms)?<PageGastosCreditosIA isMob={isMob}/>:<NoPerm/>; // (05/10/2026)
       case "gestao_crescimento":    return _menuBloco("gestao.crescimento",effectivePerms)?<PagePlanoCrescimento isMob={isMob}/>:<NoPerm/>; // (01/10/2026)
       case "edicao_arte":           return _menuBloco("criacao.edicao_arte",effectivePerms)?(typeof PageEdicaoArte==="function"?<PageEdicaoArte isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>):<NoPerm/>; // (29/09/2026)
       case "edicao_video":          return _menuBloco("criacao.edicao_video",effectivePerms)?<PageEdicaoVideo isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>; // (28/09/2026)
