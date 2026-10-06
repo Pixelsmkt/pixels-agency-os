@@ -113553,6 +113553,10 @@ async function pxPropostasDaSolicitacao(opts){
     const _extra=String(opts.pedidoExtra||"").trim();
     if(_extra){
       u+="⭐ PEDIDO ESPECÍFICO DA EQUIPE PARA ESTA RODADA (manda acima de tudo — siga o tema, o enfoque e o que for descrito aqui; o pedido original do cliente acima é o contexto):\n"+_extra+"\n\n";
+    }else if(grupo!=="video"){
+      /* (06/10/2026, Gustavo) "o roteiro de obra específica só precisa de VÍDEO — é da visita deles, não vai
+         ser feito card ou carrossel de uma visita". Arte e carrossel ficam todos no assunto geral. */
+      u+="CASO ESPECÍFICO: se o cliente citou uma obra, visita, entrega ou evento concreto, ele vira só VÍDEO (outra linha cuida disso). Aqui, NENHUMA proposta é sobre esse caso — todas sobre o ASSUNTO GERAL, com FOCO: geral.\n\n";
     }else{
       const _metade=Math.ceil(quantos/2);
       u+="CASO ESPECÍFICO: leia o pedido e veja se o cliente citou um CASO CONCRETO — uma obra, visita, entrega, evento, cliente, propriedade ou serviço que vai acontecer/aconteceu num lugar ou numa data.\n"+
