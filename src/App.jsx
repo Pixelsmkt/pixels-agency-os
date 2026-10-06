@@ -113719,23 +113719,35 @@ if(typeof window!=="undefined"){ window.pxPropostasDaSolicitacao=pxPropostasDaSo
 /* (06/10/2026, Gustavo) "barra de rolagem pra direita no topo também — tem só no rodapé da seção".
    Barra fina em cima, sincronizada com a de baixo; some quando tudo cabe. */
 function SwRolagemDupla({children,style,cor}){
-  const cimaRef=useRef(null), baixoRef=useRef(null);
+  /* v2 (06/10, Gustavo: "na barra de cima fica travando, voltando, queda de fps"): as duas barras se
+     corrigiam uma à outra (eco) e a medição rodava a cada render. Agora quem está sendo arrastada manda
+     e o eco da outra é ignorado; a cópia vai num requestAnimationFrame; medição só ao redimensionar. */
+  const cimaRef=useRef(null), baixoRef=useRef(null), dono=useRef({el:null,t:0}), raf=useRef(0);
   const [larg,setLarg]=useState(0), [sobra,setSobra]=useState(false);
+  const nFilhos=Array.isArray(children)?children.length:1;
   useEffect(function(){
     const el=baixoRef.current; if(!el) return;
-    const medir=function(){ setLarg(el.scrollWidth); setSobra(el.scrollWidth>el.clientWidth+2); };
+    const medir=function(){ const w=el.scrollWidth, c=el.clientWidth; setLarg(function(o){ return o===w?o:w; }); setSobra(function(o){ const n=w>c+2; return o===n?o:n; }); };
     medir();
-    let ro=null; try{ ro=new ResizeObserver(medir); ro.observe(el); Array.prototype.forEach.call(el.children,function(c){ ro.observe(c); }); }catch(_){}
+    let ro=null; try{ ro=new ResizeObserver(medir); ro.observe(el); }catch(_){}
     window.addEventListener("resize",medir);
     return function(){ try{ if(ro) ro.disconnect(); }catch(_){} window.removeEventListener("resize",medir); };
-  });
-  const sync=function(de,para){ if(de&&para&&Math.abs(para.scrollLeft-de.scrollLeft)>=1) para.scrollLeft=de.scrollLeft; };
+  },[nFilhos]);
+  const rolou=function(de,para){
+    if(!de||!para) return;
+    const agora=Date.now();
+    // eco: a outra barra está mandando há pouco → este scroll fui eu que causei, ignora
+    if(dono.current.el&&dono.current.el!==de&&agora-dono.current.t<160) return;
+    dono.current={el:de,t:agora};
+    cancelAnimationFrame(raf.current);
+    raf.current=requestAnimationFrame(function(){ if(Math.abs(para.scrollLeft-de.scrollLeft)>=1) para.scrollLeft=de.scrollLeft; });
+  };
   return <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
-    {sobra&&<div ref={cimaRef} onScroll={function(){ sync(cimaRef.current,baixoRef.current); }}
-      style={{overflowX:"auto",overflowY:"hidden"}}>
+    {sobra&&<div ref={cimaRef} onScroll={function(){ rolou(cimaRef.current,baixoRef.current); }}
+      style={{overflowX:"auto",overflowY:"hidden",scrollBehavior:"auto"}}>
       <div style={{width:larg,height:1}}/>
     </div>}
-    <div ref={baixoRef} onScroll={function(){ sync(baixoRef.current,cimaRef.current); }} style={style}>{children}</div>
+    <div ref={baixoRef} onScroll={function(){ rolou(baixoRef.current,cimaRef.current); }} style={Object.assign({},style,{scrollBehavior:"auto"})}>{children}</div>
   </div>;
 }
 
