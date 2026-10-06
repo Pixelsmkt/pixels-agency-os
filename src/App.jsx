@@ -131989,7 +131989,11 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
     return { r:r, n:Math.max(1, fins.length) };
   }, [p.textos]);
   /* v41: raias de Efeitos e Narração (a duração do efeito depende do arquivo já carregado: conta a cada desenho, é barato) */
-  const raiasSfx = _evpRaiasSom(p.sfx, _evpSfxDurTotal), raiasNarr = _evpRaiasSom(p.narracoes, function(x){ return _evpNum(x.dur, 1); });
+  /* v56c (06/10/2026): EFEITOS EM VÁRIAS RAIAS — os sons automáticos (tracejados) também ganham raia própria (antes ficavam um em cima do
+     outro: "Impacto" sobre "Batida grave") e sempre sobra UMA raia vazia embaixo para colocar mais um som. Sem som nenhum: fica como era. */
+  const sfxAutoTL = (calc.sfxAuto || []).map(function(x){ return { id:"auto" + x.chave, t0:x.t0, dur:x.dur, _auto:true }; });
+  const raiasSfx = _evpRaiasSom((p.sfx || []).concat(sfxAutoTL), function(x){ return x._auto ? _evpNum(x.dur, 0.5) : _evpSfxDurTotal(x); }),
+        raiasNarr = _evpRaiasSom(p.narracoes, function(x){ return _evpNum(x.dur, 1); });
   const hSom = E(36);                                       // altura de uma raia de som (bloco = hSom − 2)
 
   /* volume do clipe arrastando a linha amarela na faixa Fala (0% embaixo · 300% em cima) */
@@ -132016,8 +132020,8 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
     if(id === "motion") return _evmFaixaAlt(p);                  // v35
     if(id === "textos") return Math.max(E(30), raias.n * 22 + 6);
     if(id === "imagens") return (p.imagens || []).length ? Math.max(28, raiasImg.n * 22 + 6) : 22;
-    if(id === "narracao") return (p.narracoes || []).length || gravando ? raiasNarr.n * hSom + 4 : E(28);
-    if(id === "sfx") return (p.sfx || []).length ? raiasSfx.n * hSom + 4 : E(40);
+    if(id === "narracao") return (p.narracoes || []).length || gravando ? (raiasNarr.n + ((p.narracoes || []).length ? 1 : 0)) * hSom + 4 : E(28);   // v56c: +1 raia vazia
+    if(id === "sfx") return (p.sfx || []).length || sfxAutoTL.length ? (raiasSfx.n + 1) * hSom + 4 : E(40);                                    // v56c: +1 raia vazia
     return ({ legenda:28, video:E(64), fala:E(44), musica:E(44) })[id] || 28;
   };
   const ordemFaixa = function(id){ const i = _EVP_FAIXAS.findIndex(function(f){ return f.id === id; }); return i < 0 ? 50 : i + 1; };   // v41: ordem visual (régua = 0)
@@ -132258,7 +132262,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
                 </div>; })}
               {/* v34: sons automáticos (só mostram, tracejados; trocar/desligar no menu Efeitos) */}
               {(calc.sfxAuto || []).map(function(x){ const lb = (_EVP_SFX.find(function(q){ return q.id === x.tipo; }) || {}).label || x.tipo;
-                return <div key={"auto" + x.chave} data-sfx-auto={x.tipo} style={Object.assign(bloco(_EVP_COR.sfx, false), { left:x.t0*pxs, width:Math.max(12, x.dur*pxs), padding:"0 3px", background:"transparent", border:"1.5px dashed " + _EVP_COR.sfx, color:_EVP_COR.sfx, opacity:.75, pointerEvents:"none", zIndex:0 })}>{x.dur*pxs > 46 ? lb : ""}</div>; })}
+                return <div key={"auto" + x.chave} data-sfx-auto={x.tipo} style={Object.assign(bloco(_EVP_COR.sfx, false), { left:x.t0*pxs, width:Math.max(12, x.dur*pxs), top:2 + (raiasSfx.r["auto" + x.chave] || 0) * hSom, bottom:"auto", height:hSom - 2, padding:"0 3px", background:"transparent", border:"1.5px dashed " + _EVP_COR.sfx, color:_EVP_COR.sfx, opacity:.75, pointerEvents:"none", zIndex:0 })}>{x.dur*pxs > 46 ? lb : ""}</div>; })}
               {/* transições entre os clipes (clique = abre o clipe) */}
               {calc.clips.filter(function(c){ return c.i > 0 && c.trans && c.trans !== "corte"; }).map(function(c){ const lb = ((_EVP_TRANS.find(function(q){ return q.id === c.trans; }) || {}).label || c.trans);
                 return <div key={"tr" + c.id} title={"Transição: " + lb} onPointerDown={function(e){ e.stopPropagation(); if(e.button !== 0) return; setSel({ tipo:"clip", id:c.id }); irPara(c.t0 + 0.01); }}
