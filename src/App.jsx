@@ -126447,7 +126447,7 @@ const _EVP_FERR = {
             { id:"corrigir", label:"Corrigir", icone:"lapis" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"estilo", label:"Estilo", icone:"estilo" } ],
   imagem:[ { id:"tamanho", label:"Tamanho", icone:"encaixar" }, { id:"anim", label:"Animação", icone:"animacao" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"seguir", label:"Seguir", icone:"olho" },
            { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
-  motion:[ { id:"campos", label:"Textos", icone:"lapis" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v35
+  motion:[ { id:"campos", label:"Textos", icone:"lapis" }, { id:"melhorar", label:"Melhorar com IA", icone:"ia" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v35 · v56: Melhorar com IA (só esta peça)
            { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
   final:[ { id:"duracao", label:"Duração", icone:"tempo" } ],
   narracao:[ { id:"voz", label:"Voz", icone:"robo" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v40
@@ -132631,7 +132631,7 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
   const chips = function(vals, atual, fn){ return <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>{vals.map(function(v){ return <button key={v[0]} onClick={function(){ fn(v[0]); }} aria-pressed={atual === v[0]} style={Object.assign(_evpChip(atual === v[0]), {padding:"4px 9px",fontSize:11.5})}>{v[1]}</button>; })}</div>; };
   const r1 = function(v){ return (Math.round(v * 10) / 10).toString().replace(".", ",") + " s"; };
   const cab = <div style={{marginBottom:10}}>
-    <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{width:22,height:22,borderRadius:7,display:"grid",placeItems:"center",background:tp.cor,color:"#fff"}}><_EvpIco n={ferr === "tempo" ? "tempo" : tp.ico || "motion"} s={13}/></span>{ferr === "tempo" ? "Tempo" : "Textos"}</div>
+    <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{width:22,height:22,borderRadius:7,display:"grid",placeItems:"center",background:tp.cor,color:"#fff"}}><_EvpIco n={ferr === "tempo" ? "tempo" : tp.ico || "motion"} s={13}/></span>{ferr === "tempo" ? "Tempo" : ferr === "melhorar" ? "Melhorar com IA" : "Textos"}</div>
     <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nomeItem} · {_evTempo(it.t0)}–{_evTempo(it.t1)}</div></div>;
   /* listas dentro da peça (palavras, itens, etapas, lugares) */
   const listaTxt = function(chave, arr, max, minN, maxN, rotK, novo, campoTxt){
@@ -132648,6 +132648,7 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
     <select value={atual} aria-label={rot} onChange={function(e){ fn(e.target.value); }} style={Object.assign({}, selCampo, {marginLeft:"auto",minWidth:120})}>
       {_EVM_LUGARES.map(function(l){ return <option key={l[0]} value={l[0]}>{l[0]}{l[3] ? " (país)" : ""}</option>; })}</select></label>; };
   let corpo = null;
+  if(ferr === "melhorar") return <div style={caixa} data-evm-inspetor={it.modelo}>{cab}<_EvmMelhorarPeca evm={evm} i={i} abrir={true}/></div>;   // v56
   if(ferr === "tempo"){
     const num = function(rot, campo){ return <label style={{display:"flex",gap:8,alignItems:"center",fontSize:12.5,fontWeight:700,marginBottom:8}}>{rot}
       <input type="number" step={0.1} min={0} aria-label={rot} value={Math.round(it[campo] * 100) / 100} onChange={function(e){ const v = Number(e.target.value); if(!isFinite(v)) return;
@@ -132751,8 +132752,8 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
 }
 
 /* v56: caixinha "✨ Melhorar esta peça com IA" no inspetor da peça */
-function _EvmMelhorarPeca({ evm, i }){
-  const [aberto, setAberto] = useState(false), [txt, setTxt] = useState("");
+function _EvmMelhorarPeca({ evm, i, abrir }){
+  const [aberto, setAberto] = useState(!!abrir), [txt, setTxt] = useState("");
   const fazendo = !!(evm.ia && evm.ia.estado === "fazendo");
   return <div data-evm-melhorar="1" style={{marginTop:12,padding:10,borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
     <button onClick={function(){ setAberto(!aberto); }} disabled={fazendo || evm.soVer} aria-expanded={aberto} style={Object.assign(_evpBtn("primario", !fazendo), {width:"100%",justifyContent:"center",fontSize:12})}>✨ Melhorar esta peça com IA</button>
