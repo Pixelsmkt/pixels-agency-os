@@ -117389,7 +117389,7 @@ function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
       <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4}}>A IA edita os vídeos brutos do card seguindo o kit de cada cliente. Você assiste, pede ajuste e exporta.</div>
 
       <div style={{display:"flex",gap:isMob?14:22,marginTop:14,borderBottom:"1px solid "+_EV.linha,overflowX:"auto"}}>
-        {[["fila","Fila"],["estudio","Estúdio"],["kit","Kit do cliente"],["musicas","Músicas"],["vozes","Vozes"],["aprende","IA que aprende"]].map(function(g){ const on = aba===g[0];
+        {[["fila","Fila"],["estudio","Estúdio"],["kit","Kit do cliente"],["musicas","Músicas"],["vozes","Vozes"],["conhecimento","Conhecimento de edição"],["aprende","IA que aprende"]].map(function(g){ const on = aba===g[0];
           return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
             borderBottom:"2px solid "+(on?_EV.roxo:"transparent"),color:on?_EV.roxo:_EV.sub,fontWeight:on?800:600,fontSize:_evF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
       </div>
@@ -117399,6 +117399,7 @@ function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
       {aba==="kit"  && <_EvKit isMob={isMob}/>}
       {aba==="musicas" && <_EvMusicas isMob={isMob}/>}
       {aba==="vozes" && <_EvVozes isMob={isMob}/>}
+      {aba==="conhecimento" && <_EvConhecimento isMob={isMob}/>}
       {aba==="aprende" && typeof _EvAprende==="function" && <_EvAprende isMob={isMob}/>}
     </div>
   );
@@ -126133,7 +126134,8 @@ const _EVP_FERR_GLOBAL = [
   { id:"texto", label:"Texto", icone:"texto", tecla:"T" }, { id:"motion", label:"Motion", icone:"motion", tecla:"G" },
   { id:"imagem", label:"Imagem", icone:"imagem", tecla:"Alt+I" }, { id:"cor", label:"Cor", icone:"cor", tecla:"Alt+C" },
   { id:"trans", label:"Transição", icone:"transicao", tecla:"X" }, { id:"legenda", label:"Legenda", icone:"legenda", tecla:"Alt+L" },
-  { id:"ia", label:"IA", icone:"ia", tecla:"Alt+K" }, { id:"exportar", label:"Exportar", icone:"baixar", tecla:"" } ];
+  { id:"ia", label:"IA", icone:"ia", tecla:"Alt+K" }, { id:"corrigir", label:"Corrigir", icone:"lapis", tecla:"C" },   /* v49: Corrigir que ensina na barra */
+  { id:"exportar", label:"Exportar", icone:"baixar", tecla:"" } ];
 const _EVP_FERR_TECLA = { "1":"midia", v:"vel", a:"audio", t:"texto", g:"motion", x:"trans" };                 // tecla sozinha (estavam livres)
 const _EVP_FERR_ALT = { KeyS:"cortar", KeyI:"imagem", KeyC:"cor", KeyL:"legenda", KeyK:"ia" };                  // Alt+tecla (a letra já tinha dono)
 /* v41: menu esquerdo vira BIBLIOTECA (só coisas para escolher/arrastar). As 11 guias antigas continuam atrás de "Mais…" por 1 semana. */
@@ -127003,10 +127005,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const novaCorrecao = function(a, b){
     const id = _evpId(), t0 = Math.max(0, Math.round(a * 100) / 100), t1 = Math.round(Math.max(a + 0.3, b) * 100) / 100;
     mudar(function(np){ np.ajustes_trecho = (np.ajustes_trecho || []).concat([{ id:id, t0:t0, t1:t1, tipo:"corte", oque:"", porque:"", status:"aberto", origem:"estudio", em:new Date().toISOString() }]); });
-    setMenu("corrigir"); setFocoCorr(id); setMarcaCorr(null);
+    setFerrGlobal({ ferramenta:"corrigir", sub:"lista" }); setFocoCorr(id); setMarcaCorr(null);   // v49: abre no painel da direita (antes: menu antigo)
   };
   const marcarCorrecao = function(){
-    if(marcaCorr == null){ setMarcaCorr(tempo); setMenu("corrigir"); _evToast("success", "Começo em " + _evTempo(tempo) + " — aperte C no fim do trecho"); return; }
+    if(marcaCorr == null){ setMarcaCorr(tempo); setFerrGlobal({ ferramenta:"corrigir", sub:"lista" }); _evToast("success", "Começo em " + _evTempo(tempo) + " — aperte C no fim do trecho"); return; }
     const a = Math.min(marcaCorr, tempo), b = Math.max(marcaCorr, tempo); novaCorrecao(a, b - a < 0.3 ? a + 2 : b);
   };
   const marcarPontoCorr = function(){ novaCorrecao(Math.max(0, tempo - 0.8), Math.min(calc.total, tempo + 1.2)); };
@@ -127565,6 +127567,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const ferrGlobalClique = function(id){
     if(id === "exportar"){ setVerExp(true); return; }
     if(id === "midia") setMenu("bib-midia");
+    if(id === "corrigir"){ setFerrGlobal(function(g){ return g.ferramenta === "corrigir" ? { ferramenta:null, sub:null } : { ferramenta:"corrigir", sub:"lista" }; }); return; }   // v49: abre direto a lista
     setFerrGlobal(function(g){ return g.ferramenta === id ? { ferramenta:null, sub:null } : { ferramenta:id, sub:null }; });
   };
   const abrirSub = function(sub){ setFerrGlobal(function(g){ return { ferramenta:g.ferramenta, sub:g.sub === sub ? null : sub }; }); };
@@ -127630,6 +127633,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       return [ Q("mostrar", on ? "Esconder" : "Mostrar", on ? "olho" : "olhoFechado", { dica:"Mostrar / esconder a legenda", acao:function(){ mudar(function(np){ np.legenda.ativa = !on; }); } }),
       Q("estilo", "Estilo", "estilo", { sub:"estilo" }), Q("lingua", "Língua", "traduzir", { sub:"lingua" }), Q("tempo", "Tempo", "tempo", { sub:"tempo" }),
       Q("srt", "Baixar .srt", "baixar", { acao:baixarSrt }), Q("nomes", "Corrigir nomes", "fala2", { dica:"Cola da fala: corrigir nomes e cor por trecho", acao:abrirCola }), Q("blocos", "Blocos (" + calc.blocos.length + ")", "legenda", { sub:"blocos" }) ]; }
+    if(id === "corrigir"){ const nC = (p.ajustes_trecho || []).filter(function(x){ return x.status === "aberto" || x.status === "nao"; }).length;   // v49
+      return [ Q("lista", "Correções" + (nC ? " (" + nC + ")" : ""), "lapis", { sub:"lista" }), Q("marcar", "Marcar aqui", "mais", { dica:"Trecho de 2 s em volta da agulha", acao:marcarPontoCorr }),
+        Q("trecho", marcaCorr == null ? "Começo (C)" : "Fim (C)", "dividir", { dica:"C no começo e C no fim do trecho", acao:marcarCorrecao }) ]; }
     if(id === "ia") return [ Q("editar", "Editar com IA", "ia", { dica:"Pedir à IA (painel direito)", acao:function(){ setSel(null); fecharSub(); setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 30); } }),
       Q("corrigir", "Corrigir", "lapis", { dica:"Cartões de correção (C marca começo/fim)", sub:"corrigir" }), Q("anuncio", "Anúncio", "megafone", { sub:"anuncio" }),
       Q("revisor", revisando ? "Revisando…" : "Revisor", "olho", { dica:"A IA olha quadros do vídeo e aponta problemas", acao:function(){ setSel(null); fecharSub(); revisarIA(); } }),
@@ -130723,7 +130729,8 @@ function _EvpPainelMenu(q){
   /* ── Anúncio · Corrigir (componentes próprios) ── */
   S.anuncio = function(){ return <_EvpAnuncio p={p} calc={calc} mudar={mudar} irPara={irPara} kit={kit} base={q.base} fala={q.fala} clipes={clipes}/>; };
   S.corrigir = function(){ return <_EvpCorrigir p={p} calc={calc} tempo={tempo} irPara={irPara} mudar={mudar} comentarios={q.comentarios} tirarTrechos={q.tirarTrechos}
-        aplicar={q.aplicarCorrecoes} ajustando={q.ajustando} marcaCorr={q.marcaCorr} marcar={q.marcarCorrecao} marcarPonto={q.marcarPontoCorr} foco={q.focoCorr} setFoco={q.setFocoCorr}/>; };
+        aplicar={q.aplicarCorrecoes} ajustando={q.ajustando} marcaCorr={q.marcaCorr} marcar={q.marcarCorrecao} marcarPonto={q.marcarPontoCorr} foco={q.focoCorr} setFoco={q.setFocoCorr}
+        edId={q.edId} cliente={q.cliente}/>; };
 
   /* ── cabeçalhos da Biblioteca ── */
   S.cabSons = function(){ return cab("efeitos", "Sons", "Efeitos sonoros do app (sem licença) e Meus sons. Clique para pôr na agulha."); };
@@ -130762,7 +130769,7 @@ function _EvpPainelMenu(q){
     "ferr:cor:filtros":["filtros", "voltarCor"],
     "ferr:trans:todos":["transTodos"], "ferr:trans:luz":["luz"],
     "ferr:legenda:estilo":["mostrarLeg", "estiloLeg"], "ferr:legenda:lingua":["lingua"], "ferr:legenda:tempo":["tempoLeg"], "ferr:legenda:blocos":["blocos"],
-    "ferr:ia:corrigir":["corrigir"], "ferr:ia:anuncio":["anuncio"], "ferr:ia:modelo":["modelo"], "ferr:ia:atalhos":["atalhos"],
+    "ferr:ia:corrigir":["corrigir"], "ferr:corrigir:lista":["corrigir"], "ferr:ia:anuncio":["anuncio"], "ferr:ia:modelo":["modelo"], "ferr:ia:atalhos":["atalhos"],
   };
   if(menu === "musica" || menu === "bib-musicas") return <div style={caixa}><_EvpMusicas {...q}/></div>;
   if(menu === "motion") return <div style={caixa}><_EvmPainel {...q}/></div>;      // v35
@@ -133843,14 +133850,212 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
 
 
 
+/* ═══ v49 (06/10/2026): CORRIGIR QUE ENSINA + CONHECIMENTO DE EDIÇÃO ═══
+   Pedido do Vini: "quero que ela entenda, compreenda e aprenda… vira conhecimento, não regra fixa… porque eu também posso errar".
+   1) O sócio aponta (C marca começo/fim ou "Marcar aqui") e escreve o que está errado.
+   2) "Pedir para a IA entender": video-editar acao "entender" devolve, por correção, o que aconteceu, por que a IA errou, o princípio
+      de edição, como reconhecer, exceções, a correção neste vídeo, o alcance sugerido, se a lição já existe (o erro voltou) e se ela DISCORDA.
+   3) O sócio escolhe o alcance (só este vídeo · cliente · todos) e aprova → vira LIÇÃO (public.video_licoes, SQL v47).
+      Lição global = só sócio. Lição do cliente = sócio ou a chave nova "criacao.conhecimento" (Gerenciar acessos › Criação, nasce fechada).
+   4) As lições entram no aprendizado da montagem, do ajuste e do motion (servidor). Aba "Conhecimento de edição" mostra e cuida delas. */
+const _EVP_LICAO_TEMAS = [["apoio","Apoio / B-roll"],["corte","Corte"],["ritmo","Ritmo"],["rosto","Rosto"],["texto","Texto"],["legenda","Legenda"],["som","Som"],["musica","Música"],
+  ["motion","Motion"],["cor","Cor"],["gancho","Gancho"],["cta","Chamada (CTA)"],["outro","Outro"]];
+const _evpLicaoTema = function(id){ const t = _EVP_LICAO_TEMAS.find(function(x){ return x[0] === id; }); return t ? t[1] : "Outro"; };
+const _EVP_LICAO_ST = { observando:["observando", "#a16207", "rgba(234,179,8,.14)"], firme:["firme", "#15803d", "rgba(34,197,94,.14)"], revisar:["o erro voltou", "#b91c1c", "rgba(239,68,68,.13)"], arquivada:["arquivada", "#64748b", "rgba(100,116,139,.13)"] };
+/* a chave nova aparece em Gerenciar acessos › Criação (sem mexer no 00_clientes_data.jsx: o catálogo é global e este módulo vem depois) */
+try {
+  if(typeof PX_BLOCOS !== "undefined" && PX_BLOCOS && PX_BLOCOS.criacao && Array.isArray(PX_BLOCOS.criacao.grupos) && PX_BLOCOS.criacao.grupos[0]){
+    const _itC = PX_BLOCOS.criacao.grupos[0].itens || (PX_BLOCOS.criacao.grupos[0].itens = []);
+    if(!_itC.some(function(x){ return x && x.key === "criacao.conhecimento"; }))
+      _itC.push({ key:"criacao.conhecimento", label:"Ensinar a IA (lições)", desc:"Aprovar no Corrigir a lição de um cliente e cuidar do Conhecimento de edição. Lição para todos os clientes (global) é só de sócio. Padrão: fechado (só sócios)", padrao:false });
+  }
+} catch(_e){}
+
+function _evpUsarLicoes(cliente, rec){
+  const [info, setInfo] = useState(null);
+  useEffect(function(){ let vivo = true;
+    (async function(){ try{ const r = await window._sb.rpc("criacao_licoes", { p_client:cliente || null, p_todas:false }); if(vivo) setInfo(r.error ? { erro:r.error.message, licoes:[] } : (r.data || { licoes:[] })); }
+      catch(e){ if(vivo) setInfo({ erro:String((e && e.message) || e), licoes:[] }); } })();
+    return function(){ vivo = false; }; }, [cliente, rec]);
+  return info;
+}
+
+/* o bloco "A IA entendeu" de uma correção (dentro do Corrigir) */
+function _EvpEntendido({ x, muda, cliente, edId, info, aoMudarLicoes }){
+  const d = x.diag; const lc = x.licao || null;
+  const [editar, setEditar] = useState(false);
+  const [txt, setTxt] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  if(!d) return null;
+  const v = txt || { titulo:d.titulo || "", principio:d.principio || "", como_reconhecer:d.como_reconhecer || "", excecoes:d.excecoes || "", tema:d.tema || "outro" };
+  const escopo = x.licao_escopo || d.escopo_sugerido || "cliente";
+  const socio = !!(info && info.socio), pode = !!(info && info.pode_aprovar);
+  const igual = d.mesma_licao ? ((info && info.licoes) || []).find(function(l){ return Number(l.id) === Number(d.mesma_licao); }) : null;
+  const sec = function(cor, k, t){ return t ? <div style={{marginTop:7}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:cor}}>{k}</div>
+    <div style={{fontSize:12,lineHeight:1.45,color:_EVP_COR.ink,marginTop:1,userSelect:"text"}}>{t}</div></div> : null; };
+  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", fontSize:12, padding:"5px 7px", borderRadius:8, border:"1px solid " + _EVP_COR.linha, background:_EVP_COR.campo, color:_EVP_COR.ink, resize:"vertical", userSelect:"text", marginTop:3 };
+  const caso = { edicao_id:edId, t0:x.t0, t1:x.t1, pedido:String(x.oque || "").slice(0, 400), o_que_aconteceu:d.o_que_aconteceu || "", correcao:d.correcao || "" };
+  const aprovar = async function(){
+    if(escopo === "video"){ muda(x, function(o){ o.licao = { escopo:"video", em:new Date().toISOString() }; }); _evToast("success", "Fica só neste vídeo (não vira lição)"); return; }
+    if(!pode){ _evToast("warning", "Só sócio ou quem tem a chave \"Ensinar a IA\" aprova lição."); return; }
+    if(escopo === "global" && !socio){ _evToast("warning", "Lição para todos os clientes só sócio aprova."); return; }
+    setSalvando(true);
+    try{
+      const r = await window._sb.rpc("criacao_licao_salvar", { p:{ escopo:escopo, client_id:cliente, tema:v.tema, titulo:v.titulo, principio:v.principio, como_reconhecer:v.como_reconhecer, excecoes:v.excecoes, caso:caso, origem:"correcao" } });
+      if(r.error) throw new Error(r.error.message);
+      muda(x, function(o){ o.licao = { id:r.data && r.data.id, escopo:escopo, titulo:v.titulo, em:new Date().toISOString() }; });
+      _evToast("success", "Lição aprovada (" + (escopo === "global" ? "todos os clientes" : "este cliente") + "). A IA lê nas próximas edições.");
+      setEditar(false); if(aoMudarLicoes) aoMudarLicoes();
+    }catch(e){ _evToast("error", "Não salvou: " + ((e && e.message) || e)); }
+    setSalvando(false);
+  };
+  const voltou = async function(){
+    if(!igual) return; setSalvando(true);
+    try{ const r = await window._sb.rpc("criacao_licao_status", { p_id:igual.id, p_status:"voltou", p_caso:caso }); if(r.error) throw new Error(r.error.message);
+      muda(x, function(o){ o.licao = { id:igual.id, escopo:igual.client_id ? "cliente" : "global", titulo:igual.titulo, voltou:true, em:new Date().toISOString() }; });
+      _evToast("success", "Anotado: o erro voltou. A lição fica marcada para revisar."); if(aoMudarLicoes) aoMudarLicoes(); }
+    catch(e){ _evToast("error", "Não salvou: " + ((e && e.message) || e)); }
+    setSalvando(false);
+  };
+  const chipE = function(id, rot, travado, dica){ const on = escopo === id;
+    return <button key={id} disabled={!!lc} title={dica || ""} onClick={function(){ muda(x, function(o){ o.licao_escopo = id; }); }}
+      style={Object.assign(_evpChip(on), { padding:"4px 9px", fontSize:11.5, opacity:travado ? 0.5 : 1 })}>{travado ? "🔒 " : ""}{rot}</button>; };
+  return (
+    <div style={{marginTop:8,borderRadius:10,border:"1px solid " + _EVP_COR.azulLinha,background:_EVP_COR.azul,padding:"8px 10px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:800,color:_EVP_COR.ink}}><span>🧠</span>A IA entendeu
+        <span style={{marginLeft:"auto",fontSize:10.5,fontWeight:700,color:_EVP_COR.sub}}>{_evpLicaoTema(d.tema)}</span></div>
+      {sec("#f87171", "O que aconteceu", d.o_que_aconteceu)}
+      {sec("#fb923c", "Por que a IA errou", d.porque_errei)}
+      {!editar && sec(_EVP_COR.roxo, "Princípio de edição", d.principio)}
+      {!editar && sec("#60a5fa", "Como reconhecer de novo", d.como_reconhecer)}
+      {!editar && sec("#fbbf24", "Exceções", d.excecoes)}
+      {sec("#4ade80", "Neste vídeo", d.correcao)}
+      {d.concorda === false && d.conflito && <div style={{marginTop:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.aviso,border:"1px solid rgba(234,179,8,.45)",fontSize:12,lineHeight:1.45,color:_EVP_COR.ink}}>
+        <b>⚠ A IA discorda:</b> {d.conflito}</div>}
+      {igual && !lc && <div style={{marginTop:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.erro,fontSize:12,lineHeight:1.45,color:_EVP_COR.ink}}>
+        <b>Essa lição já existe:</b> L{igual.id} · {igual.titulo}. O erro voltou.
+        <div style={{marginTop:6}}><button onClick={voltou} disabled={salvando || !pode} style={Object.assign(_evpBtn("suave", !salvando && pode), {padding:"4px 10px",fontSize:11.5})}>Registrar que o erro voltou</button></div></div>}
+      {editar && <div style={{marginTop:8}}>
+        <select value={v.tema} onChange={function(e){ setTxt(Object.assign({}, v, { tema:e.target.value })); }} style={Object.assign({}, campo, { width:"auto" })}>{_EVP_LICAO_TEMAS.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}</select>
+        {[["titulo", "Título da lição", 1], ["principio", "Princípio (o porquê)", 4], ["como_reconhecer", "Como reconhecer", 2], ["excecoes", "Exceções", 2]].map(function(f){
+          return <label key={f[0]} style={{display:"block",marginTop:6,fontSize:10.5,fontWeight:800,color:_EVP_COR.sub}}>{f[1]}
+            <textarea rows={f[2]} value={v[f[0]]} onKeyDown={function(e){ e.stopPropagation(); }} onChange={function(e){ const n = Object.assign({}, v); n[f[0]] = e.target.value; setTxt(n); }} style={campo}/></label>; })}
+      </div>}
+      {lc ? <div style={{marginTop:8,fontSize:12,fontWeight:700,color:"var(--evx-verde)"}}>{lc.escopo === "video" ? "✓ Só neste vídeo (não virou lição)" : lc.voltou ? "✓ Registrado: o erro da lição L" + lc.id + " voltou" : "✓ Virou lição L" + lc.id + " (" + (lc.escopo === "global" ? "todos os clientes" : "este cliente") + ")"}</div>
+       : <div style={{marginTop:9}}>
+        <div style={{fontSize:10.5,fontWeight:800,color:_EVP_COR.sub,marginBottom:4}}>VIRA LIÇÃO PARA… {d.motivo_escopo ? <span style={{fontWeight:600}}>(a IA sugere {d.escopo_sugerido === "global" ? "todos" : "este cliente"}: {d.motivo_escopo})</span> : null}</div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {chipE("video", "Só este vídeo")}
+          {chipE("cliente", "Este cliente", !pode, pode ? "" : "Precisa ser sócio ou ter a chave \"Ensinar a IA\"")}
+          {chipE("global", "Todos (global)", !socio, socio ? "" : "Só sócio aprova lição global")}
+        </div>
+        <div style={{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}}>
+          <button onClick={function(){ setEditar(!editar); if(!txt) setTxt(v); }} style={Object.assign(_evpBtn(), {padding:"5px 10px",fontSize:11.5})}>{editar ? "Fechar edição" : "✏ Editar a lição"}</button>
+          <button onClick={aprovar} disabled={salvando} style={Object.assign(_evpBtn("primario", !salvando), {padding:"5px 12px",fontSize:11.5})}>{salvando ? "Salvando…" : escopo === "video" ? "Confirmar (só este vídeo)" : "Aprovar lição"}</button>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+/* ═══ aba "Conhecimento de edição" (página da Edição de vídeo) ═══ */
+function _EvConhecimento({ isMob }){
+  const [cliente, setCliente] = useState("");
+  const [tema, setTema] = useState("");
+  const [verArq, setVerArq] = useState(false);
+  const [dados, setDados] = useState(null);
+  const [rec, setRec] = useState(0);
+  const [editando, setEditando] = useState(null);
+  const [aberta, setAberta] = useState(null);
+  useEffect(function(){ let vivo = true; setDados(null);
+    (async function(){ try{ const r = await window._sb.rpc("criacao_licoes", { p_client:cliente || null, p_todas:verArq }); if(vivo) setDados(r.error ? { erro:r.error.message, licoes:[] } : (r.data || { licoes:[] })); }
+      catch(e){ if(vivo) setDados({ erro:String((e && e.message) || e), licoes:[] }); } })();
+    return function(){ vivo = false; }; }, [cliente, verArq, rec]);
+  const clientes = ((typeof CLIENTS !== "undefined" && Array.isArray(CLIENTS)) ? CLIENTS : []).filter(function(c){ return c && c.id; });
+  const nomeCli = function(id){ const c = clientes.find(function(x){ return x.id === id; }); return c ? (c.name || c.id) : id; };
+  const todas = (dados && dados.licoes) || [];
+  const lista = todas.filter(function(l){ return (!tema || l.tema === tema) && (!cliente || !l.client_id || l.client_id === cliente); });
+  const porTema = {}; todas.forEach(function(l){ porTema[l.tema] = (porTema[l.tema] || 0) + 1; });
+  const mudarStatus = async function(l, st){
+    try{ const r = await window._sb.rpc("criacao_licao_status", { p_id:l.id, p_status:st, p_caso:null }); if(r.error) throw new Error(r.error.message); setRec(function(n){ return n + 1; }); }
+    catch(e){ _evToast("error", "Não mudou: " + ((e && e.message) || e)); } };
+  const salvarEd = async function(){
+    const l = editando; try{
+      const r = await window._sb.rpc("criacao_licao_salvar", { p:{ id:l.id, escopo:l.client_id ? "cliente" : "global", client_id:l.client_id, tema:l.tema, titulo:l.titulo, principio:l.principio, como_reconhecer:l.como_reconhecer, excecoes:l.excecoes } });
+      if(r.error) throw new Error(r.error.message); setEditando(null); setRec(function(n){ return n + 1; }); _evToast("success", "Lição atualizada"); }
+    catch(e){ _evToast("error", "Não salvou: " + ((e && e.message) || e)); } };
+  const caixa = { background:"#fff", border:"1px solid " + _EV.linha, borderRadius:14, padding:isMob ? 12 : 16 };
+  const chip = function(on){ return { font:"inherit", fontSize:12, padding:"5px 11px", borderRadius:99, cursor:"pointer", border:"1px solid " + (on ? _EV.roxo : _EV.linha), background:on ? _EV.roxoClaro : "#fff", color:on ? _EV.roxo : _EV.texto, fontWeight:on ? 700 : 500 }; };
+  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", fontSize:13, padding:"7px 9px", borderRadius:9, border:"1px solid " + _EV.linha, marginTop:4, resize:"vertical" };
+  const total = todas.length, firmes = todas.filter(function(l){ return l.status === "firme"; }).length, revisar = todas.filter(function(l){ return l.status === "revisar"; }).length;
+  const lidas = todas.reduce(function(s, l){ return s + (Number(l.lida) || 0); }, 0), voltas = todas.reduce(function(s, l){ return s + (Number(l.recorrencias) || 0); }, 0);
+  return (
+    <div style={{marginTop:16}}>
+      <div style={Object.assign({}, caixa, { background:"linear-gradient(135deg,#f5f3ff,#fff 55%)" })}>
+        <div style={{fontWeight:800,fontSize:_evF(16,isMob)}}>🧠 Conhecimento de edição</div>
+        <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4,lineHeight:1.5}}>O que a IA aprendeu com as correções de vocês. Não é lista de regras: cada lição tem o <b>princípio</b> (o porquê), <b>como reconhecer</b> e as <b>exceções</b>. A IA lê isso a cada montagem e ajuste e decide com critério. Para ensinar: no Estúdio, <b>✋ Corrigir</b> → aponte o erro → <b>Pedir para a IA entender</b> → aprove.</div>
+        <div style={{display:"grid",gridTemplateColumns:isMob ? "repeat(2,1fr)" : "repeat(5,1fr)",gap:8,marginTop:12}}>
+          {[["Lições", total], ["Firmes", firmes], ["O erro voltou", revisar], ["Lidas pela IA", lidas], ["Erros repetidos", voltas]].map(function(k){
+            return <div key={k[0]} style={{padding:"9px 11px",borderRadius:11,border:"1px solid " + _EV.linha,background:"#fff"}}><div style={{fontSize:11,color:_EV.sub,fontWeight:700}}>{k[0]}</div><div style={{fontSize:20,fontWeight:800}}>{k[1]}</div></div>; })}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",margin:"14px 0 10px"}}>
+        <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, campo, { width:"auto", marginTop:0 })}>
+          <option value="">Todos os clientes (só globais e de cada um)</option>{clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name || c.id}</option>; })}</select>
+        <button onClick={function(){ setTema(""); }} style={chip(!tema)}>Todos os temas</button>
+        {_EVP_LICAO_TEMAS.filter(function(t){ return porTema[t[0]]; }).map(function(t){ return <button key={t[0]} onClick={function(){ setTema(tema === t[0] ? "" : t[0]); }} style={chip(tema === t[0])}>{t[1]} {porTema[t[0]]}</button>; })}
+        <label style={{marginLeft:"auto",fontSize:12.5,color:_EV.sub,display:"flex",gap:6,alignItems:"center"}}><input type="checkbox" checked={verArq} onChange={function(e){ setVerArq(e.target.checked); }}/>Ver arquivadas</label>
+      </div>
+      {!dados && <div style={{padding:24,textAlign:"center",color:_EV.sub}}>Carregando…</div>}
+      {dados && dados.erro && <div style={Object.assign({}, caixa, { color:_EV.verm })}>{/function .*does not exist|criacao_licoes/.test(dados.erro) ? "Falta rodar a SQL v47 (Conhecimento de edição)." : dados.erro}</div>}
+      {dados && !dados.erro && !lista.length && <div style={Object.assign({}, caixa, { textAlign:"center", color:_EV.sub })}>Nenhuma lição ainda{tema ? " neste tema" : ""}. Elas nascem no Estúdio, no ✋ Corrigir.</div>}
+      <div style={{display:"grid",gridTemplateColumns:isMob ? "1fr" : "repeat(2,minmax(0,1fr))",gap:10}}>
+        {lista.map(function(l){ const st = _EVP_LICAO_ST[l.status] || _EVP_LICAO_ST.observando, ab = aberta === l.id, ed = editando && editando.id === l.id ? editando : null;
+          const podeMexer = dados.pode_aprovar && (l.client_id || dados.socio);
+          return <div key={l.id} style={Object.assign({}, caixa, { padding:12 })}>
+            <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:11,color:_EV.sub,fontWeight:700}}>L{l.id} · {_evpLicaoTema(l.tema)} · {l.client_id ? "🏷 " + nomeCli(l.client_id) : "🌎 Todos os clientes"}</div>
+                <div style={{fontWeight:800,fontSize:14,marginTop:2}}>{l.titulo}</div></div>
+              <span style={{fontSize:10.5,fontWeight:800,padding:"3px 9px",borderRadius:99,color:st[1],background:st[2],whiteSpace:"nowrap"}}>{st[0]}</span>
+            </div>
+            {ed ? <div>
+                {[["titulo", "Título", 1], ["principio", "Princípio (o porquê)", 4], ["como_reconhecer", "Como reconhecer", 2], ["excecoes", "Exceções", 2]].map(function(f){
+                  return <label key={f[0]} style={{display:"block",marginTop:8,fontSize:11,fontWeight:800,color:_EV.sub}}>{f[1]}<textarea rows={f[2]} value={ed[f[0]] || ""} onChange={function(e){ const n = Object.assign({}, ed); n[f[0]] = e.target.value; setEditando(n); }} style={campo}/></label>; })}
+                <div style={{display:"flex",gap:6,marginTop:8}}><button onClick={salvarEd} style={{font:"inherit",fontSize:13,fontWeight:700,padding:"7px 14px",borderRadius:9,border:0,background:_EV.roxo,color:"#fff",cursor:"pointer"}}>Salvar</button><button onClick={function(){ setEditando(null); }} style={{font:"inherit",fontSize:13,fontWeight:600,padding:"7px 14px",borderRadius:9,border:"1px solid " + _EV.linha,background:"#fff",color:_EV.texto,cursor:"pointer"}}>Cancelar</button></div></div>
+             : <div style={{fontSize:13,lineHeight:1.5,marginTop:6}}>{l.principio}</div>}
+            {!ed && ab && <div style={{marginTop:8,fontSize:12.5,lineHeight:1.5}}>
+              {l.como_reconhecer && <div style={{marginTop:6}}><b style={{color:"#2563eb"}}>Como reconhecer:</b> {l.como_reconhecer}</div>}
+              {l.excecoes && <div style={{marginTop:6}}><b style={{color:_EV.amarelo}}>Exceções:</b> {l.excecoes}</div>}
+              {(l.casos || []).length > 0 && <div style={{marginTop:8}}><b>Casos ({l.casos.length}):</b>{(l.casos || []).slice(-5).reverse().map(function(c, i){
+                return <div key={i} style={{marginTop:4,padding:"6px 8px",borderRadius:8,background:c.voltou ? _EV.vermClaro : _EV.linha2,fontSize:12}}>{c.voltou ? "↺ voltou · " : ""}{c.pedido || "—"}{c.o_que_aconteceu ? " — " + c.o_que_aconteceu : ""}<span style={{color:_EV.fraco}}> · {c.por || ""}</span></div>; })}</div>}
+            </div>}
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginTop:9,fontSize:11.5,color:_EV.sub}}>
+              <span>lida {l.lida || 0}×</span><span>erro voltou {l.recorrencias || 0}×</span><span>{(l.casos || []).length} caso(s)</span><span>por {l.aprovado_nome || l.criado_nome || "—"}</span>
+              <button onClick={function(){ setAberta(ab ? null : l.id); }} style={{border:0,background:"none",color:_EV.roxo,fontWeight:700,cursor:"pointer",font:"inherit",fontSize:12}}>{ab ? "menos ▴" : "ver tudo ▾"}</button>
+              {podeMexer && !ed && <span style={{marginLeft:"auto",display:"flex",gap:5,flexWrap:"wrap"}}>
+                <button onClick={function(){ setEditando(Object.assign({}, l)); }} style={chip(false)}>✏ Editar</button>
+                {l.status !== "firme" && l.status !== "arquivada" && <button onClick={function(){ mudarStatus(l, "firme"); }} style={chip(false)} title="Provou que funciona: vira firme">✓ Firme</button>}
+                {l.status === "revisar" && <button onClick={function(){ mudarStatus(l, "observando"); }} style={chip(false)}>Revisei</button>}
+                {l.status !== "arquivada" ? <button onClick={function(){ mudarStatus(l, "arquivada"); }} style={chip(false)}>Arquivar</button> : <button onClick={function(){ mudarStatus(l, "observando"); }} style={chip(false)}>Voltar a valer</button>}
+              </span>}
+            </div>
+          </div>; })}
+      </div>
+    </div>
+  );
+}
+
 /* ─── v13: CORRIGIR EDIÇÃO NA LINHA DO TEMPO — trecho (do segundo X ao Y) + tipo + o que fazer + POR QUÊ. A IA aplica todas juntas,
    diz o que fez em cada uma e o sócio confirma (✓ era isso / ✗ não era isso). Tudo fica em projeto.ajustes_trecho e ensina a IA. ─── */
 const _EVP_CORR_TIPOS = [ { id:"corte", label:"Corte" }, { id:"texto", label:"Texto" }, { id:"legenda", label:"Legenda" }, { id:"musica", label:"Música" },
   { id:"apoio", label:"Imagem de apoio" }, { id:"ritmo", label:"Ritmo" }, { id:"som", label:"Som" }, { id:"cor", label:"Cor" }, { id:"outro", label:"Outro" } ];
 const _EVP_CORR_ST = { aberto:["A fazer", "#c2410c", "#fff7ed"], aplicado:["A IA aplicou — confira", "#1d4ed8", "#eff6ff"], nao_feito:["A IA não conseguiu", "#b91c1c", "#fef2f2"],
   ok:["✓ Era isso", "#15803d", "#f0fdf4"], nao:["✗ Não era isso — de novo", "#b91c1c", "#fef2f2"], feito_mao:["Feito à mão", "#15803d", "#f0fdf4"] };
-function _EvpCorrigir({ p, calc, tempo, irPara, mudar, comentarios, tirarTrechos, aplicar, ajustando, marcaCorr, marcar, marcarPonto, foco, setFoco }){
-  const [rasc, setRasc] = useState({});                 // rascunho dos textos (grava ao sair do campo)
+function _EvpCorrigir({ p, calc, tempo, irPara, mudar, comentarios, tirarTrechos, aplicar, ajustando, marcaCorr, marcar, marcarPonto, foco, setFoco, edId, cliente, modeloIA }){
+  const [rasc, setRasc] = useState({});
+  const [entendendo, setEntendendo] = useState(false);          // v49: a IA está entendendo as correções
+  const [recLic, setRecLic] = useState(0);
+  const infoLic = _evpUsarLicoes(cliente, recLic);                 // rascunho dos textos (grava ao sair do campo)
   const [verTodas, setVerTodas] = useState(false);
   const lista = (p.ajustes_trecho || []).filter(function(x){ return x.status !== "arquivado" && (verTodas || (x.status !== "ok" && x.status !== "feito_mao")); })
     .slice().sort(function(a, b){ return a.t0 - b.t0; });
@@ -133876,12 +134081,29 @@ function _EvpCorrigir({ p, calc, tempo, irPara, mudar, comentarios, tirarTrechos
     if(tirarTrechos(lst, "Correção " + _evTempo(a))) mudar(function(np){ const o = (np.ajustes_trecho || []).find(function(q){ return q.id === x.id; }); if(o){ o.status = "feito_mao"; o.resultado = "Trecho tirado à mão (sem IA)."; o.t1 = o.t0 + 0.3; } });
   };
   const final = function(){ return (p.ajustes_trecho || []).map(function(x){ const r = rasc[x.id]; return r ? Object.assign({}, x, r) : x; }); };
-  const abertas = final().filter(function(x){ return (x.status === "aberto" || x.status === "nao") && String(x.oque || "").trim(); });
+  const abertas = final().filter(function(x){ return (x.status === "aberto" || x.status === "nao") && String(x.oque || "").trim(); })
+    .map(function(x){ return x.porque || !x.diag ? x : Object.assign({}, x, { porque:String(x.diag.principio || "").slice(0, 600) }); });   // v49: sem porquê escrito, vai o princípio que a IA entendeu
+  /* v49: CORRIGIR QUE ENSINA — a IA entende o porquê de cada correção (ainda sem diagnóstico) */
+  const paraEntender = final().filter(function(x){ return x.status !== "arquivado" && String(x.oque || "").trim() && !x.diag; });
+  const entender = async function(){
+    if(!paraEntender.length){ _evToast("warning", "Escreva o que está errado em pelo menos uma correção."); return; }
+    if(!edId){ _evToast("warning", "Salve a edição antes."); return; }
+    setEntendendo(true);
+    try{
+      const r = await _evInvocar("video-editar", { body:Object.assign({ acao:"entender", id:edId, projeto:p,
+        correcoes:paraEntender.map(function(x){ return { id:x.id, t0:x.t0, t1:x.t1, tipo:x.tipo || "outro", oque:String(x.oque || "").slice(0, 600), porque:String(x.porque || "").slice(0, 600) }; }) }, modeloIA ? { modelo:modeloIA } : {}) });
+      if(r.error) throw new Error(await _evErroFn(r));
+      const ds = (r.data && r.data.diagnosticos) || [];
+      mudar(function(np){ ds.forEach(function(d){ const o = (np.ajustes_trecho || []).find(function(q){ return q.id === d.id; }); if(o){ o.diag = Object.assign({}, d, { em:new Date().toISOString() }); if(!o.licao_escopo) o.licao_escopo = d.escopo_sugerido || "cliente"; } }); });
+      _evToast("success", "A IA explicou " + ds.length + " correç" + (ds.length === 1 ? "ão" : "ões") + (r.data && r.data.custo_brl != null ? " · R$ " + Number(r.data.custo_brl).toLocaleString("pt-BR", { minimumFractionDigits:2 }) : ""));
+    }catch(e){ _evToast("error", "A IA não respondeu: " + ((e && e.message) || e)); }
+    setEntendendo(false);
+  };
   const chip = function(on){ return Object.assign(_evpChip(on), { padding:"3px 8px", fontSize:11 }); };
   const area = { font:"inherit", width:"100%", boxSizing:"border-box", fontSize:12.5, padding:"6px 8px", borderRadius:9, border:"1px solid " + _EVP_COR.linha, background:_EVP_COR.campo, resize:"vertical", userSelect:"text" };
   return (<div>
-    <div style={{marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="lapis"/></span>Corrigir a edição</div>
-      <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2}}>Dê play e aperte <b>C</b> no começo e <b>C</b> no fim do trecho. Escreva o que fazer e <b>por quê</b> — a IA aplica e aprende com o porquê.</div></div>
+    <div style={{marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="lapis"/></span>✋ Corrigir e ensinar a IA</div>
+      <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2,lineHeight:1.45}}>Aponte cada erro: <b>C</b> no começo e <b>C</b> no fim do trecho (ou "Marcar aqui") e escreva o que está errado. Depois <b>peça para a IA entender</b>: ela explica o porquê e você decide se vira <b>lição</b> (só este vídeo, o cliente ou todos).</div></div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"8px 0"}}>
       <button onClick={marcar} style={Object.assign(_evpBtn(marcaCorr != null ? "primario" : "suave", true), {flex:"1 1 150px",justifyContent:"center"})}>
         <_EvpIco n="mais" s={15}/>{marcaCorr == null ? "Marcar começo (C)" : "Marcar fim (C) · desde " + _evTempo(marcaCorr)}</button>
@@ -133907,6 +134129,7 @@ function _EvpCorrigir({ p, calc, tempo, irPara, mudar, comentarios, tirarTrechos
           onChange={function(e){ escrever(x, "oque", e.target.value); }} onBlur={function(){ gravar(x, "oque"); }} onKeyDown={function(e){ e.stopPropagation(); }} style={area}/>
         <textarea rows={2} maxLength={600} value={campoV(x, "porque")} placeholder="Por quê? (ex.: começo arrastado, perde a pessoa) — é isso que ensina a IA" aria-label="Por quê"
           onChange={function(e){ escrever(x, "porque", e.target.value); }} onBlur={function(){ gravar(x, "porque"); }} onKeyDown={function(e){ e.stopPropagation(); }} style={Object.assign({}, area, {marginTop:5})}/>
+        <_EvpEntendido x={x} muda={muda} cliente={cliente} edId={edId} info={infoLic} aoMudarLicoes={function(){ setRecLic(function(n){ return n + 1; }); }}/>
         {x.resultado && <div style={{fontSize:11.5,color:_EVP_COR.sub,background:_EVP_COR.faixa,borderRadius:8,padding:"6px 8px",marginTop:6}}><b>O que a IA fez:</b> {x.resultado}</div>}
         {(x.status === "aplicado" || x.status === "nao_feito") && <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
           <button onClick={function(){ muda(x, function(o){ o.status = "ok"; o.conferido_em = new Date().toISOString(); }); _evToast("success", "Anotado: era isso — a IA aprende"); }} style={Object.assign(_evpBtn("primario", true), {padding:"5px 10px",fontSize:11.5})}>✓ Era isso</button>
@@ -133918,9 +134141,12 @@ function _EvpCorrigir({ p, calc, tempo, irPara, mudar, comentarios, tirarTrechos
           title="Tira exatamente o trecho marcado, sem IA (R$ 0)"><_EvpIco n="dividir" s={14}/>Tirar este trecho agora (sem IA)</button>}
       </div>; })}
     <label style={{display:"flex",gap:6,alignItems:"center",fontSize:11.5,color:_EVP_COR.sub,margin:"2px 0 8px",cursor:"pointer"}}><input type="checkbox" checked={verTodas} onChange={function(e){ setVerTodas(e.target.checked); }}/>Ver também as já conferidas</label>
-    <button onClick={function(){ aplicar(abertas); }} disabled={!abertas.length || ajustando} style={Object.assign(_evpBtn("primario", !!abertas.length && !ajustando), {width:"100%",justifyContent:"center",padding:"10px 12px"})}>
-      <_EvpIco n="robo" s={16}/>{ajustando ? "A IA está corrigindo…" : "Aplicar " + abertas.length + " correç" + (abertas.length === 1 ? "ão" : "ões") + " com a IA"}</button>
-    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>Vai tudo numa chamada só (custa como um ajuste). Sem o porquê ela faz, mas aprende menos.</div>
+    <button onClick={entender} disabled={!paraEntender.length || entendendo} style={Object.assign(_evpBtn("primario", !!paraEntender.length && !entendendo), {width:"100%",justifyContent:"center",padding:"10px 12px"})}>
+      <span>🧠</span>{entendendo ? "A IA está entendendo…" : "Pedir para a IA entender (" + paraEntender.length + ")"}</button>
+    <div style={{fontSize:11,color:_EVP_COR.fraco,margin:"5px 0 9px"}}>Ela explica o que aconteceu, o princípio de edição e as exceções, e diz se discorda. Nada muda no vídeo até você aplicar.</div>
+    <button onClick={function(){ aplicar(abertas); }} disabled={!abertas.length || ajustando} style={Object.assign(_evpBtn("suave", !!abertas.length && !ajustando), {width:"100%",justifyContent:"center",padding:"9px 12px"})}>
+      <_EvpIco n="robo" s={16}/>{ajustando ? "A IA está corrigindo…" : "Aplicar " + abertas.length + " correç" + (abertas.length === 1 ? "ão" : "ões") + " no vídeo"}</button>
+    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>Vai tudo numa chamada só (custa como um ajuste). Com a lição entendida, ela corrige já sabendo o porquê.</div>
   </div>);
 }
 
