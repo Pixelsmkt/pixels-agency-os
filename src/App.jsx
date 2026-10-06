@@ -49877,6 +49877,23 @@ function _cardPodeSerResp(u){
     onClose();
   };
 
+  /* (06/10/2026, Gustavo) PREENCHER MATERIAL → AVALIAÇÃO DE COPYS. Segundo caminho: material preenchido,
+     mas quer que o sócio veja de novo antes de ir pro freela — volta pra Copys (fila da Avaliação de copys). */
+  const _enviarProAvaliacao=function(){
+    const _now=new Date().toISOString();
+    const _quem=(user&&user.name)||"";
+    setTasks(function(p){return p.map(function(t){ return t.id===task.id?Object.assign({},t,{
+      status:"demanda",
+      ajustar:false,
+      colEnteredAt:_now,
+      timeline:(t.timeline||[]).concat([{type:"status",fromLabel:"Preencher material",toLabel:"Copys",
+        from:"preencher_material",to:"demanda",at:_now,atFmt:nowFmt(),user:_quem,
+        note:"Material preenchido por "+_quem+" — enviado pra Avaliação de copys"}])
+    }):t; });});
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Enviado pra Avaliação de copys!",4000);
+    onClose();
+  };
+
   const removeAttachment=(id,_confirmado)=>{
     const att=attachments.find(a=>a.id===id);
     // Confirma antes de remover arquivo já subido (o × fica colado no Baixar — toque errado apagava).
@@ -50992,20 +51009,29 @@ function _cardPodeSerResp(u){
                   return f&&!f.isAnnotation&&!f.isRef&&(!f.tipo||f.tipo==="material"||f.tipo==="referencia"||f.tipo==="final");
                 });
                 const _temMaterial=_mats.length>0;
-                return <button
-                  onClick={function(){
-                    if(!_temMaterial&&typeof pixelsConfirm==="function"){
-                      pixelsConfirm("Este card não tem nenhuma imagem ou arquivo anexado. Mandar assim mesmo pra Demanda?",
-                        {danger:true,okText:"Mandar assim mesmo",cancelText:"Voltar e anexar"})
-                        .then(function(y){ if(y) _enviarProDemanda(); });
-                      return;
-                    }
-                    _enviarProDemanda();
-                  }}
+                /* (06/10/2026, Gustavo) dois caminhos: volta pra Avaliação de copys OU vai direto pra produção */
+                const _ir=function(fn,pra){
+                  if(!_temMaterial&&typeof pixelsConfirm==="function"){
+                    pixelsConfirm("Este card não tem nenhuma imagem ou arquivo anexado. Mandar assim mesmo pra "+pra+"?",
+                      {danger:true,okText:"Mandar assim mesmo",cancelText:"Voltar e anexar"})
+                      .then(function(y){ if(y) fn(); });
+                    return;
+                  }
+                  fn();
+                };
+                return <>
+                <button onClick={function(){ _ir(_enviarProAvaliacao,"a Avaliação de copys"); }}
+                  title="Material preenchido: o card volta pra Copys e aparece na Avaliação de copys pra aprovar de novo."
+                  style={_pxBtnAcaoSt("#7c3aed","124,58,237",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  <span style={{display:"block",lineHeight:1}}>Material preenchido: enviar pra avaliação</span>
+                </button>
+                <button
+                  onClick={function(){ _ir(_enviarProDemanda,"Demanda"); }}
                   title={_temMaterial?("Material anexado ("+_mats.length+"). Vira demanda pro freelancer."):"Ainda não tem nenhum arquivo anexado neste card."}
                   style={_pxBtnAcaoSt("#f97316","249,115,22",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                  <span style={{display:"block",lineHeight:1}}>Material pronto: Demanda</span>
-                </button>;
+                  <span style={{display:"block",lineHeight:1}}>Enviar para produção</span>
+                </button>
+                </>;
               })()}
               {/* Drive folder — shown when approved */}
               {task.status==="aprovado"&&_bl("acao.drive")&&(()=>{
