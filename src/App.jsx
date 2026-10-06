@@ -123775,6 +123775,43 @@ function _evpRealceAlfa(m, t){
     a = Math.max(a, 0.18 * Math.max(0, Math.min(1, (t - x.t0) / 0.2, (x.t1 - t) / 0.2))); });
   return a;
 }
+/* v52 (06/10/2026): máscaras do PC que ficaram prontas DEPOIS de abrir o Estúdio (clipe → url). As que já estavam prontas vêm em clipes[].mascara. */
+const _evpMascarasPC = {};
+/* "✨ Recorte de qualidade (PC)": estado do recorte feito na placa de vídeo para este bruto + pedir / refazer (SQL v50) */
+const _EVP_RPC_ST = { pronta:["✨", "Recorte de qualidade pronto (feito na placa de vídeo do PC)", "var(--evx-verde)"], fazendo:["⏳", "O PC está recortando este vídeo agora…", "var(--evx-amarelo)"],
+  pedida:["⏳", "Na fila do PC para recortar (a máscara entra sozinha quando ficar pronta)", "var(--evx-amarelo)"], erro:["⚠", "O PC não conseguiu recortar", "var(--evx-verm)"],
+  sem_pessoa:["·", "O PC não achou pessoa neste vídeo", "var(--evp-sub)"], nao:["·", "Usando o recorte rápido do navegador", "var(--evp-sub)"] };
+function _EvpRecortePC({ edId, clipe, onPronta }){
+  const [st, setSt] = useState(null);
+  const [rec, setRec] = useState(0);
+  const [pedindo, setPedindo] = useState(false);
+  useEffect(function(){ if(!edId || !clipe) return; let vivo = true, to = 0;
+    const ler = function(){ window._sb.rpc("criacao_mascaras", { p_id:edId }).then(function(r){ if(!vivo) return;
+        if(r.error){ setSt({ status:"indisp", erro:r.error.message }); return; }
+        const x = (r.data || {})[clipe] || { status:"nao" }; setSt(x);
+        if(x.status === "pronta" && x.url){ if(_evpMascarasPC[clipe] !== x.url){ _evpMascarasPC[clipe] = x.url; if(onPronta) onPronta(); } }
+        if(x.status === "pedida" || x.status === "fazendo") to = setTimeout(ler, 20000); })
+      .catch(function(){ if(vivo) setSt({ status:"indisp" }); }); };
+    ler(); return function(){ vivo = false; clearTimeout(to); }; }, [edId, clipe, rec]);
+  if(!st || st.status === "indisp") return null;
+  const k = _EVP_RPC_ST[st.status] || _EVP_RPC_ST.nao;
+  const pedir = function(refazer){ setPedindo(true);
+    window._sb.rpc("criacao_mascara_pedir", { p_id:edId, p_clipe:clipe, p_refazer:!!refazer }).then(function(r){
+      if(r.error) _evToast("error", "Não pediu: " + r.error.message); else { _evToast("success", "Pedido ao PC: o recorte de qualidade entra sozinho quando ficar pronto"); setRec(function(n){ return n + 1; }); } })
+      .finally(function(){ setPedindo(false); }); };
+  return (
+    <div style={{marginTop:10,padding:"8px 10px",borderRadius:10,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,fontSize:12,lineHeight:1.45}}>
+      <div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{fontSize:13}}>{k[0]}</span>
+        <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,color:k[2]}}>{k[1]}</div>
+          {st.status === "pronta" && <div style={{color:_EVP_COR.fraco,fontSize:11}}>{st.modelo || "BiRefNet"} · borda de cabelo e chapéu muito melhor que a do navegador</div>}
+          {st.status === "erro" && st.erro && <div style={{color:_EVP_COR.fraco,fontSize:11}}>{String(st.erro).slice(0, 160)}</div>}
+          {st.status === "nao" && <div style={{color:_EVP_COR.fraco,fontSize:11}}>O PC faz um recorte bem melhor (cabelo, mão, chapéu). Leva uns minutos.</div>}</div></div>
+      {(st.status === "nao" || st.status === "erro" || st.status === "sem_pessoa") && <button disabled={pedindo} onClick={function(){ pedir(false); }} style={Object.assign(_evpBtn("suave", !pedindo), { marginTop:7, padding:"5px 10px", fontSize:11.5 })}>✨ {st.status === "nao" ? "Pedir recorte de qualidade ao PC" : "Tentar de novo no PC"}</button>}
+      {st.status === "pronta" && <button disabled={pedindo} onClick={function(){ pedir(true); }} style={{marginTop:6,border:0,background:"none",color:_EVP_COR.roxo,cursor:"pointer",font:"inherit",fontSize:11.5,fontWeight:700,padding:0}}>Refazer o recorte no PC</button>}
+    </div>
+  );
+}
+
 /* ─── RECORTAR A PESSOA (IA de segmentação que roda no navegador: MediaPipe, Apache-2.0) ─── */
 const _EVP_MP_SEG = (typeof window !== "undefined" && window.__EVP_MP_SEG) || "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/";
 let _evpSeg = null, _evpSegEstado = "nao", _evpSegResolver = null, _evpSegModelo = 1;
@@ -125203,6 +125240,54 @@ function _evpMotor(canvas, o){
   const pessoa = document.createElement("canvas"); pessoa.width = W; pessoa.height = H; const px2 = pessoa.getContext("2d");
   const mkC = document.createElement("canvas"); mkC.width = W; mkC.height = H; const mkX = mkC.getContext("2d");   // v22: clipe com máscara   // recorte da pessoa (fundo / texto atrás)
   let mascara = null, mascaraDe = -1, segOcupado = false;
+  /* v52 (06/10/2026): RECORTE DE QUALIDADE FEITO NO PC (BiRefNet na placa de vídeo, SQL v50) — o clipe que tem "mascara" (vídeo cinza do
+     bruto inteiro, branco = pessoa) usa ela no lugar do MediaPipe: um <video> da máscara anda junto com o clipe (no quadro a quadro ele vai
+     ao quadro exato), é desenhado com A MESMA geometria do clipe (corte, zoom, enquadrar, animar) e vira o alfa da pessoa.
+     Sem máscara, clipe estabilizado no PC ou "ao contrário": continua o MediaPipe de sempre. */
+  const elsM = {};
+  let mascaraFonte = "", mPCChave = "";
+  const mqC = document.createElement("canvas"); mqC.width = W; mqC.height = H; const mqX = mqC.getContext("2d");
+  const mpC = document.createElement("canvas"); mpC.width = Math.max(2, Math.round(W / 2)); mpC.height = Math.max(2, Math.round(H / 2)); const mpX = mpC.getContext("2d", { willReadFrequently:true });
+  function urlMascara(c){
+    if(!c || c.reverso || c.off || (o.tratados && o.tratados[c.clipe])) return "";
+    const cl = (o.clipes || []).find(function(x){ return x.id === c.clipe; }) || {};
+    return String((cl.mascara && cl.mascara.url) || _evpMascarasPC[c.clipe] || "");
+  }
+  function elM(c){
+    const u = urlMascara(c); if(!u) return null;
+    if(elsM[c.id] && elsM[c.id]._src === u) return elsM[c.id];
+    if(elsM[c.id]){ try{ elsM[c.id].pause(); elsM[c.id].removeAttribute("src"); elsM[c.id].load(); }catch(_){} }
+    const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true;
+    v._src = u; v.src = u; v._alvo = c.ini;
+    v.addEventListener("loadedmetadata", function(){ try{ v.currentTime = v._alvo; }catch(_){} marcar(); });
+    v.addEventListener("seeked", function(){ marcar(6); }); v.addEventListener("loadeddata", function(){ marcar(6); });
+    v.addEventListener("error", function(){ v._falhou = true; });
+    elsM[c.id] = v; return v;
+  }
+  /* a máscara do PC DESTE quadro (canvas com alfa) ou null (aí usa o MediaPipe) */
+  function mascaraPC(c){
+    const v = elM(c); if(!v || v._falhou) return null;
+    const a = srcT(c, t); v._alvo = a;
+    if(o.quadroAQuadro){ /* quem leva ao quadro exato é o quadro(nt) */ }
+    else if(tocando){ if(v.readyState >= 1){ if(v.paused){ try{ v.currentTime = a; }catch(_){} v.play().catch(function(){}); } else if(Math.abs(v.currentTime - a) > 0.12 && !v.seeking){ try{ v.currentTime = a; }catch(_){} } } }
+    else { if(!v.paused) v.pause(); if(v.readyState >= 1 && Math.abs(v.currentTime - a) > 0.02 && !v.seeking){ try{ v.currentTime = a; }catch(_){} } }
+    const tol = o.quadroAQuadro ? 0.02 : (tocando ? 0.2 : 0.06);
+    if(v.readyState < 2 || v.seeking || Math.abs(v.currentTime - a) > tol) return (mascaraFonte === "pc" && mPCChave.split("|")[0] === c.id) ? mascara : null;   // ainda chegando: segura a última deste clipe
+    const chave = c.id + "|" + Math.round(v.currentTime * 1000) + "|" + Math.round(t * 1000);
+    if(chave === mPCChave && mascaraFonte === "pc") return mascara;
+    try{
+      mqX.setTransform(1, 0, 0, 1, 0, 0); mqX.globalCompositeOperation = "source-over"; mqX.globalAlpha = 1; mqX.filter = "none";
+      mqX.fillStyle = "#000"; mqX.fillRect(0, 0, W, H);
+      desenharClipe(mqX, v, c, t, { mascara:true });
+      mpX.setTransform(1, 0, 0, 1, 0, 0); mpX.imageSmoothingEnabled = true; mpX.imageSmoothingQuality = "high";
+      mpX.clearRect(0, 0, mpC.width, mpC.height); mpX.drawImage(mqC, 0, 0, mpC.width, mpC.height);
+      const im = mpX.getImageData(0, 0, mpC.width, mpC.height), d = im.data;
+      for(let k = 0; k < d.length; k += 4){ const y = d[k]; d[k] = 255; d[k + 1] = 255; d[k + 2] = 255; d[k + 3] = y; }   // cinza → alfa
+      mpX.putImageData(im, 0, 0);
+    }catch(e){ v._falhou = true; return null; }      // máscara sem permissão de leitura (CORS) ou outro defeito: volta ao MediaPipe
+    mPCChave = chave; mascaraFonte = "pc";
+    return mpC;
+  }
   let ofsC = null, ofsX = null;   // v17: camada do clipe com desfoque / opacidade (Animar)
   let antes = false;              // v19: antes/depois (sem a cor)
   let comparar = 0, cmpC = null, cmpX = null;      // v25: tela dividida (0 = desligado; 0,05–0,95 = onde fica a linha)
@@ -125246,9 +125331,11 @@ function _evpMotor(canvas, o){
   function soltar(){
     const perto = {}; [cur-1, cur, cur+1, cur+2].forEach(function(i){ if(calc.clips[i]) perto[calc.clips[i].id] = 1; });
     Object.keys(els).forEach(function(k){ if(!perto[k]){ const v = els[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} delete els[k]; } });
+    Object.keys(elsM).forEach(function(k){ if(!perto[k]){ const v = elsM[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} delete elsM[k]; } });   // v52
   }
   function srcT(c, tt){ return _evpSrcT(c, tt); }
-  function mirar(c, tt){ const v = el(c); const a = srcT(c, tt); v._alvo = a; if(v.readyState >= 1 && Math.abs(v.currentTime - a) > 0.04){ try{ v.currentTime = a; }catch(_){} } }
+  function mirar(c, tt){ const v = el(c); const a = srcT(c, tt); v._alvo = a; if(v.readyState >= 1 && Math.abs(v.currentTime - a) > 0.04){ try{ v.currentTime = a; }catch(_){} }
+    const vm = elM(c); if(vm && !vm._falhou){ vm._alvo = a; if(vm.readyState >= 1 && vm.paused && Math.abs(vm.currentTime - a) > 0.04 && !vm.seeking){ try{ vm.currentTime = a; }catch(_){} } } }   // v52: a máscara do PC já vai carregando
 
   const pronto = new Promise(function(res){
     let falta = 6; const um = function(){ falta--; if(falta<=0) res(); };
@@ -125473,8 +125560,9 @@ function _evpMotor(canvas, o){
   function desenharClipe(ctx, v0, c, tt, extra){
     // "ao contrário": usa os quadros guardados (se prontos); senão o próprio vídeo parado no ponto certo
     let v = v0;
-    if(c.reverso){ const q = _evpQuadroReverso(c, srcT(c, tt)); if(q) v = q; }
-    let corE = antes ? null : _evpCorEfetiva(c, tt);                                         // v21: intensidade do filtro × força da cor (◆)
+    const soMasc = !!(extra && extra.mascara);          // v52: desenha a MÁSCARA DO PC com a mesma geometria do clipe (sem cor, sem fundo borrado)
+    if(c.reverso && !soMasc){ const q = _evpQuadroReverso(c, srcT(c, tt)); if(q) v = q; }
+    let corE = (antes || soMasc) ? null : _evpCorEfetiva(c, tt);                                         // v21: intensidade do filtro × força da cor (◆)
     if(corE && corE.flick){ corE = Object.assign({}, corE, { _ganho:_evpFlickerGanho(c, v) }); }      // v21: tirar o piscar
     if(!antes && c.chroma && c.chroma.on){ corE = Object.assign({}, corE || {}, { chroma:c.chroma }); }      // v23: chroma key
     if(corE && _evpCorAvancada(corE)){ const g = _evpCorGL.render(v, corE); if(g) v = g; else corE = _evpCorSemGL(corE); }     // v19: cor completa na placa de vídeo · v34: sem placa, versão simples
@@ -125485,12 +125573,13 @@ function _evpMotor(canvas, o){
     const tr = !(o.tratados && o.tratados[c.clipe]) && c.estab && proj.estab && proj.estab[c.clipe];
     let sdx = 0, sdy = 0, sz = 1;
     if(tr){ const e = _evpTremidoEm(tr, srcT(c, tt)); sdx = e[0]; sdy = e[1]; sz = c._zt || (c._zt = _evpZoomTremido(tr, c.ini, c.fim)); }
-    ctx.save(); ctx.filter = filtroCor(c, corE);
-    if(modo === "encaixar"){
+    const filtroC = function(){ return soMasc ? "none" : filtroCor(c, corE); };
+    ctx.save(); ctx.filter = filtroC();
+    if(modo === "encaixar" && !soMasc){
       const sc = Math.max(W/vw, H/vh);
       const bw = vw * sc, bh = vh * sc, fx0 = (bw - W) / 2 / sc, fy0 = (bh - H) / 2 / sc;     // pedaço do vídeo que cobre a tela
       borrar(ctx, v, rx + Math.max(0, fx0), ry + Math.max(0, fy0), Math.min(vw, W / sc), Math.min(vh, H / sc), 0, 0, W, H, 40, 0.6);
-      ctx.filter = filtroCor(c, corE);
+      ctx.filter = filtroC();
     }
     const s0 = modo === "encaixar" ? Math.min(W/vw, H/vh) : Math.max(W/vw, H/vh);
     // movimento ao longo do clipe (Ken Burns): u vai de 0 a 1 do começo ao fim do trecho
@@ -125525,14 +125614,14 @@ function _evpMotor(canvas, o){
       if(an){ const ax = _evpNum(an[0], 0) * g.dw, ay = _evpNum(an[1], 0) * g.dh; cx2.translate(g.tx + ax, g.ty + ay); cx2.rotate(g.r * Math.PI / 180); cx2.translate(-ax, -ay); }
       else { cx2.translate(g.tx, g.ty); if(g.r) cx2.rotate(g.r * Math.PI / 180); }
       if(c.espelho) cx2.scale(-1, 1); if(c.espelhoV) cx2.scale(1, -1); cx2.drawImage(v, rx, ry, vw, vh, -g.dw/2, -g.dh/2, g.dw, g.dh); cx2.restore(); };
-    { const g0 = geo(A); c._xf = { tx:g0.tx, ty:g0.ty, dw:g0.dw, dh:g0.dh, r:g0.r, esp:!!c.espelho, rx:rx, ry:ry, vw:vw, vh:vh, VW:VW, VH:VH, W:W, H:H }; }   // v22: rastro → tela
+    if(!soMasc){ const g0 = geo(A); c._xf = { tx:g0.tx, ty:g0.ty, dw:g0.dw, dh:g0.dh, r:g0.r, esp:!!c.espelho, rx:rx, ry:ry, vw:vw, vh:vh, VW:VW, VH:VH, W:W, H:H }; }   // v22: rastro → tela
     if(A.b > 0.4 || A.o < 0.995){
       // desfoque: desenha pequeno e amplia (barato, mesmo truque do fundo desfocado) · opacidade: a camada entra com transparência
       const k = A.b > 0.4 ? Math.max(1, A.b * (W / 1080) / 3) : 1, ow = Math.max(4, Math.round(W / k)), oh = Math.max(4, Math.round(H / k));
       if(!ofsC){ ofsC = document.createElement("canvas"); ofsX = ofsC.getContext("2d"); }
       if(ofsC.width !== ow) ofsC.width = ow; if(ofsC.height !== oh) ofsC.height = oh;
       ofsX.setTransform(1, 0, 0, 1, 0, 0); ofsX.clearRect(0, 0, ow, oh); ofsX.imageSmoothingEnabled = true; ofsX.imageSmoothingQuality = "high";
-      const fc = filtroCor(c, corE), fb = A.b > 0.4 ? "blur(" + Math.min(3, 0.6 + A.b / k * 0.4).toFixed(2) + "px)" : "";
+      const fc = filtroC(), fb = A.b > 0.4 ? "blur(" + Math.min(3, 0.6 + A.b / k * 0.4).toFixed(2) + "px)" : "";
       ofsX.filter = fb ? (fc === "none" ? fb : fc + " " + fb) : fc;
       ofsX.setTransform(ow / W, 0, 0, oh / H, 0, 0);
       amostras.forEach(function(V, i){ pinta(ofsX, V, 1 / (i + 1)); });
@@ -125950,13 +126039,13 @@ function _evpMotor(canvas, o){
     if(o.quadroAQuadro){ segPedido = true; return; }
     if(segOcupado || !_evpSegPronto()) return;
     segOcupado = true; const de = Math.round(t * 30);
-    _evpSegmentar(vl).then(function(m){ if(m){ mascara = m; mascaraDe = de; } }).catch(function(){}).finally(function(){ segOcupado = false; });
+    _evpSegmentar(vl).then(function(m){ if(m){ mascara = m; mascaraDe = de; mascaraFonte = "mp"; } }).catch(function(){}).finally(function(){ segOcupado = false; });
   }
   function recortarPessoa(fu){        // pessoa (sem fundo) em "pessoa" · v22: borda macia (suave) e recuperar bordas (exp)
     if(!mascara) return false;
     /* v48 (06/10/2026): E2-6 — borda proporcional ao tamanho do pixel do MODELO (o MediaPipe devolve a máscara já no tamanho do quadro, mas ela
        nasce em 256×256 ou 144×256): ≈ 0,9 pixel do modelo, de 2 a 10 px → 256 linhas para 1920 = ~6,7 px. Quem escolheu "suave" no fundo continua mandando. */
-    const bsAuto = _evpSegBorda(W, H);
+    const bsAuto = mascaraFonte === "pc" ? 1.2 : _evpSegBorda(W, H);     // v52: a máscara do PC já vem com a borda certa (cabelo)
     const bs = fu && fu.suave != null ? _evClamp(_evpNum(fu.suave, 2), 0, 16) : bsAuto, ex = fu ? _evClamp(_evpNum(fu.exp, 0), 0, 12) : 0;
     px2.save(); px2.clearRect(0, 0, W, H); px2.filter = bs > 0.2 ? "blur(" + bs + "px)" : "none"; px2.drawImage(mascara, 0, 0, W, H);
     if(ex > 0.5){ [[ex, 0], [-ex, 0], [0, ex], [0, -ex]].forEach(function(d){ px2.drawImage(mascara, d[0], d[1], W, H); }); }
@@ -125974,7 +126063,11 @@ function _evpMotor(canvas, o){
       const motAtras0 = _evpMotionAtras(calc, t);                                   // v47: texto do motion atrás da pessoa
       const atras = motAtras0 || (calc.textos||[]).some(function(x){ return x.atras && t >= x.t0 && t <= x.t1; });
       const precisaSeg = (cAt && cAt.masc && cAt.masc.some(function(m){ return m.tipo === "pessoa"; })) || (calc.imagens || []).some(function(x){ return x.camada === "ajuste" && x.forma === "pessoa" && t >= x.t0 && t <= x.t1; });
-      if(fundo || atras || precisaSeg){ _evpSegCarregar(); pedirMascara(); }
+      if(fundo || atras || precisaSeg){
+        const mPC = cAt ? mascaraPC(cAt) : null;                               // v52: recorte de qualidade do PC, se este clipe tiver
+        if(mPC){ mascara = mPC; mascaraDe = Math.round(t * 1000); }
+        else { if(mascaraFonte === "pc") { mascara = null; mascaraFonte = ""; } _evpSegCarregar(); pedirMascara(); }
+      }
       if(fundo && recortarPessoa(fundo)){      // troca o fundo: desfocado, cor, imagem ou vídeo (v22)
         cx.save();
         if(fundo.modo === "desfocar"){ borrar(cx, vl, 0, 0, W, H, 0, 0, W, H, _evClamp(_evpNum(fundo.forca, 28), 4, 80), 0.85); }
@@ -126097,6 +126190,7 @@ function _evpMotor(canvas, o){
       if(c && t < calc.fimCortes){
         const v = el(c); const a = srcT(c, t);
         if(!(c.reverso && _evpQuadroReverso(c, a))) esperas.push(_evpIrExato(v, a));
+        const vm = elM(c); if(vm && !vm._falhou) esperas.push(_evpIrExato(vm, a).then(function(ok){ if(!ok){ vm._erros = (vm._erros || 0) + 1; if(vm.error || vm._erros >= 3) vm._falhou = true; } return true; }));   // v52: máscara do PC no mesmo quadro (3 falhas ou erro do arquivo: usa o MediaPipe)
         const nx = calc.clips[cur + 1]; if(nx){ const vn = el(nx); if(vn.readyState >= 1 && Math.abs(vn.currentTime - nx.ini) > 0.05 && !vn.seeking){ try{ vn.currentTime = nx.ini; }catch(_){} } }
       }
       sincronizarSobre();
@@ -126123,6 +126217,7 @@ function _evpMotor(canvas, o){
       if(vFinal){ try{ vFinal.pause(); vFinal.removeAttribute("src"); vFinal.load(); }catch(_){} vFinal = null; }
       Object.keys(els).forEach(function(k){ const v = els[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
       Object.keys(els2).forEach(function(k){ const v = els2[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
+      Object.keys(elsM).forEach(function(k){ const v = elsM[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });   // v52
       vaSeq++; try{ master.disconnect(); lim.disconnect(); vaG.desligar(); }catch(_){} if(!o.ctx) try{ ac.close(); }catch(_){} },
   };
 }
@@ -133514,6 +133609,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {ferr === "fx" && <_EvpFxPainel c={c} mudar={mudar} ctl={ctl}/>}
         {ferr === "fundo" && (<div>
           <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>A IA recorta a pessoa e troca o que está atrás dela. Funciona melhor com a pessoa em primeiro plano.</div>
+          {(c.fundo || {}).modo && (c.fundo || {}).modo !== "nenhum" && <_EvpRecortePC edId={edId} clipe={c.clipe}/>}
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
             {[["nenhum","Fundo original"],["desfocar","Desfocar o fundo"],["cor","Cor lisa"],["imagem","Imagem"],["video","Vídeo"]].map(function(o){
               return <button key={o[0]} onClick={function(){ mudar(nc(function(x){ x.fundo = Object.assign({ cor:kit.cor_principal || "#0f172a", url:"" }, x.fundo, { modo:o[0] }); })); if(o[0] !== "nenhum") _evpSegCarregar(); }} style={_evpChip(((c.fundo || {}).modo || "nenhum") === o[0])}>{o[1]}</button>; })}
@@ -133893,6 +133989,9 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
 
 
 
+/* ═══ v52 (06/10/2026): RECORTE DE QUALIDADE FEITO NO PC — clipes com "mascara" (BiRefNet na placa de vídeo do PIXELS-01, SQL v50,
+   recorte_pc.py) usam essa máscara no fundo trocado, no texto atrás da pessoa e nas máscaras "pessoa", na prévia e na gravação quadro a
+   quadro; painel Fundo mostra o estado e deixa pedir/refazer. Sem máscara: MediaPipe como antes. ═══ */
 /* ═══ v51 (06/10/2026): EVOLUÇÃO + AVISO DE DISCORDO — "📈 A IA está melhorando?" na aba Conhecimento (SQL v49) e, quando o pedido
    contraria o conhecimento, a IA faz e avisa (toast no ajuste, na prévia e no "Por que ficou assim"). Servidor v71. ═══ */
 /* ═══ v50 (06/10/2026): CONHECIMENTO II — o painel mostra também as 33 REGRAS (agora com o porquê, 📏 R7…) e o LIVRO DO EDITOR (📖 P-01…P-62,
