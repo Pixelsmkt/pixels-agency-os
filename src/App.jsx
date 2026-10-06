@@ -4058,10 +4058,10 @@ const NAV=[
   // a gente alcança pagando, o outro é o que alcança sem pagar.
   {id:"gestaoredes",icon:"gestaoredes", label:"Gestão de redes"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
+  {id:"roteiros",   icon:"roteiros", label:"Conteúdos"}, // (06/10/2026, Gustavo) entre Planejamento e Scripts (antes: fim de ESTRATÉGIA, 29/09)
   {id:"scripts",icon:"◇", label:"Scripts"},
   {id:"matriz",icon:"▦", label:"Matriz de Responsabilidades"},
   {id:"playbooks",icon:"◇", label:"Playbooks"},
-  {id:"roteiros",   icon:"roteiros", label:"Conteúdos"}, // (29/09/2026) saiu de cima de Avaliações e veio pro fim de ESTRATÉGIA (Gustavo)
   // Pixels IA DESLIGADA por enquanto (26/08 — "tá super fraca") — religa descomentando
   //{id:"ia",         icon:"◎", label:"Pixels IA",children:[
   //  {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
