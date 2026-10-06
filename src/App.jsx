@@ -113326,7 +113326,10 @@ function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerI
    • Nada é apagado: proposta descartada ou refeita fica guardada com status "descartada".
    Tabelas: pautas, pauta_propostas (RLS agência, realtime) — migration pautas_solicitacoes_whatsapp.
    ═══════════════════════════════════════════════════════════════════════ */
-const _SW_AC="#16a34a";            // verde WhatsApp — distingue a aba das outras (roxo)
+/* (06/10/2026, Gustavo) "usar cores que não sejam de nenhum cliente, pra não confundir nem inconscientemente".
+   Cores dos clientes: vermelho (Construschorr), laranja (Acreforte), verdes (Bioter, VetService, Climaves),
+   azuis (Clem, Lero), roxo (Pixels), cinza (Arabutã). Aqui só tons fora disso: verde-água, rosa, ciano, grafite. */
+const _SW_AC="#0d9488";            // verde-água — nenhum cliente usa
 const _SW_MAX_PROPOSTAS=10;
 const _SW_VIDEOS_INICIAL=10;   // (06/10/2026) 5 do caso específico (obra/visita citada) + 5 do assunto geral
 /* v2 (28/09/2026, 18h40, Gustavo): "não precisa ter essa distinção Sugestão da Pixels e cliente,
@@ -113423,11 +113426,11 @@ function SwLegenda({txt,cor}){
   </div>;
 }
 const _SW_GRUPOS=[
-  {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"60 segundos · roteiro de fala pro cliente gravar", cor:"#dc2626",
+  {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"60 segundos · roteiro de fala pro cliente gravar", cor:"#db2777",
    icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="M16.5 10.2l5-3v9.6l-5-3z"/></svg>},
-  {id:"arte",      tipo:"arte",      titulo:"Artes estáticas", sub:"título + texto na arte",                  cor:"#2563eb",
+  {id:"arte",      tipo:"arte",      titulo:"Artes estáticas", sub:"título + texto na arte",                  cor:"#0891b2",
    icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="M21 15.5l-5-5L5 21"/></svg>},
-  {id:"carrossel", tipo:"carrossel", titulo:"Carrosséis",      sub:"até 5 lâminas",                          cor:"#d97706",
+  {id:"carrossel", tipo:"carrossel", titulo:"Carrosséis",      sub:"até 5 lâminas",                          cor:"#334155",
    icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M3 7v10M21 7v10"/></svg>},
 ];
 function _swGrupoDe(ct){ const c=String(ct||""); if(c==="carrossel") return "carrossel"; if(_swEhVideo(c)) return "video"; return "arte"; }
@@ -114155,14 +114158,14 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       </div>}
     </div>
 
-    {form&&<div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:12,borderColor:"#bbf7d0"})}>
+    {form&&<div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:12,borderColor:"#99f6e4"})}>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Nova solicitação — {_nome()}</div>
       <div><div style={_lbl}>Título (opcional)</div><input value={form.titulo} onChange={function(e){ setForm(Object.assign({},form,{titulo:e.target.value})); }} placeholder={"Pedido de "+_swDataCurta(new Date().toISOString())} style={_inp}/></div>
       <div><div style={_lbl}>Mensagem do cliente / anotação</div><textarea value={form.texto} onChange={function(e){ setForm(Object.assign({},form,{texto:e.target.value})); }} rows={4} placeholder="Cole aqui o que ele escreveu no WhatsApp, ou anote o que precisa saber junto com o áudio." style={Object.assign({},_inp,{resize:"vertical"})}/></div>
       <div onDragOver={function(e){ e.preventDefault(); setArrastando(true); }} onDragLeave={function(){ setArrastando(false); }}
         onDrop={function(e){ e.preventDefault(); setArrastando(false); _addFiles(e.dataTransfer&&e.dataTransfer.files); }}
         onClick={function(){ if(fileRef.current) fileRef.current.click(); }}
-        style={{border:"2px dashed "+(arrastando?_SW_AC:"#cbd5e1"),background:arrastando?"#f0fdf4":"#f8fafc",borderRadius:14,padding:isMob?"18px 12px":"22px 16px",textAlign:"center",cursor:"pointer"}}>
+        style={{border:"2px dashed "+(arrastando?_SW_AC:"#cbd5e1"),background:arrastando?"#f0fdfa":"#f8fafc",borderRadius:14,padding:isMob?"18px 12px":"22px 16px",textAlign:"center",cursor:"pointer"}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5}}>Solte aqui o áudio do WhatsApp e o que mais o cliente mandou</div>
         <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Áudio (.ogg, .opus, .mp3, .m4a), vídeo, imagem, PDF, Word ou texto. Vídeo vira só o áudio — o vídeo não sai do PC.</div>
         <input ref={fileRef} type="file" multiple style={{display:"none"}} onChange={function(e){ _addFiles(e.target.files); e.target.value=""; }}/>
@@ -114181,7 +114184,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       </div>
     </div>}
 
-    {maisForm&&aberta&&<div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:12,borderColor:"#bbf7d0"})}>
+    {maisForm&&aberta&&<div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:12,borderColor:"#99f6e4"})}>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Pedir mais — {aberta.titulo||"Pedido"}</div>
       <div style={{color:"#64748b",fontSize:12.5,marginTop:-6}}>A IA usa o mesmo áudio/mensagem desta solicitação e o cérebro do cliente, e segue o que você descrever aqui. As novas entram na linha do formato escolhido, sem repetir as que já existem.</div>
       <div><div style={_lbl}>Formato</div>
@@ -114217,7 +114220,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
         {pautas.map(function(pt){
           const st=_SW_STATUS[pt.status]||_SW_STATUS.rascunho; const on=pt.id===abertaId;
           return <button key={pt.id} type="button" onClick={function(){ setAbertaId(on?null:pt.id); }}
-            style={{textAlign:"left",background:on?"#f0fdf4":"#fff",border:"1px solid "+(on?_SW_AC:"#eef0f3"),borderRadius:14,padding:"11px 13px",cursor:"pointer",fontFamily:_RT_FF}}>
+            style={{textAlign:"left",background:on?"#f0fdfa":"#fff",border:"1px solid "+(on?_SW_AC:"#eef0f3"),borderRadius:14,padding:"11px 13px",cursor:"pointer",fontFamily:_RT_FF}}>
             <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5}}>{pt.titulo||"Pedido"}</div>
             <div style={{display:"flex",gap:6,alignItems:"center",marginTop:5,flexWrap:"wrap"}}>
               <span style={{background:st.b,color:st.c,borderRadius:99,padding:"1px 8px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{st.t}</span>
