@@ -142908,8 +142908,12 @@ function _eaEscolherVariantes(fc, ctx){
     let melhor = null, nota = 0;
     opcoes.forEach(function(n){
       const k = _eaChaveCidade(n); let pts = 0;
+      // texto que está dentro da opção (ex.: grupo "FRAIBURGO-SC" com o texto "Ipumirim/SC") também vale
+      const kt = _eaChaveCidade(nomes[n].filter(function(o){ return _eaTipo(o) === "texto"; }).map(function(o){ return o.text || ""; }).join(" "));
       if(cid && (k === cid || k.indexOf(cid) >= 0 || cid.indexOf(k) >= 0)) pts += 100;
+      else if(cid && kt && (kt === cid || kt.indexOf(cid) >= 0)) pts += 90;
       else if(cidTok.length && cidTok.every(function(t){ return k.indexOf(t) >= 0; })) pts += 80;
+      else if(cidTok.length && kt && cidTok.every(function(t){ return kt.indexOf(t) >= 0; })) pts += 70;
       if(un && (k.indexOf(un) >= 0 || un.indexOf(k) >= 0 || (/paragua/.test(un) && /paragua/.test(k)) || (!/paragua/.test(un) && /brasil|brazil/.test(k)))) pts += 40;
       const tk = _eaTokens(n); tk.forEach(function(t){ if(bag.indexOf(t) >= 0) pts += 10; });
       if(pts > nota){ nota = pts; melhor = n; }
