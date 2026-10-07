@@ -28992,6 +28992,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           const _colSort=colSortMode[col.id];
           const colTasks=visible
             .filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id)
+            .filter(t=>!(t.status==="preencher_material"&&typeof pxEhVersaoES==="function"&&pxEhVersaoES(t)))   // (07/10) estrategista vê um card só
             .sort((a,b)=>{
             // Modos de ordenação por data — funcionam tanto como override por coluna
             // quanto como padrão global (sortMode). _colSort tem prioridade.
@@ -31540,7 +31541,8 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
 
     {orderedCols.map(col=>{
       // Coluna "agendado" (Publicações) agrega status="agendado" + status="publicado"
-      const colTasks=sortTasks(filteredVisible.filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id));
+      const colTasks=sortTasks(filteredVisible.filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id)
+        .filter(t=>!(t.status==="preencher_material"&&typeof pxEhVersaoES==="function"&&pxEhVersaoES(t))));   // (07/10) versão ES some do Preencher material
       // Mantém grupo visível mesmo sem cards SE há drag em andamento (vira drop zone)
       if(colTasks.length===0&&!dragId)return null;
       const isDropTarget=dragId&&dragOverCol===col.id;
@@ -34774,6 +34776,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const _grupoBio=task.client==="bioter"&&_uns.indexOf("grupo")>=0&&!/-es$/.test(String(task.id))&&typeof pxCriarVersaoES==="function";
     const _unBr=_grupoBio?Array.from(new Set(_uns.map(x=>x==="grupo"?"brasil":x).filter(x=>x!=="paraguay"))).join(","):null;
     if(_grupoBio) setTimeout(()=>{ pxCriarVersaoES({...task,status:_dest,bioterUnit:_unBr},setTasks,{status:_dest}); },600);
+    /* (07/10/2026, Gustavo) é NA APROVAÇÃO que o card entra de vez no calendário: a cascata confere a semana
+       (a data dele fica; se a semana estourou a cadência, quem anda é a fila). */
+    if(typeof pxCascataVarrer==="function") setTimeout(()=>{ try{ pxCascataVarrer(task.id); }catch(_e){} },3000);
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:_dest,ajustar:false,colEnteredAt:_now,
       ...(_grupoBio?{bioterUnit:_unBr}:{}),
       comments:_cmtInstr?[...(t.comments||[]),_cmtInstr]:(t.comments||[]),
@@ -49060,7 +49065,10 @@ function _cardPodeSerResp(u){
        Vale também pra quem só troca de unidade ou de cliente. */
     const _alvoDe=String((task.client||"")+"|"+((task.bioterUnit||task.bioter_unit)||""));
     const _alvoPra=String((client||"")+"|"+(client==="bioter"?(bioterUnit||""):""));
-    const _mudouAlvo=_alvoDe!==_alvoPra;
+    /* (07/10/2026, Gustavo) "eu nem aprovei e ele já começou a arrastar". Card ainda na fase de COPY
+       (rascunho, Copys, alteração) trocando de unidade NÃO mexe no calendário — isso acontece na aprovação. */
+    const _faseCopy=["rascunhos","demanda","alteracao_copy"].indexOf(String(task.status||""))>=0;
+    const _mudouAlvo=_alvoDe!==_alvoPra&&!_faseCopy;
     if(!task._isDraft&&(_viraFeed||_mudouData||_mudouAlvo)&&!somenteStory&&!naoPublica&&typeof pxCascataVarrer==="function"){
       /* O id vai junto: a data que a pessoa escolheu AQUI fica. Quem anda pra abrir espaço
          é a fila, nunca o card que ela acabou de posicionar. */
@@ -50024,6 +50032,11 @@ function _cardPodeSerResp(u){
       timeline:(t.timeline||[]).concat([{type:"status",fromLabel:"Preencher material",toLabel:"Demanda",
         from:"preencher_material",to:"recebida",at:_now,atFmt:nowFmt(),user:_quem,
         note:"Material preenchido por "+_quem+" — liberado pra produção"}])
+    }):(String(t.id)===String(task.id)+"-es"&&t.status==="preencher_material")?Object.assign({},t,{
+      /* (07/10) versão ES do Grupo Bioter anda junto e leva o mesmo material (a estrategista preenche um card só) */
+      status:"recebida",colEnteredAt:_now,
+      files:(t.files&&t.files.length)?t.files:((((p.find(function(x){return x.id===task.id;})||{}).files)||[]).filter(function(f){ return f&&!f.isAnnotation; })),
+      timeline:(t.timeline||[]).concat([{type:"status",fromLabel:"Preencher material",toLabel:"Demanda",from:"preencher_material",to:"recebida",at:_now,atFmt:nowFmt(),user:_quem,note:"Acompanhou o card em português (mesmo material)"}])
     }):t; });});
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Card liberado pra produção!",4000);
     onClose();
@@ -50041,6 +50054,9 @@ function _cardPodeSerResp(u){
       timeline:(t.timeline||[]).concat([{type:"status",fromLabel:"Preencher material",toLabel:"Copys",
         from:"preencher_material",to:"demanda",at:_now,atFmt:nowFmt(),user:_quem,
         note:"Material preenchido por "+_quem+" — enviado pra Avaliação de copys"}])
+    }):(String(t.id)===String(task.id)+"-es"&&t.status==="preencher_material")?Object.assign({},t,{
+      status:"demanda",colEnteredAt:_now,
+      timeline:(t.timeline||[]).concat([{type:"status",fromLabel:"Preencher material",toLabel:"Copys",from:"preencher_material",to:"demanda",at:_now,atFmt:nowFmt(),user:_quem,note:"Acompanhou o card em português"}])
     }):t; });});
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Enviado pra Avaliação de copys!",4000);
     onClose();
