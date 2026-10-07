@@ -122746,6 +122746,7 @@ function _evLeve(c){                             // endereço para VER/ANALISAR:
   return c.preview_url || c.url || "";
 }
 async function _evCachePodar(cache){ try{ const ks = await cache.keys(); for(let i = 0; i < ks.length - 300; i++) await cache.delete(ks[i]); }catch(_){} }
+const _evProg = {};                                // v72: {url: {rec, tot}} — bytes que já chegaram de cada vídeo
 const _evBuscando = {};                            // v41: pedidos em andamento (o mesmo vídeo pedido 3–5× ao mesmo tempo baixava 3–5×)
 function _evBuscar(url){
   if(!url) return Promise.reject(new Error("vídeo sem endereço"));
@@ -122762,7 +122763,12 @@ async function _evBuscar1(url){                  // baixa a cópia leve UMA vez 
   const r = await fetch(url); if(!r.ok) throw new Error("não consegui abrir o vídeo (HTTP " + r.status + ")");
   const n = Number(r.headers.get("content-length")) || 0;
   if(!local && n > _EV_NAV_MAX){ try{ if(r.body) r.body.cancel(); }catch(_){} throw new Error("vídeo pesado (" + Math.round(n / 1e6) + " MB): o navegador só abre a cópia leve, que o PC do escritório faz"); }
-  const b = await r.blob();
+  let b;                                           // v72: conta os bytes enquanto chegam (tela "Carregando mídias")
+  if(r.body && r.body.getReader){
+    const rd = r.body.getReader(), partes = [], pg = _evProg[url] = { rec:0, tot:n };
+    for(;;){ const x = await rd.read(); if(x.done) break; partes.push(x.value); pg.rec += x.value.length; }
+    b = new Blob(partes, { type:r.headers.get("content-type") || "video/mp4" }); pg.tot = pg.rec = b.size;
+  } else b = await r.blob();
   if(cache && b.size <= _EV_NAV_MAX){ try{ await cache.put(url, new Response(b, { headers:{ "content-type":b.type || "video/mp4" } })); _evCachePodar(cache); }catch(_){} }
   return b;
 }
@@ -126933,7 +126939,7 @@ function _EvpInterruptor({ on, onChange, label, dica }){
    _EvpAcoes   ações em blocos com ícone (em vez de botões compridos empilhados com texto embaixo)
    _EvpMais    "Mais ajustes" — esconde o que é avançado
    _EvpDica    uma linha de ajuda, discreta ─── */
-const _EVP_CSS = ".evp-r{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0;cursor:pointer;display:block}" +
+const _EVP_CSS = "@keyframes evpGira{to{transform:rotate(360deg)}}.evp-gira{animation:evpGira .9s linear infinite}" + ".evp-r{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0;cursor:pointer;display:block}" +
   ".evp-r::-webkit-slider-runnable-track{height:4px;border-radius:99px;background:linear-gradient(var(--evp-roxo),var(--evp-roxo)) 0 0/var(--p,0%) 100% no-repeat,var(--evp-knob)}" +
   ".evp-r::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;margin-top:-5.5px;border:0;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 1px 4px rgba(0,0,0,.35);transition:transform .12s}" +
   ".evp-r:hover::-webkit-slider-thumb,.evp-r:active::-webkit-slider-thumb{transform:scale(1.15)}" +
@@ -127018,6 +127024,50 @@ async function _evpDetectarBpm(buf){
   if(!lag) return null;
   let bpm = 6000 / lag; while(bpm < 70) bpm *= 2; while(bpm > 170) bpm /= 2;
   return Math.round(bpm);
+}
+
+/* v72: TELA "CARREGANDO MÍDIAS" — aparece só se demorar mais de 0,4 s (da 2ª vez, com os vídeos guardados, nem pisca) */
+function _EvpCarregandoMidias({ carga, onAbrir, isMob }){
+  const [ver, setVer] = useState(false), [agora, setAgora] = useState(Date.now());
+  useEffect(function(){ const a = setTimeout(function(){ setVer(true); }, 400); const iv = setInterval(function(){ setAgora(Date.now()); }, 1000);
+    return function(){ clearTimeout(a); clearInterval(iv); }; }, []);
+  if(!ver || !carga) return null;
+  const mb = function(b){ return b >= 1e6 ? (b / 1e6).toFixed(b >= 1e8 ? 0 : 1).replace(".", ",") + " MB" : Math.max(0, Math.round(b / 1e3)) + " KB"; };
+  const pct = carga.tot > 0 ? Math.min(100, Math.round(carga.rec * 100 / carga.tot)) : Math.round(carga.feitos * 100 / Math.max(1, carga.total));
+  const passou = (agora - carga.desde) / 1000;
+  return (
+    <div data-carregando-midias role="dialog" aria-label="Carregando mídias" aria-live="polite"
+      style={{position:"fixed",inset:0,zIndex:80,background:"rgba(5,8,18,.78)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div className="evp-entra" style={{width:"min(420px, 100%)",background:"#12141c",border:"1px solid rgba(255,255,255,.08)",borderRadius:16,padding:isMob ? "20px 18px" : "24px 24px 20px",
+        color:"#e8eaf2",fontFamily:"inherit",boxShadow:"0 20px 60px rgba(0,0,0,.5)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <span className="evp-gira" aria-hidden="true" style={{width:22,height:22,borderRadius:"50%",border:"2.5px solid rgba(167,139,250,.25)",borderTopColor:"#a78bfa",flex:"0 0 auto"}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:16,fontWeight:700,letterSpacing:-0.2}}>Carregando mídias</div>
+            <div style={{fontSize:12.5,color:"#9aa0b4",marginTop:2}}>Trazendo os vídeos desta edição para {isMob ? "este aparelho" : "este computador"}</div>
+          </div>
+          <div style={{fontSize:15,fontWeight:700,fontVariantNumeric:"tabular-nums",color:"#c4b5fd"}}>{pct}%</div>
+        </div>
+        <div style={{height:6,borderRadius:99,background:"rgba(255,255,255,.08)",marginTop:16,overflow:"hidden"}}>
+          <div style={{height:"100%",width:pct + "%",borderRadius:99,background:"linear-gradient(90deg,#7c3aed,#a78bfa)",transition:"width .3s ease"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#9aa0b4",marginTop:8,fontVariantNumeric:"tabular-nums"}}>
+          <span data-carga-conta>{carga.feitos} de {carga.total} {carga.total > 1 ? "vídeos" : "vídeo"}</span>
+          {carga.tot > 0 && <span>{mb(carga.rec)} de {mb(carga.tot)}</span>}
+        </div>
+        <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:6,maxHeight:168,overflow:"auto"}}>
+          {carga.itens.map(function(x){ const ok = x.st === "ok", ruim = x.st === "falhou", vai = x.st === "baixando";
+            return <div key={x.id} style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,color:ok ? "#e8eaf2" : "#9aa0b4"}}>
+              <span aria-hidden="true" style={{width:16,textAlign:"center",color:ok ? "#4ade80" : ruim ? "#fbbf24" : "#a78bfa",fontWeight:700}}>{ok ? "✓" : ruim ? "!" : vai ? "↓" : "·"}</span>
+              <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.nome}</span>
+              {vai && <span style={{fontSize:11,color:"#a78bfa"}}>baixando</span>}{ruim && <span style={{fontSize:11,color:"#fbbf24"}}>não veio</span>}
+            </div>; })}
+        </div>
+        <div style={{fontSize:11.5,color:"#7c8296",marginTop:14,lineHeight:1.45}}>Só na primeira vez {isMob ? "neste aparelho" : "neste computador"}. Da próxima, abre na hora.</div>
+        {passou >= 8 && <button data-abrir-mesmo-assim onClick={onAbrir} style={{marginTop:12,width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid rgba(255,255,255,.12)",
+          background:"transparent",color:"#e8eaf2",font:"inherit",fontSize:13,fontWeight:600,cursor:"pointer"}}>Abrir mesmo assim (o resto chega enquanto você mexe)</button>}
+      </div>
+    </div>);
 }
 
 function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou, pcAuto, erroAjuste, limparErroAjuste }){
@@ -127200,7 +127250,57 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   }, [precisaEstab.join(","), Object.keys(tratados).join(",")]);
 
   /* mídia: miniaturas + áudio (tratado conforme as opções) */
-  useEffect(function(){ clipes.forEach(function(c){ const u = _evLeve(c); _evpMiniaturas(c.id, u); _evpAudio(c.id, u); }); }, [ed.id]);
+  /* v72 (07/10/2026): TELA "CARREGANDO MÍDIAS" — num computador que ainda não tem os vídeos desta edição, o Estúdio baixa PRIMEIRO só os
+     vídeos que estão na linha do tempo (na ordem em que aparecem, 3 por vez) e mostra o andamento; o player só começa com eles na mão
+     (antes: tela preta com o som andando e tudo travando, porque baixava os 26 brutos do card de uma vez + o som e as miniaturas de todos).
+     Da 2ª vez em diante os vídeos já estão guardados no computador e a tela nem aparece. As miniaturas e o som dos outros brutos vêm
+     depois, um de cada vez, sem disputar a internet com a edição. */
+  const usadosAbrir = useMemo(function(){
+    const ids = [], ja = {};
+    const por = function(id){ if(id && !ja[id] && infoClipe[id]){ ja[id] = 1; ids.push(id); } };
+    (p.clips || []).forEach(function(c){ if(c && !c.off) por(c.clipe); });
+    (p.imagens || []).forEach(function(x){ if(x && x.camada === "video") por(x.clipe); });
+    (p.narracoes || []).forEach(function(n){ if(n && n.fonte === "clipe") por(n.clipe); });
+    return ids;
+  }, [ed.id]);
+  const [midiaPronta, setMidiaPronta] = useState(!!pcAuto);
+  const [carga, setCarga] = useState(null);
+  useEffect(function(){
+    if(pcAuto){ setMidiaPronta(true); return; }
+    let vivo = true; setMidiaPronta(false);
+    const itens = usadosAbrir.map(function(id){ const c = infoClipe[id]; return { id:id, nome:(c && c.nome) || "Vídeo", url:_evLeve(c), tam:Number(c && c.size) || 0, st:"fila" }; })
+      .filter(function(x){ return /^https?:/.test(x.url); });
+    const jaTem = function(x){ return !!_evObjUrls[x.url]; };
+    if(!itens.length || itens.every(jaTem)){ setMidiaPronta(true); setCarga(null); return; }
+    const t0 = Date.now();
+    const pinta = function(){ if(!vivo) return;
+      let rec = 0, tot = 0; itens.forEach(function(x){ const g = _evProg[x.url]; const tt = (g && g.tot) || x.tam || 0; tot += tt; rec += x.st === "ok" ? tt : Math.min(tt, (g && g.rec) || 0); });
+      setCarga({ itens:itens.map(function(x){ return { id:x.id, nome:x.nome, st:x.st }; }), feitos:itens.filter(function(x){ return x.st === "ok" || x.st === "falhou"; }).length,
+        total:itens.length, rec:rec, tot:tot, desde:t0 }); };
+    let k = 0;
+    const fila = async function(){
+      while(vivo && k < itens.length){ const x = itens[k++];
+        if(jaTem(x)){ x.st = "ok"; pinta(); continue; }
+        x.st = "baixando"; pinta();
+        try{ const u = await _evUrlLocal(x.url); x.st = /^blob:/.test(u) ? "ok" : "falhou"; }catch(_){ x.st = "falhou"; }
+        pinta(); } };
+    const iv = setInterval(pinta, 300); pinta();
+    Promise.all([fila(), fila(), fila()]).then(function(){ if(!vivo) return;
+      clearInterval(iv); pinta();
+      const ruins = itens.filter(function(x){ return x.st === "falhou"; });
+      if(ruins.length) _evToast("warning", ruins.length + (ruins.length > 1 ? " vídeos não carregaram" : " vídeo não carregou") + " neste computador (" + ruins.map(function(x){ return x.nome; }).join(", ").slice(0, 120) + "): " + (ruins.length > 1 ? "tocam" : "toca") + " direto pelo link");
+      setMidiaPronta(true); });
+    return function(){ vivo = false; clearInterval(iv); };
+  }, [ed.id]);
+  /* mídia: miniaturas + áudio (tratado conforme as opções) — v72: depois da edição carregada, primeiro os vídeos usados, um de cada vez */
+  useEffect(function(){
+    if(!midiaPronta) return; let vivo = true;
+    const usa = {}; usadosAbrir.forEach(function(id){ usa[id] = 1; });
+    const ord = clipes.filter(function(c){ return usa[c.id]; }).concat(clipes.filter(function(c){ return !usa[c.id]; }));
+    (async function(){ for(const c of ord){ if(!vivo) return; const u = _evLeve(c);
+      try{ await _evpMiniaturas(c.id, u); }catch(_){} if(!vivo) return; try{ await _evpAudio(c.id, u); }catch(_){} } })();
+    return function(){ vivo = false; };
+  }, [ed.id, midiaPronta]);
   const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + _evpChaveExtra(p.audio) + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().join(",") : "");
   const [tratandoAudio, setTratandoAudio] = useState(true);   // v10b (30/09): começa "tratando" — o PC não pode gravar antes de carregar a fala (saía sem som)
   const [metodoRuido, setMetodoRuido] = useState(null);
@@ -128301,6 +128401,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   if(isMob && !mobAberto){
     return (
       <div style={{marginTop:14}}>
+        {!midiaPronta && <style>{_EVP_CSS}</style>}{!midiaPronta && <_EvpCarregandoMidias carga={carga} isMob={true} onAbrir={function(){ setMidiaPronta(true); }}/>}
         {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
         <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} sel={null} enquadrar={false} soVer={true} nome={(base && base.nome) || ""}/>
         <div style={{display:"flex",gap:10,alignItems:"center",marginTop:10}}>
@@ -128640,6 +128741,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}
           fala={ed.fala} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }} ctxMenu={abrirCtx} io={io} abrirHist={function(){ setHistK(true); }} travarFaixa={travarFaixa} mob={isMob}/>;
   const elExtras = <Fragment>
+      {!midiaPronta && <_EvpCarregandoMidias carga={carga} isMob={isMob} onAbrir={function(){ setMidiaPronta(true); }}/>}
       <div role={verExp ? "dialog" : undefined} aria-label="Exportar" aria-hidden={!verExp} onPointerDown={function(e){ if(e.target === e.currentTarget && !expAtivo) setVerExp(false); }}
         style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:"center",justifyContent:"center",padding:16}}>
         <div ref={expRef} style={{width:"min(620px, 100%)",maxHeight:"90vh",overflow:"auto",position:"relative"}}>
