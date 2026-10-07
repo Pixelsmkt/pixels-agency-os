@@ -142997,7 +142997,10 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
         <label onDragOver={function(e){ e.preventDefault(); setArrasta(true); }} onDragLeave={function(){ setArrasta(false); }} onDrop={function(e){ e.preventDefault(); setArrasta(false); escolher(e.dataTransfer.files && e.dataTransfer.files[0]); }}
           style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:"22px 14px",borderRadius:14,border:"2px dashed "+(arq||arrasta?_EA_UI.a:_EA_UI.aBorda),background:arq||arrasta?_EA_UI.aSoft:"#fbfaff",cursor:"pointer",textAlign:"center",minHeight:120}}>
           <input ref={inputRef} type="file" accept=".psd,.psb,.svg" style={{display:"none"}} onChange={function(e){ escolher(e.target.files && e.target.files[0]); }}/>
-          <span style={{width:40,height:40,borderRadius:12,background:"#fff",border:"1px solid "+_EA_UI.aBorda,display:"inline-flex",alignItems:"center",justifyContent:"center",color:_EA_UI.a,fontSize:18}}>{arq ? "✓" : "⬆"}</span>
+          <span style={{width:56,height:56,borderRadius:16,background:arq?"linear-gradient(135deg,#22c55e,#15803d)":"linear-gradient(135deg,#a78bfa,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:arq?"0 8px 20px -6px rgba(21,128,61,.55)":"0 8px 20px -6px rgba(124,58,237,.55)",marginBottom:4,transform:arrasta?"translateY(-3px) scale(1.05)":"none",transition:"transform .15s"}}>
+            {arq ? <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" opacity=".45"/><path d="M3 15l5-5 4 4"/><path d="M14 12l2-2 5 5" opacity=".45"/><path d="M16 3v-0M12 8V3M9.5 5.5L12 3l2.5 2.5"/></svg>}
+          </span>
           <div style={{fontSize:13.5,fontWeight:800,color:arq?_EA_UI.a:_EA_UI.tx}}>{arq ? arq.name : "Arraste o PSD aqui"}</div>
           <div style={{fontSize:12,color:_EA_UI.sub}}>{arq ? Math.round((arq.size || 0) / 1048576) + " MB · clique pra trocar" : "ou clique pra escolher (.psd, .psb, .svg)"}</div>
         </label>
@@ -143431,6 +143434,71 @@ async function _eaEncaixarFotoObra(fc, o, url, ctx){
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   return { avisos:avisos, analise:an, encaixe:m };
 }
+/* (07/10, Gustavo) cidade que NÃO existe no grupo CIDADES do template: escreve a cidade numa das opções (a que o template
+   deixa acesa) e ajusta o retângulo de fundo ao tamanho do texto, com a mesma sobra dos lados do original. O lado ancorado
+   (direita, se o texto é alinhado à direita) fica parado. O pin vai pra posição guardada da cidade, se houver. */
+function _eaLarguraTexto(t){
+  try{ t.initDimensions(); let w = 0; const n = (t._textLines || [""]).length; for(let i = 0; i < n; i++) w = Math.max(w, t.getLineWidth(i)); return w * (t.scaleX || 1); }
+  catch(_){ return (t.width || 0) * (t.scaleX || 1); }
+}
+async function _eaEsticarImagemH(o, novaLarg, ancora){
+  const el = o.getElement && o.getElement(); if(!el) return;
+  const sx = o.scaleX || 1, w0 = Math.round(o.width || el.width), h0 = Math.round(o.height || el.height);
+  const alvo = Math.max(8, Math.round(novaLarg / sx)); if(Math.abs(alvo - w0) < 2) return;
+  const cap = Math.min(Math.floor(h0 / 2), Math.floor(w0 / 2) - 1);   // pontas (cantos arredondados) não esticam
+  const cv = document.createElement("canvas"); cv.width = alvo; cv.height = h0; const x = cv.getContext("2d");
+  x.drawImage(el, 0, 0, cap, h0, 0, 0, cap, h0);
+  x.drawImage(el, cap, 0, Math.max(1, w0 - 2 * cap), h0, cap, 0, Math.max(1, alvo - 2 * cap), h0);
+  x.drawImage(el, w0 - cap, 0, cap, h0, alvo - cap, 0, cap, h0);
+  const direita = (o.left || 0) + w0 * sx;
+  await o.setSrc(cv.toDataURL("image/png"));
+  o.set({ width:alvo, height:h0 });
+  if(ancora === "right") o.set("left", direita - alvo * sx);
+  o.setCoords();
+}
+async function _eaEscreverCidade(fc, cidade, ident, W, H){
+  const avisos = []; if(!cidade) return avisos;
+  const grupos = {}; fc.getObjects().forEach(function(o){ if(o.variante && /cidade|city|local/i.test(o.variante.grupo)){ (grupos[o.variante.grupo] = grupos[o.variante.grupo] || {}); (grupos[o.variante.grupo][o.variante.nome] = grupos[o.variante.grupo][o.variante.nome] || []).push(o); } });
+  const cid = _eaChaveCidade(cidade);
+  for(const g of Object.keys(grupos)){
+    const ops = grupos[g], nomes = Object.keys(ops);
+    const acesa = nomes.find(function(n){ return ops[n].some(function(o){ return o.visible !== false; }); }) || nomes[0];
+    const txt = ops[acesa].find(function(o){ return _eaTipo(o) === "texto"; }); if(!txt) continue;
+    if(_eaChaveCidade(txt.text) === cid) continue;   // já é a cidade certa (casou nas alternativas)
+    // escreve a cidade na opção acesa
+    nomes.forEach(function(n){ ops[n].forEach(function(o){ o.set("visible", n === acesa); }); });
+    const al = txt.textAlign || "left", sxT = txt.scaleX || 1;
+    const larg0 = _eaLarguraTexto(txt), esq0 = al === "right" ? (txt.left + txt.width * sxT - larg0) : al === "center" ? (txt.left + (txt.width * sxT - larg0) / 2) : txt.left;
+    const fundo = ops[acesa].filter(function(o){ return o !== txt && _eaTipo(o) !== "texto"; }).map(function(o){ return { o:o, c:_eaCaixa(o) }; })
+      .filter(function(f){ const t = _eaCaixa(txt); return f.c.left <= t.left + t.width && f.c.left + f.c.width >= t.left && f.c.top <= t.top + 4 && f.c.top + f.c.height >= t.top + t.height - 4; })
+      .sort(function(a, b){ return a.c.width * a.c.height - b.c.width * b.c.height; })[0] || null;
+    // sobra igual dos dois lados (média do original; a caixa do texto do PSD vem um pouco mais larga que o texto)
+    const sobra = fundo ? Math.max(16, ((esq0 - fundo.c.left) + (fundo.c.left + fundo.c.width - (esq0 + larg0))) / 2) : 0;
+    const sobraE = sobra, sobraD = sobra;
+    const direita = fundo && al === "right" ? fundo.c.left + fundo.c.width - sobraD : txt.left + txt.width * sxT;
+    txt.set({ text:String(cidade).trim(), width:4000 });          // largo pra medir numa linha só
+    const larg1 = _eaLarguraTexto(txt);
+    txt.set("width", (larg1 / sxT) + 4); try{ txt.initDimensions(); }catch(_){ }
+    if(al === "right") txt.set("left", direita - txt.width * sxT);
+    txt.setCoords();
+    if(fundo){
+      const novaLarg = larg1 + sobraE + sobraD;
+      try{
+        if(_eaTipo(fundo.o) === "imagem") await _eaEsticarImagemH(fundo.o, novaLarg, al === "right" ? "right" : "left");
+        else { const sxF = fundo.o.scaleX || 1, dir = fundo.c.left + fundo.c.width; fundo.o.set("width", novaLarg / sxF); if(al === "right") fundo.o.set("left", dir - novaLarg); fundo.o.setCoords(); }
+        if(al !== "right"){ const tL = _eaCaixa(txt); fundo.o.set("left", (fundo.o.left || 0) + (tL.left - sobraE - _eaCaixa(fundo.o).left)); fundo.o.setCoords(); }
+      }catch(e){ avisos.push("fundo da cidade: " + _eaErro(e)); }
+    }
+    // pin: posição guardada dessa cidade (Identidade visual › Pins), senão fica onde estava e avisa
+    const pin = ops[acesa].find(function(o){ return o !== txt && (!fundo || o !== fundo.o) && /pin|alfinete|marcador/i.test(o.nome || ""); });
+    if(pin){ pin.espaco = "PIN";
+      const p = ident && ident.pins && ident.pins[cid];
+      if(p && p.W && p.H){ pin.set({ left:p.x * W / p.W, top:p.y * H / p.H }); pin.setCoords(); }
+      else avisos.push("a cidade “" + cidade + "” não existe no template: escrevi o nome e ajustei o fundo, mas o pin ficou no lugar da " + acesa + " — arraste o pin no editor e guarde a posição (vale pra próxima)"); }
+    else avisos.push("a cidade “" + cidade + "” não existe no template: escrevi o nome e ajustei o fundo");
+  }
+  return avisos;
+}
 async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const passo = function(m){ try{ if(onPasso) onPasso(m); }catch(_){ } };
   if(!task || !modelo || !modelo.doc || !Array.isArray(modelo.doc.paginas) || !modelo.doc.paginas.length) throw new Error("Modelo sem página");
@@ -143474,7 +143542,9 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     }catch(e){ avisos.push((o.nome || o.espaco) + ": " + _eaErro(e)); }
   }
   // (07/10) grupos de alternativas do template (CIDADES, ÍCONES, MAPA…): liga a que casa com o briefing, apaga as outras
-  try{ _eaEscolherVariantes(fc, { cidade:copy.cidade, unidade:unid, textos:[task.title, copy.titulo, copy.frase, copy.texto, task.produto, task.product, _eaSemHtml(task.desc || task.description || "")] }).forEach(function(x){ avisos.push(x); }); }catch(_){ }
+  try{ _eaEscolherVariantes(fc, { cidade:copy.cidade, unidade:unid, textos:[task.title, copy.titulo, copy.frase, copy.texto, task.produto, task.product, _eaSemHtml(task.desc || task.description || "")] })
+    .filter(function(x){ return !(copy.cidade && /alternativas de [^:]*(cidade|city|local)/i.test(x)); }).forEach(function(x){ avisos.push(x); }); }catch(_){ }
+  try{ (await _eaEscreverCidade(fc, copy.cidade, ident, W, H)).forEach(function(x){ avisos.push(x); }); }catch(e){ avisos.push("cidade: " + _eaErro(e)); }
   // fotos do card nos espaços FOTO. Foto de obra (regras do Gustavo, 07/10): texto e mapa NÃO podem ficar em cima da obra;
   // na altura do mapa/pin já tem que ser céu; horizonte reto. A IA olha a foto (horizonte, inclinação, caixa da obra) e
   // o encaixe escolhe zoom/posição que respeitem isso; se não der, a foto entra centralizada e o histórico avisa.
