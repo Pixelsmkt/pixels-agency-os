@@ -2796,6 +2796,8 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     if(!t)return;
     const assigned=t.assignee===designerId||(Array.isArray(t.assignees)&&t.assignees.includes(designerId));
     if(!assigned)return;
+    // (07/10/2026, Gustavo) versão em espanhol do Grupo Bioter conta junto com o original — não paga de novo
+    if(Array.isArray(t.tags)&&t.tags.indexOf("Versão espanhol")>=0)return;
     // Descarta deletados + cards ainda em fase de copy (rascunhos, Copys=demanda, Alteração de copy).
     // Considera pra pagamento a partir de "Demanda" (recebida) em diante: execução, avaliação,
     // aprovado, agendado, publicado, reprovado, pausado, ajustes.
@@ -5320,6 +5322,60 @@ function _pxColaTelefone(txt){
   return String(txt||"").replace(_PX_RE_TEL_LINHA,"\n");
 }
 
+/* ═══ VERSÃO EM ESPANHOL DO CARD DO GRUPO BIOTER (07/10/2026, Gustavo) ══════════════════════
+   "quando for selecionado Grupo Bioter, faz automaticamente a versão em espanhol". Decisão dele:
+   DUPLICAR o card (id <original>-es), legendas separadas, e no pagamento conta como 1 só
+   (o card ES não entra no cálculo do freela — tag "Versão espanhol").
+   O card ES vai pra unidade Paraguay (é lá que o espanhol publica), fica travado na mesma data
+   (a cascata não mexe: _pxCasFixo olha a tag) e nasce na mesma coluna do original.
+   Traduz o texto que já existe — não reescreve. Rótulos do briefing ficam em português. */
+const PX_TAG_VERSAO_ES="Versão espanhol";
+function pxEhVersaoES(t){ return !!(t&&((Array.isArray(t.tags)&&t.tags.indexOf(PX_TAG_VERSAO_ES)>=0)||/-es$/.test(String(t.id||"")))); }
+const _pxVersaoESEmCurso={};
+async function pxCriarVersaoES(taskId,setTasks){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const id=String(taskId||""); if(!sb||!id||/-es$/.test(id)||_pxVersaoESEmCurso[id]) return null;
+  _pxVersaoESEmCurso[id]=true;
+  try{
+    const idEs=id+"-es";
+    const ja=await sb.from("tasks").select("id").eq("id",idEs).limit(1);
+    if(ja.data&&ja.data.length) return null;                       // já existe (nada é sobrescrito)
+    const r=await sb.from("tasks").select("*").eq("id",id).single();
+    if(r.error||!r.data) return null;
+    const o=r.data;
+    if(String(o.client)!=="bioter"||String(o.bioter_unit||"").split(",").map(function(x){return x.trim();}).indexOf("grupo")<0||o.deleted_at) return null;
+    const brief=_pxHtmlParaTexto(o.description||""), leg=_pxHtmlParaTexto(o.caption||"");
+    if(!brief.trim()&&!leg.trim()) return null;                    // sem copy ainda: tenta no próximo salvar
+    if(typeof askIA!=="function") return null;
+    const sys="Você traduz copy de redes sociais do português do Brasil para o ESPANHOL do Paraguai (agronegócio). "+
+      "Traduz com naturalidade, sem acrescentar nem tirar ideia. Os RÓTULOS do briefing (• TÍTULO, • TEXTO NA ARTE, • ROTEIRO, Cena 1 — Abertura, Lâmina 2 —, • Narração IA etc.) ficam EXATAMENTE como estão, em português; "+
+      "o conteúdo depois de cada rótulo vai em espanhol. Telefone, @perfis e hashtags de marca ficam iguais; hashtags comuns podem ir para o espanhol. "+
+      "Responda só neste formato, texto puro:\n===TITULO===\n(título do card em espanhol)\n===BRIEFING===\n(briefing)\n===LEGENDA===\n(legenda)";
+    const u="TÍTULO DO CARD: "+(o.title||"")+"\n\nBRIEFING:\n"+(brief||"(vazio)")+"\n\nLEGENDA:\n"+(leg||"(vazia)");
+    const data=await askIA({model:PX_IA_MODELO,max_tokens:4000,system:sys,messages:[{role:"user",content:u}]});
+    const txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+    const pega=function(k,prox){ const i=txt.indexOf("==="+k+"==="); if(i<0) return ""; const j=prox?txt.indexOf("==="+prox+"===",i):-1; return txt.slice(i+k.length+6,j>i?j:undefined).trim(); };
+    const tit=pega("TITULO","BRIEFING")||(o.title||""), b2=pega("BRIEFING","LEGENDA"), l2=pega("LEGENDA");
+    if(!b2&&!l2) return null;
+    const agora=new Date().toISOString();
+    const tags=(Array.isArray(o.tags)?o.tags:[]).filter(function(x){return x!==PX_TAG_VERSAO_ES;}).concat([PX_TAG_VERSAO_ES]);
+    const novo=Object.assign({},o,{
+      id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioter_unit:"paraguay",
+      description:b2?_pxTextoParaHtml(b2):"", caption:l2?_pxTextoParaHtml(l2):"",
+      tags:tags, files:[], comments:[], copy_versoes:[], traducao_pt:{titulo:o.title||"",briefing:o.description||"",legenda:o.caption||""},
+      paid_at:null, col_entered_at:agora, updated_at:agora,
+      timeline:[{type:"created",label:"Versão em espanhol criada automaticamente do card “"+(o.title||"")+"” (Grupo Bioter) — mesma data, unidade Paraguay; no pagamento conta junto com o original",at:agora,atFmt:(typeof nowFmt==="function"?nowFmt():""),user:"Claude"}],
+    });
+    delete novo.created_at_ts;
+    const ins=await sb.from("tasks").insert(novo).select("*").single();
+    if(ins.error){ console.warn("[versao ES]",ins.error); return null; }
+    if(typeof setTasks==="function"&&typeof rowToTask==="function"){ const tk=rowToTask(ins.data); setTasks(function(p){ return (p||[]).some(function(x){return x.id===tk.id;})?p:(p||[]).concat([tk]); }); }
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Versão em espanhol criada: “"+novo.title+"” (Paraguay, mesma data).",4500);
+    return ins.data;
+  }catch(e){ console.warn("[versao ES]",e); return null; }
+  finally{ delete _pxVersaoESEmCurso[id]; }
+}
+if(typeof window!=="undefined"){ window.pxCriarVersaoES=pxCriarVersaoES; window.pxEhVersaoES=pxEhVersaoES; }
 function _pxHtmlParaTexto(html){
   return String(html||"")
     .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n")
@@ -20909,6 +20965,7 @@ function _pxCasFixo(t){
   const id=String((t&&t.id)||"");
   if(id.indexOf("autocom-")===0||id.indexOf("autoev-")===0) return true;
   const tags=Array.isArray(t&&t.tags)?t.tags:[];
+  if(tags.indexOf("Versão espanhol")>=0||/-es$/.test(id)) return true;   // (07/10) versão ES do Grupo Bioter: mesma data do original
   if(tags.some(function(x){ return /^data comemorativa$/i.test(String(x||"").trim()); })) return true;
   // rede de segurança: aniversário da marca criado à mão sem a tag ("Arte de 29 anos/años")
   if(/anivers[áa]rio|aniversario|cumplea|seguidor|\b\d{1,3}\s+(anos|años)\b/i.test(String((t&&t.title)||""))) return true;
@@ -49009,6 +49066,10 @@ function _cardPodeSerResp(u){
       setTimeout(function(){ try{ pxCascataPuxar([_saiu]); }catch(_e){} },2500);
     }
     _gravar();
+    /* (07/10/2026, Gustavo) Grupo Bioter marcado → nasce o card da versão em espanhol (Paraguay), uma vez só. */
+    if(client==="bioter"&&String(bioterUnit||"").split(",").map(function(x){return x.trim();}).indexOf("grupo")>=0&&!/-es$/.test(String(task.id))&&typeof pxCriarVersaoES==="function"){
+      setTimeout(function(){ pxCriarVersaoES(task.id,setTasks); },3500);
+    }
     function _gravar(){
     // Usa updater functional — preserva comments/timeline mais recentes do `prev`
     // (caso outro usuário tenha adicionado algo via realtime entre o open e o save)
