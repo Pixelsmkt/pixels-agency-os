@@ -105145,6 +105145,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               <Ico n="plus" size={15} color={PB_PURPLE_DK}/> Adicionar novo template
             </button>}
             {templates.length===0 && !editMode && <_PbEmpty icon="image" text="Nenhum template cadastrado." sub={isAdmin?"Use o botão abaixo pra adicionar templates.":""}/>}
+            {/* (07/10/2026, Gustavo) os templates que estão NO APP (Edição de arte) aparecem aqui pro designer, com o link do PSD original */}
+            <_PbTemplatesDoApp clientId={cl && cl.id}/>
           </div>}
 
           {/* Orientações para a equipe — só na área Design.
@@ -108545,6 +108547,40 @@ function PortalFeedbacksCliente({cl, unit, isMob, cor}){
   </div>;
 }
 if(typeof window!=="undefined"){ window.PortalFeedbacksCliente=PortalFeedbacksCliente; }
+
+
+/* (07/10/2026) Templates que estão no app (Criação › Edição de arte) — listados pro designer no Playbook, com link do PSD original (Drive) quando houver */
+function _PbTemplatesDoApp({ clientId }){
+  const [lista, setLista] = useState(null);
+  useEffect(function(){
+    let vivo = true;
+    if(!clientId || !window._sb){ setLista([]); return; }
+    window._sb.rpc("arte_modelos_resumo", { p_client:clientId }).then(function(r){ if(vivo) setLista(Array.isArray(r.data) ? r.data : []); }).catch(function(){ if(vivo) setLista([]); });
+    return function(){ vivo = false; };
+  }, [clientId]);
+  if(!lista || !lista.length) return null;
+  const rot = { foto_obra:"Foto de obra", arte:"Arte", carrossel:"Carrossel", story:"Story", template:"Outro" };
+  return <div style={{background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:14,padding:"14px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+      <div style={{color:PB_INK,fontWeight:800,fontSize:14}}>Templates no app</div>
+      <div style={{color:PB_MUTE,fontSize:12}}>os PSDs oficiais que o botão "Gerar arte" usa (Criação › Edição de arte). O link abre o PSD original no Drive.</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
+      {lista.map(function(m){ return <div key={m.id} style={{border:"1px solid "+(m.padrao?PB_PURPLE_BD:PB_BORDER2),borderRadius:12,overflow:"hidden",background:"#fff"}}>
+        <div style={{aspectRatio:"4/5",background:"#eef1f5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative"}}>
+          {m.thumb_url ? <img src={m.thumb_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : <span style={{fontSize:11,color:PB_MUTE}}>{m.largura}×{m.altura}</span>}
+          {m.padrao && <span style={{position:"absolute",top:6,left:6,fontSize:10,fontWeight:800,color:"#fff",background:PB_PURPLE,borderRadius:999,padding:"2px 7px"}}>★ padrão</span>}
+        </div>
+        <div style={{padding:"8px 10px"}}>
+          <div style={{fontSize:12.5,fontWeight:800,color:PB_INK,lineHeight:1.25}}>{m.nome}</div>
+          <div style={{fontSize:11,color:PB_MUTE,marginTop:2}}>{rot[m.tipo_card] || "Arte"} · {m.modo === "base" ? "Base" : "Fixo"}{m.unidade ? " · " + m.unidade : ""}</div>
+          {m.arquivo_url ? <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={{display:"inline-block",marginTop:6,fontSize:12,fontWeight:800,color:PB_PURPLE_DK,textDecoration:"none"}}>Baixar PSD ↗</a>
+            : <div style={{marginTop:6,fontSize:11,color:PB_MUTE}}>{m.arquivo_nome || "sem link do PSD"}</div>}
+        </div>
+      </div>; })}
+    </div>
+  </div>;
+}
 
 /* ── Normalizador de texto das tarefas/etapas ──
    Regra da casa (pedido 2026-09-01): sem pontuação e símbolos (!?.:; emojis...),
@@ -142207,6 +142243,12 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
                 {_EA_TIPOS_CARD.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}</select>
               <select value={m.modo || "fixo"} onChange={function(e){ config(m, { p_modo:e.target.value }); }} title="Modo" style={miniSel}><option value="fixo">Fixo</option><option value="base">Base</option></select>
               {(unidades || []).length > 0 && <select value={m.unidade || ""} onChange={function(e){ config(m, { p_unidade:e.target.value }); }} title="Unidade" style={miniSel}><option value="">Todas</option>{unidades.map(function(u){ return <option key={u} value={u}>{u}</option>; })}</select>}
+            </div>}
+            {!isMob && <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <input defaultValue={m.arquivo_url || ""} placeholder="Link do PSD original (Drive) — aparece pro designer no Playbook" title="Link do PSD original no Drive: fica disponível pro designer baixar em Playbook › Design › Templates"
+                onBlur={function(e){ const v = e.target.value.trim(); if(v !== (m.arquivo_url || "")) _eaRpc("arte_modelo_link", { p_id:m.id, p_url:v }).then(function(){ _eaToast("success", v ? "Link do PSD guardado" : "Link removido"); carregar(); }).catch(function(err){ _eaToast("error", _eaErro(err)); }); }}
+                style={Object.assign({}, miniSel, {flex:1,fontWeight:500,cursor:"text"})}/>
+              {m.arquivo_url && <a href={m.arquivo_url} target="_blank" rel="noreferrer" title="Abrir o PSD original" style={{fontSize:12,fontWeight:800,color:_EA_UI.a,textDecoration:"none",whiteSpace:"nowrap"}}>PSD ↗</a>}
             </div>}
             {!isMob && <div style={{display:"flex",gap:6,alignItems:"center"}}>
               {!m.padrao ? <button onClick={function(){ config(m, { p_padrao:true }); }} style={_eaBt("suave",{padding:"6px 10px",fontSize:12,flex:1,justifyContent:"center"})}>★ Usar como padrão</button>
