@@ -143164,18 +143164,19 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
       try{
         if(refsCache === null){ passo("procurando fotos aprovadas deste cliente…");
           intel = await pxInteligenciaDesign(task.client, unid);
-          // (Gustavo 15:04) fotos APROVADAS são a referência principal; a foto do produto do Playbook (recorte de catálogo)
-          // só entra por último, e só se houver menos de 3 fotos reais — senão puxa tudo pra mesma cara
-          const aprov = await pxFotosReferenciaDoCliente(task, 6);
-          const prods = aprov.length >= 3 ? [] : pxProdutosCitadosNoCard(intel, task).filter(function(p){ return p.imgUrl; }).slice(0, 1).map(function(p){ return { url:p.imgUrl, nome:p.nome, card:"Produto do Playbook: " + p.nome, pts:0, data:"" }; });
+          // (Gustavo 15:27) não existe referência "principal": fotos aprovadas do cliente e a foto do produto do Playbook
+          // entram no MESMO balde e a cada arte sorteia-se um conjunto diferente — pra não sair tudo igual nem sempre do Playbook
+          const aprov = await pxFotosReferenciaDoCliente(task, 8);
+          const prods = pxProdutosCitadosNoCard(intel, task).filter(function(p){ return p.imgUrl; }).map(function(p){ return { url:p.imgUrl, nome:p.nome, card:"Produto do Playbook: " + p.nome, pts:0, data:"" }; });
           refsCache = aprov.concat(prods); }
-        const refs = refsCache.filter(function(r){ return geradas.indexOf(r.url) < 0; });
+        const sorteio = refsCache.filter(function(r){ return geradas.indexOf(r.url) < 0; }).map(function(r){ return { r:r, k:Math.random() }; }).sort(function(a, b){ return a.k - b.k; }).map(function(x){ return x.r; });
+        const refs = sorteio.slice(0, 4);
         if(!refs.length){ avisos.push("sem foto no material e sem fotos aprovadas deste cliente pra usar de referência — o espaço FOTO ficou com a imagem do template"); continue; }
         const permite = !(ident && ident.gerar_foto_ia === false);
         if(permite && typeof _eaFn === "function"){
           passo("criando uma foto nova do produto a partir das referências aprovadas…");
           const g = await _eaGerarFotoPorReferencia(task, refs, W, H, { identidade:ident, intel:intel, tipoCard:tipoCard });
-          if(g){ f = { url:g.url, name:"foto-ia.png", gerada:true }; geradas.push(refs[0].url); avisos.push("sem foto no material: foto NOVA gerada por IA a partir de " + g.refs.length + " foto(s) aprovada(s) do cliente (" + g.refs.map(function(r){ return r.card; }).filter(Boolean).slice(0, 2).join("; ") + ")" + (g.custo ? " · R$ " + Number(g.custo).toFixed(2) : "")); }
+          if(g){ f = { url:g.url, name:"foto-ia.png", gerada:true }; g.refs.forEach(function(r){ geradas.push(r.url); }); avisos.push("sem foto no material: foto NOVA gerada por IA a partir de " + g.refs.length + " foto(s) aprovada(s) do cliente (" + g.refs.map(function(r){ return r.card; }).filter(Boolean).slice(0, 2).join("; ") + ")" + (g.custo ? " · R$ " + Number(g.custo).toFixed(2) : "")); }
         }
         if(!f){ f = { url:refs[0].url, name:refs[0].nome }; geradas.push(refs[0].url); avisos.push("sem foto no material: entrou a foto aprovada do card “" + refs[0].card + "”" + (permite ? " (a IA não conseguiu gerar uma nova)" : " (geração por IA desligada pra este cliente)")); }
       }catch(e){ avisos.push("foto: " + _eaErro(e)); continue; }
