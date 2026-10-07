@@ -123314,8 +123314,8 @@ function _EvpMelhorarTrechos({ p, calc, selClip, tempo, irPara, mudar, ctl, trat
         <_EvpInterruptor on={!!r.igualar} onChange={function(v){ muda(r.id, { igualar:v || undefined }); }} label="Igualar com o resto" dica="Deixa a voz deste trecho no mesmo volume da fala ao redor"/>
         <_EvpInterruptor on={!!r.mudo} onChange={function(v){ muda(r.id, { mudo:v || undefined }); }} label="Silenciar este trecho" dica="Corta o som só aqui (ex.: barulho, palavrão)"/>
         <div style={{display:"flex",gap:6,marginTop:6}}>
-          <button onClick={function(){ if(tempo >= r.t1 - 0.3){ _evToast("warning", "A agulha está depois do fim do trecho."); return; } muda(r.id, { t0:r2(tempo) }); }} style={Object.assign(_evpBtn(), {flex:1,justifyContent:"center",padding:"5px 6px",fontSize:11})}><_EvpIco n="inicio" s={12}/>Começa na agulha</button>
-          <button onClick={function(){ if(tempo <= r.t0 + 0.3){ _evToast("warning", "A agulha está antes do começo do trecho."); return; } muda(r.id, { t1:r2(Math.min(fimV, tempo)) }); }} style={Object.assign(_evpBtn(), {flex:1,justifyContent:"center",padding:"5px 6px",fontSize:11})}><_EvpIco n="final" s={12}/>Termina na agulha</button>
+          <button onClick={function(){ if(tempo >= r.t1 - 0.3){ _evToast("warning", "A agulha está depois do fim do trecho."); return; } muda(r.id, { t0:r2(tempo) }); }} style={Object.assign(_evpBtn(), {flex:1,justifyContent:"center",padding:"5px 6px",fontSize:11})}><_EvpIco n="comecarAgulha" s={12}/>Começa na agulha</button>
+          <button onClick={function(){ if(tempo <= r.t0 + 0.3){ _evToast("warning", "A agulha está antes do começo do trecho."); return; } muda(r.id, { t1:r2(Math.min(fimV, tempo)) }); }} style={Object.assign(_evpBtn(), {flex:1,justifyContent:"center",padding:"5px 6px",fontSize:11})}><_EvpIco n="terminarAgulha" s={12}/>Termina na agulha</button>
         </div>
       </div>; })}
     {selClip && trs.length > meus.length && <div style={{fontSize:10.5,color:_EVP_COR.fraco,marginTop:8}}>{trs.length - meus.length} trecho(s) em outros clipes (Áudio › Melhorar trecho mostra todos).</div>}
@@ -127541,67 +127541,67 @@ const _EVP_TEMAS = {
 const _EVP_FAIXAS = [ { id:"motion", label:"Motion", icone:"motion", h:28, tag:"V5" },
                       { id:"textos", label:"Textos", icone:"texto", h:40, tag:"V4" },
                       { id:"transicoes", label:"Transições", icone:"transicao", h:26, tag:"V3" },   /* v65: camada de transições, acima do apoio */
-                      { id:"imagens", label:"Imagens", icone:"figurinha", h:30, tag:"V2" },
+                      { id:"imagens", label:"Imagens", icone:"camadas", h:30, tag:"V2" },
                       { id:"video", label:"Vídeo", icone:"editar", h:62, tag:"V1", divisoria:true },
                       { id:"fala", label:"Fala", icone:"fala", h:40, tag:"A1" }, { id:"musica", label:"Música", icone:"musica", h:34, tag:"A2" },
-                      { id:"narracao", label:"Narração", icone:"gravar", h:30, tag:"A3" }, { id:"sfx", label:"Efeitos", icone:"efeitos", h:30, tag:"A4", divisoria:true },
+                      { id:"narracao", label:"Narração", icone:"narracao", h:30, tag:"A3" }, { id:"sfx", label:"Efeitos", icone:"sfx", h:30, tag:"A4", divisoria:true },
                       { id:"legenda", label:"Legenda", icone:"legenda", h:30, tag:"CC" } ];
 const _EVP_DIVISORIA = "3px solid #475569";      // v56: entre imagem (em cima) e som (embaixo)
-const _EVP_MENUS = [ { id:"midia", label:"Mídia", icone:"midia" }, { id:"editar", label:"Editar", icone:"editar" }, { id:"audio", label:"Áudio", icone:"audio" }, { id:"texto", label:"Texto", icone:"texto" },
+const _EVP_MENUS = [ { id:"midia", label:"Mídia", icone:"midia" }, { id:"editar", label:"Editar", icone:"edicao" }, { id:"audio", label:"Áudio", icone:"audio" }, { id:"texto", label:"Texto", icone:"texto" },
                      { id:"motion", label:"Motion", icone:"motion" },   /* v35: painel do motion */
-                     { id:"musica", label:"Música", icone:"musica" }, { id:"imagem", label:"Imagem", icone:"imagem" }, { id:"efeitos", label:"Efeitos", icone:"efeitos" },
-                     { id:"legenda", label:"Legenda", icone:"legenda" }, { id:"corrigir", label:"Corrigir", icone:"lapis" },
-                     { id:"anuncio", label:"Anúncio", icone:"megafone" } ];                                        // v35: modo anúncio
+                     { id:"musica", label:"Música", icone:"musica" }, { id:"imagem", label:"Imagem", icone:"camadas" }, { id:"efeitos", label:"Efeitos", icone:"efeitos" },
+                     { id:"legenda", label:"Legenda", icone:"legenda" }, { id:"corrigir", label:"Corrigir", icone:"corrigir" },
+                     { id:"anuncio", label:"Anúncio", icone:"anuncio" } ];                                        // v35: modo anúncio
 /* v41: BARRA DE FERRAMENTAS fixa embaixo do vídeo (por ação, sempre a mesma). A tecla de verdade está no handler de atalhos:
    S, C, I e L já tinham dono (dividir, marcar correção, entrada, tocar) → essas ferramentas abrem com Alt+letra. Ctrl+K continua abrindo a paleta. */
 /* v68 (07/10/2026): BARRA ORGANIZADA COMO O CAPCUT — mesmos assuntos, mas os principais primeiro; ícones e atalhos do Estúdio continuam.
    Cada botão abre na própria barra as opções do assunto (‹ volta). Exportar fica só no topo. Velocidade (V) foi para Editar / barra do clipe. */
 const _EVP_FERR_GLOBAL = [
-  { id:"midia", label:"Mídia", icone:"midia", tecla:"1" }, { id:"editar", label:"Editar", icone:"dividir", tecla:"E" },
+  { id:"midia", label:"Mídia", icone:"midia", tecla:"1" }, { id:"editar", label:"Editar", icone:"edicao", tecla:"E" },
   { id:"texto", label:"Texto", icone:"texto", tecla:"T" }, { id:"legenda", label:"Legendas", icone:"legenda", tecla:"Alt+L" },
   { id:"audio", label:"Áudio", icone:"audio", tecla:"A" }, { id:"trans", label:"Transição", icone:"transicao", tecla:"X" },
   { id:"motion", label:"Motion", icone:"motion", tecla:"G" }, { id:"cor", label:"Cor", icone:"cor", tecla:"Alt+C" },
-  { id:"camada", label:"Camada", icone:"imagem", tecla:"Alt+I" }, { id:"efeitos", label:"Efeitos", icone:"efeitos", tecla:"Alt+X" },
+  { id:"camada", label:"Camada", icone:"camadas", tecla:"Alt+I" }, { id:"efeitos", label:"Efeitos", icone:"efeitos", tecla:"Alt+X" },
   { id:"figs", label:"Figurinhas", icone:"figurinha", tecla:"Alt+G" }, { id:"formato", label:"Formato", icone:"formato", tecla:"Alt+R" },
-  { id:"fundo", label:"Fundo", icone:"pessoa", tecla:"Alt+B" }, { id:"gerar", label:"Gerar mídia", icone:"busca", tecla:"Alt+N" },
-  { id:"ia", label:"IA", icone:"ia", tecla:"Alt+K" }, { id:"corrigir", label:"Corrigir", icone:"lapis", tecla:"C" } ];
+  { id:"fundo", label:"Fundo", icone:"fundo", tecla:"Alt+B" }, { id:"gerar", label:"Gerar mídia", icone:"gerar", tecla:"Alt+N" },
+  { id:"ia", label:"IA", icone:"ia", tecla:"Alt+K" }, { id:"corrigir", label:"Corrigir", icone:"corrigir", tecla:"C" } ];
 const _EVP_FERR_ALIAS = { cortar:"editar", imagem:"camada" };                                                   // v68: nomes antigos (atalhos/paleta)
 const _EVP_FERR_TECLA = { "1":"midia", e:"editar", v:"vel", a:"audio", t:"texto", g:"motion", x:"trans" };      // tecla sozinha (estavam livres; Shift+E continua "liga/desliga")
 const _EVP_FERR_ALT = { KeyS:"editar", KeyI:"camada", KeyC:"cor", KeyL:"legenda", KeyK:"ia", KeyX:"efeitos", KeyG:"figs", KeyR:"formato", KeyB:"fundo", KeyN:"gerar" };   // Alt+tecla (sem Alt+E/F/D: o navegador usa)
 /* v41: menu esquerdo vira BIBLIOTECA (só coisas para escolher/arrastar). As 11 guias antigas continuam atrás de "Mais…" por 1 semana. */
-const _EVP_BIB = [ { id:"bib-midia", label:"Mídia", icone:"midia" }, { id:"bib-musicas", label:"Músicas", icone:"musica" }, { id:"bib-sons", label:"Sons", icone:"efeitos" },
-                   { id:"bib-figs", label:"Figurinhas", icone:"figurinha" }, { id:"bib-kit", label:"Galeria", icone:"camadas" },
-                   { id:"bib-motion", label:"Motion", icone:"motion" }, { id:"bib-vozes", label:"Vozes", icone:"robo" } ];
+const _EVP_BIB = [ { id:"bib-midia", label:"Mídia", icone:"midia" }, { id:"bib-musicas", label:"Músicas", icone:"musica" }, { id:"bib-sons", label:"Sons", icone:"sfx" },
+                   { id:"bib-figs", label:"Figurinhas", icone:"figurinha" }, { id:"bib-kit", label:"Galeria", icone:"galeria" },
+                   { id:"bib-motion", label:"Motion", icone:"modelosMotion" }, { id:"bib-vozes", label:"Vozes", icone:"robo" } ];
 /* ferramentas da barra embaixo do vídeo, por tipo de item (ação = faz na hora; o resto abre a seção no painel da direita) */
 const _EVP_FERR = {
   /* v68: em grupos como o CapCut — Básico · Cor · Imagem · Enquadramento · Tempo (o tracinho separa) */
-  clip:[ { id:"fala", label:"Fala", icone:"fala2", acao:true }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"aparar", label:"Aparar", icone:"dividir" },
+  clip:[ { id:"fala", label:"Fala", icone:"cola", acao:true }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"aparar", label:"Aparar", icone:"aparar" },
          { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true },
-         { id:"vel", label:"Velocidade", icone:"velocidade" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"som", label:"Melhorar som", icone:"ia" }, { id:"mov", label:"Animar", icone:"movimento" },   // v78: Melhorar som no clipe
-         { id:"trans", label:"Transição", icone:"transicao" }, { id:"recortar", label:"Recortar", icone:"recortar" },
-         { id:"subst", label:"Substituir", icone:"midia" }, { id:"paracima", label:"Para cima", icone:"camadas", acao:true },
+         { id:"vel", label:"Velocidade", icone:"velocidade" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"som", label:"Melhorar som", icone:"melhorarSom" }, { id:"mov", label:"Animar", icone:"movimento" },   // v78: Melhorar som no clipe
+         { id:"trans", label:"Transição", icone:"transCorte" }, { id:"recortar", label:"Recortar", icone:"recortar" },
+         { id:"subst", label:"Substituir", icone:"substituir" }, { id:"paracima", label:"Para cima", icone:"paraCima", acao:true },
          { sep:"s1" }, { id:"cor", label:"Cor", icone:"cor" },
-         { sep:"s2" }, { id:"estab", label:"Qualidade", icone:"estab" }, { id:"fundo", label:"Trocar fundo", icone:"pessoa" }, { id:"fx", label:"Efeito", icone:"efeitos" },
-         { id:"chroma", label:"Chroma", icone:"pessoa" }, { id:"masc", label:"Máscara", icone:"camadas" },
-         { sep:"s3" }, { id:"rastrear", label:"Rastrear", icone:"olho" }, { id:"sinc", label:"Câmeras", icone:"camadas" },
-         { sep:"s4" }, { id:"separar", label:"Separar som", icone:"audio", acao:true },
-         { sep:"s5" }, { id:"congelar", label:"Congelar", icone:"congelar", acao:true }, { id:"reverso", label:"Reverso", icone:"desfazer", acao:true } ],
-  texto:[ { id:"editar", label:"Texto", icone:"lapis" }, { id:"elemento", label:"Elemento", icone:"camadas" }, { id:"estilo", label:"Estilo", icone:"estilo" }, { id:"anim", label:"Animação", icone:"animacao" },
-          { id:"pontos", label:"Animar", icone:"movimento" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"seguir", label:"Seguir", icone:"olho" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
-  musica:[ { id:"trocar", label:"Trocar", icone:"musica" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"suave", label:"Suave", icone:"audio" },
+         { sep:"s2" }, { id:"estab", label:"Qualidade", icone:"estab" }, { id:"fundo", label:"Trocar fundo", icone:"trocarFundo" }, { id:"fx", label:"Efeito", icone:"efeitoClipe" },
+         { id:"chroma", label:"Chroma", icone:"chroma" }, { id:"masc", label:"Máscara", icone:"mascara" },
+         { sep:"s3" }, { id:"rastrear", label:"Rastrear", icone:"rastrear" }, { id:"sinc", label:"Câmeras", icone:"cameras" },
+         { sep:"s4" }, { id:"separar", label:"Separar som", icone:"separarSom", acao:true },
+         { sep:"s5" }, { id:"congelar", label:"Congelar", icone:"congelar", acao:true }, { id:"reverso", label:"Reverso", icone:"reverso", acao:true } ],
+  texto:[ { id:"editar", label:"Texto", icone:"editarTexto" }, { id:"elemento", label:"Elemento", icone:"elemento" }, { id:"estilo", label:"Estilo", icone:"estilo" }, { id:"anim", label:"Animação", icone:"animacao" },
+          { id:"pontos", label:"Animar", icone:"movimento" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"seguir", label:"Seguir", icone:"seguir" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
+  musica:[ { id:"trocar", label:"Trocar", icone:"trocarMusica" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"suave", label:"Suave", icone:"suave" },
            { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v41
            { id:"apagar", label:"Tirar", icone:"apagar", acao:true } ],
-  sfx:[ { id:"som", label:"Som", icone:"efeitos" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" },
+  sfx:[ { id:"som", label:"Som", icone:"sfx" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" },
         { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v40
         { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
-  legenda:[ { id:"altura", label:"Altura", icone:"mover" }, { id:"pintar", label:"Cor do pedaço", icone:"cor" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true },
-            { id:"corrigir", label:"Corrigir", icone:"lapis" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"estilo", label:"Estilo", icone:"estilo" } ],
-  imagem:[ { id:"tamanho", label:"Tamanho", icone:"encaixar" }, { id:"anim", label:"Animação", icone:"animacao" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"seguir", label:"Seguir", icone:"olho" },
+  legenda:[ { id:"altura", label:"Altura", icone:"altura" }, { id:"pintar", label:"Cor do pedaço", icone:"pintar" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true },
+            { id:"corrigir", label:"Corrigir", icone:"editarLegenda" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"estilo", label:"Estilo", icone:"estilo" } ],
+  imagem:[ { id:"tamanho", label:"Tamanho", icone:"tamanho" }, { id:"anim", label:"Animação", icone:"animacao" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"seguir", label:"Seguir", icone:"seguir" },
            { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true }, { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
-  motion:[ { id:"campos", label:"Textos", icone:"lapis" }, { id:"melhorar", label:"Melhorar com IA", icone:"ia" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v35 · v56: Melhorar com IA (só esta peça)
+  motion:[ { id:"campos", label:"Textos", icone:"campos" }, { id:"melhorar", label:"Melhorar com IA", icone:"melhorarIA" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v35 · v56: Melhorar com IA (só esta peça)
            { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
-  final:[ { id:"duracao", label:"Duração", icone:"tempo" } ],
-  transicao:[ { id:"tipo", label:"Transição", icone:"transicao" } ],   // v65
+  final:[ { id:"duracao", label:"Duração", icone:"duracao" } ],
+  transicao:[ { id:"tipo", label:"Transição", icone:"transCorte" } ],   // v65
   narracao:[ { id:"voz", label:"Voz", icone:"robo" }, { id:"volume", label:"Volume", icone:"volume" }, { id:"tempo", label:"Tempo", icone:"tempo" }, { id:"dividir", label:"Dividir", icone:"dividir", acao:true }, { id:"duplicar", label:"Duplicar", icone:"duplicar", acao:true },   // v40
              { id:"apagar", label:"Apagar", icone:"apagar", acao:true } ],
 };
@@ -127653,8 +127653,8 @@ const _EVP_ICONES = {
   cor:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"/>',
   transicao:'<path d="M4 6l8 6-8 6z"/><path d="M20 6l-8 6 8 6z"/>',
   texto:'<path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/>',
-  estilo:'<path d="M14.5 4.5l5 5-8.5 8.5H6v-5z"/><path d="M12.5 6.5l5 5"/>',
-  animacao:'<circle cx="15" cy="12" r="5"/><path d="M3 9h5M2 12h5M3 15h5"/>',
+  estilo:'<path d="M2.5 19 7.5 5l5 14M4.3 14h6.4"/><path d="M14.5 12.5a3 3 0 1 1 6 0V19M20.5 16a3 3 0 1 1-6 0"/>',
+  animacao:'<rect x="10" y="6" width="11" height="12" rx="2"/><path d="M6.5 7.5v9M3 9v6"/>',
   tempo:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   musica:'<path d="M9 17.5V6l10-2v11.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
   efeitos:'<path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8L12 17.5l-1.8-5.2L5 10.5l5.2-1.8z"/><path d="M18.5 16v4M16.5 18h4"/>',
@@ -127678,7 +127678,7 @@ const _EVP_ICONES = {
   busca:'<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/>', lapis:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   alerta:'<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17.2v.1"/>',
   voltar:'<path d="M14.5 5.5 8 12l6.5 6.5"/>',
-  midia:'<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 9h17M3.5 15h17M8 5v4M16 5v4M8 15v4M16 15v4"/>',
+  midia:'<rect x="7" y="3" width="14" height="13" rx="2"/><path d="M3 7v11a3 3 0 0 0 3 3h11"/><path d="m12 7.2 4 2.3-4 2.3z"/>',
   sol:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   lua:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   expandir:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', recolher:'<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
@@ -127705,6 +127705,119 @@ const _EVP_ICONES = {
   figurinha:'<path d="M20 12.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6.5"/><path d="M20 12.5 12.5 20c0-4 3.5-7.5 7.5-7.5z"/><circle cx="9" cy="9.5" r="1.3" fill="currentColor"/><circle cx="15" cy="9.5" r="1.3" fill="currentColor"/>',
   abertura:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/>',
   fala2:'<path d="M4 6h16M4 10h10M4 14h16M4 18h7"/>', silencio:'<path d="M4 12h3M17 12h3"/><path d="M9 8v8M15 8v8"/>', licenca:'<path d="M12 3.5 5 6.5v5c0 4.3 3 7.6 7 9 4-1.4 7-4.7 7-9v-5z"/><path d="M9 12l2 2 4-4"/>',
+  edicao:'<path d="M4 11h16v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19z"/><path d="M4 11 3.3 7.6a1.3 1.3 0 0 1 1-1.5l12.9-2.7a1.3 1.3 0 0 1 1.5 1l.6 2.8"/><path d="m8.2 5.4 2.2 3.6M13 4.4l2.2 3.6"/><path d="M4 11h16"/>',
+  motion:'<circle cx="15" cy="12" r="5.5"/><path d="M2.5 8.5h5M2 12h6M2.5 15.5h5"/>',
+  fundo:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10 9 4M3 16 15 4M7 20 21 6M13 20l8-8M19 20l2-2"/>',
+  gerar:'<path d="M4 18V7a2 2 0 0 1 2-2h7"/><path d="M4 16l4-4 3 3 2-2 3 3"/><path d="M6 20h11a2 2 0 0 0 2-2v-5"/><path d="M18 3v4M16 5h4"/><path d="M14.5 8.5h.01"/>',
+  corrigir:'<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3"/><path d="m13.5 8 3 3"/><path d="M15 20h5"/>',
+  clipeAgulha:'<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M12 2v20"/><path d="m10 2 2 2.5L14 2"/>',
+  aparar:'<path d="M8 4H5v16h3"/><path d="M16 4h3v16h-3"/><path d="M9 12h6"/><path d="m11 10-2 2 2 2M13 10l2 2-2 2"/>',
+  muletas:'<path d="M4 18.5V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H8.5z"/><path d="m10 8.5 4 4M14 8.5l-4 4"/>',
+  ritmo:'<path d="M9.5 3h5l3.5 18H6z"/><path d="M8 15h8"/><path d="m12 15 4.5-8.5"/><circle cx="17" cy="5.8" r="1.2"/>',
+  cola:'<rect x="4" y="3" width="13" height="18" rx="2"/><path d="M7.5 7.5h6M7.5 11h6M7.5 14.5h3"/><path d="M20 9v8"/><path d="M18.5 9h3M18.5 17h3"/>',
+  ordem:'<path d="M4 6h9M4 12h9M4 18h9"/><path d="m17 8 2.5-3L22 8M19.5 5v6"/><path d="m17 16 2.5 3 2.5-3M19.5 19v-6"/>',
+  entrada:'<path d="M9 4H6v16h3"/><path d="M12 12h9"/><path d="m15 9-3 3 3 3"/>',
+  saida:'<path d="M15 4h3v16h-3"/><path d="M3 12h9"/><path d="m9 9 3 3-3 3"/>',
+  telaFinal:'<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M9.5 15.5h5"/><circle cx="12" cy="9.5" r="2.5"/><path d="M10.5 19h3"/>',
+  brutos:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m10.5 10.5 4 2.5-4 2.5z"/>',
+  videoCima:'<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="8" width="6.5" height="5" rx="1"/><path d="M6 15h4"/>',
+  banco:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+  galeria:'<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="m13 19 2.5-2.5 2 2 1.2-1.2L21 19.5"/>',
+  formas:'<circle cx="7.5" cy="7.5" r="4"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="m16.5 3 4 7h-8z"/><path d="M3.5 20.5 10 14"/>',
+  efeitoTrecho:'<path d="M5 4H3v16h2M19 4h2v16h-2"/><path d="M12 6.5c.4 2.6 1.9 4.1 4.5 4.5-2.6.4-4.1 1.9-4.5 4.5-.4-2.6-1.9-4.1-4.5-4.5 2.6-.4 4.1-1.9 4.5-4.5z"/>',
+  efeitoClipe:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14"/><path d="M14 8.5c.3 1.8 1.2 2.7 3 3-1.8.3-2.7 1.2-3 3-.3-1.8-1.2-2.7-3-3 1.8-.3 2.7-1.2 3-3z"/>',
+  enquadrarTodos:'<path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 10h4v4h-4z"/>',
+  preencher:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9 5.5 5.5M15 9l3.5-3.5M9 15l-3.5 3.5M15 15l3.5 3.5"/><path d="M5.5 8.5v-3h3M15.5 5.5h3v3M18.5 15.5v3h-3M8.5 18.5h-3v-3"/>',
+  fundoDesfocado:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1"/><circle cx="12" cy="9" r="1"/><circle cx="16" cy="9" r="1"/><circle cx="8" cy="13" r="1"/><circle cx="12" cy="13" r="1"/><circle cx="16" cy="13" r="1"/><circle cx="10" cy="17" r="1"/><circle cx="14" cy="17" r="1"/>',
+  fundoPreto:'<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="6" y="7" width="12" height="10" rx="1" fill="currentColor"/>',
+  fundoBranco:'<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="6" y="7" width="12" height="10" rx="1" stroke-dasharray="2 2"/>',
+  guardarKit:'<path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/><path d="M12 7v6M9 10h6"/>',
+  fundoImagem:'<rect x="3" y="4" width="14" height="12" rx="2"/><path d="m3 13 4-4 3 3 2-2 5 5"/><path d="M19 9v9a2 2 0 0 1-2 2H8"/><path d="m10.5 18 -2.5 2 2.5 2"/>',
+  trocarFundo:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="10" r="2.5"/><path d="M7.5 20c.4-2.8 2.2-4.5 4.5-4.5s4.1 1.7 4.5 4.5"/><path d="M5.5 6.5 9 4M15 4l3.5 2.5"/>',
+  chroma:'<rect x="3" y="4" width="18" height="16" rx="2" stroke-dasharray="3 2"/><circle cx="12" cy="10" r="2.5"/><path d="M7.5 20c.4-2.8 2.2-4.5 4.5-4.5s4.1 1.7 4.5 4.5"/>',
+  trocarMusica:'<path d="M9 17V5l9-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="15.5" cy="15" r="2.5"/><path d="M3 9.5h4M5 7.5l2 2-2 2"/>',
+  sfx:'<path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M18 4.5c.3 1.6 1 2.3 2.5 2.5-1.5.2-2.2 1-2.5 2.5-.3-1.5-1-2.3-2.5-2.5 1.5-.2 2.2-.9 2.5-2.5z"/><path d="M15.5 13a3.5 3.5 0 0 1 0 4"/>',
+  narracao:'<rect x="7" y="2.5" width="6" height="11" rx="3"/><path d="M4 11a6 6 0 0 0 12 0M10 17v4M7 21h6"/><path d="M18.5 7.5a4 4 0 0 1 0 6M20.8 5a7.5 7.5 0 0 1 0 11"/>',
+  importarSom:'<path d="M9 18V6l9-2v11"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="15" r="2.5"/><path d="M21 22v-5M19 19l2-2 2 2"/>',
+  extrairSom:'<rect x="2.5" y="5" width="10" height="9" rx="1.5"/><path d="m6.5 7.5 3 2-3 2z"/><path d="M14 9.5h3M15.5 8l1.5 1.5-1.5 1.5"/><path d="M19 13v6M21.5 14.5v3M16.5 15v2M12 21h10"/>',
+  locucao:'<rect x="4" y="7" width="12" height="10" rx="3"/><path d="M10 7V4.5M8.5 4.5h3"/><path d="M7.5 11v1M12.5 11v1"/><path d="M8 14.5h4"/><path d="M19 9.5a3 3 0 0 1 0 5M21.5 7.5a6 6 0 0 1 0 9"/>',
+  mixer:'<path d="M6 3v18M12 3v18M18 3v18"/><rect x="4" y="13" width="4" height="3" rx="1" fill="currentColor"/><rect x="10" y="6" width="4" height="3" rx="1" fill="currentColor"/><rect x="16" y="10" width="4" height="3" rx="1" fill="currentColor"/>',
+  limpeza:'<rect x="6" y="2.5" width="6" height="11" rx="3"/><path d="M3 11a6 6 0 0 0 12 0M9 17v4M6 21h6"/><path d="M19 3.5c.3 1.6 1 2.3 2.5 2.5-1.5.2-2.2 1-2.5 2.5-.3-1.5-1-2.3-2.5-2.5 1.5-.2 2.2-.9 2.5-2.5z"/><path d="M18.5 13.5h.01M21 17h.01"/>',
+  melhorarTrecho:'<path d="M4 4H2.5v16H4M20 4h1.5v16H20"/><path d="M7 10v4M10 7.5v9M13 10v4"/><path d="M17 7c.3 1.5 1 2.2 2.4 2.4-1.4.2-2.1 1-2.4 2.4-.3-1.4-1-2.2-2.4-2.4 1.4-.2 2.1-.9 2.4-2.4z"/>',
+  melhorarSom:'<path d="M3 10v4M6.5 7v10M10 9v6M13.5 11v2"/><path d="M18 7c.4 2 1.4 3 3.4 3.4-2 .4-3 1.4-3.4 3.4-.4-2-1.4-3-3.4-3.4 2-.4 3-1.4 3.4-3.4z"/>',
+  sonsAuto:'<path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M19.5 3.5v4M17.5 5.5h4"/><path d="M19.5 15v4M17.5 17h4"/>',
+  suave:'<path d="M3 19h4c4 0 6-14 10-14h4"/><path d="M3 5h18" stroke-dasharray="2 3"/>',
+  separarSom:'<rect x="3" y="3" width="18" height="7" rx="1.5"/><path d="M7 3v7M17 3v7"/><path d="M3 14h18" stroke-dasharray="2 2.5"/><path d="M5 19.5v-1M8 21v-4M11 20v-2M14 21v-4M17 19.5v-1M20 20.5v-2"/>',
+  addTexto:'<path d="M4 6V4.5h11V6M9.5 4.5V19M7.5 19h4"/><path d="M18.5 13v7M15 16.5h7"/>',
+  destaque:'<path d="m9 15-4.5 4.5H8l2.5-2.5"/><path d="m9 15 7.5-9a2 2 0 0 1 3 3L11 16.5z"/><path d="M13 21h8"/>',
+  tarja:'<rect x="2.5" y="13" width="19" height="7" rx="1.5"/><path d="M5.5 15.5h8M5.5 17.7h5"/><path d="M5 4h14v6H5z" stroke-dasharray="2 2"/>',
+  textoAnimado:'<path d="M8 5h12M14 5v14M12 19h4"/><path d="M2.5 9h4M3.5 13h5M2.5 17h4"/>',
+  listaTextos:'<path d="M3 5h3M4.5 5v5"/><path d="M10 5.5h11M10 9h7"/><path d="M3 14h3M4.5 14v5"/><path d="M10 14.5h11M10 18h7"/>',
+  editarTexto:'<path d="M4 6V4h10v2M9 4v15M7 19h4"/><path d="M13 20h3l5.5-5.5a1.6 1.6 0 0 0-2.3-2.3L13.7 17.7z"/>',
+  elemento:'<rect x="2.5" y="7" width="19" height="10" rx="3"/><path d="M7 10.5h6M7 13.5h4"/><path d="M17 10.5v3"/>',
+  addPeca:'<rect x="3" y="8" width="8" height="8" rx="1.5"/><circle cx="16" cy="12" r="4"/><path d="M19 3v4M17 5h4"/>',
+  corMotion:'<path d="M12 3a9 9 0 0 0 0 18c1 0 1.5-.7 1.5-1.5 0-.5-.3-.9-.6-1.2-.3-.4-.5-.8-.5-1.3 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.1-4-7.4-9-7.4z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15.5" cy="8.5" r="1.2"/>',
+  refazerIA:'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/><path d="M11 8.5c.3 1.6 1 2.3 2.6 2.6-1.6.3-2.3 1-2.6 2.6-.3-1.6-1-2.3-2.6-2.6 1.6-.3 2.3-1 2.6-2.6z"/>',
+  modelosMotion:'<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><circle cx="17" cy="17" r="4"/><path d="M5.5 6h3M5.5 8h2"/>',
+  melhorarIA:'<rect x="3" y="8" width="8" height="8" rx="1.5"/><path d="M16.5 5c.5 2.6 1.8 3.9 4.4 4.4-2.6.5-3.9 1.8-4.4 4.4-.5-2.6-1.8-3.9-4.4-4.4 2.6-.5 3.9-1.8 4.4-4.4z"/><path d="M16.5 17v4M14.5 19h4"/>',
+  campos:'<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M6 7h5M6 17h3"/><path d="M14 6v2M14 16v2"/>',
+  ajustar:'<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/><path d="M4 12h5M13 12h7"/><circle cx="11" cy="12" r="2"/>',
+  corAvancado:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6.5 17.5c4.5 0 4.5-11 11-11"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/>',
+  comparar:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 2v20"/><path d="M3 15l4-4 5 5"/><path d="m12 13 3-3 6 6" stroke-dasharray="2 2"/>',
+  redefinir:'<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+  transCamada:'<path d="M4 4v9l8-4.5zM20 4v9l-8-4.5z"/><path d="m3 17 9 4 9-4"/>',
+  transTodos:'<path d="M3 6v8l5-4zM13 6v8l-5-4z"/><path d="M11 6v8l5-4zM21 6v8l-5-4z"/><path d="M3 19h18"/>',
+  transCorte:'<path d="M4 5v14l7-7zM20 5v14l-7-7z"/><path d="M12 2v3M12 19v3"/>',
+  srt:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
+  corrigirNomes:'<rect x="2.5" y="5" width="15" height="14" rx="2"/><circle cx="7.5" cy="10.5" r="2"/><path d="M4.8 15.5c.5-1.6 1.5-2.4 2.7-2.4s2.2.8 2.7 2.4"/><path d="M12.5 9.5h2.5"/><path d="M14 20h2l5.5-5.5a1.4 1.4 0 0 0-2-2L14 18z"/>',
+  blocos:'<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="11" width="11" height="4" rx="1.5"/><rect x="3" y="17" width="15" height="4" rx="1.5"/>',
+  altura:'<path d="M12 3v18"/><path d="m8.5 6.5 3.5-3.5 3.5 3.5M8.5 17.5l3.5 3.5 3.5-3.5"/><path d="M4 12h4M16 12h4"/>',
+  pintar:'<path d="M18.5 3.5a2.1 2.1 0 0 1 3 3L13 15l-3-3z"/><path d="M10 12c-2.5 0-4 1.5-4.5 4-.3 1.5-1 2.5-2.5 3 3.5 1.5 8 .5 9-3"/>',
+  editarLegenda:'<rect x="3" y="5" width="13" height="11" rx="2"/><path d="M8.5 9.5a1.8 1.8 0 1 0 0 2.5M13 9.5a1.8 1.8 0 1 0 0 2.5"/><path d="M14 21h2.5l5-5a1.6 1.6 0 0 0-2.3-2.3l-5 5z"/>',
+  listaCorrecoes:'<path d="M3 6h9M3 12h7M3 18h5"/><path d="M14 20h2.5l5-5a1.6 1.6 0 0 0-2.3-2.3l-5 5z"/>',
+  marcarAqui:'<path d="M12 21s-6.5-5.4-6.5-11a6.5 6.5 0 0 1 13 0c0 5.6-6.5 11-6.5 11z"/><path d="M12 7v6M9 10h6"/>',
+  trecho:'<path d="M7 4H4v16h3M17 4h3v16h-3"/><path d="M9 12h6" stroke-dasharray="1.5 2"/>',
+  pedirIA:'<path d="M4 19.5V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H8z"/><path d="M12 7.5c.3 1.6 1 2.3 2.6 2.6-1.6.3-2.3 1-2.6 2.6-.3-1.6-1-2.3-2.6-2.6 1.6-.3 2.3-1 2.6-2.6z"/>',
+  anuncio:'<path d="M3 10v4a1 1 0 0 0 1 1h3l6 4.5V4.5L7 9H4a1 1 0 0 0-1 1z"/><path d="M7 15l1.5 5h2.5L10 16.8"/><path d="M17 9a4 4 0 0 1 0 6M19.5 6.5a7.5 7.5 0 0 1 0 11"/>',
+  revisor:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path d="m7.8 10.6 2 2 3.6-4"/>',
+  aprender:'<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3V11"/><path d="M21.5 9v5"/>',
+  modeloCliente:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18"/><circle cx="12" cy="13.5" r="2.2"/><path d="M8 19c.5-1.8 2-2.8 4-2.8s3.5 1 4 2.8"/>',
+  atalhos:'<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M6 14h.01M18 14h.01M9 14h6"/>',
+  substituir:'<rect x="3" y="3" width="10" height="10" rx="1.5"/><rect x="11" y="11" width="10" height="10" rx="1.5"/><path d="M16 3.5a3.5 3.5 0 0 1 3.5 3.5V8.5M18 7l1.5 1.5L21 7"/><path d="M8 20.5A3.5 3.5 0 0 1 4.5 17v-1.5M6 17l-1.5-1.5L3 17"/>',
+  paraCima:'<path d="m12 13.5-9-4.5 9-4.5 9 4.5z"/><path d="m3 14 9 4.5 9-4.5"/><path d="M12 22v-7" /><path d="m9.5 17.5 2.5-2.5 2.5 2.5" />',
+  mascara:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4.5" stroke-dasharray="2 2"/><path d="M3 12h4.5M16.5 12H21"/>',
+  rastrear:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  seguir:'<circle cx="17.5" cy="6.5" r="3"/><path d="M15 9 9.5 14.5" stroke-dasharray="2 2.2"/><rect x="3" y="14.5" width="6.5" height="6.5" rx="1.3"/>',
+  cameras:'<path d="M3 8a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m14 10.5 4-2.5v6l-4-2.5"/><path d="M8 19.5a9 9 0 0 0 11.5-1.5M19.5 15.5V18h-2.5"/>',
+  reverso:'<path d="M11 19 3 12l8-7z"/><path d="M21 19l-8-7 8-7z"/>',
+  tamanho:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 16 16 8M11 8h5v5M8 11v5h5"/>',
+  duracao:'<path d="M6.5 3h11M6.5 21h11"/><path d="M7.5 3v2.5c0 2.2 4.5 4.5 4.5 6.5s-4.5 4.3-4.5 6.5V21M16.5 3v2.5c0 2.2-4.5 4.5-4.5 6.5s4.5 4.3 4.5 6.5V21"/><path d="M9.5 18.5h5"/>',
+  comandos:'<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/>',
+  exportar:'<rect x="3" y="8" width="13" height="13" rx="2"/><path d="M12 12 21 3M15 3h6v6"/>',
+  carregando:'<path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+  gerarFormato:'<rect x="3" y="6" width="9" height="14" rx="1.5"/><rect x="9.5" y="9" width="11.5" height="8" rx="1.5" stroke-dasharray="2 2"/><path d="M18 2.5v4M16 4.5h4"/>',
+  rosto:'<circle cx="12" cy="12" r="8.5"/><path d="M9 10h.01M15 10h.01"/><path d="M9 15c1.7 1.4 4.3 1.4 6 0"/>',
+  area:'<rect x="3" y="3" width="13" height="13" rx="1" stroke-dasharray="2.5 2"/><path d="m14 14 6.5 2.5-3 1-1 3z"/>',
+  manchete:'<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M8.5 6.5h7M8.5 9h5"/>',
+  palco:'<rect x="2.5" y="5" width="11" height="14" rx="1.5"/><path d="m6.5 9.5 3.5 2.5-3.5 2.5z"/><path d="M16 8h5.5M16 11.5h5.5M16 15h3.5"/>',
+  cta:'<path d="M9 9V4.5a1.5 1.5 0 0 1 3 0V12"/><path d="M12 10.5a1.5 1.5 0 0 1 3 0V12"/><path d="M15 11.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.7a5 5 0 0 1-4.2-2.3L4.6 15a1.5 1.5 0 0 1 2.4-1.8L9 15.5V9"/>',
+  numero:'<path d="M5 9h15M4 15h15M10 4 8 20M16 4l-2 16"/>',
+  listaCheck:'<circle cx="5" cy="6" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="5" cy="18" r="2"/><path d="M10 6h11M10 12h11M10 18h11"/>',
+  antesDepois:'<rect x="2.5" y="6" width="7" height="12" rx="1.5"/><rect x="14.5" y="6" width="7" height="12" rx="1.5"/><path d="M11 12h2.5M12.5 10.5 14 12l-1.5 1.5"/>',
+  citacao:'<path d="M9.5 6H6a2 2 0 0 0-2 2v3h5.5v6H4v-6"/><path d="M20 6h-3.5a2 2 0 0 0-2 2v3H20v6h-5.5v-6"/>',
+  selo:'<path d="m12 2.5 2.4 1.7 3-.1.9 2.8 2.4 1.8-.9 2.8.9 2.8-2.4 1.8-.9 2.8-3-.1L12 21.5l-2.4-1.7-3 .1-.9-2.8-2.4-1.8.9-2.8-.9-2.8 2.4-1.8.9-2.8 3 .1z"/><path d="m8.8 12 2.2 2.2 4.2-4.2"/>',
+  receitaMotion:'<path d="m12 13.5-9-4.5 9-4.5 9 4.5z"/><path d="m3 14 9 4.5 4-2"/><path d="M19 14.5c.3 1.6 1 2.3 2.5 2.5-1.5.2-2.2 1-2.5 2.5-.3-1.5-1-2.3-2.5-2.5 1.5-.2 2.2-.9 2.5-2.5z"/>',
+  comecarAgulha:'<path d="M5 3v18"/><path d="m5 3 2 2-2 2"/><path d="M10 6h3v12h-3"/><path d="M16 12h5"/>',
+  terminarAgulha:'<path d="M19 3v18"/><path d="m19 3-2 2 2 2"/><path d="M14 6h-3v12h3"/><path d="M3 12h5"/>',
+  levarAgulha:'<path d="M19 3v18"/><path d="m17 3 2 2.5L21 3"/><rect x="3" y="9" width="8" height="6" rx="1.2"/><path d="M12.5 12H16M14.5 10.5 16 12l-1.5 1.5"/>',
+  fimMusica:'<path d="M7 17V5l8-2v11"/><circle cx="4.5" cy="17" r="2.5"/><circle cx="12.5" cy="14" r="2.5"/><path d="M19 4v16M22 4v16"/>',
+  remix:'<path d="M7 17V5l7-2v12"/><circle cx="4.5" cy="17" r="2.5"/><circle cx="11.5" cy="15" r="2.5"/><path d="m16 9 2.5 3-2.5 3M23 9l-2.5 3 2.5 3"/>',
+  transCenas:'<path d="M4 6v9l7-4.5zM20 6v9l-7-4.5z"/><rect x="3" y="18" width="7" height="3" rx="1"/><rect x="14" y="18" width="7" height="3" rx="1"/>',
+  volumeTodos:'<path d="M3 9v5h3l4.5 4V5L6 9z"/><path d="M14 9a3.5 3.5 0 0 1 0 5"/><path d="M17 5.5h4M17 9.5h4M17 13.5h4M17 17.5h4"/>',
+  virar:'<path d="M12 3v18" stroke-dasharray="0" /><path d="M3 12h18" stroke-dasharray="2 2"/><path d="M6 9.5 12 4l6 5.5z"/><path d="M6 14.5 12 20l6-5.5"/>',
+  enquadrarRosto:'<path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="10" r="2.5"/><path d="M8 17c.5-1.8 2-3 4-3s3.5 1.2 4 3"/>',
+  mapa:'<path d="m3 6 6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 3.5v14.5M15 6v14.5"/>',
+  fluxo:'<rect x="3" y="3.5" width="6" height="5" rx="1"/><rect x="15" y="9.5" width="6" height="5" rx="1"/><rect x="3" y="15.5" width="6" height="5" rx="1"/><path d="M9 6h3v12H9M12 12h3"/>'   // v82 (07/10/2026): ícones novos — cada função com o seu
 };
 _EVP_ICONES.megafone = '<path d="M4 10v4a1 1 0 0 0 1 1h2l6 4V5L7 9H5a1 1 0 0 0-1 1z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>';   // v35
 _EVP_ICONES.sino = '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>';   // v48 (Exportar): avisar quando terminar
@@ -129296,7 +129409,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <span style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub,fontFamily:_EVP_MONO}}>{_evTempo(tempo)} / {_evTempo(calc.total)}</span>
           <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" title="Assistir em tela cheia" style={_evpBtn("icone")}><_EvpIco n="expandir" s={16}/></button>
         </div>
-        <button data-mob-abrir="1" onClick={function(){ setMobAberto(true); }} style={Object.assign(_evpBtn("primario"), {marginTop:12,width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14})}><_EvpIco n="editar" s={17}/>Editar no celular</button>
+        <button data-mob-abrir="1" onClick={function(){ setMobAberto(true); }} style={Object.assign(_evpBtn("primario"), {marginTop:12,width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14})}><_EvpIco n="celular" s={17}/>Editar no celular</button>
       </div>
     );
   }
@@ -129362,42 +129475,42 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     const naAgulha = function(fid){ if(sel && sel.tipo === "clip"){ usarFerr({ id:fid }); return; } if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr(fid); fecharSub(); };
     id = _EVP_FERR_ALIAS[id] || id;
     /* v68: EDITAR — o clipe da agulha + tudo de cortar/arrumar o vídeo + estrutura (abertura, tela final, capa) */
-    if(id === "editar") return [ Q("clipe", "Clipe da agulha", "midia", { dica:"Seleciona o clipe da agulha e mostra as ferramentas dele", acao:function(){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } setSel({ tipo:"clip", id:clipAg.id }); } }),
+    if(id === "editar") return [ Q("clipe", "Clipe da agulha", "clipeAgulha", { dica:"Seleciona o clipe da agulha e mostra as ferramentas dele", acao:function(){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } setSel({ tipo:"clip", id:clipAg.id }); } }),
       Q("dividir", "Dividir", "dividir", { dica:"Dividir na agulha (S)", acao:cortar }),
-      Q("aparar", "Aparar ±1 q", "dividir", { dica:"Aparar o clipe da agulha quadro a quadro", acao:function(){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("aparar"); fecharSub(); } }),
+      Q("aparar", "Aparar ±1 q", "aparar", { dica:"Aparar o clipe da agulha quadro a quadro", acao:function(){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("aparar"); fecharSub(); } }),
       Q("vel", "Velocidade", "velocidade", { dica:"Velocidade do item selecionado ou do clipe da agulha (V)", acao:function(){ irFerr("vel"); } }),
       Q("congelar", "Congelar", "congelar", { dica:"Quadro parado na agulha", acao:congelar }),
       SEP("a"),
       Q("silencios", "Tirar silêncios", "silencio", { dica:"Régua do tamanho mínimo + botão (painel direito)", sub:"silencios" }),
-      Q("muletas", "Tirar \"éé/né\"", "fala", { dica:"Tira as muletas da fala agora", acao:muletasAg }),
-      Q("ritmo", "Apertar ritmo", "batida", { sub:"ritmo" }), Q("cola", "Cola da fala", "fala2", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }),
-      Q("ordem", "Ordem das falas", "modelo", { dica:"Reordenar os clipes pela frase + IA na fala", sub:"ordem" }),
+      Q("muletas", "Tirar \"éé/né\"", "muletas", { dica:"Tira as muletas da fala agora", acao:muletasAg }),
+      Q("ritmo", "Apertar ritmo", "ritmo", { sub:"ritmo" }), Q("cola", "Cola da fala", "cola", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }),
+      Q("ordem", "Ordem das falas", "ordem", { dica:"Reordenar os clipes pela frase + IA na fala", sub:"ordem" }),
       SEP("b"),
-      Q("io-a", "Entrada (I)", "inicio", { acao:function(){ marcarIO("a"); } }), Q("io-b", "Saída (O)", "fim", { acao:function(){ marcarIO("b"); } }),
+      Q("io-a", "Entrada (I)", "entrada", { acao:function(){ marcarIO("a"); } }), Q("io-b", "Saída (O)", "saida", { acao:function(){ marcarIO("b"); } }),
       Q("marca", "Marcador (M)", "marca", { acao:addMarca }),
       Q("comentarios", "Comentários" + (nComent ? " (" + nComent + ")" : ""), "comentario", { dica:"Comentários do cliente na Avaliação", sub:"comentarios" }),
       SEP("c"),
-      Q("abertura", "Abertura", "abertura", { sub:"abertura" }), Q("final", "Tela final", "final", { sub:"final" }), Q("capa", "Capa", "capa", { sub:"capa" }) ];
+      Q("abertura", "Abertura", "abertura", { sub:"abertura" }), Q("final", "Tela final", "telaFinal", { sub:"final" }), Q("capa", "Capa", "capa", { sub:"capa" }) ];
     /* v68: CAMADA — tudo que entra POR CIMA do vídeo (faixa V2) */
-    if(id === "camada") return [ Q("brutos", "Brutos do card", "midia", { dica:"Biblioteca › Mídia: o ícone de camadas põe o vídeo por cima", acao:function(){ abrirBib("bib-midia"); } }),
-      Q("sobre", "Vídeo por cima", "camadas", { sub:"sobre" }), Q("fotos", "Fotos do card", "imagem", { acao:function(){ abrirBib("bib-midia"); } }),
-      Q("banco", "Banco do cliente", "busca", { acao:function(){ window.dispatchEvent(new CustomEvent("evp-banco")); } }),
-      Q("galeria", "Galeria do kit", "camadas", { dica:"GC e elementos do kit do cliente", acao:function(){ abrirBib("bib-kit"); } }),
+    if(id === "camada") return [ Q("brutos", "Brutos do card", "brutos", { dica:"Biblioteca › Mídia: o ícone de camadas põe o vídeo por cima", acao:function(){ abrirBib("bib-midia"); } }),
+      Q("sobre", "Vídeo por cima", "videoCima", { sub:"sobre" }), Q("fotos", "Fotos do card", "imagem", { acao:function(){ abrirBib("bib-midia"); } }),
+      Q("banco", "Banco do cliente", "banco", { acao:function(){ window.dispatchEvent(new CustomEvent("evp-banco")); } }),
+      Q("galeria", "Galeria do kit", "galeria", { dica:"GC e elementos do kit do cliente", acao:function(){ abrirBib("bib-kit"); } }),
       SEP("a"), Q("camadas", "Desfocar / pixelar", "desfocar", { sub:"camadas" }) ];
     /* v68: EFEITOS — só imagem (o som ficou em Áudio) */
-    if(id === "efeitos") return [ Q("trecho", "Efeito num trecho", "efeitos", { dica:"Brilho, glitch, VHS, borrão… por cima de tudo, do tamanho que quiser (arraste as pontas na linha do tempo)", acao:function(){
+    if(id === "efeitos") return [ Q("trecho", "Efeito num trecho", "efeitoTrecho", { dica:"Brilho, glitch, VHS, borrão… por cima de tudo, do tamanho que quiser (arraste as pontas na linha do tempo)", acao:function(){
         const nid = _evpId(), tt = tIns(3); mudar(function(np){ np.imagens = np.imagens || []; np.imagens.push({ id:nid, camada:"efeito", nome:"Efeito", fx:[{ tipo:"glow", f:0.5 }], t0:tt.t0, t1:tt.t1, x:0.5, y:0.5, escala:1, rot:0, anim:"nenhuma" }); });
         setSel({ tipo:"imagem", id:nid }); setFerr(function(f2){ return Object.assign({}, f2, { imagem:"tamanho" }); }); _evToast("success", "Efeito em " + _evTempo(tt.t0) + " — escolha o efeito à direita e estique na linha do tempo"); } }),
-      Q("fx", "Efeito no clipe", "efeitos", { dica:"Brilho, glitch, lente, luz vazando, VHS, pixelar, mosaico — no clipe selecionado (ou da agulha)", acao:function(){ naAgulha("fx"); } }),
+      Q("fx", "Efeito no clipe", "efeitoClipe", { dica:"Brilho, glitch, lente, luz vazando, VHS, pixelar, mosaico — no clipe selecionado (ou da agulha)", acao:function(){ naAgulha("fx"); } }),
       Q("luz", "Luz nas trocas", "sol", { sub:"luz" }), Q("camadas", "Desfocar / pixelar", "desfocar", { sub:"camadas" }) ];
     /* v68: FIGURINHAS — abre a Biblioteca de figurinhas à esquerda */
     if(id === "figs") return [ Q("figs", "Figurinhas e formas", "figurinha", { dica:"Formas, ícones, emojis, figurinhas e enviar imagem", acao:function(){ abrirBib("bib-figs"); } }),
-      Q("kit", "Do cliente", "camadas", { dica:"Galeria do kit do cliente", acao:function(){ abrirBib("bib-kit"); } }), Q("camadas", "Desfocar / pixelar", "desfocar", { sub:"camadas" }) ];
+      Q("kit", "Do cliente", "galeria", { dica:"Galeria do kit do cliente", acao:function(){ abrirBib("bib-kit"); } }), Q("camadas", "Desfocar / pixelar", "desfocar", { sub:"camadas" }) ];
     /* v68: FORMATO — saiu do topo */
     if(id === "formato") return _EVP_FORMATOS.map(function(fm){ const on = (p.formato || "9x16") === fm.id;
         const r = fm.w / fm.h, dw = r >= 1 ? 26 : Math.round(26 * r), dh = r >= 1 ? Math.round(26 / r) : 26;
         return Q("f-" + fm.id, fm.label, "formato", { on:on, dica:fm.sub, desenho:<span style={{display:"block",width:dw,height:dh,border:"2px solid currentColor",borderRadius:3}}/>, acao:function(){ if(!on){ mudar(function(np){ np.formato = fm.id; }); _evToast("success", "Formato " + fm.label); } } }); })
-      .concat([ SEP("a"), Q("todos", "Enquadrar todos", "estab", { dica:"Estabilizar, melhorar, zerar enquadramento em todos os clipes", sub:"todos" }) ])
+      .concat([ SEP("a"), Q("todos", "Enquadrar todos", "enquadrarTodos", { dica:"Estabilizar, melhorar, zerar enquadramento em todos os clipes", sub:"todos" }) ])
       .concat(pcAuto ? [] : [SEP("b")].concat(_EVP_FORMATOS.filter(function(fm){ return fm.id !== (p.formato || "9x16"); }).map(function(fm){   /* v68c: GERAR TAMBÉM NOS OUTROS FORMATOS (o PC grava; o vídeo do card não muda) */
         const j = fmtJobs.find(function(x){ return x.opcoes.formato === fm.id; }), r = (j && j.resultado) || {}, url = j && j.status === "pronto" ? (r.url || (r.arquivo && r.arquivo.url)) : null;
         const rot = fm.id.replace("x", ":");
@@ -129414,77 +129527,77 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       const fundosMarca = (fundosKit || (kit && Array.isArray(kit.fundos) ? kit.fundos : [])).filter(function(fd){ return fd && /^https:\/\//.test(String(fd.url || "")); }).slice(0, 12);   // v68b: fundos da marca (kit)
       const coresKit = [kit && kit.cor_principal, kit && kit.cor_secundaria].concat((kit && Array.isArray(kit.cores)) ? kit.cores : []).filter(function(c, i2, a){ return /^#[0-9a-f]{6}$/i.test(String(c || "")) && a.indexOf(c) === i2; }).slice(0, 4);
       const bola = function(c){ return <span style={{display:"block",width:22,height:22,borderRadius:99,background:c,border:"2px solid rgba(127,127,127,.35)"}}/>; };
-      return [ Q("preencher", "Preencher a tela", "formato", { on:dt === "preencher", dica:"Vídeo deitado: corta e enche o vertical (já entra na pessoa)", acao:function(){ mudar(function(np){ np.deitado = "preencher"; }); } }),
-        Q("desfocado", "Desfocado", "desfocar", { on:fm === "desfoque", dica:"Vídeo inteiro, com o próprio vídeo desfocado atrás", acao:function(){ fundo({ modo:"desfoque" }, "Fundo desfocado"); } }),
+      return [ Q("preencher", "Preencher a tela", "preencher", { on:dt === "preencher", dica:"Vídeo deitado: corta e enche o vertical (já entra na pessoa)", acao:function(){ mudar(function(np){ np.deitado = "preencher"; }); } }),
+        Q("desfocado", "Desfocado", "fundoDesfocado", { on:fm === "desfoque", dica:"Vídeo inteiro, com o próprio vídeo desfocado atrás", acao:function(){ fundo({ modo:"desfoque" }, "Fundo desfocado"); } }),
         SEP("a") ].concat(fundosMarca.map(function(fd, k){ return Q("marca-" + k, String(fd.nome || "Fundo da marca").slice(0, 18), "imagem", { on:fm === "imagem" && ft.url === fd.url, dica:"Fundo da marca (kit do cliente)",
             desenho:<span style={{display:"block",width:26,height:26,borderRadius:6,background:"#000 url(" + JSON.stringify(fd.url) + ") center/cover",border:"1px solid rgba(127,127,127,.4)"}}/>,
             acao:function(){ fundo({ modo:"imagem", url:fd.url }, "Fundo da marca"); } }); }), coresKit.map(function(c, k){ return Q("cor-" + k, k ? "Cor do kit" : "Cor do cliente", "cor", { on:fm === "cor" && String(ft.cor).toLowerCase() === String(c).toLowerCase(), desenho:bola(c), acao:function(){ fundo({ modo:"cor", cor:c }, "Fundo na cor do cliente"); } }); }),
-        [ Q("preto", "Preto", "cor", { on:fm === "cor" && String(ft.cor).toLowerCase() === "#000000", desenho:bola("#000000"), acao:function(){ fundo({ modo:"cor", cor:"#000000" }, "Fundo preto"); } }),
-          Q("branco", "Branco", "cor", { on:fm === "cor" && String(ft.cor).toLowerCase() === "#ffffff", desenho:bola("#ffffff"), acao:function(){ fundo({ modo:"cor", cor:"#ffffff" }, "Fundo branco"); } }),
-          ...(fm === "imagem" && ft.url && !fundosMarca.some(function(fd){ return fd.url === ft.url; }) ? [Q("guardar", "Guardar no kit", "baixar", { dica:"Guarda esta imagem como fundo da marca do cliente (aparece aqui em todos os vídeos dele)", acao:async function(){
+        [ Q("preto", "Preto", "fundoPreto", { on:fm === "cor" && String(ft.cor).toLowerCase() === "#000000", desenho:bola("#000000"), acao:function(){ fundo({ modo:"cor", cor:"#000000" }, "Fundo preto"); } }),
+          Q("branco", "Branco", "fundoBranco", { on:fm === "cor" && String(ft.cor).toLowerCase() === "#ffffff", desenho:bola("#ffffff"), acao:function(){ fundo({ modo:"cor", cor:"#ffffff" }, "Fundo branco"); } }),
+          ...(fm === "imagem" && ft.url && !fundosMarca.some(function(fd){ return fd.url === ft.url; }) ? [Q("guardar", "Guardar no kit", "guardarKit", { dica:"Guarda esta imagem como fundo da marca do cliente (aparece aqui em todos os vídeos dele)", acao:async function(){
             try{ const r = await window._sb.rpc("criacao_kit_fundo", { p_client:t.client, p_unidade:ed.unidade || "", p_url:ft.url, p_nome:"Fundo " + (fundosMarca.length + 1) });
               if(r.error) throw new Error(r.error.message); setFundosKit(Array.isArray(r.data) ? r.data : null); _evToast("success", "Guardado no kit do cliente como fundo da marca"); }
             catch(e){ _evToast("error", "Não guardou: " + ((e && e.message) || e)); } } })] : []),
-          Q("imagem", fm === "imagem" ? "Trocar imagem" : "Imagem", "imagem", { on:fm === "imagem", dica:"Uma foto ou arte da marca atrás do vídeo (PNG/JPG)", arquivo:{ accept:"image/png,image/jpeg,image/webp", fn:async function(fl){
+          Q("imagem", fm === "imagem" ? "Trocar imagem" : "Imagem", "fundoImagem", { on:fm === "imagem", dica:"Uma foto ou arte da marca atrás do vídeo (PNG/JPG)", arquivo:{ accept:"image/png,image/jpeg,image/webp", fn:async function(fl){
             try{ _evToast("info", "Enviando o fundo…"); const path = "tasks/" + t.id + "/estudio/fundo-" + Date.now() + "." + ((String(fl.name).split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
               await pxUploadResumable(fl, path, function(){}); fundo({ modo:"imagem", url:window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl }, "Fundo com imagem"); }
             catch(e){ _evToast("error", "Não subiu: " + ((e && e.message) || e)); } } } }),
-          SEP("b"), Q("pessoa", "Trocar fundo da pessoa", "pessoa", { dica:"A IA recorta a pessoa e troca o que está atrás (clipe selecionado ou da agulha)", acao:function(){ naAgulha("fundo"); } }) ]); }
+          SEP("b"), Q("pessoa", "Trocar fundo da pessoa", "trocarFundo", { dica:"A IA recorta a pessoa e troca o que está atrás (clipe selecionado ou da agulha)", acao:function(){ naAgulha("fundo"); } }) ]); }
     /* v68: GERAR MÍDIA — por enquanto o banco do cliente (imagem/vídeo por IA = um dia) */
-    if(id === "gerar") return [ Q("banco", "Banco do cliente", "busca", { acao:function(){ window.dispatchEvent(new CustomEvent("evp-banco")); } }),
-      Q("brutos", "Brutos do card", "midia", { acao:function(){ abrirBib("bib-midia"); } }) ];
-    if(id === "midia") return [ Q("banco", "Banco de mídia", "busca", { acao:function(){ window.dispatchEvent(new CustomEvent("evp-banco")); } }),
-      Q("brutos", "Brutos do card", "midia", { dica:"Abre a Biblioteca › Mídia (clique no vídeo para pôr na linha do tempo)", acao:function(){ abrirBib("bib-midia"); } }),
-      Q("fotos", "Fotos do card", "imagem", { acao:function(){ abrirBib("bib-midia"); } }), Q("camada", "Pôr por cima", "camadas", { dica:"Camada › Vídeo por cima", acao:function(){ irFerr("camada", "sobre"); } }) ];
+    if(id === "gerar") return [ Q("banco", "Banco do cliente", "banco", { acao:function(){ window.dispatchEvent(new CustomEvent("evp-banco")); } }),
+      Q("brutos", "Brutos do card", "brutos", { acao:function(){ abrirBib("bib-midia"); } }) ];
+    if(id === "midia") return [ Q("banco", "Banco de mídia", "banco", { acao:function(){ window.dispatchEvent(new CustomEvent("evp-banco")); } }),
+      Q("brutos", "Brutos do card", "brutos", { dica:"Abre a Biblioteca › Mídia (clique no vídeo para pôr na linha do tempo)", acao:function(){ abrirBib("bib-midia"); } }),
+      Q("fotos", "Fotos do card", "imagem", { acao:function(){ abrirBib("bib-midia"); } }), Q("camada", "Pôr por cima", "videoCima", { dica:"Camada › Vídeo por cima", acao:function(){ irFerr("camada", "sobre"); } }) ];
     if(id === "cortar") return [ Q("dividir", "Dividir na agulha", "dividir", { dica:"Dividir na agulha (S)", acao:cortar }),
-      Q("aparar", "Aparar ±1 q", "dividir", { dica:"Aparar o clipe da agulha quadro a quadro", acao:function(){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("aparar"); fecharSub(); } }),
+      Q("aparar", "Aparar ±1 q", "aparar", { dica:"Aparar o clipe da agulha quadro a quadro", acao:function(){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("aparar"); fecharSub(); } }),
       Q("silencios", "Tirar silêncios", "silencio", { dica:"Régua do tamanho mínimo + botão (painel direito)", sub:"silencios" }),
-      Q("muletas", "Tirar \"éé/né\"", "fala", { dica:"Tira as muletas da fala agora", acao:muletasAg }),
-      Q("ritmo", "Apertar ritmo", "batida", { sub:"ritmo" }), Q("io-a", "Entrada (I)", "inicio", { acao:function(){ marcarIO("a"); } }), Q("io-b", "Saída (O)", "fim", { acao:function(){ marcarIO("b"); } }),
-      Q("cola", "Cola da fala", "fala2", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }),
-      Q("marca", "Marcador (M)", "marca", { acao:addMarca }), Q("ordem", "Ordem das falas", "modelo", { dica:"Reordenar os clipes pela frase + IA na fala", sub:"ordem" }),
+      Q("muletas", "Tirar \"éé/né\"", "muletas", { dica:"Tira as muletas da fala agora", acao:muletasAg }),
+      Q("ritmo", "Apertar ritmo", "ritmo", { sub:"ritmo" }), Q("io-a", "Entrada (I)", "entrada", { acao:function(){ marcarIO("a"); } }), Q("io-b", "Saída (O)", "saida", { acao:function(){ marcarIO("b"); } }),
+      Q("cola", "Cola da fala", "cola", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }),
+      Q("marca", "Marcador (M)", "marca", { acao:addMarca }), Q("ordem", "Ordem das falas", "ordem", { dica:"Reordenar os clipes pela frase + IA na fala", sub:"ordem" }),
       Q("comentarios", "Comentários" + (nComent ? " (" + nComent + ")" : ""), "comentario", { dica:"Comentários do cliente na Avaliação", sub:"comentarios" }) ];
     if(id === "vel") return [0.5, 1, 1.5, 2].map(function(v){ return Q("vel-" + v, String(v).replace(".", ",") + "×", "velocidade", { dica:"Velocidade " + String(v).replace(".", ",") + "× no item selecionado (ou no clipe da agulha)", acao:function(){ velSel(v); } }); }).concat([
       Q("vel-p", "Personalizada", "velocidade", { dica:"Abre a velocidade do item selecionado no painel direito (rampa/curva, ao contrário, manter o tom)", acao:velPersonalizada }),
       Q("congelar", "Congelar", "congelar", { dica:"Quadro parado na agulha (clipe)", acao:congelar }) ]);
     if(id === "audio") return [ Q("musica", "Músicas", "musica", { dica:"Música selecionada → ajustes no painel direito; sem música → Biblioteca › Músicas", acao:function(){ if(p.musica){ setSel({ tipo:"musica", id:"m" }); fecharSub(); } else abrirBib("bib-musicas"); } }),
-      Q("sfx", "Efeitos sonoros", "efeitos", { sub:"sfx" }), Q("gravar", gravando ? "Parar gravação" : "Gravar narração", "gravar", { dica:"Gravar narração na agulha (microfone)", acao:function(){ gravarNarracao(false); } }),
-      Q("importar", "Importar som", "enviar", { dica:"Enviar áudio pronto (MP3/WAV) — entra como bloco de áudio na agulha", arquivo:{ accept:"audio/*,.mp3,.wav,.m4a", fn:enviarAudioPronto } }),
-      Q("extrair", "Extrair de vídeo", "midia", { dica:"Escolha um vídeo: só o som dele entra na agulha (o vídeo não sobe)", arquivo:{ accept:"video/*,.mp4,.mov,.m4v,.webm", fn:enviarAudioPronto } }),
-      SEP("a"), Q("locucao", "Locução IA", "robo", { sub:"locucao" }), Q("vozes", "Vozes", "robo", { dica:"Biblioteca de vozes (do cliente e da agência)", acao:function(){ abrirBib("bib-vozes"); } }),
-      SEP("b"), Q("mixer", "Mixer", "volume", { sub:"mixer" }), Q("limpeza", "Limpeza da fala", "audio", { sub:"limpeza" }), Q("melhorar", "Melhorar trecho", "ia", { dica:"✨ Melhorar com IA só a parte ruim do áudio (com intensidade)", sub:"melhorar" }), Q("vocal", "Vocal Attacker", "vocal", { dica:"Compressor de voz: nivela, comprime e deixa em −14 LUFS", sub:"vocal" }), Q("sfxauto", "Sons automáticos", "batida", { sub:"sfxauto" }) ];
-    if(id === "texto") return [ Q("texto", "Adicionar texto", "texto", { acao:function(){ addTexto("texto"); } }), Q("destaque", "Destaque", "texto", { acao:function(){ addTexto("destaque"); } }),
-      Q("tarja", "Tarja", "legenda", { acao:function(){ addTexto("tarja"); } }), Q("leg", "Legendas", "legenda", { acao:function(){ irFerr("legenda"); } }),
+      Q("sfx", "Efeitos sonoros", "sfx", { sub:"sfx" }), Q("gravar", gravando ? "Parar gravação" : "Gravar narração", "gravar", { dica:"Gravar narração na agulha (microfone)", acao:function(){ gravarNarracao(false); } }),
+      Q("importar", "Importar som", "importarSom", { dica:"Enviar áudio pronto (MP3/WAV) — entra como bloco de áudio na agulha", arquivo:{ accept:"audio/*,.mp3,.wav,.m4a", fn:enviarAudioPronto } }),
+      Q("extrair", "Extrair de vídeo", "extrairSom", { dica:"Escolha um vídeo: só o som dele entra na agulha (o vídeo não sobe)", arquivo:{ accept:"video/*,.mp4,.mov,.m4v,.webm", fn:enviarAudioPronto } }),
+      SEP("a"), Q("locucao", "Locução IA", "locucao", { sub:"locucao" }), Q("vozes", "Vozes", "robo", { dica:"Biblioteca de vozes (do cliente e da agência)", acao:function(){ abrirBib("bib-vozes"); } }),
+      SEP("b"), Q("mixer", "Mixer", "mixer", { sub:"mixer" }), Q("limpeza", "Limpeza da fala", "limpeza", { sub:"limpeza" }), Q("melhorar", "Melhorar trecho", "melhorarTrecho", { dica:"✨ Melhorar com IA só a parte ruim do áudio (com intensidade)", sub:"melhorar" }), Q("vocal", "Vocal Attacker", "vocal", { dica:"Compressor de voz: nivela, comprime e deixa em −14 LUFS", sub:"vocal" }), Q("sfxauto", "Sons automáticos", "sonsAuto", { sub:"sfxauto" }) ];
+    if(id === "texto") return [ Q("texto", "Adicionar texto", "addTexto", { acao:function(){ addTexto("texto"); } }), Q("destaque", "Destaque", "destaque", { acao:function(){ addTexto("destaque"); } }),
+      Q("tarja", "Tarja", "tarja", { acao:function(){ addTexto("tarja"); } }), Q("leg", "Legendas", "legenda", { acao:function(){ irFerr("legenda"); } }),
       Q("figs", "Figurinhas", "figurinha", { acao:function(){ irFerr("figs"); } }),
-      SEP("a"), Q("galeria", "Modelos de texto", "camadas", { dica:"GC e elementos do kit (Biblioteca › Galeria)", acao:function(){ abrirBib("bib-kit"); } }),
-      Q("kinetic", "Texto animado", "motion", { dica:"Motion › peças de texto (kinetic, palco…)", acao:function(){ irFerr("motion", "add"); } }),
-      Q("locucao", "Locução IA", "robo", { dica:"Texto vira voz (Áudio › Locução IA)", acao:function(){ irFerr("audio", "locucao"); } }),
-      Q("lista", "Textos do vídeo (" + (p.textos || []).length + ")", "lapis", { sub:"lista" }) ];
-    if(id === "motion") return [ Q("add", "Adicionar peça", "mais", { dica:"14 modelos, entram na agulha", sub:"add" }), Q("estilo", "Estilo", "estilo", { sub:"estilo" }), Q("cor", "Cor", "cor", { sub:"cor" }), Q("ia", "Refazer com IA", "ia", { sub:"ia" }),
-      Q("modelos", "Modelos", "camadas", { dica:"Modelos para arrastar na linha do tempo (Biblioteca)", acao:function(){ abrirBib("bib-motion"); } }) ];
-    if(id === "imagem") return [ Q("foto", "Foto do card", "imagem", { acao:function(){ abrirBib("bib-midia"); } }), Q("sobre", "Vídeo por cima", "camadas", { sub:"sobre" }),
+      SEP("a"), Q("galeria", "Modelos de texto", "galeria", { dica:"GC e elementos do kit (Biblioteca › Galeria)", acao:function(){ abrirBib("bib-kit"); } }),
+      Q("kinetic", "Texto animado", "textoAnimado", { dica:"Motion › peças de texto (kinetic, palco…)", acao:function(){ irFerr("motion", "add"); } }),
+      Q("locucao", "Locução IA", "locucao", { dica:"Texto vira voz (Áudio › Locução IA)", acao:function(){ irFerr("audio", "locucao"); } }),
+      Q("lista", "Textos do vídeo (" + (p.textos || []).length + ")", "listaTextos", { sub:"lista" }) ];
+    if(id === "motion") return [ Q("add", "Adicionar peça", "addPeca", { dica:"14 modelos, entram na agulha", sub:"add" }), Q("estilo", "Estilo", "estilo", { sub:"estilo" }), Q("cor", "Cor", "corMotion", { sub:"cor" }), Q("ia", "Refazer com IA", "refazerIA", { sub:"ia" }),
+      Q("modelos", "Modelos", "modelosMotion", { dica:"Modelos para arrastar na linha do tempo (Biblioteca)", acao:function(){ abrirBib("bib-motion"); } }) ];
+    if(id === "imagem") return [ Q("foto", "Foto do card", "imagem", { acao:function(){ abrirBib("bib-midia"); } }), Q("sobre", "Vídeo por cima", "videoCima", { sub:"sobre" }),
       Q("figs", "Figurinha / forma", "figurinha", { dica:"Formas, ícones, emojis, figurinhas e enviar imagem (Biblioteca)", acao:function(){ abrirBib("bib-figs"); } }),
-      Q("camadas", "Desfocar / pixelar", "desfocar", { sub:"camadas" }), Q("formato", "Formato", "formato", { sub:"formato" }), Q("todos", "Em todos os clipes", "estab", { dica:"Estabilizar, melhorar, zerar enquadramento", sub:"todos" }),
-      Q("abertura", "Abertura", "abertura", { sub:"abertura" }), Q("final", "Tela final", "final", { sub:"final" }), Q("capa", "Capa", "capa", { sub:"capa" }) ];
+      Q("camadas", "Desfocar / pixelar", "desfocar", { sub:"camadas" }), Q("formato", "Formato", "formato", { sub:"formato" }), Q("todos", "Em todos os clipes", "enquadrarTodos", { dica:"Estabilizar, melhorar, zerar enquadramento", sub:"todos" }),
+      Q("abertura", "Abertura", "abertura", { sub:"abertura" }), Q("final", "Tela final", "telaFinal", { sub:"final" }), Q("capa", "Capa", "capa", { sub:"capa" }) ];
     if(id === "cor") return [ Q("filtros", "Filtros", "filtro", { sub:"filtros" }),
-      Q("ajustar", "Ajustar", "cor", { dica:"Inteligente (IA) ou Personalizar (uma régua por vez) — este clipe ou todos", sub:"ajustar" }),
-      Q("painel", "Avançado", "cor", { dica:"Cor do clipe selecionado (ou da agulha) no painel direito", acao:function(){ if(sel && sel.tipo === "clip"){ usarFerr({ id:"cor" }); return; } if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("cor"); fecharSub(); } }),
+      Q("ajustar", "Ajustar", "ajustar", { dica:"Inteligente (IA) ou Personalizar (uma régua por vez) — este clipe ou todos", sub:"ajustar" }),
+      Q("painel", "Avançado", "corAvancado", { dica:"Cor do clipe selecionado (ou da agulha) no painel direito", acao:function(){ if(sel && sel.tipo === "clip"){ usarFerr({ id:"cor" }); return; } if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("cor"); fecharSub(); } }),
       Q("qualidade", "Qualidade", "estab", { dica:"Estabilizar, melhorar a imagem e enquadramento em todos os clipes", sub:"todos" }),
-      Q("comparar", comparar > 0 ? "Parar comparação" : "Comparar", "olho", { on:comparar > 0, dica:"Antes (sem cor e efeitos) × depois — tela dividida", acao:function(){ setComparar(function(v){ return v ? 0 : 0.5; }); } }),
-      SEP("a"), Q("original", "Redefinir", "desfazer", { dica:"Tira a cor de todos os clipes (volta ao original)", acao:function(){ mudar(function(np){ np.clips.forEach(function(c){ c.cor = { bri:0, con:0, sat:0, temp:0 }; }); }); _evToast("success", "Cor original em todos os clipes"); } }) ];
-    if(id === "trans") return [ Q("camada", "Por cima (V3)", "transicao", { sub:"camada", dica:"Brilho dourado na agulha, por cima do vídeo e do apoio" }), Q("todos", "Em todos os cortes", "transicao", { sub:"todos" }), Q("luz", "Luz só nas trocas", "sol", { sub:"luz" }),
-      Q("este", "Deste corte", "transicao", { dica:"Transição do clipe selecionado (ou da agulha)", acao:function(){ if(sel && sel.tipo === "clip"){ usarFerr({ id:"trans" }); return; } if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("trans"); fecharSub(); } }) ];
+      Q("comparar", comparar > 0 ? "Parar comparação" : "Comparar", "comparar", { on:comparar > 0, dica:"Antes (sem cor e efeitos) × depois — tela dividida", acao:function(){ setComparar(function(v){ return v ? 0 : 0.5; }); } }),
+      SEP("a"), Q("original", "Redefinir", "redefinir", { dica:"Tira a cor de todos os clipes (volta ao original)", acao:function(){ mudar(function(np){ np.clips.forEach(function(c){ c.cor = { bri:0, con:0, sat:0, temp:0 }; }); }); _evToast("success", "Cor original em todos os clipes"); } }) ];
+    if(id === "trans") return [ Q("camada", "Por cima (V3)", "transCamada", { sub:"camada", dica:"Brilho dourado na agulha, por cima do vídeo e do apoio" }), Q("todos", "Em todos os cortes", "transTodos", { sub:"todos" }), Q("luz", "Luz só nas trocas", "sol", { sub:"luz" }),
+      Q("este", "Deste corte", "transCorte", { dica:"Transição do clipe selecionado (ou da agulha)", acao:function(){ if(sel && sel.tipo === "clip"){ usarFerr({ id:"trans" }); return; } if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr("trans"); fecharSub(); } }) ];
     if(id === "legenda"){ const on = !(p.legenda && p.legenda.ativa === false);
       return [ Q("mostrar", on ? "Esconder" : "Mostrar", on ? "olho" : "olhoFechado", { dica:"Mostrar / esconder a legenda", acao:function(){ mudar(function(np){ np.legenda.ativa = !on; }); } }),
       Q("estilo", "Estilo", "estilo", { sub:"estilo" }), Q("lingua", "Língua", "traduzir", { sub:"lingua" }), Q("tempo", "Tempo", "tempo", { sub:"tempo" }),
-      Q("srt", "Baixar .srt", "baixar", { acao:baixarSrt }), Q("nomes", "Corrigir nomes", "fala2", { dica:"Cola da fala: corrigir nomes e cor por trecho", acao:abrirCola }), Q("blocos", "Blocos (" + calc.blocos.length + ")", "legenda", { sub:"blocos" }) ]; }
+      Q("srt", "Baixar .srt", "srt", { acao:baixarSrt }), Q("nomes", "Corrigir nomes", "corrigirNomes", { dica:"Cola da fala: corrigir nomes e cor por trecho", acao:abrirCola }), Q("blocos", "Blocos (" + calc.blocos.length + ")", "blocos", { sub:"blocos" }) ]; }
     if(id === "corrigir"){ const nC = (p.ajustes_trecho || []).filter(function(x){ return x.status === "aberto" || x.status === "nao"; }).length;   // v49
-      return [ Q("lista", "Correções" + (nC ? " (" + nC + ")" : ""), "lapis", { sub:"lista" }), Q("marcar", "Marcar aqui", "mais", { dica:"Trecho de 2 s em volta da agulha", acao:marcarPontoCorr }),
-        Q("trecho", marcaCorr == null ? "Começo (C)" : "Fim (C)", "dividir", { dica:"C no começo e C no fim do trecho", acao:marcarCorrecao }) ]; }
-    if(id === "ia") return [ Q("editar", "Editar com IA", "ia", { dica:"Pedir à IA (painel direito)", acao:function(){ setSel(null); fecharSub(); setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 30); } }),
-      Q("corrigir", "Corrigir", "lapis", { dica:"Cartões de correção (C marca começo/fim)", sub:"corrigir" }), Q("anuncio", "Anúncio", "megafone", { sub:"anuncio" }),
-      Q("revisor", revisando ? "Revisando…" : "Revisor", "olho", { dica:"A IA olha quadros do vídeo e aponta problemas", acao:function(){ setSel(null); fecharSub(); revisarIA(); } }),
-      Q("aprender", ensinando ? "Estudando…" : "Aprender", "modelo", { dica:"Ensinar a IA com este vídeo", acao:ensinarIA }), Q("modelo", "Modelo do cliente", "modelo", { sub:"modelo" }), Q("atalhos", "Atalhos", "pc", { sub:"atalhos" }) ];
+      return [ Q("lista", "Correções" + (nC ? " (" + nC + ")" : ""), "listaCorrecoes", { sub:"lista" }), Q("marcar", "Marcar aqui", "marcarAqui", { dica:"Trecho de 2 s em volta da agulha", acao:marcarPontoCorr }),
+        Q("trecho", marcaCorr == null ? "Começo (C)" : "Fim (C)", "trecho", { dica:"C no começo e C no fim do trecho", acao:marcarCorrecao }) ]; }
+    if(id === "ia") return [ Q("editar", "Editar com IA", "pedirIA", { dica:"Pedir à IA (painel direito)", acao:function(){ setSel(null); fecharSub(); setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 30); } }),
+      Q("corrigir", "Corrigir", "corrigir", { dica:"Cartões de correção (C marca começo/fim)", sub:"corrigir" }), Q("anuncio", "Anúncio", "anuncio", { sub:"anuncio" }),
+      Q("revisor", revisando ? "Revisando…" : "Revisor", "revisor", { dica:"A IA olha quadros do vídeo e aponta problemas", acao:function(){ setSel(null); fecharSub(); revisarIA(); } }),
+      Q("aprender", ensinando ? "Estudando…" : "Aprender", "aprender", { dica:"Ensinar a IA com este vídeo", acao:ensinarIA }), Q("modelo", "Modelo do cliente", "modeloCliente", { sub:"modelo" }), Q("atalhos", "Atalhos", "atalhos", { sub:"atalhos" }) ];
     return [];
   };
   const quads = ferrGlobal.ferramenta ? quadsDe(ferrGlobal.ferramenta) : [];
@@ -129702,7 +129815,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={desfazer} disabled={!desf.length} aria-label="Desfazer" style={bM({ opacity:desf.length ? 1 : 0.35 })}><_EvpIco n="desfazer" s={18}/></button>
           <button onClick={refazer} disabled={!refaz.length} aria-label="Refazer" style={bM({ opacity:refaz.length ? 1 : 0.35 })}><_EvpIco n="refazer" s={18}/></button>
           <button onClick={salvar} disabled={!alterado || salvando} aria-label="Salvar versão" style={Object.assign(_evpBtn(alterado ? "primario" : null, alterado && !salvando), {padding:"8px 11px",marginLeft:2})}><_EvpIco n="salvar" s={15}/>{salvando ? "…" : "Salvar"}</button>
-          <button onClick={function(){ setVerExp(true); }} aria-label="Exportar" style={Object.assign(_evpBtn("verde"), {padding:"8px 10px",marginLeft:4})}><_EvpIco n="baixar" s={16}/></button>
+          <button onClick={function(){ setVerExp(true); }} aria-label="Exportar" style={Object.assign(_evpBtn("verde"), {padding:"8px 10px",marginLeft:4})}><_EvpIco n="exportar" s={16}/></button>
         </div>
         {elNovos && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elNovos}</div>}
         {/* vídeo */}
@@ -129756,7 +129869,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <div style={{fontSize:11.5,color:_EVP_COR.sub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_evNomeCliente(t.client)} · {clipes.length} bruto{clipes.length === 1 ? "" : "s"} · versão {(ed.versoes || []).length || 1}</div>
         </div>
         {/* v68: o formato saiu do topo — botão "Formato" (Alt+R) na barra embaixo do vídeo */}
-        <button onClick={function(){ setPaleta(true); }} title="Buscar comando ou ferramenta (Ctrl+K)" aria-label="Comandos" style={Object.assign(_evpBtn(), {fontSize:12})}><_EvpIco n="busca" s={15}/>Comandos {!avisoRasc && <span style={{fontFamily:_EVP_MONO,fontSize:10.5,color:_EVP_COR.fraco}}>Ctrl+K</span>}</button>
+        <button onClick={function(){ setPaleta(true); }} title="Buscar comando ou ferramenta (Ctrl+K)" aria-label="Comandos" style={Object.assign(_evpBtn(), {fontSize:12})}><_EvpIco n="comandos" s={15}/>Comandos {!avisoRasc && <span style={{fontFamily:_EVP_MONO,fontSize:10.5,color:_EVP_COR.fraco}}>Ctrl+K</span>}</button>
         <button onClick={function(){ setBasico(!basico); }} aria-pressed={basico} title={basico ? "Modo básico: só o essencial. Clique para ver todas as ferramentas." : "Modo avançado: todas as ferramentas. Clique para o modo básico."}
           style={Object.assign(_evpBtn(basico ? "suave" : null), {fontSize:12})}>{basico ? "Básico" : "Avançado"}</button>
         {/* v66 (07/10/2026): "A IA montou" e "Continuando…" sobem para o topo (o vídeo ganha a altura dessas duas faixas) */}
@@ -129766,7 +129879,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={function(){ setAvisoRasc(null); }} style={Object.assign(_evpBtn("suave"), {padding:"3px 8px",fontSize:11})}>Ok</button>
           <button onClick={descartarRascunho} title="Voltar para a última versão salva" style={Object.assign(_evpBtn(), {padding:"3px 8px",fontSize:11})}>Voltar</button></span>}
         <span style={{marginLeft:"auto"}}/>
-        {expAtivo && <button onClick={function(){ setVerExp(true); }} style={Object.assign(_evpBtn("suave"), {fontSize:12})}><_EvpIco n="baixar" s={15}/>Exportando {exp.pct || 0}%</button>}
+        {expAtivo && <button onClick={function(){ setVerExp(true); }} style={Object.assign(_evpBtn("suave"), {fontSize:12})}><_EvpIco n="exportar" s={15}/>Exportando {exp.pct || 0}%</button>}
         <span title="O Estúdio guarda sozinho a cada alteração. 'Salvar versão' cria um ponto na lista de versões." style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",
           color:auto && auto.estado === "erro" ? _EV.verm : _EVP_COR.sub,background:_EVP_COR.faixa,border:"1px solid " + _EVP_COR.linha2,borderRadius:99,padding:"6px 11px"}}>
           <_EvpIco n={auto && auto.estado === "ok" ? "nuvemOk" : "nuvem"} s={15}/>{autoTxt}</span>
@@ -129775,7 +129888,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <button onClick={function(){ setVerVersoes(!verVersoes); }} aria-pressed={verVersoes} title="Versões salvas" style={Object.assign(_evpBtn(), verVersoes ? { background:_EVP_COR.roxoSoft, color:_EVP_COR.roxo } : {})}><_EvpIco n="versoes" s={16}/>Versões</button>
         <button onClick={function(){ setSel(null); setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 30); }} style={_evpBtn("suave")}><_EvpIco n="ia" s={16}/>Pedir à IA</button>
         <button onClick={salvar} disabled={!alterado || salvando} title="Cria uma versão (Ctrl+S)" style={_evpBtn(alterado ? "primario" : null, alterado && !salvando)}><_EvpIco n="salvar" s={16}/>{salvando ? "Salvando…" : "Salvar versão"}</button>
-        <button onClick={function(){ setVerExp(true); }} style={_evpBtn("verde")}><_EvpIco n="baixar" s={16}/>Exportar</button>
+        <button onClick={function(){ setVerExp(true); }} style={_evpBtn("verde")}><_EvpIco n="exportar" s={16}/>Exportar</button>
         <button onClick={trocarTema} title={tema === "escuro" ? "Modo claro" : "Modo escuro"} aria-label={tema === "escuro" ? "Modo claro" : "Modo escuro"} style={bTopo(false)}><_EvpIco n={tema === "escuro" ? "sol" : "lua"} s={17}/></button>
         <button onClick={trocarCheia} title={cheia ? "Tela normal" : "Tela cheia"} aria-label={cheia ? "Tela normal" : "Tela cheia"} style={bTopo(false)}><_EvpIco n={cheia ? "recolher" : "expandir"} s={16}/></button>
         {verVersoes && (
@@ -130390,9 +130503,9 @@ function _EvpRastrearPainel({ c, calc, p, mudar, tempo, infoClipe, irPara, setSe
     {/* v71: o que seguir em blocos com ícone · trecho em barra · explicação técnica no "?" */}
     <div style={{fontSize:12.5,color:_EVP_COR.sub,marginBottom:10,lineHeight:1.4}}>Escolha o que seguir. Texto, figura ou desfoque vão junto.</div>
     {!prog ? <_EvpAcoes colunas={3} itens={[
-      { id:"trk-rosto", icone:"pessoa", label:"Rosto", dica:"Acha o rosto (IA no navegador, R$ 0)", onClick:rosto },
+      { id:"trk-rosto", icone:"rosto", label:"Rosto", dica:"Acha o rosto (IA no navegador, R$ 0)", onClick:rosto },
       { id:"trk-pessoa", icone:"pessoa", label:"Pessoa", dica:"Segue a pessoa inteira (IA no navegador, R$ 0)", onClick:function(){ rodar("pessoa"); } },
-      { id:"trk-area", icone:"encaixar", label:"Área", dica:"Desenhe um quadrado no vídeo e ele segue aquilo", onClick:area } ]}/> : <div style={{padding:"8px 10px",borderRadius:10,background:_EVP_COR.faixa,fontSize:12}}>
+      { id:"trk-area", icone:"area", label:"Área", dica:"Desenhe um quadrado no vídeo e ele segue aquilo", onClick:area } ]}/> : <div style={{padding:"8px 10px",borderRadius:10,background:_EVP_COR.faixa,fontSize:12}}>
       <div style={{fontWeight:700}}>{prog.msg || ("Seguindo " + ({ rosto:"o rosto", pessoa:"a pessoa", area:"a área" }[prog.tipo] || "") + "… " + (prog.pct || 0) + "%")}</div>
       <div style={{height:6,borderRadius:99,background:_EVP_COR.linha,marginTop:6,overflow:"hidden"}}><div style={{height:"100%",width:(prog.pct || 0) + "%",background:_EVP_COR.roxoFixo}}/></div>
       <button onClick={function(){ if(pararRef.current) pararRef.current(); }} style={Object.assign(_evpBtn(), {marginTop:6,padding:"4px 9px",fontSize:11.5})}>Parar</button>
@@ -131304,7 +131417,7 @@ function _EvpLegendaMais({ p, calc, mudar }){
         return <div key={id} style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
           <span style={{flex:1,fontWeight:700,fontSize:12.5}}>{nm}{on ? " · na tela" : ""}</span>
           {!on && <button onClick={function(){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda, { traducao:{ idioma:id, blocos:trs[id] } }); }); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>Usar</button>}
-          <button onClick={function(){ baixar(id); }} aria-label={"Baixar .srt " + nm} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}><_EvpIco n="baixar" s={13}/>.srt</button>
+          <button onClick={function(){ baixar(id); }} aria-label={"Baixar .srt " + nm} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}><_EvpIco n="srt" s={13}/>.srt</button>
         </div>; })}
       <div style={{fontSize:11,color:_EVP_COR.fraco}}>Cada língua traduzida fica guardada: trocar não chama a IA de novo.</div>
     </div>)}
@@ -132547,12 +132660,12 @@ function _EvpPainelMenu(q){
             : <div style={cinza}>Nenhum silêncio desse tamanho</div>}
         </div>); };
   S.muletas = function(){ return (<div>
-          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700,marginTop:10}}><_EvpIco n="fala" s={16}/>Tirar "éé", "ãã", "né"</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700,marginTop:10}}><_EvpIco n="muletas" s={16}/>Tirar "éé", "ãã", "né"</div>
           {muletas.length ? <button onClick={function(){ q.tirarTrechos(muletas, "Muletas tiradas"); }} title={muletas.map(function(m){ return m.p; }).join(", ")} style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginTop:6})}>
             {"Tirar " + muletas.length + " (" + muletas.slice(0, 4).map(function(m){ return m.p; }).join(", ") + (muletas.length > 4 ? "…" : "") + ")"}</button>
             : <div style={cinza}>Nenhuma encontrada</div>}
         </div>); };
-  S.cola = function(){ return <button onClick={abrirCola} style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center",marginTop:8})}><_EvpIco n="fala2" s={16}/>Cola da fala (editar pelo texto)</button>; };
+  S.cola = function(){ return <button onClick={abrirCola} style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center",marginTop:8})}><_EvpIco n="cola" s={16}/>Cola da fala (editar pelo texto)</button>; };
   S.cortarFala = function(){ return (<div><div style={_EVP_TIT}>Cortar pela fala</div>
         <div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:10,background:_EVP_COR.faixa}}>{S.silencios()}{S.muletas()}{S.cola()}</div></div>); };
   S.ritmo = function(){ return <_EvpRitmoPainel p={p} calc={calc} fala={q.fala} mudar={mudar} irPara={irPara} clipes={clipes} receita={q.receita}/>; };
@@ -132631,7 +132744,7 @@ function _EvpPainelMenu(q){
           <div style={{fontSize:11,color:_EVP_COR.fraco}}>O vídeo toca a partir da agulha para você falar em cima. A música abaixa sozinha na narração.</div>
         </div>); };
   S.locucao = function(){ return (<div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:10,background:_EVP_COR.faixa,marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700,marginBottom:6}}><_EvpIco n="robo" s={16}/>Locução com IA</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700,marginBottom:6}}><_EvpIco n="locucao" s={16}/>Locução com IA</div>
           {(q.tagNarr || q.roteiroNarr) && <div style={{fontSize:11.5,fontWeight:700,color:"#7c2d12",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:9,padding:"6px 8px",marginBottom:6}}>
             🎙 {q.tagNarr ? "Este card pede narração com IA." : "O roteiro do card tem texto de narração."}
             {q.roteiroNarr && <button onClick={function(){ setLocTexto(q.roteiroNarr); }} style={Object.assign(_evpBtn("suave", true), {marginLeft:6,padding:"3px 8px",fontSize:11})}>Puxar do roteiro</button>}</div>}
@@ -132795,7 +132908,7 @@ function _EvpPainelMenu(q){
 
   /* ── Legenda ── */
   S.cabLegenda = function(){ return cab("legenda", "Legenda", "Criada da fala, palavra por palavra"); };
-  S.colaLeg = function(){ return <button onClick={abrirCola} style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginBottom:8})}><_EvpIco n="fala2" s={16}/>Cola da fala: corrigir nomes e cor por trecho</button>; };
+  S.colaLeg = function(){ return <button onClick={abrirCola} style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginBottom:8})}><_EvpIco n="corrigirNomes" s={16}/>Cola da fala: corrigir nomes e cor por trecho</button>; };
   S.mostrarLeg = function(){ return <_EvpInterruptor on={!(p.legenda && p.legenda.ativa === false)} onChange={function(v){ mudar(function(np){ np.legenda.ativa = v; }); }} label="Mostrar legenda"/>; };
   S.estiloLeg = function(){ return <div><_EvpEstiloLegenda p={p} kit={kit} mudar={mudar} ctl={ctl} cli={{ cliente:q.cliente, unidade:q.edUnidade || "" }}/></div>; };
   S.lingua = function(){ const tr = p.legenda && p.legenda.traducao, atual = tr ? tr.idioma : "";
@@ -132813,7 +132926,7 @@ function _EvpPainelMenu(q){
             <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>A IA traduz bloco por bloco; o tempo de cada bloco continua o mesmo.</div>
           </div>; };
   S.srt = function(){ return (<div>
-        <button onClick={q.baixarSrt} disabled={!calc.blocos.length} style={Object.assign(_evpBtn(null, !!calc.blocos.length), {width:"100%",justifyContent:"center",marginTop:10})}><_EvpIco n="baixar" s={16}/>Baixar legenda (.srt)</button>
+        <button onClick={q.baixarSrt} disabled={!calc.blocos.length} style={Object.assign(_evpBtn(null, !!calc.blocos.length), {width:"100%",justifyContent:"center",marginTop:10})}><_EvpIco n="srt" s={16}/>Baixar legenda (.srt)</button>
         <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:4}}>Para subir no YouTube, Facebook ou LinkedIn como legenda separada.</div>
         </div>); };
   S.tempoLeg = function(){ return <_EvpLegendaMais p={p} calc={calc} mudar={mudar}/>; };
@@ -133158,7 +133271,7 @@ function _EvpMusicas(q){
       </div>
       {p.musica && (
         <div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:10,background:_EVP_COR.faixa,marginTop:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700}}><_EvpIco n="batida" s={16}/>Ritmo
+          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700}}><_EvpIco n="ritmo" s={16}/>Ritmo
             <span style={{marginLeft:"auto",fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.sub}}>{musInfo && musInfo.bpm ? Math.round(musInfo.bpm) + " BPM" : "BPM ?"}</span></div>
           <div style={{fontSize:11,color:_EVP_COR.fraco,margin:"4px 0 6px"}}>{(q.batidas || []).length ? (q.batidas || []).length + " batidas marcadas na faixa Música." : musInfo && musInfo.bpm ? "Lendo onde caem as batidas…" : "Esta música está sem BPM. Edite os dados dela (lápis) e informe o BPM."}</div>
           <button onClick={q.encaixarBatida} disabled={!(q.batidas || []).length} style={Object.assign(_evpBtn((q.batidas || []).length ? "suave" : null, !!(q.batidas || []).length), {width:"100%",justifyContent:"center"})}><_EvpIco n="batida" s={15}/>Encaixar os cortes na batida</button>
@@ -134820,7 +134933,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel:setSelP, selecionar, tempo, ir
               {calc.total > calc.fimCortes && (
                 <div onPointerDown={function(e){ e.stopPropagation(); if(e.button !== 0) return; setSel({ tipo:"final", id:"f" }); irPara(calc.fimCortes + 0.01); }}
                   style={Object.assign(bloco("linear-gradient(135deg,#334155,#1e293b)", ehSel("final", "f")), { left:calc.fimCortes*pxs, width:Math.max(6, (calc.total - calc.fimCortes)*pxs - 1), cursor:"pointer" })}>
-                  <_EvpIco n="final" s={13}/>Tela final{_evpZoomFinalLigado(p) ? "" : " · sem zoom"}
+                  <_EvpIco n="telaFinal" s={13}/>Tela final{_evpZoomFinalLigado(p) ? "" : " · sem zoom"}
                   <div onPointerDown={esticarFinal} style={alca("right")}/>
                 </div>
               )}
@@ -134914,17 +135027,17 @@ function _EvpTimeline({ evm, p, calc, sel, setSel:setSelP, selecionar, tempo, ir
    mudar início/fim, arrastar e puxar as pontas na faixa "Motion" e pedir "✨ Refazer com IA" (ação "motion" do video-editar v43).
    Tudo passa por _evmNormalizar (nada que o motor não desenha vai para o projeto). Motion desligado fica guardado em projeto.motionDesligado. ══ */
 const _EVM_TIPOS = {
-  manchete:{ nome:"Manchete", cor:"#7c3aed", ico:"texto", desc:"Título grande no topo" },
-  tarja:{ nome:"Tarja (nome)", cor:"#0d9488", ico:"pessoa", desc:"Nome e função de quem fala" },
-  kinetic:{ nome:"Palavras grandes", cor:"#db2777", ico:"animacao", desc:"1 a 4 palavras no ritmo da fala" },
-  palco:{ nome:"Palco", cor:"#2563eb", ico:"camadas", desc:"Vídeo num quadro + título ao lado" },
-  cta:{ nome:"Chamada final", cor:"#ea580c", ico:"marca", desc:"Chamada para ação com a marca" },
-  numero:{ nome:"Número que conta", cor:"#ca8a04", ico:"rank", desc:"Número grande contando até o valor" },
-  lista:{ nome:"Lista com check", cor:"#16a34a", ico:"modelo", desc:"2 a 4 itens aparecendo" },
-  antesdepois:{ nome:"Antes e depois", cor:"#9333ea", ico:"transicao", desc:"Dois cartões com seta" },
-  citacao:{ nome:"Citação", cor:"#be185d", ico:"fala", desc:"Frase de alguém com aspas" },
-  selo:{ nome:"Selo", cor:"#dc2626", ico:"estrelaV", desc:"Etiqueta curta (não esconde a legenda)" },
-  receita:{ nome:"Motion novo", cor:"#0ea5e9", ico:"motion", desc:"Motion de receita (camadas animadas)" } };
+  manchete:{ nome:"Manchete", cor:"#7c3aed", ico:"manchete", desc:"Título grande no topo" },
+  tarja:{ nome:"Tarja (nome)", cor:"#0d9488", ico:"tarja", desc:"Nome e função de quem fala" },
+  kinetic:{ nome:"Palavras grandes", cor:"#db2777", ico:"textoAnimado", desc:"1 a 4 palavras no ritmo da fala" },
+  palco:{ nome:"Palco", cor:"#2563eb", ico:"palco", desc:"Vídeo num quadro + título ao lado" },
+  cta:{ nome:"Chamada final", cor:"#ea580c", ico:"cta", desc:"Chamada para ação com a marca" },
+  numero:{ nome:"Número que conta", cor:"#ca8a04", ico:"numero", desc:"Número grande contando até o valor" },
+  lista:{ nome:"Lista com check", cor:"#16a34a", ico:"listaCheck", desc:"2 a 4 itens aparecendo" },
+  antesdepois:{ nome:"Antes e depois", cor:"#9333ea", ico:"antesDepois", desc:"Dois cartões com seta" },
+  citacao:{ nome:"Citação", cor:"#be185d", ico:"citacao", desc:"Frase de alguém com aspas" },
+  selo:{ nome:"Selo", cor:"#dc2626", ico:"selo", desc:"Etiqueta curta (não esconde a legenda)" },
+  receita:{ nome:"Motion novo", cor:"#0ea5e9", ico:"receitaMotion", desc:"Motion de receita (camadas animadas)" } };
 /* as 14 peças do menu Adicionar (o palco tem 5 jeitos) */
 const _EVM_ADD = [ ["manchete"], ["tarja"], ["kinetic"], ["numero"], ["lista"], ["antesdepois"], ["citacao"], ["selo"], ["cta"],
   ["palco", "", "Palco simples", "Quadro com o vídeo + título"], ["palco", "mapa", "Palco com mapa", "Mapa com os lugares acendendo"],
@@ -134940,7 +135053,7 @@ const _EVM_LUGARES = [["AC",-9.97,-67.81],["AL",-9.67,-35.74],["AP",0.03,-51.07]
 const _EVM_PALCO_DENTRO = [["", "Só o quadro"], ["mapa", "Mapa"], ["mapa+contadores", "Mapa + contadores"], ["mapa+fluxo", "Mapa + etapas"], ["fluxo", "Etapas"], ["grafico", "Gráfico"], ["fluxo+grafico", "Etapas + gráfico"]];
 const _evmIA = {};          // estado do ✨ por edição (vale para quem abrir o Estúdio depois)
 const _evmPendJa = {};      // motion_pendente: chama UMA vez por edição
-_EVP_ICONES.motion = '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M7 15.5l3-4 2.5 2.5L17 9"/><path d="M17 9h-2.6M17 9v2.6"/>';
+_EVP_ICONES.motion = '<circle cx="15" cy="12" r="5.5"/><path d="M2.5 8.5h5M2 12h6M2.5 15.5h5"/>';
 _EVP_ICONES.estrelaV = '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>';
 
 function _evmNormUm(it){ const r = _evmNormalizar({ estilo:"editorial", itens:[it] }); return r && r.itens[0] ? r.itens[0] : null; }
@@ -135246,7 +135359,7 @@ function _EvmPainel(q){
         <button onClick={function(){ setDaFala(true); }} aria-pressed={daFala} style={Object.assign(_evpChip(daFala), {flex:1,justifyContent:"center",padding:"5px 6px",fontSize:11.5})}>Da fala na agulha</button></div>
       {_EVM_ADD.map(function(a, k){ const tp = _EVM_TIPOS[a[0]];
         return <button key={k} data-evm-add={a[0] + (a[1] ? "-" + a[1] : "")} onClick={function(){ evm.add(a[0], a[1] || "", daFala); }} disabled={evm.soVer} style={Object.assign({}, linhaBtn, {padding:"6px 9px"})}>
-          <span style={{width:26,height:26,borderRadius:8,display:"grid",placeItems:"center",background:tp.cor,color:"#fff",flexShrink:0}}><_EvpIco n={a[1] === "mapa" || a[1] === "mapa+contadores" ? "busca" : a[1] === "fluxo" ? "modelo" : a[1] === "grafico" ? "rank" : tp.ico} s={14}/></span>
+          <span style={{width:26,height:26,borderRadius:8,display:"grid",placeItems:"center",background:tp.cor,color:"#fff",flexShrink:0}}><_EvpIco n={a[1] === "mapa" || a[1] === "mapa+contadores" ? "mapa" : a[1] === "fluxo" ? "fluxo" : a[1] === "grafico" ? "rank" : tp.ico} s={14}/></span>
           <span style={{flex:1,minWidth:0}}>{a[2] || tp.nome}<div style={{fontSize:10.5,color:_EVP_COR.fraco,fontWeight:600}}>{a[3] || tp.desc}</div></span><_EvpIco n="mais" s={15}/></button>; })}
       <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:2,lineHeight:1.45}}>Número, lista, antes/depois, citação e selo: só uma de cada na tela por vez.</div>
       {_evmPodeTrocar() && <Fragment><div data-evm-add-receitas style={{fontSize:11.5,fontWeight:800,color:_EVP_COR.ink,margin:"12px 0 4px"}}>Motions novos</div>
@@ -135636,9 +135749,9 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
       {num("Começa em", "t0")}{num("Termina em", "t1")}
       <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:10}}>Fica na tela por <b style={{color:_EVP_COR.ink}}>{r1(it.t1 - it.t0)}</b> (mínimo 0,4 s)</div>
       <_EvpAcoes colunas={3} itens={[
-        { id:"evm-comeca", icone:"tempo", label:"Começar na agulha", onClick:function(){ const t = evm.tempo; if(t >= it.t1 - 0.4){ _evToast("warning", "A agulha está depois do fim da peça."); return; } evm.mudarPeca(i, function(o){ o.t0 = Math.round(t * 1000) / 1000; }); } },
-        { id:"evm-termina", icone:"fim", label:"Terminar na agulha", onClick:function(){ const t = evm.tempo; if(t <= it.t0 + 0.4){ _evToast("warning", "A agulha está antes do começo da peça."); return; } evm.mudarPeca(i, function(o){ o.t1 = Math.round(t * 1000) / 1000; }); } },
-        { id:"evm-levar", icone:"mover", label:"Levar para a agulha", onClick:function(){ const d = it.t1 - it.t0, t = Math.min(evm.tempo, evm.fim - d); if(t < 0) return; evm.mudarPeca(i, function(o){ const dd = t - o.t0; o.t0 = t; o.t1 = t + d; _evmDeslocar(o, dd); }); } } ]}/>
+        { id:"evm-comeca", icone:"comecarAgulha", label:"Começar na agulha", onClick:function(){ const t = evm.tempo; if(t >= it.t1 - 0.4){ _evToast("warning", "A agulha está depois do fim da peça."); return; } evm.mudarPeca(i, function(o){ o.t0 = Math.round(t * 1000) / 1000; }); } },
+        { id:"evm-termina", icone:"terminarAgulha", label:"Terminar na agulha", onClick:function(){ const t = evm.tempo; if(t <= it.t0 + 0.4){ _evToast("warning", "A agulha está antes do começo da peça."); return; } evm.mudarPeca(i, function(o){ o.t1 = Math.round(t * 1000) / 1000; }); } },
+        { id:"evm-levar", icone:"levarAgulha", label:"Levar para a agulha", onClick:function(){ const d = it.t1 - it.t0, t = Math.min(evm.tempo, evm.fim - d); if(t < 0) return; evm.mudarPeca(i, function(o){ const dd = t - o.t0; o.t0 = t; o.t1 = t + d; _evmDeslocar(o, dd); }); } } ]}/>
       <_EvpDica>Ou arraste o bloco na faixa Motion e puxe as pontas.</_EvpDica></div>;
   } else if(it.modelo === "manchete") corpo = <div>{C("rotulo", "Linha de cima (pequena)", 40)}{C("titulo", "Título", 40, true)}{C("sub", "Linha de baixo (itálico)", 60)}</div>;
   else if(it.modelo === "tarja") corpo = <div>{C("nome", "Nome", 28, true)}{C("funcao", "Função ou cidade", 56)}</div>;
@@ -136157,8 +136270,8 @@ function _EvpTransPainel({ c, calc, p, mudar }){
       </_EvpGrupo>)}
       <_EvpGrupo titulo="Usar esta transição em" solto>
         <_EvpAcoes colunas={2} itens={[
-          { id:"trans-cenas", icone:"transicao", label:"Trocas de cena", dica:"Só onde o clipe vem de outro vídeo (fica bonito, não cansa)", onClick:function(){ usarEm("cenas"); } },
-          { id:"trans-todos", icone:"camadas", label:"Todos os cortes", dica:"Em todo corte (luz em todo corte cansa)", onClick:function(){ usarEm("todos"); } } ]}/>
+          { id:"trans-cenas", icone:"transCenas", label:"Trocas de cena", dica:"Só onde o clipe vem de outro vídeo (fica bonito, não cansa)", onClick:function(){ usarEm("cenas"); } },
+          { id:"trans-todos", icone:"transTodos", label:"Todos os cortes", dica:"Em todo corte (luz em todo corte cansa)", onClick:function(){ usarEm("todos"); } } ]}/>
       </_EvpGrupo>
     </div>
   );
@@ -136749,8 +136862,8 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
             <_EvpSlider ctl={ctl} rotulo="Saída" v={_evpNum(c.fo, 0)} min={0} max={3} step={0.1} fmt={seg} padrao={0} aplicar={nc(function(o, v){ o.fo = v; })}/>
           </_EvpGrupo>
           <div style={{marginTop:12}}><_EvpAcoes colunas={2} itens={[
-            { id:"vol-todos", icone:"volume", label:"Usar em todos os clipes", dica:"Põe este volume em todos os clipes", onClick:function(){ const v = c.vol == null ? 1 : c.vol; mudar(function(np){ np.clips.forEach(function(o){ o.vol = v; }); }); _evToast("success", "Volume " + pct(v) + " em todos os clipes"); } },
-            { id:"separar", icone:"audio", label:"Separar o som", dica:"O som vira um bloco na faixa Narração (o clipe fica mudo)", onClick:separar } ]}/></div>
+            { id:"vol-todos", icone:"volumeTodos", label:"Usar em todos os clipes", dica:"Põe este volume em todos os clipes", onClick:function(){ const v = c.vol == null ? 1 : c.vol; mudar(function(np){ np.clips.forEach(function(o){ o.vol = v; }); }); _evToast("success", "Volume " + pct(v) + " em todos os clipes"); } },
+            { id:"separar", icone:"separarSom", label:"Separar o som", dica:"O som vira um bloco na faixa Narração (o clipe fica mudo)", onClick:separar } ]}/></div>
           <_EvpMais id="clip-vol" aberto={(c.volPts || []).length > 0}>
             <_EvpVolPontos pts={c.volPts} agora={tempo >= c.t0 && tempo < c.t1 ? _evpSrcT(c, tempo) : null} base={c.vol == null ? 1 : c.vol} fmtT={function(tb){ return seg(Math.max(0, (tb - c.ini) / (c.vel || 1))); }} ctl={ctl} mudar={mudar}
               aplicarPts={function(np, fn){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return; const n = fn(o.volPts); if(n && n.length) o.volPts = n; else delete o.volPts; }}/>
@@ -136814,13 +136927,13 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           <div style={{marginTop:10}}><_EvpAcoes colunas={4} itens={[
             { id:"arrastar", icone:"mover", label:"Arrastar", on:!!enquadrar, dica:"Arraste o vídeo direto na prévia", onClick:function(){ setEnquadrar(!enquadrar); } },
             { id:"espelhar", icone:"espelhar", label:"Espelhar", on:!!c.espelho, dica:"Espelhar ↔", onClick:function(){ mudar(nc(function(x){ x.espelho = !x.espelho; })); } },
-            { id:"virar", icone:"espelhar", label:"Virar ↕", on:!!c.espelhoV, dica:"Espelhar de cabeça para baixo", onClick:function(){ mudar(nc(function(x){ x.espelhoV = !x.espelhoV; })); } },
+            { id:"virar", icone:"virar", label:"Virar ↕", on:!!c.espelhoV, dica:"Espelhar de cabeça para baixo", onClick:function(){ mudar(nc(function(x){ x.espelhoV = !x.espelhoV; })); } },
             { id:"centralizar", icone:"centro", label:"Centralizar", dica:"Volta zoom, posição e giro ao normal", onClick:function(){ mudar(nc(function(x){ if(_evpAnimTem(x) && agDentro){ const pt = _evpAnimPonto(x, c, tempo); pt.z = 1; pt.x = 0; pt.y = 0; pt.r = 0; } else { x.zoom = 1; x.x = 0; x.y = 0; x.rot = 0; } })); } } ]}/></div>
           <_EvpGrupo titulo="Enquadrar automático">{/* v36: olhos no terço de cima, área segura, câmera suave → pontos ◆ normais */}
             <_EvpAcoes colunas={2} itens={[
-              { id:"enq-um", icone:"centro", label:"Este clipe", on:!!(c.enq && temAn), desligado:!!_evpEnqEstado[c.id], attrs:{"data-enq":"um"}, dica:"Acha o rosto e cria a câmera (pontos ◆): olhos no terço de cima, sem tremer",
+              { id:"enq-um", icone:"enquadrarRosto", label:"Este clipe", on:!!(c.enq && temAn), desligado:!!_evpEnqEstado[c.id], attrs:{"data-enq":"um"}, dica:"Acha o rosto e cria a câmera (pontos ◆): olhos no terço de cima, sem tremer",
                 onClick:function(){ _evpEnqRodar([c], p, infoClipe, mudar).then(function(n){ if(n) _evToast("success", "Clipe enquadrado — os pontos ◆ estão no Animar"); else _evToast("warning", "Não consegui enquadrar este clipe"); }); } },
-              { id:"enq-todos", icone:"camadas", label:"Todos os clipes", desligado:!!_evpEnqEstado.todos, attrs:{"data-enq":"todos"}, dica:"Enquadra todos os clipes de uma vez",
+              { id:"enq-todos", icone:"enquadrarTodos", label:"Todos os clipes", desligado:!!_evpEnqEstado.todos, attrs:{"data-enq":"todos"}, dica:"Enquadra todos os clipes de uma vez",
                 onClick:function(){ const vistos = {}, lista = calc.clips.filter(function(q){ if(q.off || vistos[q.id]) return false; vistos[q.id] = 1; return true; });
                   _evpEnqEstado.todos = "Enquadrando " + lista.length + " clipes…"; _evpAvisar();
                   _evpEnqRodar(lista, p, infoClipe, mudar).then(function(n){ delete _evpEnqEstado.todos; _evpAvisar(); _evToast(n ? "success" : "warning", n ? n + " de " + lista.length + " clipes enquadrados" : "Não consegui enquadrar os clipes"); }); } } ]}/>
@@ -137072,8 +137185,8 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           </_EvpGrupo>
           <_EvpGrupo titulo="Final da música">
             <_EvpAcoes itens={[
-              { id:"terminar", icone:"fim", label:"Terminar com o vídeo", dica:"Usa o final de verdade da música, em vez de cortar no meio", onClick:terminar },
-              { id:"remix", icone:"batida", label:mu.remix ? "Tirar o remix" : "Encurtar na batida", on:!!mu.remix, dica:"Toca o começo, pula na batida e termina no final de verdade", onClick:remix },
+              { id:"terminar", icone:"fimMusica", label:"Terminar com o vídeo", dica:"Usa o final de verdade da música, em vez de cortar no meio", onClick:terminar },
+              { id:"remix", icone:"remix", label:mu.remix ? "Tirar o remix" : "Encurtar na batida", on:!!mu.remix, dica:"Toca o começo, pula na batida e termina no final de verdade", onClick:remix },
               { id:"dividir", icone:"dividir", label:"Dividir na agulha", dica:"A 2ª parte vira trilha extra (canal A5), continuando do mesmo ponto. Tecla S", onClick:function(){ if(dividir) dividir(); } } ]}/>
             {mu.remix && <_EvpDica>Pula de {seg(mu.remix.a)} para {seg(mu.remix.b)} da música.</_EvpDica>}
           </_EvpGrupo>
@@ -137732,7 +137845,7 @@ function _EvpCorrigir({ p, calc, tempo, irPara, mudar, comentarios, tirarTrechos
     </div>
     <div style={{position:"sticky",bottom:0,background:_EVP_COR.painel,paddingTop:8,borderTop:"1px solid " + _EVP_COR.linha,display:"flex",flexDirection:"column",gap:6}}>
       <button onClick={function(){ aplicar(abertas); }} disabled={!abertas.length || ajustando} style={Object.assign(_evpBtn("primario", !!abertas.length && !ajustando), {width:"100%",justifyContent:"center",padding:"11px 12px",fontSize:13})}>
-        <_EvpIco n="robo" s={16}/>{ajustando ? "A IA está corrigindo…" : abertas.length ? "Aplicar " + abertas.length + " correç" + (abertas.length === 1 ? "ão" : "ões") + " no vídeo" : "Escreva uma correção para aplicar"}</button>
+        <_EvpIco n="corrigir" s={16}/>{ajustando ? "A IA está corrigindo…" : abertas.length ? "Aplicar " + abertas.length + " correç" + (abertas.length === 1 ? "ão" : "ões") + " no vídeo" : "Escreva uma correção para aplicar"}</button>
       <button onClick={entender} disabled={!paraEntender.length || entendendo} title="Opcional: a IA explica o porquê e vira lição (só este vídeo, o cliente ou todos)"
         style={Object.assign(_evpBtn(null, !!paraEntender.length && !entendendo), {width:"100%",justifyContent:"center",padding:"7px 12px",fontSize:12})}>
         🧠 {entendendo ? "A IA está entendendo…" : "A IA entender antes (opcional" + (paraEntender.length ? " · " + paraEntender.length : "") + ")"}</button>
