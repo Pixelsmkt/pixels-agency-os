@@ -128016,6 +128016,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     }catch(e){ _evToast("error", "A IA não conseguiu estudar: " + ((e && e.message) || e)); }
     setEnsinando(false);
   };
+  const [fundosKit, setFundosKit] = useState(null);   // v68b: fundos da marca guardados nesta sessão (o kit só recarrega ao abrir de novo)
   const [resumoAberto, setResumoAberto] = useState(function(){ try { return window.localStorage.getItem("evp_resumo_aberto") === "1"; } catch(_e){ return false; } });   // v66
   const alternarResumo = function(){ setResumoAberto(function(v){ try { window.localStorage.setItem("evp_resumo_aberto", v ? "0" : "1"); } catch(_e){} return !v; }); };
   const palcoRef = useRef(null); const [palco, setPalco] = useState({ w:700, h:520 });
@@ -128144,13 +128145,20 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     /* v68: FUNDO — quando o vídeo não enche a tela */
     if(id === "fundo"){ const dt = p.deitado || "encaixar", ft = p.fundoTela || {}, fm = dt === "encaixar" ? (ft.modo || "desfoque") : "";
       const fundo = function(o, msg){ mudar(function(np){ np.deitado = "encaixar"; np.fundoTela = o; }); _evToast("success", msg + " — vale para o vídeo que não enche a tela (deitado)"); };
+      const fundosMarca = (fundosKit || (kit && Array.isArray(kit.fundos) ? kit.fundos : [])).filter(function(fd){ return fd && /^https:\/\//.test(String(fd.url || "")); }).slice(0, 12);   // v68b: fundos da marca (kit)
       const coresKit = [kit && kit.cor_principal, kit && kit.cor_secundaria].concat((kit && Array.isArray(kit.cores)) ? kit.cores : []).filter(function(c, i2, a){ return /^#[0-9a-f]{6}$/i.test(String(c || "")) && a.indexOf(c) === i2; }).slice(0, 4);
       const bola = function(c){ return <span style={{display:"block",width:22,height:22,borderRadius:99,background:c,border:"2px solid rgba(127,127,127,.35)"}}/>; };
       return [ Q("preencher", "Preencher a tela", "formato", { on:dt === "preencher", dica:"Vídeo deitado: corta e enche o vertical (já entra na pessoa)", acao:function(){ mudar(function(np){ np.deitado = "preencher"; }); } }),
         Q("desfocado", "Desfocado", "desfocar", { on:fm === "desfoque", dica:"Vídeo inteiro, com o próprio vídeo desfocado atrás", acao:function(){ fundo({ modo:"desfoque" }, "Fundo desfocado"); } }),
-        SEP("a") ].concat(coresKit.map(function(c, k){ return Q("cor-" + k, k ? "Cor do kit" : "Cor do cliente", "cor", { on:fm === "cor" && String(ft.cor).toLowerCase() === String(c).toLowerCase(), desenho:bola(c), acao:function(){ fundo({ modo:"cor", cor:c }, "Fundo na cor do cliente"); } }); }),
+        SEP("a") ].concat(fundosMarca.map(function(fd, k){ return Q("marca-" + k, String(fd.nome || "Fundo da marca").slice(0, 18), "imagem", { on:fm === "imagem" && ft.url === fd.url, dica:"Fundo da marca (kit do cliente)",
+            desenho:<span style={{display:"block",width:26,height:26,borderRadius:6,background:"#000 url(" + JSON.stringify(fd.url) + ") center/cover",border:"1px solid rgba(127,127,127,.4)"}}/>,
+            acao:function(){ fundo({ modo:"imagem", url:fd.url }, "Fundo da marca"); } }); }), coresKit.map(function(c, k){ return Q("cor-" + k, k ? "Cor do kit" : "Cor do cliente", "cor", { on:fm === "cor" && String(ft.cor).toLowerCase() === String(c).toLowerCase(), desenho:bola(c), acao:function(){ fundo({ modo:"cor", cor:c }, "Fundo na cor do cliente"); } }); }),
         [ Q("preto", "Preto", "cor", { on:fm === "cor" && String(ft.cor).toLowerCase() === "#000000", desenho:bola("#000000"), acao:function(){ fundo({ modo:"cor", cor:"#000000" }, "Fundo preto"); } }),
           Q("branco", "Branco", "cor", { on:fm === "cor" && String(ft.cor).toLowerCase() === "#ffffff", desenho:bola("#ffffff"), acao:function(){ fundo({ modo:"cor", cor:"#ffffff" }, "Fundo branco"); } }),
+          ...(fm === "imagem" && ft.url && !fundosMarca.some(function(fd){ return fd.url === ft.url; }) ? [Q("guardar", "Guardar no kit", "baixar", { dica:"Guarda esta imagem como fundo da marca do cliente (aparece aqui em todos os vídeos dele)", acao:async function(){
+            try{ const r = await window._sb.rpc("criacao_kit_fundo", { p_client:t.client, p_unidade:ed.unidade || "", p_url:ft.url, p_nome:"Fundo " + (fundosMarca.length + 1) });
+              if(r.error) throw new Error(r.error.message); setFundosKit(Array.isArray(r.data) ? r.data : null); _evToast("success", "Guardado no kit do cliente como fundo da marca"); }
+            catch(e){ _evToast("error", "Não guardou: " + ((e && e.message) || e)); } } })] : []),
           Q("imagem", fm === "imagem" ? "Trocar imagem" : "Imagem", "imagem", { on:fm === "imagem", dica:"Uma foto ou arte da marca atrás do vídeo (PNG/JPG)", arquivo:{ accept:"image/png,image/jpeg,image/webp", fn:async function(fl){
             try{ _evToast("info", "Enviando o fundo…"); const path = "tasks/" + t.id + "/estudio/fundo-" + Date.now() + "." + ((String(fl.name).split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
               await pxUploadResumable(fl, path, function(){}); fundo({ modo:"imagem", url:window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl }, "Fundo com imagem"); }
