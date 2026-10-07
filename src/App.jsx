@@ -142116,6 +142116,43 @@ function _eaPsdDeslocar(lista, dx, dy){
     if(l.children) _eaPsdDeslocar(l.children, dx, dy);
   });
 }
+/* trechos de estilo do Photoshop (styleRuns) → estilos por caractere do Fabric (peso, itálico, tamanho, cor) */
+async function _eaPsdEstilosTexto(t, l, texto, esc, fonteOk, corPadrao){
+  const runs = (l.text && Array.isArray(l.text.styleRuns)) ? l.text.styleRuns : [];
+  if(runs.length < 2) return;
+  const bruto = String(l.text.text || "");
+  const hex = function(c){ return c ? "#" + [c.r, c.g, c.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : corPadrao; };
+  // mapa: índice no texto bruto → índice no texto limpo (\r e \u0003 viraram \n; \r\n virou 1 char)
+  const estilos = {}; let linha = 0, col = 0, pos = 0;
+  for(let r = 0; r < runs.length; r++){
+    const run = runs[r], st = run.style || {}, fo = _eaFontePsd(st.font && st.font.name);
+    const okRun = fonteOk ? await _eaCarregarFonte(fo.familia) : false;
+    const e = { fontWeight:fo.peso || (st.fauxBold ? "700" : "400"), fontStyle:(fo.italico || st.fauxItalic) ? "italic" : "normal", fill:hex(st.fillColor) };
+    if(okRun) e.fontFamily = fo.familia;
+    if(st.fontSize) e.fontSize = Math.max(4, st.fontSize * esc);
+    for(let i = 0; i < (run.length || 0) && pos < bruto.length; i++, pos++){
+      const ch = bruto[pos];
+      if(ch === "\r" && bruto[pos + 1] === "\n") continue;
+      if(ch === "\r" || ch === "\n" || ch === "\u0003"){ linha++; col = 0; continue; }
+      (estilos[linha] = estilos[linha] || {})[col] = Object.assign({}, e); col++;
+    }
+  }
+  t.set("styles", estilos); try{ t.initDimensions(); }catch(_){ }
+}
+/* confere a altura do texto desenhado contra a altura da camada no PSD e corrige a escala da fonte (documento em 150/300 ppi, etc.) */
+function _eaPsdAjustarTamanhoTexto(t, l){
+  const alvo = (l.bottom || 0) - (l.top || 0); if(!(alvo > 4)) return;
+  try{ t.initDimensions(); }catch(_){ }
+  const h = _eaCaixa(t).height; if(!(h > 1)) return;
+  const k = alvo / h;
+  if(k > 0.92 && k < 1.08) return;                      // está certo
+  if(k < 0.4 || k > 6) return;                          // medida estranha (camada com efeito/sombra enorme): não mexe
+  t.set("fontSize", Math.max(4, (t.fontSize || 24) * k));
+  if(t.styles) Object.keys(t.styles).forEach(function(li){ Object.keys(t.styles[li]).forEach(function(ci){ const e = t.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(4, e.fontSize * k); }); });
+  t.set("width", Math.max(20, ((l.right || 0) - (l.left || 0)) * 1.08));
+  try{ t.initDimensions(); }catch(_){ }
+  t.setCoords();
+}
 async function _eaAbrirPsd(a, arquivo, op){
   const mb = Math.round((arquivo.size || 0) / 1048576);
   if(mb > 700) throw new Error("PSD de " + mb + " MB é grande demais para abrir no navegador. No Photoshop: Arquivo › Salvar uma cópia com menos camadas ou menor, e mande de novo.");
@@ -142140,6 +142177,9 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
   const arquivo = { name:nomeArq };
   const W = pr ? pr.w : psd.width, H = pr ? pr.h : psd.height, lib = a.lib, avisos = [], objs = [], infos = [];
   if(!pr && psd.colorMode !== undefined && psd.colorMode !== 3) avisos.push(arquivo.name + ": o PSD não é RGB (é CMYK ou outro). As cores foram convertidas para RGB.");
+  if(!pr && psd.bitsPerChannel && psd.bitsPerChannel !== 8) avisos.push(arquivo.name + ": PSD de " + psd.bitsPerChannel + " bits — as cores podem sair um pouco diferentes. Se notar diferença, salve uma cópia em 8 bits/canal, sRGB.");
+  try{ const ir = psd.imageResources || {}; if(ir.iccProfile || ir.iccUntaggedProfile === false){ const nome = (function(){ try{ const b = ir.iccProfile; if(!b) return ""; let s = ""; for(let i = 0; i < Math.min(b.length, 400); i++){ const c = b[i]; if(c >= 32 && c < 127) s += String.fromCharCode(c); } const m = s.match(/(Adobe RGB|ProPhoto|Display P3|sRGB|Apple RGB)[^\x00]{0,20}/i); return m ? m[1] : ""; }catch(_){ return ""; } })();
+    if(nome && !/sRGB/i.test(nome) && !pr) avisos.push(arquivo.name + ": perfil de cor " + nome + " — o navegador trata como sRGB, então as cores podem ficar diferentes do Photoshop. Pra ficar igual, converta o PSD pra sRGB (Editar › Converter para perfil)."); } }catch(_){ }
   // camadas de baixo para cima, com o que vem do grupo (escondido, opacidade, máscaras) e a camada-base do recorte
   const camadas = [];
   (function andar(lista, pai){
@@ -142193,11 +142233,17 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       const simples = ok && !temEfeito && !temMascara;
       const familia = ok ? fo.familia : "Montserrat";
       if(!ok) await _eaCarregarFonte("Montserrat");
-      const t = new lib.Textbox(String(l.text.text).replace(/\r/g, "\n").replace(/\u0003/g, "\n"), Object.assign({}, base, { left:l.left||0, top:l.top||0, width:larg,
+      const textoPsd = String(l.text.text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\u0003/g, "\n").replace(/\n$/, "");
+      const t = new lib.Textbox(textoPsd, Object.assign({}, base, { left:l.left||0, top:l.top||0, width:larg,
         fontFamily:familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
         lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },
         simples ? {} : { nome:(c.nome + (temDesenho ? " (texto editável" + (ok ? "" : ", fonte trocada") + ")" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
-      infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:Math.max(4, (st.fontSize || 24) * esc) });
+      /* (07/10, Gustavo: "tamanhos diferentes, espaçamentos não respeitados") — 1) trechos com estilo diferente dentro do
+         mesmo texto (1ª linha leve, 2ª negrito, tamanhos/cores diferentes) viram estilos por caractere; 2) o tamanho da fonte
+         é CONFERIDO contra a altura real da camada no PSD (resolução do documento muda a escala) e corrigido. */
+      try{ await _eaPsdEstilosTexto(t, l, textoPsd, esc, ok, cor); }catch(_){ }
+      try{ _eaPsdAjustarTamanhoTexto(t, l); }catch(_){ }
+      infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:t.fontSize || Math.max(4, (st.fontSize || 24) * esc) });
       if(simples){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
       /* (07/10) camada de TEXTO marcada como espaço: entra só o texto editável e visível (o texto vai ser trocado
          pela copy — a imagem do texto antigo não pode ficar por baixo) */
@@ -142693,7 +142739,7 @@ function _EaPainelEspacos({ a, sel, um }){
       const m = (Array.isArray(ms) ? ms : []).find(function(x){ return x.id === a.proj.modelo_id; });
       if(!m) throw new Error("Template de origem não está mais na lista");
       const p = a.pagina(); const doc = { versao:1, paginas:[JSON.parse(JSON.stringify(p))], meta:(m.doc && m.doc.meta) || {} };
-      let thumb = null; try{ const up = await _eaSubir(_eaDataUrlBlob(_eaMiniatura(fc, a.W, 420)), "arte/modelos", "modelo.jpg"); thumb = up.url; }catch(_){ }
+      let thumb = null; try{ const up = await _eaSubir(_eaDataUrlBlob(fc.toDataURL({ format:"jpeg", quality:0.86, multiplier:Math.min(1, 1080 / a.W) / (fc.getZoom() || 1) })), "arte/modelos", "modelo.jpg"); thumb = up.url; }catch(_){ }
       await _eaRpc("arte_modelo_salvar", { p_id:m.id, p_client:m.client_id, p_nome:m.nome, p_formato:m.formato, p_largura:a.W, p_altura:a.H, p_doc:doc,
         p_espacos:Array.from(new Set(com.map(function(o){ return o.espaco; }))), p_thumb:thumb });
       _eaToast("success", "Template “" + m.nome + "” atualizado");
@@ -142904,7 +142950,7 @@ async function _eaPsdParaTemplate(arquivo, op){
   const lib = await _eaFabric();
   const doc = { versao:1, paginas:[] }, avisos = [];
   let atual = -1;
-  const fechar = function(){ if(a.fc && atual >= 0 && doc.paginas[atual]){ a.fc.renderAll(); doc.paginas[atual].fabric = _eaJsonPagina(a.fc); doc.paginas[atual].__thumb = _eaMiniatura(a.fc, a.W, 420); doc.paginas[atual].__espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
+  const fechar = function(){ if(a.fc && atual >= 0 && doc.paginas[atual]){ a.fc.renderAll(); doc.paginas[atual].fabric = _eaJsonPagina(a.fc); doc.paginas[atual].__thumb = a.fc.toDataURL({ format:"jpeg", quality:0.86, multiplier:Math.min(1, 1080 / a.W) }); doc.paginas[atual].__espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
       doc.paginas[atual].__titulo = (function(){ const t = a.fc.getObjects().find(function(o){ return o.espaco === "HEADLINE" && o.text; }); return t ? String(t.text).replace(/\s+/g, " ").trim().slice(0, 40) : ""; })(); } };
   const a = { lib:lib, projetoId:"modelos/" + _eaUid(), fc:null, W:0, H:0, kit:null, proj:{ client_id:op.client },
     doc:function(){ return doc; },
@@ -142919,17 +142965,21 @@ async function _eaPsdParaTemplate(arquivo, op){
   if(!doc.paginas.length || !a.fc) throw new Error("O arquivo não tem camadas que deem para abrir");
   passo("salvando " + (doc.paginas.length > 1 ? doc.paginas.length + " templates…" : "o template…"));
   const base = (op.nome || arquivo.name.replace(/\.[^.]+$/, "")).trim().slice(0, 60);
+  // (07/10) mandar o MESMO PSD de novo ATUALIZA os templates (mesmo arquivo + mesma prancheta), mantendo tipo/modo/★ padrão/unidade
+  let existentes = []; try{ const l = await _eaRpc("arte_modelos_lista", { p_client:op.client }); existentes = (Array.isArray(l) ? l : []).filter(function(m){ return m.client_id === op.client && m.arquivo_nome === arquivo.name; }); }catch(_){ }
   const feitos = [];
   for(let i = 0; i < doc.paginas.length; i++){
     const pg = doc.paginas[i];
     const espacos = pg.__espacos || [], thumbData = pg.__thumb, titulo = pg.__titulo; delete pg.__espacos; delete pg.__thumb; delete pg.__titulo;
     let thumb = null; try{ if(thumbData){ const up = await _eaSubir(_eaDataUrlBlob(thumbData), "arte/modelos", "modelo.jpg"); thumb = up.url; } }catch(_){ }
     const f = _EA_FORMATOS.find(function(x){ return x.w === pg.largura && x.h === pg.altura; });
-    const nome = (doc.paginas.length > 1 ? base + " · " + pg.nome + (titulo ? " — " + titulo : "") : base).slice(0, 80);
-    const r = await _eaRpc("arte_modelo_salvar", { p_id:null, p_client:op.client, p_nome:nome, p_formato:f ? f.id : "custom", p_largura:pg.largura, p_altura:pg.altura,
-      p_doc:{ versao:1, paginas:[pg], meta:{ origem:"psd", arquivo:arquivo.name, prancheta:pg.nome, tipo_card:op.tipo_card, modo:op.modo } }, p_espacos:espacos, p_thumb:thumb });
-    await _eaRpc("arte_modelo_config", { p_id:r.id, p_tipo_card:op.tipo_card || "arte", p_modo:op.modo || "fixo", p_padrao:!!op.padrao && i === 0, p_unidade:op.unidade || "", p_arquivo_nome:arquivo.name });
-    feitos.push({ id:r.id, nome:nome, espacos:espacos, largura:pg.largura, altura:pg.altura, camadas:(pg.fabric.objects || []).length });
+    const antigo = existentes.find(function(m){ return (doc.paginas.length > 1) ? ((m.doc && m.doc.meta && m.doc.meta.prancheta) === pg.nome) : true; }) || null;
+    const nome = antigo ? antigo.nome : (doc.paginas.length > 1 ? base + " · " + pg.nome + (titulo ? " — " + titulo : "") : base).slice(0, 80);
+    const r = await _eaRpc("arte_modelo_salvar", { p_id:antigo ? antigo.id : null, p_client:op.client, p_nome:nome, p_formato:f ? f.id : "custom", p_largura:pg.largura, p_altura:pg.altura,
+      p_doc:{ versao:1, paginas:[pg], meta:{ origem:"psd", arquivo:arquivo.name, prancheta:pg.nome, tipo_card:antigo ? antigo.tipo_card : op.tipo_card, modo:antigo ? antigo.modo : op.modo } }, p_espacos:espacos, p_thumb:thumb });
+    if(antigo) await _eaRpc("arte_modelo_config", { p_id:antigo.id, p_arquivo_nome:arquivo.name });
+    else await _eaRpc("arte_modelo_config", { p_id:r.id, p_tipo_card:op.tipo_card || "arte", p_modo:op.modo || "fixo", p_padrao:!!op.padrao && i === 0, p_unidade:op.unidade || "", p_arquivo_nome:arquivo.name });
+    feitos.push({ id:antigo ? antigo.id : r.id, nome:nome, espacos:espacos, largura:pg.largura, altura:pg.altura, camadas:(pg.fabric.objects || []).length, atualizado:!!antigo });
   }
   try{ a.fc.dispose(); }catch(_){ }
   return { id:feitos[0] && feitos[0].id, templates:feitos, espacos:feitos[0] ? feitos[0].espacos : [], avisos:avisos, largura:feitos[0] && feitos[0].largura, altura:feitos[0] && feitos[0].altura, camadas:feitos.reduce(function(n, t){ return n + t.camadas; }, 0) };
@@ -142950,6 +143000,8 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
   const [resultado, setResultado] = useState(null);
   const [ajuda, setAjuda] = useState(false);
   const [arrasta, setArrasta] = useState(false);
+  const [ampliado, setAmpliado] = useState(null);     // template aberto em tamanho grande
+  const [real, setReal] = useState(false);            // 100% (tamanho real) ou cabendo na tela
   const inputRef = useRef(null);
   const carregar = function(){ _eaRpc("arte_modelos_lista", { p_client:cliente }).then(function(l){ const m = (Array.isArray(l) ? l : []).filter(function(x){ return x.client_id === cliente; }); setLista(m); if(onContagem) onContagem(m.length); }).catch(function(e){ setErro(_eaErro(e)); setLista([]); }); };
   useEffect(carregar, [cliente]);
@@ -143024,9 +143076,11 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
         </div>
       </div>
       {resultado && <div style={{marginTop:14,padding:"12px 14px",borderRadius:12,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:12.5,color:"#166534",lineHeight:1.55}}>
-        <b>{resultado.templates.length > 1 ? resultado.templates.length + " templates salvos (um por prancheta)." : "Template salvo."}</b> {resultado.camadas} camada(s). Espaços reconhecidos abaixo — se algo estiver errado: abrir no editor › Espaços › corrigir › "Salvar de volta no template".
+        <b>{resultado.templates.length > 1 ? resultado.templates.length + " templates salvos (um por prancheta)." : (resultado.templates[0] && resultado.templates[0].atualizado ? "Template atualizado (mesmo arquivo — tipo, modo e ★ padrão mantidos)." : "Template salvo.")}</b> {resultado.camadas} camada(s). Espaços reconhecidos abaixo — se algo estiver errado: abrir no editor › Espaços › corrigir › "Salvar de volta no template".
         {resultado.templates.map(function(t){ return <div key={t.id} style={{marginTop:4}}>• <b>{t.nome}</b> · {t.largura}×{t.altura} · {t.espacos.length ? t.espacos.join(", ") : <span style={{color:"#92400e"}}>nenhum espaço achado</span>}</div>; })}
-        {resultado.avisos.length > 0 && <div style={{marginTop:6,color:"#92400e"}}>{resultado.avisos.slice(0, 6).map(function(x, i){ return <div key={i}>• {x}</div>; })}{resultado.avisos.length > 6 ? <div>• … e mais {resultado.avisos.length - 6}</div> : null}</div>}
+        {(function(){ const fontes = Array.from(new Set(resultado.avisos.map(function(x){ const m = String(x).match(/fonte "([^"]+)" não encontrada/); return m ? m[1].replace(/-(Bold|Light|Regular|Medium|SemiBold|Black|Thin|Heavy|ExtraBold|Italic|BoldItalic)$/i, "") : null; }).filter(Boolean)));
+          return fontes.length ? <div style={{marginTop:8,padding:"8px 10px",borderRadius:8,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e"}}><b>Fonte que falta: {fontes.join(", ")}.</b> Os textos do template vão sair em Montserrat até você mandar o arquivo da fonte em <b>Identidade visual › Fontes do cliente</b>. Depois disso, é só mandar o PSD de novo (ele atualiza o template).</div> : null; })()}
+        {resultado.avisos.length > 0 && <div style={{marginTop:6,color:"#92400e"}}>{resultado.avisos.filter(function(x){ return !/fonte "[^"]+" não encontrada/.test(x); }).slice(0, 6).map(function(x, i){ return <div key={i}>• {x}</div>; })}</div>}
       </div>}
     </_EaCard>}
     {isMob && <div style={{fontSize:12.5,color:_EA_UI.sub}}>No celular dá pra ver os templates. Pra mandar um PSD, use o computador.</div>}
@@ -143036,8 +143090,8 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
     {porTipo.map(function(g){ return <_EaCard key={g[0]} titulo={g[1]} sub={g[2].length + " template" + (g[2].length===1?"":"s") + " · o ★ padrão é o que o card usa"} style={{padding:16}}>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(228px,1fr))",gap:14}}>
         {g[2].map(function(m){ return <div key={m.id} style={{border:"1px solid "+(m.padrao?_EA_UI.aBorda:_EA_UI.borda),borderRadius:14,overflow:"hidden",background:"#fff",display:"flex",flexDirection:"column",boxShadow:m.padrao?"0 0 0 3px "+_EA_UI.aSoft:"none"}}>
-          <div style={{position:"relative",background:"#eef1f5",aspectRatio:"4/5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
-            {m.thumb_url ? <img src={m.thumb_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : <span style={{color:_EA_UI.fraco,fontSize:12}}>{m.largura}×{m.altura}</span>}
+          <div onClick={function(){ if(m.thumb_url){ setAmpliado(m); setReal(false); } }} title={m.thumb_url ? "Clique pra ver grande" : ""} style={{position:"relative",background:"#eef1f5",aspectRatio:String(m.largura || 4) + "/" + String(m.altura || 5),display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:m.thumb_url?"zoom-in":"default"}}>
+            {m.thumb_url ? <img src={m.thumb_url} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}}/> : <span style={{color:_EA_UI.fraco,fontSize:12}}>{m.largura}×{m.altura}</span>}
             <div style={{position:"absolute",top:8,left:8,display:"flex",gap:4,flexWrap:"wrap"}}>
               {m.padrao && <_EaChip cor="#fff" fundo={_EA_UI.a}>★ Padrão</_EaChip>}
               <_EaChip cor={_EA_UI.tx} fundo="rgba(255,255,255,.92)">{m.modo === "base" ? "Base" : "Fixo"}</_EaChip>
@@ -143072,6 +143126,17 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
         </div>; })}
       </div>
     </_EaCard>; })}
+    {ampliado && <div onClick={function(){ setAmpliado(null); }} style={{position:"fixed",inset:0,zIndex:10060,background:"rgba(15,23,42,.86)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,cursor:"zoom-out"}}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{display:"flex",gap:10,alignItems:"center",marginBottom:10,cursor:"default"}}>
+        <span style={{color:"#fff",fontWeight:800,fontSize:14}}>{ampliado.nome}</span>
+        <span style={{color:"rgba(255,255,255,.65)",fontSize:12.5}}>{ampliado.largura}×{ampliado.altura}</span>
+        <button onClick={function(){ setReal(!real); }} style={_eaBt("fantasma",{padding:"6px 10px",fontSize:12})}>{real ? "Caber na tela" : "Tamanho real (100%)"}</button>
+        <button onClick={function(){ setAmpliado(null); }} style={_eaBt("fantasma",{padding:"6px 10px",fontSize:12})}>Fechar</button>
+      </div>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{overflow:"auto",maxWidth:"100%",maxHeight:"calc(100vh - 80px)",borderRadius:8,boxShadow:"0 30px 80px rgba(0,0,0,.5)",cursor:"default",background:"#111"}}>
+        <img src={ampliado.thumb_url} alt="" style={real ? { width:ampliado.largura, height:ampliado.altura, display:"block", maxWidth:"none" } : { display:"block", maxWidth:"calc(100vw - 32px)", maxHeight:"calc(100vh - 80px)", width:"auto", height:"auto" }}/>
+      </div>
+    </div>}
   </div>;
 }
 
