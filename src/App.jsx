@@ -140193,6 +140193,49 @@ async function _eaRegistrarFontes(fontes){
     catch(_){ delete _eaFontesCarregadas[f.url]; }
   }
 }
+/* (07/10, Gustavo: "o template abriu com a fonte errada") FONTES DO PC DO DESIGNER → IDENTIDADE DO CLIENTE, sozinho.
+   O Chrome deixa ler as fontes instaladas (queryLocalFonts) depois de um clique e de uma permissão (uma vez). Guardamos a lista
+   no clique de "Salvar template"/"Abrir"; na hora que o PSD pede uma fonte que não temos, pegamos o arquivo dela no PC,
+   subimos pra Identidade visual do cliente e registramos — o texto já abre certo e vale pra todo mundo depois. */
+async function _eaPrepararFontesLocais(){
+  try{
+    if(typeof window === "undefined" || typeof window.queryLocalFonts !== "function") return [];
+    if(window.__eaFontesLocais && window.__eaFontesLocais.length) return window.__eaFontesLocais;
+    const lista = await window.queryLocalFonts();
+    window.__eaFontesLocais = Array.isArray(lista) ? lista : [];
+    return window.__eaFontesLocais;
+  }catch(_){ window.__eaFontesLocais = window.__eaFontesLocais || []; return window.__eaFontesLocais; }
+}
+function _eaFamiliaNorm(s){ return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+async function _eaImportarFontesLocais(familias, client, unidade){
+  const locais = (typeof window !== "undefined" && window.__eaFontesLocais) || []; if(!locais.length || !client || !familias.length) return [];
+  let ident = null; try{ ident = await _eaRpc("arte_identidade", { p_client:client, p_unidade:unidade || "" }); }catch(_){ }
+  const jaTem = ((ident && ident.fontes) || []).slice();
+  const novas = []; const importadas = [];
+  for(const fam of familias){
+    const chave = _eaFamiliaNorm(fam); if(!chave) continue;
+    const faces = locais.filter(function(f){ return _eaFamiliaNorm(f.family) === chave || _eaFamiliaNorm(f.family).indexOf(chave) === 0 || _eaFamiliaNorm(f.postscriptName || "").indexOf(chave) === 0 || _eaFamiliaNorm(f.fullName || "").indexOf(chave) === 0; });
+    if(!faces.length) continue;
+    for(const f of faces.slice(0, 18)){
+      try{
+        const g = _eaFontePsd(String(f.postscriptName || f.fullName || f.family).replace(/\s+/g, ""));
+        const peso = g.peso || "400", italico = g.italico || /italic|oblique/i.test(f.style || "");
+        if(jaTem.concat(novas).some(function(x){ return _eaFamiliaNorm(x.familia) === chave && String(x.peso) === String(peso) && !!x.italico === !!italico; })) continue;
+        const blob = await f.blob(); if(!blob || blob.size < 1000 || blob.size > 12 * 1024 * 1024) continue;
+        const nomeArq = (f.postscriptName || f.fullName || fam).replace(/[^\w.-]+/g, "_") + (blob.type && /woff2/.test(blob.type) ? ".woff2" : /woff/.test(blob.type) ? ".woff" : /opentype|otf/.test(blob.type) ? ".otf" : ".ttf");
+        const up = await _eaSubir(blob, "arte/fontes/" + client, nomeArq);
+        novas.push({ familia:fam, peso:String(peso), italico:!!italico, url:up.url, arquivo:nomeArq, origem:"pc do designer" });
+      }catch(_){ }
+    }
+    if(novas.some(function(n){ return _eaFamiliaNorm(n.familia) === chave; })) importadas.push(fam);
+  }
+  if(novas.length){
+    try{ await _eaRpc("arte_identidade_salvar", { p_client:client, p_unidade:unidade || "", p_dados:{ fontes:jaTem.concat(novas) } }); }catch(_){ }
+    await _eaRegistrarFontes(novas);
+    novas.forEach(function(n){ delete _eaFontesOk[n.familia]; });
+  }
+  return importadas;
+}
 async function _eaFontesDoCliente(client, unidade){
   if(!client) return null;
   try{ const d = await _eaRpc("arte_identidade", { p_client:client, p_unidade:unidade || "" }); await _eaRegistrarFontes(d && d.fontes); return d || {}; }catch(_){ return null; }
@@ -142251,6 +142294,17 @@ async function _eaAbrirPsd(a, arquivo, op){
   // (07/10) perfil de cor: Adobe RGB / ProPhoto / P3 → converte pra sRGB pra ficar igual ao Photoshop
   const perfil = _eaPerfilDoPsd(psd, buf);
   if(perfil){ const conv = _eaConversorPerfil(perfil.id); if(conv){ _eaToast("info", "PSD em " + perfil.nome + ": convertendo as cores pra sRGB…"); try{ _eaConverterPsdParaSrgb(psd, conv); }catch(_){ } psd.__perfilConvertido = perfil.nome; } }
+  // (07/10) fontes do PSD que não temos → tenta pegar do PC (lista guardada no clique) e subir pra Identidade do cliente
+  try{
+    const fams = {}; (function andar(lista){ (lista || []).forEach(function(l){ if(l.text){ const n = l.text.style && l.text.style.font && l.text.style.font.name; if(n) fams[_eaFontePsd(n).familia] = 1; (l.text.styleRuns || []).forEach(function(r){ const m = r.style && r.style.font && r.style.font.name; if(m) fams[_eaFontePsd(m).familia] = 1; }); } if(l.children) andar(l.children); }); })(psd.children);
+    const faltam = []; for(const fam of Object.keys(fams)){ if(!(await _eaCarregarFonte(fam))) faltam.push(fam); }
+    const cid = a.proj && a.proj.client_id;
+    if(faltam.length && cid){
+      const imp = await _eaImportarFontesLocais(faltam, cid, (a.proj && a.proj.unidade) || "");
+      if(imp.length) _eaToast("success", "Fonte(s) " + imp.join(", ") + " copiada(s) do seu PC pra Identidade visual de " + _eaNomeCliente(cid));
+      else if(typeof window !== "undefined" && typeof window.queryLocalFonts !== "function") _eaToast("warning", "Fonte(s) " + faltam.join(", ") + " não encontrada(s). Mande o arquivo em Identidade visual › Fontes (ou use o Chrome/Edge, que copia do PC sozinho).");
+    }
+  }catch(_){ }
   const prs = (op && op.naPagina) ? [] : _eaPsdPranchetas(psd);
   if(!prs.length) return _eaAbrirPsdLido(a, psd, arquivo.name, op, null);
   const vis = prs.filter(function(p){ return !p.hidden; });
@@ -142681,7 +142735,7 @@ function _EaPainelArquivo({ a, onAbrirCard }){
     {tit("Abrir arquivo")}
     <div style={{fontSize:12,color:_EA.sub,marginBottom:8}}>PSD (camadas), SVG, PDF, AI (salvo "compatível com PDF") ou imagens. <b>Abrir</b> = página nova · <b>Acrescentar</b> = entra na página aberta. Também dá para arrastar para a arte (acrescenta).</div>
     <button onClick={function(){ const i = document.getElementById(idAbrir); if(i) i.click(); }} style={bt}><_EaIc n="abrir" s={16}/> Escolher arquivo</button>
-    <input id={idAbrir} type="file" multiple accept=".psd,.psb,.svg,.pdf,.ai,image/*" style={{display:"none"}} onChange={function(e){ const f = e.target.files; _eaAbrirArquivos(a, f); e.target.value = ""; }}/>
+    <input id={idAbrir} type="file" multiple accept=".psd,.psb,.svg,.pdf,.ai,image/*" style={{display:"none"}} onChange={function(e){ const f = e.target.files; _eaPrepararFontesLocais().finally(function(){ _eaAbrirArquivos(a, f); }); e.target.value = ""; }}/>
     <button onClick={function(){ const i = document.getElementById(idAbrir + "-mais"); if(i) i.click(); }} style={Object.assign({}, bt, {marginLeft:6})} title="PSD entra com as camadas na página aberta"><_EaIc n="imagem" s={16}/> Acrescentar nesta página</button>
     <input id={idAbrir + "-mais"} type="file" multiple accept=".psd,.psb,.svg,.pdf,.ai,image/*" style={{display:"none"}} onChange={function(e){ const f = Array.from(e.target.files || []); e.target.value = ""; _eaAcrescentar(a, f); }}/>
     {(function(){ const doCard = tarefa ? (Array.isArray(tarefa.files) ? tarefa.files : []).filter(_eaEhArquivoArte).slice(0, 40) : [];
@@ -143064,7 +143118,7 @@ async function _eaPsdParaTemplate(arquivo, op){
   let atual = -1;
   const fechar = function(){ if(a.fc && atual >= 0 && doc.paginas[atual]){ a.fc.renderAll(); doc.paginas[atual].fabric = _eaJsonPagina(a.fc); doc.paginas[atual].__thumb = a.fc.toDataURL({ format:"jpeg", quality:0.86, multiplier:Math.min(1, 1080 / a.W) }); doc.paginas[atual].__espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
       doc.paginas[atual].__titulo = (function(){ const t = a.fc.getObjects().find(function(o){ return o.espaco === "HEADLINE" && o.text; }); return t ? String(t.text).replace(/\s+/g, " ").trim().slice(0, 40) : ""; })(); } };
-  const a = { lib:lib, projetoId:"modelos/" + _eaUid(), fc:null, W:0, H:0, kit:null, proj:{ client_id:op.client },
+  const a = { lib:lib, projetoId:"modelos/" + _eaUid(), fc:null, W:0, H:0, kit:null, proj:{ client_id:op.client, unidade:op.unidade || "" },
     doc:function(){ return doc; },
     abrirPagina:async function(i){ fechar(); const pg = doc.paginas[i]; const el = document.createElement("canvas"); el.width = pg.largura; el.height = pg.altura;
       if(a.fc){ try{ a.fc.dispose(); }catch(_){ } }
@@ -143122,6 +143176,7 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
     setForm(function(x){ return Object.assign({}, x, { nome:f.name.replace(/\.[^.]+$/, ""), tipo_card:tipo, modo:tipo === "foto_obra" ? "fixo" : x.modo }); }); };
   const enviar = async function(){
     if(!arq) return; setErro(""); setPasso("começando…");
+    try{ await _eaPrepararFontesLocais(); }catch(_){ }   // precisa ser no clique (permissão do navegador pra ler as fontes do PC)
     try{
       const jaTem = (lista || []).some(function(m){ return (m.tipo_card || "arte") === form.tipo_card && (m.unidade || "") === (form.unidade || ""); });
       const r = await _eaPsdParaTemplate(arq, { client:cliente, nome:form.nome, tipo_card:form.tipo_card, modo:form.modo, unidade:form.unidade, padrao:!jaTem, onPasso:setPasso });
