@@ -2569,7 +2569,7 @@ function smartFormatTitle(input){
 
 /* ─── DESIGNER PAYMENTS ─── */
 // Tabela BASE — vigente até 08/2026.
-const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50 };
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50, versao: 0 };  // versao (07/10): versão ES do Grupo Bioter, custo 0
 
 // ── Reajustes datados ────────────────────────────────────────────────────
 // O pagamento é calculado sob demanda a partir das tasks do mês. Se a gente
@@ -5332,20 +5332,21 @@ function _pxColaTelefone(txt){
 const PX_TAG_VERSAO_ES="Versão espanhol";
 function pxEhVersaoES(t){ return !!(t&&((Array.isArray(t.tags)&&t.tags.indexOf(PX_TAG_VERSAO_ES)>=0)||/-es$/.test(String(t.id||"")))); }
 const _pxVersaoESEmCurso={};
-async function pxCriarVersaoES(taskId,setTasks){
+/* v2 (07/10, Gustavo): nasce NA APROVAÇÃO DA COPY (Avaliação de copys), não ao salvar o card. Na hora de
+   aprovar: o original vira "Bioter Brasil" e nasce o card "Paraguay" (ES) — a gestora de mídia vê dois
+   cards, um pra cada perfil. Tipo de conteúdo do ES = "versao" (Versão, custo 0). O ES já nasce na mesma
+   coluna do original aprovado (a copy é a mesma, traduzida). Depois a cascata confere a semana do Paraguay. */
+async function pxCriarVersaoES(task,setTasks,opts){
   const sb=(typeof window!=="undefined")?window._sb:null;
-  const id=String(taskId||""); if(!sb||!id||/-es$/.test(id)||_pxVersaoESEmCurso[id]) return null;
+  const o=task||{}; const id=String(o.id||"");
+  if(!sb||!id||/-es$/.test(id)||_pxVersaoESEmCurso[id]) return null;
   _pxVersaoESEmCurso[id]=true;
   try{
     const idEs=id+"-es";
     const ja=await sb.from("tasks").select("id").eq("id",idEs).limit(1);
     if(ja.data&&ja.data.length) return null;                       // já existe (nada é sobrescrito)
-    const r=await sb.from("tasks").select("*").eq("id",id).single();
-    if(r.error||!r.data) return null;
-    const o=r.data;
-    if(String(o.client)!=="bioter"||String(o.bioter_unit||"").split(",").map(function(x){return x.trim();}).indexOf("grupo")<0||o.deleted_at) return null;
-    const brief=_pxHtmlParaTexto(o.description||""), leg=_pxHtmlParaTexto(o.caption||"");
-    if(!brief.trim()&&!leg.trim()) return null;                    // sem copy ainda: tenta no próximo salvar
+    const brief=_pxHtmlParaTexto(o.desc||o.description||""), leg=_pxHtmlParaTexto(o.caption||"");
+    if(!brief.trim()&&!leg.trim()) return null;
     if(typeof askIA!=="function") return null;
     const sys="Você traduz copy de redes sociais do português do Brasil para o ESPANHOL do Paraguai (agronegócio). "+
       "Traduz com naturalidade, sem acrescentar nem tirar ideia. Os RÓTULOS do briefing (• TÍTULO, • TEXTO NA ARTE, • ROTEIRO, Cena 1 — Abertura, Lâmina 2 —, • Narração IA etc.) ficam EXATAMENTE como estão, em português; "+
@@ -5356,23 +5357,28 @@ async function pxCriarVersaoES(taskId,setTasks){
     const txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
     const pega=function(k,prox){ const i=txt.indexOf("==="+k+"==="); if(i<0) return ""; const j=prox?txt.indexOf("==="+prox+"===",i):-1; return txt.slice(i+k.length+6,j>i?j:undefined).trim(); };
     const tit=pega("TITULO","BRIEFING")||(o.title||""), b2=pega("BRIEFING","LEGENDA"), l2=pega("LEGENDA");
-    if(!b2&&!l2) return null;
+    if(!b2&&!l2) throw new Error("a tradução veio vazia");
     const agora=new Date().toISOString();
     const tags=(Array.isArray(o.tags)?o.tags:[]).filter(function(x){return x!==PX_TAG_VERSAO_ES;}).concat([PX_TAG_VERSAO_ES]);
-    const novo=Object.assign({},o,{
-      id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioter_unit:"paraguay",
-      description:b2?_pxTextoParaHtml(b2):"", caption:l2?_pxTextoParaHtml(l2):"",
-      tags:tags, files:[], comments:[], copy_versoes:[], traducao_pt:{titulo:o.title||"",briefing:o.description||"",legenda:o.caption||""},
-      paid_at:null, col_entered_at:agora, updated_at:agora,
-      timeline:[{type:"created",label:"Versão em espanhol criada automaticamente do card “"+(o.title||"")+"” (Grupo Bioter) — mesma data, unidade Paraguay; no pagamento conta junto com o original",at:agora,atFmt:(typeof nowFmt==="function"?nowFmt():""),user:"Claude"}],
+    const tk=Object.assign({},o,{
+      id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioterUnit:"paraguay", bioter_unit:"paraguay",
+      status:(opts&&opts.status)||o.status||"recebida", contentType:"versao", content_type:"versao",
+      desc:b2?_pxTextoParaHtml(b2):"", description:b2?_pxTextoParaHtml(b2):"", caption:l2?_pxTextoParaHtml(l2):"",
+      tags:tags, files:[], comments:[], copyVersoes:[], paidAt:null, paid_at:null, valorPersonalizado:null,
+      colEnteredAt:agora, ajustar:false, _isDraft:false,
+      timeline:[{type:"created",label:"Versão em espanhol (Paraguay) criada na aprovação da copy de “"+(o.title||"")+"” (Grupo Bioter) — mesma data; tipo Versão, não entra no pagamento",at:agora,atFmt:(typeof nowFmt==="function"?nowFmt():""),user:"Claude"}],
     });
-    delete novo.created_at_ts;
-    const ins=await sb.from("tasks").insert(novo).select("*").single();
-    if(ins.error){ console.warn("[versao ES]",ins.error); return null; }
-    if(typeof setTasks==="function"&&typeof rowToTask==="function"){ const tk=rowToTask(ins.data); setTasks(function(p){ return (p||[]).some(function(x){return x.id===tk.id;})?p:(p||[]).concat([tk]); }); }
-    if(typeof pixelsToast!=="undefined") pixelsToast.success("Versão em espanhol criada: “"+novo.title+"” (Paraguay, mesma data).",4500);
+    const row=(typeof taskToRow==="function")?taskToRow(tk):null;
+    if(!row) return null;
+    row.traducao_pt={titulo:o.title||"",briefing:o.desc||o.description||"",legenda:o.caption||""};
+    const ins=await sb.from("tasks").insert(row).select("*").single();
+    if(ins.error) throw ins.error;
+    if(typeof setTasks==="function"&&typeof rowToTask==="function"){ const nt=rowToTask(ins.data); setTasks(function(p){ return (p||[]).some(function(x){return x.id===nt.id;})?p:(p||[]).concat([nt]); }); }
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Versão em espanhol criada: “"+tk.title+"” (Paraguay, mesma data).",4500);
+    // o card ES ocupa o dia do Paraguay: se a semana estourou a cadência, a cascata empurra os OUTROS (o ES é fixo)
+    if(typeof pxCascataVarrer==="function") setTimeout(function(){ try{ pxCascataVarrer(idEs); }catch(_){} },2000);
     return ins.data;
-  }catch(e){ console.warn("[versao ES]",e); return null; }
+  }catch(e){ console.warn("[versao ES]",e); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui criar a versão em espanhol: "+((e&&e.message)||e),6000); return null; }
   finally{ delete _pxVersaoESEmCurso[id]; }
 }
 if(typeof window!=="undefined"){ window.pxCriarVersaoES=pxCriarVersaoES; window.pxEhVersaoES=pxEhVersaoES; }
@@ -6040,6 +6046,7 @@ const PX_TIPOS_CONTEUDO=[
   {id:"arte",           label:"Arte única",         grupo:"design", quando:"uma peça estática só, criada do zero"},
   {id:"carrossel",      label:"Carrossel",          grupo:"design", quando:"o conteúdo precisa de várias lâminas em sequência"},
   {id:"folder",         label:"Material gráfico",   grupo:"design", quando:"folder, catálogo, cartão, banner, material impresso ou PDF — valor do freela definido no card"},
+  {id:"versao",         label:"Versão",             grupo:"design", quando:"outra versão (ex.: espanhol do Grupo Bioter) de um card já pago — custo 0"},
   {id:"corte",          label:"Corte de vídeo",     grupo:"video",  quando:"já existe um vídeo gravado e é só cortar, legendar ou adaptar"},
   {id:"video_feira",    label:"Vídeo básico",       grupo:"video",  quando:"vídeo simples, pouca edição — registro de feira, bastidor, recado rápido"},
   {id:"video",          label:"Vídeo",              grupo:"video",  quando:"vídeo editado de verdade, com roteiro, cenas e trilha"},
@@ -34761,9 +34768,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
        buscar de imagens. Vira comentário do card (tipo material_instrucao) + nota na timeline + aviso. */
     const _instr=String(instrucao||"").trim();
     const _cmtInstr=_instr?{id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),type:"material_instrucao",text:_instr,user:actor,at:_now,atFmt:nowFmt()}:null;
+    /* (07/10/2026, Gustavo) GRUPO BIOTER: na aprovação vira "Bioter Brasil" e nasce o card da versão em
+       espanhol (Paraguay, tipo Versão, custo 0) — dois cards, um por perfil, pra não confundir a gestora. */
+    const _uns=String(task.bioterUnit||task.bioter_unit||"").split(",").map(x=>x.trim()).filter(Boolean);
+    const _grupoBio=task.client==="bioter"&&_uns.indexOf("grupo")>=0&&!/-es$/.test(String(task.id))&&typeof pxCriarVersaoES==="function";
+    const _unBr=_grupoBio?Array.from(new Set(_uns.map(x=>x==="grupo"?"brasil":x).filter(x=>x!=="paraguay"))).join(","):null;
+    if(_grupoBio) setTimeout(()=>{ pxCriarVersaoES({...task,status:_dest,bioterUnit:_unBr},setTasks,{status:_dest}); },600);
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:_dest,ajustar:false,colEnteredAt:_now,
+      ...(_grupoBio?{bioterUnit:_unBr}:{}),
       comments:_cmtInstr?[...(t.comments||[]),_cmtInstr]:(t.comments||[]),
-      timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:_lbl,from:"demanda",to:_dest,at:_now,atFmt:nowFmt(),user:actor,note:_instr?("Imagens a buscar: "+_instr):undefined}]}:t));
+      timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:_lbl,from:"demanda",to:_dest,at:_now,atFmt:nowFmt(),user:actor,note:_instr?("Imagens a buscar: "+_instr):undefined},
+        ...(_grupoBio?[{type:"edit",label:"Grupo Bioter → este card fica Bioter Brasil; a versão em espanhol (Paraguay) virou outro card",at:_now,atFmt:nowFmt(),user:actor,from:"Grupo Bioter",to:"Bioter Brasil"}]:[])]}:t));
     pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",
       body:'"'+task.title+'" foi aprovada e está em '+_lbl+(_instr?(" — imagens: "+_instr.slice(0,90)):""),
       user:actor,at:"Agora",targetUsers:_notifTargets(task)});
@@ -36496,7 +36511,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               corpo=_o.join("\n").replace(/\n{3,}/g,"\n\n").trim();
             }catch(_){}
             const _ct=String((current&&(current.contentType||current.content_type))||"");
-            const _CT={arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",folder:"Material gráfico",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",video_short:"Short",corte:"Corte de vídeo"};
+            const _CT={arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",folder:"Material gráfico",versao:"Versão",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",video_short:"Short",corte:"Corte de vídeo"};
             const _nLam=(corpo.match(/^\*L[âa]mina\s*\d+/gim)||[]).length;
             const _uni=(cl&&cl.id==="bioter"&&typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit).map(function(u){return u.label;}).join(", "):"";
             const _cli=cl?(String(cl.name||cl.id)+(_uni?(" · "+_uni):"")):"";
@@ -36641,7 +36656,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                  Quem não aprova continua só lendo, e bloco sem valor nem aparece. */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
-              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Material gráfico",icon:"file-text"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Material gráfico",icon:"file-text"},versao:{label:"Versão",icon:"copy"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"}};
               const ctCfg=CT_MAP[ct];
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
@@ -49066,10 +49081,6 @@ function _cardPodeSerResp(u){
       setTimeout(function(){ try{ pxCascataPuxar([_saiu]); }catch(_e){} },2500);
     }
     _gravar();
-    /* (07/10/2026, Gustavo) Grupo Bioter marcado → nasce o card da versão em espanhol (Paraguay), uma vez só. */
-    if(client==="bioter"&&String(bioterUnit||"").split(",").map(function(x){return x.trim();}).indexOf("grupo")>=0&&!/-es$/.test(String(task.id))&&typeof pxCriarVersaoES==="function"){
-      setTimeout(function(){ pxCriarVersaoES(task.id,setTasks); },3500);
-    }
     function _gravar(){
     // Usa updater functional — preserva comments/timeline mais recentes do `prev`
     // (caso outro usuário tenha adicionado algo via realtime entre o open e o save)
@@ -74181,6 +74192,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
       video_short:"Short",
       foto:"Foto de obra",
       folder:"Material gráfico",
+      versao:"Versão",
       corte:"Corte de vídeo",
       corte_video:"Corte de vídeo",
       ajuste_template:"Ajuste de template",
@@ -94770,6 +94782,7 @@ function _dcTipoLabel(t){
   if(ct==="arte") return "Arte única";
   if(ct==="carrossel") return "Carrossel";
   if(ct==="folder") return "Material gráfico";
+  if(ct==="versao") return "Versão";
   if(ct==="foto") return "Ajuste de template";
   if(ct==="video"||ct==="vídeo") return "Vídeo";
   if(ct==="corte") return "Corte de vídeo";
