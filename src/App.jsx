@@ -48167,12 +48167,19 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
       <div style={{marginTop:4,fontSize:11,color:"#64748b",lineHeight:1.45,wordBreak:"break-word"}}>
         {br.manual?"Pasta escolhida: ":"K:\\Meu Drive\\App\\Edição de vídeo com IA\\"}{String(br.caminho||"").split(" / ").join(br.manual?" / ":"\\")}
       </div>
-      <div style={{marginTop:3,fontSize:11,color:br.novos>0?"#b45309":"#15803d",fontWeight:600}}>
+      {/* v71c (07/10/2026): arquivo que NÃO entrou aparece com o motivo (antes dizia "todos já no card" — caso ETA - Sid 02: 26 na pasta, 21 no card) */}
+      <div style={{marginTop:3,fontSize:11,color:br.novos>0||(Array.isArray(br.fora)&&br.fora.length)?"#b45309":"#15803d",fontWeight:600}}>
         {br.novos>0?"⏳ "+br.novos+" arquivo(s) novo(s) na pasta: o PC puxa quando a pasta ficar "+(br.espera_min||4)+" min sem receber arquivo"
+          :(Array.isArray(br.fora)&&br.fora.length)?"⚠️ "+br.arquivos+" arquivo(s) na pasta · "+(br.arquivos-br.fora.length)+" no card · "+br.fora.length+" não entrou(aram)"+(br.visto_em?" · conferido às "+_brFmt(br.visto_em):"")
           :br.arquivos>0?"✓ "+br.arquivos+" arquivo(s) na pasta, todos já no card"+(br.visto_em?" · conferido às "+_brFmt(br.visto_em):"")
           :"Suba os vídeos brutos aqui (app do Drive no celular, arrastando no K: ou pelo navegador). O PC puxa sozinho, faz a cópia leve e a IA edita."}
         {br.pc_ligado===false?" · ⚠️ o "+(br.pc||"PC")+" está sem sinal":""}
       </div>
+      {Array.isArray(br.fora)&&br.fora.length>0&&<div style={{marginTop:4,padding:"6px 8px",borderRadius:8,background:"#fffbeb",border:"1px solid #fde68a",fontSize:11,color:"#92400e",lineHeight:1.45}}>
+        {br.fora.slice(0,8).map(function(x,k){ return <div key={k}><b>{String(x.nome||"arquivo")}</b>: {String(x.motivo||"").replace(/ · tento de novo$/,"")}</div>; })}
+        {br.fora.length>8&&<div>… e mais {br.fora.length-8}</div>}
+        <div style={{marginTop:3,color:"#78350f"}}>O PC tenta de novo sozinho (a IA não usa esses vídeos até eles entrarem no card).</div>
+      </div>}
     </div>}
   </div>:null;
   return <div style={{marginBottom:12,padding:"10px 12px",borderRadius:12,background:"#faf5ff",border:"1px solid #e9d5ff"}}>
@@ -126204,6 +126211,16 @@ function _evpMotor(canvas, o){
       const larg = Math.max.apply(null, linhas.map(function(l){ return l.reduce(function(s, w, k){ return s + cx.measureText(w.p).width + (k ? sp : 0); }, 0); }));
       cx.fillStyle = "rgba(11,16,32,.72)"; _evRet(cx, (W - larg)/2 + dxL - 34, yc - linhas.length*lh/2 - 18, larg + 68, linhas.length*lh + 36, 28); cx.fill();
     }
+    /* v71c (07/10/2026): SOMBRA e CONTORNO com intensidade (pedido do sócio: "a borda preta nas palavras fica feio").
+       contorno 0–1 (padrão 0,3 = fino; 1 = o contorno grosso antigo) · sombra 0–1 (padrão 0,5 = sombra macia embaixo da letra) */
+    const contK = _evClamp(_evpNum(lg.contorno, 0.3), 0, 1), sombK = _evClamp(_evpNum(lg.sombra, 0.5), 0, 1);
+    const sombraOn = function(){ if(sombK > 0){ cx.shadowColor = "rgba(0,0,0," + (0.9 * sombK).toFixed(3) + ")"; cx.shadowBlur = (4 + 26 * sombK) * tam; cx.shadowOffsetY = 4 * tam * sombK; } };
+    const sombraOff = function(){ cx.shadowColor = "rgba(0,0,0,0)"; cx.shadowBlur = 0; cx.shadowOffsetY = 0; };
+    const letra = function(txt, x, y, fill, borda, lw){
+      sombraOn(); const lwN = lw * contK;
+      if(lwN > 0.5){ cx.strokeStyle = borda; cx.lineWidth = lwN; cx.strokeText(txt, x, y); }
+      else if(sombK > 0){ cx.fillStyle = fill; cx.fillText(txt, x, y); }
+      sombraOff(); cx.fillStyle = fill; cx.fillText(txt, x, y); };
     linhas.forEach(function(l, li){
       const lw = l.reduce(function(s, w, k){ return s + cx.measureText(w.p).width + (k ? sp : 0); }, 0);
       let x = (W - lw)/2 + dxL; const y = yc - (linhas.length*lh)/2 + lh/2 + li*lh;
@@ -126221,17 +126238,19 @@ function _evpMotor(canvas, o){
         if(mostra){
           cx.save();
           if(esc !== 1){ cx.translate(x + ww/2, y); cx.scale(esc, esc); cx.translate(-(x + ww/2), -y); }
-          if(est === "palavra" && atual){ cx.fillStyle = hl[0]; _evRet(cx, x-14, y-fs*0.62, ww+28, fs*1.24, 16); cx.fill(); cx.fillStyle = hl[1]; cx.fillText(w.p, x, y); }
+          if(est === "palavra" && atual){ sombraOn(); cx.fillStyle = hl[0]; _evRet(cx, x-14, y-fs*0.62, ww+28, fs*1.24, 16); cx.fill(); sombraOff(); cx.fillStyle = hl[1]; cx.fillText(w.p, x, y); }
           else if(est === "caixa"){ cx.fillStyle = atual || kw(w, atual) ? cDest : corT; cx.fillText(w.p, x, y); }
           else if(est === "neon"){ cx.shadowColor = cDest; cx.shadowBlur = atual ? 34 : 18; cx.fillStyle = atual ? cDest : corT; cx.fillText(w.p, x, y); cx.fillText(w.p, x, y); }
-          else if(est === "contorno"){ cx.strokeStyle = atual ? cDest : borda; cx.lineWidth = (atual ? 16 : 12) * tam; cx.strokeText(w.p, x, y); cx.fillStyle = kw(w, atual) ? cDest : corT; cx.fillText(w.p, x, y); }
+          else if(est === "contorno"){   // o contorno colorido É o modelo: ganha a sombra e fica no mínimo 70%
+            sombraOn(); cx.strokeStyle = atual ? cDest : borda; cx.lineWidth = (atual ? 16 : 12) * tam * Math.max(0.7, contK); cx.strokeText(w.p, x, y);
+            sombraOff(); cx.fillStyle = kw(w, atual) ? cDest : corT; cx.fillText(w.p, x, y); }
           else if(est === "sublinhado"){
-            cx.strokeStyle = borda; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = kw(w, atual) ? cDest : corT; cx.fillText(w.p, x, y);
+            letra(w.p, x, y, kw(w, atual) ? cDest : corT, borda, 12 * tam);
             if(atual){ cx.fillStyle = cDest; _evRet(cx, x - 4, y + fs*0.5, ww + 8, Math.max(6, fs*0.14), 5); cx.fill(); }
           }
           else {
             const cor = (est === "karaoke" && falada) || (est === "chave" && chave(w)) || (est !== "karaoke" && kw(w, false)) ? cDest : corT;
-            cx.strokeStyle = borda; cx.lineWidth = 12 * tam; cx.strokeText(w.p, x, y); cx.fillStyle = cor; cx.fillText(w.p, x, y);
+            letra(w.p, x, y, cor, borda, 12 * tam);
           }
           cx.restore();
         }
@@ -127041,7 +127060,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [revisando, setRevisando] = useState(false), [passoRev, setPassoRev] = useState("");
   const cvRef = useRef(null), motorRef = useRef(null), pRef = useRef(p), copiaRef = useRef(null), expRef = useRef(null), tempoUi = useRef({ em:0, toc:false, esp:false });
   pRef.current = p;
-  const soVer = !!isMob;
+  const [mobAberto, setMobAberto] = useState(false);   // v71: CELULAR — o editor abre em tela cheia (antes: "Para editar, use o computador")
+  const soVer = !!isMob && !mobAberto;                 // v71d: no celular, com o editor aberto, salva e grava rascunho como no computador
 
   /* v48 (06/10/2026): E2-1 + E2-4 + C2 — chegou uma versão nova de fora (IA, motion, PC, outra pessoa) enquanto a pessoa tem mudança não salva:
      NUNCA troca a tela sozinha. Mostra "Tem uma versão mais nova — [Ver a nova] [Manter a minha]". Sem mudança local, troca como antes.
@@ -128220,10 +128240,37 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     setEnsinando(false);
   };
   const [fundosKit, setFundosKit] = useState(null);
+  /* v71d (07/10/2026): VÍDEO NOVO NO CARD → entra sozinho na Mídia do Estúdio, e aparece "✨ Reeditar com os vídeos novos"
+     (pedido do sócio: "se incluir um vídeo na pasta do cartão, ele sobe para o cartão e automaticamente vai para o Estúdio"). */
+  const novosCard = useMemo(function(){ const tem = {}; ((ed && ed.clipes) || []).forEach(function(c){ if(c){ tem[c.id] = 1; if(c.url) tem[c.url] = 1; } });
+    return _evBrutos(t).filter(function(f){ return !tem[f.id] && !tem[f.url]; }); }, [t && t.files, ed && ed.clipes]);
+  const incluindoRef = useRef(false);
+  useEffect(function(){
+    if(pcAuto || soVer || !ed || !ed.id || !window._sb || !novosCard.length || incluindoRef.current) return;
+    incluindoRef.current = true; let n = 0;
+    (async function(){
+      for(const f of novosCard.slice(0, 10)){
+        try{ const dur = await _evDuracao(f.previewUrl || f.url); if(!(dur > 0)) continue;
+          const r = await window._sb.rpc("criacao_edicao_clipe_incluir", { p_id:ed.id, p_clipe:{ id:f.id, nome:f.name || "Vídeo", url:f.url, preview_url:f.previewUrl || null, duracao:Math.round(dur * 1000) / 1000 } });
+          if(!r.error) n++; }catch(_){}
+      }
+      incluindoRef.current = false;
+      if(n){ _evToast("success", n + (n > 1 ? " vídeos novos do card entraram" : " vídeo novo do card entrou") + " na Mídia"); if(onRecarregar) onRecarregar(); }
+    })();
+  }, [novosCard.map(function(f){ return f.id; }).join(","), soVer]);
+  const novosIA = ((ed && ed.clipes) || []).filter(function(c){ return c && c.incluido && c.incluido.manual; });   // na Mídia, mas a IA ainda não leu
+  const [reed, setReed] = useState(null), [ocultarNovos, setOcultarNovos] = useState("");
+  const olharReed = function(){ if(!window._sb || !ed || !ed.id) return;
+    window._sb.rpc("criacao_edicao_reeditar_status", { p_id:ed.id }).then(function(r){ const d = r && r.data; if(!d || !d.existe) return;
+      setReed(function(a){
+        if(a && a.id === d.id && a.status !== "pronto" && d.status === "pronto") _evToast("success", "A IA juntou os vídeos novos: a versão nova está pronta");
+        if(a && a.id === d.id && a.status !== "erro" && d.status === "erro") _evToast("error", "A reedição não deu certo: " + (d.erro || "erro no PC"));
+        return d; }); }).catch(function(){}); };
+  useEffect(function(){ if(!pcAuto) olharReed(); }, [ed && ed.id]);
+  useEffect(function(){ if(!reed || (reed.status !== "fila" && reed.status !== "processando")) return; const iv = setInterval(olharReed, 8000); return function(){ clearInterval(iv); }; }, [reed && reed.status, reed && reed.id]);
   const [fmtJobs, setFmtJobs] = useState([]);   // v68c: gravações em outro formato (4:5, 1:1, 16:9) pedidas ao PC
   const olharFormatos = function(){ if(!window._sb || pcAuto) return; window._sb.rpc("criacao_exportar_pc_status", { p_edicao:ed.id }).then(function(r){
     if(!r.error && r.data) setFmtJobs((r.data.itens || []).filter(function(it){ return (it.opcoes || {}).formato; })); }).catch(function(){}); };   // v68b: fundos da marca guardados nesta sessão (o kit só recarrega ao abrir de novo)
-  const [mobAberto, setMobAberto] = useState(false);   // v71: CELULAR — o editor abre em tela cheia (antes: "Para editar, use o computador")
   const [folha, setFolha] = useState(false);           // v71: celular — gaveta com a ferramenta do item escolhido
   const [mobBib, setMobBib] = useState(false);         // v71: celular — biblioteca (mídia, figurinhas…) em gaveta
   useEffect(function(){ setFolha(false); }, [sel ? sel.tipo + ":" + sel.id : ""]);
@@ -128464,6 +128511,30 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     onMusicasMudou, setFerr, pRef, setP, confirmar, addImagem, addMarca, tirarTrechos, fala:ed.fala, modelos, salvarModelo, aplicarModelo, voltarTrechos, pintarTrechos, corrigirTexto,
     addNome, coresCli, nomesKit, clipesTodos:clipes, addTrilha, gerarCapa, capaUrl, t, edId:ed.id, onRecarregar, tratandoTudo:Object.keys(medindoAcao).length, trat, addSobre, addDesfoque,
     addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt, vaMed, tocando };   // v48: Vocal Attacker
+  const reeditarNovos = async function(){
+    if(alterado){ const ok = await salvar(); if(!ok) return; }
+    try{
+      const r = await window._sb.rpc("criacao_edicao_reeditar_novos", { p_id:ed.id, p_pedido:"" });
+      if(r.error) throw new Error(r.error.message);
+      const d = r.data || {};
+      if(!d.ok){ _evToast("info", d.motivo === "nada_novo" ? "Não tem vídeo novo para juntar." : d.motivo === "limite_30" ? "Passa de 30 vídeos: tire alguns do card." : "Não deu: " + (d.motivo || "")); return; }
+      _evToast("success", d.ja ? "Já tem uma montagem na fila do PC: os vídeos novos entram nela" : "Pedido ao PC: a IA vai juntar " + d.n + (d.n > 1 ? " vídeos novos" : " vídeo novo") + " (uns minutos)");
+      olharReed();
+    }catch(e){ _evToast("error", "Não deu para pedir: " + ((e && e.message) || e)); }
+  };
+  const verMidiaNovos = function(){ setMenu("bib-midia"); setFerrGlobal({ ferramenta:"midia", sub:null }); if(isMob) setMobBib(true); };
+  const reedAtivo = !!(reed && (reed.status === "fila" || reed.status === "processando"));
+  const chaveNovos = novosIA.map(function(c){ return c.id; }).join(",");
+  const elNovos = (reedAtivo || (novosIA.length > 0 && ocultarNovos !== chaveNovos)) ? (
+    <div data-novos-banner="1" role="status" style={Object.assign({}, _EVP_PAINEL, {padding:"8px 10px 8px 12px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontSize:12.5,fontWeight:600,flexShrink:0,
+      borderColor:"rgba(139,92,246,.45)",background:"linear-gradient(90deg, rgba(139,92,246,.18), rgba(139,92,246,0) 70%), " + _EVP_COR.painel})}>
+      <span style={{color:_EVP_COR.roxo,display:"grid"}}><_EvpIco n={reedAtivo ? "ia" : "midia"} s={18}/></span>
+      {reedAtivo ? <span style={{flex:"1 1 220px",minWidth:0}}>A IA está juntando os vídeos novos no PC…{reed.msg ? <span style={{color:_EVP_COR.sub,fontWeight:500}}> {reed.msg}</span> : null}</span>
+        : <span style={{flex:"1 1 220px",minWidth:0}}>{novosIA.length > 1 ? novosIA.length + " vídeos novos chegaram no card" : "1 vídeo novo chegou no card"}<span style={{color:_EVP_COR.sub,fontWeight:500}}> · já {novosIA.length > 1 ? "estão" : "está"} na Mídia</span></span>}
+      {!reedAtivo && <button data-reeditar-novos="1" onClick={reeditarNovos} style={Object.assign(_evpBtn("primario"), {padding:"6px 12px"})}>✨ Reeditar com os vídeos novos</button>}
+      {!reedAtivo && <button onClick={verMidiaNovos} style={Object.assign(_evpBtn(), {padding:"6px 10px"})}>Ver na Mídia</button>}
+      {!reedAtivo && <button onClick={function(){ setOcultarNovos(chaveNovos); }} aria-label="Agora não" title="Agora não" style={Object.assign(_evpBtn("icone"), {padding:5})}><_EvpIco n="fechar" s={13}/></button>}
+    </div>) : null;
   /* v71 (07/10/2026): as peças do Estúdio viram constantes — o computador e o CELULAR montam o mesmo editor em arranjos diferentes */
   const elViewer = <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} comparar={comparar} setComparar={setComparar} lupa={lupa}
             sel={sel} selObj={selObj} enquadrar={enquadrar && sel && sel.tipo === "clip"} pRef={pRef} setP={setP} confirmar={confirmar} tempo={tempo} nome={(base && base.nome) || ""}
@@ -128601,6 +128672,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={salvar} disabled={!alterado || salvando} aria-label="Salvar versão" style={Object.assign(_evpBtn(alterado ? "primario" : null, alterado && !salvando), {padding:"8px 11px",marginLeft:2})}><_EvpIco n="salvar" s={15}/>{salvando ? "…" : "Salvar"}</button>
           <button onClick={function(){ setVerExp(true); }} aria-label="Exportar" style={Object.assign(_evpBtn("verde"), {padding:"8px 10px",marginLeft:4})}><_EvpIco n="baixar" s={16}/></button>
         </div>
+        {elNovos && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elNovos}</div>}
         {/* vídeo */}
         <div ref={palcoRef} style={{flex:"1 1 auto",minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative",background:_EVP_COR.palco}}>
           {elViewer}
@@ -128695,6 +128767,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <div style={{position:"relative",height:0,flexShrink:0,zIndex:40}}>
           <div style={{position:"absolute",top:0,left:0,right:0,maxHeight:"62vh",overflowY:"auto",borderRadius:14,boxShadow:"0 18px 50px rgba(15,10,40,.28)"}}>
             <_EvpResumoIA ed={ed} p={p} calc={calc} irPara={irPara} modo="painel" aberto={true} alternar={alternarResumo}/></div></div>)}
+      {elNovos}{/* v71d */}
       {novaVersao && (      /* v48 (06/10/2026): E2-1 / E2-4 — a versão nova não troca a tela sozinha */
         <div role="alert" style={Object.assign({}, _EVP_PAINEL, {padding:"8px 12px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontSize:12.5,fontWeight:600,flexShrink:0,borderColor:"rgba(234,179,8,.55)",background:_EVP_COR.aviso})}>
           <span style={{color:_EVX.amarelo}}><_EvpIco n="alerta"/></span>
@@ -130082,12 +130155,12 @@ function _EvpTextoMais({ x, nt, mudar, ctl, enviarFonte }){
 function _EvpTextoSaidaLoop({ x, nt, mudar }){
   return (<div style={{width:"100%"}}>
     <div style={_EVP_TIT}>Saída</div>
-    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-      {_EVP_SAIDAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nt(function(q){ if(o.id === "sumir") delete q.saida; else q.saida = o.id; })); }} style={_evpChip((x.saida || "sumir") === o.id)}>{o.label}</button>; })}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+      {_EVP_SAIDAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nt(function(q){ if(o.id === "sumir") delete q.saida; else q.saida = o.id; })); }} style={Object.assign(_evpChip((x.saida || "sumir") === o.id), {justifyContent:"center",padding:"9px 6px"})}>{o.label}</button>; })}
     </div>
     <div style={_EVP_TIT}>Enquanto aparece (repetir)</div>
-    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-      {_EVP_LOOPS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nt(function(q){ if(o.id === "nenhum") delete q.loop; else q.loop = o.id; })); }} style={_evpChip((x.loop || "nenhum") === o.id)}>{o.label}</button>; })}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+      {_EVP_LOOPS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nt(function(q){ if(o.id === "nenhum") delete q.loop; else q.loop = o.id; })); }} style={Object.assign(_evpChip((x.loop || "nenhum") === o.id), {justifyContent:"center",padding:"9px 6px"})}>{o.label}</button>; })}
     </div>
   </div>);
 }
@@ -132203,54 +132276,58 @@ function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
     if(id === "contorno") return <span style={Object.assign({}, base, { WebkitTextStroke:"1.2px " + dest, textShadow:"none" })}>sua água está</span>;
     if(id === "sublinhado") return <span style={base}>sua {w("água", { borderBottom:"3px solid " + dest })} está</span>;
     return <span style={base}>sua água está</span>; };
+  /* v71c: um assunto por vez (Letra · Cores · Lugar · Animação) — antes era uma lista comprida com tudo junto */
+  const [aba, setAba] = useState(function(){ try{ return localStorage.getItem("pxev-leg-aba") || "letra"; }catch(_){ return "letra"; } });
+  const irAba = function(a){ setAba(a); try{ localStorage.setItem("pxev-leg-aba", a); }catch(_){} };
+  const pct = function(v){ return v ? Math.round(v*100) + "%" : "sem"; };
   return (
     <div>
-      {tit("Modelo")}
-      <div data-leg-modelos="1" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,marginBottom:6}}>
+      <div data-leg-modelos="1" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,marginBottom:12}}>
         {_EVP_LEG_ESTILOS.map(function(o){ const on = est === o.id;
           return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.estilo = o.id; }); }} aria-pressed={on} title={o.label}
             style={{font:"inherit",padding:0,borderRadius:10,cursor:"pointer",overflow:"hidden",border:"1.5px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),boxShadow:on ? "0 0 0 3px rgba(124,58,237,.18)" : "none",background:_EVP_COR.campo}}>
             <div style={{height:50,display:"grid",placeItems:"center",padding:"0 6px",background:"linear-gradient(160deg,#3f5f7f,#1f2f3f 60%,#29402a)"}}>{previa(o.id)}</div>
             <div style={{fontSize:10.5,fontWeight:700,padding:"4px 3px",color:on ? _EVP_COR.roxo : _EVP_COR.ink}}>{o.label}</div></button>; })}
       </div>
-      {tit("Linhas")}
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
-        {[[1,"Uma linha"],[2,"Até 2 linhas"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(function(np){ np.legenda.linhas = o[0]; }); }} style={_evpChip(_evpNum(lg.linhas, 1) === o[0])}>{o[1]}</button>; })}
-      </div>
-      <_EvpInterruptor on={_evpLegBoa(lg)} onChange={function(v){ mudar(function(np){ np.legenda.quebra = v ? "boa" : "simples"; }); }} label="Quebra inteligente"
-        dica="Não deixa artigo no fim nem palavra sozinha; até ~32 letras por linha; tempo mínimo de leitura."/>
-      <_EvpInterruptor on={lg.chaves !== "nao"} onChange={function(v){ mudar(function(np){ np.legenda.chaves = v ? "auto" : "nao"; }); }} label="Destacar palavras-chave"
-        dica="Números, nome da marca e verbos de ação na cor do destaque."/>
-      {tit("Cor da letra")}
-      {linhaCores("corTexto", lg.corTexto, "Branco (padrão)")}
-      {tit("Cor do destaque")}
-      {linhaCores("corDestaque", lg.corDestaque, "Cor escolhida abaixo (padrão)")}
-      <div style={{fontSize:11,color:_EVP_COR.sub,margin:"-2px 0 6px"}}>Para mover a legenda: arraste ela no vídeo.</div>
-      {tit("Animação")}
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
-        {_EVP_LEG_ANIMS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.anim = o.id; }); }} style={_evpChip((lg.anim || "nenhuma") === o.id)}>{o.label}</button>; })}
-      </div>
-      {tit("Posição")}
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
-        {_EVP_LEG_POS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.posicao = o.id; np.legenda.y = null; np.legenda.dx = 0; }); }} style={_evpChip(lg.y == null && pos === o.id)}>{o.label}</button>; })}
-      </div>
-      <_EvpSlider ctl={ctl} rotulo="Altura na tela" v={lg.y != null ? _evpNum(lg.y, 0.72) : (pos === "centro" ? 0.52 : pos === "baixo" ? 0.75 : pos === "anuncio" ? 0.61 : 0.755)} min={0.15} max={0.9} step={0.005} fmt={function(v){ return Math.round(v*100) + "%"; }} aplicar={function(np, v){ np.legenda.y = v; }}/>
-      <div style={{fontSize:11,color:_EVP_COR.sub,margin:"-4px 0 8px"}}>Área segura: fora dos 14% de cima e dos 20% de baixo que o Instagram cobre (35% em anúncio). O tamanho da letra nunca muda sozinho: a linha quebra por palavra.</div>
-      <_EvpInterruptor on={areaSegura} onChange={mudarArea} label="Mostrar área segura na prévia"/>
-      {tit("Letra")}
-      <_EvpSlider ctl={ctl} rotulo="Tamanho" v={_evpNum(lg.tam, 1)} min={0.6} max={1.6} step={0.05} padrao={1} fmt={function(v){ return Math.round(v*100) + "%"; }} aplicar={function(np, v){ np.legenda.tam = v; }}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-        <select value={lg.fonte || ""} aria-label="Fonte da legenda" onChange={function(e){ const v = e.target.value; try{ if(v) _evCarregarFonte(v); }catch(_){} mudar(function(np){ np.legenda.fonte = v; }); }} style={sel}>
+      <_EvpSeg rotulo="Ajustes da legenda" opcoes={[["letra", "Letra"], ["cores", "Cores"], ["lugar", "Lugar"], ["anim", "Animação"]]} valor={aba} onChange={irAba}/>
+      <div key={aba} className="evp-entra" style={{marginTop:12}}>
+      {aba === "letra" && (<div>
+        <_EvpSlider ctl={ctl} rotulo="Tamanho" v={_evpNum(lg.tam, 1)} min={0.6} max={1.6} step={0.05} padrao={1} fmt={function(v){ return Math.round(v*100) + "%"; }} aplicar={function(np, v){ np.legenda.tam = v; }}/>
+        {/* v71c: intensidade da sombra e do contorno (antes: borda preta grossa fixa) */}
+        <_EvpSlider ctl={ctl} rotulo="Sombra" v={_evpNum(lg.sombra, 0.5)} min={0} max={1} step={0.05} padrao={0.5} fmt={pct} aplicar={function(np, v){ np.legenda.sombra = Math.round(v * 100) / 100; }}/>
+        <_EvpSlider ctl={ctl} rotulo="Contorno" v={_evpNum(lg.contorno, 0.3)} min={0} max={1} step={0.05} padrao={0.3} fmt={pct} aplicar={function(np, v){ np.legenda.contorno = Math.round(v * 100) / 100; }}/>
+        <div style={{fontSize:12.5,fontWeight:600,margin:"4px 0 6px"}}>Fonte</div>
+        <select value={lg.fonte || ""} aria-label="Fonte da legenda" onChange={function(e){ const v = e.target.value; try{ if(v) _evCarregarFonte(v); }catch(_){} mudar(function(np){ np.legenda.fonte = v; }); }} style={Object.assign({}, sel, {width:"100%",padding:"8px 10px",fontSize:12.5,color:_EVP_COR.ink})}>
           <option value="">Fonte do kit</option>{_EV_FONTES.map(function(f){ return <option key={f} value={f}>{f}</option>; })}</select>
-        <select value={lg.cor || "principal"} aria-label="Cor de destaque da legenda" onChange={function(e){ const v = e.target.value; mudar(function(np){ np.legenda.cor = v; np.legenda.corDestaque = ""; }); }} style={sel}>
-          <option value="principal">Destaque: cor do cliente</option><option value="amarelo">Destaque: amarelo</option><option value="branco">Destaque: branco</option></select>
-      </div>
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
-        {_EVP_LEG_PESOS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.peso = o.id; }); }} style={_evpChip((lg.peso || "negrito") === o.id)}>{o.label}</button>; })}
-        <button onClick={function(){ mudar(function(np){ np.legenda.italico = !np.legenda.italico; }); }} style={Object.assign(_evpChip(!!lg.italico), {fontStyle:"italic"})}>Itálico</button>
-      </div>
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
-        {_EVP_LEG_CAIXAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.caixa = o.id; np.legenda.caixaAlta = o.id === "alta"; }); }} style={_evpChip(caixa === o.id)}>{o.label}</button>; })}
+        <div style={{fontSize:12.5,fontWeight:600,margin:"12px 0 6px"}}>Peso</div>
+        <_EvpSeg rotulo="Peso da letra" opcoes={_EVP_LEG_PESOS.map(function(o){ return [o.id, o.label]; })} valor={lg.peso || "negrito"} onChange={function(v){ mudar(function(np){ np.legenda.peso = v; }); }}/>
+        <div style={{fontSize:12.5,fontWeight:600,margin:"12px 0 6px"}}>Letras</div>
+        <_EvpSeg rotulo="Maiúsculas" opcoes={_EVP_LEG_CAIXAS.map(function(o){ return [o.id, o.id === "" ? "Como falado" : o.id === "alta" ? "ABC" : "abc", o.label]; })} valor={caixa} onChange={function(v){ mudar(function(np){ np.legenda.caixa = v; np.legenda.caixaAlta = v === "alta"; }); }}/>
+        <div style={{marginTop:10}}><_EvpInterruptor on={!!lg.italico} onChange={function(v){ mudar(function(np){ np.legenda.italico = v; }); }} label="Itálico"/></div>
+      </div>)}
+      {aba === "cores" && (<div>
+        <div style={{fontSize:12.5,fontWeight:600,marginBottom:6}}>Letra</div>
+        {linhaCores("corTexto", lg.corTexto, "Branco (padrão)")}
+        <div style={{fontSize:12.5,fontWeight:600,margin:"12px 0 6px"}}>Destaque</div>
+        {linhaCores("corDestaque", lg.corDestaque, "Cor do cliente (padrão)")}
+        <div style={{marginTop:10}}><_EvpInterruptor on={lg.chaves !== "nao"} onChange={function(v){ mudar(function(np){ np.legenda.chaves = v ? "auto" : "nao"; }); }} label="Destacar palavras-chave"
+          dica="Números, marca e verbos de ação na cor do destaque"/></div>
+      </div>)}
+      {aba === "lugar" && (<div>
+        <_EvpSeg rotulo="Posição da legenda" opcoes={_EVP_LEG_POS.map(function(o){ return [o.id, o.id === "segura" ? "Segura" : o.id === "anuncio" ? "Anúncio" : o.id === "centro" ? "Meio" : "Embaixo", o.label]; })}
+          valor={lg.y == null ? pos : null} onChange={function(v){ mudar(function(np){ np.legenda.posicao = v; np.legenda.y = null; np.legenda.dx = 0; }); }}/>
+        <div style={{marginTop:12}}><_EvpSlider ctl={ctl} rotulo="Altura na tela" v={lg.y != null ? _evpNum(lg.y, 0.72) : (pos === "centro" ? 0.52 : pos === "baixo" ? 0.75 : pos === "anuncio" ? 0.61 : 0.755)} min={0.15} max={0.9} step={0.005} fmt={function(v){ return Math.round(v*100) + "%"; }} aplicar={function(np, v){ np.legenda.y = v; }}/></div>
+        <div style={{fontSize:12.5,fontWeight:600,margin:"2px 0 6px"}}>Linhas</div>
+        <_EvpSeg rotulo="Linhas da legenda" opcoes={[[1, "Uma linha"], [2, "Até 2 linhas"]]} valor={_evpNum(lg.linhas, 1) === 2 ? 2 : 1} onChange={function(v){ mudar(function(np){ np.legenda.linhas = v; }); }}/>
+        <div style={{marginTop:10}}>
+          <_EvpInterruptor on={_evpLegBoa(lg)} onChange={function(v){ mudar(function(np){ np.legenda.quebra = v ? "boa" : "simples"; }); }} label="Quebra inteligente" dica="Sem artigo no fim nem palavra sozinha"/>
+          <_EvpInterruptor on={areaSegura} onChange={mudarArea} label="Mostrar área segura na prévia"/>
+        </div>
+        <_EvpDica>Para mover, arraste a legenda no vídeo.</_EvpDica>
+      </div>)}
+      {aba === "anim" && (<div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+        {_EVP_LEG_ANIMS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.anim = o.id; }); }} style={Object.assign(_evpChip((lg.anim || "nenhuma") === o.id), {justifyContent:"center",padding:"10px 6px"})}>{o.label}</button>; })}
+      </div>)}
       </div>
     </div>
   );
@@ -132597,7 +132674,16 @@ function _EvpOnda({ clipe, ini, fim, w, h, cor, mudo, vol }){
   return <canvas ref={ref} style={{width:w, height:h, display:"block"}}/>;
 }
 
-function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef, fala, marcaCorr, onCorrecao, abrirAnimar, ctxMenu, io, abrirHist, travarFaixa, mob }){
+function _EvpTimeline({ evm, p, calc, sel, setSel:setSelP, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef, fala, marcaCorr, onCorrecao, abrirAnimar, ctxMenu, io, abrirHist, travarFaixa, mob }){
+  /* v71b: CELULAR — escolher um item só quando o dedo TOCA (se ele rolar a linha do tempo, nada muda); segurando, escolhe na hora */
+  const toqueRef = useRef(null);
+  const setSel = !mob ? setSelP : function(v){ const st = toqueRef.current; if(!st || typeof v === "function"){ setSelP(v); return; } st.tem = true; st.sel = v; };
+  const toqueIni = function(e){ if(!mob || e.pointerType !== "touch") return; const st = { x:e.clientX, y:e.clientY, mov:false, tem:false, sel:null, id:e.pointerId }; toqueRef.current = st;
+    const mv = function(ev){ if(ev.pointerId === st.id && (Math.abs(ev.clientX - st.x) > 9 || Math.abs(ev.clientY - st.y) > 9)) st.mov = true; };
+    const fim = function(ev){ if(ev.pointerId !== st.id) return; window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", fim); window.removeEventListener("pointercancel", fim);
+      if(ev.type === "pointerup" && !st.mov && st.tem) setSelP(st.sel); if(toqueRef.current === st) toqueRef.current = null; };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", fim); window.addEventListener("pointercancel", fim);
+    setTimeout(function(){ if(toqueRef.current === st && !st.mov && st.tem) setSelP(st.sel); }, 300); };
   _evpUsarMidia();
   const scRef = useRef(null), inRef = useRef(null), ancora = useRef(null);
   const [ima, setIma] = useState(true);
@@ -132622,6 +132708,19 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
     };
     sc.addEventListener("wheel", h, { passive:false }); return function(){ sc.removeEventListener("wheel", h); };
   }, [pxs]);
+  /* v71b: CELULAR — pinça com 2 dedos = zoom da linha do tempo (como no CapCut) */
+  const pxsRef = useRef(pxs); pxsRef.current = pxs;
+  useEffect(function(){
+    const sc = scRef.current; if(!sc || !mob) return; let ini = null;
+    const dist = function(t){ return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); };
+    const ts = function(e){ if(e.touches.length === 2){ const r = sc.getBoundingClientRect(), off = (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left;
+      ini = { d:dist(e.touches), pxs:pxsRef.current, off:off, t:(sc.scrollLeft + off) / pxsRef.current }; } };
+    const tm = function(e){ if(!ini || e.touches.length !== 2) return; e.preventDefault();
+      const np = _evClamp(ini.pxs * dist(e.touches) / Math.max(10, ini.d), 6, 400); ancora.current = { t:ini.t, off:ini.off, pxs:np }; setPxs(np); };
+    const te = function(e){ if(e.touches.length < 2) ini = null; };
+    sc.addEventListener("touchstart", ts, { passive:true }); sc.addEventListener("touchmove", tm, { passive:false }); sc.addEventListener("touchend", te); sc.addEventListener("touchcancel", te);
+    return function(){ sc.removeEventListener("touchstart", ts); sc.removeEventListener("touchmove", tm); sc.removeEventListener("touchend", te); sc.removeEventListener("touchcancel", te); };
+  }, [mob]);
   useEffect(function(){ const a = ancora.current, sc = scRef.current; if(a && sc && a.pxs === pxs){ sc.scrollLeft = Math.max(0, a.t * pxs - a.off); ancora.current = null; } }, [pxs]);
   /* acompanha a agulha enquanto toca */
   useEffect(function(){
@@ -132650,6 +132749,25 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
   /* arraste genérico: mover(ds, anterior, ev) devolve o projeto novo; no fim grava no desfazer */
   const arrastar = function(e, mover, clique, soltar){
     if(e.button !== 0) return;
+    /* v71b: CELULAR — tocar = escolher; arrastar o dedo = rolar; SEGURAR (0,3 s) e arrastar = mover/aparar (vibra quando "pega") */
+    if(mob && e.pointerType === "touch" && !e._evpSegurou){
+      e.stopPropagation();
+      const ex = e.clientX, ey = e.clientY, pid = e.pointerId; let pegou = false;
+      const limpa = function(){ clearTimeout(tmr); window.removeEventListener("pointermove", mvA); window.removeEventListener("pointerup", upA); window.removeEventListener("pointercancel", limpa); };
+      const mvA = function(ev){ if(ev.pointerId === pid && !pegou && (Math.abs(ev.clientX - ex) > 9 || Math.abs(ev.clientY - ey) > 9)) limpa(); };
+      const upA = function(ev){ if(ev.pointerId !== pid) return; limpa(); if(!pegou && clique) clique(ev); };
+      const tmr = setTimeout(function(){ pegou = true; limpa(); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(_){}
+        /* depois de "pegar", o arraste segue pelos eventos de TOQUE (em cima de texto o navegador para de mandar pointermove) */
+        const h = arrastar({ button:0, clientX:ex, clientY:ey, pointerType:"touch", _evpSegurou:true, preventDefault:function(){}, stopPropagation:function(){} }, mover, null, soltar);
+        let ult = { clientX:ex, clientY:ey };
+        const tmv = function(ev){ if(ev.cancelable) ev.preventDefault(); const q = ev.touches && ev.touches[0]; if(!q || !h) return; ult = { clientX:q.clientX, clientY:q.clientY, target:ev.target }; h.mv(ult); };
+        const fim = function(ev){ window.removeEventListener("touchmove", tmv); window.removeEventListener("touchend", fim); window.removeEventListener("touchcancel", canc);
+          if(h) h.up(ult); };
+        const canc = function(){ window.removeEventListener("touchmove", tmv); window.removeEventListener("touchend", fim); window.removeEventListener("touchcancel", canc); if(h) h.cancela(); };
+        window.addEventListener("touchmove", tmv, { passive:false }); window.addEventListener("touchend", fim); window.addEventListener("touchcancel", canc); }, 300);
+      window.addEventListener("pointermove", mvA); window.addEventListener("pointerup", upA); window.addEventListener("pointercancel", limpa);
+      return;
+    }
     e.preventDefault(); e.stopPropagation();
     const x0 = e.clientX, anterior = pRef.current; let movido = false, ultimo = null, quadro = 0, evUlt = null;   // v41: 1 redesenho por quadro
     const aplicar = function(){ quadro = 0; const ev = evUlt; if(!ev) return; const np = mover((ev.clientX - x0) / pxs, anterior, ev); if(np){ ultimo = np; setP(np); } };
@@ -132662,6 +132780,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
       else if(movido && ultimo) confirmar(anterior, ultimo); else if(movido) setP(anterior); else if(clique) clique(ev); };
     const cancela = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancela); setArr(null);
       if(quadro) cancelAnimationFrame(quadro); if(movido) setP(anterior); };   // v71: no celular o dedo que rola a linha do tempo cancela o arraste
+    if(e._evpSegurou) return { mv:mv, up:up, cancela:cancela };   // v71d: celular — quem chama manda os movimentos do dedo
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", cancela);
   };
 
@@ -132677,7 +132796,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
   /* v25: faixa travada (cadeado): escolhe, mas não arrasta · botão direito abre o menu do item */
   const trava = function(e, tipo, id){ if(!_evpTravada(p, tipo)) return false; e.preventDefault(); e.stopPropagation();
     if(e.button === 0){ setSel(tipo === "clip" || tipo === "musica" || tipo === "final" ? { tipo:tipo, id:id } : _evpSelGrupo(p, tipo, id)); _evToast("info", "Faixa travada: destrave no cadeado ao lado do nome da faixa."); } return true; };
-  const menuCtx = function(e, tipo, id){ e.preventDefault(); e.stopPropagation();
+  const menuCtx = function(e, tipo, id){ e.preventDefault(); e.stopPropagation(); if(mob) return;   // v71d: no celular o "segurar" é para arrastar (não abre o menu)
     if(!ehSel(tipo, id)) setSel(tipo === "clip" || tipo === "musica" ? { tipo:tipo, id:id } : _evpSelGrupo(p, tipo, id)); if(ctxMenu) ctxMenu({ x:e.clientX, y:e.clientY, tipo:tipo, id:id }); };
 
   /* ─── clipes: aparar (bordas) e trocar de lugar (meio) ─── */
@@ -132896,7 +133015,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
   };
 
   return (
-    <div style={Object.assign({position:"relative",background:_EVP_TL.fundo,color:_EVP_TL.texto,borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",height:alt || undefined,
+    <div onPointerDownCapture={toqueIni} style={Object.assign({position:"relative",background:_EVP_TL.fundo,color:_EVP_TL.texto,borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",height:alt || undefined,
         border:"1px solid " + _EVP_TL.linha,boxShadow:"0 18px 40px -24px rgba(0,0,0,.7)"}, mob ? { height:"100%", borderRadius:0, border:0, boxShadow:"none" } : {})}>
       {mob && <div style={{display:"flex",gap:4,alignItems:"center",padding:"4px 8px",borderBottom:"1px solid "+_EVP_TL.linha,flexShrink:0}}>{/* v71: celular — só o essencial */}
         <button onClick={cortar} aria-label="Dividir" style={btnT(false)}><_EvpIco n="dividir" s={16}/></button>
@@ -134752,12 +134871,12 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
                   <div style={{fontSize:10.5,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{inf.n ? inf.n + ". " : ""}{inf.nome || id.slice(0, 6)}{on ? " (este)" : ""}</div></button>; })}
             </div></div>); })()}
         {ferr === "fundo" && (<div>
-          <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>A IA recorta a pessoa e troca o fundo.</div>
+          <div style={{fontSize:12.5,color:_EVP_COR.sub,marginBottom:10}}>A IA recorta a pessoa e troca o que está atrás.</div>
           {(c.fundo || {}).modo && (c.fundo || {}).modo !== "nenhum" && <_EvpRecortePC edId={edId} clipe={c.clipe}/>}
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {[["nenhum","Fundo original"],["desfocar","Desfocar o fundo"],["cor","Cor lisa"],["imagem","Imagem"],["video","Vídeo"]].map(function(o){
-              return <button key={o[0]} onClick={function(){ mudar(nc(function(x){ x.fundo = Object.assign({ cor:kit.cor_principal || "#0f172a", url:"" }, x.fundo, { modo:o[0] }); })); if(o[0] !== "nenhum") _evpSegCarregar(); }} style={_evpChip(((c.fundo || {}).modo || "nenhum") === o[0])}>{o[1]}</button>; })}
-          </div>
+          {/* v71c: opções em blocos com ícone (antes: botões soltos) */}
+          <_EvpAcoes colunas={3} itens={[["nenhum","Original","midia"],["desfocar","Desfocar","olho"],["cor","Cor lisa","cor"],["imagem","Imagem","imagem"],["video","Vídeo","camadas"]].map(function(o){
+            return { id:"fundo-" + o[0], icone:o[2], label:o[1], on:((c.fundo || {}).modo || "nenhum") === o[0],
+              onClick:function(){ mudar(nc(function(x){ x.fundo = Object.assign({ cor:kit.cor_principal || "#0f172a", url:"" }, x.fundo, { modo:o[0] }); })); if(o[0] !== "nenhum") _evpSegCarregar(); } }; })}/>
           {(c.fundo || {}).modo === "desfocar" && <div style={{marginTop:10}}><_EvpSlider ctl={ctl} rotulo="Força do desfoque" v={_evpNum((c.fundo || {}).forca, 28)} min={4} max={80} step={1} fmt={function(v){ return v + " px"; }} padrao={28}
             aplicar={nc(function(x, v){ x.fundo = Object.assign({}, x.fundo, { forca:v }); })}/></div>}
           {(c.fundo || {}).modo === "video" && <div style={{marginTop:10}}>
@@ -134824,10 +134943,12 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           {_evgDoTexto(kit, x) && <div style={{fontSize:11.5,color:_EVP_COR.fraco,background:_EVP_COR.roxoSoft,borderRadius:8,padding:"6px 8px",marginBottom:8}}>Este texto usa o elemento "{_evgDoTexto(kit, x).nome}" da galeria: cor, fonte e fundo vêm dele. Aqui vale o tamanho e o lugar.</div>}
           <_EvpSeg rotulo="Tipo de texto" opcoes={[["destaque", "Destaque"], ["texto", "Texto"], ["tarja", "Tarja"]]} valor={x.tipo} onChange={function(v){ mudar(nt(function(q){ q.tipo = v; })); }}/>{/* v71 */}
           <div style={_EVP_TIT}>Cor</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>{/* v71c: bolinhas, como no CapCut */}
             {[["principal","Cor do cliente",kit.cor_principal || _EVP_COR.roxo],["branco","Branco","#fff"],["preto","Preto","#0b1020"],["amarelo","Amarelo","#facc15"]].map(function(o){
               const on = (x.cor || "principal") === o[0];
-              return <button key={o[0]} onClick={function(){ mudar(nt(function(q){ q.cor = o[0]; })); }} style={_evpChip(on)}><span style={{width:11,height:11,borderRadius:3,background:o[2],border:"1px solid #cfd3e1"}}/>{o[1]}</button>; })}
+              return <button key={o[0]} onClick={function(){ mudar(nt(function(q){ q.cor = o[0]; })); }} title={o[1]} aria-label={o[1]} aria-pressed={on}
+                style={{width:32,height:32,borderRadius:99,padding:0,cursor:"pointer",background:o[2],border:"2px solid " + (on ? _EVP_COR.roxo : "rgba(148,163,184,.4)"),boxShadow:on ? "0 0 0 3px rgba(139,92,246,.3)" : "none"}}/>; })}
+            <span style={{fontSize:12,color:_EVP_COR.sub}}>{({ principal:"Cor do cliente", branco:"Branco", preto:"Preto", amarelo:"Amarelo" })[x.cor || "principal"]}</span>
           </div>
           <div style={_EVP_TIT}>Fonte</div>
           <select value={x.fonte || ""} aria-label="Fonte do texto" onChange={function(e){ const v = e.target.value; try{ if(v && _EV_FONTES.indexOf(v) >= 0) _evCarregarFonte(v); }catch(_){} mudar(nt(function(q){ q.fonte = v; })); }} style={campo}>
@@ -134850,9 +134971,11 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           <_EvpTextoMais x={x} nt={nt} mudar={mudar} ctl={ctl} enviarFonte={function(f, id){ return new Promise(function(r){ window.dispatchEvent(new CustomEvent("evp-arquivo", { detail:{ tipo:"fonte", f:f, id:id, pronto:r } })); }); }}/>
         </div>)}
         {ferr === "pontos" && <_EvpTextoPontos x={x} mudar={mudar} ctl={ctl} tempo={tempo} irPara={irPara}/>}
-        {ferr === "anim" && (<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          <div style={{..._EVP_TIT, marginTop:0, width:"100%"}}>Entrada</div>
-          {_EVP_ANIM.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nt(function(q){ q.anim = o.id; })); }} style={_evpChip((x.anim || "pop") === o.id)}>{o.label}</button>; })}
+        {ferr === "anim" && (<div>{/* v71c: grade, igual às outras animações */}
+          <div style={{..._EVP_TIT, marginTop:0}}>Entrada</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+          {_EVP_ANIM.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nt(function(q){ q.anim = o.id; })); }} style={Object.assign(_evpChip((x.anim || "pop") === o.id), {justifyContent:"center",padding:"9px 6px"})}>{o.label}</button>; })}
+          </div>
           <_EvpTextoSaidaLoop x={x} nt={nt} mudar={mudar}/>
         </div>)}
         {ferr === "tempo" && (<div>
@@ -135130,9 +135253,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         </div>)}
         {ferr === "tamanho" && x.camada !== "desfoque" && x.camada !== "ajuste" && <_EvpMais id="camada-extra" rotulo="Mistura, opacidade, espelhar" aberto={!!(x.blend || _evpNum(x.op, 1) < 1 || x.fh || x.fv || (x.chroma && x.chroma.on))}>{/* v71 */}
           <_EvpCamadaExtra x={x} ni={ni} mudar={mudar} ctl={ctl}/></_EvpMais>}
-        {ferr === "anim" && (<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {[["pop","Pular"],["aparecer","Aparecer"],["nenhuma","Sem animação"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(ni(function(q){ q.anim = o[0]; })); }} style={_evpChip((x.anim || "pop") === o[0])}>{o[1]}</button>; })}
-        </div>)}
+        {ferr === "anim" && <_EvpSeg rotulo="Animação da camada" opcoes={[["pop", "Pular"], ["aparecer", "Aparecer"], ["nenhuma", "Sem animação"]]} valor={x.anim || "pop"} onChange={function(v){ mudar(ni(function(q){ q.anim = v; })); }}/>}{/* v71c */}
         {ferr === "tempo" && (<div>
           <_EvpSlider ctl={ctl} rotulo="Começa" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.2)} step={0.05} fmt={seg} aplicar={ni(function(o, v){ const d = o.t1 - o.t0; o.t0 = v; o.t1 = v + d; })}/>
           <_EvpSlider ctl={ctl} rotulo="Duração" v={Math.round((x.t1 - x.t0) * 100) / 100} min={0.3} max={30} step={0.1} fmt={seg} aplicar={ni(function(o, v){ o.t1 = o.t0 + v; })}/>
