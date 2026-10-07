@@ -126740,22 +126740,85 @@ function _evpBtn(tipo, ativo){
 }
 function _evpChip(on){ return { font:"inherit", display:"inline-flex", alignItems:"center", gap:6, fontSize:12, fontWeight:700, padding:"6px 10px", borderRadius:9, cursor:"pointer",
   border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha), background:on ? _EVP_COR.roxoSoft : _EVP_COR.campo, color:on ? _EVP_COR.roxo : _EVP_COR.ink,
-  boxShadow:on ? "0 0 0 3px rgba(124,58,237,.12)" : "none" }; }
+  boxShadow:"none" }; }
 const _EVP_PAINEL = { background:_EVP_COR.painel, border:"1px solid " + _EVP_COR.linha, borderRadius:14, boxShadow:"var(--evp-sombra)" };
-const _EVP_TIT = { fontSize:10.5, fontWeight:800, color:_EVP_COR.fraco, textTransform:"uppercase", letterSpacing:".09em", margin:"16px 0 8px" };
+const _EVP_TIT = { fontSize:12, fontWeight:700, color:_EVP_COR.sub, margin:"18px 0 8px", letterSpacing:0 };   // v71: título de seção calmo (antes: maiúsculas pequenas)
 const _EVP_MONO = "ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace";
 function _EvpInterruptor({ on, onChange, label, dica }){
+  /* v71: linha limpa — nome (e uma linha de explicação, se tiver) à esquerda e a chave à direita, como no CapCut */
+  const alterna = function(e){ e.preventDefault(); onChange(!on); };
   return (
-    <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:10}}>
-      <span role="switch" aria-checked={!!on} tabIndex={0} onKeyDown={function(e){ if(e.key === " " || e.key === "Enter"){ e.preventDefault(); onChange(!on); } }}
-        onClick={function(e){ e.preventDefault(); onChange(!on); }}
-        style={{width:34,height:20,borderRadius:99,background:on ? "linear-gradient(135deg," + _EVP_COR.roxo + "," + _EVP_COR.roxo2 + ")" : _EVP_COR.knob,position:"relative",flexShrink:0,transition:"background .15s",marginTop:1}}>
-        <span style={{position:"absolute",top:2,left:on ? 16 : 2,width:16,height:16,borderRadius:"50%",background:"#FFFFFF",boxShadow:"0 1px 3px rgba(0,0,0,.25)",transition:"left .15s"}}/>
+    <label data-chave="1" onClick={alterna} style={{display:"flex",gap:12,alignItems:"center",cursor:"pointer",minHeight:36,marginBottom:6}}>
+      <span style={{flex:1,minWidth:0}}><span style={{display:"block",fontSize:13,fontWeight:600,color:_EVP_COR.ink,lineHeight:1.3}}>{label}</span>
+        {dica && <span style={{display:"block",fontSize:11.5,color:_EVP_COR.fraco,marginTop:2,lineHeight:1.35}}>{dica}</span>}</span>
+      <span role="switch" aria-checked={!!on} aria-label={typeof label === "string" ? label : undefined} tabIndex={0} onKeyDown={function(e){ if(e.key === " " || e.key === "Enter"){ e.preventDefault(); onChange(!on); } }}
+        style={{width:36,height:21,borderRadius:99,background:on ? _EVP_COR.roxoFixo : _EVP_COR.knob,position:"relative",flexShrink:0,transition:"background .15s"}}>
+        <span style={{position:"absolute",top:2.5,left:on ? 17.5 : 2.5,width:16,height:16,borderRadius:"50%",background:"#FFFFFF",boxShadow:"0 1px 3px rgba(0,0,0,.3)",transition:"left .15s"}}/>
       </span>
-      <span onClick={function(e){ e.preventDefault(); onChange(!on); }}><b style={{fontSize:13,color:_EVP_COR.ink}}>{label}</b>{dica && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:1}}>{dica}</div>}</span>
     </label>
   );
 }
+
+/* ─── v71 (07/10/2026): PEÇAS DO PAINEL — um padrão só, minimalista (pedido do sócio: "claro, objetivo, nada poluído, estilo CapCut")
+   _EvpGrupo   bloco com título curto e fundo suave (junta o que é do mesmo assunto)
+   _EvpSeg     escolha de uma opção, em barra (velocidade, pouco/médio/muito…)
+   _EvpAcoes   ações em blocos com ícone (em vez de botões compridos empilhados com texto embaixo)
+   _EvpMais    "Mais ajustes" — esconde o que é avançado
+   _EvpDica    uma linha de ajuda, discreta ─── */
+const _EVP_CSS = ".evp-r{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0;cursor:pointer;display:block}" +
+  ".evp-r::-webkit-slider-runnable-track{height:4px;border-radius:99px;background:linear-gradient(var(--evp-roxo),var(--evp-roxo)) 0 0/var(--p,0%) 100% no-repeat,var(--evp-knob)}" +
+  ".evp-r::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;margin-top:-5.5px;border:0;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 1px 4px rgba(0,0,0,.35);transition:transform .12s}" +
+  ".evp-r:hover::-webkit-slider-thumb,.evp-r:active::-webkit-slider-thumb{transform:scale(1.15)}" +
+  ".evp-r::-moz-range-track{height:4px;border-radius:99px;background:var(--evp-knob)}.evp-r::-moz-range-progress{height:4px;border-radius:99px;background:var(--evp-roxo)}" +
+  ".evp-r::-moz-range-thumb{width:15px;height:15px;border:0;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}" +
+  ".evp-r:focus{outline:none}.evp-r:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px rgba(139,92,246,.45)}" +
+  ".evp-acao:not([aria-pressed=true]):not(:disabled):hover{background:var(--evp-linha2)!important}.evp-seg button:hover{color:var(--evp-ink)}" +
+  "[data-tema] select:not([style*=background]),[data-tema] textarea:not([style*=background]),[data-tema] input:not([type=range]):not([type=color]):not([type=checkbox]):not([type=radio]):not([style*=background]){background-color:var(--evp-campo);color:var(--evp-ink);border-color:var(--evp-linha)}" +
+  "@keyframes evpEntra{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}.evp-entra{animation:evpEntra .16s ease-out}" +
+  "@keyframes evpSobe{from{transform:translateY(100%)}to{transform:none}}.evp-sobe{animation:evpSobe .22s cubic-bezier(.2,.8,.2,1)}";
+function _EvpGrupo({ titulo, extra, children, estilo, solto }){
+  return (
+    <div data-grupo="1" style={Object.assign({ marginTop:12 }, estilo)}>
+      {(titulo || extra) && <div style={{display:"flex",alignItems:"center",gap:8,margin:"0 2px 7px",minHeight:18}}>
+        {titulo && <span style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub}}>{titulo}</span>}
+        {extra && <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>{extra}</span>}</div>}
+      {solto ? children : <div style={{background:_EVP_COR.faixa,border:"1px solid " + _EVP_COR.linha2,borderRadius:12,padding:"10px 12px"}}>{children}</div>}
+    </div>);
+}
+function _EvpSeg({ opcoes, valor, onChange, rotulo }){
+  return (
+    <div className="evp-seg" role="radiogroup" aria-label={rotulo} style={{display:"flex",gap:2,padding:3,borderRadius:10,background:_EVP_COR.linha2,border:"1px solid " + _EVP_COR.linha}}>
+      {opcoes.map(function(o){ const on = o[0] === valor;
+        return <button key={String(o[0])} type="button" role="radio" aria-checked={on} title={o[2] || undefined} onClick={function(){ onChange(o[0]); }}
+          style={{font:"inherit",flex:"1 1 0",minWidth:0,padding:"6px 2px",borderRadius:8,border:0,cursor:"pointer",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",
+            background:on ? _EVP_COR.painel : "transparent",color:on ? _EVP_COR.roxo : _EVP_COR.sub,boxShadow:on ? "0 1px 3px rgba(0,0,0,.18)" : "none",transition:"background .12s, color .12s"}}>{o[1]}</button>; })}
+    </div>);
+}
+function _EvpAcoes({ itens, colunas }){
+  const lista = (itens || []).filter(Boolean);
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"repeat(" + (colunas || Math.min(3, Math.max(1, lista.length))) + ",minmax(0,1fr))",gap:6}}>
+      {lista.map(function(a){ const on = !!a.on, desl = a.desligado;
+        return <button key={a.id || a.label} type="button" className="evp-acao" data-acao={a.id || undefined} {...(a.attrs || {})} onClick={desl ? undefined : a.onClick} title={a.dica || a.label} aria-pressed={a.on != null ? on : undefined} disabled={!!desl}
+          style={{font:"inherit",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,minHeight:62,padding:"8px 6px",borderRadius:11,cursor:desl ? "default" : "pointer",
+            border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),background:on ? _EVP_COR.roxoSoft : _EVP_COR.campo,color:on ? _EVP_COR.roxo : _EVP_COR.ink,opacity:desl ? 0.45 : 1,
+            fontSize:11.5,fontWeight:700,lineHeight:1.2,textAlign:"center",transition:"background .12s"}}>
+          <_EvpIco n={a.icone} s={19}/><span>{a.label}</span></button>; })}
+    </div>);
+}
+function _EvpMais({ rotulo, aberto, children, id }){
+  const [ab, setAb] = useState(!!aberto);
+  const mostra = ab || !!aberto;
+  return (
+    <div style={{marginTop:10}}>
+      <button type="button" data-mais={id || "1"} onClick={function(){ setAb(!mostra); }} aria-expanded={mostra}
+        style={{font:"inherit",display:"flex",alignItems:"center",gap:6,width:"100%",padding:"8px 2px",border:0,background:"transparent",cursor:"pointer",color:_EVP_COR.sub,fontSize:12,fontWeight:700}}>
+        <span style={{display:"inline-block",transition:"transform .15s",transform:mostra ? "rotate(90deg)" : "none",fontSize:13,lineHeight:1}}>›</span>{rotulo || "Mais ajustes"}
+        <span style={{flex:1,height:1,background:_EVP_COR.linha,marginLeft:6}}/></button>
+      {mostra && <div className="evp-entra">{children}</div>}
+    </div>);
+}
+function _EvpDica({ children, cor }){ return <div style={{fontSize:11.5,color:cor || _EVP_COR.fraco,lineHeight:1.4,marginTop:6}}>{children}</div>; }
 
 /* ─── rank de músicas: quanto a música combina com o objetivo do vídeo ─── */
 const _EVP_OBJ_PERFIL = {
@@ -127982,6 +128045,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       mudar(function(np){ const o = np.clips.find(function(x){ return x.id === c0.id; }); if(o) o.reverso = !o.reverso; });
       _evToast("success", c0.reverso ? "Reverso desligado" : "Clipe de trás para frente"); return; }
     setFerr(function(o){ const n = Object.assign({}, o); n[sel.tipo] = f.id; return n; });
+    if(isMob) setFolha(true);   // v71: no celular a ferramenta abre numa gaveta que sobe
     if(f.id === "recortar") setEnquadrar(true); else setEnquadrar(false);
     setFerrGlobal(function(g){ return g.sub ? { ferramenta:g.ferramenta, sub:null } : g; });   // v41: aba do item → painel direito volta a ser o inspetor
   };
@@ -128020,6 +128084,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [fmtJobs, setFmtJobs] = useState([]);   // v68c: gravações em outro formato (4:5, 1:1, 16:9) pedidas ao PC
   const olharFormatos = function(){ if(!window._sb || pcAuto) return; window._sb.rpc("criacao_exportar_pc_status", { p_edicao:ed.id }).then(function(r){
     if(!r.error && r.data) setFmtJobs((r.data.itens || []).filter(function(it){ return (it.opcoes || {}).formato; })); }).catch(function(){}); };   // v68b: fundos da marca guardados nesta sessão (o kit só recarrega ao abrir de novo)
+  const [mobAberto, setMobAberto] = useState(false);   // v71: CELULAR — o editor abre em tela cheia (antes: "Para editar, use o computador")
+  const [folha, setFolha] = useState(false);           // v71: celular — gaveta com a ferramenta do item escolhido
+  const [mobBib, setMobBib] = useState(false);         // v71: celular — biblioteca (mídia, figurinhas…) em gaveta
+  useEffect(function(){ setFolha(false); }, [sel ? sel.tipo + ":" + sel.id : ""]);
   const [resumoAberto, setResumoAberto] = useState(function(){ try { return window.localStorage.getItem("evp_resumo_aberto") === "1"; } catch(_e){ return false; } });   // v66
   const alternarResumo = function(){ setResumoAberto(function(v){ try { window.localStorage.setItem("evp_resumo_aberto", v ? "0" : "1"); } catch(_e){} return !v; }); };
   const palcoRef = useRef(null); const [palco, setPalco] = useState({ w:700, h:520 });
@@ -128027,14 +128095,14 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     const el = palcoRef.current; if(!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(function(en){ const r = en[0].contentRect; setPalco(function(a){ return Math.abs(a.w - r.width) < 2 && Math.abs(a.h - r.height) < 2 ? a : { w:r.width, h:r.height }; }); });
     ro.observe(el); return function(){ ro.disconnect(); };
-  }, [cheia, isMob]);
+  }, [cheia, isMob, mobAberto]);
   const DIMF = _evpDim(p.formato);
-  const maxW = isMob ? (typeof window !== "undefined" ? window.innerWidth - 40 : 330) : Math.max(220, palco.w - 32),
-        maxH = isMob ? 560 : Math.max(240, palco.h - 172);   // v66: transporte (50) + UMA barra (84) + folgas — antes 3 barras (até 314 px)
+  const maxW = isMob ? (mobAberto ? Math.max(120, palco.w - 16) : (typeof window !== "undefined" ? window.innerWidth - 40 : 330)) : Math.max(220, palco.w - 32),
+        maxH = isMob ? (mobAberto ? Math.max(120, palco.h - 12) : 560) : Math.max(240, palco.h - 172);   // v66: transporte (50) + UMA barra (84) + folgas — antes 3 barras (até 314 px)
   const escV = Math.min(maxW / DIMF.w, maxH / DIMF.h);
   const W_VIEW = Math.round(DIMF.w * escV), H_VIEW = Math.round(DIMF.h * escV);
 
-  if(isMob){
+  if(isMob && !mobAberto){
     return (
       <div style={{marginTop:14}}>
         {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
@@ -128045,7 +128113,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <span style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub,fontFamily:_EVP_MONO}}>{_evTempo(tempo)} / {_evTempo(calc.total)}</span>
           <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" title="Assistir em tela cheia" style={_evpBtn("icone")}><_EvpIco n="expandir" s={16}/></button>
         </div>
-        <div style={{marginTop:10,fontSize:12.5,color:_EVP_COR.sub}}>Para editar, use o computador.</div>
+        <button data-mob-abrir="1" onClick={function(){ setMobAberto(true); }} style={Object.assign(_evpBtn("primario"), {marginTop:12,width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14})}><_EvpIco n="editar" s={17}/>Editar no celular</button>
       </div>
     );
   }
@@ -128074,6 +128142,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(id === "exportar"){ setVerExp(true); return; }
     if(id === "midia" || id === "camada" || id === "gerar") setMenu("bib-midia");
     if(id === "figs") setMenu("bib-figs");
+    if(isMob && (id === "midia" || id === "figs")) setMobBib(true);   // v71: no celular, Mídia e Figurinhas abrem a biblioteca numa gaveta
     if(id === "formato") olharFormatos();   // v68c
     if(id === "corrigir"){ setFerrGlobal(function(g){ return g.ferramenta === "corrigir" ? { ferramenta:null, sub:null } : { ferramenta:"corrigir", sub:"lista" }; }); return; }   // v49: abre direto a lista
     setFerrGlobal(function(g){ return g.ferramenta === id ? { ferramenta:null, sub:null } : { ferramenta:id, sub:null }; });
@@ -128081,7 +128150,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const abrirSub = function(sub){ setFerrGlobal(function(g){ return { ferramenta:g.ferramenta, sub:g.sub === sub ? null : sub }; }); };
   const fecharSub = function(){ setFerrGlobal(function(g){ return g.sub ? { ferramenta:g.ferramenta, sub:null } : g; }); };
   const abrirCola = function(){ window.dispatchEvent(new CustomEvent("evp-cola")); };
-  const abrirBib = function(id){ setMenu(id); };
+  const abrirBib = function(id){ setMenu(id); if(isMob) setMobBib(true); };
   /* velocidade no item selecionado: clipe, vídeo por cima, efeito, narração ou música (campo `vel`); sem seleção → clipe da agulha */
   const velSel = function(v){
     const tipos = { clip:"clips", imagem:"imagens", sfx:"sfx", narracao:"narracoes" };
@@ -128238,7 +128307,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const quads = ferrGlobal.ferramenta ? quadsDe(ferrGlobal.ferramenta) : [];
   const expAtivo = exp && (exp.fase === "preparando" || exp.fase === "gravando" || exp.fase === "enviando");
   const raiz = Object.assign({}, _EVP_TEMAS[tema], { userSelect:"none", color:_EVP_COR.ink, background:_EVP_COR.fundo, display:"flex", flexDirection:"column", gap:10, padding:10, boxSizing:"border-box" },
-    cheia ? { position:"fixed", inset:0, zIndex:1200, height:"100vh" } : { marginTop:14, borderRadius:18, height:"max(760px, calc(100vh - 110px))" });
+    isMob ? { position:"fixed", inset:0, zIndex:1200, height:"100dvh", padding:0, gap:0 }   // v71: celular = tela cheia sempre
+    : cheia ? { position:"fixed", inset:0, zIndex:1200, height:"100vh" } : { marginTop:14, borderRadius:18, height:"max(760px, calc(100vh - 110px))" });
   const bTopo = function(on){ return Object.assign(_evpBtn("icone"), { width:36, height:36, justifyContent:"center", padding:0 }, on ? { background:_EVP_COR.roxoSoft, color:_EVP_COR.roxo, borderColor:"transparent" } : {}); };
   /* v41: botão da coluna de guias (Biblioteca ou menu antigo) e menu antigo = guia que não começa com "bib-" */
   const bMenu = function(on){ return { font:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3, border:0, borderRadius:12, padding:"8px 0 6px", cursor:"pointer", fontWeight:700, fontSize:10.5, flexShrink:0,
@@ -128255,8 +128325,184 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     onMusicasMudou, setFerr, pRef, setP, confirmar, addImagem, addMarca, tirarTrechos, fala:ed.fala, modelos, salvarModelo, aplicarModelo, voltarTrechos, pintarTrechos, corrigirTexto,
     addNome, coresCli, nomesKit, clipesTodos:clipes, addTrilha, gerarCapa, capaUrl, t, edId:ed.id, onRecarregar, tratandoTudo:Object.keys(medindoAcao).length, trat, addSobre, addDesfoque,
     addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt, vaMed, tocando };   // v48: Vocal Attacker
+  /* v71 (07/10/2026): as peças do Estúdio viram constantes — o computador e o CELULAR montam o mesmo editor em arranjos diferentes */
+  const elViewer = <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} comparar={comparar} setComparar={setComparar} lupa={lupa}
+            sel={sel} selObj={selObj} enquadrar={enquadrar && sel && sel.tipo === "clip"} pRef={pRef} setP={setP} confirmar={confirmar} tempo={tempo} nome={(base && base.nome) || ""}
+            onSelTexto={function(id, tipo){ if(tipo === "legenda"){ let k = calc.blocos.findIndex(function(b){ return tempo >= b.a && tempo < b.b; }); if(k < 0) k = 0; if(calc.blocos.length) setSel({ tipo:"legenda", id:k }); return; } setSel({ tipo:tipo || "texto", id:id }); }}
+            onSemTexto={function(){ if(sel && (sel.tipo === "texto" || sel.tipo === "imagem" || sel.tipo === "legenda" || sel.tipo === "motion")){ setSel(null); return true; } return false; }}
+            onSelMotion={p.motion ? function(i){ if(!sel || sel.tipo !== "motion" || sel.id !== i) setSel({ tipo:"motion", id:i }); } : null}
+            onMover={function(dx, dy, dz, fim){
+              const c = sel && sel.tipo === "clip" && p.clips.find(function(x){ return x.id === sel.id; }); if(!c) return;
+              if(fim){ confirmar(fim.anterior, pRef.current); return; }
+              setP(function(pp){ const np = _evpCopia(pp); const o = np.clips.find(function(x){ return x.id === sel.id; }); if(!o) return pp;
+                const cc = calc.clips.find(function(x){ return x.id === sel.id; });
+                if(_evpAnimTem(o) && cc){            // v17: clipe com pontos ◆ → mexe no ponto da agulha (cria se não tiver)
+                  if(tempo < cc.t0 - 0.001 || tempo >= cc.t1){ return pp; }
+                  const pt = _evpAnimPonto(o, cc, tempo); pt.x = _evpR4(_evClamp(pt.x + dx, -1.5, 1.5)); pt.y = _evpR4(_evClamp(pt.y + dy, -1.5, 1.5)); pt.z = _evpR4(_evClamp(pt.z * dz, 0.3, 6)); return np; }
+                o.x = _evClamp(o.x + dx, -1, 1); o.y = _evClamp(o.y + dy, -1, 1); o.zoom = _evClamp(o.zoom * dz, 0.5, 4); return np; });
+            }}/>;
+  const elTransporte = <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10,flexShrink:0,maxWidth:"100%",overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"}}>   {/* v66: tela estreita → rola em vez de cortar o Play */}
+            <button onClick={function(){ irPara(0); }} aria-label="Início" title="Início" style={_evpBtn("icone")}><_EvpIco n="inicio" s={16}/></button>
+            <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} title="Tocar / pausar (Espaço)" style={Object.assign(_evpBtn("primario"), {width:50,height:40,flexShrink:0,justifyContent:"center",padding:0,borderRadius:12})}><_EvpIco n={tocando ? "pause" : "play"} s={18}/></button>
+            <button onClick={function(){ irPara(calc.total); }} aria-label="Fim" title="Fim" style={_evpBtn("icone")}><_EvpIco n="fim" s={16}/></button>
+            <span style={{flexShrink:0,whiteSpace:"nowrap",fontFamily:_EVP_MONO,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",padding:"7px 11px",borderRadius:10,background:"#0b1020",color:"#e9e6ff",letterSpacing:".02em"}}>
+              {_evTempo(tempo)} <span style={{color:"#7e7aa8"}}>/ {_evTempo(calc.total)}</span></span>
+            {/* v10e: logo no canto (marca d'água) — mostra ou esconde só neste vídeo */}
+            {(function(){ const temLogo = !!_evLogoKit(kit, t.client), lg = p.logo || {}, on = lg.mostrar === true || (lg.mostrar == null && !!(kit && kit.logo_mostrar === true));
+              return <button onClick={function(){ if(!temLogo){ _evToast("warning", "Este cliente não tem logo. Envie no Kit do cliente."); return; } mudar(function(np){ np.logo = Object.assign({}, np.logo, { mostrar:!on }); }); }}
+                aria-pressed={on} title={temLogo ? (on ? "Esconder a logo do canto neste vídeo" : "Mostrar a logo no canto neste vídeo") : "Envie a logo no Kit do cliente"}
+                style={Object.assign(_evpBtn(on ? "suave" : null), {marginLeft:6,opacity:temLogo ? 1 : 0.55})}><_EvpIco n={on ? "olho" : "olhoFechado"} s={15}/>Logo</button>; })()}
+            <button onClick={function(){ setAssistir(true); }} title="Assistir: só o vídeo, em tela cheia (F)" style={Object.assign(_evpBtn(), {marginLeft:2})}><_EvpIco n="expandir" s={15}/>Assistir</button>
+            <_EvpBotaoInsta/>
+            {/* v68: "Comparar" saiu daqui — fica em Cor › Comparar (e no Ctrl+K) */}
+            <button onClick={function(){ setLupa(function(z){ return z >= 4 ? 1 : z * 2; }); }} aria-label="Lupa" title="Lupa: aproximar a prévia (arraste para ver outra parte)" style={_evpBtn(lupa > 1 ? "suave" : null)}><_EvpIco n="zoomMais" s={15}/>{lupa > 1 ? lupa + "x" : "Lupa"}</button>
+          </div>;
+  const elBarra = (function(){
+            const estB = isMob ? {width:"100%",height:70,flexShrink:0,boxSizing:"border-box",display:"flex",alignItems:"center",gap:2,flexWrap:"nowrap",padding:"4px 6px",borderTop:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo}   // v71: celular
+              : {marginTop:10,width:"fit-content",maxWidth:"min(100%, 1500px)",marginLeft:"auto",marginRight:"auto",alignSelf:"center",height:76,flexShrink:0,boxSizing:"border-box",display:"flex",alignItems:"center",gap:3,flexWrap:"nowrap",
+              padding:"6px 8px",borderRadius:14,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo};
+            const volta = function(fn, rot, dica){ return [
+              <button key="volta" onClick={fn} title={dica} aria-label={dica} style={{font:"inherit",flex:"0 0 auto",width:44,height:54,borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.painel,
+                color:_EVP_COR.ink,cursor:"pointer",display:"grid",placeItems:"center",fontSize:24,fontWeight:800,lineHeight:1}}>‹</button>,
+              <span key="rot" style={{flex:"0 0 auto",maxWidth:130,margin:"0 8px 0 4px",fontSize:10,fontWeight:800,color:_EVP_COR.fraco,textTransform:"uppercase",letterSpacing:".07em",
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={rot}>{rot}</span>]; };
+            const bt = function(on, cor){ return {font:"inherit",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,flex:"0 0 auto",minWidth:58,height:58,padding:"4px 6px",borderRadius:11,border:0,cursor:"pointer",
+              background:on ? _EVP_COR.roxoSoft : "transparent",color:on ? _EVP_COR.roxo : (cor || _EVP_COR.ink),fontSize:11,fontWeight:700,boxShadow:on ? "inset 0 0 0 1px rgba(139,92,246,.35)" : "none",whiteSpace:"nowrap"}; };
+            if(ferramentas.length) return (
+              <_EvpBarraRola key={"item-" + sel.tipo} attrs={{"data-barra-item":"1", role:"toolbar", "aria-label":"Ferramentas do item selecionado"}} estilo={estB}
+                fixo={volta(function(){ setSel(null); }, nomeItem || "Item", "Voltar para as ferramentas (tira a seleção)")}>
+                {ferramentas.map(function(f){ if(f.sep) return <span key={f.sep} aria-hidden="true" style={{flex:"0 0 1px",alignSelf:"stretch",margin:"8px 6px",background:_EVP_COR.linha}}/>;   // v68
+                  const on = !f.acao && ferrAtual === f.id;
+                  return <button key={f.id} onClick={function(){ usarFerr(f); }} title={f.label} style={bt(on, f.id === "apagar" ? _EV.verm : null)}><_EvpIco n={f.icone} s={20}/>{f.label}</button>; })}
+              </_EvpBarraRola>);
+            if(ferrGlobal.ferramenta && quads.length) return (
+              <_EvpBarraRola key={"ferr-" + ferrGlobal.ferramenta} attrs={{"data-barrinha":ferrGlobal.ferramenta, role:"toolbar", "aria-label":"Opções: " + ferrRotulo}} estilo={estB}
+                fixo={volta(function(){ setFerrGlobal({ ferramenta:null, sub:null }); }, ferrRotulo, "Voltar para a barra principal (Esc)")}>
+                {quads.map(function(qd){ if(qd.sep) return <span key={qd.id} aria-hidden="true" style={{flex:"0 0 1px",alignSelf:"stretch",margin:"8px 6px",background:_EVP_COR.linha}}/>;   // v68
+                  const on = qd.on != null ? !!qd.on : (!!qd.sub && ferrGlobal.sub === qd.sub);
+                  const st = Object.assign(bt(on), { minWidth:66, maxWidth:132, whiteSpace:"normal", textAlign:"center", lineHeight:1.15, fontSize:10.5 });   // v71: sem caixinha (igual à barra principal), só o escolhido fica marcado
+                  if(qd.arquivo) return <label key={qd.id} data-quad={qd.id} title={qd.dica || qd.label} style={st}>{qd.desenho || <_EvpIco n={qd.icone} s={18}/>}{qd.label}
+                    <input type="file" accept={qd.arquivo.accept} style={{display:"none"}} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; if(fl) qd.arquivo.fn(fl); }}/></label>;
+                  return <button key={qd.id} data-quad={qd.id} onClick={function(){ if(qd.sub) abrirSub(qd.sub); else qd.acao(); }} aria-pressed={qd.sub || qd.on != null ? on : undefined} title={qd.dica || qd.label} style={st}>
+                    {qd.desenho || <_EvpIco n={qd.icone} s={18}/>}{qd.label}</button>; })}
+              </_EvpBarraRola>);
+            return (
+              <_EvpBarraRola key="principal" attrs={{"data-barra-ferr":"1", role:"toolbar", "aria-label":"Ferramentas"}} estilo={estB}>
+                {_EVP_FERR_GLOBAL.map(function(f){   /* v68: só os assuntos (Músicas, Sons, Vozes, Galeria, Modelos… ficaram dentro deles) */
+                  if(f.sep) return <span key={f.id} aria-hidden="true" style={{flex:"0 0 1px",alignSelf:"stretch",margin:"8px 5px",background:_EVP_COR.linha}}/>;
+                  if(f.menu){ const on = menu === f.menu;   /* v67: Biblioteca e guias do menu antigo → abrem no painel da esquerda */
+                    return <button key={f.id} data-bib={f.menu} onClick={function(){ setFerrGlobal({ ferramenta:null, sub:null }); setMenu(f.menu); }} aria-pressed={on} title={f.dica || f.label}
+                      style={Object.assign(bt(on), { flex:"1 0 auto" })}><_EvpIco n={f.icone} s={20}/>{f.label}<span style={{height:9}}/></button>; }
+                  const on = ferrGlobal.ferramenta === f.id;
+                  return <button key={f.id} data-ferr={f.id} onClick={function(){ ferrGlobalClique(f.id); }} aria-pressed={on} title={f.label + (f.tecla ? " (" + f.tecla + ")" : "")}
+                    style={Object.assign(bt(on, f.id === "exportar" ? "#15803d" : null), { flex:"1 0 auto" })}>
+                    <_EvpIco n={f.icone} s={20}/>{f.label}<span style={{fontFamily:_EVP_MONO,fontSize:8.5,fontWeight:700,color:on ? _EVP_COR.roxo : _EVP_COR.fraco,lineHeight:1,height:isMob ? 0 : 9}}>{isMob ? "" : f.tecla}</span></button>; })}
+                {/* v67: o "Mais…" saiu — a barra desliza (‹ ›). O menu antigo segue no Ctrl+K › "Menu antigo". */}
+              </_EvpBarraRola>);
+          })();
+  const elPainel = ferrGlobal.sub ? (   /* v41: a barrinha pediu configuração → seção da ferramenta no painel direito */
+          <_EvpPainelFerramenta ferramenta={ferrGlobal.ferramenta} sub={ferrGlobal.sub} rotulo={ferrRotulo} subRotulo={subRotulo} fechar={fecharSub} propsMenu={propsMenu}/>
+        ) : sel && selObj && sel.tipo === "motion" ? <_EvmInspetor evm={evm} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem}/> : sel && selObj ? (   /* v35 */
+          <_EvpInspetor fotosCard={_evpFotosDoCard(t.files).map(function(f){ return { url:f.url, nome:f.arq }; })}
+            tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
+            infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
+            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id} dividir={cortar}/>
+        ) : (
+          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
+            ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
+            mostrarAntes={mostrarAntes} setMostrarAntes={setMostrarAntes} simulando={simulando}
+            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido} p={p} calc={calc} mudar={mudar}
+            erroAjuste={erroAjuste} limparErroAjuste={limparErroAjuste}/>
+        );
+  const elTimeline = <_EvpTimeline evm={evm} abrirAnimar={function(id){ setSel({ tipo:"clip", id:id }); setFerr(function(f){ return Object.assign({}, f, { clip:"mov" }); }); }}
+          p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
+          setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
+          alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}
+          fala={ed.fala} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }} ctxMenu={abrirCtx} io={io} abrirHist={function(){ setHistK(true); }} travarFaixa={travarFaixa} mob={isMob}/>;
+  const elExtras = <Fragment>
+      <div role={verExp ? "dialog" : undefined} aria-label="Exportar" aria-hidden={!verExp} onPointerDown={function(e){ if(e.target === e.currentTarget && !expAtivo) setVerExp(false); }}
+        style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div ref={expRef} style={{width:"min(620px, 100%)",maxHeight:"90vh",overflow:"auto",position:"relative"}}>
+          <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
+          <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
+            logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
+            vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
+            onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
+            narrFalha={narrFalha}
+            prontoPC={!!pcAuto && dicPronto && !tratandoAudio && !narrCarregando && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)
+              && !precisaFoco.length && !Object.keys(medindoFoco).length}/>
+        </div>
+      </div>
+      <_EvpExtrasK ctx={ctxK} setCtx={setCtxK} ctxItens={ctxItens} paleta={paleta} setPaleta={setPaleta} comandos={comandosK} colarAtr={colarAtr} setColarAtr={setColarAtr} copiaAtr={copiaAtr} colarAtrib={colarAtrib}
+        hist={histK} setHist={setHistK} desf={desf} p={p} voltarAte={voltarAte}/>
+      <_EvpBanco aberto={banco} onFechar={function(){ setBanco(false); }} cliente={t.client} taskId={t.id} onUsarImagem={function(u, nm){ addImagem(u, nm); setBanco(false); _evToast("success", "Imagem no vídeo, na agulha"); }}/>
+      {soltando && <div onDragOver={function(e){ e.preventDefault(); }} onDragLeave={function(){ setSoltando(false); }} onDrop={soltarArquivos}
+        style={{position:"fixed",inset:0,zIndex:95,background:"rgba(124,58,237,.18)",border:"3px dashed #7c3aed",display:"grid",placeItems:"center",fontSize:20,fontWeight:800,color:"#4c1d95"}}>Solte aqui: imagem, áudio, legenda (.srt) ou fonte</div>}
+      </Fragment>;
+
+  /* ─── v71 (07/10/2026): EDITOR NO CELULAR — no jeito do CapCut: vídeo em cima, linha do tempo no meio, barra embaixo;
+     cada ferramenta abre numa GAVETA que sobe (os mesmos painéis do computador). Antes: "Para editar, use o computador". ─── */
+  if(isMob){
+    const gaveta = mobBib ? "bib" : ferrGlobal.sub ? "ferr" : (folha && sel && selObj) ? "item" : null;
+    const fecharGaveta = function(){ if(gaveta === "bib"){ setMobBib(false); return; } if(gaveta === "ferr"){ fecharSub(); return; } setFolha(false); };
+    const bM = function(extra){ return Object.assign({ font:"inherit", width:38, height:38, borderRadius:11, border:0, background:"transparent", color:_EVP_COR.ink, display:"grid", placeItems:"center", cursor:"pointer", padding:0, flexShrink:0 }, extra || {}); };
+    return (
+      <div style={raiz} data-tema={tema} data-mob="1">
+        <style>{_EVP_CSS}</style>
+        {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
+        {/* topo: fechar · nome · desfazer · refazer · salvar · exportar */}
+        <div style={{display:"flex",alignItems:"center",gap:2,padding:"6px 6px",paddingTop:"max(6px, env(safe-area-inset-top))",background:_EVP_COR.painel,borderBottom:"1px solid " + _EVP_COR.linha,flexShrink:0}}>
+          <button onClick={function(){ setMobAberto(false); setSel(null); setFerrGlobal({ ferramenta:null, sub:null }); setMobBib(false); }} aria-label="Fechar o editor" title="Fechar" style={bM()}><_EvpIco n="fechar" s={19}/></button>
+          <div style={{flex:1,minWidth:0,padding:"0 4px"}}>
+            <div style={{fontWeight:800,fontSize:14,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title || "Estúdio"}</div>
+            <div style={{fontSize:11,color:auto && auto.estado === "erro" ? _EV.verm : _EVP_COR.fraco,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{expAtivo ? "Exportando " + (exp.pct || 0) + "%" : autoTxt}</div>
+          </div>
+          <button onClick={desfazer} disabled={!desf.length} aria-label="Desfazer" style={bM({ opacity:desf.length ? 1 : 0.35 })}><_EvpIco n="desfazer" s={18}/></button>
+          <button onClick={refazer} disabled={!refaz.length} aria-label="Refazer" style={bM({ opacity:refaz.length ? 1 : 0.35 })}><_EvpIco n="refazer" s={18}/></button>
+          <button onClick={salvar} disabled={!alterado || salvando} aria-label="Salvar versão" style={Object.assign(_evpBtn(alterado ? "primario" : null, alterado && !salvando), {padding:"8px 11px",marginLeft:2})}><_EvpIco n="salvar" s={15}/>{salvando ? "…" : "Salvar"}</button>
+          <button onClick={function(){ setVerExp(true); }} aria-label="Exportar" style={Object.assign(_evpBtn("verde"), {padding:"8px 10px",marginLeft:4})}><_EvpIco n="baixar" s={16}/></button>
+        </div>
+        {/* vídeo */}
+        <div ref={palcoRef} style={{flex:"1 1 auto",minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative",background:_EVP_COR.palco}}>
+          {elViewer}
+        </div>
+        {/* tocar · tempo · assistir */}
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",flexShrink:0,background:_EVP_COR.palco}}>
+          <span style={{fontFamily:_EVP_MONO,fontSize:12,fontWeight:700,color:_EVP_COR.ink,minWidth:0,whiteSpace:"nowrap"}}>{_evTempo(tempo)} <span style={{color:_EVP_COR.fraco}}>/ {_evTempo(calc.total)}</span></span>
+          <span style={{flex:1}}/>
+          <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} style={bM({ width:44, height:44, borderRadius:99, background:_EVP_COR.roxoFixo, color:"#fff" })}><_EvpIco n={tocando ? "pause" : "play"} s={20}/></button>
+          <span style={{flex:1}}/>
+          <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" style={bM()}><_EvpIco n="expandir" s={18}/></button>
+        </div>
+        {/* linha do tempo */}
+        <div data-mob-tl="1" style={{flexShrink:0,height:"34dvh",minHeight:180,display:"flex",flexDirection:"column",overflow:"hidden"}}>{elTimeline}</div>
+        {/* barra única (a mesma do computador) */}
+        <div style={{flexShrink:0,paddingBottom:"env(safe-area-inset-bottom)",background:_EVP_COR.campo}}>{elBarra}</div>
+        {/* gaveta */}
+        {gaveta && (
+          <div data-gaveta={gaveta} onPointerDown={function(e){ if(e.target === e.currentTarget) fecharGaveta(); }}
+            style={{position:"fixed",inset:0,zIndex:1300,background:"rgba(3,6,15,.38)",display:"flex",alignItems:"flex-end"}}>
+            <div className="evp-sobe" style={{width:"100%",height:"64dvh",maxHeight:"calc(100dvh - 60px)",background:_EVP_COR.fundo,borderRadius:"18px 18px 0 0",display:"flex",flexDirection:"column",overflow:"hidden",
+              boxShadow:"0 -18px 50px rgba(0,0,0,.45)",paddingBottom:"env(safe-area-inset-bottom)"}}>
+              <div style={{position:"relative",display:"flex",justifyContent:"center",alignItems:"center",height:30,flexShrink:0}}>
+                <span onClick={fecharGaveta} style={{width:42,height:5,borderRadius:99,background:_EVP_COR.linha,cursor:"pointer"}}/>
+                <button onClick={fecharGaveta} aria-label="Fechar" style={bM({ position:"absolute", right:6, top:0, width:30, height:30 })}><_EvpIco n="fechar" s={16}/></button>
+              </div>
+              <div style={{flex:1,minHeight:0,padding:"0 8px 8px",display:"flex",flexDirection:"column"}}>
+                <div key={gaveta + "|" + (ferrGlobal.sub || "") + "|" + (sel ? sel.tipo + ":" + sel.id : "") + "|" + (ferrAtual || "")} className="evp-entra" style={{flex:1,minHeight:0}}>
+                  {gaveta === "bib" ? <_EvpPainelMenu {...propsMenu} menu={menu} papel="menu"/> : elPainel}
+                </div>
+              </div>
+            </div>
+          </div>)}
+        {elExtras}
+      </div>
+    );
+  }
+
   return (
     <div style={raiz} data-tema={tema} onDragEnter={function(e){ if(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0){ e.preventDefault(); setSoltando(true); } }}>
+      <style>{_EVP_CSS}</style>{/* v71: régua, blocos de ação e entrada suave dos painéis */}
       {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
       {/* ── barra de cima ── */}
       <div style={Object.assign({}, _EVP_PAINEL, {display:"flex",gap:8,alignItems:"center",padding:"7px 10px",flexShrink:0,position:"relative"})}>
@@ -128327,83 +128573,13 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <_EvpPainelMenu {...propsMenu} menu={menu} papel="menu"/>
         <div ref={palcoRef} style={Object.assign({}, _EVP_PAINEL, {background:"radial-gradient(900px 380px at 50% -10%, rgba(139,92,246,.10), transparent 62%), " + _EVP_COR.palco,
             padding:"14px 12px 10px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minWidth:0,minHeight:0,overflow:"hidden",position:"relative"})}>
-          <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} comparar={comparar} setComparar={setComparar} lupa={lupa}
-            sel={sel} selObj={selObj} enquadrar={enquadrar && sel && sel.tipo === "clip"} pRef={pRef} setP={setP} confirmar={confirmar} tempo={tempo} nome={(base && base.nome) || ""}
-            onSelTexto={function(id, tipo){ if(tipo === "legenda"){ let k = calc.blocos.findIndex(function(b){ return tempo >= b.a && tempo < b.b; }); if(k < 0) k = 0; if(calc.blocos.length) setSel({ tipo:"legenda", id:k }); return; } setSel({ tipo:tipo || "texto", id:id }); }}
-            onSemTexto={function(){ if(sel && (sel.tipo === "texto" || sel.tipo === "imagem" || sel.tipo === "legenda" || sel.tipo === "motion")){ setSel(null); return true; } return false; }}
-            onSelMotion={p.motion ? function(i){ if(!sel || sel.tipo !== "motion" || sel.id !== i) setSel({ tipo:"motion", id:i }); } : null}
-            onMover={function(dx, dy, dz, fim){
-              const c = sel && sel.tipo === "clip" && p.clips.find(function(x){ return x.id === sel.id; }); if(!c) return;
-              if(fim){ confirmar(fim.anterior, pRef.current); return; }
-              setP(function(pp){ const np = _evpCopia(pp); const o = np.clips.find(function(x){ return x.id === sel.id; }); if(!o) return pp;
-                const cc = calc.clips.find(function(x){ return x.id === sel.id; });
-                if(_evpAnimTem(o) && cc){            // v17: clipe com pontos ◆ → mexe no ponto da agulha (cria se não tiver)
-                  if(tempo < cc.t0 - 0.001 || tempo >= cc.t1){ return pp; }
-                  const pt = _evpAnimPonto(o, cc, tempo); pt.x = _evpR4(_evClamp(pt.x + dx, -1.5, 1.5)); pt.y = _evpR4(_evClamp(pt.y + dy, -1.5, 1.5)); pt.z = _evpR4(_evClamp(pt.z * dz, 0.3, 6)); return np; }
-                o.x = _evClamp(o.x + dx, -1, 1); o.y = _evClamp(o.y + dy, -1, 1); o.zoom = _evClamp(o.zoom * dz, 0.5, 4); return np; });
-            }}/>
+          {elViewer}
           {/* transporte */}
-          <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10,flexShrink:0,maxWidth:"100%",overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"}}>   {/* v66: tela estreita → rola em vez de cortar o Play */}
-            <button onClick={function(){ irPara(0); }} aria-label="Início" title="Início" style={_evpBtn("icone")}><_EvpIco n="inicio" s={16}/></button>
-            <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} title="Tocar / pausar (Espaço)" style={Object.assign(_evpBtn("primario"), {width:50,height:40,flexShrink:0,justifyContent:"center",padding:0,borderRadius:12})}><_EvpIco n={tocando ? "pause" : "play"} s={18}/></button>
-            <button onClick={function(){ irPara(calc.total); }} aria-label="Fim" title="Fim" style={_evpBtn("icone")}><_EvpIco n="fim" s={16}/></button>
-            <span style={{flexShrink:0,whiteSpace:"nowrap",fontFamily:_EVP_MONO,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",padding:"7px 11px",borderRadius:10,background:"#0b1020",color:"#e9e6ff",letterSpacing:".02em"}}>
-              {_evTempo(tempo)} <span style={{color:"#7e7aa8"}}>/ {_evTempo(calc.total)}</span></span>
-            {/* v10e: logo no canto (marca d'água) — mostra ou esconde só neste vídeo */}
-            {(function(){ const temLogo = !!_evLogoKit(kit, t.client), lg = p.logo || {}, on = lg.mostrar === true || (lg.mostrar == null && !!(kit && kit.logo_mostrar === true));
-              return <button onClick={function(){ if(!temLogo){ _evToast("warning", "Este cliente não tem logo. Envie no Kit do cliente."); return; } mudar(function(np){ np.logo = Object.assign({}, np.logo, { mostrar:!on }); }); }}
-                aria-pressed={on} title={temLogo ? (on ? "Esconder a logo do canto neste vídeo" : "Mostrar a logo no canto neste vídeo") : "Envie a logo no Kit do cliente"}
-                style={Object.assign(_evpBtn(on ? "suave" : null), {marginLeft:6,opacity:temLogo ? 1 : 0.55})}><_EvpIco n={on ? "olho" : "olhoFechado"} s={15}/>Logo</button>; })()}
-            <button onClick={function(){ setAssistir(true); }} title="Assistir: só o vídeo, em tela cheia (F)" style={Object.assign(_evpBtn(), {marginLeft:2})}><_EvpIco n="expandir" s={15}/>Assistir</button>
-            <_EvpBotaoInsta/>
-            {/* v68: "Comparar" saiu daqui — fica em Cor › Comparar (e no Ctrl+K) */}
-            <button onClick={function(){ setLupa(function(z){ return z >= 4 ? 1 : z * 2; }); }} aria-label="Lupa" title="Lupa: aproximar a prévia (arraste para ver outra parte)" style={_evpBtn(lupa > 1 ? "suave" : null)}><_EvpIco n="zoomMais" s={15}/>{lupa > 1 ? lupa + "x" : "Lupa"}</button>
-          </div>
+          {elTransporte}
           {/* v66 (07/10/2026): UMA BARRA SÓ embaixo do vídeo (estilo CapCut — pedido do sócio: "clicou abre outra guia, aí volta").
               Nada selecionado = barra principal · clicou numa ferramenta = a barra troca pelas opções dela (‹ volta) ·
               selecionou um item = a barra mostra só as ferramentas dele (‹ tira a seleção). Antes eram 3 barras e o vídeo ficava pequeno. */}
-          {(function(){
-            const estB = {marginTop:10,width:"100%",maxWidth:1500,height:76,flexShrink:0,boxSizing:"border-box",display:"flex",alignItems:"center",gap:3,flexWrap:"nowrap",
-              padding:"6px 8px",borderRadius:14,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo};
-            const volta = function(fn, rot, dica){ return [
-              <button key="volta" onClick={fn} title={dica} aria-label={dica} style={{font:"inherit",flex:"0 0 auto",width:44,height:54,borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.painel,
-                color:_EVP_COR.ink,cursor:"pointer",display:"grid",placeItems:"center",fontSize:24,fontWeight:800,lineHeight:1}}>‹</button>,
-              <span key="rot" style={{flex:"0 0 auto",maxWidth:130,margin:"0 8px 0 4px",fontSize:10,fontWeight:800,color:_EVP_COR.fraco,textTransform:"uppercase",letterSpacing:".07em",
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={rot}>{rot}</span>]; };
-            const bt = function(on, cor){ return {font:"inherit",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,flex:"0 0 auto",minWidth:58,height:58,padding:"4px 6px",borderRadius:11,border:0,cursor:"pointer",
-              background:on ? _EVP_COR.roxoSoft : "transparent",color:on ? _EVP_COR.roxo : (cor || _EVP_COR.ink),fontSize:11,fontWeight:700,boxShadow:on ? "inset 0 0 0 1px rgba(139,92,246,.35)" : "none",whiteSpace:"nowrap"}; };
-            if(ferramentas.length) return (
-              <_EvpBarraRola key={"item-" + sel.tipo} attrs={{"data-barra-item":"1", role:"toolbar", "aria-label":"Ferramentas do item selecionado"}} estilo={estB}
-                fixo={volta(function(){ setSel(null); }, nomeItem || "Item", "Voltar para as ferramentas (tira a seleção)")}>
-                {ferramentas.map(function(f){ if(f.sep) return <span key={f.sep} aria-hidden="true" style={{flex:"0 0 1px",alignSelf:"stretch",margin:"8px 6px",background:_EVP_COR.linha}}/>;   // v68
-                  const on = !f.acao && ferrAtual === f.id;
-                  return <button key={f.id} onClick={function(){ usarFerr(f); }} title={f.label} style={bt(on, f.id === "apagar" ? _EV.verm : null)}><_EvpIco n={f.icone} s={20}/>{f.label}</button>; })}
-              </_EvpBarraRola>);
-            if(ferrGlobal.ferramenta && quads.length) return (
-              <_EvpBarraRola key={"ferr-" + ferrGlobal.ferramenta} attrs={{"data-barrinha":ferrGlobal.ferramenta, role:"toolbar", "aria-label":"Opções: " + ferrRotulo}} estilo={estB}
-                fixo={volta(function(){ setFerrGlobal({ ferramenta:null, sub:null }); }, ferrRotulo, "Voltar para a barra principal (Esc)")}>
-                {quads.map(function(qd){ if(qd.sep) return <span key={qd.id} aria-hidden="true" style={{flex:"0 0 1px",alignSelf:"stretch",margin:"8px 6px",background:_EVP_COR.linha}}/>;   // v68
-                  const on = qd.on != null ? !!qd.on : (!!qd.sub && ferrGlobal.sub === qd.sub);
-                  const st = Object.assign(bt(on), { minWidth:72, maxWidth:132, border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha), background:on ? _EVP_COR.roxoSoft : _EVP_COR.painel, whiteSpace:"normal", textAlign:"center", lineHeight:1.15, fontSize:10.5, marginRight:3 });
-                  if(qd.arquivo) return <label key={qd.id} data-quad={qd.id} title={qd.dica || qd.label} style={st}>{qd.desenho || <_EvpIco n={qd.icone} s={18}/>}{qd.label}
-                    <input type="file" accept={qd.arquivo.accept} style={{display:"none"}} onChange={function(e){ const fl = e.target.files && e.target.files[0]; e.target.value = ""; if(fl) qd.arquivo.fn(fl); }}/></label>;
-                  return <button key={qd.id} data-quad={qd.id} onClick={function(){ if(qd.sub) abrirSub(qd.sub); else qd.acao(); }} aria-pressed={qd.sub || qd.on != null ? on : undefined} title={qd.dica || qd.label} style={st}>
-                    {qd.desenho || <_EvpIco n={qd.icone} s={18}/>}{qd.label}</button>; })}
-              </_EvpBarraRola>);
-            return (
-              <_EvpBarraRola key="principal" attrs={{"data-barra-ferr":"1", role:"toolbar", "aria-label":"Ferramentas"}} estilo={estB}>
-                {_EVP_FERR_GLOBAL.map(function(f){   /* v68: só os assuntos (Músicas, Sons, Vozes, Galeria, Modelos… ficaram dentro deles) */
-                  if(f.sep) return <span key={f.id} aria-hidden="true" style={{flex:"0 0 1px",alignSelf:"stretch",margin:"8px 5px",background:_EVP_COR.linha}}/>;
-                  if(f.menu){ const on = menu === f.menu;   /* v67: Biblioteca e guias do menu antigo → abrem no painel da esquerda */
-                    return <button key={f.id} data-bib={f.menu} onClick={function(){ setFerrGlobal({ ferramenta:null, sub:null }); setMenu(f.menu); }} aria-pressed={on} title={f.dica || f.label}
-                      style={Object.assign(bt(on), { flex:"1 0 auto" })}><_EvpIco n={f.icone} s={20}/>{f.label}<span style={{height:9}}/></button>; }
-                  const on = ferrGlobal.ferramenta === f.id;
-                  return <button key={f.id} data-ferr={f.id} onClick={function(){ ferrGlobalClique(f.id); }} aria-pressed={on} title={f.label + (f.tecla ? " (" + f.tecla + ")" : "")}
-                    style={Object.assign(bt(on, f.id === "exportar" ? "#15803d" : null), { flex:"1 0 auto" })}>
-                    <_EvpIco n={f.icone} s={20}/>{f.label}<span style={{fontFamily:_EVP_MONO,fontSize:8.5,fontWeight:700,color:on ? _EVP_COR.roxo : _EVP_COR.fraco,lineHeight:1,height:9}}>{f.tecla}</span></button>; })}
-                {/* v67: o "Mais…" saiu — a barra desliza (‹ ›). O menu antigo segue no Ctrl+K › "Menu antigo". */}
-              </_EvpBarraRola>);
-          })()}
+          {elBarra}
           {(tratandoAudio || Object.keys(analisando).length > 0 || Object.keys(medindoAcao).length > 0) && (
             <div style={{position:"absolute",top:8,left:12,right:12,textAlign:"center",pointerEvents:"none",fontSize:11.5,color:_EVP_COR.sub,zIndex:2}}>
               {tratandoAudio ? "Preparando o áudio (ruído, voz e volume)… " : ""}
@@ -128414,52 +128590,18 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         </div>
         <div style={{minWidth:0,minHeight:0,display:"flex",flexDirection:"column"}}>
         <_EvpSugestoes ed={ed} p={p} mudar={mudar} kit={kit}/>
-        <div style={{flex:1,minHeight:0}}>
-        {ferrGlobal.sub ? (   /* v41: a barrinha pediu configuração → seção da ferramenta no painel direito */
-          <_EvpPainelFerramenta ferramenta={ferrGlobal.ferramenta} sub={ferrGlobal.sub} rotulo={ferrRotulo} subRotulo={subRotulo} fechar={fecharSub} propsMenu={propsMenu}/>
-        ) : sel && selObj && sel.tipo === "motion" ? <_EvmInspetor evm={evm} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem}/> : sel && selObj ? (   /* v35 */
-          <_EvpInspetor fotosCard={_evpFotosDoCard(t.files).map(function(f){ return { url:f.url, nome:f.arq }; })}
-            tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
-            infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
-            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id} dividir={cortar}/>
-        ) : (
-          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
-            ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
-            mostrarAntes={mostrarAntes} setMostrarAntes={setMostrarAntes} simulando={simulando}
-            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido} p={p} calc={calc} mudar={mudar}
-            erroAjuste={erroAjuste} limparErroAjuste={limparErroAjuste}/>
-        )}
+        <div key={(ferrGlobal.sub ? "f:" + ferrGlobal.ferramenta + ":" + ferrGlobal.sub : "") + "|" + (sel ? sel.tipo + ":" + sel.id : "") + "|" + (ferrAtual || "")} className="evp-entra" style={{flex:1,minHeight:0}}>{/* v71: o painel entra suave quando troca de ferramenta */}
+        {elPainel}
         </div></div>
       </div>
 
       {/* ── linha do tempo (grafite; a borda de cima muda a altura) ── */}
       <div style={{flexShrink:0}}>
-        <_EvpTimeline evm={evm} abrirAnimar={function(id){ setSel({ tipo:"clip", id:id }); setFerr(function(f){ return Object.assign({}, f, { clip:"mov" }); }); }}
-          p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
-          setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
-          alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}
-          fala={ed.fala} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }} ctxMenu={abrirCtx} io={io} abrirHist={function(){ setHistK(true); }} travarFaixa={travarFaixa}/>
+        {elTimeline}
       </div>
 
       {/* ── Exportar: janela por cima (fica montada para não parar uma exportação em andamento) ── */}
-      <div role={verExp ? "dialog" : undefined} aria-label="Exportar" aria-hidden={!verExp} onPointerDown={function(e){ if(e.target === e.currentTarget && !expAtivo) setVerExp(false); }}
-        style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:"center",justifyContent:"center",padding:16}}>
-        <div ref={expRef} style={{width:"min(620px, 100%)",maxHeight:"90vh",overflow:"auto",position:"relative"}}>
-          <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
-          <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
-            logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
-            vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
-            onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
-            narrFalha={narrFalha}
-            prontoPC={!!pcAuto && dicPronto && !tratandoAudio && !narrCarregando && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)
-              && !precisaFoco.length && !Object.keys(medindoFoco).length}/>
-        </div>
-      </div>
-      <_EvpExtrasK ctx={ctxK} setCtx={setCtxK} ctxItens={ctxItens} paleta={paleta} setPaleta={setPaleta} comandos={comandosK} colarAtr={colarAtr} setColarAtr={setColarAtr} copiaAtr={copiaAtr} colarAtrib={colarAtrib}
-        hist={histK} setHist={setHistK} desf={desf} p={p} voltarAte={voltarAte}/>
-      <_EvpBanco aberto={banco} onFechar={function(){ setBanco(false); }} cliente={t.client} taskId={t.id} onUsarImagem={function(u, nm){ addImagem(u, nm); setBanco(false); _evToast("success", "Imagem no vídeo, na agulha"); }}/>
-      {soltando && <div onDragOver={function(e){ e.preventDefault(); }} onDragLeave={function(){ setSoltando(false); }} onDrop={soltarArquivos}
-        style={{position:"fixed",inset:0,zIndex:95,background:"rgba(124,58,237,.18)",border:"3px dashed #7c3aed",display:"grid",placeItems:"center",fontSize:20,fontWeight:800,color:"#4c1d95"}}>Solte aqui: imagem, áudio, legenda (.srt) ou fonte</div>}
+      {elExtras}
     </div>
   );
 }
@@ -128997,20 +129139,19 @@ function _EvpRastrearPainel({ c, calc, p, mudar, tempo, infoClipe, irPara, setSe
       trk:{ id:tr.id, ref:[cx.x, cx.y, cx.w, cx.h], esc:false } }); }); if(setSel) setSel({ tipo:"imagem", id:id }); };
   const imgs = (p.imagens || []).filter(function(q){ return q.url && (q.camada || "imagem") === "imagem"; }).filter(function(q, i, a){ return a.findIndex(function(z){ return z.url === q.url; }) === i; }).slice(0, 8);
   return (<div>
-    <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>O texto, a figura ou o desfoque seguem o que você escolher.</div>
-    <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
-      {[["tudo","O clipe todo"],["frente","Da agulha para frente"],["tras","Da agulha para trás"]].map(function(o){ return <button key={o[0]} onClick={function(){ setDir(o[0]); }} style={Object.assign(_evpChip(dir === o[0]), { padding:"5px 9px", fontSize:11.5 })}>{o[1]}</button>; })}
-    </div>
-    {!prog ? <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-      <button onClick={rosto} style={Object.assign(_evpBtn("primario"), {justifyContent:"center"})}>Rosto</button>
-      <button onClick={function(){ rodar("pessoa"); }} style={Object.assign(_evpBtn("primario"), {justifyContent:"center"})}>Pessoa</button>
-      <button onClick={area} style={Object.assign(_evpBtn("primario"), {justifyContent:"center"})}>Área</button>
-    </div> : <div style={{padding:"8px 10px",borderRadius:10,background:_EVP_COR.faixa,fontSize:12}}>
+    {/* v71: o que seguir em blocos com ícone · trecho em barra · explicação técnica no "?" */}
+    <div style={{fontSize:12.5,color:_EVP_COR.sub,marginBottom:10,lineHeight:1.4}}>Escolha o que seguir. Texto, figura ou desfoque vão junto.</div>
+    {!prog ? <_EvpAcoes colunas={3} itens={[
+      { id:"trk-rosto", icone:"pessoa", label:"Rosto", dica:"Acha o rosto (IA no navegador, R$ 0)", onClick:rosto },
+      { id:"trk-pessoa", icone:"pessoa", label:"Pessoa", dica:"Segue a pessoa inteira (IA no navegador, R$ 0)", onClick:function(){ rodar("pessoa"); } },
+      { id:"trk-area", icone:"encaixar", label:"Área", dica:"Desenhe um quadrado no vídeo e ele segue aquilo", onClick:area } ]}/> : <div style={{padding:"8px 10px",borderRadius:10,background:_EVP_COR.faixa,fontSize:12}}>
       <div style={{fontWeight:700}}>{prog.msg || ("Seguindo " + ({ rosto:"o rosto", pessoa:"a pessoa", area:"a área" }[prog.tipo] || "") + "… " + (prog.pct || 0) + "%")}</div>
       <div style={{height:6,borderRadius:99,background:_EVP_COR.linha,marginTop:6,overflow:"hidden"}}><div style={{height:"100%",width:(prog.pct || 0) + "%",background:_EVP_COR.roxoFixo}}/></div>
       <button onClick={function(){ if(pararRef.current) pararRef.current(); }} style={Object.assign(_evpBtn(), {marginTop:6,padding:"4px 9px",fontSize:11.5})}>Parar</button>
     </div>}
-    <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Roda neste computador (R$ 0). Rosto e pessoa usam a IA do navegador (MediaPipe); área segue o desenho que você fizer.</div>
+    <_EvpGrupo titulo="Trecho">
+      <_EvpSeg rotulo="Trecho a seguir" opcoes={[["tudo", "Clipe todo"], ["frente", "Agulha →"], ["tras", "← Agulha"]]} valor={dir} onChange={setDir}/>
+    </_EvpGrupo>
     {lista.length > 0 && <div style={_EVP_TIT}>Rastros deste vídeo</div>}
     {lista.map(function(tr){ const on = ver === tr.id, n = tr.pts.length, dur = n ? (tr.pts[n-1][0] - tr.pts[0][0]) : 0;
       return <div key={tr.id} style={{border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),borderRadius:10,padding:"7px 9px",marginBottom:6}}>
@@ -129293,10 +129434,9 @@ function _EvpFormaPainel({ x, ni, mudar, ctl }){
 /* ─── v23: mistura, opacidade, espelhar e chroma da camada (imagem, vídeo por cima, forma) ─── */
 function _EvpCamadaExtra({ x, ni, mudar, ctl }){
   const ehVideo = x.camada === "video", ch = x.chroma || {};
-  return (<div style={{marginTop:6}}>
-    <div style={_EVP_TIT}>Camada</div>
-    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
-      <span style={{fontSize:12,fontWeight:700}}>Mistura</span>
+  return (<div style={{marginTop:2}}>
+    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:10}}>
+      <span style={{fontSize:12.5,fontWeight:600}}>Mistura</span>
       <select value={x.blend || "normal"} aria-label="Modo de mistura" onChange={function(e){ const v = e.target.value; mudar(ni(function(o){ if(v === "normal") delete o.blend; else o.blend = v; })); }}
         style={{font:"inherit",flex:1,padding:"5px 8px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,fontSize:12,background:_EVP_COR.campo,color:_EVP_COR.ink}}>
         {_EVP_BLENDS.map(function(b){ return <option key={b[0]} value={b[0]}>{b[1]}</option>; })}</select>
@@ -129356,8 +129496,8 @@ function _EvpAudioExtra({ au, mudar }){
   return (<div>
     <_EvpInterruptor on={!!au.cliques} onChange={function(v){ setA({ cliques:v }); }} label="Tirar estalos (cliques)" dica="Estalo de boca, chiado de cabo, pico de ruído curto"/>
     <_EvpInterruptor on={!!au.pops} onChange={function(v){ setA({ pops:v }); }} label="Tirar o 'P' estourado (pops)" dica="Sopro no microfone em P e B; corta o grave que não é voz"/>
-    {!mais && <button data-audio-mais="1" onClick={function(){ setMaisAb(true); }} style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"center",margin:"2px 0 4px"})}>Mais ajustes (zumbido, equalizador)</button>}
-    {mais && (<div>
+    <_EvpMais id="audio" rotulo="Zumbido e equalizador" aberto={mais}>{/* v71: mesmo "Mais" dos outros painéis */}
+    <div>
     <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",margin:"2px 0 8px"}}>
       <span style={{fontSize:12,fontWeight:700}}>Tirar zumbido (hum)</span>
       {[[0,"Não"],[60,"60 Hz (Brasil)"],[50,"50 Hz"]].map(function(o){ return <button key={o[0]} onClick={function(){ setA({ hum:o[0] || 0 }); }} style={_evpChip(_evpNum(au.hum, 0) === o[0])}>{o[1]}</button>; })}
@@ -129373,7 +129513,7 @@ function _EvpAudioExtra({ au, mudar }){
           onPointerUp={function(){ setA({ eq:eqLocal }); }} onKeyUp={function(){ setA({ eq:eqLocal }); }} style={{writingMode:"vertical-lr",direction:"rtl",height:90,width:22,accentColor:_EVP_COR.roxo}}/>
         <div style={{fontSize:10.5,color:_EVP_COR.fraco}}>{f}</div></div>; })}
     </div>
-    </div>)}
+    </div></_EvpMais>
     <button onPointerDown={function(){ antes(true); }} onPointerUp={function(){ antes(false); }} onPointerLeave={function(){ antes(false); }}
       title="Segure com o vídeo tocando: ouve o som original, sem nenhuma limpeza" style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginTop:10})}>Ouvir antes/depois (segure)</button>
   </div>);
@@ -129614,31 +129754,28 @@ function _EvpAparar({ c, p, calc, mudar, infoClipe, tempo }){
       if(_evpAnimTem(q)) q.anim.pts.forEach(function(pt){ pt.t = _evpR4(pt.t + dd); });          // os pontos ◆ andam junto com o trecho
       if(Array.isArray(q.volPts)) q.volPts = q.volPts.map(function(v){ return [Math.round((v[0] + dd) * 1000) / 1000, v[1]]; }); });
   };
-  const btns = function(fn, rot){ return <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
-    {[[-1, "−1 s"], [-Q, "−1 quadro"], [Q, "+1 quadro"], [1, "+1 s"]].map(function(q){ return <button key={q[1]} onClick={function(){ fn(q[0]); }} aria-label={rot + " " + q[1]} style={Object.assign(_evpBtn(), {padding:"5px 8px",fontSize:11.5})}>{q[1]}</button>; })}
+  /* v71: passos numa barra só (« 1 s · ‹ 1 quadro · 1 quadro › · 1 s ») */
+  const btns = function(fn, rot){ return <div className="evp-seg" style={{display:"flex",gap:2,padding:3,borderRadius:10,background:_EVP_COR.linha2,border:"1px solid " + _EVP_COR.linha}}>
+    {[[-1, "−1 s", "−1 s"], [-Q, "−1 quadro", "−1 quadro"], [Q, "+1 quadro", "+1 quadro"], [1, "+1 s", "+1 s"]].map(function(q, k){ return <button key={q[2]} onClick={function(){ fn(q[0]); }} aria-label={rot + " " + q[2]} title={q[2]}
+      style={{font:"inherit",flex:k === 1 || k === 2 ? "1.4 1 0" : "1 1 0",minWidth:0,padding:"7px 2px",borderRadius:8,border:0,borderLeft:k ? "1px solid " + _EVP_COR.linha : 0,cursor:"pointer",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",background:"transparent",color:_EVP_COR.ink}}>{q[1]}</button>; })}
   </div>; };
+  const agulha = function(fn){ return <button onClick={fn} title="Levar o corte até a agulha" style={Object.assign(_evpBtn("suave"), {padding:"3px 9px",fontSize:11})}>Até a agulha</button>; };
   const o = p.clips[i]; if(!o || !cc) return null;
   const dur = durDe(o), temAnt = i > 0, temProx = i < p.clips.length - 1;
   return (<div>
-    <div style={{fontSize:12,color:_EVP_COR.sub,lineHeight:1.5,marginBottom:6}}>Ajuste fino do corte, quadro a quadro.</div>
-    {temAnt && (<div>
-      <div style={_EVP_TIT}>Corte com o clipe anterior</div>
-      {btns(function(d){ rolar(i - 1, d); }, "Corte anterior")}
-      {tempo > cc.t0 - 3 && tempo < cc.t1 && <button onClick={function(){ rolar(i - 1, tempo - cc.t0); }} style={Object.assign(_evpBtn("suave"), {marginTop:6})}>Levar o corte até a agulha</button>}
-    </div>)}
-    {temProx && (<div>
-      <div style={_EVP_TIT}>Corte com o próximo clipe</div>
-      {btns(function(d){ rolar(i, d); }, "Corte seguinte")}
-      {tempo > cc.t0 && tempo < cc.t1 + 3 && <button onClick={function(){ rolar(i, tempo - cc.t1); }} style={Object.assign(_evpBtn("suave"), {marginTop:6})}>Levar o corte até a agulha</button>}
-    </div>)}
-    <div style={_EVP_TIT}>Trocar o trecho do bruto (mesma duração)</div>
-    <div title={"Bruto de " + seg(dur) + " · usando " + seg(o.ini) + " até " + seg(o.fim)} style={{position:"relative",height:16,borderRadius:6,background:_EVP_COR.linha2,margin:"2px 0 8px",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:0,bottom:0,left:(o.ini / Math.max(0.1, dur) * 100) + "%",width:Math.max(1, (o.fim - o.ini) / Math.max(0.1, dur) * 100) + "%",background:_EVP_COR.roxo,borderRadius:6}}/>
-    </div>
-    <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:6,fontFamily:_EVP_MONO}}>{seg(o.ini)} → {seg(o.fim)} de {seg(dur)}</div>
-    {btns(deslizar, "Trecho do bruto")}
-    <input type="range" min={0} max={Math.max(0, dur - (o.fim - o.ini))} step={0.01} value={o.ini} aria-label="Começo do trecho no bruto"
-      onChange={function(e){ deslizar(Number(e.target.value) - o.ini); }} style={{width:"100%",marginTop:8,accentColor:"#7c3aed"}}/>
+    {temAnt && <_EvpGrupo solto titulo="Começo (corte com o anterior)" estilo={{marginTop:0}} extra={tempo > cc.t0 - 3 && tempo < cc.t1 ? agulha(function(){ rolar(i - 1, tempo - cc.t0); }) : null}>
+      {btns(function(d){ rolar(i - 1, d); }, "Corte anterior")}</_EvpGrupo>}
+    {temProx && <_EvpGrupo solto titulo="Fim (corte com o próximo)" estilo={temAnt ? null : {marginTop:0}} extra={tempo > cc.t0 && tempo < cc.t1 + 3 ? agulha(function(){ rolar(i, tempo - cc.t1); }) : null}>
+      {btns(function(d){ rolar(i, d); }, "Corte seguinte")}</_EvpGrupo>}
+    <_EvpGrupo titulo="Trecho do bruto" extra={<span style={{fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.fraco}}>{seg(o.ini)} → {seg(o.fim)} de {seg(dur)}</span>}>
+      <div title={"Bruto de " + seg(dur) + " · usando " + seg(o.ini) + " até " + seg(o.fim)} style={{position:"relative",height:14,borderRadius:6,background:_EVP_COR.linha2,margin:"0 0 10px",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:0,bottom:0,left:(o.ini / Math.max(0.1, dur) * 100) + "%",width:Math.max(1, (o.fim - o.ini) / Math.max(0.1, dur) * 100) + "%",background:_EVP_COR.roxo,borderRadius:6}}/>
+      </div>
+      {btns(deslizar, "Trecho do bruto")}
+      <input type="range" className="evp-r" min={0} max={Math.max(0, dur - (o.fim - o.ini))} step={0.01} value={o.ini} aria-label="Começo do trecho no bruto"
+        onChange={function(e){ deslizar(Number(e.target.value) - o.ini); }} style={{marginTop:10,"--p":(Math.max(0, dur - (o.fim - o.ini)) > 0 ? o.ini / Math.max(0.01, dur - (o.fim - o.ini)) * 100 : 0) + "%"}}/>
+      <_EvpDica>Troca qual parte do bruto aparece, sem mudar a duração.</_EvpDica>
+    </_EvpGrupo>
   </div>);
 }
 
@@ -131071,7 +131208,8 @@ function _EvpPainelMenu(q){
   };
   const envImgRef = useRef(null); envImgRef.current = enviarImagem;                       // v25: arrastar imagem para o Estúdio
   useEffect(function(){ if(q.papel === "ferr") return; const f = function(e){ if(e.detail && e.detail.tipo === "imagem") envImgRef.current(e.detail.f); }; window.addEventListener("evp-arquivo", f); return function(){ window.removeEventListener("evp-arquivo", f); }; }, []);
-  const caixa = Object.assign({}, _EVP_PAINEL, { padding:12, minHeight:0, overflow:"auto", height:"100%", boxSizing:"border-box" });
+  const caixa = q.papel === "ferr" ? { padding:"12px 14px 16px", minHeight:0, overflow:"auto", height:"100%", boxSizing:"border-box" }   // v71: dentro do cartão da ferramenta (um cartão só)
+    : Object.assign({}, _EVP_PAINEL, { padding:12, minHeight:0, overflow:"auto", height:"100%", boxSizing:"border-box" });
   const cab = function(icone, titulo, sub){ return <div style={{marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}>
     <span style={{color:_EVP_COR.roxo}}><_EvpIco n={icone}/></span>{titulo}</div>{sub && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2}}>{sub}</div>}</div>; };
   const linhaBtn = { font:"inherit", width:"100%", display:"flex", alignItems:"center", gap:9, textAlign:"left", padding:"9px 10px", borderRadius:10, borderWidth:1, borderStyle:"solid", borderColor:_EVP_COR.linha,
@@ -131387,19 +131525,19 @@ function _EvpPainelMenu(q){
           style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center"})}><_EvpIco n="transicao" s={16}/>Brilho dourado na agulha</button>
         </div>); };
   S.transTodos = function(){ return (<div>
-        <div style={_EVP_TIT}>Transição em todos os cortes</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {_EVP_TRANS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.clips.forEach(function(c, i){ c.trans = i ? o.id : "corte"; }); }); _evToast("success", "Transição: " + o.label); }} style={_evpChip(false)}>{o.label}</button>; })}
+        <div style={{..._EVP_TIT, marginTop:0}}>Transição em todos os cortes</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>{/* v71: grade */}
+          {_EVP_TRANS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.clips.forEach(function(c, i){ c.trans = i ? o.id : "corte"; }); }); _evToast("success", "Transição: " + o.label); }} style={Object.assign(_evpChip(false), {justifyContent:"center",padding:"9px 6px"})}>{o.label}</button>; })}
         </div>
         </div>); };
   S.luz = function(){ return (<div>
-        <div style={_EVP_TIT}>Luz só nas trocas de cena</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        <div style={{..._EVP_TIT, marginTop:0}}>Luz só nas trocas de cena</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
           {_EVP_TRANS_LUZ.map(function(id){ const o = _EVP_TRANS.find(function(q){ return q.id === id; }) || { label:id };
             return <button key={id} onClick={function(){ let n = 0; mudar(function(np){ np.clips.forEach(function(c, i){ if(i && np.clips[i-1].clipe !== c.clipe && !(_evpNum(c.congelar, 0) > 0)){ c.trans = id; n++; } }); });
-              _evToast(n ? "success" : "warning", n ? o.label + " em " + n + " troca" + (n > 1 ? "s" : "") + " de cena" : "Não tem troca de cena (todos os clipes são do mesmo vídeo)"); }} style={_evpChip(false)}>{o.label}</button>; })}
+              _evToast(n ? "success" : "warning", n ? o.label + " em " + n + " troca" + (n > 1 ? "s" : "") + " de cena" : "Não tem troca de cena (todos os clipes são do mesmo vídeo)"); }} style={Object.assign(_evpChip(false), {justifyContent:"center",padding:"9px 6px"})}>{o.label}</button>; })}
         </div>
-        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Troca de cena = o clipe vem de outro vídeo. Os outros cortes continuam como estão.</div>
+        <_EvpDica>Só onde o clipe vem de outro vídeo. Os outros cortes ficam como estão.</_EvpDica>
         </div>); };
 
   /* ── Legenda ── */
@@ -131500,10 +131638,11 @@ function _EvpPainelMenu(q){
 /* v41: PAINEL DA FERRAMENTA (lado direito) — a seção que a barrinha pediu, com os mesmos blocos do menu */
 function _EvpPainelFerramenta({ ferramenta, sub, rotulo, subRotulo, fechar, propsMenu }){
   return (
-    <div data-painel-ferr={ferramenta + ":" + sub} style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
-      <div style={Object.assign({}, _EVP_PAINEL, {display:"flex",alignItems:"center",gap:8,padding:"8px 10px",marginBottom:6,flexShrink:0})}>
-        <span style={{color:_EVP_COR.roxo,display:"grid"}}><_EvpIco n={((_EVP_FERR_GLOBAL.find(function(f){ return f.id === ferramenta; })) || {}).icone || "editar"} s={16}/></span>
-        <span style={{flex:1,minWidth:0,fontSize:12.5,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotulo}<span style={{color:_EVP_COR.fraco}}> › </span>{subRotulo || sub}</span>
+    <div data-painel-ferr={ferramenta + ":" + sub} style={Object.assign({}, _EVP_PAINEL, {display:"flex",flexDirection:"column",height:"100%",minHeight:0,overflow:"hidden",boxSizing:"border-box"})}>{/* v71: um cartão só, cabeçalho igual ao do inspetor */}
+      <div style={{display:"flex",alignItems:"center",gap:9,padding:"12px 12px 12px 14px",borderBottom:"1px solid " + _EVP_COR.linha2,flexShrink:0}}>
+        <span style={{width:30,height:30,borderRadius:9,display:"grid",placeItems:"center",background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,flexShrink:0}}><_EvpIco n={((_EVP_FERR_GLOBAL.find(function(f){ return f.id === ferramenta; })) || {}).icone || "editar"} s={17}/></span>
+        <span style={{flex:1,minWidth:0}}><span style={{display:"block",fontSize:14.5,fontWeight:800,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{subRotulo || sub}</span>
+          <span style={{display:"block",fontSize:11.5,color:_EVP_COR.fraco,marginTop:1}}>{rotulo}</span></span>
         <button onClick={fechar} aria-label="Fechar a seção da ferramenta" title="Fechar (volta para o inspetor / IA)" style={Object.assign(_evpBtn("icone"), {padding:5})}><_EvpIco n="fechar" s={14}/></button>
       </div>
       <div style={{flex:1,minHeight:0}}><_EvpPainelMenu {...propsMenu} menu={"ferr:" + ferramenta + ":" + sub} papel="ferr"/></div>
@@ -131812,18 +131951,75 @@ function _EvpMusicas(q){
   );
 }
 
+/* v71 (07/10/2026): TROCAR A MÚSICA — a que está em uso em cima (com ouvir) e a lista embaixo, com busca. Um clique troca. */
+function _EvpTrocarMusica({ p, calc, musicas, musInfo, setMusica }){
+  const [busca, setBusca] = useState(""); const [toc, setToc] = useState(null);
+  useEffect(function(){ return function(){ if(_evpPlayer){ try{ _evpPlayer.pause(); }catch(_){} } }; }, []);
+  const idAtual = p.musica ? p.musica.id : null, objetivo = p.objetivo || "";
+  const atual = (musicas || []).find(function(m){ return m.id === idAtual; }) || (idAtual ? { id:idAtual, nome:(musInfo && musInfo.nome) || "Música", fonte:musInfo && musInfo.fonte } : null);
+  const lista = useMemo(function(){ const b = _evNorm(busca);
+    return (musicas || []).filter(function(m){ return m.id !== idAtual && (!b || _evNorm(m.nome + " " + (m.genero || "") + " " + (m.clima || "")).indexOf(b) >= 0); })
+      .map(function(m){ return Object.assign({}, m, { nota:objetivo ? _evpNotaMusica(m, objetivo, calc.total) : null }); })
+      .sort(function(a, b2){ return (b2.nota == null ? -1 : b2.nota) - (a.nota == null ? -1 : a.nota); }); }, [musicas, busca, idAtual, objetivo, calc.total]);
+  const ouvir = function(m, ev){ if(ev) ev.stopPropagation();
+    try{ if(toc === m.id && _evpPlayer){ _evpPlayer.pause(); setToc(null); return; }
+      if(!m.url){ _evToast("info", "Esta música está sem arquivo para ouvir."); return; }
+      if(!_evpPlayer) _evpPlayer = new Audio();
+      _evpPlayer.pause(); _evpPlayer.src = m.url; _evpPlayer.currentTime = 0; _evpPlayer.volume = 0.8; _evpPlayer.onended = function(){ setToc(null); };
+      const pr = _evpPlayer.play(); if(pr && pr.catch) pr.catch(function(){ setToc(null); }); setToc(m.id); }catch(_){ setToc(null); } };
+  const meta = function(m){ return [m.genero, m.bpm ? m.bpm + " BPM" : null, m.duracao ? _evTempo(m.duracao).replace(/\.\d$/, "") : null].filter(Boolean).join(" · "); };
+  const play = function(m, grande){ const on = toc === m.id;
+    return <button onClick={function(e){ ouvir(m, e); }} aria-label={(on ? "Parar " : "Ouvir ") + m.nome} title={on ? "Parar" : "Ouvir"}
+      style={{width:grande ? 38 : 30,height:grande ? 38 : 30,borderRadius:99,border:0,flexShrink:0,cursor:"pointer",display:"grid",placeItems:"center",
+        background:on ? _EVP_COR.roxoFixo : (grande ? _EVP_COR.roxoFixo : _EVP_COR.linha2),color:on || grande ? "#fff" : _EVP_COR.ink}}><_EvpIco n={on ? "pause" : "play"} s={grande ? 16 : 13}/></button>; };
+  const envato = atual && /envato/i.test(atual.fonte || (musInfo && musInfo.fonte) || "");
+  return (
+    <div data-trocar-musica="1">
+      {atual && <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,background:_EVP_COR.roxoSoft,border:"1px solid rgba(139,92,246,.35)"}}>
+        {play(atual, true)}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,fontWeight:700,color:_EVP_COR.roxo}}>Em uso</div>
+          <div title={atual.nome} style={{fontSize:13.5,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{atual.nome}</div>
+          {meta(atual) && <div style={{fontSize:11,color:_EVP_COR.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{meta(atual)}</div>}
+        </div></div>}
+      {envato && <div style={{display:"flex",gap:6,alignItems:"center",marginTop:8,fontSize:11.5,color:_EV.amarelo,fontWeight:600}}><_EvpIco n="licenca" s={13}/>Envato: registre a licença antes de publicar.</div>}
+      <div style={{position:"relative",margin:"14px 0 8px"}}>
+        <span style={{position:"absolute",left:10,top:8,color:_EVP_COR.fraco,display:"grid"}}><_EvpIco n="busca" s={15}/></span>
+        <input value={busca} onChange={function(e){ setBusca(e.target.value); }} onKeyDown={function(e){ e.stopPropagation(); }} placeholder="Buscar música" aria-label="Buscar música"
+          style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"8px 10px 8px 32px",borderRadius:10,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,fontSize:12.5,userSelect:"text"}}/>
+      </div>
+      <div style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub,margin:"0 2px 6px"}}>{objetivo ? "Melhores para este vídeo" : "Trocar por"}</div>
+      <div style={{display:"grid",gap:2}}>
+        {lista.map(function(m){ return (
+          <div key={m.id} role="button" tabIndex={0} data-musica={m.id} onClick={function(){ setMusica(m.id); _evToast("success", "Música trocada: " + m.nome); }}
+            onKeyDown={function(e){ if(e.key === "Enter"){ e.preventDefault(); setMusica(m.id); } }} title={"Usar " + m.nome}
+            className="evp-acao" style={{display:"flex",alignItems:"center",gap:10,padding:"7px 8px",borderRadius:10,cursor:"pointer",background:"transparent"}}>
+            {play(m)}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.nome}</div>
+              <div style={{fontSize:11,color:_EVP_COR.fraco,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{meta(m)}</div>
+            </div>
+            {m.nota != null && <span title="Quanto combina com o objetivo do vídeo" style={{fontFamily:_EVP_MONO,fontSize:10.5,fontWeight:700,padding:"2px 6px",borderRadius:6,background:m.nota >= 60 ? _EVP_COR.ok : _EVP_COR.linha2,color:m.nota >= 60 ? _EV.verde : _EVP_COR.sub}}>{m.nota}%</span>}
+          </div>); })}
+        {!lista.length && <div style={{fontSize:12,color:_EVP_COR.fraco,padding:"8px 2px"}}>{busca ? "Nenhuma música com esse nome." : "Nenhuma outra música na biblioteca."}</div>}
+      </div>
+      <_EvpDica>Enviar músicas novas: Áudio › Músicas.</_EvpDica>
+    </div>);
+}
+
 /* v10e: quanto a música fica abaixo da voz (voz nivelada a −18 dB) — a IA e o Estúdio usam a mesma conta */
 function _EvpNivelMusica({ mu, nivel, aplicarVol }){
+  /* v71: uma linha só — bolinha + situação + "Acertar" (os números em dB ficam no "?" ao passar o mouse) */
   const nf = _evpMusNaFala(mu, nivel), ideal = _evpVolIdeal(mu, nivel);
-  const st = !nf ? null : nf.fala < -36 ? ["baixa", "Baixa demais: some no celular", _EV.amarelo, _EVP_COR.aviso] : nf.fala > -25 ? ["alta", "Alta: pode cobrir a voz", _EV.verm, _EV.vermClaro] : ["ok", "No ponto: presente sem cobrir a voz", _EV.verde, _EVP_COR.ok];
+  const st = !nf ? null : nf.fala < -36 ? ["baixa", "Baixa demais: some no celular", _EV.amarelo] : nf.fala > -25 ? ["alta", "Alta: pode cobrir a voz", _EV.verm] : ["ok", "No ponto: não cobre a voz", _EV.verde];
+  const acertar = nf && Math.abs(ideal - _evpNum(mu.vol, 0.15)) >= 0.02;
   return (
-    <div style={{border:"1px solid " + _EVP_COR.linha,borderRadius:10,padding:"8px 10px",margin:"2px 0 10px",background:_EVP_COR.faixa,fontSize:11.5}}>
-      {nf ? (<div>
-        <div style={{display:"flex",gap:6,alignItems:"center",fontWeight:800,color:st[2]}}><span style={{width:8,height:8,borderRadius:9,background:st[2]}}/>{st[1]}</div>
-        <div style={{color:_EVP_COR.sub,marginTop:3,fontFamily:_EVP_MONO,fontSize:10.5}}>música na fala {nf.fala} dB · sem fala {nf.solta} dB · voz −18 dB</div>
-      </div>) : <div style={{color:_EVP_COR.sub}}>Medindo o volume desta música…</div>}
-      {nf && Math.abs(ideal - _evpNum(mu.vol, 0.15)) >= 0.02 && (
-        <button onClick={function(){ aplicarVol(ideal); }} style={Object.assign(_evpBtn(st && st[0] !== "ok" ? "primario" : "suave"), {width:"100%",justifyContent:"center",marginTop:7})}>Acertar volume ({Math.round(ideal * 100)}%): uns 13 dB abaixo da voz</button>)}
+    <div data-nivel-musica="1" title={nf ? "Música na fala " + nf.fala + " dB · sem fala " + nf.solta + " dB · voz −18 dB" : ""}
+      style={{display:"flex",alignItems:"center",gap:8,margin:"-2px 0 4px",minHeight:30,fontSize:12,color:_EVP_COR.sub}}>
+      {nf ? <span style={{width:8,height:8,borderRadius:9,background:st[2],flexShrink:0}}/> : null}
+      <span style={{flex:1,minWidth:0,color:nf ? _EVP_COR.ink : _EVP_COR.fraco,fontWeight:nf ? 600 : 400}}>{nf ? st[1] : "Medindo o volume…"}</span>
+      {acertar && <button onClick={function(){ aplicarVol(ideal); }} title={"Deixa em " + Math.round(ideal * 100) + "% (uns 13 dB abaixo da voz)"}
+        style={Object.assign(_evpBtn(st && st[0] !== "ok" ? "primario" : "suave"), {padding:"5px 10px",fontSize:11.5})}>Acertar ({Math.round(ideal * 100)}%)</button>}
     </div>
   );
 }
@@ -131837,7 +132033,7 @@ function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
   const [areaSegura, setAreaSegura] = useState(function(){ try{ return localStorage.getItem("pxev-area-segura") === "1"; }catch(_){ return false; } });
   const mudarArea = function(v){ setAreaSegura(v); try{ localStorage.setItem("pxev-area-segura", v ? "1" : "0"); }catch(_){} try{ window.dispatchEvent(new Event("pxev-area-segura")); }catch(_){} };
   const sel = {font:"inherit",padding:"6px 8px",borderRadius:9,border:"1px solid "+_EVP_COR.linha,fontSize:12,background:_EVP_COR.campo};
-  const tit = function(x){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:_EVP_COR.sub,margin:"8px 0 4px"}}>{x}</div>; };
+  const tit = function(x){ return <div style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub,margin:"12px 0 6px"}}>{x}</div>; };   // v71
   // v10e: cores livres — bolinhas prontas + qualquer cor
   const corKit = /^#[0-9a-fA-F]{6}$/.test(String(kit.cor_principal || "")) ? kit.cor_principal : "#7c3aed";
   const paleta = [["#ffffff","Branco"],["#facc15","Amarelo"],[corKit,"Cor do cliente"],["#22c55e","Verde"],["#f97316","Laranja"],["#ef4444","Vermelho"],["#3b82f6","Azul"],["#111111","Preto"]];
@@ -132139,12 +132335,16 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
    V1 vídeo principal · V2–V10 camadas por cima (apoio, tela sobre tela, logo): V10 fica em cima de todas. */
 const _EVP_NOME_A = { A1:"Fala dos vídeos", A2:"Música", A3:"Narração", A4:"Efeitos sonoros" };
 function _EvpCanalSel({ letra, valor, min, onChange }){
+  /* v71: uma linha só — "Canal" + caixinha de escolher (antes eram 9 botões V2…V10 em todas as abas) */
   const ns = []; for(let k=min;k<=10;k++) ns.push(k);
   return (
-    <div style={{margin:"4px 0 10px"}}>
-      <div style={{fontSize:11,fontWeight:700,color:_EVP_COR.sub,marginBottom:4}}>{letra === "V" ? "Canal de vídeo (V10 fica em cima)" : "Canal de áudio (volume no Mixer do menu Áudio)"}</div>
-      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{ns.map(function(k){ return <button key={k} onClick={function(){ onChange(k); }} style={Object.assign(_evpChip(valor === k), {padding:"3px 8px",fontSize:11,fontFamily:_EVP_MONO})}>{letra}{k}</button>; })}</div>
-    </div>);
+    <label data-canal-sel={letra} title={letra === "V" ? "V10 fica por cima de todos" : "O volume de cada canal fica no Mixer (Áudio › Mixer)"}
+      style={{display:"flex",alignItems:"center",gap:10,minHeight:36,margin:"2px 0 8px",fontSize:13,fontWeight:600,color:_EVP_COR.ink}}>
+      <span style={{flex:1}}>{letra === "V" ? "Camada de vídeo" : "Canal de áudio"}</span>
+      <select value={valor} aria-label={letra === "V" ? "Canal de vídeo" : "Canal de áudio"} onChange={function(e){ onChange(Number(e.target.value)); }}
+        style={{font:"inherit",fontFamily:_EVP_MONO,fontSize:12,fontWeight:700,padding:"5px 8px",borderRadius:8,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,cursor:"pointer"}}>
+        {ns.map(function(k){ return <option key={k} value={k}>{letra}{k}</option>; })}</select>
+    </label>);
 }
 function _EvpMixer({ p, mudar, ctl }){
   const cs = p.canais || {}, fx = p.faixas || {};
@@ -132258,7 +132458,7 @@ function _EvpOnda({ clipe, ini, fim, w, h, cor, mudo, vol }){
   return <canvas ref={ref} style={{width:w, height:h, display:"block"}}/>;
 }
 
-function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef, fala, marcaCorr, onCorrecao, abrirAnimar, ctxMenu, io, abrirHist, travarFaixa }){
+function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, pxs, setPxs, infoClipe, setP, pRef, confirmar, mudar, tocando, cortar, duplicar, apagar, musInfo, batidas, gravando, comentarios, alt, onAlt, desfazer, refazer, podeDesf, podeRef, fala, marcaCorr, onCorrecao, abrirAnimar, ctxMenu, io, abrirHist, travarFaixa, mob }){
   _evpUsarMidia();
   const scRef = useRef(null), inRef = useRef(null), ancora = useRef(null);
   const [ima, setIma] = useState(true);
@@ -132321,7 +132521,9 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
       if(quadro){ cancelAnimationFrame(quadro); aplicar(); }
       if(movido && soltar){ const np = soltar(anterior); if(np) confirmar(anterior, np); }
       else if(movido && ultimo) confirmar(anterior, ultimo); else if(movido) setP(anterior); else if(clique) clique(ev); };
-    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+    const cancela = function(){ window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancela); setArr(null);
+      if(quadro) cancelAnimationFrame(quadro); if(movido) setP(anterior); };   // v71: no celular o dedo que rola a linha do tempo cancela o arraste
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", cancela);
   };
 
   /* régua / fundo: leva a agulha (arrastando = passa o vídeo) */
@@ -132555,12 +132757,21 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
   };
 
   return (
-    <div style={{position:"relative",background:_EVP_TL.fundo,color:_EVP_TL.texto,borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",height:alt || undefined,
-        border:"1px solid " + _EVP_TL.linha,boxShadow:"0 18px 40px -24px rgba(0,0,0,.7)"}}>
-      {onAlt && <div onPointerDown={puxarAlt} title="Arraste para aumentar ou diminuir a linha do tempo" aria-label="Altura da linha do tempo"
+    <div style={Object.assign({position:"relative",background:_EVP_TL.fundo,color:_EVP_TL.texto,borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",height:alt || undefined,
+        border:"1px solid " + _EVP_TL.linha,boxShadow:"0 18px 40px -24px rgba(0,0,0,.7)"}, mob ? { height:"100%", borderRadius:0, border:0, boxShadow:"none" } : {})}>
+      {mob && <div style={{display:"flex",gap:4,alignItems:"center",padding:"4px 8px",borderBottom:"1px solid "+_EVP_TL.linha,flexShrink:0}}>{/* v71: celular — só o essencial */}
+        <button onClick={cortar} aria-label="Dividir" style={btnT(false)}><_EvpIco n="dividir" s={16}/></button>
+        <button onClick={duplicar} aria-label="Duplicar" style={btnT(false)}><_EvpIco n="duplicar" s={16}/></button>
+        <button onClick={apagar} aria-label="Apagar" style={Object.assign(btnT(false), {color:"#fca5a5"})}><_EvpIco n="apagar" s={16}/></button>
+        <span style={{flex:1}}/>
+        <button onClick={function(){ setPxs(function(z){ return Math.max(6, z / 1.4); }); }} aria-label="Afastar" style={btnT(false)}><_EvpIco n="zoomMenos" s={16}/></button>
+        <button onClick={function(){ setPxs(function(z){ return Math.min(400, z * 1.4); }); }} aria-label="Aproximar" style={btnT(false)}><_EvpIco n="zoomMais" s={16}/></button>
+        <button onClick={encaixarTela} aria-label="Ver tudo" style={btnT(false)}><_EvpIco n="encaixar" s={16}/></button>
+      </div>}
+      {onAlt && !mob && <div onPointerDown={puxarAlt} title="Arraste para aumentar ou diminuir a linha do tempo" aria-label="Altura da linha do tempo"
         style={{position:"absolute",left:0,right:0,top:0,height:7,cursor:"ns-resize",zIndex:12,display:"flex",justifyContent:"center"}}>
         <span style={{width:54,height:4,borderRadius:9,background:_EVP_TL.linha,marginTop:2}}/></div>}
-      <div style={{display:"flex",gap:6,alignItems:"center",padding:"9px 12px 8px",borderBottom:"1px solid "+_EVP_TL.linha,fontSize:12,flexShrink:0}}>
+      <div style={{display:mob ? "none" : "flex",gap:6,alignItems:"center",padding:"9px 12px 8px",borderBottom:"1px solid "+_EVP_TL.linha,fontSize:12,flexShrink:0}}>
         <b style={{fontSize:13.5,marginRight:2}} title="Arraste o meio do clipe para trocar de lugar · puxe as bordas para aparar · arraste a linha amarela da Fala para o volume · Ctrl + roda = zoom">Linha do tempo</b>
         <span style={{color:_EVP_TL.sub,fontFamily:_EVP_MONO,fontSize:11.5,marginRight:6}}>{calc.clips.length} clipe{calc.clips.length === 1 ? "" : "s"} · {_evTempo(calc.total)}</span>
         <button onClick={cortar} title="Dividir na agulha (S)" aria-label="Dividir" style={btnT(false)}><_EvpIco n="dividir" s={15}/>Dividir</button>
@@ -132585,15 +132796,15 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
       </div>
       <div style={{display:"flex",flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden"}}>
         {/* nomes e controles das faixas */}
-        <div style={{width:124,flexShrink:0,borderRight:"1px solid "+_EVP_TL.linha,background:_EVP_TL.nome,alignSelf:"flex-start",minHeight:"100%"}}>
+        <div style={{width:mob ? 30 : 124,flexShrink:0,borderRight:"1px solid "+_EVP_TL.linha,background:_EVP_TL.nome,alignSelf:"flex-start",minHeight:"100%",overflow:"hidden"}}>
           <div style={{height:_EVP_REGUA,borderBottom:"1px solid "+_EVP_TL.linha,background:_EVP_TL.regua}}/>
           {_EVP_FAIXAS.map(function(f){ const c = ctrlFaixa[f.id];
             return <div key={f.id} style={{height:alturaFaixa(f.id),borderBottom:f.divisoria ? _EVP_DIVISORIA : "1px solid "+_EVP_TL.linha,display:"flex",alignItems:"center",gap:7,padding:"0 6px 0 8px",fontSize:12,fontWeight:700,color:_EVP_TL.sub,boxSizing:"border-box"}}>
-              {f.tag && <span style={{fontSize:9.5,fontWeight:800,fontFamily:_EVP_MONO,color:f.tag[0] === "V" ? "#93c5fd" : f.tag[0] === "A" ? "#86efac" : "#fcd34d",opacity:0.85,minWidth:16}}>{f.tag}</span>}
-              <_EvpIco n={f.icone} s={14}/>{f.label}
-              {c && <button onClick={c.fn} title={c.dica} aria-label={c.dica} style={{font:"inherit",marginLeft:"auto",width:24,height:22,borderRadius:6,border:0,background:c.on ? "transparent" : "rgba(239,68,68,.2)",color:c.on ? _EVP_TL.sub : "#fca5a5",cursor:"pointer",display:"grid",placeItems:"center"}}>
+              {f.tag && !mob && <span style={{fontSize:9.5,fontWeight:800,fontFamily:_EVP_MONO,color:f.tag[0] === "V" ? "#93c5fd" : f.tag[0] === "A" ? "#86efac" : "#fcd34d",opacity:0.85,minWidth:16}}>{f.tag}</span>}
+              <_EvpIco n={f.icone} s={14}/>{!mob && f.label}
+              {c && !mob && <button onClick={c.fn} title={c.dica} aria-label={c.dica} style={{font:"inherit",marginLeft:"auto",width:24,height:22,borderRadius:6,border:0,background:c.on ? "transparent" : "rgba(239,68,68,.2)",color:c.on ? _EVP_TL.sub : "#fca5a5",cursor:"pointer",display:"grid",placeItems:"center"}}>
                 <_EvpIco n={c.on ? c.ico[0] : c.ico[1]} s={14}/></button>}
-              {(function(){ const tv = !!(p.travas && p.travas[f.id]); return <button onClick={function(){ if(travarFaixa) travarFaixa(f.id); }} aria-pressed={tv} aria-label={(tv ? "Destravar" : "Travar") + " a faixa " + f.label}
+              {!mob && (function(){ const tv = !!(p.travas && p.travas[f.id]); return <button onClick={function(){ if(travarFaixa) travarFaixa(f.id); }} aria-pressed={tv} aria-label={(tv ? "Destravar" : "Travar") + " a faixa " + f.label}
                 title={tv ? "Faixa travada: clique para destravar" : "Travar a faixa (não arrasta, não apaga)"} style={{font:"inherit",marginLeft:c ? 2 : "auto",width:22,height:22,borderRadius:6,border:0,background:tv ? "rgba(234,179,8,.22)" : "transparent",
                   color:tv ? "#facc15" : _EVP_TL.sub,cursor:"pointer",display:"grid",placeItems:"center",opacity:tv ? 1 : 0.55}}><_EvpCadeado on={tv} s={13}/></button>; })()}
             </div>; })}
@@ -132602,7 +132813,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
         <div ref={scRef} style={{flex:1,minWidth:0,overflowX:"auto",overflowY:"hidden",position:"relative"}}>
           <div ref={inRef} style={{position:"relative",width:larg,minWidth:"100%",display:"flex",flexDirection:"column"}}>{/* v41: a ordem das faixas vem do "order" (régua = 0) */}
             {/* régua */}
-            <div onPointerDown={agulha} style={{position:"relative",order:0,flexShrink:0,height:_EVP_REGUA,borderBottom:"1px solid "+_EVP_TL.linha,cursor:"pointer",background:_EVP_TL.regua,
+            <div onPointerDown={agulha} style={{position:"relative",order:0,flexShrink:0,height:_EVP_REGUA,touchAction:"none",borderBottom:"1px solid "+_EVP_TL.linha,cursor:"pointer",background:_EVP_TL.regua,
               backgroundImage:"repeating-linear-gradient(to right, #343b5c 0 1px, transparent 1px " + (passo*pxs/4) + "px)",backgroundSize:"100% 5px",backgroundRepeat:"no-repeat",backgroundPosition:"0 100%"}}>
               {marcas.map(function(s){ return <div key={s} style={{position:"absolute",left:s*pxs,top:0,bottom:0,borderLeft:"1px solid #3a4266",paddingLeft:4,fontSize:10.5,color:_EVP_TL.sub,fontWeight:600,fontFamily:_EVP_MONO,pointerEvents:"none",lineHeight:"16px"}}>{_evpRotuloT(s)}</div>; })}
               {io && <div title={"Trecho " + _evTempo(io.a) + " – " + _evTempo(io.b) + " (I / O)"} aria-label="Trecho de entrada e saída" style={{position:"absolute",left:io.a*pxs,width:Math.max(2, (io.b - io.a)*pxs),top:0,bottom:0,background:"rgba(56,189,248,.22)",borderLeft:"2px solid #38bdf8",borderRight:"2px solid #38bdf8",pointerEvents:"none",zIndex:2}}/>}
@@ -133144,9 +133355,10 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
   const selCampo = { font:"inherit", padding:"6px 8px", borderRadius:9, border:"1px solid " + _EVP_COR.linha, fontSize:12, background:_EVP_COR.campo, color:_EVP_COR.ink, cursor:"pointer" };
   const chips = function(vals, atual, fn){ return <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>{vals.map(function(v){ return <button key={v[0]} onClick={function(){ fn(v[0]); }} aria-pressed={atual === v[0]} style={Object.assign(_evpChip(atual === v[0]), {padding:"4px 9px",fontSize:11.5})}>{v[1]}</button>; })}</div>; };
   const r1 = function(v){ return (Math.round(v * 10) / 10).toString().replace(".", ",") + " s"; };
-  const cab = <div style={{marginBottom:10}}>
-    <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{width:22,height:22,borderRadius:7,display:"grid",placeItems:"center",background:tp.cor,color:"#fff"}}><_EvpIco n={ferr === "tempo" ? "tempo" : tp.ico || "motion"} s={13}/></span>{ferr === "tempo" ? "Tempo" : ferr === "melhorar" ? "Melhorar com IA" : "Textos"}</div>
-    <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nomeItem} · {_evTempo(it.t0)}–{_evTempo(it.t1)}</div></div>;
+  const cab = <div style={{margin:"-2px -2px 12px",paddingBottom:12,borderBottom:"1px solid " + _EVP_COR.linha2,display:"flex",alignItems:"center",gap:9}}>{/* v71: igual ao cabeçalho dos outros painéis */}
+    <span style={{width:30,height:30,borderRadius:9,display:"grid",placeItems:"center",background:tp.cor,color:"#fff",flexShrink:0}}><_EvpIco n={ferr === "tempo" ? "tempo" : tp.ico || "motion"} s={16}/></span>
+    <div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:14.5,lineHeight:1.2}}>{ferr === "tempo" ? "Tempo" : ferr === "melhorar" ? "Melhorar com IA" : "Textos"}</div>
+      <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nomeItem} · {_evTempo(it.t0)}–{_evTempo(it.t1)}</div></div></div>;
   /* listas dentro da peça (palavras, itens, etapas, lugares) */
   const listaTxt = function(chave, arr, max, minN, maxN, rotK, novo, campoTxt){
     return <div>{arr.map(function(x, k){ const v = campoTxt ? x[campoTxt] : x;
@@ -133171,12 +133383,11 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
     corpo = <div>
       {num("Começa em", "t0")}{num("Termina em", "t1")}
       <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:10}}>Fica na tela por <b style={{color:_EVP_COR.ink}}>{r1(it.t1 - it.t0)}</b> (mínimo 0,4 s)</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        <button onClick={function(){ const t = evm.tempo; if(t >= it.t1 - 0.4){ _evToast("warning", "A agulha está depois do fim da peça."); return; } evm.mudarPeca(i, function(o){ o.t0 = Math.round(t * 1000) / 1000; }); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}>Começar na agulha</button>
-        <button onClick={function(){ const t = evm.tempo; if(t <= it.t0 + 0.4){ _evToast("warning", "A agulha está antes do começo da peça."); return; } evm.mudarPeca(i, function(o){ o.t1 = Math.round(t * 1000) / 1000; }); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}>Terminar na agulha</button>
-        <button onClick={function(){ const d = it.t1 - it.t0, t = Math.min(evm.tempo, evm.fim - d); if(t < 0) return; evm.mudarPeca(i, function(o){ const dd = t - o.t0; o.t0 = t; o.t1 = t + d; _evmDeslocar(o, dd); }); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}>Levar para a agulha</button>
-      </div>
-      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:10,lineHeight:1.5}}>Na linha do tempo: arraste o bloco na faixa Motion para mover e puxe as pontas para mudar a duração.</div></div>;
+      <_EvpAcoes colunas={3} itens={[
+        { id:"evm-comeca", icone:"tempo", label:"Começar na agulha", onClick:function(){ const t = evm.tempo; if(t >= it.t1 - 0.4){ _evToast("warning", "A agulha está depois do fim da peça."); return; } evm.mudarPeca(i, function(o){ o.t0 = Math.round(t * 1000) / 1000; }); } },
+        { id:"evm-termina", icone:"fim", label:"Terminar na agulha", onClick:function(){ const t = evm.tempo; if(t <= it.t0 + 0.4){ _evToast("warning", "A agulha está antes do começo da peça."); return; } evm.mudarPeca(i, function(o){ o.t1 = Math.round(t * 1000) / 1000; }); } },
+        { id:"evm-levar", icone:"mover", label:"Levar para a agulha", onClick:function(){ const d = it.t1 - it.t0, t = Math.min(evm.tempo, evm.fim - d); if(t < 0) return; evm.mudarPeca(i, function(o){ const dd = t - o.t0; o.t0 = t; o.t1 = t + d; _evmDeslocar(o, dd); }); } } ]}/>
+      <_EvpDica>Ou arraste o bloco na faixa Motion e puxe as pontas.</_EvpDica></div>;
   } else if(it.modelo === "manchete") corpo = <div>{C("rotulo", "Linha de cima (pequena)", 40)}{C("titulo", "Título", 40, true)}{C("sub", "Linha de baixo (itálico)", 60)}</div>;
   else if(it.modelo === "tarja") corpo = <div>{C("nome", "Nome", 28, true)}{C("funcao", "Função ou cidade", 56)}</div>;
   else if(it.modelo === "kinetic") corpo = <div>{listaTxt("palavras", it.palavras || [], 24, 1, 4, "Palavra", function(){ return "PALAVRA"; })}
@@ -133264,11 +133475,8 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
   </div>;
   return (
     <div style={caixa} data-evm-inspetor={it.modelo}>{cab}{corpo}{lugarCor}
-      <_EvmMelhorarPeca evm={evm} i={i}/>
-      <div style={{display:"flex",gap:6,marginTop:14,paddingTop:10,borderTop:"1px solid " + _EVP_COR.linha2}}>
-        <button onClick={function(){ evm.irPara(it.t0 + Math.min(0.8, (it.t1 - it.t0) / 2)); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}><_EvpIco n="play" s={13}/>Ver</button>
-        <button onClick={function(){ evm.duplicar(i); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px"})}><_EvpIco n="duplicar" s={13}/>Duplicar</button>
-        <button onClick={function(){ evm.apagar(i); }} style={Object.assign(_evpBtn(), {fontSize:11.5,padding:"6px 10px",color:_EV.verm,marginLeft:"auto"})}><_EvpIco n="apagar" s={13}/>Apagar</button></div>
+      {/* v71: "Melhorar com IA" ficou só na aba dele; Duplicar e Apagar já estão na barra embaixo do vídeo */}
+      <button onClick={function(){ evm.irPara(it.t0 + Math.min(0.8, (it.t1 - it.t0) / 2)); }} style={Object.assign(_evpBtn(), {marginTop:14,width:"100%",justifyContent:"center"})}><_EvpIco n="play" s={13}/>Ver esta peça</button>
     </div>);
 }
 
@@ -133276,14 +133484,15 @@ function _EvmInspetor({ evm, sel, selObj, ferr, nomeItem }){
 function _EvmMelhorarPeca({ evm, i, abrir }){
   const [aberto, setAberto] = useState(!!abrir), [txt, setTxt] = useState("");
   const fazendo = !!(evm.ia && evm.ia.estado === "fazendo");
-  return <div data-evm-melhorar="1" style={{marginTop:12,padding:10,borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
-    <button onClick={function(){ setAberto(!aberto); }} disabled={fazendo || evm.soVer} aria-expanded={aberto} style={Object.assign(_evpBtn("primario", !fazendo), {width:"100%",justifyContent:"center",fontSize:12})}>✨ Melhorar esta peça com IA</button>
-    {aberto && !fazendo && <div style={{marginTop:8}}>
+  return <div data-evm-melhorar="1" style={abrir ? {} : {marginTop:12,padding:10,borderRadius:12,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
+    {!abrir && <button onClick={function(){ setAberto(!aberto); }} disabled={fazendo || evm.soVer} aria-expanded={aberto} style={Object.assign(_evpBtn("primario", !fazendo), {width:"100%",justifyContent:"center",fontSize:12})}>✨ Melhorar esta peça com IA</button>}
+    {aberto && !fazendo && <div style={{marginTop:abrir ? 0 : 8}}>
+      {abrir && <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>O que melhorar nesta peça?</div>}
       <textarea value={txt} onChange={function(e){ setTxt(e.target.value); }} onKeyDown={function(e){ e.stopPropagation(); }} rows={2} maxLength={400} aria-label="O que melhorar nesta peça (opcional)"
-        placeholder="Opcional: o que melhorar (ex.: título mais curto e forte; destacar o número; trocar por uma lista)"
-        style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"7px 9px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,fontSize:12,background:_EVP_COR.campo,color:_EVP_COR.ink,resize:"vertical",userSelect:"text"}}/>
-      <div style={{fontSize:11,color:_EVP_COR.sub,margin:"6px 0 8px",lineHeight:1.45}}>Só esta peça muda; as outras ficam exatamente como estão. Leva até 2 minutos, custa uns R$ 3 e vira uma versão nova (dá para voltar).</div>
-      <button onClick={function(){ evm.pedirIAPeca(i, txt).then(function(ok){ if(ok){ setAberto(false); setTxt(""); } }); }} style={Object.assign(_evpBtn("primario"), {width:"100%",justifyContent:"center"})}>✨ Melhorar só esta</button>
+        placeholder="Ex.: título mais curto e forte · destacar o número (opcional)"
+        style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"9px 10px",borderRadius:10,border:"1px solid " + _EVP_COR.linha,fontSize:12.5,background:_EVP_COR.campo,color:_EVP_COR.ink,resize:"vertical",userSelect:"text",minHeight:70}}/>
+      <button onClick={function(){ evm.pedirIAPeca(i, txt).then(function(ok){ if(ok){ setAberto(!!abrir); setTxt(""); } }); }} disabled={!!evm.soVer} style={Object.assign(_evpBtn("primario", !evm.soVer), {width:"100%",justifyContent:"center",marginTop:10})}>✨ Melhorar com IA</button>
+      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:8,lineHeight:1.45}}>Só esta peça muda · até 2 min · uns R$ 3 · dá para voltar.</div>
     </div>}
     {fazendo && <div role="status" style={{marginTop:6,fontSize:11.5,color:_EVP_COR.roxo,fontWeight:700}}>{evm.ia.oque}</div>}
   </div>;
@@ -133376,17 +133585,28 @@ function _EvpAjustarCor({ p, calc, sel, tempo, mudar, ctl }){
     <button onClick={redefinir} style={Object.assign(_evpBtn(), {marginTop:10,justifyContent:"center",width:"100%"})}><_EvpIco n="desfazer" s={14}/>Redefinir {alc === "este" ? "este clipe" : "todos"}</button>
   </div>);
 }
+const _EVP_BT_Q = { font:"inherit", width:20, height:20, borderRadius:6, border:0, background:"transparent", color:"var(--evp-sub)", cursor:"pointer", fontSize:15, fontWeight:800, lineHeight:1, padding:0, display:"grid", placeItems:"center" };
 function _EvpSlider(q){
+  /* v71: régua no estilo CapCut — nome à esquerda, valor numa caixinha à direita, trilho fino que enche de roxo;
+     ↺ aparece quando saiu do padrão (antes era só o duplo clique, que ninguém achava) */
   const c = q.ctl;
+  const mn = Number(q.min), mx = Number(q.max), vv = Number(q.v), pc = mx > mn ? Math.max(0, Math.min(100, (vv - mn) / (mx - mn) * 100)) : 0;
+  const fora = q.padrao != null && Math.abs(vv - Number(q.padrao)) > 0.0001;
+  const volta = function(){ c.mudar(function(np){ q.aplicar(np, q.padrao); }); };
   return (
-    <div style={{marginBottom:q.semRotulo ? 4 : 10}}>
-      {!q.semRotulo && <div style={{display:"flex",fontSize:12,fontWeight:700,color:_EVP_COR.ink,marginBottom:2}}>
-        <span onDoubleClick={q.padrao != null ? function(){ c.mudar(function(np){ q.aplicar(np, q.padrao); }); } : undefined} title={q.padrao != null ? "Duplo clique volta ao padrão" : ""} style={{cursor:q.padrao != null ? "pointer" : "default"}}>{q.rotulo}</span>
-        <span style={{marginLeft:"auto",color:_EVP_COR.sub,fontFamily:_EVP_MONO,fontSize:11.5,fontVariantNumeric:"tabular-nums"}}>{q.fmt ? q.fmt(q.v) : q.v}</span>
+    <div data-regua="1" style={{marginBottom:q.semRotulo ? 4 : 12}}>
+      {!q.semRotulo && <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:600,color:_EVP_COR.ink,marginBottom:4,minHeight:22}}>
+        <span onDoubleClick={q.padrao != null ? volta : undefined} style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.rotulo}</span>
+        {fora && <button type="button" onClick={volta} aria-label={"Voltar " + (q.rotulo || "") + " ao padrão"} title="Voltar ao padrão"
+          style={{font:"inherit",border:0,background:"transparent",color:_EVP_COR.fraco,cursor:"pointer",padding:"0 2px",fontSize:13,lineHeight:1}}>↺</button>}
+        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
+          {q.quadro && <button type="button" onClick={function(){ q.quadro(-1 / 30); }} aria-label={(q.rotulo || "") + " 1 quadro antes"} title="1 quadro antes" style={_EVP_BT_Q}>‹</button>}
+          <span style={{minWidth:38,textAlign:"center",padding:"2px 7px",borderRadius:6,background:_EVP_COR.linha2,color:_EVP_COR.ink,fontFamily:_EVP_MONO,fontSize:11.5,fontWeight:600,fontVariantNumeric:"tabular-nums"}}>{q.fmt ? q.fmt(q.v) : q.v}</span>
+          {q.quadro && <button type="button" onClick={function(){ q.quadro(1 / 30); }} aria-label={(q.rotulo || "") + " 1 quadro depois"} title="1 quadro depois" style={_EVP_BT_Q}>›</button>}</span>
       </div>}
-      <input type="range" min={q.min} max={q.max} step={q.step} value={q.v} aria-label={q.rotulo || "valor"}
+      <input type="range" className="evp-r" min={q.min} max={q.max} step={q.step} value={q.v} aria-label={q.rotulo || "valor"}
         onChange={function(e){ const x = Number(e.target.value); c.vivo(function(np){ q.aplicar(np, x); }); }}
-        onPointerUp={c.fim} onKeyUp={c.fim} onBlur={c.fim} style={{width:"100%",accentColor:_EVP_COR.roxo}}/>
+        onPointerUp={c.fim} onKeyUp={c.fim} onBlur={c.fim} style={{"--p":pc + "%"}}/>
     </div>
   );
 }
@@ -133635,48 +133855,49 @@ function _EvpTransPrevia({ tipo, dur, curva, cA, cB, w }){
   return <canvas ref={cvRef} width={W} height={H} aria-label="Prévia da transição" style={{width:W,height:H,borderRadius:10,background:"#000",display:"block"}}/>;
 }
 function _EvpTransPainel({ c, calc, p, mudar }){
+  /* v71: prévia grande em cima · categorias em abas · tipos em grade · duração e curva em barra · "usar em" em blocos */
   const [hover, setHover] = useState(null);
   const nc = function(fn){ return function(np){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(o) fn(o); }; };
   const atual = c.trans || "corte", dur = _evpTransDur(c), curva = c.transCurva || "io";
+  const grupoDe = function(id){ return (_EVP_TRANS_GRUPOS.find(function(g){ return g.ids.indexOf(id) >= 0; }) || _EVP_TRANS_GRUPOS[0]).id; };
+  const [cat, setCat] = useState(function(){ return grupoDe(atual); });
   const cAnt = calc.clips[c.i - 1], mostra = hover || atual;
   const rot = function(id){ return (_EVP_TRANS.find(function(q){ return q.id === id; }) || {}).label || id; };
+  const g = _EVP_TRANS_GRUPOS.find(function(x){ return x.id === cat; }) || _EVP_TRANS_GRUPOS[0];
+  const usarEm = function(modo){ const tr = { trans:atual, transDur:dur, transCurva:curva }; let n = 0;
+    if(modo === "cenas"){ mudar(function(np){ np.clips.forEach(function(o, i){ if(i && np.clips[i-1].clipe !== o.clipe && !(_evpNum(o.congelar, 0) > 0)){ Object.assign(o, tr); n++; } }); });
+      _evToast(n ? "success" : "warning", n ? rot(atual) + " em " + n + " troca" + (n > 1 ? "s" : "") + " de cena" : "Não tem troca de cena (todos os clipes são do mesmo vídeo)"); return; }
+    mudar(function(np){ np.clips.forEach(function(o, i){ if(i) Object.assign(o, tr); else o.trans = "corte"; }); }); _evToast("success", rot(atual) + " em todos os cortes"); };
   return (
     <div>
-      <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Passe o mouse para ver antes de escolher.</div>
-      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-        <div style={{flexShrink:0,textAlign:"center"}}>
-          {mostra !== "corte" ? <_EvpTransPrevia tipo={mostra} dur={dur} curva={curva} cA={cAnt} cB={c} w={96}/> : <div style={{width:96,height:171,borderRadius:10,background:"#0b1020",color:"#8b92ad",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>Corte seco</div>}
-          <div style={{fontSize:10.5,fontWeight:700,color:hover ? _EVP_COR.roxo : _EVP_COR.sub,marginTop:4,maxWidth:96}}>{rot(mostra)}</div>
-        </div>
-        <div style={{flex:1,minWidth:0}}>
-          {_EVP_TRANS_GRUPOS.map(function(g){ return <div key={g.id} style={{marginBottom:8}}>
-            <div style={{fontSize:10.5,fontWeight:800,color:_EVP_COR.fraco,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4}}>{g.label}</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-              {g.ids.map(function(id){ return <button key={id} onMouseEnter={function(){ setHover(id); }} onMouseLeave={function(){ setHover(null); }} onFocus={function(){ setHover(id); }} onBlur={function(){ setHover(null); }}
-                onClick={function(){ mudar(nc(function(x){ x.trans = id; })); }} style={Object.assign(_evpChip(atual === id), { padding:"5px 8px", fontSize:11.5 })}>{rot(id)}</button>; })}
-            </div></div>; })}
-        </div>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,marginBottom:12}}>
+        {mostra !== "corte" ? <_EvpTransPrevia tipo={mostra} dur={dur} curva={curva} cA={cAnt} cB={c} w={104}/> : <div style={{width:104,height:185,borderRadius:12,background:"#0b1020",color:"#8b92ad",fontSize:11.5,display:"flex",alignItems:"center",justifyContent:"center"}}>Corte seco</div>}
+        <div style={{fontSize:12.5,fontWeight:700,color:hover ? _EVP_COR.roxo : _EVP_COR.ink}}>{rot(mostra)}</div>
+        <div style={{fontSize:11,color:_EVP_COR.fraco}}>Passe o mouse para ver antes de escolher</div>
       </div>
-      {atual !== "corte" && (<div>
-        <div style={_EVP_TIT}>Duração</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {_EVP_TRANS_DURS.map(function(d){ return <button key={d.v} onClick={function(){ mudar(nc(function(x){ x.transDur = d.v; })); }} style={_evpChip(dur === d.v)}>{d.label} · {String(d.v).replace(".", ",")} s</button>; })}
-        </div>
-        <div style={_EVP_TIT}>Curva</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {_EVP_CURVAS.filter(function(q){ return q.id !== "volta"; }).map(function(q){ return <button key={q.id} onClick={function(){ mudar(nc(function(x){ x.transCurva = q.id; })); }} style={_evpChip(curva === q.id)}>{q.label}</button>; })}
-        </div>
-        {_EVP_TRANS_LUZ.indexOf(atual) >= 0 && <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:6}}>Luz com limite: nunca fica branco puro (no máximo 70%).</div>}
-      </div>)}
-      <div style={_EVP_TIT}>Usar esta transição</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        <button onClick={function(){ const tr = { trans:atual, transDur:dur, transCurva:curva }; let n = 0;
-          mudar(function(np){ np.clips.forEach(function(o, i){ if(i && np.clips[i-1].clipe !== o.clipe && !(_evpNum(o.congelar, 0) > 0)){ Object.assign(o, tr); n++; } }); });
-          _evToast(n ? "success" : "warning", n ? rot(atual) + " em " + n + " troca" + (n > 1 ? "s" : "") + " de cena" : "Não tem troca de cena (todos os clipes são do mesmo vídeo)"); }} style={_evpBtn()}>Nas trocas de cena</button>
-        <button onClick={function(){ const tr = { trans:atual, transDur:dur, transCurva:curva };
-          mudar(function(np){ np.clips.forEach(function(o, i){ if(i) Object.assign(o, tr); else o.trans = "corte"; }); }); _evToast("success", rot(atual) + " em todos os cortes"); }} style={_evpBtn()}>Em todos os cortes</button>
+      <div data-rola="1" style={{display:"flex",gap:2,overflowX:"auto",scrollbarWidth:"none",marginBottom:8,borderBottom:"1px solid " + _EVP_COR.linha2}}>
+        {_EVP_TRANS_GRUPOS.map(function(x){ const on = x.id === cat, tem = x.ids.indexOf(atual) >= 0;
+          return <button key={x.id} onClick={function(){ setCat(x.id); }} aria-pressed={on} style={{font:"inherit",flex:"0 0 auto",padding:"7px 9px",border:0,borderBottom:"2px solid " + (on ? _EVP_COR.roxo : "transparent"),background:"transparent",cursor:"pointer",
+            fontSize:12,fontWeight:700,color:on ? _EVP_COR.ink : _EVP_COR.fraco,whiteSpace:"nowrap"}}>{x.label}{tem && !on ? " •" : ""}</button>; })}
       </div>
-      <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:5}}>Troca de cena = o clipe vem de outro vídeo. Transição de luz em todo corte cansa; nas trocas de cena fica bonito.</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+        {g.ids.map(function(id){ return <button key={id} onMouseEnter={function(){ setHover(id); }} onMouseLeave={function(){ setHover(null); }} onFocus={function(){ setHover(id); }} onBlur={function(){ setHover(null); }}
+          onClick={function(){ mudar(nc(function(x){ x.trans = id; })); }} style={Object.assign(_evpChip(atual === id), { justifyContent:"center", padding:"9px 6px", fontSize:12 })}>{rot(id)}</button>; })}
+      </div>
+      {atual !== "corte" && (<_EvpGrupo titulo="Ajustes">
+        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>Duração</div>
+        <_EvpSeg rotulo="Duração da transição" opcoes={_EVP_TRANS_DURS.map(function(d){ return [d.v, d.label, String(d.v).replace(".", ",") + " s"]; })} valor={dur} onChange={function(v){ mudar(nc(function(x){ x.transDur = v; })); }}/>
+        <div style={{fontSize:12,fontWeight:600,margin:"12px 0 6px"}}>Ritmo</div>
+        <select value={curva} aria-label="Curva da transição" onChange={function(e){ const v = e.target.value; mudar(nc(function(x){ x.transCurva = v; })); }}
+          style={{font:"inherit",width:"100%",padding:"7px 9px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,fontSize:12.5}}>
+          {_EVP_CURVAS.filter(function(q){ return q.id !== "volta"; }).map(function(q){ return <option key={q.id} value={q.id}>{q.label}</option>; })}</select>
+        {_EVP_TRANS_LUZ.indexOf(atual) >= 0 && <_EvpDica>Luz com limite: nunca fica branco puro.</_EvpDica>}
+      </_EvpGrupo>)}
+      <_EvpGrupo titulo="Usar esta transição em" solto>
+        <_EvpAcoes colunas={2} itens={[
+          { id:"trans-cenas", icone:"transicao", label:"Trocas de cena", dica:"Só onde o clipe vem de outro vídeo (fica bonito, não cansa)", onClick:function(){ usarEm("cenas"); } },
+          { id:"trans-todos", icone:"camadas", label:"Todos os cortes", dica:"Em todo corte (luz em todo corte cansa)", onClick:function(){ usarEm("todos"); } } ]}/>
+      </_EvpGrupo>
     </div>
   );
 }
@@ -134018,9 +134239,16 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
   };
   return (
     <div>
-      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
-        {abas.map(function(a){ return <button key={a[0]} onClick={function(){ irAba(a[0]); }} style={Object.assign(_evpChip(aba === a[0]), { padding:"5px 9px", fontSize:11.5 })}>{a[1]}</button>; })}
-      </div>
+      {/* v71: 3 abas grandes (Filtros · Ajustar · Avançado); as 11 ferramentas de colorista ficam dentro de Avançado, numa linha que desliza */}
+      <_EvpSeg rotulo="Cor do clipe" opcoes={[["filtros", "Filtros"], ["basico", "Ajustar"], ["avancado", "Avançado"]]} valor={aba === "filtros" || aba === "basico" ? aba : "avancado"}
+        onChange={function(v){ if(v === "avancado"){ let u = "auto"; try{ u = localStorage.getItem("pxev-cor-aba-av") || "auto"; }catch(_){} irAba(u); } else irAba(v); }}/>
+      {aba !== "filtros" && aba !== "basico" && <div data-rola="1" style={{display:"flex",gap:4,overflowX:"auto",scrollbarWidth:"none",margin:"10px 0 2px",paddingBottom:2}}>
+        {abas.filter(function(a){ return a[0] !== "filtros" && a[0] !== "basico"; }).map(function(a){ const on = aba === a[0];
+          return <button key={a[0]} onClick={function(){ irAba(a[0]); try{ localStorage.setItem("pxev-cor-aba-av", a[0]); }catch(_){} }} aria-pressed={on}
+            style={{font:"inherit",flex:"0 0 auto",padding:"5px 10px",borderRadius:99,border:0,cursor:"pointer",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",
+              background:on ? _EVP_COR.roxoSoft : "transparent",color:on ? _EVP_COR.roxo : _EVP_COR.sub}}>{a[1]}</button>; })}
+      </div>}
+      <div style={{height:10}}/>
 
       {aba === "filtros" && (<div>
         <_EvpLooks2 thumbClipe={c.clipe} atual={cor.look || (Object.keys(_evpCorLimpa(cor)).length === 4 && !cor.bri && !cor.con && !cor.sat && !cor.temp ? "original" : null)} favs={favs} onFav={favTroca}
@@ -134028,7 +134256,6 @@ function _EvpCorPainel({ c, p, ctl, mudar, kit, tCard, edUnidade }){
           onEscolher={function(lk){ mudar(nk(function(k){ const ig = k.ig, hl = k.hlg; Object.keys(k).forEach(function(q){ delete k[q]; }); Object.assign(k, { bri:0, con:0, sat:0, temp:0 }, _evpCopia(lk.cor), ig ? { ig:ig } : {}, hl ? { hlg:hl } : {}, { look:lk.id }); })); }}/>
         <div style={{marginTop:10}}><_EvpSlider ctl={ctl} rotulo="Intensidade do filtro" v={_evpNum(cor.forca, 1)} min={0} max={1} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={1}
           aplicar={function(np, v){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(o){ o.cor = Object.assign({}, o.cor, { forca:v }); } }}/></div>
-        <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:-4}}>Clique na ★ de um filtro para deixá-lo no começo da lista.</div>
         <div style={_EVP_TIT}>Guardar meu filtro (no kit do cliente)</div>
         <div style={{display:"flex",gap:6}}>
           <input value={nomeF} maxLength={40} onChange={function(e){ setNomeF(e.target.value); }} placeholder="Nome (ex.: Clem obra)" aria-label="Nome do filtro"
@@ -134189,7 +134416,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
                         trat, tratados, analisando, pedirEstab, medindoAcao, fala, prepRev, tempo, irPara, edUnidade, setSel, edId, dividir }){   // v40: dividir = o Dividir da barra
   const ctl = _evpUsarCtl(pRef, setP, confirmar, mudar);
   const caixa = Object.assign({}, _EVP_PAINEL, { padding:14, overflow:"auto", height:"100%", boxSizing:"border-box", minWidth:0 });
-  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"8px 10px", borderRadius:10, border:"1px solid "+_EVP_COR.linha, fontSize:13, userSelect:"text" };
+  const campo = { font:"inherit", width:"100%", boxSizing:"border-box", padding:"9px 11px", borderRadius:10, border:"1px solid "+_EVP_COR.linha, fontSize:13, userSelect:"text", background:_EVP_COR.campo, color:_EVP_COR.ink, outline:"none" };   // v71: campo no tema (antes ficava cinza no escuro)
   const pct = function(v){ return Math.round(v * 100) + "%"; };
   const sinal = function(v){ return (v > 0 ? "+" : "") + Math.round(v * 100); };
   const seg = function(v){ return (Math.round(v * 10) / 10).toString().replace(".", ",") + " s"; };
@@ -134211,10 +134438,12 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
   }
   const f = (_EVP_FERR[sel.tipo] || []).find(function(x){ return x.id === ferr; }) || {};
   const nExtra = (sel.extra || []).length;
-  const cab = <div style={{marginBottom:10}}>
+  const cab = <div style={{margin:"-2px -2px 12px",paddingBottom:12,borderBottom:"1px solid " + _EVP_COR.linha2}}>{/* v71: cabeçalho com linha embaixo — separa o nome dos ajustes */}
     {nExtra > 0 && <div style={{marginBottom:8,padding:"6px 9px",borderRadius:9,background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,fontSize:11.5,fontWeight:700}}>{nExtra + 1} itens selecionados (Shift + clique). Delete apaga todos; os ajustes abaixo valem para o primeiro.</div>}
-    <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n={f.icone || "mover"}/></span>{f.label || "Ajustes"}</div>
-    <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nomeItem}</div></div>;
+    <div style={{display:"flex",alignItems:"center",gap:9}}>
+      <span style={{width:30,height:30,borderRadius:9,display:"grid",placeItems:"center",background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,flexShrink:0}}><_EvpIco n={f.icone || "mover"} s={17}/></span>
+      <div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:14.5,lineHeight:1.2}}>{f.label || "Ajustes"}</div>
+        <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nomeItem}</div></div></div></div>;
 
   /* ─── CLIPE ─── */
   if(sel.tipo === "clip"){
@@ -134245,46 +134474,51 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
       <div style={caixa}>{cab}
         {ferr === "aparar" && <_EvpAparar c={c} p={p} calc={calc} mudar={mudar} infoClipe={infoClipe} tempo={tempo}/>}
         {ferr === "sinc" && <_EvpSincPainel c={c} p={p} mudar={mudar} infoClipe={infoClipe} clipes={Object.keys(infoClipe).map(function(k2){ return infoClipe[k2]; })}/>}
-        {ferr === "volume" && (<div>
-          <_EvpSlider ctl={ctl} rotulo="Volume" v={c.vol == null ? 1 : c.vol} min={0} max={3} step={0.05} fmt={pct} padrao={1} aplicar={nc(function(o, v){ o.vol = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Entrada suave" v={_evpNum(c.fi, 0)} min={0} max={3} step={0.1} fmt={seg} padrao={0} aplicar={nc(function(o, v){ o.fi = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Saída suave" v={_evpNum(c.fo, 0)} min={0} max={3} step={0.1} fmt={seg} padrao={0} aplicar={nc(function(o, v){ o.fo = v; })}/>
-          <_EvpInterruptor on={!!c.mudo} onChange={function(v){ mudar(nc(function(o){ o.mudo = v; })); }} label="Sem som (mudo)"/>
-          <button onClick={function(){ const v = c.vol == null ? 1 : c.vol; mudar(function(np){ np.clips.forEach(function(o){ o.vol = v; }); }); _evToast("success", "Volume " + pct(v) + " em todos os clipes"); }} style={_evpBtn()}>Usar este volume em todos</button>
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:10}}>Ou arraste a linha amarela na faixa Fala.</div>
-          <_EvpVolPontos pts={c.volPts} agora={tempo >= c.t0 && tempo < c.t1 ? _evpSrcT(c, tempo) : null} base={c.vol == null ? 1 : c.vol} fmtT={function(tb){ return seg(Math.max(0, (tb - c.ini) / (c.vel || 1))); }} ctl={ctl} mudar={mudar}
-            aplicarPts={function(np, fn){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return; const n = fn(o.volPts); if(n && n.length) o.volPts = n; else delete o.volPts; }}/>
-          <button onClick={function(){ if(Math.abs(_evpNum(c.vel, 1) - 1) > 0.01 || c.reverso || (c.rampa && c.rampa !== "nenhuma")){ _evToast("info", "Volte a velocidade para 1x (sem rampa e sem tocar ao contrário) antes de separar o som."); return; } const nid = _evpId(); mudar(function(np){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return; const inf = infoClipe[o.clipe] || {};
+        {ferr === "volume" && (function(){   /* v71: volume em cima, suave num bloco, ações em blocos, pontos em "Mais" */
+          const separar = function(){ if(Math.abs(_evpNum(c.vel, 1) - 1) > 0.01 || c.reverso || (c.rampa && c.rampa !== "nenhuma")){ _evToast("info", "Volte a velocidade para 1x (sem rampa e sem tocar ao contrário) antes de separar o som."); return; } const nid = _evpId(); mudar(function(np){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return; const inf = infoClipe[o.clipe] || {};
               np.narracoes = np.narracoes || []; np.narracoes.push({ id:nid, fonte:"clipe", clipe:o.clipe, ini:o.ini, t0:c.t0, dur:Math.round((o.fim - o.ini) * 100) / 100, cortado:true, vol:o.vol == null ? 1 : o.vol, nome:"Som do clipe " + (inf.n || "") + " " + (inf.nome || ""), canal:3 });
-              o.mudo = true; }); _evToast("success", "O som virou um bloco na faixa Narração: mova, corte ou divida à vontade (o clipe ficou mudo)"); }}
-            style={Object.assign(_evpBtn(), {marginTop:6,width:"100%",justifyContent:"center"})}>Separar o som do vídeo</button>
-        </div>)}
+              o.mudo = true; }); _evToast("success", "O som virou um bloco na faixa Narração: mova, corte ou divida à vontade (o clipe ficou mudo)"); };
+          return (<div>
+          <_EvpSlider ctl={ctl} rotulo="Volume" v={c.vol == null ? 1 : c.vol} min={0} max={3} step={0.05} fmt={pct} padrao={1} aplicar={nc(function(o, v){ o.vol = v; })}/>
+          <_EvpInterruptor on={!!c.mudo} onChange={function(v){ mudar(nc(function(o){ o.mudo = v; })); }} label="Sem som (mudo)"/>
+          <_EvpGrupo titulo="Entrar e sair suave">
+            <_EvpSlider ctl={ctl} rotulo="Entrada" v={_evpNum(c.fi, 0)} min={0} max={3} step={0.1} fmt={seg} padrao={0} aplicar={nc(function(o, v){ o.fi = v; })}/>
+            <_EvpSlider ctl={ctl} rotulo="Saída" v={_evpNum(c.fo, 0)} min={0} max={3} step={0.1} fmt={seg} padrao={0} aplicar={nc(function(o, v){ o.fo = v; })}/>
+          </_EvpGrupo>
+          <div style={{marginTop:12}}><_EvpAcoes colunas={2} itens={[
+            { id:"vol-todos", icone:"volume", label:"Usar em todos os clipes", dica:"Põe este volume em todos os clipes", onClick:function(){ const v = c.vol == null ? 1 : c.vol; mudar(function(np){ np.clips.forEach(function(o){ o.vol = v; }); }); _evToast("success", "Volume " + pct(v) + " em todos os clipes"); } },
+            { id:"separar", icone:"audio", label:"Separar o som", dica:"O som vira um bloco na faixa Narração (o clipe fica mudo)", onClick:separar } ]}/></div>
+          <_EvpMais id="clip-vol" aberto={(c.volPts || []).length > 0}>
+            <_EvpVolPontos pts={c.volPts} agora={tempo >= c.t0 && tempo < c.t1 ? _evpSrcT(c, tempo) : null} base={c.vol == null ? 1 : c.vol} fmtT={function(tb){ return seg(Math.max(0, (tb - c.ini) / (c.vel || 1))); }} ctl={ctl} mudar={mudar}
+              aplicarPts={function(np, fn){ const o = np.clips.find(function(q){ return q.id === c.id; }); if(!o) return; const n = fn(o.volPts); if(n && n.length) o.volPts = n; else delete o.volPts; }}/>
+            <_EvpDica>Também dá para arrastar a linha amarela na faixa Fala.</_EvpDica>
+          </_EvpMais>
+        </div>); })()}
         {ferr === "vel" && _evpNum(c.congelar, 0) > 0 && (<div>
           <div style={{fontSize:12,color:_EVP_COR.sub,marginBottom:8}}>Quadro parado (congelado) no segundo {seg(c.ini)} do bruto.</div>
           <_EvpSlider ctl={ctl} rotulo="Duração do quadro parado" v={_evpNum(c.congelar, 2)} min={0.3} max={10} step={0.1} fmt={seg} padrao={2} aplicar={nc(function(o, v){ o.congelar = v; })}/>
           <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>Dica: ponha um texto ou uma figurinha por cima para destacar o momento.</div>
         </div>)}
-        {ferr === "vel" && !(_evpNum(c.congelar, 0) > 0) && (<div>
-          <div style={{..._EVP_TIT, marginTop:0}}>Velocidade</div>
-          <_EvpInterruptor on={c.tom !== false} onChange={function(v){ mudar(nc(function(o){ if(v) delete o.tom; else o.tom = false; })); }} label="Manter o tom da voz" dica="Acelerou ou ficou lento? A voz continua natural (sem voz de esquilo ou de monstro)"/>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {_EVP_VEL.map(function(v){ return <button key={v} onClick={function(){ mudar(nc(function(o){ o.vel = v; })); }} style={_evpChip((c.vel || 1) === v)}>{String(v).replace(".", ",")}x</button>; })}
-          </div>
-          <div style={_EVP_TIT}>Curva (velocidade que muda no trecho)</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {_EVP_RAMPAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.rampa = o.id; delete x.velPts; })); }} style={_evpChip((c.rampa || "nenhuma") === o.id)}>{o.id === "nenhuma" ? "Nenhuma" : o.label}</button>; })}
-            {_EVP_RAMPAS_NOVAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.rampa = o.id; delete x.velPts; })); }} style={_evpChip(c.rampa === o.id)}>{o.label}</button>; })}
-            <button onClick={function(){ mudar(nc(function(x){ x.velPts = _evpVelPtsBase(x); x.rampa = "curva"; })); }} style={_evpChip(c.rampa === "curva")}>Personalizada</button>
-          </div>
-          {c.rampa && c.rampa !== "nenhuma" && <_EvpVelGrafico c={c} ctl={ctl} mudar={mudar}/>}
-          <div style={_EVP_TIT}>Ao contrário</div>
-          <_EvpInterruptor on={!!c.reverso} onChange={function(v){ if(v && c.fim - c.ini > 6.05){ _evToast("warning", "Ao contrário funciona em trechos de até 6 s. Divida o clipe antes."); return; } mudar(nc(function(o){ o.reverso = v; })); }}
-            label="Tocar de trás para frente" dica="Trechos de até 6 s"/>
-          {c.reverso && prepRev && prepRev[_evpChaveRev(c)] != null && <div style={{fontSize:12,fontWeight:700,color:_EV.amarelo}}>Preparando o trecho ao contrário… {prepRev[_evpChaveRev(c)]}%</div>}
-          {c.reverso && _evpReversos[_evpChaveRev(c)] && _evpReversos[_evpChaveRev(c)].pronto && <div style={{fontSize:12,fontWeight:700,color:_EV.verde,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="check" s={14}/>Pronto para tocar ao contrário</div>}
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:10}}>
-            {_evpClipeFalaNormal(c) ? "O som acompanha a velocidade." : "Com rampa ou ao contrário, a fala deste trecho sai sem legenda (use música ou efeito)."} Duração no vídeo: {seg(c.dur)}.
-          </div>
+        {ferr === "vel" && !(_evpNum(c.congelar, 0) > 0) && (<div>{/* v71: velocidade em barra, curva em blocos, "ao contrário" em Mais */}
+          <_EvpGrupo titulo="Velocidade" estilo={{marginTop:0}} extra={<span style={{fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.fraco}}>{seg(c.dur)} no vídeo</span>}>
+            <_EvpSeg rotulo="Velocidade do clipe" opcoes={_EVP_VEL.map(function(v){ return [v, String(v).replace(".", ",") + "×"]; })} valor={c.vel || 1} onChange={function(v){ mudar(nc(function(o){ o.vel = v; })); }}/>
+            <div style={{marginTop:8}}><_EvpInterruptor on={c.tom !== false} onChange={function(v){ mudar(nc(function(o){ if(v) delete o.tom; else o.tom = false; })); }} label="Manter o tom da voz" dica="Sem voz de esquilo ou de monstro"/></div>
+          </_EvpGrupo>
+          <_EvpGrupo titulo="Curva de velocidade">
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:5}}>
+              {_EVP_RAMPAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.rampa = o.id; delete x.velPts; })); }} style={Object.assign(_evpChip((c.rampa || "nenhuma") === o.id), {justifyContent:"center",padding:"7px 4px",fontSize:11.5})}>{o.id === "nenhuma" ? "Nenhuma" : o.label}</button>; })}
+              {_EVP_RAMPAS_NOVAS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(nc(function(x){ x.rampa = o.id; delete x.velPts; })); }} style={Object.assign(_evpChip(c.rampa === o.id), {justifyContent:"center",padding:"7px 4px",fontSize:11.5})}>{o.label}</button>; })}
+              <button onClick={function(){ mudar(nc(function(x){ x.velPts = _evpVelPtsBase(x); x.rampa = "curva"; })); }} style={Object.assign(_evpChip(c.rampa === "curva"), {justifyContent:"center",padding:"7px 4px",fontSize:11.5})}>Personalizada</button>
+            </div>
+            {c.rampa && c.rampa !== "nenhuma" && <div style={{marginTop:10}}><_EvpVelGrafico c={c} ctl={ctl} mudar={mudar}/></div>}
+          </_EvpGrupo>
+          <_EvpMais id="clip-rev" rotulo="Ao contrário" aberto={!!c.reverso}>
+            <_EvpInterruptor on={!!c.reverso} onChange={function(v){ if(v && c.fim - c.ini > 6.05){ _evToast("warning", "Ao contrário funciona em trechos de até 6 s. Divida o clipe antes."); return; } mudar(nc(function(o){ o.reverso = v; })); }}
+              label="Tocar de trás para frente" dica="Trechos de até 6 s"/>
+            {c.reverso && prepRev && prepRev[_evpChaveRev(c)] != null && <div style={{fontSize:12,fontWeight:700,color:_EV.amarelo}}>Preparando o trecho ao contrário… {prepRev[_evpChaveRev(c)]}%</div>}
+            {c.reverso && _evpReversos[_evpChaveRev(c)] && _evpReversos[_evpChaveRev(c)].pronto && <div style={{fontSize:12,fontWeight:700,color:_EV.verde,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="check" s={14}/>Pronto para tocar ao contrário</div>}
+          </_EvpMais>
+          {!_evpClipeFalaNormal(c) && <_EvpDica cor={_EV.amarelo}>Com curva ou ao contrário, a fala deste trecho sai sem legenda.</_EvpDica>}
         </div>)}
         {ferr === "recortar" && (<div>
           {(function(){ // v16: vídeo deitado no vertical — preencher (com zoom, na pessoa) ou inteiro com fundo desfocado (vale para o vídeo todo)
@@ -134304,49 +134538,51 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
               {dv && <div style={{marginTop:8,fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.45}}>Editando a cópia leve. O original ({dv.w}×{dv.h}) fica no Drive e vai para a gravação no PC, com o mesmo enquadramento.{" "}
                 <a href={"https://drive.google.com/file/d/" + dv.id + "/view" + (dv.rk ? "?resourcekey=" + dv.rk : "")} target="_blank" rel="noopener noreferrer" style={{color:_EVP_COR.roxo,fontWeight:700}}>Abrir no Drive</a></div>}
             </div>; })()}
-          <div style={_EVP_TIT}>Modo</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {[["auto","Automático"],["preencher","Preencher"],["encaixar","Encaixar"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(nc(function(x){ x.modo = o[0]; })); }} style={_evpChip((c.modo || "auto") === o[0])}>{o[1]}</button>; })}
-          </div>
-          <div style={_EVP_TIT}>Enquadrar</div>
-          {temAn && <div style={{marginBottom:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,fontSize:11.5,fontWeight:700,lineHeight:1.45}}>
-            Este clipe tem animação ◆: zoom, posição e girar mexem no ponto da agulha{agDentro ? "" : " — leve a agulha para dentro do clipe"}.</div>}
-          <_EvpSlider ctl={ctl} rotulo={"Zoom" + (temAn ? " ◆" : "")} v={_evpR4(Vag.z)} min={0.5} max={4} step={0.01} fmt={pct} padrao={1} aplicar={ga("z")}/>
-          <_EvpSlider ctl={ctl} rotulo={"Horizontal" + (temAn ? " ◆" : "")} v={_evpR4(Vag.x)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("x")}/>
-          <_EvpSlider ctl={ctl} rotulo={"Vertical" + (temAn ? " ◆" : "")} v={_evpR4(Vag.y)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("y")}/>
-          <_EvpSlider ctl={ctl} rotulo={"Girar" + (temAn ? " ◆" : "")} v={_evpR4(Vag.r)} min={-180} max={180} step={0.5} fmt={function(v){ return Math.round(v * 10) / 10 + "°"; }} padrao={0} aplicar={ga("r")}/>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <button onClick={function(){ setEnquadrar(!enquadrar); }} style={_evpChip(enquadrar)}><_EvpIco n="mover" s={14}/>{enquadrar ? "Arrastando no vídeo" : "Arrastar no vídeo"}</button>
-            <button onClick={function(){ mudar(nc(function(x){ x.espelho = !x.espelho; })); }} style={_evpChip(!!c.espelho)}><_EvpIco n="espelhar" s={14}/>Espelhar</button>
-            <button onClick={function(){ mudar(nc(function(x){ x.espelhoV = !x.espelhoV; })); }} style={_evpChip(!!c.espelhoV)}>Espelhar ↕</button>
-            <button onClick={function(){ mudar(nc(function(x){ if(_evpAnimTem(x) && agDentro){ const pt = _evpAnimPonto(x, c, tempo); pt.z = 1; pt.x = 0; pt.y = 0; pt.r = 0; } else { x.zoom = 1; x.x = 0; x.y = 0; x.rot = 0; } })); }} style={_evpChip(false)}><_EvpIco n="centro" s={14}/>Centralizar</button>
-          </div>
-          <_EvpSlider ctl={ctl} rotulo="Opacidade do clipe" v={_evpNum(c.op, 1)} min={0} max={1} step={0.01} fmt={pct} padrao={1} aplicar={nc(function(x, v){ x.op = v; })}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <_EvpSlider ctl={ctl} rotulo="Ponto de giro ↔" v={_evpNum((c.ancora || [0, 0])[0], 0)} min={-0.5} max={0.5} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={0} aplicar={nc(function(x, v){ x.ancora = [v, _evpNum((x.ancora || [0, 0])[1], 0)]; })}/>
-            <_EvpSlider ctl={ctl} rotulo="Ponto de giro ↕" v={_evpNum((c.ancora || [0, 0])[1], 0)} min={-0.5} max={0.5} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={0} aplicar={nc(function(x, v){ x.ancora = [_evpNum((x.ancora || [0, 0])[0], 0), v]; })}/>
-          </div>
-          <div style={_EVP_TIT}>Enquadrar automático</div>{/* v36: olhos no terço de cima, área segura, câmera suave → pontos ◆ normais */}
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginBottom:6,lineHeight:1.45}}>Acha o rosto (ou o assunto) e cria os pontos ◆ da câmera: olhos no terço de cima, rosto dentro da área segura, sem tremer. Vídeo deitado: a câmera acompanha a pessoa; com 2 pessoas, corta para quem fala. Dá para ajustar depois no Animar.</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <button data-enq="um" disabled={!!_evpEnqEstado[c.id]} onClick={function(){ _evpEnqRodar([c], p, infoClipe, mudar).then(function(n){ if(n) _evToast("success", "Clipe enquadrado — os pontos ◆ estão no Animar"); else _evToast("warning", "Não consegui enquadrar este clipe"); }); }} style={_evpChip(!!(c.enq && temAn))}><_EvpIco n="centro" s={14}/>Enquadrar automático</button>
-            <button data-enq="todos" disabled={!!_evpEnqEstado.todos} onClick={function(){ const vistos = {}, lista = calc.clips.filter(function(q){ if(q.off || vistos[q.id]) return false; vistos[q.id] = 1; return true; });
-              _evpEnqEstado.todos = "Enquadrando " + lista.length + " clipes…"; _evpAvisar();
-              _evpEnqRodar(lista, p, infoClipe, mudar).then(function(n){ delete _evpEnqEstado.todos; _evpAvisar(); _evToast(n ? "success" : "warning", n ? n + " de " + lista.length + " clipes enquadrados" : "Não consegui enquadrar os clipes"); }); }} style={_evpChip(false)}>Em todos os clipes</button>
-          </div>
-          {(_evpEnqEstado[c.id] || _evpEnqEstado.todos) && <div style={{fontSize:12,fontWeight:700,color:_EV.amarelo,marginTop:6}}>{_evpEnqEstado[c.id] || _evpEnqEstado.todos}</div>}
-          {!_evpEnqEstado[c.id] && c.enq && temAn && <div data-enq-ok="1" style={{fontSize:12,fontWeight:700,color:_EV.verde,display:"flex",gap:6,alignItems:"center",marginTop:6}}><_EvpIco n="check" s={14}/>{_evpEnqTexto(c.enq)}</div>}
-          <div style={_EVP_TIT}>Reenquadrar automático</div>
-          <_EvpInterruptor on={!!c.seguir} onChange={function(v){ mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe === c.clipe){ o.seguir = v; if(v) o.modo = "preencher"; } }); }); }}
-            label="Seguir a ação" dica="Para vídeo deitado: o quadro acompanha onde tem movimento"/>
-          {c.seguir && medindoAcao && medindoAcao[c.clipe] != null && <div style={{fontSize:12,fontWeight:700,color:_EV.amarelo}}>Acompanhando a ação… {medindoAcao[c.clipe]}%</div>}
-          {c.seguir && p.reenq && p.reenq[c.clipe] && <div style={{fontSize:12,fontWeight:700,color:_EV.verde,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="check" s={14}/>Reenquadrado</div>}
-          <div style={_EVP_TIT}>Recortar as bordas</div>
-          <_EvpSlider ctl={ctl} rotulo="Esquerda" v={_evpNum(k.l, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { l:v }); })}/>
-          <_EvpSlider ctl={ctl} rotulo="Direita" v={_evpNum(k.r, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { r:v }); })}/>
-          <_EvpSlider ctl={ctl} rotulo="Em cima" v={_evpNum(k.t, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { t:v }); })}/>
-          <_EvpSlider ctl={ctl} rotulo="Embaixo" v={_evpNum(k.b, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { b:v }); })}/>
-          <button onClick={function(){ mudar(nc(function(x){ x.corte = { l:0, t:0, r:0, b:0 }; })); }} style={_evpBtn()}>Tirar o recorte</button>
+          {/* v71: modo em barra · enquadrar num bloco · ações em blocos · automático num bloco · opacidade, giro e bordas em "Mais" */}
+          <_EvpSeg rotulo="Como o vídeo ocupa a tela" opcoes={[["auto", "Automático"], ["preencher", "Preencher"], ["encaixar", "Encaixar"]]} valor={c.modo || "auto"} onChange={function(v){ mudar(nc(function(x){ x.modo = v; })); }}/>
+          {temAn && <div style={{marginTop:10,padding:"7px 9px",borderRadius:9,background:_EVP_COR.roxoSoft,color:_EVP_COR.roxo,fontSize:11.5,fontWeight:600,lineHeight:1.45}}>
+            Tem animação ◆: o ajuste vale no ponto da agulha{agDentro ? "" : " (leve a agulha para dentro do clipe)"}.</div>}
+          <_EvpGrupo titulo="Enquadrar">
+            <_EvpSlider ctl={ctl} rotulo={"Zoom" + (temAn ? " ◆" : "")} v={_evpR4(Vag.z)} min={0.5} max={4} step={0.01} fmt={pct} padrao={1} aplicar={ga("z")}/>
+            <_EvpSlider ctl={ctl} rotulo={"Horizontal" + (temAn ? " ◆" : "")} v={_evpR4(Vag.x)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("x")}/>
+            <_EvpSlider ctl={ctl} rotulo={"Vertical" + (temAn ? " ◆" : "")} v={_evpR4(Vag.y)} min={-1} max={1} step={0.005} fmt={sinal} padrao={0} aplicar={ga("y")}/>
+            <_EvpSlider ctl={ctl} rotulo={"Girar" + (temAn ? " ◆" : "")} v={_evpR4(Vag.r)} min={-180} max={180} step={0.5} fmt={function(v){ return Math.round(v * 10) / 10 + "°"; }} padrao={0} aplicar={ga("r")}/>
+          </_EvpGrupo>
+          <div style={{marginTop:10}}><_EvpAcoes colunas={4} itens={[
+            { id:"arrastar", icone:"mover", label:"Arrastar", on:!!enquadrar, dica:"Arraste o vídeo direto na prévia", onClick:function(){ setEnquadrar(!enquadrar); } },
+            { id:"espelhar", icone:"espelhar", label:"Espelhar", on:!!c.espelho, dica:"Espelhar ↔", onClick:function(){ mudar(nc(function(x){ x.espelho = !x.espelho; })); } },
+            { id:"virar", icone:"espelhar", label:"Virar ↕", on:!!c.espelhoV, dica:"Espelhar de cabeça para baixo", onClick:function(){ mudar(nc(function(x){ x.espelhoV = !x.espelhoV; })); } },
+            { id:"centralizar", icone:"centro", label:"Centralizar", dica:"Volta zoom, posição e giro ao normal", onClick:function(){ mudar(nc(function(x){ if(_evpAnimTem(x) && agDentro){ const pt = _evpAnimPonto(x, c, tempo); pt.z = 1; pt.x = 0; pt.y = 0; pt.r = 0; } else { x.zoom = 1; x.x = 0; x.y = 0; x.rot = 0; } })); } } ]}/></div>
+          <_EvpGrupo titulo="Enquadrar automático">{/* v36: olhos no terço de cima, área segura, câmera suave → pontos ◆ normais */}
+            <_EvpAcoes colunas={2} itens={[
+              { id:"enq-um", icone:"centro", label:"Este clipe", on:!!(c.enq && temAn), desligado:!!_evpEnqEstado[c.id], attrs:{"data-enq":"um"}, dica:"Acha o rosto e cria a câmera (pontos ◆): olhos no terço de cima, sem tremer",
+                onClick:function(){ _evpEnqRodar([c], p, infoClipe, mudar).then(function(n){ if(n) _evToast("success", "Clipe enquadrado — os pontos ◆ estão no Animar"); else _evToast("warning", "Não consegui enquadrar este clipe"); }); } },
+              { id:"enq-todos", icone:"camadas", label:"Todos os clipes", desligado:!!_evpEnqEstado.todos, attrs:{"data-enq":"todos"}, dica:"Enquadra todos os clipes de uma vez",
+                onClick:function(){ const vistos = {}, lista = calc.clips.filter(function(q){ if(q.off || vistos[q.id]) return false; vistos[q.id] = 1; return true; });
+                  _evpEnqEstado.todos = "Enquadrando " + lista.length + " clipes…"; _evpAvisar();
+                  _evpEnqRodar(lista, p, infoClipe, mudar).then(function(n){ delete _evpEnqEstado.todos; _evpAvisar(); _evToast(n ? "success" : "warning", n ? n + " de " + lista.length + " clipes enquadrados" : "Não consegui enquadrar os clipes"); }); } } ]}/>
+            {(_evpEnqEstado[c.id] || _evpEnqEstado.todos) && <_EvpDica cor={_EV.amarelo}>{_evpEnqEstado[c.id] || _evpEnqEstado.todos}</_EvpDica>}
+            {!_evpEnqEstado[c.id] && c.enq && temAn && <div data-enq-ok="1" style={{fontSize:12,fontWeight:600,color:_EV.verde,display:"flex",gap:6,alignItems:"center",marginTop:8}}><_EvpIco n="check" s={14}/>{_evpEnqTexto(c.enq)}</div>}
+            <div style={{marginTop:10}}><_EvpInterruptor on={!!c.seguir} onChange={function(v){ mudar(function(np){ np.clips.forEach(function(o){ if(o.clipe === c.clipe){ o.seguir = v; if(v) o.modo = "preencher"; } }); }); }}
+              label="Seguir a ação" dica="Vídeo deitado: o quadro acompanha o movimento"/></div>
+            {c.seguir && medindoAcao && medindoAcao[c.clipe] != null && <div style={{fontSize:12,fontWeight:700,color:_EV.amarelo}}>Acompanhando a ação… {medindoAcao[c.clipe]}%</div>}
+            {c.seguir && p.reenq && p.reenq[c.clipe] && <div style={{fontSize:12,fontWeight:700,color:_EV.verde,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="check" s={14}/>Reenquadrado</div>}
+          </_EvpGrupo>
+          <_EvpMais id="clip-rec" aberto={_evpNum(c.op, 1) < 1 || !!(c.ancora && (c.ancora[0] || c.ancora[1])) || !!(_evpNum(k.l, 0) || _evpNum(k.r, 0) || _evpNum(k.t, 0) || _evpNum(k.b, 0))}>
+            <_EvpSlider ctl={ctl} rotulo="Opacidade do clipe" v={_evpNum(c.op, 1)} min={0} max={1} step={0.01} fmt={pct} padrao={1} aplicar={nc(function(x, v){ x.op = v; })}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <_EvpSlider ctl={ctl} rotulo="Giro ↔" v={_evpNum((c.ancora || [0, 0])[0], 0)} min={-0.5} max={0.5} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={0} aplicar={nc(function(x, v){ x.ancora = [v, _evpNum((x.ancora || [0, 0])[1], 0)]; })}/>
+              <_EvpSlider ctl={ctl} rotulo="Giro ↕" v={_evpNum((c.ancora || [0, 0])[1], 0)} min={-0.5} max={0.5} step={0.01} fmt={function(v){ return Math.round(v * 100) + "%"; }} padrao={0} aplicar={nc(function(x, v){ x.ancora = [_evpNum((x.ancora || [0, 0])[0], 0), v]; })}/>
+            </div>
+            <_EvpGrupo titulo="Recortar as bordas" extra={(_evpNum(k.l, 0) || _evpNum(k.r, 0) || _evpNum(k.t, 0) || _evpNum(k.b, 0)) ? <button onClick={function(){ mudar(nc(function(x){ x.corte = { l:0, t:0, r:0, b:0 }; })); }} style={Object.assign(_evpBtn(), {padding:"3px 8px",fontSize:11})}>Tirar</button> : null}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 10px"}}>
+                <_EvpSlider ctl={ctl} rotulo="Esquerda" v={_evpNum(k.l, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { l:v }); })}/>
+                <_EvpSlider ctl={ctl} rotulo="Direita" v={_evpNum(k.r, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { r:v }); })}/>
+                <_EvpSlider ctl={ctl} rotulo="Em cima" v={_evpNum(k.t, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { t:v }); })}/>
+                <_EvpSlider ctl={ctl} rotulo="Embaixo" v={_evpNum(k.b, 0)} min={0} max={0.45} step={0.005} fmt={pct} padrao={0} aplicar={nc(function(x, v){ x.corte = Object.assign({}, x.corte, { b:v }); })}/>
+              </div>
+            </_EvpGrupo>
+          </_EvpMais>
         </div>)}
         {ferr === "mov" && <_EvpAnimar c={c} p={p} calc={calc} ctl={ctl} mudar={mudar} tempo={tempo} irPara={irPara} ga={ga} agDentro={agDentro} tauAg={tauAg} Vag={Vag}/>}
         {ferr === "estab" && (<div>
@@ -134447,10 +134683,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {ferr === "elemento" && <_EvpElementoSel x={x} kit={kit} base={base} mudar={mudar} nt={nt} fotos={fotosCard} t={tCard}/>}
         {ferr === "estilo" && (<div>
           {_evgDoTexto(kit, x) && <div style={{fontSize:11.5,color:_EVP_COR.fraco,background:_EVP_COR.roxoSoft,borderRadius:8,padding:"6px 8px",marginBottom:8}}>Este texto usa o elemento "{_evgDoTexto(kit, x).nome}" da galeria: cor, fonte e fundo vêm dele. Aqui vale o tamanho e o lugar.</div>}
-          <div style={{..._EVP_TIT, marginTop:0}}>Tipo</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {[["destaque","Destaque"],["texto","Texto"],["tarja","Tarja"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(nt(function(q){ q.tipo = o[0]; })); }} style={_evpChip(x.tipo === o[0])}>{o[1]}</button>; })}
-          </div>
+          <_EvpSeg rotulo="Tipo de texto" opcoes={[["destaque", "Destaque"], ["texto", "Texto"], ["tarja", "Tarja"]]} valor={x.tipo} onChange={function(v){ mudar(nt(function(q){ q.tipo = v; })); }}/>{/* v71 */}
           <div style={_EVP_TIT}>Cor</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
             {[["principal","Cor do cliente",kit.cor_principal || _EVP_COR.roxo],["branco","Branco","#fff"],["preto","Preto","#0b1020"],["amarelo","Amarelo","#facc15"]].map(function(o){
@@ -134526,59 +134759,60 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
     const nm = function(fn){ return function(np, v){ if(np.musica) fn(np.musica, v); }; };
     return (
       <div style={caixa}>{cab}
-        {ferr === "trocar" && (<div>
-          <select value={mu.id} onChange={function(e){ setMusica(e.target.value || null); }} style={campo}>
-            {(musicas||[]).map(function(m){ return <option key={m.id} value={m.id}>{m.nome}{m.genero ? " · " + m.genero : ""}</option>; })}
-          </select>
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:8}}>Para ouvir, ver o rank e enviar músicas: menu Música, em cima.</div>
-          {/envato/i.test(info.fonte || "") && <div style={{marginTop:10,display:"flex",gap:6,fontSize:11.5,color:_EV.amarelo,fontWeight:700}}><_EvpIco n="licenca" s={14}/>Música do Envato: registre no projeto deste vídeo antes de publicar.</div>}
-        </div>)}
+        {ferr === "trocar" && <_EvpTrocarMusica p={p} calc={calc} musicas={musicas} musInfo={info} setMusica={setMusica}/>}{/* v71: lista com ouvir, no lugar da caixinha de escolher */}
         {ferr === "volume" && (<div>
           <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(mu.vol, 0.15)} min={0} max={1} step={0.01} fmt={pct} padrao={0.3} aplicar={nm(function(o, v){ o.vol = v; })}/>
           <_EvpNivelMusica mu={mu} nivel={info.nivel_db != null ? Number(info.nivel_db) : null} aplicarVol={function(v){ mudar(nm(function(o){ o.vol = v; })); }}/>
-          <_EvpInterruptor on={mu.duck !== false} onChange={function(v){ mudar(nm(function(o){ o.duck = v; })); }} label="Abaixar quando tem fala"/>
-          {mu.duck !== false && (<div style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
-            {[[0.63,"Pouco (−4 dB)"],[0.45,"Médio (−7 dB)"],[0.3,"Muito (−10 dB)"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(nm(function(x){ x.abaixa = o[0]; })); }} style={_evpChip(_evpNum(mu.abaixa, 0.45) === o[0])}>{o[1]}</button>; })}
-          </div>)}
-          <_EvpInterruptor on={!!mu.mudo} onChange={function(v){ mudar(nm(function(o){ o.mudo = v; })); }} label="Música muda"/>
-          <_EvpInterruptor on={!!mu.off} onChange={function(v){ mudar(nm(function(o){ if(v) o.off = true; else delete o.off; })); }} label="Música desligada (Shift+E)" dica="Fica na linha do tempo, mas não toca nem sai no vídeo"/>{/* v41 */}
-          <_EvpVolPontos pts={mu.volPts} agora={tempo >= _evpNum(mu.t0, 0) ? tempo - _evpNum(mu.t0, 0) : null} base={_evpNum(mu.vol, 0.15)} maxV={1} fmtT={seg} ctl={ctl} mudar={mudar}
-            aplicarPts={function(np, fn){ if(!np.musica) return; const n = fn(np.musica.volPts); if(n && n.length) np.musica.volPts = n; else delete np.musica.volPts; }}/>
+          <_EvpGrupo titulo="Quando alguém fala">
+            <_EvpSeg rotulo="Abaixar a música quando tem fala" opcoes={[[0, "Não", "Não abaixa"], [0.63, "Pouco", "−4 dB"], [0.45, "Médio", "−7 dB"], [0.3, "Muito", "−10 dB"]]}
+              valor={mu.duck === false ? 0 : _evpNum(mu.abaixa, 0.45)} onChange={function(v){ mudar(nm(function(o){ if(!v) o.duck = false; else { o.duck = true; o.abaixa = v; } })); }}/>
+            <_EvpDica>A música abaixa sozinha enquanto tem voz.</_EvpDica>
+          </_EvpGrupo>
+          <div style={{marginTop:10}}><_EvpInterruptor on={!!mu.mudo} onChange={function(v){ mudar(nm(function(o){ o.mudo = v; })); }} label="Música muda"/></div>
+          <_EvpMais id="mus-vol" aberto={!!mu.off || (mu.volPts || []).length > 0}>
+            <_EvpInterruptor on={!!mu.off} onChange={function(v){ mudar(nm(function(o){ if(v) o.off = true; else delete o.off; })); }} label="Desligar a música (Shift+E)" dica="Fica na linha do tempo, mas não toca nem sai no vídeo"/>{/* v41 */}
+            <_EvpVolPontos pts={mu.volPts} agora={tempo >= _evpNum(mu.t0, 0) ? tempo - _evpNum(mu.t0, 0) : null} base={_evpNum(mu.vol, 0.15)} maxV={1} fmtT={seg} ctl={ctl} mudar={mudar}
+              aplicarPts={function(np, fn){ if(!np.musica) return; const n = fn(np.musica.volPts); if(n && n.length) np.musica.volPts = n; else delete np.musica.volPts; }}/>
+          </_EvpMais>
         </div>)}
         {ferr === "suave" && (<div>
           <_EvpSlider ctl={ctl} rotulo="Entrada suave" v={_evpNum(mu.fadeIn, 0.5)} min={0} max={5} step={0.1} fmt={seg} padrao={0.5} aplicar={nm(function(o, v){ o.fadeIn = v; })}/>
           <_EvpSlider ctl={ctl} rotulo="Saída suave" v={_evpNum(mu.fadeOut, 1.5)} min={0} max={6} step={0.1} fmt={seg} padrao={1.5} aplicar={nm(function(o, v){ o.fadeOut = v; })}/>
+          <_EvpDica>A música aparece e some aos poucos, sem susto.</_EvpDica>
         </div>)}
-        {ferr === "tempo" && (function(){ const t0M = _evpNum(mu.t0, 0), velM = Math.max(0.5, Math.min(2, _evpNum(mu.vel, 1))), fimM = _evpNum(mu.dur, 0) > 0 ? Math.min(calc.total, t0M + _evpNum(mu.dur, 0)) : calc.total, fmtX = function(v){ return (Math.round(v * 100) / 100).toString().replace(".", ",") + "\u00d7"; };   /* v41 */
-          return (<div>
-          <_EvpSlider ctl={ctl} rotulo="Começa no vídeo em" v={t0M} min={0} max={Math.max(0.5, calc.total - 1)} step={0.1} fmt={seg} padrao={0} aplicar={nm(function(o, v){ o.t0 = v; })}/>
-          <_EvpQuadros rot="Começa" aplicar={function(d){ mudar(nm(function(o){ o.t0 = Math.max(0, Math.round((_evpNum(o.t0, 0) + d) * 1000) / 1000); })); }}/>
-          <_EvpSlider ctl={ctl} rotulo="Duração (0 = até o fim do vídeo)" v={_evpNum(mu.dur, 0)} min={0} max={Math.max(1, calc.total)} step={0.1} fmt={function(v){ return v > 0 ? seg(v) : "até o fim"; }} padrao={0} aplicar={nm(function(o, v){ if(v >= 0.5 && v < calc.total - _evpNum(o.t0, 0) - 0.05) o.dur = Math.round(v * 100) / 100; else delete o.dur; })}/>
-          <_EvpQuadros rot="Duração" aplicar={function(d){ mudar(nm(function(o){ const d0 = _evpNum(o.dur, 0) > 0 ? _evpNum(o.dur, 0) : calc.total - _evpNum(o.t0, 0); o.dur = Math.max(0.5, Math.round((d0 + d) * 1000) / 1000); })); }}/>
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginBottom:10}}>Toca de {seg(t0M)} até {seg(fimM)} do vídeo. Na linha do tempo, puxe as pontas do bloco da música.</div>
-          <div style={_EVP_TIT}>Velocidade</div>
-          <_EvpInterruptor on={mu.tom !== false} onChange={function(v){ mudar(nm(function(o){ if(v) delete o.tom; else o.tom = false; })); }} label="Manter o tom" dica="Acelerou ou ficou lenta? A música continua no tom (sem ficar aguda ou grave)"/>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
-            {_EVP_VEL.map(function(v){ return <button key={v} onClick={function(){ mudar(nm(function(o){ if(v === 1) delete o.vel; else o.vel = v; })); }} style={_evpChip(velM === v)}>{fmtX(v)}</button>; })}
-          </div>
-          {velM !== 1 && mu.remix && <div style={{fontSize:11.5,color:_EV.amarelo,marginBottom:8}}>O remix (encurtar na batida) só vale em 1×.</div>}
-          <div style={_EVP_TIT}>Arquivo</div>
-          <_EvpSlider ctl={ctl} rotulo="Pular o começo da música" v={_evpNum(mu.ini, 0)} min={0} max={Math.max(1, _evpNum(info.duracao, 120) - 1)} step={0.5} fmt={seg} padrao={0} aplicar={nm(function(o, v){ o.ini = v; })}/>
-          <button onClick={function(){ const md = _evpNum(info.duracao, 0), usa = calc.total - _evpNum(mu.t0, 0);
+        {ferr === "tempo" && (function(){ const t0M = _evpNum(mu.t0, 0), velM = Math.max(0.5, Math.min(2, _evpNum(mu.vel, 1))), fimM = _evpNum(mu.dur, 0) > 0 ? Math.min(calc.total, t0M + _evpNum(mu.dur, 0)) : calc.total, fmtX = function(v){ return (Math.round(v * 100) / 100).toString().replace(".", ",") + "\u00d7"; };   /* v41 · v71: em blocos */
+          const terminar = function(){ const md = _evpNum(info.duracao, 0), usa = calc.total - _evpNum(mu.t0, 0);
               if(!md){ _evToast("warning", "Não sei a duração desta música."); return; }
               mudar(nm(function(o){ o.ini = Math.max(0, Math.round((md - usa) * 10) / 10); o.fadeOut = Math.min(_evpNum(o.fadeOut, 1.5), 0.6); }));
-              _evToast("success", md >= usa ? "A música agora termina junto com o vídeo" : "A música é mais curta que o vídeo: ela vai repetir"); }}
-            style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center"})}><_EvpIco n="fim" s={15}/>Terminar junto com o vídeo</button>
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:6}}>Usa o final de verdade da música, em vez de cortar no meio.</div>
-          <button onClick={function(){ const md = _evpNum(info.duracao, 0), usa = calc.total - _evpNum(mu.t0, 0);
+              _evToast("success", md >= usa ? "A música agora termina junto com o vídeo" : "A música é mais curta que o vídeo: ela vai repetir"); };
+          const remix = function(){ if(mu.remix){ mudar(nm(function(o){ delete o.remix; })); _evToast("info", "Remix tirado"); return; }
+              const md = _evpNum(info.duracao, 0), usa = calc.total - _evpNum(mu.t0, 0);
               if(!md){ _evToast("warning", "Não sei a duração desta música."); return; }
               const rx = _evpRemix(md, _evpNum(mu.ini, 0), usa, mu.beat); if(!rx){ _evToast("info", "A música já cabe no vídeo (não precisa encurtar)."); return; }
-              mudar(nm(function(o){ o.remix = rx; o.fadeOut = Math.min(_evpNum(o.fadeOut, 1.5), 0.6); })); _evToast("success", "Remix: toca o começo, pula na batida e termina no final de verdade"); }}
-            style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginTop:10})}><_EvpIco n="batida" s={15}/>Encurtar na batida (remix)</button>
-          {mu.remix && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6,display:"flex",gap:6,alignItems:"center"}}>Pula de {seg(mu.remix.a)} para {seg(mu.remix.b)} da música
-            <button onClick={function(){ mudar(nm(function(o){ delete o.remix; })); }} style={Object.assign(_evpBtn(), {padding:"3px 8px",fontSize:11,marginLeft:"auto"})}>Tirar</button></div>}
-          <button onClick={function(){ if(dividir) dividir(); }} style={Object.assign(_evpBtn(), {marginTop:12,width:"100%",justifyContent:"center"})}><_EvpIco n="dividir" s={14}/>Dividir na agulha</button>
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:6}}>A 1ª parte fica aqui; a 2ª vira trilha extra na faixa Narração (canal A5), continuando do mesmo ponto. A tecla S também divide.</div>
+              mudar(nm(function(o){ o.remix = rx; o.fadeOut = Math.min(_evpNum(o.fadeOut, 1.5), 0.6); })); _evToast("success", "Remix: toca o começo, pula na batida e termina no final de verdade"); };
+          return (<div>
+          <_EvpGrupo titulo="No vídeo" estilo={{marginTop:0}} extra={<span style={{fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.fraco}}>{seg(t0M)} → {seg(fimM)}</span>}>
+            <_EvpSlider ctl={ctl} rotulo="Começa em" v={t0M} min={0} max={Math.max(0.5, calc.total - 1)} step={0.1} fmt={seg} padrao={0} aplicar={nm(function(o, v){ o.t0 = v; })}
+              quadro={function(d){ mudar(nm(function(o){ o.t0 = Math.max(0, Math.round((_evpNum(o.t0, 0) + d) * 1000) / 1000); })); }}/>
+            <_EvpSlider ctl={ctl} rotulo="Duração" v={_evpNum(mu.dur, 0)} min={0} max={Math.max(1, calc.total)} step={0.1} fmt={function(v){ return v > 0 ? seg(v) : "até o fim"; }} padrao={0} aplicar={nm(function(o, v){ if(v >= 0.5 && v < calc.total - _evpNum(o.t0, 0) - 0.05) o.dur = Math.round(v * 100) / 100; else delete o.dur; })}
+              quadro={function(d){ mudar(nm(function(o){ const d0 = _evpNum(o.dur, 0) > 0 ? _evpNum(o.dur, 0) : calc.total - _evpNum(o.t0, 0); o.dur = Math.max(0.5, Math.round((d0 + d) * 1000) / 1000); })); }}/>
+            <_EvpDica>Ou puxe as pontas do bloco na linha do tempo.</_EvpDica>
+          </_EvpGrupo>
+          <_EvpGrupo titulo="Velocidade">
+            <_EvpSeg rotulo="Velocidade da música" opcoes={_EVP_VEL.map(function(v){ return [v, fmtX(v)]; })} valor={velM} onChange={function(v){ mudar(nm(function(o){ if(v === 1) delete o.vel; else o.vel = v; })); }}/>
+            <div style={{marginTop:8}}><_EvpInterruptor on={mu.tom !== false} onChange={function(v){ mudar(nm(function(o){ if(v) delete o.tom; else o.tom = false; })); }} label="Manter o tom" dica="Não fica aguda nem grave"/></div>
+            {velM !== 1 && mu.remix && <_EvpDica cor={_EV.amarelo}>O remix (encurtar na batida) só vale em 1×.</_EvpDica>}
+          </_EvpGrupo>
+          <_EvpGrupo titulo="Final da música">
+            <_EvpAcoes itens={[
+              { id:"terminar", icone:"fim", label:"Terminar com o vídeo", dica:"Usa o final de verdade da música, em vez de cortar no meio", onClick:terminar },
+              { id:"remix", icone:"batida", label:mu.remix ? "Tirar o remix" : "Encurtar na batida", on:!!mu.remix, dica:"Toca o começo, pula na batida e termina no final de verdade", onClick:remix },
+              { id:"dividir", icone:"dividir", label:"Dividir na agulha", dica:"A 2ª parte vira trilha extra (canal A5), continuando do mesmo ponto. Tecla S", onClick:function(){ if(dividir) dividir(); } } ]}/>
+            {mu.remix && <_EvpDica>Pula de {seg(mu.remix.a)} para {seg(mu.remix.b)} da música.</_EvpDica>}
+          </_EvpGrupo>
+          <_EvpMais id="mus-tempo" aberto={_evpNum(mu.ini, 0) > 0}>
+            <_EvpSlider ctl={ctl} rotulo="Pular o começo da música" v={_evpNum(mu.ini, 0)} min={0} max={Math.max(1, _evpNum(info.duracao, 120) - 1)} step={0.5} fmt={seg} padrao={0} aplicar={nm(function(o, v){ o.ini = v; })}/>
+          </_EvpMais>
         </div>); })()}
       </div>
     );
@@ -134591,36 +134825,41 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
     const tocarSfx = function(tipo){ try{ const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC(); const s = ac.createBufferSource(); s.buffer = _evpSfxBuffer(ac, tipo); s.connect(ac.destination); s.start(); s.onended = function(){ try{ ac.close(); }catch(_){} }; }catch(_){} };
     return (
       <div style={caixa}>{cab}
-        {ferr === "som" && (<div style={{display:"grid",gap:6}}>
-          {_EVP_SFX.map(function(o){ return <div key={o.id} style={{display:"flex",gap:6}}>
-            <button onClick={function(){ mudar(ns(function(q){ q.tipo = o.id; })); }} style={Object.assign(_evpChip(x.tipo === o.id), {flex:1})}>{o.label}</button>
-            <button onClick={function(){ tocarSfx(o.id); }} aria-label={"Ouvir " + o.label} title="Ouvir" style={Object.assign(_evpBtn("icone"), {padding:6})}><_EvpIco n="play" s={14}/></button></div>; })}
+        {ferr === "som" && (<div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>{/* v71: grade; o ▶ toca sem trocar */}
+          {_EVP_SFX.map(function(o){ const on = x.tipo === o.id; return <div key={o.id} role="button" tabIndex={0} onClick={function(){ mudar(ns(function(q){ q.tipo = o.id; })); tocarSfx(o.id); }}
+            onKeyDown={function(e){ if(e.key === "Enter"){ e.preventDefault(); mudar(ns(function(q){ q.tipo = o.id; })); } }} title={"Usar " + o.label}
+            style={Object.assign(_evpChip(on), {display:"flex",alignItems:"center",gap:6,padding:"8px 8px",minWidth:0})}>
+            <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.label}</span>
+            <button onClick={function(e){ e.stopPropagation(); tocarSfx(o.id); }} aria-label={"Ouvir " + o.label} title="Ouvir" style={{border:0,background:"transparent",color:"inherit",cursor:"pointer",padding:2,display:"grid",flexShrink:0}}><_EvpIco n="play" s={13}/></button></div>; })}
         </div>)}
         {ferr === "volume" && (<div>
+          {/* v71: volume e mudo em cima · suave num bloco · velocidade, nome, canal e pontos em "Mais" ("Momento" já está em Tempo) */}
           <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(x.vol, 0.8)} min={0} max={2} step={0.05} fmt={pct} padrao={0.8} aplicar={ns(function(o, v){ o.vol = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Momento" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={ns(function(o, v){ o.t0 = v; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Velocidade (o pedaço encurta/alonga)" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} padrao={1} fmt={function(v){ return (Math.round(v * 100) / 100).toString().replace(".", ",") + "×"; }}
-            aplicar={ns(function(o, v){ const v0 = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(!_EVP_SFX_AMB[o.tipo] && _evpNum(o.dur, 0) > 0) o.dur = Math.max(0.05, Math.round(o.dur * v0 / v * 100) / 100); o.vel = v; })}/>{/* v39; v40: a duração acompanha (mesmo trecho do arquivo) */}
-          <_EvpInterruptor on={x.tom !== false} onChange={function(v){ mudar(ns(function(o){ if(v) delete o.tom; else o.tom = false; })); }} label="Manter o tom" dica="Com outra velocidade, o som não fica agudo nem grave"/>{/* v41 */}
-          <_EvpSlider ctl={ctl} rotulo="Entrada suave" v={_evpNum(x.fi, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={ns(function(o, v){ if(v > 0) o.fi = v; else delete o.fi; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Saída suave" v={_evpNum(x.fo, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={ns(function(o, v){ if(v > 0) o.fo = v; else delete o.fo; })}/>
           <_EvpInterruptor on={!!x.mudo} onChange={function(v){ mudar(ns(function(o){ if(v) o.mudo = true; else delete o.mudo; })); }} label="Sem som (mudo)"/>
-          <input value={x.nome || ""} placeholder={(_EVP_SFX.find(function(q){ return q.id === x.tipo; }) || {}).label || "Nome do efeito"} aria-label="Nome do efeito" onChange={function(e){ const v = e.target.value.slice(0, 60); ctl.vivo(ns(function(o){ if(v) o.nome = v; else delete o.nome; })); }} onBlur={ctl.fim} style={campo}/>
-          <_EvpCanalSel letra="A" valor={_evpNum(x.canal, 4)} min={3} onChange={function(k){ mudar(ns(function(o){ o.canal = k; })); }}/>
-          <_EvpVolPontos pts={x.volPts} agora={tempo >= x.t0 && tempo < x.t0 + _evpSfxDurTotal(x) ? tempo - x.t0 : null} base={_evpNum(x.vol, 0.8)} maxV={2} fmtT={seg} ctl={ctl} mudar={mudar}
-            aplicarPts={function(np, fn){ const o = (np.sfx || []).find(function(q){ return q.id === x.id; }); if(!o) return; const n = fn(o.volPts); if(n && n.length) o.volPts = n; else delete o.volPts; }}/>{/* v41: pontos ◆ */}
+          <_EvpGrupo titulo="Entrar e sair suave">
+            <_EvpSlider ctl={ctl} rotulo="Entrada" v={_evpNum(x.fi, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={ns(function(o, v){ if(v > 0) o.fi = v; else delete o.fi; })}/>
+            <_EvpSlider ctl={ctl} rotulo="Saída" v={_evpNum(x.fo, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={ns(function(o, v){ if(v > 0) o.fo = v; else delete o.fo; })}/>
+          </_EvpGrupo>
+          <_EvpMais id="sfx-vol" aberto={Math.abs(_evpNum(x.vel, 1) - 1) > 0.01 || (x.volPts || []).length > 0}>
+            <_EvpSlider ctl={ctl} rotulo="Velocidade" v={_evpNum(x.vel, 1)} min={0.5} max={2} step={0.05} padrao={1} fmt={function(v){ return (Math.round(v * 100) / 100).toString().replace(".", ",") + "×"; }}
+              aplicar={ns(function(o, v){ const v0 = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(!_EVP_SFX_AMB[o.tipo] && _evpNum(o.dur, 0) > 0) o.dur = Math.max(0.05, Math.round(o.dur * v0 / v * 100) / 100); o.vel = v; })}/>{/* v39; v40: a duração acompanha (mesmo trecho do arquivo) */}
+            <_EvpInterruptor on={x.tom !== false} onChange={function(v){ mudar(ns(function(o){ if(v) delete o.tom; else o.tom = false; })); }} label="Manter o tom" dica="Não fica agudo nem grave"/>{/* v41 */}
+            <label style={{display:"block",fontSize:12.5,fontWeight:600,margin:"6px 0 6px"}}>Nome na linha do tempo</label>
+            <input value={x.nome || ""} placeholder={(_EVP_SFX.find(function(q){ return q.id === x.tipo; }) || {}).label || "Nome do efeito"} aria-label="Nome do efeito" onChange={function(e){ const v = e.target.value.slice(0, 60); ctl.vivo(ns(function(o){ if(v) o.nome = v; else delete o.nome; })); }} onBlur={ctl.fim} style={campo}/>
+            <div style={{height:8}}/>
+            <_EvpCanalSel letra="A" valor={_evpNum(x.canal, 4)} min={3} onChange={function(k){ mudar(ns(function(o){ o.canal = k; })); }}/>
+            <_EvpVolPontos pts={x.volPts} agora={tempo >= x.t0 && tempo < x.t0 + _evpSfxDurTotal(x) ? tempo - x.t0 : null} base={_evpNum(x.vol, 0.8)} maxV={2} fmtT={seg} ctl={ctl} mudar={mudar}
+              aplicarPts={function(np, fn){ const o = (np.sfx || []).find(function(q){ return q.id === x.id; }); if(!o) return; const n = fn(o.volPts); if(n && n.length) o.volPts = n; else delete o.volPts; }}/>{/* v41: pontos ◆ */}
+          </_EvpMais>
         </div>)}
         {ferr === "tempo" && (function(){ const amb = !!_EVP_SFX_AMB[x.tipo], vel = Math.max(0.5, Math.min(2, _evpNum(x.vel, 1))), bf = x.url && _evpSfxUrls[x.url] && _evpSfxUrls[x.url].buf, durArq = bf ? bf.duration : _evpDurSfx(x.tipo), dT = _evpSfxDurTotal(x);   /* v40 */
           return (<div>
           <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:8,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n="efeitos" s={14}/>{x.nome || "Som"} · ocupa {seg(dT)}{!amb && <span> · no arquivo: {seg(_evpNum(x.ini, 0))} → {seg(Math.min(durArq, _evpNum(x.ini, 0) + dT * vel))}</span>}</div>
-          <_EvpSlider ctl={ctl} rotulo="Começa" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={ns(function(o, v){ o.t0 = v; })}/>
-          <_EvpQuadros rot="Começa" aplicar={function(d){ mudar(ns(function(o){ o.t0 = Math.max(0, Math.round((o.t0 + d) * 1000) / 1000); })); }}/>{/* v41: ±1 quadro */}
-          {!amb && <_EvpSlider ctl={ctl} rotulo="Cortar o começo (do arquivo)" v={_evpNum(x.ini, 0)} min={0} max={Math.max(0.1, durArq - 0.1)} step={0.02} fmt={seg} padrao={0}
+          <_EvpSlider ctl={ctl} rotulo="Começa" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={ns(function(o, v){ o.t0 = v; })} quadro={function(d){ mudar(ns(function(o){ o.t0 = Math.max(0, Math.round((o.t0 + d) * 1000) / 1000); })); }}/>
+          {!amb && <_EvpSlider ctl={ctl} rotulo="Cortar o começo" v={_evpNum(x.ini, 0)} min={0} max={Math.max(0.1, durArq - 0.1)} step={0.02} fmt={seg} padrao={0}
             aplicar={ns(function(o, v){ const a = _evpNum(o.ini, 0), vv = Math.max(0.5, Math.min(2, _evpNum(o.vel, 1))); if(_evpNum(o.dur, 0) > 0) o.dur = Math.max(0.05, Math.round((o.dur - (v - a) / vv) * 100) / 100); o.ini = Math.round(v * 100) / 100; })}/>}
-          <_EvpSlider ctl={ctl} rotulo={amb ? "Duração (o ambiente repete)" : "Duração (corta o fim; 0 = até o fim do arquivo)"} v={_evpNum(x.dur, amb ? 6 : 0)} min={0} max={60} step={0.05} fmt={seg} padrao={amb ? 6 : 0} aplicar={ns(function(o, v){ if(v > 0.05) o.dur = Math.round(v * 100) / 100; else delete o.dur; })}/>
-          <_EvpQuadros rot="Duração" aplicar={function(d){ mudar(ns(function(o){ o.dur = Math.max(0.05, Math.round((_evpSfxDurTotal(o) + d) * 1000) / 1000); })); }}/>{/* v41: ±1 quadro */}
-          <button onClick={function(){ if(dividir) dividir(); }} style={Object.assign(_evpBtn(), {marginTop:6,width:"100%",justifyContent:"center"})}><_EvpIco n="dividir" s={14}/>Dividir na agulha</button>
-          <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:8}}>Divida, depois mude a Velocidade de cada pedaço (aba Volume). O botão Dividir lá em cima e a tecla S também dividem o som selecionado.</div>
+          <_EvpSlider ctl={ctl} rotulo={amb ? "Duração (repete)" : "Duração"} v={_evpNum(x.dur, amb ? 6 : 0)} min={0} max={60} step={0.05} fmt={seg} padrao={amb ? 6 : 0} aplicar={ns(function(o, v){ if(v > 0.05) o.dur = Math.round(v * 100) / 100; else delete o.dur; })} quadro={function(d){ mudar(ns(function(o){ o.dur = Math.max(0.05, Math.round((_evpSfxDurTotal(o) + d) * 1000) / 1000); })); }}/>
+          <button onClick={function(){ if(dividir) dividir(); }} title="Divida e mude a velocidade de cada pedaço (Volume › Mais ajustes). Tecla S" style={Object.assign(_evpBtn(), {marginTop:6,width:"100%",justifyContent:"center"})}><_EvpIco n="dividir" s={14}/>Dividir na agulha</button>
         </div>); })()}
       </div>
     );
@@ -134636,20 +134875,26 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {ferr === "voz" && (x.musica || x.fonte === "clipe") && <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>Este áudio não é narração (trilha ou som de um clipe).</div>}
         <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}><_EvpIco n={x.musica ? "musica" : x.ia ? "robo" : "gravar"} s={14}/>{x.musica ? "Trilha extra (música em outro canal)" : x.ia ? "Voz gerada pela IA" : "Gravada no microfone"} · {_evTempo(x.dur)}</div>
         {ferr === "volume" && (<div>
+          {/* v71: mesma ordem do efeito — volume, mudo, suave; canal, nome e pontos em "Mais" */}
           <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(x.vol, 1)} min={0} max={3} step={0.05} fmt={pct} padrao={1} aplicar={nn(function(o, v){ o.vol = v; })}/>
-          <_EvpCanalSel letra="A" valor={_evpNum(x.canal, x.musica ? 5 : 3)} min={3} onChange={function(k){ mudar(nn(function(o){ o.canal = k; })); }}/>
-          {x.musica && <_EvpInterruptor on={x.duck !== false} onChange={function(v){ mudar(nn(function(o){ o.duck = v; })); }} label="Abaixar na fala" dica="Igual à música principal"/>}
-          <input value={x.nome || ""} aria-label="Nome da narração" onChange={function(e){ const v = e.target.value.slice(0, 60); ctl.vivo(nn(function(o){ o.nome = v; })); }} onBlur={ctl.fim} style={campo}/>
-          <_EvpSlider ctl={ctl} rotulo="Entrada suave" v={_evpNum(x.fi, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={nn(function(o, v){ if(v > 0) o.fi = v; else delete o.fi; })}/>{/* v41 */}
-          <_EvpSlider ctl={ctl} rotulo="Saída suave" v={_evpNum(x.fo, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={nn(function(o, v){ if(v > 0) o.fo = v; else delete o.fo; })}/>
           <_EvpInterruptor on={!!x.mudo} onChange={function(v){ mudar(nn(function(o){ if(v) o.mudo = true; else delete o.mudo; })); }} label="Sem som (mudo)"/>
+          {x.musica && <_EvpInterruptor on={x.duck !== false} onChange={function(v){ mudar(nn(function(o){ o.duck = v; })); }} label="Abaixar na fala" dica="Igual à música principal"/>}
+          <_EvpGrupo titulo="Entrar e sair suave">
+            <_EvpSlider ctl={ctl} rotulo="Entrada" v={_evpNum(x.fi, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={nn(function(o, v){ if(v > 0) o.fi = v; else delete o.fi; })}/>{/* v41 */}
+            <_EvpSlider ctl={ctl} rotulo="Saída" v={_evpNum(x.fo, 0)} min={0} max={3} step={0.05} fmt={seg} padrao={0} aplicar={nn(function(o, v){ if(v > 0) o.fo = v; else delete o.fo; })}/>
+          </_EvpGrupo>
+          <_EvpMais id="narr-vol" aberto={(x.volPts || []).length > 0}>
+          <label style={{display:"block",fontSize:12.5,fontWeight:600,margin:"2px 0 6px"}}>Nome na linha do tempo</label>
+          <input value={x.nome || ""} aria-label="Nome da narração" onChange={function(e){ const v = e.target.value.slice(0, 60); ctl.vivo(nn(function(o){ o.nome = v; })); }} onBlur={ctl.fim} style={campo}/>
+          <div style={{height:8}}/>
+          <_EvpCanalSel letra="A" valor={_evpNum(x.canal, x.musica ? 5 : 3)} min={3} onChange={function(k){ mudar(nn(function(o){ o.canal = k; })); }}/>
           <_EvpVolPontos pts={x.volPts} agora={tempo >= x.t0 && tempo < x.t0 + _evpNum(x.dur, 1) ? tempo - x.t0 : null} base={_evpNum(x.vol, 1)} fmtT={seg} ctl={ctl} mudar={mudar}
             aplicarPts={function(np, fn){ const o = (np.narracoes || []).find(function(q){ return q.id === x.id; }); if(!o) return; const n = fn(o.volPts); if(n && n.length) o.volPts = n; else delete o.volPts; }}/>
+          </_EvpMais>
           <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:8}}>A limpeza do menu Áudio (ruído, voz, eco) também vale para a narração gravada. A música abaixa sozinha enquanto ela fala.</div>
         </div>)}
         {ferr === "tempo" && (<div>
-          <_EvpSlider ctl={ctl} rotulo="Começa" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={nn(function(o, v){ o.t0 = v; })}/>
-          <_EvpQuadros rot="Começa" aplicar={function(d){ mudar(nn(function(o){ o.t0 = Math.max(0, Math.round((o.t0 + d) * 1000) / 1000); })); }}/>{/* v41: ±1 quadro */}
+          <_EvpSlider ctl={ctl} rotulo="Começa" v={x.t0} min={0} max={Math.max(0.2, calc.total - 0.1)} step={0.02} fmt={seg} aplicar={nn(function(o, v){ o.t0 = v; })} quadro={function(d){ mudar(nn(function(o){ o.t0 = Math.max(0, Math.round((o.t0 + d) * 1000) / 1000); })); }}/>
           <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>Ou arraste o bloco na faixa Narração (as pontas cortam o começo e o fim).</div>
           <div style={_EVP_TIT}>Velocidade</div>
           <_EvpInterruptor on={x.tom !== false} onChange={function(v){ mudar(nn(function(o){ if(v) delete o.tom; else o.tom = false; })); }} label="Manter o tom" dica="Acelerou ou ficou lenta? A voz continua natural"/>{/* v41 */}
@@ -134658,8 +134903,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           </div>
           <div style={_EVP_TIT}>Cortes</div>
           <_EvpSlider ctl={ctl} rotulo="Cortar o começo" v={_evpNum(x.corte, 0)} min={0} max={Math.max(0.5, _evpNum(x.dur, 1) - 0.2)} step={0.05} fmt={seg} padrao={0} aplicar={nn(function(o, v){ const d = _evpNum(o.corte, 0) - v; o.corte = Math.round(v * 100) / 100; o.dur = Math.max(0.2, Math.round((_evpNum(o.dur, 1) + d) * 100) / 100); o.cortado = true; })}/>
-          <_EvpSlider ctl={ctl} rotulo="Duração (corta o fim)" v={_evpNum(x.dur, 1)} min={0.2} max={Math.max(0.5, _evpNum(x.dur, 1) + 30)} step={0.05} fmt={seg} aplicar={nn(function(o, v){ o.dur = Math.round(v * 100) / 100; o.cortado = true; })}/>
-          <_EvpQuadros rot="Duração" aplicar={function(d){ mudar(nn(function(o){ o.dur = Math.max(0.2, Math.round((_evpNum(o.dur, 1) + d) * 1000) / 1000); o.cortado = true; })); }}/>{/* v41: ±1 quadro */}
+          <_EvpSlider ctl={ctl} rotulo="Duração (corta o fim)" v={_evpNum(x.dur, 1)} min={0.2} max={Math.max(0.5, _evpNum(x.dur, 1) + 30)} step={0.05} fmt={seg} aplicar={nn(function(o, v){ o.dur = Math.round(v * 100) / 100; o.cortado = true; })} quadro={function(d){ mudar(nn(function(o){ o.dur = Math.max(0.2, Math.round((_evpNum(o.dur, 1) + d) * 1000) / 1000); o.cortado = true; })); }}/>
           <button onClick={function(){ const k = tempo - x.t0; if(k <= 0.1 || k >= _evpNum(x.dur, 1) - 0.1){ _evToast("warning", "Leve a agulha para o meio deste áudio."); return; } const nid = _evpId();
               mudar(function(np){ const o = (np.narracoes || []).find(function(q){ return q.id === x.id; }); if(!o) return; const d0 = _evpNum(o.dur, 1);
                 np.narracoes.push(Object.assign(_evpCopia(o), { id:nid, t0:Math.round(tempo * 100) / 100, corte:Math.round((_evpNum(o.corte, 0) + k) * 100) / 100, dur:Math.round((d0 - k) * 100) / 100, cortado:true, volPts:undefined }));
@@ -134677,7 +134921,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
     return (
       <div style={caixa}>{cab}
         {(x.camada || "imagem") === "imagem" && <img src={x.url} alt="" style={{display:"block",maxWidth:"100%",maxHeight:90,margin:"0 auto 10px",borderRadius:8,background:"repeating-conic-gradient(#f1f2f8 0% 25%, #fff 0% 50%) 50% / 12px 12px"}}/>}
-        <_EvpCanalSel letra="V" valor={_evpNum(x.canal, 2)} min={2} onChange={function(k){ mudar(ni(function(o){ o.canal = k; })); }}/>
+        {ferr === "tamanho" && <_EvpCanalSel letra="V" valor={_evpNum(x.canal, 2)} min={2} onChange={function(k){ mudar(ni(function(o){ o.canal = k; })); }}/>}
         {x.camada === "efeito" && ferr === "tamanho" && (function(){   /* v68: EFEITO NUM TRECHO — os mesmos efeitos do clipe, valendo para tudo embaixo */
           const fx = x.fx || [], tem = function(id){ return fx.find(function(e){ return e.tipo === id; }); };
           const nf = function(fn){ return ni(function(o, v){ o.fx = (o.fx || []).map(function(e){ return Object.assign({}, e); }); fn(o, v); if(!o.fx.length) o.fx = [{ tipo:"glow", f:0.5 }]; }); };
@@ -134692,7 +134936,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           </div>); })()}
         {(x.camada || "imagem") !== "desfoque" && x.camada !== "ajuste" && x.camada !== "forma" && x.camada !== "efeito" && ferr === "tamanho" && (<div style={{marginBottom:6}}>
           <_EvpInterruptor on={!!x.cheia} onChange={function(v){ mudar(ni(function(o){ if(v){ o.cheia = true; o.x = 0.5; o.y = 0.5; o.escala = 1; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; o.mudo = true; } } else { delete o.cheia; o.escala = 0.35; o.y = 0.3; } })); }}
-            label="Apoio em tela cheia" dica="Imagem de apoio (B-roll): cobre a tela toda por cima do vídeo principal; a fala continua por baixo"/>
+            label="Apoio em tela cheia" dica="Cobre a tela toda; a fala continua por baixo"/>
           {x.camada === "video" && !x.cheia && (<div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>{/* v39: velocidade por trecho — divide na agulha e acelera só um pedaço */}
             <button onClick={function(){ const T = tempo; if(!(T > x.t0 + 0.1 && T < x.t1 - 0.1)){ _evToast("warning", "Leve a agulha para dentro deste vídeo por cima (não nas pontas)."); return; }
                 mudar(function(np){ const o = (np.imagens || []).find(function(q){ return q.id === x.id; }); if(!o) return; const vx = _evpNum(o.vel, 1) || 1;
@@ -134745,7 +134989,8 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
           <_EvpSlider ctl={ctl} rotulo="Girar" v={_evpNum(x.rot, 0)} min={-180} max={180} step={1} fmt={function(v){ return v + "°"; }} padrao={0} aplicar={ni(function(o, v){ o.rot = v; })}/>
           <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>No vídeo: arraste para mover e use a roda do mouse para o tamanho.</div>
         </div>)}
-        {ferr === "tamanho" && x.camada !== "desfoque" && x.camada !== "ajuste" && <_EvpCamadaExtra x={x} ni={ni} mudar={mudar} ctl={ctl}/>}
+        {ferr === "tamanho" && x.camada !== "desfoque" && x.camada !== "ajuste" && <_EvpMais id="camada-extra" rotulo="Mistura, opacidade, espelhar" aberto={!!(x.blend || _evpNum(x.op, 1) < 1 || x.fh || x.fv || (x.chroma && x.chroma.on))}>{/* v71 */}
+          <_EvpCamadaExtra x={x} ni={ni} mudar={mudar} ctl={ctl}/></_EvpMais>}
         {ferr === "anim" && (<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
           {[["pop","Pular"],["aparecer","Aparecer"],["nenhuma","Sem animação"]].map(function(o){ return <button key={o[0]} onClick={function(){ mudar(ni(function(q){ q.anim = o[0]; })); }} style={_evpChip((x.anim || "pop") === o[0])}>{o[1]}</button>; })}
         </div>)}
@@ -134763,19 +135008,18 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
     const mudarT = function(fn){ mudar(function(np){ const o = (np.transicoes || []).find(function(q){ return q.id === x.id; }); if(o){ fn(o); delete o.auto; } }); };
     return (
       <div style={caixa}>{cab}
-        <div style={_EVP_TIT}>Tipo</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
+        {/* v71: tipos em grade, duração em barra, um texto curto */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
           {_EVP_TRANS_CAMADA.map(function(id){ const lb = ((_EVP_TRANS.find(function(q){ return q.id === id; })) || {}).label || id;
-            return <button key={id} onClick={function(){ mudarT(function(o){ o.tipo = id; }); }} style={_evpChip(x.tipo === id)}>{lb}</button>; })}
+            return <button key={id} onClick={function(){ mudarT(function(o){ o.tipo = id; }); }} style={Object.assign(_evpChip(x.tipo === id), {justifyContent:"center",padding:"9px 6px"})}>{lb}</button>; })}
         </div>
-        <div style={_EVP_TIT}>Duração</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
-          {_EVP_TRANS_DURS.map(function(o){ return <button key={o.v} onClick={function(){ mudarT(function(q){ const meio = q.t0 + _evpTrCamDur(q) / 2; q.dur = o.v; q.t0 = Math.max(0, Math.round((meio - o.v / 2) * 100) / 100); }); }}
-            style={_evpChip(Math.abs(dAt - o.v) < 0.01)}>{o.label} ({String(o.v).replace(".", ",")} s)</button>; })}
-        </div>
-        <div style={{fontSize:11.5,color:_EVP_COR.fraco,lineHeight:1.5,marginBottom:10}}>Fica por cima do vídeo e do apoio (faixa V3): aparece sempre. A troca de imagem acontece no meio dela; arraste na faixa para mudar o lugar.{x.motivo ? " A IA pôs aqui: " + x.motivo + "." : ""}</div>
+        <_EvpGrupo titulo="Duração" solto>
+          <_EvpSeg rotulo="Duração da transição" opcoes={_EVP_TRANS_DURS.map(function(o){ return [o.v, o.label, String(o.v).replace(".", ",") + " s"]; })} valor={(_EVP_TRANS_DURS.find(function(o){ return Math.abs(dAt - o.v) < 0.01; }) || {}).v}
+            onChange={function(v){ mudarT(function(q){ const meio = q.t0 + _evpTrCamDur(q) / 2; q.dur = v; q.t0 = Math.max(0, Math.round((meio - v / 2) * 100) / 100); }); }}/>
+        </_EvpGrupo>
+        <_EvpDica>Aparece por cima de tudo. Arraste na faixa para mudar o lugar.{x.motivo ? " A IA pôs aqui: " + x.motivo + "." : ""}</_EvpDica>
         <button onClick={function(){ mudar(function(np){ np.transicoes = (np.transicoes || []).filter(function(q){ return q.id !== x.id; }); }); }}
-          style={Object.assign(_evpBtn("suave"), {color:"#b91c1c"})}><_EvpIco n="apagar" s={15}/>Tirar esta transição</button>
+          style={Object.assign(_evpBtn(), {color:"#ef4444",marginTop:14,width:"100%",justifyContent:"center"})}><_EvpIco n="apagar" s={15}/>Tirar esta transição</button>
       </div>
     );
   }
