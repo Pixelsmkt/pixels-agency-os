@@ -141913,7 +141913,90 @@ function _eaFontePsd(nome){
   return { familia:fam, peso:m && m[2] ? pesos[m[2].toLowerCase()] || "400" : "400", italico:!!(m && m[3]) };
 }
 const _EA_MISTURA = { "multiply":"multiply", "screen":"screen", "overlay":"overlay", "darken":"darken", "lighten":"lighten", "color dodge":"color-dodge", "color burn":"color-burn",
-  "hard light":"hard-light", "soft light":"soft-light", "difference":"difference", "exclusion":"exclusion", "hue":"hue", "saturation":"saturation", "color":"color", "luminosity":"luminosity" };
+  "hard light":"hard-light", "soft light":"soft-light", "difference":"difference", "exclusion":"exclusion", "hue":"hue", "saturation":"saturation", "color":"color", "luminosity":"luminosity",
+  // (07/10) aproximações: o canvas não tem estes, usa o mais parecido em vez de virar "normal"
+  "linear burn":"multiply", "darker color":"darken", "linear dodge":"lighter", "lighter color":"lighten", "vivid light":"hard-light", "linear light":"hard-light", "pin light":"hard-light", "hard mix":"hard-light", "subtract":"difference", "divide":"screen" };
+
+/* ─── (07/10/2026, Gustavo: "sem cor, parece CMYK") PERFIL DE COR DO PSD ───────────────────────────────────────────
+   O Photoshop mostra as cores pelo perfil embutido (Adobe RGB, ProPhoto, Display P3…); o navegador trata os números
+   como sRGB e tudo fica lavado (o azul do céu vira azul-acinzentado, o verde do mapa apaga). Lemos o nome do perfil
+   no ICC e CONVERTEMOS pixels, cores de texto, de forma e de efeitos pra sRGB antes de montar a arte. */
+const _EA_PERFIS = {
+  adobe:    { gama:2.19921875, m:[[0.5767309,0.1855540,0.1881852],[0.2973769,0.6273491,0.0752741],[0.0270343,0.0706872,0.9911085]] },
+  prophoto: { gama:1.8, d50:true, m:[[0.7976749,0.1351917,0.0313534],[0.2880402,0.7118741,0.0000857],[0.0000000,0.0000000,0.8252100]] },
+  p3:       { srgb:true, m:[[0.4865709,0.2656677,0.1982173],[0.2289746,0.6917385,0.0792869],[0.0000000,0.0451134,1.0439444]] },
+  apple:    { gama:1.8, m:[[0.4497288,0.3162486,0.1844926],[0.2446525,0.6720283,0.0833192],[0.0251848,0.1411824,0.9224628]] },
+};
+/* a biblioteca que lê o PSD pula o perfil ICC (recurso 1039); lemos direto dos bytes: cabeçalho (26) → dados de modo de cor → recursos "8BIM" */
+function _eaIccDoPsd(buf){
+  try{
+    const u = new Uint8Array(buf), dv = new DataView(buf);
+    if(!(u[0] === 0x38 && u[1] === 0x42 && u[2] === 0x50 && u[3] === 0x53)) return null;   // "8BPS"
+    let p = 26; const cm = dv.getUint32(p); p += 4 + cm;
+    const irLen = dv.getUint32(p); p += 4; const fim = Math.min(u.length, p + irLen);
+    while(p + 12 <= fim){
+      if(!(u[p] === 0x38 && u[p+1] === 0x42 && u[p+2] === 0x49 && u[p+3] === 0x4D)) break;   // "8BIM"
+      const id = dv.getUint16(p + 4); p += 6;
+      const nl = u[p]; p += 1 + nl; if((1 + nl) % 2) p++;
+      const sz = dv.getUint32(p); p += 4;
+      if(id === 1039) return u.subarray(p, p + sz);
+      p += sz; if(sz % 2) p++;
+    }
+  }catch(_){ }
+  return null;
+}
+function _eaPerfilDoPsd(psd, buf){
+  try{
+    const b = _eaIccDoPsd(buf) || (psd.imageResources && psd.imageResources.iccProfile); if(!b || !b.length) return null;
+    let s = ""; for(let i = 0; i < Math.min(b.length, 6000); i++){ const c = b[i]; if(c >= 32 && c < 127) s += String.fromCharCode(c); }
+    if(/Adobe ?RGB/i.test(s)) return { id:"adobe", nome:"Adobe RGB (1998)" };
+    if(/ProPhoto|ROMM/i.test(s)) return { id:"prophoto", nome:"ProPhoto RGB" };
+    if(/Display ?P3|DCI-?P3/i.test(s)) return { id:"p3", nome:"Display P3" };
+    if(/Apple ?RGB/i.test(s)) return { id:"apple", nome:"Apple RGB" };
+    return null;   // sRGB (IEC61966) ou desconhecido: não mexe
+  }catch(_){ return null; }
+}
+function _eaConversorPerfil(id){
+  const P = _EA_PERFIS[id]; if(!P) return null;
+  const X2S = [[3.2404542,-1.5371385,-0.4985314],[-0.9692660,1.8760108,0.0415560],[0.0556434,-0.2040259,1.0572252]];
+  const BRAD = [[0.9555766,-0.0230393,0.0631636],[-0.0282895,1.0099416,0.0210077],[0.0122982,-0.0204830,1.3299098]];   // D50 → D65
+  const mul = function(A, B){ const R = [[0,0,0],[0,0,0],[0,0,0]]; for(let i = 0; i < 3; i++) for(let j = 0; j < 3; j++) for(let k = 0; k < 3; k++) R[i][j] += A[i][k] * B[k][j]; return R; };
+  const M = mul(X2S, P.d50 ? mul(BRAD, P.m) : P.m);
+  const dec = new Float32Array(256);
+  for(let i = 0; i < 256; i++){ const v = i / 255; dec[i] = P.srgb ? (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)) : Math.pow(v, P.gama); }
+  const enc = new Uint8ClampedArray(4097);
+  for(let i = 0; i <= 4096; i++){ const v = i / 4096; const e = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; enc[i] = Math.round(Math.max(0, Math.min(1, e)) * 255); }
+  const px = function(r, g, b){
+    const lr = dec[r], lg = dec[g], lb = dec[b];
+    let R = M[0][0] * lr + M[0][1] * lg + M[0][2] * lb, G = M[1][0] * lr + M[1][1] * lg + M[1][2] * lb, B = M[2][0] * lr + M[2][1] * lg + M[2][2] * lb;
+    R = R < 0 ? 0 : R > 1 ? 1 : R; G = G < 0 ? 0 : G > 1 ? 1 : G; B = B < 0 ? 0 : B > 1 ? 1 : B;
+    return [enc[(R * 4096) | 0], enc[(G * 4096) | 0], enc[(B * 4096) | 0]];
+  };
+  const canvas = function(cv){
+    try{
+      if(!cv || !cv.width || !cv.height || cv.__perfilOk) return;
+      const x = cv.getContext("2d"), d = x.getImageData(0, 0, cv.width, cv.height), a = d.data;
+      for(let i = 0; i < a.length; i += 4){ if(a[i + 3] === 0) continue; const o = px(a[i], a[i + 1], a[i + 2]); a[i] = o[0]; a[i + 1] = o[1]; a[i + 2] = o[2]; }
+      x.putImageData(d, 0, 0); cv.__perfilOk = true;
+    }catch(_){ }
+  };
+  const cor = function(c){ if(!c || c.__perfilOk) return; if(c.r != null){ const o = px(Math.max(0, Math.min(255, Math.round(c.r))), Math.max(0, Math.min(255, Math.round(c.g || 0))), Math.max(0, Math.min(255, Math.round(c.b || 0)))); c.r = o[0]; c.g = o[1]; c.b = o[2]; c.__perfilOk = true; } };
+  return { px:px, canvas:canvas, cor:cor };
+}
+/* converte TODO o PSD lido (camadas, composto, cores de texto/forma/efeitos) pra sRGB */
+function _eaConverterPsdParaSrgb(psd, conv){
+  const grad = function(g){ if(g && Array.isArray(g.colorStops)) g.colorStops.forEach(function(st){ conv.cor(st.color); }); };
+  const efeitos = function(ef){ if(!ef) return; Object.keys(ef).forEach(function(k){ const v = ef[k]; (Array.isArray(v) ? v : [v]).forEach(function(e){ if(!e || typeof e !== "object") return; conv.cor(e.color); grad(e.gradient); if(e.content) conv.cor(e.content.color); }); }); };
+  (function andar(lista){ (lista || []).forEach(function(l){
+    if(l.canvas) conv.canvas(l.canvas);
+    if(l.text){ if(l.text.style) conv.cor(l.text.style.fillColor); (l.text.styleRuns || []).forEach(function(r){ if(r.style) conv.cor(r.style.fillColor); }); }
+    if(l.vectorFill){ conv.cor(l.vectorFill.color); grad(l.vectorFill); }
+    if(l.vectorStroke && l.vectorStroke.content) conv.cor(l.vectorStroke.content.color);
+    efeitos(l.effects);
+    if(l.children) andar(l.children);
+  }); })(psd.children);
+  if(psd.canvas) conv.canvas(psd.canvas);
+}
 /* ─── v3 (30/09/2026): PSD FIEL — o sócio abriu um PSD e o azul cobriu tudo, sem o degradê, sem a curva, logo colorido.
    Causas: a máscara de camada vem em CINZA (a biblioteca não põe em transparência), a máscara de VETOR (forma curva) não era
    aplicada, a máscara de RECORTE era ignorada e os EFEITOS (sobreposição de cor, degradê, contorno, sombra) não eram desenhados.
@@ -142041,12 +142124,16 @@ function _eaPsdDesenhar(l, W, H, ctx){
     o.save(); o.globalAlpha = gl.opacity == null ? 0.75 : gl.opacity; if(tam > 0) o.filter = "blur(" + (tam / 2) + "px)";
     o.drawImage(_eaPsdSilhueta(_eaPsdEngordar(S, tam / 2), _eaPsdCor(gl.color, 1)), 0, 0); o.restore(); });
   o.save(); o.globalAlpha = l.fillOpacity == null ? 1 : l.fillOpacity; o.drawImage(S, 0, 0); o.restore();
-  cores.forEach(function(c){ o.save(); o.globalAlpha = c.opacity == null ? 1 : c.opacity; o.drawImage(_eaPsdSilhueta(S, _eaPsdCor(c.color)), 0, 0); o.restore(); });
+  // (07/10) a sobreposição de cor/degradê tem modo de mistura PRÓPRIO (ex.: "YOUR COLOR" em Cor/Multiplicar sobre um render 3D):
+  //   sem isso, a cor cobria o render e virava uma mancha chapada
+  cores.forEach(function(c){ o.save(); o.globalAlpha = c.opacity == null ? 1 : c.opacity; o.globalCompositeOperation = (c.blendMode && _EA_MISTURA[c.blendMode]) || "source-over";
+    const k = _eaPsdSilhueta(S, _eaPsdCor(c.color)); o.drawImage(k, 0, 0); o.restore();
+    if(c.blendMode && c.blendMode !== "normal" && !_EA_MISTURA[c.blendMode]) avisos.push("sobreposição de cor em \"" + c.blendMode + "\" virou normal"); });
   degr.forEach(function(g){
     if(!g.gradient || g.gradient.type === "noise"){ avisos.push("degradê de ruído do Photoshop ficou de fora"); return; }
     const k = _eaPsdCv(A.w, A.h), x = k.getContext("2d"); x.fillStyle = _eaPsdDegrade(x, g.gradient, _eaPsdCaixaAlfa(S), g); x.fillRect(0, 0, A.w, A.h);
     x.globalCompositeOperation = "destination-in"; x.drawImage(S, 0, 0);
-    o.save(); o.globalAlpha = g.opacity == null ? 1 : g.opacity; o.drawImage(k, 0, 0); o.restore(); });
+    o.save(); o.globalAlpha = g.opacity == null ? 1 : g.opacity; o.globalCompositeOperation = (g.blendMode && _EA_MISTURA[g.blendMode]) || "source-over"; o.drawImage(k, 0, 0); o.restore(); });
   // contorno de FORMA (o traço da forma desenhada com a caneta/retângulo do Photoshop)
   if(vs && vm){
     const lw = _eaPsdUn(vs.lineWidth) || 1, al = vs.lineAlignment || "center";
@@ -142161,6 +142248,9 @@ async function _eaAbrirPsd(a, arquivo, op){
   _eaToast("info", "Abrindo " + arquivo.name + "…");
   const buf = await arquivo.arrayBuffer();
   const psd = ag.readPsd(buf, { skipThumbnail:true, skipCompositeImageData:false, skipLayerImageData:false, useImageData:false, logMissingFeatures:false });
+  // (07/10) perfil de cor: Adobe RGB / ProPhoto / P3 → converte pra sRGB pra ficar igual ao Photoshop
+  const perfil = _eaPerfilDoPsd(psd, buf);
+  if(perfil){ const conv = _eaConversorPerfil(perfil.id); if(conv){ _eaToast("info", "PSD em " + perfil.nome + ": convertendo as cores pra sRGB…"); try{ _eaConverterPsdParaSrgb(psd, conv); }catch(_){ } psd.__perfilConvertido = perfil.nome; } }
   const prs = (op && op.naPagina) ? [] : _eaPsdPranchetas(psd);
   if(!prs.length) return _eaAbrirPsdLido(a, psd, arquivo.name, op, null);
   const vis = prs.filter(function(p){ return !p.hidden; });
@@ -142178,8 +142268,7 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
   const W = pr ? pr.w : psd.width, H = pr ? pr.h : psd.height, lib = a.lib, avisos = [], objs = [], infos = [];
   if(!pr && psd.colorMode !== undefined && psd.colorMode !== 3) avisos.push(arquivo.name + ": o PSD não é RGB (é CMYK ou outro). As cores foram convertidas para RGB.");
   if(!pr && psd.bitsPerChannel && psd.bitsPerChannel !== 8) avisos.push(arquivo.name + ": PSD de " + psd.bitsPerChannel + " bits — as cores podem sair um pouco diferentes. Se notar diferença, salve uma cópia em 8 bits/canal, sRGB.");
-  try{ const ir = psd.imageResources || {}; if(ir.iccProfile || ir.iccUntaggedProfile === false){ const nome = (function(){ try{ const b = ir.iccProfile; if(!b) return ""; let s = ""; for(let i = 0; i < Math.min(b.length, 400); i++){ const c = b[i]; if(c >= 32 && c < 127) s += String.fromCharCode(c); } const m = s.match(/(Adobe RGB|ProPhoto|Display P3|sRGB|Apple RGB)[^\x00]{0,20}/i); return m ? m[1] : ""; }catch(_){ return ""; } })();
-    if(nome && !/sRGB/i.test(nome) && !pr) avisos.push(arquivo.name + ": perfil de cor " + nome + " — o navegador trata como sRGB, então as cores podem ficar diferentes do Photoshop. Pra ficar igual, converta o PSD pra sRGB (Editar › Converter para perfil)."); } }catch(_){ }
+  if(!pr && psd.__perfilConvertido) avisos.push(arquivo.name + ": o PSD está em " + psd.__perfilConvertido + " — as cores foram convertidas pra sRGB pra ficarem iguais ao Photoshop.");
   // camadas de baixo para cima, com o que vem do grupo (escondido, opacidade, máscaras) e a camada-base do recorte
   const camadas = [];
   (function andar(lista, pai){
@@ -142203,6 +142292,10 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       if(!l.clipping) base = item;
     });
   })(pr ? pr.children : psd.children, { escondido:false, prefixo:"", opacidade:1, grupos:[] });
+  // (07/10) GRUPO DE RECORTE: camada com "clipping" é desenhada DENTRO da camada de baixo, com o modo de mistura dela
+  //   (ex.: "YOUR COLOR" em modo Cor/Escurecer em cima do render 3D do mapa). Antes cada uma virava um objeto solto,
+  //   e a cor cobria o render como uma mancha chapada. Agora a de cima é mesclada na de baixo e sobe um objeto só.
+  camadas.forEach(function(c){ if(c.l.clipping && c.base && !c.base.l.text && !c.l.text && !c.escondido){ (c.base.recortados = c.base.recortados || []).push(c); c.mesclarNoBase = true; } });
   // original achatado do Photoshop (para comparar) — escondido, embaixo de tudo (na prancheta: só o pedaço dela)
   if(psd.canvas && psd.canvas.width){
     try{ let orig = psd.canvas; if(pr){ orig = _eaPsdCv(W, H); orig.getContext("2d").drawImage(psd.canvas, -pr.x, -pr.y); }
@@ -142228,7 +142321,8 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       const tr = l.text.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
       const cor = st.fillColor ? "#" + [st.fillColor.r, st.fillColor.g, st.fillColor.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : "#000000";
       const al = { left:"left", center:"center", right:"right", justifyLeft:"justify", justifyCenter:"justify", justifyRight:"justify", justifyAll:"justify" }[(l.text.paragraphStyle && l.text.paragraphStyle.justification) || "left"] || "left";
-      const larg = Math.max(20, ((l.right||0) - (l.left||0)) * 1.08);
+      const temLimites = ((l.right||0) - (l.left||0)) > 4;
+      const larg = temLimites ? Math.max(20, ((l.right||0) - (l.left||0)) * 1.08) : 4000;   // sem limites: mede o texto numa linha só e ajusta depois
       const temDesenho = !!(l.canvas && l.canvas.width && l.canvas.height);
       const simples = ok && !temEfeito && !temMascara;
       const familia = ok ? fo.familia : "Montserrat";
@@ -142243,6 +142337,7 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
          é CONFERIDO contra a altura real da camada no PSD (resolução do documento muda a escala) e corrigido. */
       try{ await _eaPsdEstilosTexto(t, l, textoPsd, esc, ok, cor); }catch(_){ }
       try{ _eaPsdAjustarTamanhoTexto(t, l); }catch(_){ }
+      if(!temLimites){ try{ t.initDimensions(); let mw = 0; for(let li = 0; li < (t._textLines || []).length; li++) mw = Math.max(mw, t.getLineWidth(li)); t.set("width", Math.max(20, mw + 6)); t.initDimensions(); t.setCoords(); }catch(_){ } }
       infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:t.fontSize || Math.max(4, (st.fontSize || 24) * esc) });
       if(simples){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
       /* (07/10) camada de TEXTO marcada como espaço: entra só o texto editável e visível (o texto vai ser trocado
@@ -142256,12 +142351,29 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       l.__textoEditavel = t;          // entra logo acima da imagem
     }
     if(l.adjustment && !(l.canvas && l.canvas.width)){ avisos.push(c.nome + ": camada de ajuste do Photoshop (" + (l.adjustment.type || "ajuste") + ") não existe aqui — ficou de fora."); continue; }
+    if(c.mesclarNoBase && c.base.feito){ continue; }                 // já entrou dentro da camada de baixo
     const r = _eaPsdDesenhar(l, W, H, { grupos:c.grupos, base:c.base && c.base.feito ? c.base.feito : null });
     if(!r){ continue; }
     c.feito = r;
     r.avisos.forEach(function(x){ avisos.push(c.nome + ": " + x); });
+    (c.recortados || []).forEach(function(cc){
+      try{
+        const rc = _eaPsdDesenhar(cc.l, W, H, { grupos:cc.grupos, base:r }); if(!rc) return;
+        rc.avisos.forEach(function(x){ avisos.push(cc.nome + ": " + x); });
+        const efc = (cc.l.effects && !cc.l.effects.disabled) ? cc.l.effects : {};
+        const semPreench = cc.l.fillOpacity != null && cc.l.fillOpacity < 0.05;
+        let modo = (cc.l.blendMode && cc.l.blendMode !== "normal" && cc.l.blendMode !== "pass through") ? (_EA_MISTURA[cc.l.blendMode] || null) : null;
+        if(!modo && semPreench){ const sf = _eaPsdAtivos(efc.solidFill)[0] || _eaPsdAtivos(efc.gradientOverlay)[0]; if(sf && sf.blendMode) modo = _EA_MISTURA[sf.blendMode] || null; }   // só o efeito aparece: o modo dele é o que vale
+        if(cc.l.blendMode && cc.l.blendMode !== "normal" && cc.l.blendMode !== "pass through" && !_EA_MISTURA[cc.l.blendMode]) avisos.push(cc.nome + ": modo de mistura \"" + cc.l.blendMode + "\" virou normal.");
+        const x = r.cv.getContext("2d"); x.save(); x.globalCompositeOperation = modo || "source-over"; x.globalAlpha = (cc.l.opacity == null ? 1 : cc.l.opacity);
+        x.drawImage(rc.cv, rc.x - r.x, rc.y - r.y); x.restore();
+      }catch(e){ avisos.push(cc.nome + ": não deu pra mesclar no recorte (" + _eaErro(e) + ")"); }
+    });
     const up = await _eaSubir(await _eaCanvasBlob(r.cv), "arte/" + a.projetoId, "psd.png");
     const extra = Object.assign({}, base, { left:r.x, top:r.y });
+    if((c.recortados || []).length) extra.nome = (c.nome + " (+" + c.recortados.length + " recorte" + (c.recortados.length > 1 ? "s" : "") + ")").slice(0, 80);
+    // camada sem preenchimento (só efeito) que mistura com o que está embaixo: o objeto leva o modo do efeito
+    if(!l.clipping && l.fillOpacity != null && l.fillOpacity < 0.05 && (!l.blendMode || l.blendMode === "normal")){ const ef0 = (l.effects && !l.effects.disabled) ? l.effects : {}; const sf0 = _eaPsdAtivos(ef0.solidFill)[0] || _eaPsdAtivos(ef0.gradientOverlay)[0]; if(sf0 && sf0.blendMode && _EA_MISTURA[sf0.blendMode] && !extra.globalCompositeOperation) extra.globalCompositeOperation = _EA_MISTURA[sf0.blendMode]; }
     if(l.placedLayer) extra.aviso = "Objeto inteligente do Photoshop: entrou como imagem (dá para mover, redimensionar e esconder).";
     if(temEfeito){ extra.aviso = "Efeitos do Photoshop desenhados na camada (sombra, contorno, cor…): para mudar o efeito, edite no Photoshop."; }
     const img = await _eaImagemDeUrl(lib, up.url, extra);
