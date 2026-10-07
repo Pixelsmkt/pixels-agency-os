@@ -126127,7 +126127,8 @@ function _evpMotor(canvas, o){
         const v = els2[x.id]; if(!v || v.readyState < 2 || !v.videoWidth) return;
         const s = Math.max(W / v.videoWidth, H / v.videoHeight), w = v.videoWidth * s, h = v.videoHeight * s;
         caixas.push({ id:x.id, tipo:"imagem", x:0, y:0, w:W, h:H });
-        const vs = x.chroma && x.chroma.on ? (_evpCorGL.render(v, { chroma:x.chroma }) || v) : v;      // v23: chroma no apoio
+        const kAp = x.cor && _evpCorAvancada(x.cor) ? Object.assign({}, x.cor, x.chroma && x.chroma.on ? { chroma:x.chroma } : {}) : (x.chroma && x.chroma.on ? { chroma:x.chroma } : null);   // v64: cor automática no apoio
+        const vs = kAp ? (_evpCorGL.render(v, kAp) || v) : v;      // v23: chroma no apoio
         apoioTr(x, bl, opG, function(g){ g.drawImage(vs, (W - w) / 2, (H - h) / 2, w, h); });          // v30: com entrada/saída
         return;
       }
@@ -126891,21 +126892,34 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + _evpChaveExtra(p.audio) + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().join(",") : "");
   const [tratandoAudio, setTratandoAudio] = useState(true);   // v10b (30/09): começa "tratando" — o PC não pode gravar antes de carregar a fala (saía sem som)
   const [metodoRuido, setMetodoRuido] = useState(null);
+  /* v64 (07/10/2026): ABRE MAIS RÁPIDO — o som só é baixado e tratado dos vídeos que TOCAM som (na faixa principal e vídeo por cima sem mudo),
+     3 de cada vez. Antes eram TODOS os brutos do card, um por um (Sid: 25 vídeos, 77 MB — só 7 tinham a fala usada, 19 MB). Vídeo que entra
+     na linha do tempo depois é preparado na hora (o que já foi tratado fica guardado). O PC continua só gravando depois que a fala carregou. */
+  const usadosAudio = useMemo(function(){
+    const u = {}; (p.clips || []).forEach(function(c){ if(c && c.clipe && !c.mudo && !c.off) u[c.clipe] = 1; });
+    (p.imagens || []).forEach(function(x){ if(x && x.camada === "video" && x.clipe && !x.mudo) u[x.clipe] = 1; });
+    return Object.keys(u).sort().join(",");
+  }, [p.clips, p.imagens]);
   useEffect(function(){
     let vivo = true; setTratandoAudio(true);
     (async function(){
       const out = {}; let met = null;
-      for(const c of clipes){
+      const usa = {}; usadosAudio.split(",").forEach(function(id){ if(id) usa[id] = 1; });
+      const lista = clipes.filter(function(c){ return usa[c.id]; });
+      const trata = async function(c){
         if(p.audio.estudio && vozesPC[c.id]){      // voz de estúdio feita no PC (IA): só nivela
           const a2 = await _evpAudio("pc:" + c.id, vozesPC[c.id]);
-          if(a2){ const b2 = await _evpTratar("pc:" + c.id, { ruido:false, voz:false, eco:!!p.audio.eco, nivelar:!!p.audio.nivelar }); if(b2){ out[c.id] = b2; met = "estudio"; continue; } }
+          if(a2){ const b2 = await _evpTratar("pc:" + c.id, { ruido:false, voz:false, eco:!!p.audio.eco, nivelar:!!p.audio.nivelar }); if(b2){ out[c.id] = b2; met = "estudio"; return; } }
         }
-        const a = await _evpAudio(c.id, _evLeve(c)); if(!a) continue;
-        const b = await _evpTratar(c.id, p.audio); if(b){ out[c.id] = b; if(b._metodoRuido && met !== "estudio") met = b._metodoRuido; } }
+        const a = await _evpAudio(c.id, _evLeve(c)); if(!a) return;
+        const b = await _evpTratar(c.id, p.audio); if(b){ out[c.id] = b; if(b._metodoRuido && met !== "estudio") met = b._metodoRuido; } };
+      let k = 0;
+      const fila = async function(){ while(k < lista.length){ const c = lista[k++]; try{ await trata(c); }catch(_){ /* um vídeo que falha não trava os outros */ } } };
+      await Promise.all([fila(), fila(), fila()]);
       if(vivo){ setVozes(out); setMetodoRuido(met); setTratandoAudio(false); }
     })().catch(function(){ if(vivo) setTratandoAudio(false); });
     return function(){ vivo = false; };
-  }, [ed.id, audioKey]);
+  }, [ed.id, audioKey, usadosAudio]);
 
   /* narrações (gravadas ou da IA): mesmo tratamento de áudio da fala */
   const [narr, setNarr] = useState({});
@@ -135733,6 +135747,16 @@ function _evpConferir(p, calc, o){
   // v19: cor completa precisa de WebGL (placa de vídeo)
   if(calc.clips.some(function(c){ return c.cor && _evpCorAvancada(c.cor); }) && !_evpCorGL.ok())
     add("aviso", "Este computador está sem WebGL", "A cor avançada (curvas, HSL, rodas, exposição…) não aparece aqui. No PC do escritório ela sai normal.");
+  /* v64 (07/10/2026): CONFERÊNCIA DA IA (portão do servidor) — o checklist que a IA rodou antes desta versão sair (o mesmo que vai no WhatsApp).
+     Foto da versão SALVA: o que você mexeu depois aparece nos outros itens daqui (que olham a linha do tempo ao vivo). */
+  (function(){
+    const cf = o.receita && o.receita.conferencia; if(!cf || !Array.isArray(cf.itens)) return;
+    const quando = cf.modo === "montar" ? "na 1ª versão" : cf.modo === "motion" ? "depois do motion" : "no último ajuste";
+    cf.itens.forEach(function(it){ if(!it || !it.nome) return;
+      const nivel = it.estado === "erro" ? "erro" : it.estado === "aviso" ? "aviso" : "ok";
+      const tit = (it.estado === "corrigido" ? "IA corrigiu · " : "IA conferiu · ") + it.nome + (it.regra ? " (regra aprendida)" : "");
+      add(nivel, tit, String(it.detalhe || "") + " — " + quando + ".", it.t != null && nivel !== "ok" ? { id:"irpara", t:Number(it.t), label:"Ver" } : null); });
+  })();
   // v16: originais no Drive e nitidez do vídeo deitado no vertical
   (function(){
     const dD = o.driveDe || {}, usados = {}; calc.clips.forEach(function(c){ if(!usados[c.clipe]) usados[c.clipe] = c; });
@@ -136040,6 +136064,7 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     else if(a.id === "duck") mudar(function(np){ if(np.musica) np.musica.duck = true; });
     else if(a.id === "musvol") mudar(function(np){ if(np.musica) np.musica.vol = _evpVolIdeal(np.musica, musInfo && musInfo.nivel_db != null ? Number(musInfo.nivel_db) : null); });
     else if(a.id === "legenda") mudar(function(np){ np.legenda.ativa = true; });
+    else if(a.id === "irpara") irPara(Math.max(0, _evpNum(a.t, 0)));   // v64: item da conferência da IA → leva a agulha até o ponto
     else if(a.id === "anuncio") mudar(function(np){ _evpAnuncioAgir(np, a, { fala:fala, clipes:ed.clipes || [], kit:kit, base:base }); });   // v35: modo anúncio
     else if(a.id === "fotos_fala") _evpFotosNaFala({ projeto:projeto, calc:calc, fala:fala, kit:kit, fotos:_evpFotosDoCard(t && t.files), mudar:mudar });   // v37
     else if(a.id === "silencio") tirarTrechos(a.lista, "Silêncios tirados");
@@ -136745,6 +136770,13 @@ function _EvAprende({ isMob }){
     window._sb.rpc("criacao_reedicao_motivos", { p_client:cli || null }).then(function(r){ if(vivo) setMotivos(r.error ? null : (r.data || null)); }).catch(function(){ if(vivo) setMotivos(null); });
     return function(){ vivo = false; };
   }, [cli, rec]);
+  /* v64 (07/10/2026): PLACAR DO PORTÃO — quantos vídeos saíram certos na 1ª versão e o que a conferência da IA mais pegou (SQL v52) */
+  const [portaoPl, setPortaoPl] = useState(null);
+  useEffect(function(){
+    if(!window._sb) return; let vivo = true;
+    window._sb.rpc("criacao_portao_placar", { p_client:cli || null }).then(function(r){ if(vivo) setPortaoPl(r.error ? null : (r.data || null)); }).catch(function(){ if(vivo) setPortaoPl(null); });
+    return function(){ vivo = false; };
+  }, [cli, rec]);
   useEffect(function(){
     if(!window._sb) return; let vivo = true; setErro(null);
     window._sb.rpc("criacao_aprendizado", { p_client:cli || null }).then(function(r){
@@ -136884,8 +136916,22 @@ function _EvAprende({ isMob }){
             {cartao("Mudanças à mão por vídeo", _evNum1(pl.manuais_por_video), "versões salvas na linha do tempo")}
             {cartao("Custo de IA por vídeo", _evBrl(pl.custo_medio_brl), "total " + _evBrl(pl.custo_total_brl))}
             {cartao("Horas até exportar", _evNum1(pl.horas_ate_exportar), "da 1ª edição ao arquivo final")}
+            {portaoPl && Number(portaoPl.saidas) > 0 && cartao("Certo na 1ª versão", (Number(portaoPl.primeira) || 0) + " de " + (Number(portaoPl.saidas) || 0),
+              (portaoPl.ultimos10 && Number(portaoPl.ultimos10.total) ? "últimos " + portaoPl.ultimos10.total + ": " + (Number(portaoPl.ultimos10.primeira) || 0) + " sem nenhum ajuste" : "saíram sem nenhum ajuste depois da IA"))}
           </div>
         )}
+        {portaoPl && Array.isArray(portaoPl.itens) && portaoPl.itens.length > 0 && (function(){ const its = portaoPl.itens.slice(0, 10), max = Math.max(1, ...its.map(function(q){ return Number(q.problemas) + Number(q.corrigidos); }));
+          return <div style={{border:"1px solid " + _EV.linha2,borderRadius:12,padding:"10px 12px",background:_EV.fundo,marginTop:12}}>
+            <div style={{fontSize:_evF(11.5, isMob),color:_EV.sub,fontWeight:700}}>O que a conferência da IA mais pegou ({Number(portaoPl.com_portao) || 0} {Number(portaoPl.com_portao) === 1 ? "vídeo" : "vídeos"}, últimos 90 dias)</div>
+            {its.map(function(q){ const pr = Number(q.problemas) || 0, co = Number(q.corrigidos) || 0;
+              return <div key={q.id} style={{display:"flex",alignItems:"center",gap:8,marginTop:5,fontSize:_evF(12.5, isMob)}}>
+                <span style={{flex:"0 0 150px",fontWeight:700}}>{q.nome}</span>
+                <span style={{flex:1,height:8,borderRadius:99,background:_EV.linha2,overflow:"hidden",display:"flex"}}>
+                  <span title="a IA corrigiu sozinha" style={{display:"block",height:"100%",width:(co / max * 100) + "%",background:_EV.verde}}/>
+                  <span title="ficou para a equipe olhar" style={{display:"block",height:"100%",width:(pr / max * 100) + "%",background:_EV.amarelo}}/></span>
+                <span style={{fontVariantNumeric:"tabular-nums",color:_EV.sub,whiteSpace:"nowrap"}}>{co} corrigido{co === 1 ? "" : "s"} · {pr} pra olhar</span></div>; })}
+            <div style={{fontSize:_evF(11, isMob),color:_EV.fraco,marginTop:6}}>Verde = a IA corrigiu antes de mandar. Amarelo = foi como aviso (no WhatsApp e aqui no Estúdio). Item que se repete no amarelo vira regra.</div>
+          </div>; })()}
         <div style={{fontSize:_evF(11.5, isMob),color:_EV.fraco,marginTop:8}}>Contas feitas direto do banco (sem IA). Regras valendo: {Number(pl.regras_aprovadas) || 0} · esperando sócio: {Number(pl.regras_pendentes) || 0}.</div>
         {motivos && (function(){ const ped = Array.isArray(motivos.pedidos) ? motivos.pedidos : [], rv = motivos.revisor || {};
           const fix = [["cortes_no_meio_da_palavra","corte no meio de palavra acertado","cortes no meio de palavra acertados"],["falas_repetidas","fala repetida tirada","falas repetidas tiradas"],["nomes_recusados","troca de nome errada recusada","trocas de nome erradas recusadas"],["encurtados","vídeo encurtado para o tempo do formato","vídeos encurtados para o tempo do formato"]]
