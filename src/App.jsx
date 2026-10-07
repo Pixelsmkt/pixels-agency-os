@@ -142213,6 +142213,17 @@ function _EaIdentidade({ isMob, cliente, unidade, kit }){
         </div>}
     </div>
     <div style={caixa}>
+      <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 260px"}}>
+          <div style={{fontWeight:800,fontSize:14}}>Foto nova por IA quando não há material</div>
+          <div style={{fontSize:12,color:_EA.sub,marginTop:2}}>Sem foto no Material do card, o Gerar arte pega fotos já aprovadas deste cliente que casam com o briefing e cria uma foto <b>nova do mesmo produto</b> (nunca inventa produto). Desligado: entra a foto aprovada mais parecida, sem gerar.</div>
+        </div>
+        {dados !== null && <label style={{display:"flex",gap:8,alignItems:"center",fontSize:13,fontWeight:700,cursor:isMob?"default":"pointer"}}>
+          <input type="checkbox" disabled={isMob} checked={!(dados && dados.gerar_foto_ia === false)} onChange={function(e){ salvar({ gerar_foto_ia:e.target.checked }).then(function(ok){ if(ok) _eaToast("success", e.target.checked ? "Foto nova por IA ligada" : "Foto nova por IA desligada — usa só fotos aprovadas"); }); }}/>
+          {!(dados && dados.gerar_foto_ia === false) ? "Ligado" : "Desligado"}</label>}
+      </div>
+    </div>
+    <div style={caixa}>
       <div style={{fontWeight:800,fontSize:14}}>Observações da identidade</div>
       <div style={{fontSize:12,color:_EA.sub,marginTop:2}}>O que a IA e o designer precisam saber sobre o visual deste cliente (ex.: "logo sempre no canto inferior direito", "nunca usar laranja", "fotos sempre com a faixa verde embaixo").</div>
       <textarea value={obs} onChange={function(e){ setObs(e.target.value); }} onBlur={function(){ if(dados && (dados.observacoes || "") !== obs) salvar({ observacoes:obs }).then(function(ok){ if(ok) _eaToast("success", "Observações guardadas"); }); }} rows={4} disabled={isMob}
@@ -142330,6 +142341,50 @@ async function _eaFotoIA(base, mascara, prompt, client){
   out.__custo = resp.custo_brl;
   return out;
 }
+/* ── BANCO DE FOTOS DO CLIENTE (07/10, Gustavo): "usar fotos já aprovadas de tal produto como referência pra criar
+   imagens novas — tal qual é feito com copys". Sem foto no Material do card: pega as fotos de MATERIAL dos cards já
+   aprovados/publicados do mesmo cliente que mais casam com o briefing e manda pro gpt-image-1 como referência. ── */
+async function pxFotosReferenciaDoCliente(task, n){
+  const sb = window._sb; if(!sb || !task || !task.client) return [];
+  const r = await sb.from("tasks").select("id,title,description,status,files,publish_date,content_type").eq("client", task.client).in("status", ["aprovado","agendado","publicado"]).order("publish_date", { ascending:false }).limit(400);
+  if(r.error || !Array.isArray(r.data)) return [];
+  const bag = _eaTokens([task.title, _eaSemHtml(task.desc || task.description || "")].join(" "));
+  const fotoOk = function(f){ return f && f.url && !f.isAnnotation && !f.isRef && /\.(jpe?g|png|webp)(\?|#|$)/i.test(String(f.name || f.url)) && (f.tipo === "material" || (!f.tipo && /\.(jpe?g)(\?|#|$)/i.test(String(f.name || f.url)))); };
+  const out = [];
+  r.data.forEach(function(t){
+    if(String(t.id) === String(task.id) || /-es$/.test(String(t.id))) return;
+    const fotos = (Array.isArray(t.files) ? t.files : []).filter(fotoOk); if(!fotos.length) return;
+    const tk = _eaTokens([t.title, _eaSemHtml(t.description || "")].join(" ")); let pts = 0; tk.forEach(function(x){ if(bag.indexOf(x) >= 0) pts++; });
+    const tt = _eaTokens(t.title || ""); tt.forEach(function(x){ if(bag.indexOf(x) >= 0) pts += 2; });   // título pesa mais
+    fotos.forEach(function(f){ out.push({ url:f.url, nome:f.name || "", card:t.title || "", pts:pts, data:t.publish_date || "" }); });
+  });
+  out.sort(function(a, b){ return b.pts - a.pts || String(b.data).localeCompare(String(a.data)); });
+  const vistos = {}; return out.filter(function(x){ if(vistos[x.url]) return false; vistos[x.url] = 1; return true; }).slice(0, n || 4);
+}
+async function _eaImgParaB64(url, max){
+  const img = await _eaCarregarImg(url); const k = Math.min(1, (max || 1024) / Math.max(img.width, img.height));
+  const cv = document.createElement("canvas"); cv.width = Math.max(1, Math.round(img.width * k)); cv.height = Math.max(1, Math.round(img.height * k));
+  cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+  return cv.toDataURL("image/png").split(",")[1];
+}
+/* cria uma foto NOVA do mesmo produto a partir das referências aprovadas; devolve { url(dataURL), custo, refs } ou null */
+async function _eaGerarFotoPorReferencia(task, refs, W, H, ctx){
+  if(!refs || !refs.length) return null;
+  const b64s = []; for(const r of refs.slice(0, 4)){ try{ b64s.push(await _eaImgParaB64(r.url, 1024)); }catch(_){ } }
+  if(!b64s.length) return null;
+  const copy = _eaSecoesCopy(task.desc || task.description || "");
+  const rr = W / H, tam = rr < 0.8 ? "1024x1536" : rr > 1.25 ? "1536x1024" : "1024x1024";
+  const obs = (ctx && ctx.identidade && ctx.identidade.observacoes) ? String(ctx.identidade.observacoes).slice(0, 400) : "";
+  const prompt = ["Fotografia publicitária realista do MESMO produto que aparece nas imagens de referência (mesmo produto, mesmo material, mesmas proporções e acabamento), em uma cena nova e limpa.",
+    "Tema do post: " + String(task.title || "").slice(0, 120) + (copy.titulo ? ". Título: " + copy.titulo.slice(0, 120) : "") + (copy.texto ? ". Texto: " + copy.texto.replace(/\s+/g, " ").slice(0, 200) : "") + ".",
+    "Ambiente rural/industrial coerente com o produto, luz natural, ângulo que valorize o produto, sem pessoas em destaque, sem texto, sem logotipo, sem placas, sem marca d'água.",
+    "Não invente um produto diferente nem acrescente partes que não existem nas referências. Composição com espaço de céu/fundo limpo no terço superior.",
+    obs ? "Observações do cliente: " + obs : ""].filter(Boolean).join(" ");
+  const resp = await _eaFn({ acao:"foto", referencias:b64s, prompt:prompt, tamanho:tam, qualidade:"medium", client_id:task.client || null });
+  if(!resp || !resp.imagem) return null;
+  return { url:"data:image/png;base64," + resp.imagem, custo:resp.custo_brl, refs:refs.slice(0, b64s.length) };
+}
+
 /* encaixa a foto no espaço FOTO respeitando: obra livre de texto e de mapa · céu na altura do mapa · horizonte reto ·
    se faltar céu/chão a foto encolhe e a IA completa · entulho ao redor da obra é removido pela IA */
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
@@ -142457,9 +142512,26 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   // fotos do card nos espaços FOTO. Foto de obra (regras do Gustavo, 07/10): texto e mapa NÃO podem ficar em cima da obra;
   // na altura do mapa/pin já tem que ser céu; horizonte reto. A IA olha a foto (horizonte, inclinação, caixa da obra) e
   // o encaixe escolhe zoom/posição que respeitem isso; se não der, a foto entra centralizada e o histórico avisa.
+  let refsCache = null; const geradas = [];
   for(const o of espacosFoto){
-    const f = fotos[iFoto++];
-    if(!f){ avisos.push("faltou foto no material do card (o modelo pede mais uma)"); continue; }
+    let f = fotos[iFoto++];
+    if(!f){
+      // (07/10) sem foto no Material: 1) fotos aprovadas do mesmo cliente que casam com o briefing; 2) foto NOVA por referência (gpt-image-1),
+      // se o cliente permite (Identidade visual › "gerar foto com IA", ligado por padrão); 3) senão, a melhor referência entra direto.
+      if(fotoObra){ avisos.push("faltou a foto da obra no material do card — Foto de obra não gera foto"); continue; }
+      try{
+        if(refsCache === null){ passo("procurando fotos aprovadas deste cliente…"); refsCache = await pxFotosReferenciaDoCliente(task, 6); }
+        const refs = refsCache.filter(function(r){ return geradas.indexOf(r.url) < 0; });
+        if(!refs.length){ avisos.push("sem foto no material e sem fotos aprovadas deste cliente pra usar de referência — o espaço FOTO ficou com a imagem do template"); continue; }
+        const permite = !(ident && ident.gerar_foto_ia === false);
+        if(permite && typeof _eaFn === "function"){
+          passo("criando uma foto nova do produto a partir das referências aprovadas…");
+          const g = await _eaGerarFotoPorReferencia(task, refs, W, H, { identidade:ident });
+          if(g){ f = { url:g.url, name:"foto-ia.png", gerada:true }; geradas.push(refs[0].url); avisos.push("sem foto no material: foto NOVA gerada por IA a partir de " + g.refs.length + " foto(s) aprovada(s) do cliente (" + g.refs.map(function(r){ return r.card; }).filter(Boolean).slice(0, 2).join("; ") + ")" + (g.custo ? " · R$ " + Number(g.custo).toFixed(2) : "")); }
+        }
+        if(!f){ f = { url:refs[0].url, name:refs[0].nome }; geradas.push(refs[0].url); avisos.push("sem foto no material: entrou a foto aprovada do card “" + refs[0].card + "”" + (permite ? " (a IA não conseguiu gerar uma nova)" : " (geração por IA desligada pra este cliente)")); }
+      }catch(e){ avisos.push("foto: " + _eaErro(e)); continue; }
+    }
     try{
       if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, entulho)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url, { client:task.client }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       else await _eaTrocarFotoMantendoForma(o, f.url);
