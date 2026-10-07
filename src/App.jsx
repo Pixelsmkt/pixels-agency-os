@@ -123928,6 +123928,27 @@ function _evpNivelDb(buf){
 const _EVP_VOZ_DB = -18, _EVP_ALVO_MUS = -31;      // voz nivelada a −18 dB; música na fala uns 13 dB abaixo
 /* v57 (06/10/2026): TELA FINAL COM ZOOM SUAVE (pedido do sócio: "a tela final dos clientes sempre precisa dar um zoom suave até terminar").
    Da 1ª até a última imagem da tela final ela cresce devagar (padrão 8%, curva suave). projeto.tela_final.zoom = 0 a 0,2 (0 = sem zoom). */
+/* v58 (06/10/2026): LIGAR/DESLIGAR o zoom da tela final num clique (pedido do sócio: "caso eu não queira que isso aconteça").
+   Desligar grava zoom 0 e guarda o valor de antes; ligar volta ao valor de antes (ou 8%). */
+function _evpZoomFinalLigado(p){ const tf = p && p.tela_final; return !(tf && tf.zoom != null && Number(tf.zoom) <= 0); }
+function _EvpZoomFinalCtl({ p, ctl, mudar }){
+  const lig = _evpZoomFinalLigado(p);
+  const trocar = function(on){ if(on === lig) return;
+    mudar(function(np){ const tf = Object.assign({}, np.tela_final);
+      if(on){ const a = Number(tf.zoom_antes); tf.zoom = a > 0 ? a : 0.08; delete tf.zoom_antes; }
+      else { const z = tf.zoom != null ? Number(tf.zoom) : 0.08; tf.zoom_antes = z > 0 ? z : 0.08; tf.zoom = 0; }
+      np.tela_final = tf; });
+    _evToast("success", on ? "Zoom no fim ligado" : "Zoom no fim desligado"); };
+  return (<div style={{display:"flex",flexDirection:"column",gap:6}}>
+    <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.sub || "inherit"}}>Zoom suave no fim</div>
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={function(){ trocar(true); }} style={_evpChip(lig)}>Com zoom</button>
+      <button onClick={function(){ trocar(false); }} style={_evpChip(!lig)}>Sem zoom</button>
+    </div>
+    {lig && <_EvpSlider ctl={ctl} rotulo="Quanto cresce" v={Math.round(100 * (p.tela_final && p.tela_final.zoom != null ? _evpNum(p.tela_final.zoom, 0.08) : 0.08))} min={1} max={20} step={1} padrao={8}
+      fmt={function(v){ return v + "% maior no fim"; }} aplicar={function(np, v){ np.tela_final = Object.assign({}, np.tela_final, { zoom:Math.round(v) / 100 }); }}/>}
+  </div>);
+}
 function _evpZoomFinal(t, ini, fim, tf){
   const z = tf && tf.zoom != null && isFinite(Number(tf.zoom)) ? Math.max(0, Math.min(0.2, Number(tf.zoom))) : 0.08;
   if(z <= 0 || !(fim > ini)) return 1;
@@ -130986,8 +131007,7 @@ function _EvpPainelMenu(q){
         <_EvpTelaFinalSel p={p} kit={kit} base={q.base} mudar={mudar}/>
         <_EvpSlider ctl={ctl} rotulo="Duração" v={_evpNum(p.tela_final && p.tela_final.dur, 3)} min={0} max={10} step={0.5} padrao={3}
           fmt={function(v){ return v ? String(v).replace(".", ",") + " s" : "sem tela final"; }} aplicar={function(np, v){ np.tela_final = Object.assign({}, np.tela_final, { dur:v }); }}/>
-        <_EvpSlider ctl={ctl} rotulo="Zoom suave até o fim" v={Math.round(100 * (p.tela_final && p.tela_final.zoom != null ? _evpNum(p.tela_final.zoom, 0.08) : 0.08))} min={0} max={20} step={1} padrao={8}
-          fmt={function(v){ return v ? v + "% maior no fim" : "sem zoom"; }} aplicar={function(np, v){ np.tela_final = Object.assign({}, np.tela_final, { zoom:Math.round(v) / 100 }); }}/>
+        <_EvpZoomFinalCtl p={p} ctl={ctl} mudar={mudar}/>
         </div>); };
 
   /* ── Efeitos (sons + transições) ── */
@@ -132211,7 +132231,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel, selecionar, tempo, irPara, px
               {calc.total > calc.fimCortes && (
                 <div onPointerDown={function(e){ e.stopPropagation(); if(e.button !== 0) return; setSel({ tipo:"final", id:"f" }); irPara(calc.fimCortes + 0.01); }}
                   style={Object.assign(bloco("linear-gradient(135deg,#334155,#1e293b)", ehSel("final", "f")), { left:calc.fimCortes*pxs, width:Math.max(6, (calc.total - calc.fimCortes)*pxs - 1), cursor:"pointer" })}>
-                  <_EvpIco n="final" s={13}/>Tela final
+                  <_EvpIco n="final" s={13}/>Tela final{_evpZoomFinalLigado(p) ? "" : " · sem zoom"}
                   <div onPointerDown={esticarFinal} style={alca("right")}/>
                 </div>
               )}
@@ -134198,6 +134218,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
       <_EvpTelaFinalSel p={p} kit={kit} base={base} mudar={mudar}/>
       <_EvpSlider ctl={ctl} rotulo="Duração" v={_evpNum(p.tela_final && p.tela_final.dur, 3)} min={0} max={10} step={0.5} fmt={function(v){ return v ? seg(v) : "sem tela final"; }} padrao={3}
         aplicar={function(np, x){ np.tela_final = Object.assign({}, np.tela_final, { dur:x }); }}/>
+      <_EvpZoomFinalCtl p={p} ctl={ctl} mudar={mudar}/>
       <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>{_evgDaTela(kit, p.tela_final) ? "Chamada e contatos vêm do Kit do cliente (a IA não escreve na tela final)." : "Logo, chamada e contatos vêm do Kit do cliente (" + (kit.cta_final || "—") + ")."}</div>
     </div>
   );
