@@ -140796,7 +140796,8 @@ function _eaCaberTexto(o){
   if(!max) return;
   let fs = o.fontSize || 40, n = 0;
   try{ o.initDimensions(); }catch(_){}
-  while((o.height||0) * (o.scaleY||1) > max * 1.02 && fs > 10 && n < 60){ fs = Math.max(10, Math.floor(fs * 0.94)); o.set("fontSize", fs); try{ o.initDimensions(); }catch(_){} n++; }
+  const escalarEstilos = function(k){ if(!o.styles) return; Object.keys(o.styles).forEach(function(li){ Object.keys(o.styles[li] || {}).forEach(function(ci){ const e = o.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(8, e.fontSize * k); }); }); };
+  while((o.height||0) * (o.scaleY||1) > max * 1.02 && fs > 10 && n < 60){ const novo = Math.max(10, Math.floor(fs * 0.94)); escalarEstilos(novo / fs); fs = novo; o.set("fontSize", fs); try{ o.initDimensions(); }catch(_){} n++; }
   o.setCoords();
 }
 /* miniatura (para a lista) */
@@ -143476,6 +143477,47 @@ function _eaEscolherVariantes(fc, ctx){
   });
   return avisos;
 }
+/* (07/10) texto novo num espaço que tem HIERARQUIA POR LINHA no template (ex.: Bioter — 1ª linha leve, 2ª negrito).
+   Mantém o estilo de cada linha; se a frase vier numa linha só, quebra em duas: o NEGRITO fica com o produto
+   (lagoa de tratamento, cisterna…) quando ele está na frase; senão divide equilibrado, sem deixar preposição solta. */
+function _eaEstilosPorLinha(o){
+  const st = o.styles || {}; const linhas = Object.keys(st).map(Number).sort(function(a, b){ return a - b; });
+  if(linhas.length < 2) return null;
+  const primeiro = function(li){ const l = st[li] || {}; const k = Object.keys(l).map(Number).sort(function(a, b){ return a - b; })[0]; return k == null ? null : l[k]; };
+  const e0 = primeiro(linhas[0]), e1 = primeiro(linhas[linhas.length - 1]);
+  if(!e0 || !e1) return null;
+  const dif = ["fontWeight","fontSize","fill","fontFamily","fontStyle"].some(function(k){ return String(e0[k] || "") !== String(e1[k] || ""); });
+  return dif ? [e0, e1] : null;
+}
+function _eaQuebrarEmDuas(texto, produtos){
+  const t = String(texto || "").replace(/\s+/g, " ").trim(); if(!t) return [t, ""];
+  const norm = function(x){ return x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); };
+  const tn = norm(t);
+  // produto citado → ele (e o que vem depois) vai pro negrito
+  let corte = -1;
+  (produtos || []).forEach(function(pr){ (pr.aliases || [pr.nome]).concat([pr.nome]).filter(Boolean).forEach(function(al){ const an = norm(String(al)); if(an.length >= 4){ const i = tn.indexOf(an); if(i > 0 && (corte < 0 || i < corte)) corte = i; } }); });
+  if(corte > 0 && corte < t.length - 3 && corte >= t.length * 0.25){ return [t.slice(0, corte).trim(), t.slice(corte).trim()]; }
+  // senão: divide no meio por palavras, sem deixar preposição/artigo sozinho no fim da 1ª linha
+  const palavras = t.split(" "); if(palavras.length < 3) return [t, ""];
+  let melhor = 1, melhorDif = Infinity;
+  for(let i = 1; i < palavras.length; i++){ const a = palavras.slice(0, i).join(" ").length, b = palavras.slice(i).join(" ").length; const d = Math.abs(a - b); if(d < melhorDif){ melhorDif = d; melhor = i; } }
+  const soltas = ["a","o","e","de","da","do","das","dos","com","em","na","no","nas","nos","para","pra","por","que","um","uma","ao","à"];
+  while(melhor > 1 && soltas.indexOf(norm(palavras[melhor - 1])) >= 0) melhor--;
+  return [palavras.slice(0, melhor).join(" "), palavras.slice(melhor).join(" ")];
+}
+function _eaTextoComHierarquia(o, texto, produtos){
+  const hier = _eaEstilosPorLinha(o);
+  const temQuebra = /\n/.test(String(texto || ""));
+  if(!hier){ o.set("text", String(texto || "")); o.set("styles", {}); return; }
+  const partes = temQuebra ? String(texto).split(/\n+/).map(function(x){ return x.trim(); }).filter(Boolean) : _eaQuebrarEmDuas(texto, produtos);
+  const l0 = partes[0] || "", l1 = partes.slice(1).join(" ");
+  const novo = l1 ? l0 + "\n" + l1 : l0;
+  const styles = {};
+  const linhaEstilo = function(li, str, e){ styles[li] = {}; for(let i = 0; i < str.length; i++) styles[li][i] = Object.assign({}, e); };
+  linhaEstilo(0, l0, hier[0]); if(l1) linhaEstilo(1, l1, hier[1]);
+  o.set({ text:novo, styles:styles }); try{ o.initDimensions(); }catch(_){ }
+}
+
 /* ── FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação, a caixa da obra e as caixas de entulho (frações 0–1) ── */
 async function _eaAnalisarFotoObra(url){
   if(typeof askGPTBlocos !== "function") return null;
@@ -143750,18 +143792,20 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const fotoObra = tipoCard === "foto_obra";
   const copy = _eaSecoesCopy(task.desc || task.description || "");
   const fotos = _eaFotosDoCard(task); let iFoto = 0; const avisos = []; const travados = []; const espacosFoto = [];
+  // produtos do Playbook (pra saber o que vai em negrito na frase)
+  let produtosCtx = []; try{ const it = await pxInteligenciaDesign(task.client, unid); produtosCtx = (it.produtos || []).map(function(p){ return { nome:p.nome, aliases:[p.nome] }; }); }catch(_){ }
   passo("preenchendo com a copy e as fotos…");
   for(const o of fc.getObjects().slice()){
     if(!o.espaco) continue;
     const tipo = _eaTipo(o);
     try{
       if(fotoObra && tipo === "texto" && (o.espaco === "HEADLINE" || o.espaco === "SUBTITLE")){
-        // Foto de obra: a FRASE do briefing vai no texto (título ou frase, o que o template tiver)
+        // Foto de obra: a FRASE do briefing vai no texto (título ou frase, o que o template tiver), mantendo a hierarquia das linhas
         const txt = o.espaco === "HEADLINE" ? (copy.titulo || copy.frase) : (copy.frase || copy.texto);
-        if(txt){ o.set("text", txt); _eaCaberTexto(o); } else avisos.push("o briefing não tem • FRASE NA ARTE");
+        if(txt){ _eaTextoComHierarquia(o, txt, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • FRASE NA ARTE");
       }
-      else if(tipo === "texto" && o.espaco === "HEADLINE"){ if(copy.titulo){ o.set("text", copy.titulo); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TÍTULO"); }
-      else if(tipo === "texto" && o.espaco === "SUBTITLE"){ if(copy.texto){ o.set("text", copy.texto); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TEXTO NA ARTE"); }
+      else if(tipo === "texto" && o.espaco === "HEADLINE"){ if(copy.titulo){ _eaTextoComHierarquia(o, copy.titulo, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TÍTULO"); }
+      else if(tipo === "texto" && o.espaco === "SUBTITLE"){ if(copy.texto){ _eaTextoComHierarquia(o, copy.texto, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TEXTO NA ARTE"); }
       else if(tipo === "texto" && o.espaco === "CTA" && copy.cta){ o.set("text", copy.cta); _eaCaberTexto(o); }
       else if(tipo === "texto" && o.espaco === "LOCATION" && copy.cidade){ o.set("text", copy.cidade); _eaCaberTexto(o); o.bloqueado = true; travados.push(o); }   // cidade do pin manda; o kit não sobrescreve
       else if(o.espaco === "PIN"){
