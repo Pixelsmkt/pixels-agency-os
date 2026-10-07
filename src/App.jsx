@@ -139353,7 +139353,7 @@ async function _eaFontesDoCliente(client, unidade){
   try{ const d = await _eaRpc("arte_identidade", { p_client:client, p_unidade:unidade || "" }); await _eaRegistrarFontes(d && d.fontes); return d || {}; }catch(_){ return null; }
 }
 const _EA_FONTES = ["Montserrat","Poppins","Inter","Roboto","Open Sans","Lato","Raleway","Oswald","Bebas Neue","Anton","Playfair Display","Nunito","Barlow","Archivo Black","Work Sans","DM Sans"];
-const _EA_PROPS = ["id","nome","espaco","bloqueado","naoEditavel","aviso","origem","alturaMax","selectable","evented","hasControls",
+const _EA_PROPS = ["id","nome","espaco","variante","bloqueado","naoEditavel","aviso","origem","alturaMax","selectable","evented","hasControls",
                    "lockMovementX","lockMovementY","lockScalingX","lockScalingY","lockRotation"];
 const _EA_LIBS_CDN = {
   fabric:  "https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js",
@@ -141153,7 +141153,7 @@ const _EA_NOMES_ESPACO = [
   [/^(titulo|title|headline|manchete) ?\d*$/, "HEADLINE"],
   [/^(texto|texto ?na ?arte|subtitulo|subtitle|apoio|descricao|legenda|frase|frase ?na ?arte) ?\d*$/, "SUBTITLE"],
   [/^(pin|pino|alfinete|marcador|map ?pin|pin ?(do )?mapa|pin ?no ?mapa) ?\d*$/, "PIN"],
-  [/^(foto|imagem|image|produto|product|product ?image|foto ?produto) ?\d*$/, "PRODUCT_IMAGE"],
+  [/^(foto|imagem|image|produto|product|product ?image|foto ?produto|place ?(your )?image( here)?|placeholder|imagem aqui|sua ?foto|foto ?aqui) ?\d*$/, "PRODUCT_IMAGE"],
   [/^(logo|logotipo|marca)$/, "LOGO"],
   [/^(telefone|fone|whats|whatsapp|phone|contato)$/, "PHONE"],
   [/^(cta|chamada|botao|button)$/, "CTA"],
@@ -141218,14 +141218,21 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
   const camadas = [];
   (function andar(lista, pai){
     let base = null;
+    /* (07/10, Bioter Foto de obra) GRUPO DE ALTERNATIVAS: CIDADES (uma camada por cidade), ÍCONES (um por tipo de obra),
+       MAP › BRASIL/PARAGUAI… = grupo com 2+ filhos e no máximo 1 visível (ou nome que denuncia). Cada filho entra com
+       variante {grupo, nome}; na geração liga-se a certa e apagam-se as outras. Filhos escondidos entram (invisíveis). */
+    const filhos = (lista || []).filter(function(l){ return !l.adjustment; });
+    const visiveis = filhos.filter(function(l){ return !l.hidden; }).length;
+    const ehAlternativas = !!pai.nomeGrupo && filhos.length >= 2 && (visiveis <= 1 || /cidades?|icones?|ícones?|variantes?|alternativas?|opcoes|opções|mapas?|map\b|render|estados?|unidades?|produtos?/i.test(pai.nomeGrupo));
     (lista || []).forEach(function(l){
       const escondido = pai.escondido || !!l.hidden;
+      const variante = ehAlternativas ? { grupo:String(pai.nomeGrupo).slice(0, 40), nome:String(l.name || "").slice(0, 80) } : pai.variante || null;
       if(l.children){
-        andar(l.children, { escondido:escondido, prefixo:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Grupo"),
+        andar(l.children, { escondido:escondido, prefixo:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Grupo"), nomeGrupo:l.name || "Grupo", variante:variante,
           opacidade:pai.opacidade * (l.opacity == null ? 1 : l.opacity), grupos:pai.grupos.concat((l.mask || l.vectorMask) ? [l] : []) });
         base = null; return;
       }
-      const item = { l:l, escondido:escondido, nome:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Camada"), opacidade:pai.opacidade, grupos:pai.grupos, base:l.clipping ? base : null };
+      const item = { l:l, escondido:escondido, nome:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Camada"), opacidade:pai.opacidade, grupos:pai.grupos, base:l.clipping ? base : null, variante:variante };
       camadas.push(item);
       if(!l.clipping) base = item;
     });
@@ -141242,6 +141249,7 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
     const l = c.l; n++;
     if(n % 5 === 0) _eaToast("info", "Camadas: " + n + " de " + camadas.length);
     const base = { nome:c.nome.slice(0,80), visible:!c.escondido, opacity:(l.opacity === undefined ? 1 : l.opacity) * c.opacidade, origem:"psd" };
+    if(c.variante) base.variante = c.variante;                            // (07/10) alternativa de um grupo (cidade, ícone, mapa…)
     const _esp = _eaEspacoDoNome(c.nome); if(_esp) base.espaco = _esp;   // (07/10) espaço pelo nome da camada
     if(l.blendMode && l.blendMode !== "normal" && l.blendMode !== "pass through"){ const gco = _EA_MISTURA[l.blendMode]; if(gco) base.globalCompositeOperation = gco; else avisos.push(c.nome + ": modo de mistura \"" + l.blendMode + "\" virou normal."); }
     const temEfeito = !!(l.effects && !l.effects.disabled && Object.keys(l.effects).some(function(k){ return _eaPsdAtivos(l.effects[k]).length > 0 && k !== "scale" && k !== "disabled"; }));
@@ -141290,6 +141298,8 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       nome:c.nome, cores:(l.canvas && l.canvas.width) ? _eaPsdContarCores(l.canvas) : (l.vectorFill ? 1 : 0), x:r.x, y:r.y, w:r.cv.width, h:r.cv.height, alfa:!!(l.canvas && l.canvas.width && (l.canvas.width < W * 0.98 || l.canvas.height < H * 0.98)) });
     if(l.__textoEditavel) objs.push(l.__textoEditavel);
   }
+  (function(){ const gs = {}; objs.forEach(function(o){ if(o.variante && o.variante.grupo){ gs[o.variante.grupo] = (gs[o.variante.grupo] || 0) + 1; } });
+    const ks = Object.keys(gs); if(ks.length) avisos.push((pr ? pr.nome + ": " : "") + "grupos de alternativas: " + ks.map(function(k){ return k + " (" + gs[k] + ")"; }).join(", ") + " — na geração entra só a opção que casa com o briefing."); })();
   // (07/10) ninguém nomeou camada? então ADIVINHA os espaços (título, texto, CTA, foto, logo, telefone, cidade, fundo)
   if(!objs.some(function(o){ return o.espaco; })){ const ad = _eaAdivinharEspacos(infos, W, H); if(ad.length) avisos.push((pr ? pr.nome + ": " : "") + "espaços adivinhados — " + ad.join(", ") + ". Confira em Espaços e corrija se precisar."); }
   // v2: ACRESCENTAR na página aberta — encaixa o PSD no tamanho da arte (sem esticar) e centraliza; cada camada continua separada
@@ -141327,7 +141337,7 @@ function _eaPsdContarCores(cv){
 function _eaAdivinharEspacos(infos, W, H){
   const marcou = [], area = W * H;
   const marca = function(o, esp){ if(!o || o.espaco) return; o.set({ espaco:esp }); if(_eaTipo(o) === "texto") o.set("alturaMax", Math.round(_eaCaixa(o).height * 1.15)); marcou.push(esp + " = " + (_eaNomeTipo(o) || o.nome || "").slice(0, 24)); };
-  const vis = infos.filter(function(i){ return i.o && i.o.visible !== false; });
+  const vis = infos.filter(function(i){ return i.o && i.o.visible !== false && !i.o.variante; });
   // textos editáveis
   const textos = vis.filter(function(i){ return i.tipo === "texto"; }).map(function(i){ const c = _eaCaixa(i.o); return Object.assign({}, i, { txt:String(i.o.text || "").replace(/\s+/g, " ").trim(), c:c, fs:i.fonte * (i.o.scaleX || 1) }); })
     .filter(function(i){ return i.txt.length > 0; });
@@ -142262,6 +142272,33 @@ async function _eaTrocarFotoMantendoForma(o, url){
   await o.setSrc(cv.toDataURL("image/png"));
   o.set({ width:w, height:h }); o.setCoords();
 }
+/* escolhe, em cada grupo de alternativas, a camada que casa com o briefing (cidade · unidade · palavras do produto/frase) */
+function _eaTokens(s){ return _eaChaveCidade(s).split(" ").filter(function(t){ return t.length >= 3 && ["com","para","por","que","uma","dos","das","nas","nos","usar","obras","obra","icone","icon","copiar","copy","render","map","mapa","3d","de","em","do","da"].indexOf(t) < 0; }).map(function(t){ return t.slice(0, 5); }); }
+function _eaEscolherVariantes(fc, ctx){
+  const avisos = [], grupos = {};
+  fc.getObjects().forEach(function(o){ if(o.variante && o.variante.grupo){ (grupos[o.variante.grupo] = grupos[o.variante.grupo] || []).push(o); } });
+  const cid = _eaChaveCidade(ctx.cidade || ""), cidTok = cid.split(" ").filter(function(t){ return t.length >= 3; });
+  const un = _eaChaveCidade(ctx.unidade || "");
+  const bag = _eaTokens((ctx.textos || []).filter(Boolean).join(" "));
+  Object.keys(grupos).forEach(function(g){
+    const objs = grupos[g], nomes = {}; objs.forEach(function(o){ nomes[o.variante.nome] = nomes[o.variante.nome] || []; nomes[o.variante.nome].push(o); });
+    const opcoes = Object.keys(nomes); if(opcoes.length < 2) return;
+    let melhor = null, nota = 0;
+    opcoes.forEach(function(n){
+      const k = _eaChaveCidade(n); let pts = 0;
+      if(cid && (k === cid || k.indexOf(cid) >= 0 || cid.indexOf(k) >= 0)) pts += 100;
+      else if(cidTok.length && cidTok.every(function(t){ return k.indexOf(t) >= 0; })) pts += 80;
+      if(un && (k.indexOf(un) >= 0 || un.indexOf(k) >= 0 || (/paragua/.test(un) && /paragua/.test(k)) || (!/paragua/.test(un) && /brasil|brazil/.test(k)))) pts += 40;
+      const tk = _eaTokens(n); tk.forEach(function(t){ if(bag.indexOf(t) >= 0) pts += 10; });
+      if(pts > nota){ nota = pts; melhor = n; }
+    });
+    const confiavel = /cidades?|icones?|ícones?|variantes?|alternativas?|opcoes|opções|mapas?|map\b|render|estados?|unidades?|produtos?/i.test(g);
+    if(nota < (confiavel ? 10 : 20)) melhor = null;   // grupo que só "parece" alternativa precisa casar melhor
+    if(!melhor){ avisos.push("alternativas de " + g + ": nenhuma casa com o briefing (" + opcoes.slice(0, 6).join(", ") + (opcoes.length > 6 ? "…" : "") + ") — ficou como no template"); return; }
+    objs.forEach(function(o){ o.set("visible", o.variante.nome === melhor); });
+  });
+  return avisos;
+}
 async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const passo = function(m){ try{ if(onPasso) onPasso(m); }catch(_){ } };
   if(!task || !modelo || !modelo.doc || !Array.isArray(modelo.doc.paginas) || !modelo.doc.paginas.length) throw new Error("Modelo sem página");
@@ -142307,6 +142344,8 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
       }
     }catch(e){ avisos.push((o.nome || o.espaco) + ": " + _eaErro(e)); }
   }
+  // (07/10) grupos de alternativas do template (CIDADES, ÍCONES, MAPA…): liga a que casa com o briefing, apaga as outras
+  try{ _eaEscolherVariantes(fc, { cidade:copy.cidade, unidade:unid, textos:[task.title, copy.titulo, copy.frase, copy.texto, task.produto, task.product, _eaSemHtml(task.desc || task.description || "")] }).forEach(function(x){ avisos.push(x); }); }catch(_){ }
   // logo, telefone, cidade, cores e fonte: cadastro + Kit (mesma função do editor)
   const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
   try{ await _eaPreencherEspacos(stub, { silencioso:true }); }catch(_){ }
