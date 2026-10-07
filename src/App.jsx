@@ -34352,6 +34352,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     });
   },[]);
   const [ajusteModal,setAjusteModal]=useState(null);
+  const [materialModal,setMaterialModal]=useState(null);   // (07/10/2026) {task, texto} — instrução pra Hellen buscar as imagens
   const [ajusteText,setAjusteText]=useState("");
   // (11/09/2026) "Refazer" e "Testar nova abordagem": pedidos de reescrita pro Claude.
   // refazerModal = {task, tipo:"abordagem"|"refazer"}.
@@ -34686,7 +34687,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     if(!_soVini&&!_short&&!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
     return f;
   };
-  const approveCopy=(task,destino)=>{
+  const approveCopy=(task,destino,instrucao)=>{
     if(!isApprover)return;
     const _faltas=_faltasParaAprovar(task);
     if(_faltas.length){
@@ -34699,9 +34700,15 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const _lbl=(_dest==="aprovado")?"Aprovado":(_dest==="recebida")?"Demandas":"Preencher material";
     const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
     const _now=new Date().toISOString();
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:_dest,ajustar:false,colEnteredAt:_now,timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:_lbl,from:"demanda",to:_dest,at:_now,atFmt:nowFmt(),user:actor}]}:t));
+    /* (07/10/2026, Gustavo) "Aprovar copy → Preencher material" abre caixinha pra instruir a Hellen no que
+       buscar de imagens. Vira comentário do card (tipo material_instrucao) + nota na timeline + aviso. */
+    const _instr=String(instrucao||"").trim();
+    const _cmtInstr=_instr?{id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),type:"material_instrucao",text:_instr,user:actor,at:_now,atFmt:nowFmt()}:null;
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:_dest,ajustar:false,colEnteredAt:_now,
+      comments:_cmtInstr?[...(t.comments||[]),_cmtInstr]:(t.comments||[]),
+      timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:_lbl,from:"demanda",to:_dest,at:_now,atFmt:nowFmt(),user:actor,note:_instr?("Imagens a buscar: "+_instr):undefined}]}:t));
     pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",
-      body:'"'+task.title+'" foi aprovada e está em '+_lbl,
+      body:'"'+task.title+'" foi aprovada e está em '+_lbl+(_instr?(" — imagens: "+_instr.slice(0,90)):""),
       user:actor,at:"Agora",targetUsers:_notifTargets(task)});
     /* NÃO volta pro card 1: quem está varrendo 174 copys quer cair na PRÓXIMA.
        O card aprovado sai da fila, então manter o índice já mostra a seguinte;
@@ -37068,7 +37075,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar e ir direto pra Demanda
               </button>}
-              {_bl("copys.aprovar_material")&&<button onClick={()=>approveCopy(current,"preencher_material")}
+              {_bl("copys.aprovar_material")&&<button onClick={()=>{ if(_faltasParaAprovar(current).length){ approveCopy(current,"preencher_material"); return; } setMaterialModal({task:current,texto:""}); }}
                 title="A copy está aprovada. O card vai pra coluna Preencher material até alguém anexar as imagens."
                 style={{opacity:_faltasParaAprovar(current).length?.45:1,width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.gr+"10";e.currentTarget.style.borderColor=C.gr;}}
@@ -37696,6 +37703,32 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     )}
 
     {/* ── Modal Solicitar ajuste com comentário ── */}
+    {materialModal&&<div onClick={e=>{if(e.target===e.currentTarget)setMaterialModal(null);}}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
+        <div style={{background:"linear-gradient(135deg,#16a34a,#15803d)",padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Aprovar copy → Preencher material</div>
+            <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>Diga o que buscar de imagens — vai pro card e avisa quem preenche</div>
+          </div>
+          <button onClick={()=>setMaterialModal(null)} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
+        </div>
+        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700}}>{materialModal.task.title}</div>
+          <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Que imagens buscar?</div>
+          <textarea autoFocus value={materialModal.texto} onChange={e=>setMaterialModal({...materialModal,texto:e.target.value})} rows={5}
+            placeholder="Ex.: fotos da planta de biogás de Toledo (biodigestor + lagoa), de preferência aéreas de drone; pedir pro cliente se não tiver no Drive…"
+            style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 13px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+          <div style={{color:C.ts,fontSize:11.5}}>Não é obrigatório. Se escrever, fica no card (destaque no topo + comentários) e vai na notificação.</div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
+            <button onClick={()=>setMaterialModal(null)} style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+            <button onClick={()=>{const m=materialModal;setMaterialModal(null);approveCopy(m.task,"preencher_material",m.texto);}}
+              style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+              <Ico n="check" size={13} color="#fff"/>{String(materialModal.texto||"").trim()?"Aprovar e enviar instrução":"Aprovar"}</button>
+          </div>
+        </div>
+      </div>
+    </div>}
     {ajusteModal&&<div onClick={e=>{if(e.target===e.currentTarget){setAjusteModal(null);setAjusteText("");}}}
       style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
@@ -51111,6 +51144,22 @@ function _cardPodeSerResp(u){
             {!isMobile&&<button onClick={handleClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",flexShrink:0}}><Ico n="x" size={18}/></button>}
           </div>
         </div>
+
+        {/* (07/10/2026, Gustavo) INSTRUÇÃO DE IMAGENS — o que o sócio pediu pra buscar ao aprovar a copy
+            em "Preencher material". Aparece em destaque enquanto o card está nessa etapa. */}
+        {task.status==="preencher_material"&&(function(){
+          const _cur=((tasks||[]).find(function(t){ return t.id===task.id; }))||task;
+          const _ins=(Array.isArray(_cur.comments)?_cur.comments:[]).filter(function(c){ return c&&c.type==="material_instrucao"&&String(c.text||"").trim(); });
+          if(!_ins.length) return null;
+          const _u=_ins[_ins.length-1];
+          return <div style={{margin:isMobile?"0 14px 10px":"0 24px 12px",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:14,padding:"12px 16px",display:"flex",gap:12,alignItems:"flex-start"}}>
+            <span style={{width:32,height:32,borderRadius:10,background:"#dcfce7",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="image" size={16} color="#15803d"/></span>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:"#15803d",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Imagens a buscar{_u.user?(" — pedido de "+String(_u.user).split(" ")[0]):""}{_u.atFmt?(" · "+_u.atFmt):""}</div>
+              <div style={{color:"#14532d",fontSize:13.5,fontWeight:600,lineHeight:1.5,whiteSpace:"pre-wrap",marginTop:3}}>{_u.text}</div>
+            </div>
+          </div>;
+        })()}
 
         {/* MATERIAL SOLICITADO PRO CLIENTE (23/09/2026) — interruptor grande entre o título e as
             abas, pra ninguém pedir duas vezes. Ligado: faixa âmbar com quem/quando. Grava na hora. */}
