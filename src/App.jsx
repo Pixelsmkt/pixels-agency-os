@@ -51217,9 +51217,9 @@ function _cardPodeSerResp(u){
               {/* (07/10/2026, Gustavo) GERAR ARTE DO MODELO — copy + fotos do material entram no PSD-modelo do
                   designer; a arte vai pro card e o card vai direto pra Avaliação de design. */}
               {canEdit&&!task._isDraft&&["recebida","execucao","ajustes"].indexOf(String(task.status||""))>=0&&["arte","foto",""].indexOf(String(contentType||task.contentType||""))>=0&&typeof PxGerarArteModal==="function"&&(
-                <button onClick={function(){ setGerarArteAberto(true); }} title="Usa um modelo (PSD do designer) do cliente: entra a copy e as fotos do material, e a arte vai pra Avaliação de design"
+                <button onClick={function(){ setGerarArteAberto(true); }} title="Usa o template padrão do cliente pro tipo deste card (Foto de obra, Arte, Story…): entra a copy e as fotos do material, e a arte vai pra Avaliação de design"
                   style={_pxBtnAcaoSt("#7c3aed","124,58,237",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>
-                  <span style={{display:"block",lineHeight:1}}>Gerar arte do modelo</span>
+                  <span style={{display:"block",lineHeight:1}}>Gerar arte</span>
                 </button>)}
               {gerarArteAberto&&typeof PxGerarArteModal==="function"&&<PxGerarArteModal task={Object.assign({},((tasks||[]).find(function(t){ return t.id===task.id; }))||task)} setTasks={setTasks}
                 onClose={function(ok){ setGerarArteAberto(false); if(ok) onClose(); }}/>}
@@ -138749,7 +138749,40 @@ const _EA_ESPACOS = [
   { id:"CTA",           label:"Chamada (CTA)",     tipo:"texto" },
   { id:"PHONE",         label:"Telefone",          tipo:"texto" },
   { id:"LOCATION",      label:"Local / endereço",  tipo:"texto" },
+  { id:"PIN",           label:"Pin do mapa",       tipo:"qualquer" },   // (07/10) Foto de obra: o pin anda pra cidade do briefing
 ];
+/* (07/10/2026) tipo de card que cada template atende — o botão "Gerar arte" do card escolhe o template PADRÃO do tipo dele */
+const _EA_TIPOS_CARD = [["foto_obra","Foto de obra"],["arte","Arte"],["carrossel","Carrossel"],["story","Story"],["template","Outro"]];
+function _eaRotuloTipoCard(t){ const x = _EA_TIPOS_CARD.find(function(p){ return p[0] === t; }); return x ? x[1] : (t || "Arte"); }
+function _eaTipoCardDoTask(task){
+  try{
+    if(task && (task.somenteStory || task.somente_story)) return "story";
+    const e = (typeof pxEstiloCard === "function") ? pxEstiloCard(task) : "arte";
+    if(e === "foto_obra" || e === "carrossel") return e;
+    return "arte";
+  }catch(_){ return "arte"; }
+}
+function _eaChaveCidade(s){ return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+/* fontes que o cliente mandou (Identidade visual) — ficam registradas no navegador e valem antes do Google Fonts */
+const _eaFontesCarregadas = {};
+async function _eaRegistrarFontes(fontes){
+  if(typeof window === "undefined" || typeof FontFace === "undefined") return;
+  window.__EA_FONTES_URL = window.__EA_FONTES_URL || {};
+  for(const f of (Array.isArray(fontes) ? fontes : [])){
+    if(!f || !f.url || !f.familia) continue;
+    const k = String(f.familia).toLowerCase();
+    (window.__EA_FONTES_URL[k] = window.__EA_FONTES_URL[k] || []);
+    if(window.__EA_FONTES_URL[k].indexOf(f.url) < 0) window.__EA_FONTES_URL[k].push(f.url);
+    if(_eaFontesCarregadas[f.url]) continue;
+    _eaFontesCarregadas[f.url] = true; delete _eaFontesOk[f.familia];
+    try{ const ff = new FontFace(f.familia, "url(" + f.url + ")", { weight:String(f.peso || "400"), style:f.italico ? "italic" : "normal" }); const l = await ff.load(); document.fonts.add(l); }
+    catch(_){ delete _eaFontesCarregadas[f.url]; }
+  }
+}
+async function _eaFontesDoCliente(client, unidade){
+  if(!client) return null;
+  try{ const d = await _eaRpc("arte_identidade", { p_client:client, p_unidade:unidade || "" }); await _eaRegistrarFontes(d && d.fontes); return d || {}; }catch(_){ return null; }
+}
 const _EA_FONTES = ["Montserrat","Poppins","Inter","Roboto","Open Sans","Lato","Raleway","Oswald","Bebas Neue","Anton","Playfair Display","Nunito","Barlow","Archivo Black","Work Sans","DM Sans"];
 const _EA_PROPS = ["id","nome","espaco","bloqueado","naoEditavel","aviso","origem","alturaMax","selectable","evented","hasControls",
                    "lockMovementX","lockMovementY","lockScalingX","lockScalingY","lockRotation"];
@@ -138838,7 +138871,8 @@ function _eaCarregarFonte(nome){
   if(!nome || typeof document==="undefined") return Promise.resolve(false);
   if(_eaFontesOk[nome]) return _eaFontesOk[nome];
   const id = "ea-fonte-" + nome.replace(/\s+/g,"-").toLowerCase();
-  if(!document.getElementById(id) && (window.__EA_SEM_GOOGLE_FONTS !== true)){
+  const doCliente = !!(window.__EA_FONTES_URL && window.__EA_FONTES_URL[nome.toLowerCase()] && window.__EA_FONTES_URL[nome.toLowerCase()].length);   // (07/10) fonte do cliente já registrada
+  if(!doCliente && !document.getElementById(id) && (window.__EA_SEM_GOOGLE_FONTS !== true)){
     const l = document.createElement("link"); l.id = id; l.rel = "stylesheet";
     l.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(nome).replace(/%20/g,"+") + ":ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&display=swap";
     document.head.appendChild(l);
@@ -138941,41 +138975,78 @@ function _EaIc({ n, s }){
 }
 
 /* ═══ PÁGINA ═══ */
+/* (07/10/2026, Gustavo) EDIÇÃO DE ARTE = CENTRAL POR CLIENTE. Escolhe o cliente em cima e vê 4 blocos:
+   Templates (PSDs oficiais, por tipo de card, com o padrão marcado) · Identidade visual (kit + fontes + pins do mapa) ·
+   Aprendizado (regras da IA) · Artes feitas. A arte em si nasce pelo botão "Gerar arte" do card no kanban. */
 function PageEdicaoArte({ isMob, tasks, onAbrirCard }){
-  const [aba, setAba] = useState("artes");       // artes | editor | modelos | aprende
+  const [cliente, setCliente] = useState(function(){ try{ return localStorage.getItem("pixels-ea-cliente") || ""; }catch(_){ return ""; } });
+  const [unidade, setUnidade] = useState("");
+  const [aba, setAba] = useState(function(){ try{ return localStorage.getItem("pixels-ea-aba") || "templates"; }catch(_){ return "templates"; } });   // templates | identidade | aprende | artes | editor
   const [projetoId, setProjetoId] = useState(null);
   const [preencher, setPreencher] = useState(null);     // arte recém-criada de um modelo: preenche os espaços ao abrir
+  const [kit, setKit] = useState(null);
   const abrir = function(id, doModelo){ setProjetoId(id); setPreencher(doModelo ? id : null); setAba("editor"); };
+  const clientes = useMemo(function(){
+    try{ return (typeof CLIENTS!=="undefined" && Array.isArray(CLIENTS) ? CLIENTS : []).filter(function(c){ return c && c.id && c.name && !c.inativo && c.status !== "inativo"; })
+      .slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name),"pt-BR"); }); }catch(_){ return []; }
+  }, []);
+  useEffect(function(){ try{ localStorage.setItem("pixels-ea-cliente", cliente || ""); }catch(_){ } setUnidade(""); setKit(null);
+    if(cliente){ _eaRpc("arte_kit", { p_client:cliente, p_unidade:"" }).then(setKit).catch(function(){ setKit({}); }); _eaFontesDoCliente(cliente, ""); }
+    if(!cliente && (aba === "templates" || aba === "identidade")) setAba("artes");
+  }, [cliente]);
+  useEffect(function(){ try{ if(aba !== "editor") localStorage.setItem("pixels-ea-aba", aba); }catch(_){ } }, [aba]);
+  const unidades = (kit && Array.isArray(kit.unidades)) ? kit.unidades : [];
   const cheio = aba === "editor" && !!projetoId && !isMob;
+  const abas = cliente ? [["templates","Templates"],["identidade","Identidade visual"],["aprende","Aprendizado"],["artes","Artes feitas"]] : [["artes","Todas as artes"],["aprende","Aprendizado"]];
+  if(projetoId) abas.push(["editor","Editor"]);
+  const chip = function(id, nome, logo, on){
+    return <button key={id || "todos"} onClick={function(){ setCliente(id); if(aba === "editor") setAba(id ? "templates" : "artes"); }} title={nome}
+      style={{font:"inherit",border:"2px solid "+(on?_EA.roxo:"transparent"),background:on?_EA.roxoClaro:"#fff",borderRadius:14,padding:"8px 10px 6px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,minWidth:isMob?70:84,flex:"0 0 auto",boxShadow:on?"0 4px 14px rgba(124,58,237,.18)":"0 1px 3px rgba(15,23,42,.06)"}}>
+      <div style={{width:isMob?38:44,height:isMob?38:44,borderRadius:"50%",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid "+_EA.linha}}>
+        {logo ? <img src={logo} alt="" style={{width:"100%",height:"100%",objectFit:"contain",padding:4,boxSizing:"border-box"}}/> : <span style={{fontSize:14,fontWeight:800,color:_EA.roxo}}>{String(nome||"?").slice(0,2).toUpperCase()}</span>}
+      </div>
+      <div style={{fontSize:_eaF(11,isMob),fontWeight:on?800:600,color:on?_EA.roxo:_EA.texto,maxWidth:isMob?66:86,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nome}</div>
+    </button>;
+  };
   return (
     <div style={{padding:isMob?"14px 12px 90px":(cheio?"12px 16px 16px":"22px 28px 40px"),maxWidth:cheio?"none":1180,margin:"0 auto",color:_EA.texto,background:_EA.fundo,minHeight:"100%"}}>
       {!cheio && <div>
         <div style={{fontSize:_eaF(11.5,isMob),fontWeight:800,color:_EA.rosa,letterSpacing:".08em",textTransform:"uppercase"}}>Criação</div>
         <div style={{fontSize:_eaF(isMob?20:24,isMob),fontWeight:800,letterSpacing:-0.3,marginTop:2}}>Edição de arte</div>
-        <div style={{fontSize:_eaF(13,isMob),color:_EA.sub,marginTop:4}}>Artes com camadas, modelos que se preenchem sozinhos e IA que mexe nos objetos. Tudo fica salvo e pode ir direto para o card.</div>
+        <div style={{fontSize:_eaF(13,isMob),color:_EA.sub,marginTop:4}}>Central de cada cliente: os templates oficiais (PSD do designer), a identidade visual, o que a IA aprendeu e as artes feitas. A arte nasce pelo botão <b>Gerar arte</b> do card.</div>
+        <div style={{display:"flex",gap:8,overflowX:"auto",padding:"12px 2px 6px",marginTop:8,scrollbarWidth:"thin"}}>
+          {chip("", "Todos", null, !cliente)}
+          {clientes.map(function(c){ return chip(c.id, c.name, _eaLogo(c.id), cliente === c.id); })}
+        </div>
+        {cliente && unidades.length > 0 && <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginTop:4}}>
+          <span style={{fontSize:11.5,color:_EA.sub,fontWeight:700}}>Unidade:</span>
+          {[""].concat(unidades).map(function(u){ const on = unidade === u;
+            return <button key={u || "geral"} onClick={function(){ setUnidade(u); }} style={{font:"inherit",padding:"4px 10px",borderRadius:999,border:"1px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff",color:on?_EA.roxo:_EA.sub,fontWeight:700,fontSize:12,cursor:"pointer"}}>{u || "Geral (todas)"}</button>; })}
+        </div>}
       </div>}
-      <div style={{display:"flex",gap:isMob?14:22,marginTop:cheio?0:14,borderBottom:"1px solid "+_EA.linha,overflowX:"auto",alignItems:"flex-end"}}>
-        {cheio && <div style={{fontSize:13,fontWeight:800,color:_EA.rosa,letterSpacing:".06em",textTransform:"uppercase",paddingBottom:10,marginRight:4}}>Edição de arte</div>}
-        {[["artes","Artes"],["editor","Editor"],["modelos","Modelos"],["aprende","IA que aprende"]].map(function(g){ const on = aba===g[0];
+      <div style={{display:"flex",gap:isMob?14:22,marginTop:cheio?0:10,borderBottom:"1px solid "+_EA.linha,overflowX:"auto",alignItems:"flex-end"}}>
+        {cheio && <div style={{fontSize:13,fontWeight:800,color:_EA.rosa,letterSpacing:".06em",textTransform:"uppercase",paddingBottom:10,marginRight:4}}>Edição de arte{cliente ? " · " + _eaNomeCliente(cliente) : ""}</div>}
+        {abas.map(function(g){ const on = aba===g[0];
           return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
             borderBottom:"2px solid "+(on?_EA.roxo:"transparent"),color:on?_EA.roxo:_EA.sub,fontWeight:on?800:600,fontSize:_eaF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
       </div>
-      {aba==="artes"   && <_EaLista isMob={isMob} tasks={tasks||[]} onAbrir={abrir} onAbrirCard={onAbrirCard}/>}
-      {aba==="editor"  && (projetoId
+      {aba==="templates"  && cliente && <_EaTemplates key={cliente} isMob={isMob} cliente={cliente} unidade={unidade} unidades={unidades} onAbrir={abrir}/>}
+      {aba==="identidade" && cliente && <_EaIdentidade key={cliente + "|" + unidade} isMob={isMob} cliente={cliente} unidade={unidade} kit={kit}/>}
+      {aba==="aprende"    && <_EaAprende key={cliente} isMob={isMob} clienteFixo={cliente || null}/>}
+      {aba==="artes"      && <_EaLista key={cliente} isMob={isMob} tasks={tasks||[]} onAbrir={abrir} onAbrirCard={onAbrirCard} clienteFixo={cliente || null}/>}
+      {aba==="editor"     && (projetoId
         ? <_EaEditor key={projetoId} isMob={isMob} tasks={tasks||[]} projetoId={projetoId} preencherAoAbrir={preencher===projetoId} onAbrirCard={onAbrirCard} onFechar={function(){ setAba("artes"); }} onAbrirOutro={abrir}/>
         : <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub}}>
-            Abra uma arte na guia <b>Artes</b> ou crie uma nova.</div>)}
-      {aba==="modelos" && <_EaModelos isMob={isMob} onAbrir={abrir}/>}
-      {aba==="aprende" && <_EaAprende isMob={isMob}/>}
+            Abra uma arte em <b>Artes feitas</b> ou crie uma nova.</div>)}
     </div>
   );
 }
 
 /* ═══ LISTA DE ARTES + NOVA ARTE ═══ */
-function _EaLista({ isMob, tasks, onAbrir, onAbrirCard }){
+function _EaLista({ isMob, tasks, onAbrir, onAbrirCard, clienteFixo }){
   const [lista, setLista] = useState(null);
   const [erro, setErro] = useState("");
-  const [cliente, setCliente] = useState("");
+  const [cliente, setCliente] = useState(clienteFixo || "");
   const [nova, setNova] = useState(false);
   const [resumo, setResumo] = useState(null);
   const carregar = function(){
@@ -138993,13 +139064,14 @@ function _EaLista({ isMob, tasks, onAbrir, onAbrirCard }){
   return (
     <div>
       <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end",marginTop:14,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,padding:12}}>
-        <div style={{flex:"1 1 280px",minWidth:0}}>
+        {clienteFixo ? <div style={{flex:"1 1 280px",minWidth:0,fontSize:_eaF(13,isMob),color:_EA.sub}}>Artes de <b style={{color:_EA.texto}}>{_eaNomeCliente(clienteFixo)}</b> — as geradas pelo card e as feitas aqui. Clique numa arte para abrir no editor.</div>
+        : <div style={{flex:"1 1 280px",minWidth:0}}>
           <div style={{fontSize:_eaF(11.5,isMob),color:_EA.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}}>Cliente</div>
           <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, sel, {width:"100%"})}>
             <option value="">Todos os clientes</option>
             {clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name}</option>; })}
           </select>
-        </div>
+        </div>}
         {resumo && <div style={{padding:"8px 12px",borderRadius:10,background:_EA.fundo,border:"1px solid "+_EA.linha2,fontSize:_eaF(13,isMob)}}>
           <span style={{color:_EA.sub}}>IA no mês </span><b>{_eaBrl(resumo.gasto_mes)}</b><span style={{color:_EA.sub}}> de {_eaBrl(resumo.limite_mes)}</span></div>}
         {!isMob && <button onClick={function(){ setNova(true); }} style={{font:"inherit",padding:"10px 16px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",fontWeight:800,cursor:"pointer",display:"inline-flex",gap:8,alignItems:"center"}}>
@@ -139242,6 +139314,7 @@ function _EaEditor({ isMob, tasks, projetoId, preencherAoAbrir, onAbrirCard, onF
       try{
         const [p, f] = await Promise.all([_eaRpc("arte_projeto", { p_id:projetoId }), isMob ? Promise.resolve(null) : _eaFabric()]);
         if(!montadoRef.current) return;
+        if(p && p.client_id){ try{ await _eaFontesDoCliente(p.client_id, p.unidade || ""); }catch(_){ } }   // (07/10) fontes do cliente antes de abrir a página
         let doc = p.doc && Array.isArray(p.doc.paginas) && p.doc.paginas.length ? p.doc : _eaDocVazio(p.largura, p.altura, "#ffffff");
         docRef.current = JSON.parse(JSON.stringify(doc)); projRef.current = p;
         setProj(p); setTitulo(p.titulo || ""); setLib(f);
@@ -140509,7 +140582,8 @@ function _eaPsdDesenhar(l, W, H, ctx){
    TELEFONE, CTA, LOCAL, FUNDO, PRECO, BENEFICIO; com ou sem colchetes, maiúsculo ou não) e o espaço já vem marcado. */
 const _EA_NOMES_ESPACO = [
   [/^(titulo|title|headline|manchete) ?\d*$/, "HEADLINE"],
-  [/^(texto|texto ?na ?arte|subtitulo|subtitle|apoio|descricao|legenda) ?\d*$/, "SUBTITLE"],
+  [/^(texto|texto ?na ?arte|subtitulo|subtitle|apoio|descricao|legenda|frase|frase ?na ?arte) ?\d*$/, "SUBTITLE"],
+  [/^(pin|pino|alfinete|marcador|map ?pin|pin ?(do )?mapa|pin ?no ?mapa) ?\d*$/, "PIN"],
   [/^(foto|imagem|image|produto|product|product ?image|foto ?produto) ?\d*$/, "PRODUCT_IMAGE"],
   [/^(logo|logotipo|marca)$/, "LOGO"],
   [/^(telefone|fone|whats|whatsapp|phone|contato)$/, "PHONE"],
@@ -140587,11 +140661,11 @@ async function _eaAbrirPsd(a, arquivo, op){
       if(simples){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
       /* (07/10) camada de TEXTO marcada como espaço: entra só o texto editável e visível (o texto vai ser trocado
          pela copy — a imagem do texto antigo não pode ficar por baixo) */
-      if(_esp){ if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — o espaço " + _esp + " usa Montserrat. Envie a fonte do cliente pro Kit para ficar igual.");
+      if(_esp){ if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — o espaço " + _esp + " usa Montserrat. Mande o arquivo da fonte em Edição de arte › Identidade visual para ficar igual.");
         t.set({ visible:base.visible, nome:c.nome.slice(0,80), alturaMax:Math.round(_eaCaixa(t).height * 1.15) }); objs.push(t); continue; }
       if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (temDesenho
         ? "entrou igual ao PSD (imagem) e tem uma cópia em TEXTO EDITÁVEL escondida logo acima, com fonte parecida (ligue o olho em Camadas para editar)."
-        : "entrou como texto editável com fonte parecida (Montserrat). Para ficar igual, envie a fonte do cliente."));
+        : "entrou como texto editável com fonte parecida (Montserrat). Para ficar igual, mande o arquivo da fonte em Edição de arte › Identidade visual."));
       if(!temDesenho){ objs.push(t); continue; }
       l.__textoEditavel = t;          // entra logo acima da imagem
     }
@@ -140827,6 +140901,7 @@ function _EaPainelArquivo({ a, onAbrirCard }){
       const b = formato === "pdf" ? await _eaExportarPdf(a, false) : await _eaExportarPagina(a, formato, 1);
       const up = await _eaSubir(b, "tasks/" + a.proj.task_id, nome + "." + formato);
       const f = await _eaRpc("arte_projeto_final", { p_id:a.projetoId, p_file:{ url:up.url, storagePath:up.path, name:nome + "." + formato, type:b.type, size:b.size } });
+      await _eaGuardarPinSeTiver(a);   // (07/10) Foto de obra: o pin posicionado fica guardado pra cidade
       _eaToast("success", "Arte no card: " + (f && f.name));
     }catch(e){ _eaToast("error", "Não mandei para o card: " + _eaErro(e)); }
     setOcupado("");
@@ -140947,6 +141022,23 @@ async function _eaPreencherEspacos(a, opt){
   return n;
 }
 
+/* (07/10) guarda a posição do PIN (em px da página, com o tamanho da página) na identidade do cliente */
+async function _eaGuardarPin(a, o, cidade){
+  const cid = a.proj && a.proj.client_id; if(!cid || !o) return false;
+  const key = _eaChaveCidade(cidade); if(!key) return false;
+  const pins = {}; pins[key] = { cidade:String(cidade).trim(), x:Math.round(o.left || 0), y:Math.round(o.top || 0), W:a.W, H:a.H, em:new Date().toISOString() };
+  await _eaRpc("arte_identidade_salvar", { p_client:cid, p_unidade:(a.proj && a.proj.unidade) || "", p_dados:{ pins:pins } });
+  return true;
+}
+/* arte de Foto de obra que veio do card (doc.meta.cidade) e tem PIN: ao mandar pro card, guarda o pin sozinho */
+async function _eaGuardarPinSeTiver(a){
+  try{
+    const meta = (a.doc() && a.doc().meta) || {}; if(!meta.cidade) return;
+    const o = a.fc.getObjects().find(function(x){ return x.espaco === "PIN"; }); if(!o) return;
+    await _eaGuardarPin(a, o, meta.cidade);
+  }catch(_){ }
+}
+
 function _EaPainelEspacos({ a, sel, um }){
   const fc = a.fc;
   const com = fc.getObjects().filter(function(o){ return !!o.espaco; });
@@ -140975,9 +141067,49 @@ function _EaPainelEspacos({ a, sel, um }){
     }catch(e){ _eaToast("error", _eaErro(e)); }
     setSalvando(false);
   };
+  /* (07/10) Foto de obra: guardar a posição do PIN para a cidade (vale pra próxima arte dessa cidade) */
+  const meta = (a.doc() && a.doc().meta) || {};
+  const pin = com.find(function(o){ return o.espaco === "PIN"; });
+  const locTxt = (function(){ const l = com.find(function(o){ return o.espaco === "LOCATION" && _eaTipo(o) === "texto"; }); return l && l.text ? String(l.text).trim() : ""; })();
+  const [cidadePin, setCidadePin] = useState(meta.cidade || locTxt || "");
+  const [guardando, setGuardando] = useState(false);
+  const guardarPin = async function(){
+    const o = (um && um.espaco === "PIN") ? um : pin; if(!o || !cidadePin.trim() || !(a.proj && a.proj.client_id)) return;
+    setGuardando(true);
+    try{ await _eaGuardarPin(a, o, cidadePin.trim()); _eaToast("success", "Pin de “" + cidadePin.trim() + "” guardado — na próxima Foto de obra dessa cidade ele já vai pro lugar"); }
+    catch(e){ _eaToast("error", _eaErro(e)); }
+    setGuardando(false);
+  };
+  /* (07/10) arte aberta a partir de um template: salvar de volta nele (histórico guarda a versão anterior) */
+  const [voltando, setVoltando] = useState(false);
+  const salvarNoTemplate = async function(){
+    if(!(a.proj && a.proj.modelo_id)) return;
+    if(!window.confirm("Salvar esta página de volta no template de origem? A versão anterior fica no histórico.")) return;
+    setVoltando(true);
+    try{
+      const ms = await _eaRpc("arte_modelos_lista", { p_client:a.proj.client_id || null });
+      const m = (Array.isArray(ms) ? ms : []).find(function(x){ return x.id === a.proj.modelo_id; });
+      if(!m) throw new Error("Template de origem não está mais na lista");
+      const p = a.pagina(); const doc = { versao:1, paginas:[JSON.parse(JSON.stringify(p))], meta:(m.doc && m.doc.meta) || {} };
+      let thumb = null; try{ const up = await _eaSubir(_eaDataUrlBlob(_eaMiniatura(fc, a.W, 420)), "arte/modelos", "modelo.jpg"); thumb = up.url; }catch(_){ }
+      await _eaRpc("arte_modelo_salvar", { p_id:m.id, p_client:m.client_id, p_nome:m.nome, p_formato:m.formato, p_largura:a.W, p_altura:a.H, p_doc:doc,
+        p_espacos:Array.from(new Set(com.map(function(o){ return o.espaco; }))), p_thumb:thumb });
+      _eaToast("success", "Template “" + m.nome + "” atualizado");
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+    setVoltando(false);
+  };
   return <div>
     <div style={{fontWeight:800,fontSize:14,marginBottom:4}}>Espaços do modelo</div>
     <div style={{fontSize:12,color:_EA.sub,marginBottom:10}}>Marque cada objeto com o espaço que ele ocupa. Assim a arte vira modelo: logo, telefone, cidade e cores se preenchem pelo cadastro; título e CTA a IA escreve; texto que não cabe diminui sozinho.</div>
+    {pin && a.proj && a.proj.client_id && <div style={{padding:"10px 11px",borderRadius:10,background:_EA.roxoClaro,border:"1px solid "+_EA.roxoBorda,marginBottom:12}}>
+      <div style={{fontWeight:800,fontSize:12.5,color:_EA.roxo}}>📍 Pin do mapa</div>
+      <div style={{fontSize:11.5,color:_EA.sub,margin:"3px 0 6px"}}>Arraste o pin pra cidade certa e guarde: na próxima Foto de obra dessa cidade ele já vai sozinho.</div>
+      <div style={{display:"flex",gap:6}}>
+        <input value={cidadePin} onChange={function(e){ setCidadePin(e.target.value); }} placeholder="Cidade/UF" style={{font:"inherit",flex:1,minWidth:0,padding:"6px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:12.5}}/>
+        <button disabled={guardando || !cidadePin.trim()} onClick={guardarPin} style={Object.assign({}, bt, {background:_EA.roxo,color:"#fff",border:0,whiteSpace:"nowrap"})}>{guardando ? "Guardando…" : "Guardar posição"}</button>
+      </div>
+    </div>}
+    {a.proj && a.proj.modelo_id && <button disabled={voltando} onClick={salvarNoTemplate} style={Object.assign({}, bt, {marginBottom:12,width:"100%",color:_EA.roxo,borderColor:_EA.roxoBorda})}>{voltando ? "Salvando…" : "Salvar de volta no template de origem"}</button>}
     {um ? <_EaCampo rot={"Objeto selecionado: " + (um.nome || _eaNomeTipo(um))}>
       <select value={um.espaco || ""} onChange={function(e){ marcar(e.target.value); }} style={{font:"inherit",width:"100%",padding:"7px 8px",borderRadius:8,border:"1px solid "+_EA.linha,fontSize:13}}>
         <option value="">— sem espaço —</option>
@@ -141102,10 +141234,10 @@ function _EaModelos({ isMob, onAbrir }){
 }
 
 /* ═══ GUIA: IA QUE APRENDE (regras por cliente; só valem depois que um sócio aprova) ═══ */
-function _EaAprende({ isMob }){
+function _EaAprende({ isMob, clienteFixo }){
   const [lista, setLista] = useState(null);
   const [erro, setErro] = useState("");
-  const [cliente, setCliente] = useState("");
+  const [cliente, setCliente] = useState(clienteFixo || "");
   const [nova, setNova] = useState("");
   const [editando, setEditando] = useState(null);
   const socio = (function(){ try{ return !!(typeof CURRENT_USER !== "undefined" && CURRENT_USER && Number(CURRENT_USER.level) === 1); }catch(_){ return false; } })();
@@ -141118,12 +141250,12 @@ function _EaAprende({ isMob }){
   const grupos = [["pendente","Esperando um sócio"],["aprovado","Valendo"],["recusado","Recusadas"]];
   const bt = { font:"inherit", padding:"5px 9px", borderRadius:8, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12, fontWeight:700 };
   return <div>
-    <div style={{marginTop:14,fontSize:13,color:_EA.sub}}>A IA da arte segue as regras <b>valendo</b> do cliente. Regras novas vêm de "Ensinar a IA com esta arte" (no Editor › IA) ou são escritas aqui. Só um sócio aprova.</div>
+    <div style={{marginTop:14,fontSize:13,color:_EA.sub}}>O que a IA aprendeu{clienteFixo ? " sobre " + _eaNomeCliente(clienteFixo) : ""}: a arte segue as regras <b>valendo</b>. Regras novas vêm de "Ensinar a IA com esta arte" (no Editor › IA) ou são escritas aqui. Só um sócio aprova.</div>
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:12,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,padding:12,alignItems:"flex-end"}}>
-      <div style={{flex:"1 1 220px"}}><div style={{fontSize:11.5,color:_EA.sub,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Cliente</div>
+      {!clienteFixo && <div style={{flex:"1 1 220px"}}><div style={{fontSize:11.5,color:_EA.sub,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Cliente</div>
         <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={{font:"inherit",width:"100%",padding:"8px 10px",borderRadius:10,border:"1px solid "+_EA.linha,fontSize:14}}>
           <option value="">Todos</option>{clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name}</option>; })}
-        </select></div>
+        </select></div>}
       {!isMob && <div style={{flex:"2 1 360px",display:"flex",gap:6}}>
         <input value={nova} onChange={function(e){ setNova(e.target.value); }} placeholder={"Nova regra " + (cliente ? "para " + _eaNomeCliente(cliente) : "para todos os clientes") + " (ex.: logo sempre no canto superior direito)"}
           style={{font:"inherit",flex:1,padding:"8px 10px",borderRadius:10,border:"1px solid "+_EA.linha,fontSize:13.5}}/>
@@ -141154,6 +141286,256 @@ function _EaAprende({ isMob }){
   </div>;
 }
 
+/* ═══ CENTRAL DO CLIENTE › TEMPLATES (07/10/2026, Gustavo) ═══════════════════════════════════════════
+   O designer manda o "Template <Cliente>.psd" aqui. O PSD abre sem editor (canvas escondido), as camadas
+   nomeadas viram espaços (TITULO, FRASE, FOTO, LOGO, CIDADE, PIN…) e o template fica salvo com:
+   tipo de card (Foto de obra · Arte · Carrossel · Story), modo (Fixo · Base), padrão (o que o card usa) e unidade. */
+function _eaTipoCardDoNomeArquivo(nome){
+  const n = _eaChaveCidade(nome);
+  if(/\bstory|stories\b/.test(n)) return "story";
+  if(/carrossel|carousel/.test(n)) return "carrossel";
+  if(/foto|obra/.test(n)) return "foto_obra";
+  return "arte";
+}
+async function _eaPsdParaTemplate(arquivo, op){
+  const passo = function(m){ try{ if(op && op.onPasso) op.onPasso(m); }catch(_){ } };
+  passo("carregando o motor…");
+  const lib = await _eaFabric();
+  const doc = { versao:1, paginas:[] }, avisos = [];
+  const a = { lib:lib, projetoId:"modelos/" + _eaUid(), fc:null, W:0, H:0, kit:null, proj:{ client_id:op.client },
+    doc:function(){ return doc; },
+    abrirPagina:async function(i){ const pg = doc.paginas[i]; const el = document.createElement("canvas"); el.width = pg.largura; el.height = pg.altura;
+      if(a.fc){ try{ a.fc.dispose(); }catch(_){ } }
+      a.fc = new lib.StaticCanvas(el, { width:pg.largura, height:pg.altura, enableRetinaScaling:false, renderOnAddRemove:false }); a.W = pg.largura; a.H = pg.altura; },
+    pausar:function(){}, mudou:function(){}, zoomCaber:function(){}, toque:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
+  passo("abrindo o PSD (camada por camada)…");
+  if(/\.(svg)$/i.test(arquivo.name)) await _eaAbrirSvg(a, await arquivo.text(), arquivo.name, {});
+  else await _eaAbrirPsd(a, arquivo);
+  if(!doc.paginas.length || !a.fc) throw new Error("O arquivo não tem camadas que deem para abrir");
+  const pg = doc.paginas[0]; a.fc.renderAll();
+  pg.fabric = _eaJsonPagina(a.fc);
+  const espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
+  passo("salvando o template…");
+  let thumb = null; try{ const up = await _eaSubir(_eaDataUrlBlob(_eaMiniatura(a.fc, a.W, 420)), "arte/modelos", "modelo.jpg"); thumb = up.url; }catch(_){ }
+  const f = _EA_FORMATOS.find(function(x){ return x.w === a.W && x.h === a.H; });
+  const nome = (op.nome || arquivo.name.replace(/\.[^.]+$/, "")).trim().slice(0, 80);
+  const r = await _eaRpc("arte_modelo_salvar", { p_id:null, p_client:op.client, p_nome:nome, p_formato:f ? f.id : "custom", p_largura:a.W, p_altura:a.H,
+    p_doc:{ versao:1, paginas:[pg], meta:{ origem:"psd", arquivo:arquivo.name, tipo_card:op.tipo_card, modo:op.modo } }, p_espacos:espacos, p_thumb:thumb });
+  await _eaRpc("arte_modelo_config", { p_id:r.id, p_tipo_card:op.tipo_card || "arte", p_modo:op.modo || "fixo", p_padrao:!!op.padrao, p_unidade:op.unidade || "", p_arquivo_nome:arquivo.name });
+  try{ a.fc.dispose(); }catch(_){ }
+  return { id:r.id, espacos:espacos, avisos:avisos, largura:a.W, altura:a.H, camadas:(pg.fabric.objects || []).length };
+}
+/* template padrão para um card: do cliente, do tipo do card, da unidade (ou geral), marcado como padrão */
+function _eaTemplatePadrao(lista, client, tipo, unidade){
+  const l = (Array.isArray(lista) ? lista : []).filter(function(m){ return m && m.client_id === client && (m.tipo_card || "arte") === tipo; });
+  const u = unidade || "";
+  return l.find(function(m){ return m.padrao && (m.unidade || "") === u; }) || l.find(function(m){ return m.padrao && !(m.unidade || ""); })
+      || l.find(function(m){ return (m.unidade || "") === u; }) || l.find(function(m){ return !(m.unidade || ""); }) || l[0] || null;
+}
+function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir }){
+  const [lista, setLista] = useState(null);
+  const [erro, setErro] = useState("");
+  const [arq, setArq] = useState(null);
+  const [form, setForm] = useState({ nome:"", tipo_card:"arte", modo:"fixo", unidade:"" });
+  const [passo, setPasso] = useState("");
+  const [resultado, setResultado] = useState(null);
+  const inputRef = useRef(null);
+  const carregar = function(){ _eaRpc("arte_modelos_lista", { p_client:cliente }).then(function(l){ setLista((Array.isArray(l) ? l : []).filter(function(m){ return m.client_id === cliente; })); }).catch(function(e){ setErro(_eaErro(e)); setLista([]); }); };
+  useEffect(carregar, [cliente]);
+  useEffect(function(){ setForm(function(f){ return Object.assign({}, f, { unidade:unidade || "" }); }); }, [unidade]);
+  const escolher = function(f){ if(!f) return; setArq(f); setResultado(null); const tipo = _eaTipoCardDoNomeArquivo(f.name);
+    setForm(function(x){ return Object.assign({}, x, { nome:f.name.replace(/\.[^.]+$/, ""), tipo_card:tipo, modo:tipo === "foto_obra" ? "fixo" : x.modo }); }); };
+  const enviar = async function(){
+    if(!arq) return; setErro(""); setPasso("começando…");
+    try{
+      const jaTem = (lista || []).some(function(m){ return (m.tipo_card || "arte") === form.tipo_card && (m.unidade || "") === (form.unidade || ""); });
+      const r = await _eaPsdParaTemplate(arq, { client:cliente, nome:form.nome, tipo_card:form.tipo_card, modo:form.modo, unidade:form.unidade, padrao:!jaTem, onPasso:setPasso });
+      setResultado(r); setArq(null); if(inputRef.current) inputRef.current.value = ""; carregar();
+      _eaToast("success", "Template salvo: " + r.camadas + " camada(s), " + r.espacos.length + " espaço(s)" + (!jaTem ? " · virou o padrão de " + _eaRotuloTipoCard(form.tipo_card) : ""));
+    }catch(e){ setErro(_eaErro(e)); }
+    setPasso("");
+  };
+  const config = async function(m, mud){
+    try{ await _eaRpc("arte_modelo_config", Object.assign({ p_id:m.id }, mud)); carregar(); }catch(e){ _eaToast("error", _eaErro(e)); }
+  };
+  const tirar = async function(m){
+    if(!window.confirm("Tirar o template \"" + m.nome + "\" da lista? (Ele continua guardado no histórico.)")) return;
+    try{ await _eaRpc("arte_modelo_tirar", { p_id:m.id }); carregar(); }catch(e){ _eaToast("error", _eaErro(e)); }
+  };
+  const editar = async function(m){
+    try{
+      const doc = JSON.parse(JSON.stringify(m.doc)); (doc.paginas||[]).forEach(function(p){ p.id = _eaUid(); });
+      const p = await _eaRpc("arte_projeto_criar", { p_client:cliente, p_unidade:m.unidade || "", p_task:null, p_titulo:"Template: " + m.nome, p_formato:m.formato, p_largura:m.largura, p_altura:m.altura, p_doc:doc, p_modelo:m.id });
+      _eaToast("info", "Abri o template no editor. Ajuste e use Espaços › \"Salvar de volta no template\".");
+      onAbrir(p.id, false);
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+  };
+  const sel = { font:"inherit", padding:"8px 10px", borderRadius:9, border:"1px solid "+_EA.linha, background:"#fff", fontSize:13, fontWeight:600, color:_EA.texto };
+  const bt = { font:"inherit", padding:"6px 10px", borderRadius:8, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12, fontWeight:700 };
+  const porTipo = _EA_TIPOS_CARD.map(function(t){ return [t[0], t[1], (lista || []).filter(function(m){ return (m.tipo_card || "arte") === t[0]; })]; }).filter(function(g){ return g[2].length; });
+  return <div>
+    {!isMob && <div style={{marginTop:14,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,padding:14}}>
+      <div style={{fontWeight:800,fontSize:14}}>Mandar template de {_eaNomeCliente(cliente)}</div>
+      <div style={{fontSize:12.5,color:_EA.sub,marginTop:3,lineHeight:1.5}}>O PSD oficial do designer (ex.: <i>Template {_eaNomeCliente(cliente)}.psd</i>). As camadas pelo NOME viram espaços: <b>TITULO</b>, <b>TEXTO</b> ou <b>FRASE</b>, <b>FOTO</b>, <b>LOGO</b>, <b>CIDADE</b>, <b>PIN</b>, <b>TELEFONE</b>, <b>CTA</b>, <b>FUNDO</b>. O resto entra fixo, igual ao Photoshop. PSD muito pesado (mais de ~500 MB)? No Photoshop salve uma cópia só com as camadas do template.</div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginTop:12}}>
+        <label style={{flex:"1 1 260px",padding:"14px 12px",borderRadius:12,border:"2px dashed "+(arq?_EA.roxo:_EA.roxoBorda),background:arq?_EA.roxoClaro:"#faf5ff",cursor:"pointer",textAlign:"center",fontSize:13,fontWeight:700,color:_EA.roxo}}
+          onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ e.preventDefault(); escolher(e.dataTransfer.files && e.dataTransfer.files[0]); }}>
+          <input ref={inputRef} type="file" accept=".psd,.psb,.svg" style={{display:"none"}} onChange={function(e){ escolher(e.target.files && e.target.files[0]); }}/>
+          {arq ? arq.name + " · " + Math.round((arq.size || 0) / 1048576) + " MB" : "Clique ou arraste o PSD aqui"}
+        </label>
+        <div style={{flex:"1 1 180px"}}><div style={{fontSize:11,color:_EA.sub,fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Nome</div>
+          <input value={form.nome} onChange={function(e){ setForm(Object.assign({}, form, { nome:e.target.value })); }} placeholder="Ex.: Template Foto de obra" style={Object.assign({}, sel, {width:"100%",boxSizing:"border-box"})}/></div>
+        <div><div style={{fontSize:11,color:_EA.sub,fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Tipo de card</div>
+          <select value={form.tipo_card} onChange={function(e){ const t = e.target.value; setForm(Object.assign({}, form, { tipo_card:t, modo:t === "foto_obra" ? "fixo" : form.modo })); }} style={sel}>
+            {_EA_TIPOS_CARD.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}</select></div>
+        <div><div style={{fontSize:11,color:_EA.sub,fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Modo</div>
+          <select value={form.modo} onChange={function(e){ setForm(Object.assign({}, form, { modo:e.target.value })); }} style={sel}>
+            <option value="fixo">Fixo — só troca texto, foto e pin</option><option value="base">Base — a IA pode mexer no layout</option></select></div>
+        {(unidades || []).length > 0 && <div><div style={{fontSize:11,color:_EA.sub,fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Unidade</div>
+          <select value={form.unidade} onChange={function(e){ setForm(Object.assign({}, form, { unidade:e.target.value })); }} style={sel}>
+            <option value="">Todas</option>{unidades.map(function(u){ return <option key={u} value={u}>{u}</option>; })}</select></div>}
+        <button disabled={!arq || !!passo} onClick={enviar} style={{font:"inherit",padding:"10px 16px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",fontWeight:800,cursor:"pointer",opacity:(!arq || passo)?.6:1}}>{passo ? "Salvando…" : "Salvar template"}</button>
+      </div>
+      {passo && <div style={{marginTop:10,fontSize:12.5,color:_EA.roxo,fontWeight:700}}>{passo}</div>}
+      {resultado && <div style={{marginTop:10,padding:"10px 12px",borderRadius:10,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:12.5,color:"#166534",lineHeight:1.5}}>
+        <b>Template salvo.</b> {resultado.largura}×{resultado.altura} · {resultado.camadas} camada(s) · espaços: {resultado.espacos.length ? resultado.espacos.join(", ") : "nenhum (nomeie as camadas no Photoshop: TITULO, FRASE, FOTO, LOGO, CIDADE, PIN…)"}
+        {resultado.avisos.length > 0 && <div style={{marginTop:6,color:"#92400e"}}>{resultado.avisos.slice(0, 6).map(function(x, i){ return <div key={i}>• {x}</div>; })}{resultado.avisos.length > 6 ? <div>• … e mais {resultado.avisos.length - 6}</div> : null}</div>}
+      </div>}
+    </div>}
+    {isMob && <div style={{marginTop:10,fontSize:12.5,color:_EA.sub}}>No celular dá para ver os templates. Para mandar um PSD, use o computador.</div>}
+    {erro && <div style={{marginTop:12,padding:12,borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:13}}>{erro}</div>}
+    {lista === null && <div style={{marginTop:14,color:_EA.sub}}>Carregando…</div>}
+    {lista && !lista.length && <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub,lineHeight:1.5}}>
+      {_eaNomeCliente(cliente)} ainda não tem template.<br/>{isMob ? "" : "Mande o PSD acima — o primeiro de cada tipo já vira o padrão que o botão \"Gerar arte\" do card usa."}</div>}
+    {porTipo.map(function(g){ return <div key={g[0]} style={{marginTop:18}}>
+      <div style={{fontSize:13,fontWeight:800,color:_EA.sub,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>{g[1]} · {g[2].length}</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(230px,1fr))",gap:12}}>
+        {g[2].map(function(m){ return <div key={m.id} style={{background:"#fff",border:"1px solid "+(m.padrao?_EA.roxo:_EA.linha),borderRadius:14,overflow:"hidden",position:"relative"}}>
+          {m.padrao && <div style={{position:"absolute",top:8,left:8,background:_EA.roxo,color:"#fff",fontSize:10.5,fontWeight:800,borderRadius:999,padding:"3px 8px",zIndex:1}}>★ PADRÃO{m.unidade ? " · " + m.unidade : ""}</div>}
+          <div style={{background:_EA.palco,aspectRatio:"4/5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+            {m.thumb_url ? <img src={m.thumb_url} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:12}}>{m.largura}×{m.altura}</span>}
+          </div>
+          <div style={{padding:"10px 12px"}}>
+            <div style={{fontWeight:800,fontSize:13.5}}>{m.nome}</div>
+            <div style={{fontSize:11.5,color:_EA.sub,marginTop:2}}>{m.largura}×{m.altura} · {m.modo === "base" ? "Base" : "Fixo"}{!m.padrao && m.unidade ? " · " + m.unidade : ""}{m.arquivo_nome ? " · " + m.arquivo_nome : ""}</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:3,margin:"6px 0"}}>{(m.espacos||[]).map(function(e){ return <span key={e} style={{fontSize:10,fontWeight:800,color:_EA.roxo,background:_EA.roxoClaro,borderRadius:999,padding:"2px 6px"}}>{e}</span>; })}{!(m.espacos||[]).length && <span style={{fontSize:11,color:"#b45309"}}>sem espaços — nomeie as camadas no PSD</span>}</div>
+            {!isMob && <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+              {!m.padrao && <button onClick={function(){ config(m, { p_padrao:true }); }} style={Object.assign({}, bt, {color:_EA.roxo,borderColor:_EA.roxoBorda})}>★ Usar como padrão</button>}
+              <select value={m.tipo_card || "arte"} onChange={function(e){ config(m, { p_tipo_card:e.target.value }); }} title="Tipo de card" style={Object.assign({}, bt, {padding:"5px 6px"})}>
+                {_EA_TIPOS_CARD.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}</select>
+              <select value={m.modo || "fixo"} onChange={function(e){ config(m, { p_modo:e.target.value }); }} title="Modo" style={Object.assign({}, bt, {padding:"5px 6px"})}>
+                <option value="fixo">Fixo</option><option value="base">Base</option></select>
+              {(unidades || []).length > 0 && <select value={m.unidade || ""} onChange={function(e){ config(m, { p_unidade:e.target.value }); }} title="Unidade" style={Object.assign({}, bt, {padding:"5px 6px"})}>
+                <option value="">Todas</option>{unidades.map(function(u){ return <option key={u} value={u}>{u}</option>; })}</select>}
+              <button onClick={function(){ editar(m); }} style={bt}>Abrir no editor</button>
+              <button onClick={function(){ tirar(m); }} style={Object.assign({}, bt, {color:_EA.sub})}>Tirar</button>
+            </div>}
+          </div>
+        </div>; })}
+      </div>
+    </div>; })}
+  </div>;
+}
+
+/* ═══ CENTRAL DO CLIENTE › IDENTIDADE VISUAL ════════════════════════════════════════════════════════
+   Kit do cliente (cores, fonte, logo, contato — só leitura, vem de Clientes › Kit) + o que é só da arte:
+   fontes do cliente (arquivo .otf/.ttf), pins do mapa já posicionados (Foto de obra) e observações. */
+function _EaIdentidade({ isMob, cliente, unidade, kit }){
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+  const [obs, setObs] = useState("");
+  const [subindo, setSubindo] = useState(false);
+  const carregar = function(){ _eaRpc("arte_identidade", { p_client:cliente, p_unidade:unidade || "" }).then(function(d){ d = d || {}; setDados(d); setObs(d.observacoes || ""); _eaRegistrarFontes(d.fontes); }).catch(function(e){ setErro(_eaErro(e)); setDados({}); }); };
+  useEffect(carregar, [cliente, unidade]);
+  const salvar = async function(mud){ try{ const r = await _eaRpc("arte_identidade_salvar", { p_client:cliente, p_unidade:unidade || "", p_dados:mud }); setDados(r.dados || {}); _eaRegistrarFontes(r.dados && r.dados.fontes); return true; }catch(e){ _eaToast("error", _eaErro(e)); return false; } };
+  const fontes = (dados && Array.isArray(dados.fontes)) ? dados.fontes : [];
+  const pins = (dados && dados.pins && typeof dados.pins === "object") ? dados.pins : {};
+  const subirFontes = async function(files){
+    const lista = Array.from(files || []).filter(function(f){ return /\.(ttf|otf|woff2?)$/i.test(f.name); });
+    if(!lista.length){ _eaToast("info", "Mande arquivos .ttf, .otf ou .woff"); return; }
+    setSubindo(true);
+    try{
+      const novas = fontes.slice();
+      for(const f of lista){
+        const up = await _eaSubir(f, "arte/fontes/" + cliente, f.name);
+        const g = _eaFontePsd(f.name.replace(/\.[^.]+$/, ""));
+        novas.push({ familia:g.familia, peso:g.peso, italico:g.italico, url:up.url, arquivo:f.name });
+      }
+      if(await salvar({ fontes:novas })) _eaToast("success", lista.length + " fonte(s) do cliente guardada(s) — os templates já abrem com ela");
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+    setSubindo(false);
+  };
+  const mudarFonte = function(i, campo, v){ const novas = fontes.map(function(f, j){ return j === i ? Object.assign({}, f, (function(){ const o = {}; o[campo] = v; return o; })()) : f; }); setDados(Object.assign({}, dados, { fontes:novas })); };
+  const salvarFontes = function(){ salvar({ fontes:fontes }); };
+  const tirarFonte = function(i){ if(!window.confirm("Tirar esta fonte da lista?")) return; salvar({ fontes:fontes.filter(function(_, j){ return j !== i; }) }); };
+  const tirarPin = function(k){ if(!window.confirm("Esquecer a posição do pin de \"" + (pins[k].cidade || k) + "\"?")) return; const o = {}; o[k] = null; salvar({ pins:o }); };
+  const base = (kit && kit.base) || {}, k = (kit && kit.kit) || {};
+  const cor = function(c, rot){ return c ? <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12.5}}><span style={{width:22,height:22,borderRadius:7,background:c,border:"1px solid rgba(0,0,0,.08)",display:"inline-block"}}/>{rot}: <b>{c}</b></div> : null; };
+  const caixa = { marginTop:14, background:"#fff", border:"1px solid "+_EA.linha, borderRadius:14, padding:14 };
+  const bt = { font:"inherit", padding:"6px 10px", borderRadius:8, border:"1px solid "+_EA.linha, background:"#fff", cursor:"pointer", fontSize:12, fontWeight:700 };
+  const inp = { font:"inherit", padding:"6px 8px", borderRadius:8, border:"1px solid "+_EA.linha, fontSize:12.5, background:"#fff" };
+  return <div>
+    {erro && <div style={{marginTop:12,padding:12,borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:13}}>{erro}</div>}
+    <div style={caixa}>
+      <div style={{fontWeight:800,fontSize:14}}>Kit do cliente{unidade ? " · " + unidade : ""}</div>
+      <div style={{fontSize:12,color:_EA.sub,marginTop:2}}>Vem de Clientes › cadastro e do Kit do cliente — é o que preenche logo, cores, telefone e cidade nos templates. Para mudar, edite lá.</div>
+      {!kit ? <div style={{marginTop:10,color:_EA.sub,fontSize:13}}>Carregando…</div>
+        : <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"center",marginTop:12}}>
+          <div style={{width:72,height:72,borderRadius:14,background:"#f1f5f9",border:"1px solid "+_EA.linha,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+            {_eaLogo(cliente) ? <img src={_eaLogo(cliente)} alt="" style={{width:"100%",height:"100%",objectFit:"contain",padding:6,boxSizing:"border-box"}}/> : <span style={{fontSize:11,color:_EA.fraco}}>sem logo</span>}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {cor(k.cor_principal || base.cor, "Cor principal")}{cor(k.cor_secundaria, "Cor secundária")}
+            <div style={{fontSize:12.5}}>Fonte do kit: <b style={{fontFamily:k.fonte ? '"' + k.fonte + '", sans-serif' : "inherit"}}>{k.fonte || "—"}</b></div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,fontSize:12.5,color:_EA.sub}}>
+            <div>WhatsApp: <b style={{color:_EA.texto}}>{base.whatsapp || "—"}</b></div>
+            <div>Cidade: <b style={{color:_EA.texto}}>{base.cidade || "—"}</b></div>
+            <div>Instagram: <b style={{color:_EA.texto}}>{base.instagram || "—"}</b></div>
+          </div>
+        </div>}
+    </div>
+    <div style={caixa}>
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 260px"}}>
+          <div style={{fontWeight:800,fontSize:14}}>Fontes do cliente</div>
+          <div style={{fontSize:12,color:_EA.sub,marginTop:2}}>As fontes do PSD que o Google Fonts não tem. Mande o arquivo (.otf, .ttf, .woff) de cada peso — o nome da família tem que ser o mesmo que o Photoshop usa (ex.: <i>Gotham</i>).</div>
+        </div>
+        {!isMob && <label style={Object.assign({}, bt, {background:_EA.roxo,color:"#fff",border:0,padding:"9px 14px",opacity:subindo?.6:1})}>
+          <input type="file" multiple accept=".ttf,.otf,.woff,.woff2" style={{display:"none"}} disabled={subindo} onChange={function(e){ subirFontes(e.target.files); e.target.value = ""; }}/>{subindo ? "Subindo…" : "+ Mandar fonte"}</label>}
+      </div>
+      {dados === null ? <div style={{marginTop:10,color:_EA.sub,fontSize:13}}>Carregando…</div>
+        : !fontes.length ? <div style={{marginTop:10,fontSize:12.5,color:_EA.fraco}}>Nenhuma fonte ainda. Quando um template abrir com fonte faltando, o aviso diz qual.</div>
+        : <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:6}}>
+          {fontes.map(function(f, i){ return <div key={f.url || i} style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",padding:"6px 8px",borderRadius:10,background:_EA.fundo}}>
+            <span style={{fontFamily:'"' + f.familia + '", sans-serif',fontWeight:f.peso || 400,fontStyle:f.italico?"italic":"normal",fontSize:18,minWidth:120}}>{f.familia}</span>
+            <input value={f.familia || ""} onChange={function(e){ mudarFonte(i, "familia", e.target.value); }} onBlur={salvarFontes} title="Família (igual ao Photoshop)" style={Object.assign({}, inp, {width:150})}/>
+            <select value={String(f.peso || "400")} onChange={function(e){ mudarFonte(i, "peso", e.target.value); setTimeout(salvarFontes, 0); }} style={inp}>
+              {[["100","Thin"],["200","ExtraLight"],["300","Light"],["400","Regular"],["500","Medium"],["600","SemiBold"],["700","Bold"],["800","ExtraBold"],["900","Black"]].map(function(p){ return <option key={p[0]} value={p[0]}>{p[1]} ({p[0]})</option>; })}</select>
+            <label style={{fontSize:12,display:"flex",gap:4,alignItems:"center"}}><input type="checkbox" checked={!!f.italico} onChange={function(e){ mudarFonte(i, "italico", e.target.checked); setTimeout(salvarFontes, 0); }}/> itálico</label>
+            <span style={{fontSize:11,color:_EA.fraco,flex:1}}>{f.arquivo}</span>
+            {!isMob && <button onClick={function(){ tirarFonte(i); }} style={Object.assign({}, bt, {color:_EA.sub})}>Tirar</button>}
+          </div>; })}
+        </div>}
+    </div>
+    <div style={caixa}>
+      <div style={{fontWeight:800,fontSize:14}}>Pins do mapa (Foto de obra)</div>
+      <div style={{fontSize:12,color:_EA.sub,marginTop:2}}>Cada cidade que já teve o pin posicionado uma vez. Na próxima Foto de obra daquela cidade, o pin já vai pro lugar sozinho. Cidade nova: o designer posiciona no editor e salva em Espaços › "Guardar posição do pin".</div>
+      {dados === null ? null : !Object.keys(pins).length ? <div style={{marginTop:10,fontSize:12.5,color:_EA.fraco}}>Nenhum pin guardado ainda.</div>
+        : <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
+          {Object.keys(pins).sort().map(function(key){ const p = pins[key] || {}; return <span key={key} style={{display:"inline-flex",gap:6,alignItems:"center",padding:"5px 10px",borderRadius:999,background:_EA.roxoClaro,border:"1px solid "+_EA.roxoBorda,fontSize:12,fontWeight:700,color:_EA.roxo}}>
+            📍 {p.cidade || key}<span style={{color:_EA.fraco,fontWeight:500}}>{Math.round(p.x || 0)},{Math.round(p.y || 0)}</span>
+            {!isMob && <button onClick={function(){ tirarPin(key); }} title="Esquecer" style={{font:"inherit",border:0,background:"none",cursor:"pointer",color:_EA.sub,padding:0,lineHeight:1}}>×</button>}</span>; })}
+        </div>}
+    </div>
+    <div style={caixa}>
+      <div style={{fontWeight:800,fontSize:14}}>Observações da identidade</div>
+      <div style={{fontSize:12,color:_EA.sub,marginTop:2}}>O que a IA e o designer precisam saber sobre o visual deste cliente (ex.: "logo sempre no canto inferior direito", "nunca usar laranja", "fotos sempre com a faixa verde embaixo").</div>
+      <textarea value={obs} onChange={function(e){ setObs(e.target.value); }} onBlur={function(){ if(dados && (dados.observacoes || "") !== obs) salvar({ observacoes:obs }).then(function(ok){ if(ok) _eaToast("success", "Observações guardadas"); }); }} rows={4} disabled={isMob}
+        placeholder="Escreva aqui…" style={{font:"inherit",width:"100%",boxSizing:"border-box",marginTop:10,padding:10,borderRadius:10,border:"1px solid "+_EA.linha,fontSize:13.5,lineHeight:1.5,resize:"vertical"}}/>
+    </div>
+  </div>;
+}
+
 /* ═══ ARTE AUTOMÁTICA PELO MODELO (07/10/2026, Gustavo) ═════════════════════════════════════════════
    "fazer artes automaticamente com base nos PSDs (templates) criados pelos designers". Decisões dele:
    • o designer marca no PSD pelo NOME DA CAMADA (TITULO, TEXTO, FOTO, LOGO…) — _eaEspacoDoNome;
@@ -141164,16 +141546,29 @@ function _EaAprende({ isMob }){
    cadastro e Kit do cliente. A arte fica salva na Edição de arte (editável) e o PNG vai pro card. */
 function _eaSecoesCopy(html){
   const t = _eaSemHtml(html || "").replace(/\r/g, "");
-  const out = { titulo:"", texto:"", cta:"" }; let cur = null; const buf = { titulo:[], texto:[], cta:[] };
+  const out = { titulo:"", texto:"", cta:"", cidade:"", frase:"" }; let cur = null; const buf = { titulo:[], texto:[], cta:[], cidade:[], frase:[] };
+  // rótulo = linha com marcador ("• Título", "- Texto na arte:", "* CTA") ou o rótulo sozinho ("TÍTULO", "Título:")
+  const rot = function(s, nome){
+    let m = s.match(new RegExp("^[•*\\-]\\s*(?:" + nome + ")\\s*:?\\s*(.*)$", "i")); if(m) return m[1];
+    m = s.match(new RegExp("^(?:" + nome + ")\\s*:\\s*(.*)$", "i")); if(m) return m[1];
+    if(new RegExp("^(?:" + nome + ")$", "i").test(s)) return "";
+    return null;
+  };
   t.split("\n").forEach(function(l){
-    const s = l.trim(), m = s.replace(/^[•*\-]\s*/, "").toUpperCase();
-    if(/^[•*\-]?\s*T[ÍI]TULO\b/i.test(s)){ cur = "titulo"; const r = s.replace(/^[•*\-]?\s*T[ÍI]TULO\s*:?\s*/i, ""); if(r) buf.titulo.push(r); return; }
-    if(/^[•*\-]?\s*(TEXTO NA ARTE|TEXTO|FRASE NA ARTE)\b/i.test(s)){ cur = "texto"; const r = s.replace(/^[•*\-]?\s*(TEXTO NA ARTE|TEXTO|FRASE NA ARTE)\s*:?\s*/i, ""); if(r) buf.texto.push(r); return; }
-    if(/^[•*\-]?\s*(CTA|CHAMADA)\b/i.test(s)){ cur = "cta"; const r = s.replace(/^[•*\-]?\s*(CTA|CHAMADA)\s*:?\s*/i, ""); if(r) buf.cta.push(r); return; }
-    if(/^[•*]\s*[A-ZÁÉÍÓÚÂÊÔÃÕÇ ]{3,}$/.test(s) && m === m.toUpperCase()){ cur = null; return; }   // outro rótulo
+    const s = l.trim(); let r;
+    if((r = rot(s, "T[ÍI]TULO")) !== null){ cur = "titulo"; if(r) buf.titulo.push(r); return; }
+    // (07/10) Foto de obra: "• Pin no mapa" (cidade) e "• Frase na arte" (a frase estampada)
+    if((r = rot(s, "PIN (?:NO|EN EL) MAPA")) !== null){ cur = "cidade"; if(r) buf.cidade.push(r); return; }
+    if((r = rot(s, "FRASE (?:NA|EN EL) ARTE")) !== null){ cur = "frase"; if(r) buf.frase.push(r); return; }
+    if((r = rot(s, "TEXTO NA ARTE|TEXTO EN EL ARTE|TEXTO")) !== null){ cur = "texto"; if(r) buf.texto.push(r); return; }
+    if((r = rot(s, "CTA|CHAMADA")) !== null){ cur = "cta"; if(r) buf.cta.push(r); return; }
+    if(/^[•*]\s*\S/.test(s) && s.replace(/^[•*]\s*/, "").split(/\s+/).length <= 5 && !/[.!?]$/.test(s)){ cur = null; return; }   // outro rótulo ("• Legenda", "• Imagens")
     if(cur) buf[cur].push(l);
   });
-  out.titulo = buf.titulo.join("\n").trim(); out.texto = buf.texto.join("\n").replace(/\n{3,}/g, "\n\n").trim(); out.cta = buf.cta.join(" ").trim();
+  out.titulo = buf.titulo.join("\n").trim(); out.cta = buf.cta.join(" ").trim();
+  out.frase = buf.frase.join(" ").replace(/\s+/g, " ").trim();
+  out.cidade = (buf.cidade.map(function(x){ return x.trim(); }).filter(Boolean)[0] || "").replace(/^\(|\)$/g, "").trim();
+  out.texto = buf.texto.join("\n").replace(/\n{3,}/g, "\n\n").trim() || out.frase;
   return out;
 }
 function _eaFotosDoCard(task){
@@ -141203,17 +141598,34 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const fc = new lib.StaticCanvas(el, { width:W, height:H, enableRetinaScaling:false, renderOnAddRemove:false });
   await _eaCarregarJson(fc, pg.fabric);
   const uns = String(task.bioterUnit || task.bioter_unit || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
-  let kit = null; try{ kit = await _eaRpc("arte_kit", { p_client:task.client, p_unidade:(uns.length === 1 ? uns[0] : "") }); }catch(_){ }
+  const unid = uns.length === 1 ? uns[0] : "";
+  let kit = null; try{ kit = await _eaRpc("arte_kit", { p_client:task.client, p_unidade:unid }); }catch(_){ }
+  // (07/10) identidade do cliente: fontes (registra no navegador antes de encaixar os textos) e pins do mapa
+  const ident = (await _eaFontesDoCliente(task.client, unid)) || {};
+  const tipoCard = modelo.tipo_card || _eaTipoCardDoTask(task);
+  const fotoObra = tipoCard === "foto_obra";
   const copy = _eaSecoesCopy(task.desc || task.description || "");
-  const fotos = _eaFotosDoCard(task); let iFoto = 0; const avisos = [];
+  const fotos = _eaFotosDoCard(task); let iFoto = 0; const avisos = []; const travados = [];
   passo("preenchendo com a copy e as fotos…");
   for(const o of fc.getObjects().slice()){
     if(!o.espaco) continue;
     const tipo = _eaTipo(o);
     try{
-      if(tipo === "texto" && o.espaco === "HEADLINE"){ if(copy.titulo){ o.set("text", copy.titulo); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TÍTULO"); }
+      if(fotoObra && tipo === "texto" && (o.espaco === "HEADLINE" || o.espaco === "SUBTITLE")){
+        // Foto de obra: a FRASE do briefing vai no texto (título ou frase, o que o template tiver)
+        const txt = o.espaco === "HEADLINE" ? (copy.titulo || copy.frase) : (copy.frase || copy.texto);
+        if(txt){ o.set("text", txt); _eaCaberTexto(o); } else avisos.push("o briefing não tem • FRASE NA ARTE");
+      }
+      else if(tipo === "texto" && o.espaco === "HEADLINE"){ if(copy.titulo){ o.set("text", copy.titulo); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TÍTULO"); }
       else if(tipo === "texto" && o.espaco === "SUBTITLE"){ if(copy.texto){ o.set("text", copy.texto); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TEXTO NA ARTE"); }
       else if(tipo === "texto" && o.espaco === "CTA" && copy.cta){ o.set("text", copy.cta); _eaCaberTexto(o); }
+      else if(tipo === "texto" && o.espaco === "LOCATION" && copy.cidade){ o.set("text", copy.cidade); _eaCaberTexto(o); o.bloqueado = true; travados.push(o); }   // cidade do pin manda; o kit não sobrescreve
+      else if(o.espaco === "PIN"){
+        const key = _eaChaveCidade(copy.cidade), p = key && ident.pins && ident.pins[key];
+        if(!copy.cidade) avisos.push("o briefing não tem • PIN NO MAPA (cidade) — o pin ficou onde estava no template");
+        else if(p && p.W && p.H){ o.set({ left:p.x * W / p.W, top:p.y * H / p.H }); o.setCoords(); }
+        else avisos.push("pin: a cidade “" + copy.cidade + "” ainda não tem posição no mapa — posicione o pin no editor e use Espaços › Guardar posição do pin (fica guardado pra próxima)");
+      }
       else if(o.espaco === "PRODUCT_IMAGE" && tipo === "imagem"){
         const f = fotos[iFoto++];
         if(f) await _eaTrocarFotoMantendoForma(o, f.url); else avisos.push("faltou foto no material do card (o modelo pede mais uma)");
@@ -141223,8 +141635,10 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   // logo, telefone, cidade, cores e fonte: cadastro + Kit (mesma função do editor)
   const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
   try{ await _eaPreencherEspacos(stub, { silencioso:true }); }catch(_){ }
+  travados.forEach(function(o){ o.bloqueado = false; });
   fc.renderAll();
   pg.fabric = _eaJsonPagina(fc); pg.largura = W; pg.altura = H;
+  doc.meta = Object.assign({}, doc.meta || {}, { tipo_card:tipoCard, cidade:copy.cidade || "", modelo_id:modelo.id || null, gerada_em:new Date().toISOString() });
   passo("salvando a arte…");
   const nome = _eaNomeArquivo(task.title || modelo.nome || "arte");
   const p = await _eaRpc("arte_projeto_criar", { p_client:task.client || null, p_unidade:(uns.length === 1 ? uns[0] : ""), p_task:task.id, p_titulo:String(task.title || modelo.nome || "Arte").slice(0,120),
@@ -141245,54 +141659,73 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
 }
 if(typeof window !== "undefined"){ window.pxGerarArteDoModelo = pxGerarArteDoModelo; }
 
-/* Janela do card: escolhe o modelo do cliente e gera. */
+/* Janela do card "Gerar arte": (07/10, Gustavo) NÃO PERGUNTA — pega o template PADRÃO do tipo do card
+   (Foto de obra · Arte · Carrossel · Story) e da unidade, e já gera. Só mostra escolha se não houver padrão. */
 function PxGerarArteModal({ task, setTasks, onClose }){
   const [modelos, setModelos] = useState(null);
   const [sel, setSel] = useState("");
+  const [auto, setAuto] = useState(null);
   const [passo, setPasso] = useState("");
   const [erro, setErro] = useState("");
+  const rodouRef = useRef(false);
+  const tipo = _eaTipoCardDoTask(task);
+  const uns = String(task.bioterUnit || task.bioter_unit || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+  const unid = uns.length === 1 ? uns[0] : "";
   useEffect(function(){
     _eaRpc("arte_modelos_lista", { p_client:task.client || null }).then(function(m){
-      const l = (Array.isArray(m) ? m : []).filter(function(x){ return !x.client_id || x.client_id === task.client; })
-        .sort(function(a, b){ return (b.client_id ? 1 : 0) - (a.client_id ? 1 : 0); });
-      setModelos(l); if(l[0]) setSel(l[0].id);
+      const todos = (Array.isArray(m) ? m : []).filter(function(x){ return !x.client_id || x.client_id === task.client; });
+      const pad = _eaTemplatePadrao(todos, task.client, tipo, unid);
+      const doCliente = todos.filter(function(x){ return x.client_id === task.client; });
+      const l = (doCliente.length ? doCliente : todos).sort(function(a, b){ return (b.padrao ? 1 : 0) - (a.padrao ? 1 : 0) || (b.client_id ? 1 : 0) - (a.client_id ? 1 : 0); });
+      setModelos(l); if(pad){ setSel(pad.id); setAuto(pad); } else if(l[0]) setSel(l[0].id);
     }).catch(function(e){ setErro(_eaErro(e)); setModelos([]); });
   }, [task.id]);
   const copy = _eaSecoesCopy(task.desc || task.description || ""), fotos = _eaFotosDoCard(task);
-  const gerar = async function(){
-    const m = (modelos || []).find(function(x){ return x.id === sel; }); if(!m) return;
+  const gerar = async function(m){
+    m = m || (modelos || []).find(function(x){ return x.id === sel; }); if(!m) return;
     setErro("");
     try{
       const r = await pxGerarArteDoModelo(task, m, setTasks, setPasso);
       _eaToast("success", "Arte gerada e enviada pra Avaliação de design" + (r.avisos.length ? " (veja o aviso no histórico)" : ""));
       onClose(true);
-    }catch(e){ setErro(_eaErro(e)); setPasso(""); }
+    }catch(e){ setErro(_eaErro(e)); setPasso(""); setAuto(null); }
   };
+  useEffect(function(){ if(auto && !rodouRef.current){ rodouRef.current = true; gerar(auto); } }, [auto]);
   const lin = function(ok, txt){ return <div style={{display:"flex",gap:8,alignItems:"center",fontSize:12.5,color:ok?"#166534":"#b45309"}}><span>{ok ? "✓" : "!"}</span>{txt}</div>; };
+  const fotoObra = tipo === "foto_obra";
   return <div onClick={function(){ if(!passo) onClose(false); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:10050,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:18,width:"min(620px,100%)",maxHeight:"90vh",overflow:"auto",padding:20,boxShadow:"0 24px 60px rgba(15,23,42,.3)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{fontWeight:800,fontSize:17,color:_EA.texto}}>Gerar arte do modelo</div>
-      <div style={{fontSize:12.5,color:_EA.sub,marginTop:3}}>A copy e as fotos do material deste card entram no modelo escolhido. A arte sai pronta, fica editável na Edição de arte e o card vai direto pra Avaliação de design.</div>
+      <div style={{fontWeight:800,fontSize:17,color:_EA.texto}}>Gerar arte · {_eaRotuloTipoCard(tipo)}{unid ? " · " + unid : ""}</div>
+      {auto ? <div style={{fontSize:12.5,color:_EA.sub,marginTop:3}}>Usando o template padrão <b style={{color:_EA.texto}}>{auto.nome}</b>. A arte sai pronta, fica editável na Edição de arte e o card vai direto pra Avaliação de design.</div>
+        : <div style={{fontSize:12.5,color:_EA.sub,marginTop:3}}>A copy e as fotos do material deste card entram no template. A arte sai pronta, fica editável na Edição de arte e o card vai direto pra Avaliação de design.</div>}
       <div style={{display:"flex",flexDirection:"column",gap:4,margin:"12px 0",padding:"10px 12px",background:"#f8fafc",borderRadius:10}}>
-        {lin(!!copy.titulo, copy.titulo ? "Título: " + copy.titulo.slice(0,70) : "O briefing não tem • TÍTULO")}
-        {lin(!!copy.texto, copy.texto ? "Texto na arte: " + copy.texto.replace(/\n+/g," ").slice(0,70) + (copy.texto.length > 70 ? "…" : "") : "O briefing não tem • TEXTO NA ARTE")}
-        {lin(fotos.length > 0, fotos.length ? fotos.length + " foto(s) no material do card" : "Sem fotos no material do card (o espaço FOTO fica com a do modelo)")}
+        {fotoObra ? <>
+          {lin(!!copy.cidade, copy.cidade ? "Pin no mapa: " + copy.cidade : "O briefing não tem • PIN NO MAPA")}
+          {lin(!!copy.frase, copy.frase ? "Frase na arte: " + copy.frase.slice(0,80) : "O briefing não tem • FRASE NA ARTE")}
+        </> : <>
+          {lin(!!copy.titulo, copy.titulo ? "Título: " + copy.titulo.slice(0,70) : "O briefing não tem • TÍTULO")}
+          {lin(!!copy.texto, copy.texto ? "Texto na arte: " + copy.texto.replace(/\n+/g," ").slice(0,70) + (copy.texto.length > 70 ? "…" : "") : "O briefing não tem • TEXTO NA ARTE")}
+        </>}
+        {lin(fotos.length > 0, fotos.length ? fotos.length + " foto(s) no material do card" : "Sem fotos no material do card (o espaço FOTO fica com a do template)")}
       </div>
-      {modelos === null ? <div style={{color:_EA.sub,fontSize:13}}>Carregando modelos…</div>
-        : !modelos.length ? <div style={{color:_EA.sub,fontSize:13,lineHeight:1.5}}>Nenhum modelo para {_eaNomeCliente(task.client)} ainda. Na <b>Edição de arte</b>: abra o PSD do designer (camadas nomeadas TITULO, TEXTO, FOTO, LOGO…) e use <b>Espaços › Salvar como modelo</b>.</div>
-        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
+      {modelos === null ? <div style={{color:_EA.sub,fontSize:13}}>Procurando o template padrão…</div>
+        : auto ? null
+        : !modelos.length ? <div style={{color:_EA.sub,fontSize:13,lineHeight:1.5}}>{_eaNomeCliente(task.client)} ainda não tem template. Em <b>Edição de arte › {_eaNomeCliente(task.client)} › Templates</b>, mande o PSD do designer (camadas nomeadas TITULO, FRASE, FOTO, LOGO, PIN…). O primeiro já vira o padrão.</div>
+        : <div>
+          <div style={{fontSize:12.5,color:"#b45309",marginBottom:8}}>Sem template padrão de <b>{_eaRotuloTipoCard(tipo)}</b> para {_eaNomeCliente(task.client)}. Escolha um abaixo (ou marque um como padrão em Edição de arte › Templates).</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
           {modelos.map(function(m){ const on = m.id === sel;
             return <button key={m.id} type="button" onClick={function(){ setSel(m.id); }} style={{font:"inherit",textAlign:"left",padding:8,borderRadius:12,cursor:"pointer",border:"2px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff"}}>
-              <div style={{aspectRatio:"1",borderRadius:8,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>{m.thumb ? <img src={m.thumb} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:11}}>{m.largura}×{m.altura}</span>}</div>
+              <div style={{aspectRatio:"1",borderRadius:8,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>{m.thumb_url ? <img src={m.thumb_url} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:11}}>{m.largura}×{m.altura}</span>}</div>
               <div style={{fontSize:12.5,fontWeight:800,marginTop:6,color:_EA.texto}}>{m.nome}</div>
-              <div style={{fontSize:11,color:_EA.sub}}>{(m.espacos || []).join(" · ") || "sem espaços"}{m.client_id ? "" : " · todos"}</div>
+              <div style={{fontSize:11,color:_EA.sub}}>{_eaRotuloTipoCard(m.tipo_card || "arte")}{m.padrao ? " · padrão" : ""}{m.client_id ? "" : " · todos"}</div>
             </button>; })}
-        </div>}
+          </div></div>}
       {erro && <div style={{marginTop:12,padding:10,borderRadius:10,background:"#fef2f2",color:"#b91c1c",fontSize:13}}>{erro}</div>}
       <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16,alignItems:"center"}}>
         {passo && <span style={{fontSize:12.5,color:_EA.roxo,fontWeight:700,marginRight:"auto"}}>{passo}</span>}
         <button disabled={!!passo} onClick={function(){ onClose(false); }} style={{font:"inherit",padding:"10px 16px",borderRadius:10,border:"1px solid "+_EA.linha,background:"#fff",cursor:"pointer",fontWeight:700}}>Cancelar</button>
-        <button disabled={!!passo || !sel} onClick={gerar} style={{font:"inherit",padding:"10px 18px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",cursor:"pointer",fontWeight:800,opacity:(passo || !sel)?.6:1}}>{passo ? "Gerando…" : "Gerar e enviar pra avaliação"}</button>
+        {!auto && <button disabled={!!passo || !sel} onClick={function(){ gerar(); }} style={{font:"inherit",padding:"10px 18px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",cursor:"pointer",fontWeight:800,opacity:(passo || !sel)?.6:1}}>{passo ? "Gerando…" : "Gerar e enviar pra avaliação"}</button>}
       </div>
     </div>
   </div>;
