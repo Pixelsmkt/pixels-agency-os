@@ -117465,7 +117465,14 @@ const _EV_COLUNAS = [
   { id:"execucao", label:"Em execução" },
   { id:"ajustes",  label:"Ajustes" },
 ];
-const _EV_FONTES = ["Montserrat","Poppins","Inter","Roboto","Open Sans","Lato","Raleway","Oswald","Bebas Neue","Anton"];
+const _EV_FONTES = ["Montserrat","Poppins","Inter","Roboto","Open Sans","Lato","Raleway","Oswald","Bebas Neue","Anton",
+  // v77 (07/10/2026): mais fontes do Google para a legenda e os textos (o servidor v83 aceita as mesmas)
+  "Archivo Black","Barlow Condensed","DM Sans","Kanit","League Spartan","Lexend","Manrope","Nunito","Outfit","Rubik","Sora","Space Grotesk","Unbounded","Syne",
+  "Playfair Display","Alfa Slab One","Titan One","Luckiest Guy","Bungee","Fredoka","Righteous","Lobster","Pacifico","Permanent Marker","Caveat"];
+/* v77: grupos para a escolha da fonte (com prévia na própria letra) */
+const _EV_FONTES_GRUPOS = [ ["Limpas", ["Montserrat","Poppins","Inter","Roboto","Open Sans","Lato","Raleway","DM Sans","Manrope","Nunito","Outfit","Rubik","Sora","Lexend"]],
+  ["Fortes", ["Anton","Bebas Neue","Oswald","Archivo Black","Barlow Condensed","League Spartan","Kanit","Unbounded","Space Grotesk","Syne"]],
+  ["Elegantes", ["Playfair Display","Alfa Slab One"]], ["Divertidas", ["Titan One","Luckiest Guy","Bungee","Fredoka","Righteous","Lobster"]], ["Escritas à mão", ["Pacifico","Permanent Marker","Caveat"]] ];
 const _EV_LEGENDA = [
   { id:"palavra", label:"Palavra por palavra" },
   { id:"frase",   label:"Frase inteira" },
@@ -117524,8 +117531,12 @@ function _evCarregarFonte(nome){
     const id = "ev-fonte-" + nome.replace(/\s+/g,"-").toLowerCase();
     if(document.getElementById(id)) return;
     const l = document.createElement("link"); l.id = id; l.rel = "stylesheet";
-    l.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(nome).replace(/%20/g,"+") + ":wght@600;800&display=swap";
+    const fam = encodeURIComponent(nome).replace(/%20/g,"+");
+    l.href = "https://fonts.googleapis.com/css2?family=" + fam + ":wght@600;800&display=swap";
     document.head.appendChild(l);
+    // v77: pesos Fino/Normal/Extra e itálico em pedidos separados (fonte que não tem o peso só ignora aquele pedido)
+    ["300","500","900","1,800"].forEach(function(w){ const l2 = document.createElement("link"); l2.rel = "stylesheet"; l2.id = id + "-" + w.replace(",", "i");
+      l2.href = "https://fonts.googleapis.com/css2?family=" + fam + (w.indexOf(",") > 0 ? ":ital,wght@" + w : ":wght@" + w) + "&display=swap"; document.head.appendChild(l2); });
   }catch(_){}
 }
 function _evKitPadrao(base){
@@ -118648,6 +118659,9 @@ const _EV_CLIMAS = [
 const _EV_CORES_CLIPE = ["#7c3aed","#0891b2","#db2777","#ea580c","#16a34a","#2563eb","#9333ea","#ca8a04","#0d9488","#dc2626","#4f46e5","#65a30d"];
 
 function _evTempo(s){ s = Math.max(0, Number(s)||0); const m = Math.floor(s/60), r = s - m*60; return m + ":" + (r<10?"0":"") + r.toFixed(1); }
+/* v77 (07/10/2026): LIMITE DE 50 VÍDEOS POR EDIÇÃO (antes 30 na montagem e 40 na inclusão) — igual no servidor v83, no PC v20 e no banco (SQL v54).
+   O que passa do limite nunca some em silêncio: aparece no card, no Estúdio e na explicação da IA. */
+const _EV_LIMITE_VIDEOS = 50;
 function _evBrutos(t){ return (Array.isArray(t && t.files) ? t.files : []).filter(function(f){ return f && f.id && f.url && f.tipo==="material" && _evEhVideoArquivo(f); }); }
 function _evUuid(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(_){}
   const h = "0123456789abcdef"; let s = ""; for(let i=0;i<32;i++) s += h[Math.floor(Math.random()*16)];
@@ -119078,7 +119092,9 @@ async function _evDesmontar(blob, quadroSeg, prog){
 /* ── preparar os brutos e pedir a edição à IA (v8 · 29/09: a MESMA função serve o Estúdio e o PC do escritório no Guvi editora) ── */
 async function _evPrepararMontar(t, setPasso, extra){
   const narrado = _evVaiNarrar(t, extra);                // v28: a voz vem do texto do card; a fala dos brutos não entra
-  const brutos = _evBrutos(t).slice(0, 30);            // v10e: até 30 arquivos por edição (antes 12)
+  const todosB = _evBrutos(t), brutos = todosB.slice(0, _EV_LIMITE_VIDEOS);            // v10e: até 30 arquivos por edição (antes 12) · v77: até 50
+  const foraLim = Math.max(0, todosB.length - _EV_LIMITE_VIDEOS);
+  if(foraLim) _evToast("warning", "O card tem " + todosB.length + " vídeos: a edição usa os " + _EV_LIMITE_VIDEOS + " primeiros e " + foraLim + " ficam de fora.");
   if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
   setPasso("Medindo os vídeos…");
   const durs = []; for(let i=0;i<brutos.length;i++) durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url));
@@ -119117,7 +119133,7 @@ async function _evPrepararMontar(t, setPasso, extra){
                    : "A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
   const modM = _evpModeloLer();                                   // v20: modelo escolhido no Estúdio (sem = padrão da agência)
   const res = await _evInvocar("video-editar", { body:{ acao:"montar" } }, { chamar:function(o2){      // v48: E2-14 (prazo de 420 s, nova tentativa, erro traduzido)
-    return window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(modM ? { modelo:modM } : {}), ...(extra || {}) }, signal:o2.signal }); } });
+    return window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(foraLim ? { fora_limite:foraLim } : {}), ...(modM ? { modelo:modM } : {}), ...(extra || {}) }, signal:o2.signal }); } });
   if(res.error) throw new Error(await _evErroFn(res));
   return res.data || {};
 }
@@ -119349,7 +119365,7 @@ function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, nar
   const total = brutos.reduce(function(a, f){ return a + Number(f.size || 0); }, 0);
   const narrTem = nc ? !!nc.ligado : (narrLigado === true || (narrLigado === null && !!_evRoteiroNarracao(t)));
   const p1 = !narrTem ? ["Sem narração (usa a fala dos vídeos)", "neutro"] : nc && nc.pronta ? ["Voz pronta" + (Number(nc.dur) > 0 ? " · " + _evTempo(Number(nc.dur)).replace(/\.\d$/, "") : ""), "ok"] : ["Falta gerar a voz", "vez"];
-  const p2 = !brutos.length ? ["Nenhum vídeo no card ainda", "neutro"] : pesados.length ? [pesados.length + " pesado" + (pesados.length > 1 ? "s" : "") + " → o PC faz a cópia leve", "pc"] : [brutos.length + " vídeo" + (brutos.length > 1 ? "s" : "") + " prontos para editar", "ok"];
+  const p2 = !brutos.length ? ["Nenhum vídeo no card ainda", "neutro"] : brutos.length > _EV_LIMITE_VIDEOS ? [brutos.length + " vídeos: só os " + _EV_LIMITE_VIDEOS + " primeiros entram (limite) — tire os que não servem", "vez"] : pesados.length ? [pesados.length + " pesado" + (pesados.length > 1 ? "s" : "") + " → o PC faz a cópia leve", "pc"] : [brutos.length + " vídeo" + (brutos.length > 1 ? "s" : "") + " prontos para editar", "ok"];
   const p3 = ed && ed.existe && ed.status === "erro" ? ["A última tentativa falhou — tente de novo", "vez"] : brutos.length ? ["Pronto para começar", "vez"] : ["Espera os vídeos", "neutro"];
   const card = { background:"#fff", border:"1px solid " + _EV.linha, borderRadius:14, padding:isMob ? 12 : 16 };
   const rot = { fontSize:_evF(11, isMob), fontWeight:800, color:_EV.sub, textTransform:"uppercase", letterSpacing:".05em" };
@@ -121887,15 +121903,20 @@ function _evpCorContraste(hex){
   return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? "#0b1020" : "#ffffff";
 }
 /* fontes enviadas (p.fontes): carrega uma vez e avisa para redesenhar */
-const _evpFontesOk = {};
-function _evpFontesCarregar(lista, aoCarregar){
+const _evpFontesOk = {}, _evpFontesProm = {};
+function _evpFontesCarregar(lista, aoCarregar){      // v77: devolve uma promessa (o gravar espera a fonte enviada do cliente antes de começar)
+  const ps = [];
   (lista || []).forEach(function(f){
-    if(!f || !f.nome || !f.url || _evpFontesOk[f.nome + "|" + f.url]) return;
-    _evpFontesOk[f.nome + "|" + f.url] = "carregando";
+    if(!f || !f.nome || !f.url) return;
+    const k = f.nome + "|" + f.url;
+    if(_evpFontesOk[k]){ if(_evpFontesProm[k]) ps.push(_evpFontesProm[k]); return; }
+    _evpFontesOk[k] = "carregando";
     try{ const ff = new FontFace(f.nome, "url(" + JSON.stringify(f.url) + ")");
-      ff.load().then(function(x){ document.fonts.add(x); _evpFontesOk[f.nome + "|" + f.url] = "ok"; if(aoCarregar) aoCarregar(); }).catch(function(){ _evpFontesOk[f.nome + "|" + f.url] = "erro"; });
-    }catch(_){ _evpFontesOk[f.nome + "|" + f.url] = "erro"; }
+      _evpFontesProm[k] = ff.load().then(function(x){ document.fonts.add(x); _evpFontesOk[k] = "ok"; if(aoCarregar) aoCarregar(); }).catch(function(){ _evpFontesOk[k] = "erro"; });
+      ps.push(_evpFontesProm[k]);
+    }catch(_){ _evpFontesOk[k] = "erro"; }
   });
+  return Promise.all(ps);
 }
 /* legenda .srt → [{a, b, t}] */
 function _evpSrtLer(txt){
@@ -122499,6 +122520,7 @@ function _evpNormalizar(p, clipes){
   if(p.tipo_video != null && !_EVP_RITMO_TIPOS[p.tipo_video]) delete p.tipo_video;
   if(!/^#[0-9a-fA-F]{6}$/.test(String(p.legenda.corTexto || ""))) p.legenda.corTexto = "";
   if(!/^#[0-9a-fA-F]{6}$/.test(String(p.legenda.corDestaque || ""))) p.legenda.corDestaque = "";
+  ["corTexto2", "corChave", "sombraCor", "contornoCor", "fundoCor"].forEach(function(k){ if(p.legenda[k] != null && !/^#[0-9a-fA-F]{6}$/.test(String(p.legenda[k]))) delete p.legenda[k]; });   // v77: cores da Legenda Pro
   p.legenda.dx = Math.max(-0.4, Math.min(0.4, _evpNum(p.legenda.dx, 0)));
   // v18: legenda dividida na agulha (cortes) e palavras soltas com outra cor (pintadas)
   p.legenda.cortes = (Array.isArray(p.legenda.cortes) ? p.legenda.cortes : []).filter(function(k){ return /^[A-Za-z0-9_-]{1,80}@\d+(\.\d+)?$/.test(String(k)); }).slice(-300);
@@ -126044,9 +126066,12 @@ function _evpMotor(canvas, o){
     try{ _evCarregarFonte(kit.fonte||"Montserrat"); }catch(_){}
     // fontes escolhidas em textos e na legenda também entram antes de começar
     const extras = {}; (calc.textos||[]).forEach(function(x){ if(x.fonte) extras[x.fonte] = 1; }); if(calc.legenda && calc.legenda.fonte) extras[calc.legenda.fonte] = 1;
-    Object.keys(extras).forEach(function(f){ try{ _evCarregarFonte(f); }catch(_){} });
-    const lista = [document.fonts && document.fonts.load ? document.fonts.load("800 70px " + F) : null, document.fonts && document.fonts.load ? document.fonts.load("900 88px " + F) : null]
-      .concat(Object.keys(extras).map(function(f){ return document.fonts && document.fonts.load ? document.fonts.load("800 70px \"" + f + "\"") : null; })).filter(Boolean);
+    Object.keys(extras).forEach(function(f){ if(((proj && proj.fontes) || []).some(function(q){ return q && q.nome === f; })) return; try{ _evCarregarFonte(f); }catch(_){} });   // v77: fonte enviada não vai ao Google
+    let fEnv = null; try{ fEnv = _evpFontesCarregar((proj && proj.fontes) || []); }catch(_){}   // v77: fonte enviada (do cliente) pronta antes de gravar
+    const lista = [fEnv, document.fonts && document.fonts.load ? document.fonts.load("800 70px " + F) : null, document.fonts && document.fonts.load ? document.fonts.load("900 88px " + F) : null]
+      .concat(Object.keys(extras).map(function(f){ return document.fonts && document.fonts.load ? document.fonts.load("800 70px \"" + f + "\"") : null; }))
+      .concat((function(){ const lgF = calc.legenda || {}, pw = lgF.peso === "normal" ? 500 : lgF.peso === "fino" ? 300 : lgF.peso === "extra" ? 900 : 800;   // v77: o peso e o itálico da legenda
+        return document.fonts && document.fonts.load ? [document.fonts.load((lgF.italico ? "italic " : "") + pw + " 70px " + (lgF.fonte ? "\"" + lgF.fonte + "\", " : "") + F)] : []; })()).filter(Boolean);
     let fontesOk = false; const fontes = function(){ if(fontesOk) return; fontesOk = true; um(); };
     Promise.all(lista).then(fontes, fontes); setTimeout(fontes, 4000);
     if(o.logoUrl){ const im = new Image(); if(!/^data:/.test(o.logoUrl)) im.crossOrigin = "anonymous"; im.onload = function(){ logo = im; um(); }; im.onerror = um; im.src = o.logoUrl; } else um();
@@ -126503,10 +126528,12 @@ function _evpMotor(canvas, o){
     const corT0 = ehCor(lg.corTexto) ? lg.corTexto : "#fff";
     const borda0 = ehCor(lg.corTexto) && _evpLuz(lg.corTexto) < 0.35 ? "rgba(255,255,255,.92)" : "rgba(0,0,0,.88)";   // letra escura: contorno claro
     const hl0 = hl;
-    const peso = lg.peso === "normal" ? 500 : lg.peso === "fino" ? 300 : 800, ital = lg.italico ? "italic " : "";
+    const peso = lg.peso === "normal" ? 500 : lg.peso === "fino" ? 300 : lg.peso === "extra" ? 900 : 800, ital = lg.italico ? "italic " : "";   // v77: + Extra (900)
     const fs = Math.round(70 * tam); cx.save(); cx.font = ital + peso + " " + fs + "px " + FL; cx.textBaseline = "middle"; cx.lineJoin = "round";
+    /* v77 (07/10/2026): LEGENDA PRO — espaçamento entre letras e altura da linha */
+    const espL = _evClamp(_evpNum(lg.espaco, 0), -0.05, 0.4); try{ cx.letterSpacing = espL ? (fs * espL).toFixed(1) + "px" : "0px"; }catch(_){}
     const ws = b.words.map(function(w){ return Object.assign({}, w, { p:_evpCaixaLeg(lg, String(w.p)) }); });
-    let linhas = _evpLegBoa(lg) ? _evpLegLinhas(cx, ws, W*0.82, W < H ? 32 : 42) : _evQuebra(cx, ws, W*0.82); const lh = fs*1.3;   // v35
+    let linhas = _evpLegBoa(lg) ? _evpLegLinhas(cx, ws, W*0.82, W < H ? 32 : 42) : _evQuebra(cx, ws, W*0.82); const lh = fs * _evClamp(_evpNum(lg.alturaLinha, 1.3), 0.9, 1.9);   // v35 · v77: altura da linha
     let ativa = -1; ws.forEach(function(w, k){ if(t >= w.a) ativa = k; });
     // v10e: UMA linha só (padrão) — quando a frase não cabe, mostra a linha da palavra que está sendo falada
     let n0 = 0;
@@ -126518,61 +126545,99 @@ function _evpMotor(canvas, o){
     }
     const kL = modo ? modo.k : 1, yc = modo ? Math.max(_evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), modo.yMin) : _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), dxL = W * _evpNum(lg.dx, 0);
     if(kL !== 1){ cx.translate(W / 2 + dxL, yc); cx.scale(kL, kL); cx.translate(-(W / 2 + dxL), -yc); }
-    const anim = lg.anim || "nenhuma";
-    // animação do bloco inteiro: "sobe" (entra de baixo com fade)
-    let dyB = 0, alB = 1;
-    if(anim === "sobe"){ const k = _evClamp((t - b.a) / 0.22, 0, 1); dyB = (1 - (1 - Math.pow(1 - k, 3))) * 44; alB = k; }
-    cx.translate(0, dyB); cx.globalAlpha = alB;
+    const anim = lg.anim || "nenhuma", velA = _evClamp(_evpNum(lg.velAnim, 1) || 1, 0.4, 2.5);
+    /* v77: ENTRADA do bloco (sobe, desce, aparece, zoom, desliza, estica) — o antigo anim "sobe" continua valendo */
+    const ent = _EVP_LEG_ENTRADAS.some(function(q){ return q.id && q.id === lg.entrada; }) ? lg.entrada : (anim === "sobe" ? "sobe" : "");
+    let alB = 1;
+    if(ent){ const k = _evClamp((t - b.a) / (0.24 / velA), 0, 1), e = 1 - Math.pow(1 - k, 3), cxB = W / 2 + dxL;
+      alB = k;
+      if(ent === "sobe") cx.translate(0, (1 - e) * 44);
+      else if(ent === "desce") cx.translate(0, -(1 - e) * 44);
+      else if(ent === "desliza") cx.translate(-(1 - e) * 90, 0);
+      else if(ent === "zoom"){ const s = 0.55 + 0.45 * _evEaseBack(k); cx.translate(cxB, yc); cx.scale(s, s); cx.translate(-cxB, -yc); }
+      else if(ent === "estica"){ const s = 0.25 + 0.75 * _evEaseBack(k); cx.translate(cxB, yc); cx.scale(s, 1); cx.translate(-cxB, -yc); }
+    }
+    cx.globalAlpha = alB;
     const sp = cx.measureText(" ").width; let n = n0;
+    const largLinha = function(l){ return l.reduce(function(s2, w, k){ return s2 + cx.measureText(w.p).width + (k ? sp : 0); }, 0); };
     // área da legenda na tela (para clicar e ARRASTAR na prévia)
-    (function(){ const larg = Math.max.apply(null, linhas.map(function(l){ return l.reduce(function(s2, w, k){ return s2 + cx.measureText(w.p).width + (k ? sp : 0); }, 0); }).concat([40]));
+    (function(){ const larg = Math.max.apply(null, linhas.map(largLinha).concat([40]));
       caixas.push({ id:"legenda", tipo:"legenda", x:W/2 + dxL - (larg/2 + 20) * kL, y:yc - (linhas.length*lh/2 + 10) * kL, w:(larg + 40) * kL, h:(linhas.length*lh + 20) * kL }); })();
     const marcasL = _evpLegMarcas([(base && base.nome) || "", kit.nome || ""].concat(kit._nomes || [], lg.nomes || []));   // v35: número, marca, verbo de ação
     const chaveAuto = lg.chaves !== "nao", chave = function(w){ return _evpLegChave(w.p, marcasL); };
     const kw = function(w, atual){ return chaveAuto && !atual && !ehCor(w.corT) && chave(w); };
-    if(est === "caixa"){
-      const larg = Math.max.apply(null, linhas.map(function(l){ return l.reduce(function(s, w, k){ return s + cx.measureText(w.p).width + (k ? sp : 0); }, 0); }));
-      cx.fillStyle = "rgba(11,16,32,.72)"; _evRet(cx, (W - larg)/2 + dxL - 34, yc - linhas.length*lh/2 - 18, larg + 68, linhas.length*lh + 36, 28); cx.fill();
-    }
+    const cChave = ehCor(lg.corChave) ? lg.corChave : null;           // v77: cor própria das palavras-chave (sem = cor do destaque)
+    /* v77: FUNDO atrás da legenda — "bloco" (tudo), "linha" (faixa por linha), "palavra" (caixinha em cada palavra). O modelo "caixa" sem escolha = bloco */
+    const fundoT = ["bloco", "linha", "palavra"].indexOf(lg.fundo) >= 0 ? lg.fundo : (est === "caixa" && lg.fundo !== "nenhum" ? "bloco" : "");
+    const fCor = ehCor(lg.fundoCor) ? lg.fundoCor : "#0b1020", fOp = _evClamp(_evpNum(lg.fundoOp, 0.72), 0, 1), fRaio = _evClamp(_evpNum(lg.fundoRaio, 0.45), 0, 1);
+    const fundoRgba = (function(){ const c = _evpHexRgb ? _evpHexRgb(fCor) : null; return c ? "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + fOp.toFixed(3) + ")" : "rgba(11,16,32," + fOp + ")"; })();
+    const caixaFundo = function(x0, y0, w0, h0){ if(fOp <= 0) return; cx.save(); cx.shadowColor = "rgba(0,0,0,0)"; cx.fillStyle = fundoRgba; _evRet(cx, x0, y0, w0, h0, Math.min(h0 / 2, 4 + fs * 0.62 * fRaio)); cx.fill(); cx.restore(); };
+    if(fundoT === "bloco"){ const larg = Math.max.apply(null, linhas.map(largLinha));
+      caixaFundo((W - larg)/2 + dxL - fs * 0.48, yc - linhas.length*lh/2 - fs * 0.26, larg + fs * 0.96, linhas.length*lh + fs * 0.52); }
     /* v71c (07/10/2026): SOMBRA e CONTORNO com intensidade (pedido do sócio: "a borda preta nas palavras fica feio").
-       contorno 0–1 (padrão 0,3 = fino; 1 = o contorno grosso antigo) · sombra 0–1 (padrão 0,5 = sombra macia embaixo da letra) */
+       contorno 0–1 (padrão 0,3 = fino; 1 = o contorno grosso antigo) · sombra 0–1 (padrão 0,5 = sombra macia embaixo da letra)
+       v77: + cor, desfoque, distância e direção da sombra; sombra LONGA (3D); cor do contorno */
     const contK = _evClamp(_evpNum(lg.contorno, 0.3), 0, 1), sombK = _evClamp(_evpNum(lg.sombra, 0.5), 0, 1);
-    const sombraOn = function(){ if(sombK > 0){ cx.shadowColor = "rgba(0,0,0," + (0.9 * sombK).toFixed(3) + ")"; cx.shadowBlur = (4 + 26 * sombK) * tam; cx.shadowOffsetY = 4 * tam * sombK; } };
-    const sombraOff = function(){ cx.shadowColor = "rgba(0,0,0,0)"; cx.shadowBlur = 0; cx.shadowOffsetY = 0; };
+    const sRgb = (_evpHexRgb && ehCor(lg.sombraCor) && _evpHexRgb(lg.sombraCor)) || [0, 0, 0];
+    const sDesf = lg.sombraDesf == null || lg.sombraDesf === "" ? null : _evClamp(_evpNum(lg.sombraDesf, 0.5), 0, 1);
+    const sDist = lg.sombraDist == null || lg.sombraDist === "" ? null : _evClamp(_evpNum(lg.sombraDist, 0.2), 0, 1);
+    const sAng = _evpNum(lg.sombraAng, 90) * Math.PI / 180, sLonga = lg.sombraTipo === "longa";
+    const sombraOn = function(){ if(sombK > 0 && !sLonga){ cx.shadowColor = "rgba(" + sRgb[0] + "," + sRgb[1] + "," + sRgb[2] + "," + (0.9 * sombK).toFixed(3) + ")";
+      cx.shadowBlur = (sDesf == null ? 4 + 26 * sombK : 44 * sDesf) * tam; const d = (sDist == null ? 4 * sombK : 30 * sDist) * tam; cx.shadowOffsetX = Math.cos(sAng) * d; cx.shadowOffsetY = Math.sin(sAng) * d; } };
+    const sombraOff = function(){ cx.shadowColor = "rgba(0,0,0,0)"; cx.shadowBlur = 0; cx.shadowOffsetX = 0; cx.shadowOffsetY = 0; };
+    const longa = function(txt, x, y){   // v77: sombra longa (texto "em 3D"): cópias sólidas na direção escolhida
+      if(!sLonga || sombK <= 0) return; const passos = Math.round(4 + 22 * (sDist == null ? 0.35 : sDist)), st = 1.4 * tam;
+      cx.save(); cx.fillStyle = "rgb(" + sRgb.join(",") + ")"; cx.globalAlpha = cx.globalAlpha * sombK;
+      for(let k=passos;k>=1;k--) cx.fillText(txt, x + Math.cos(sAng) * st * k, y + Math.sin(sAng) * st * k); cx.restore(); };
+    const corContorno = ehCor(lg.contornoCor) ? lg.contornoCor : null;
+    const grad2 = ehCor(lg.corTexto2) ? lg.corTexto2 : null;          // v77: degradê na letra (de cima para baixo)
+    const pintaLetra = function(cor, y, livre){ if(!grad2 || !livre) return cor; const g = cx.createLinearGradient(0, y - fs * 0.45, 0, y + fs * 0.45); g.addColorStop(0, cor); g.addColorStop(1, grad2); return g; };
     const letra = function(txt, x, y, fill, borda, lw){
-      sombraOn(); const lwN = lw * contK;
-      if(lwN > 0.5){ cx.strokeStyle = borda; cx.lineWidth = lwN; cx.strokeText(txt, x, y); }
-      else if(sombK > 0){ cx.fillStyle = fill; cx.fillText(txt, x, y); }
+      longa(txt, x, y); sombraOn(); const lwN = lw * contK;
+      if(lwN > 0.5){ cx.strokeStyle = corContorno || borda; cx.lineWidth = lwN; cx.strokeText(txt, x, y); }
+      else if(sombK > 0 && !sLonga){ cx.fillStyle = fill; cx.fillText(txt, x, y); }
       sombraOff(); cx.fillStyle = fill; cx.fillText(txt, x, y); };
+    const escF = _evpNum(lg.escFalada, 0) > 1 ? _evClamp(_evpNum(lg.escFalada, 1), 1, 1.5) : 0;
     linhas.forEach(function(l, li){
-      const lw = l.reduce(function(s, w, k){ return s + cx.measureText(w.p).width + (k ? sp : 0); }, 0);
+      const lw = largLinha(l);
       let x = (W - lw)/2 + dxL; const y = yc - (linhas.length*lh)/2 + lh/2 + li*lh;
+      if(fundoT === "linha") caixaFundo(x - fs * 0.3, y - fs * 0.62, lw + fs * 0.6, fs * 1.24);
       l.forEach(function(w){
         const ww = cx.measureText(w.p).width, atual = n === ativa, falada = n <= ativa;
         // v11: cor do trecho (colab: cada empresa com a sua cor) — só nas palavras daquele trecho
-        const corT = ehCor(w.corT) ? w.corT : corT0, cDest = ehCor(w.corD) ? w.corD : cDest0;
+        const corT = ehCor(w.corT) ? w.corT : corT0, cDest = ehCor(w.corD) ? w.corD : cDest0, cK = ehCor(w.corD) ? w.corD : (cChave || cDest);
         const hl = ehCor(w.corD) ? [w.corD, _evpLuz(w.corD) > 0.6 ? "#0f172a" : "#ffffff"] : hl0;
         const borda = ehCor(w.corT) ? (_evpLuz(w.corT) < 0.35 ? "rgba(255,255,255,.92)" : "rgba(0,0,0,.88)") : borda0;
-        // animação por palavra
-        let esc = 1, mostra = true;
-        if(anim === "pop"){ if(!falada) mostra = false; else { const k = _evClamp((t - w.a) / 0.16, 0, 1); esc = 0.55 + 0.45 * _evEaseBack(k); } }
+        const livre = !ehCor(w.corT);
+        // animação por palavra (v77: + balança, quica, acende, cresce · velocidade · tamanho da falada)
+        let esc = 1, mostra = true, rot = 0, dyW = 0, alW = 1;
+        const kA = function(d){ return _evClamp((t - w.a) / (d / velA), 0, 1); };
+        if(anim === "pop"){ if(!falada) mostra = false; else { esc = 0.55 + 0.45 * _evEaseBack(kA(0.16)); } }
         else if(anim === "digitar"){ if(!falada) mostra = false; }
-        else if(anim === "pulso"){ if(atual) esc = 1.12; }
+        else if(anim === "pulso"){ if(atual) esc = escF || 1.12; }
+        else if(anim === "cresce"){ if(atual){ const k = kA(0.18); esc = 1 + ((escF || 1.2) - 1) * (1 - Math.pow(1 - k, 3)); } }
+        else if(anim === "balanca"){ if(atual) rot = Math.sin((t - w.a) * 16 * velA) * 0.075; }
+        else if(anim === "quica"){ if(atual){ const k = kA(0.32); dyW = -Math.abs(Math.sin(k * Math.PI)) * fs * 0.24 * (1 - k * 0.35); } }
+        else if(anim === "acende"){ alW = falada ? 0.35 + 0.65 * kA(0.14) : 0.35; }
+        if(escF && atual && anim !== "pulso" && anim !== "cresce") esc *= escF;
         if(mostra){
           cx.save();
-          if(esc !== 1){ cx.translate(x + ww/2, y); cx.scale(esc, esc); cx.translate(-(x + ww/2), -y); }
+          if(alW !== 1) cx.globalAlpha = cx.globalAlpha * alW;
+          if(dyW) cx.translate(0, dyW);
+          if(esc !== 1 || rot){ cx.translate(x + ww/2, y); if(rot) cx.rotate(rot); if(esc !== 1) cx.scale(esc, esc); cx.translate(-(x + ww/2), -y); }
+          if(fundoT === "palavra") caixaFundo(x - fs * 0.16, y - fs * 0.6, ww + fs * 0.32, fs * 1.2);
           if(est === "palavra" && atual){ sombraOn(); cx.fillStyle = hl[0]; _evRet(cx, x-14, y-fs*0.62, ww+28, fs*1.24, 16); cx.fill(); sombraOff(); cx.fillStyle = hl[1]; cx.fillText(w.p, x, y); }
-          else if(est === "caixa"){ cx.fillStyle = atual || kw(w, atual) ? cDest : corT; cx.fillText(w.p, x, y); }
-          else if(est === "neon"){ cx.shadowColor = cDest; cx.shadowBlur = atual ? 34 : 18; cx.fillStyle = atual ? cDest : corT; cx.fillText(w.p, x, y); cx.fillText(w.p, x, y); }
+          else if(est === "caixa"){ cx.fillStyle = atual ? cDest : kw(w, atual) ? cK : pintaLetra(corT, y, livre); cx.fillText(w.p, x, y); }
+          else if(est === "neon"){ cx.shadowColor = cDest; cx.shadowBlur = atual ? 34 : 18; cx.fillStyle = atual ? cDest : pintaLetra(corT, y, livre); cx.fillText(w.p, x, y); cx.fillText(w.p, x, y); }
           else if(est === "contorno"){   // o contorno colorido É o modelo: ganha a sombra e fica no mínimo 70%
-            sombraOn(); cx.strokeStyle = atual ? cDest : borda; cx.lineWidth = (atual ? 16 : 12) * tam * Math.max(0.7, contK); cx.strokeText(w.p, x, y);
-            sombraOff(); cx.fillStyle = kw(w, atual) ? cDest : corT; cx.fillText(w.p, x, y); }
+            longa(w.p, x, y); sombraOn(); cx.strokeStyle = atual ? cDest : (corContorno || borda); cx.lineWidth = (atual ? 16 : 12) * tam * Math.max(0.7, contK); cx.strokeText(w.p, x, y);
+            sombraOff(); cx.fillStyle = kw(w, atual) ? cK : pintaLetra(corT, y, livre); cx.fillText(w.p, x, y); }
           else if(est === "sublinhado"){
-            letra(w.p, x, y, kw(w, atual) ? cDest : corT, borda, 12 * tam);
+            letra(w.p, x, y, kw(w, atual) ? cK : pintaLetra(corT, y, livre), borda, 12 * tam);
             if(atual){ cx.fillStyle = cDest; _evRet(cx, x - 4, y + fs*0.5, ww + 8, Math.max(6, fs*0.14), 5); cx.fill(); }
           }
           else {
-            const cor = (est === "karaoke" && falada) || (est === "chave" && chave(w)) || (est !== "karaoke" && kw(w, false)) ? cDest : corT;
+            const cor = (est === "karaoke" && falada) ? cDest : ((est === "chave" && chave(w)) || (est !== "karaoke" && kw(w, false))) ? cK : pintaLetra(corT, y, livre);
             letra(w.p, x, y, cor, borda, 12 * tam);
           }
           cx.restore();
@@ -127115,9 +127180,12 @@ const _EVP_FONTES = ["Envato Elements","AudioJungle","YouTube Audio Library","Pi
 const _EVP_LEG_ESTILOS = [ { id:"palavra", label:"Palavra destacada" }, { id:"karaoke", label:"Karaokê" }, { id:"chave", label:"Palavra-chave colorida" },
                           { id:"caixa", label:"Caixa escura" }, { id:"frase", label:"Frase simples" },
                           { id:"neon", label:"Neon (brilho)" }, { id:"contorno", label:"Contorno colorido" }, { id:"sublinhado", label:"Sublinhado" } ];   // v10: 3 modelos novos
-const _EVP_LEG_ANIMS = [ { id:"nenhuma", label:"Sem animação" }, { id:"pop", label:"Pop (palavra pula)" }, { id:"digitar", label:"Palavra por palavra" }, { id:"pulso", label:"Pulso na falada" }, { id:"sobe", label:"Bloco sobe" } ];
+const _EVP_LEG_ANIMS = [ { id:"nenhuma", label:"Sem animação" }, { id:"pop", label:"Pop (palavra pula)" }, { id:"digitar", label:"Palavra por palavra" }, { id:"pulso", label:"Pulso na falada" }, { id:"sobe", label:"Bloco sobe" },
+                         { id:"cresce", label:"Cresce na falada" }, { id:"balanca", label:"Balança" }, { id:"quica", label:"Quica" }, { id:"acende", label:"Acende" } ];   // v77: + 4
+const _EVP_LEG_ENTRADAS = [ { id:"", label:"Sem entrada" }, { id:"sobe", label:"Sobe" }, { id:"desce", label:"Desce" }, { id:"aparece", label:"Aparece" }, { id:"zoom", label:"Zoom" }, { id:"desliza", label:"Desliza" }, { id:"estica", label:"Estica" } ];   // v77
+const _EVP_LEG_FUNDOS = [ { id:"", label:"Sem fundo" }, { id:"bloco", label:"Bloco" }, { id:"linha", label:"Faixa na linha" }, { id:"palavra", label:"Cada palavra" } ];   // v77
 const _EVP_LEG_POS = [ { id:"segura", label:"Área segura" }, { id:"anuncio", label:"Anúncio (mais alta)" }, { id:"centro", label:"No meio" }, { id:"baixo", label:"Embaixo (antiga)" } ];
-const _EVP_LEG_PESOS = [ { id:"negrito", label:"Negrito" }, { id:"normal", label:"Normal" }, { id:"fino", label:"Fino" } ];
+const _EVP_LEG_PESOS = [ { id:"fino", label:"Fino" }, { id:"normal", label:"Normal" }, { id:"negrito", label:"Negrito" }, { id:"extra", label:"Extra" } ];   // v77: + Extra
 const _EVP_LEG_CAIXAS = [ { id:"", label:"Como falado" }, { id:"alta", label:"MAIÚSCULAS" }, { id:"baixa", label:"minúsculas" } ];
 const _EVP_MOVS = [ { id:"nenhum", label:"Parado" }, { id:"aproximar", label:"Aproximar" }, { id:"afastar", label:"Afastar" }, { id:"esq_dir", label:"Esquerda → direita" },
                     { id:"dir_esq", label:"Direita → esquerda" }, { id:"sobe", label:"Subir" }, { id:"desce", label:"Descer" } ];
@@ -127774,6 +127842,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   /* ─── mudanças com desfazer/refazer ─── */
   const confirmar = function(anterior, novo){ setDesf(function(d){ return d.concat([anterior]).slice(-120); }); setRefaz([]); setP(_evpNormalizar(novo, clipes)); };
   const mudar = function(fn){ const ant = pRef.current, np = _evpCopia(ant); fn(np); confirmar(ant, np); };
+  if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpMudar = mudar;          // v77: só nos testes automáticos
   const desfazer = function(){ setDesf(function(d){ if(!d.length) return d; const ult = d[d.length-1]; setRefaz(function(r){ return r.concat([pRef.current]); }); setP(ult); return d.slice(0, -1); }); };
   const refazer = function(){ setRefaz(function(r){ if(!r.length) return r; const ult = r[r.length-1]; setDesf(function(d){ return d.concat([pRef.current]); }); setP(ult); return r.slice(0, -1); }); };
   const irPara = function(x){ const tt = _evClamp(x, 0, calc.total); if(motorRef.current) motorRef.current.seek(tt); setTempo(tt); };
@@ -128679,18 +128748,23 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
      (pedido do sócio: "se incluir um vídeo na pasta do cartão, ele sobe para o cartão e automaticamente vai para o Estúdio"). */
   const novosCard = useMemo(function(){ const tem = {}; ((ed && ed.clipes) || []).forEach(function(c){ if(c){ tem[c.id] = 1; if(c.url) tem[c.url] = 1; } });
     return _evBrutos(t).filter(function(f){ return !tem[f.id] && !tem[f.url]; }); }, [t && t.files, ed && ed.clipes]);
-  const incluindoRef = useRef(false);
+  const incluindoRef = useRef(false), avisoLimRef = useRef("");
   useEffect(function(){
     if(pcAuto || soVer || !ed || !ed.id || !window._sb || !novosCard.length || incluindoRef.current) return;
-    incluindoRef.current = true; let n = 0;
+    incluindoRef.current = true; let n = 0, limite = 0;
     (async function(){
+      let tem = ((ed && ed.clipes) || []).length;
       for(const f of novosCard.slice(0, 10)){
+        if(tem >= _EV_LIMITE_VIDEOS){ limite = novosCard.length - n; break; }    // v77: limite de 50 — avisa em vez de falhar calado
         try{ const dur = await _evDuracao(f.previewUrl || f.url); if(!(dur > 0)) continue;
           const r = await window._sb.rpc("criacao_edicao_clipe_incluir", { p_id:ed.id, p_clipe:{ id:f.id, nome:f.name || "Vídeo", url:f.url, preview_url:f.previewUrl || null, duracao:Math.round(dur * 1000) / 1000 } });
-          if(!r.error) n++; }catch(_){}
+          if(!r.error){ n++; tem++; }
+          else if(/clipes|limite/i.test(String(r.error.message || ""))){ limite = novosCard.length - n; break; } }catch(_){}
       }
       incluindoRef.current = false;
       if(n){ _evToast("success", n + (n > 1 ? " vídeos novos do card entraram" : " vídeo novo do card entrou") + " na Mídia"); if(onRecarregar) onRecarregar(); }
+      if(limite > 0 && avisoLimRef.current !== ed.id){ avisoLimRef.current = ed.id;
+        _evToast("warning", "Limite de " + _EV_LIMITE_VIDEOS + " vídeos por edição: " + limite + (limite > 1 ? " vídeos novos do card ficaram" : " vídeo novo do card ficou") + " de fora. Tire da edição os que não servem ou divida em dois cards."); }
     })();
   }, [novosCard.map(function(f){ return f.id; }).join(","), soVer]);
   const novosIA = ((ed && ed.clipes) || []).filter(function(c){ return c && c.incluido && c.incluido.manual; });   // na Mídia, mas a IA ainda não leu
@@ -128946,14 +129020,14 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     enviarAudioPronto, aplicarCorrecoes, ajustando, marcaCorr, marcarCorrecao, marcarPontoCorr, focoCorr, setFocoCorr, cortar, duplicar, apagar, metodoRuido, tratandoAudio, pedirEstab,
     onMusicasMudou, setFerr, pRef, setP, confirmar, addImagem, addMarca, tirarTrechos, fala:ed.fala, modelos, salvarModelo, aplicarModelo, voltarTrechos, pintarTrechos, corrigirTexto,
     addNome, coresCli, nomesKit, clipesTodos:clipes, addTrilha, gerarCapa, capaUrl, t, edId:ed.id, onRecarregar, tratandoTudo:Object.keys(medindoAcao).length, trat, addSobre, addDesfoque,
-    addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt, vaMed, tocando, tocar:tocar };   // v48: Vocal Attacker · v75: tocar (Ouvir o trecho melhorado)
+    addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt, vaMed, tocando, tocar:tocar, edUnidade:ed.unidade || "" };   // v77: edUnidade (estilos de legenda do cliente) · v48: Vocal Attacker · v75: tocar (Ouvir o trecho melhorado)
   const reeditarNovos = async function(){
     if(alterado){ const ok = await salvar(); if(!ok) return; }
     try{
       const r = await window._sb.rpc("criacao_edicao_reeditar_novos", { p_id:ed.id, p_pedido:"" });
       if(r.error) throw new Error(r.error.message);
       const d = r.data || {};
-      if(!d.ok){ _evToast("info", d.motivo === "nada_novo" ? "Não tem vídeo novo para juntar." : d.motivo === "limite_30" ? "Passa de 30 vídeos: tire alguns do card." : "Não deu: " + (d.motivo || "")); return; }
+      if(!d.ok){ _evToast("info", d.motivo === "nada_novo" ? "Não tem vídeo novo para juntar." : /^limite/.test(String(d.motivo || "")) ? "Limite de " + (d.limite || _EV_LIMITE_VIDEOS) + " vídeos por edição" + (d.tem != null ? ": a edição tem " + d.tem + " e chegaram " + d.novos + " novos" : "") + ". Tire os que não servem ou divida em dois cards." : "Não deu: " + (d.motivo || "")); return; }
       _evToast("success", d.ja ? "Já tem uma montagem na fila do PC: os vídeos novos entram nela" : "Pedido ao PC: a IA vai juntar " + d.n + (d.n > 1 ? " vídeos novos" : " vídeo novo") + " (uns minutos)");
       olharReed();
     }catch(e){ _evToast("error", "Não deu para pedir: " + ((e && e.message) || e)); }
@@ -132267,7 +132341,7 @@ function _EvpPainelMenu(q){
   S.cabLegenda = function(){ return cab("legenda", "Legenda", "Criada da fala, palavra por palavra"); };
   S.colaLeg = function(){ return <button onClick={abrirCola} style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginBottom:8})}><_EvpIco n="fala2" s={16}/>Cola da fala: corrigir nomes e cor por trecho</button>; };
   S.mostrarLeg = function(){ return <_EvpInterruptor on={!(p.legenda && p.legenda.ativa === false)} onChange={function(v){ mudar(function(np){ np.legenda.ativa = v; }); }} label="Mostrar legenda"/>; };
-  S.estiloLeg = function(){ return <div><_EvpEstiloLegenda p={p} kit={kit} mudar={mudar} ctl={ctl}/></div>; };
+  S.estiloLeg = function(){ return <div><_EvpEstiloLegenda p={p} kit={kit} mudar={mudar} ctl={ctl} cli={{ cliente:q.cliente, unidade:q.edUnidade || "" }}/></div>; };
   S.lingua = function(){ const tr = p.legenda && p.legenda.traducao, atual = tr ? tr.idioma : "";
           const falta = tr ? calc.blocos.filter(function(b){ return tr.blocos[b.words[0].chave] == null; }).length : 0;
           return <div>
@@ -132748,7 +132822,8 @@ function _EvpNivelMusica({ mu, nivel, aplicarVol }){
 }
 
 /* estilo da legenda (menu Legenda e painel da direita) */
-function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
+function _EvpEstiloLegenda(q){ return _evpLegPro() ? <_EvpLegendaPro {...q}/> : <_EvpEstiloLegendaV71 {...q}/>; }   // v77: Legenda Pro (chave criacao.legenda_pro) · fechada = painel v71c
+function _EvpEstiloLegendaV71({ p, kit, mudar, ctl }){
   const lg = p.legenda || {};
   const est = lg.estilo || kit.legenda_estilo || "palavra";
   const pos = lg.posicao || (kit.legenda_posicao === "centro" ? "centro" : "segura");
@@ -132838,6 +132913,420 @@ function _EvpEstiloLegenda({ p, kit, mudar, ctl }){
       </div>)}
       {aba === "anim" && (<div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
         {_EVP_LEG_ANIMS.map(function(o){ return <button key={o.id} onClick={function(){ mudar(function(np){ np.legenda.anim = o.id; }); }} style={Object.assign(_evpChip((lg.anim || "nenhuma") === o.id), {justifyContent:"center",padding:"10px 6px"})}>{o.label}</button>; })}
+      </div>)}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ v77 (07/10/2026): LEGENDA PRO — controle total da legenda e ESTILO POR CLIENTE ═══
+   Pedido do Vini: "quero poder controlar isso (a sombra), não ficar um padrão… a tipografia da legenda, cada cliente vai ter o seu…
+   uma guia de cor, outra de tipo de animação… seja criativo".
+   • Estilos do cliente (kit.legendas [{id, nome, look}] + kit.legenda_padrao): salvar, usar, ★ padrão (edições novas já nascem nele — servidor v83).
+   • Abas: Texto (fonte com prévia, fonte do cliente .ttf/.otf, peso, maiúsculas, espaçamento, altura da linha) · Cores (letra, degradê, destaque,
+     palavras-chave, cores do cliente) · Sombra (prontas + intensidade, desfoque, distância, direção, cor, longa 3D) · Contorno (espessura e cor) ·
+     Fundo (bloco, faixa na linha, cada palavra; cor, transparência, cantos) · Animação (entrada da frase + palavra falada, com prévia animada;
+     velocidade; tamanho da falada) · Lugar.
+   • Copiar / colar estilo entre vídeos.
+   Chave "criacao.legenda_pro" em Gerenciar acessos › Criação (nasce fechada: só sócios). Fechada = painel antigo (v71c). */
+try {
+  if(typeof PX_BLOCOS !== "undefined" && PX_BLOCOS && PX_BLOCOS.criacao && Array.isArray(PX_BLOCOS.criacao.grupos) && PX_BLOCOS.criacao.grupos[0]){
+    const _itL = PX_BLOCOS.criacao.grupos[0].itens || (PX_BLOCOS.criacao.grupos[0].itens = []);
+    if(!_itL.some(function(x){ return x && x.key === "criacao.legenda_pro"; }))
+      _itL.push({ key:"criacao.legenda_pro", label:"Legenda Pro", desc:"No Estúdio, o painel completo da legenda (fonte do cliente, cores, sombra, contorno, fundo, animação) e os estilos de legenda de cada cliente. Padrão: fechado (só sócios)", padrao:false });
+  }
+} catch(_e){}
+function _evpLegPro(){ try{ return typeof pxPode !== "function" || !!pxPode("criacao.legenda_pro", false); }catch(_){ return false; } }
+
+/* o que é "visual" da legenda (o que vai para o estilo do cliente e para o copiar/colar) */
+const _EVP_LEG_LOOK = ["estilo","tam","fonte","peso","italico","caixa","caixaAlta","espaco","alturaLinha","cor","corTexto","corTexto2","corDestaque","corChave","chaves",
+  "sombra","sombraCor","sombraDesf","sombraDist","sombraAng","sombraTipo","contorno","contornoCor","fundo","fundoCor","fundoOp","fundoRaio",
+  "anim","entrada","velAnim","escFalada","posicao","y","dx","linhas","quebra"];
+function _evpLegLook(lg){ const o = {}; _EVP_LEG_LOOK.forEach(function(k){ if(lg && lg[k] !== undefined && lg[k] !== null && lg[k] !== "") o[k] = lg[k]; }); return o; }
+/* aplica um estilo na legenda (o que não está no estilo volta ao padrão) — a fonte enviada do cliente entra em p.fontes */
+function _evpLegAplicarLook(np, look, fontes, marca){
+  const lg = Object.assign({}, np.legenda || {});
+  _EVP_LEG_LOOK.forEach(function(k){ delete lg[k]; });
+  Object.assign(lg, { estilo:"", posicao:"", tam:1, fonte:"", caixaAlta:false, cor:"principal", anim:"nenhuma", peso:"negrito", italico:false, caixa:"", y:null, linhas:1, corTexto:"", corDestaque:"", dx:0 }, look || {});
+  if(marca !== undefined){ if(marca) lg.estiloCliente = marca; else delete lg.estiloCliente; }
+  np.legenda = lg;
+  const f = (fontes || []).find(function(x){ return x && x.nome === lg.fonte && x.url; });
+  if(f) np.fontes = (np.fontes || []).filter(function(x){ return x.nome !== f.nome; }).concat([{ nome:f.nome, url:f.url }]).slice(-12);
+}
+/* estilos e fontes do cliente: cache por cliente (o menu e o painel da ferramenta ficam iguais) */
+const _evpKitLegCache = {};
+function _evpUsarKitLeg(kit, cli){
+  const ch = String((cli && cli.cliente) || "") + "|" + String((cli && cli.unidade) || "");
+  const doKit = function(){ return { legendas:Array.isArray(kit && kit.legendas) ? kit.legendas : [], padrao:(kit && kit.legenda_padrao) || "", fontes:Array.isArray(kit && kit.fontes) ? kit.fontes : [] }; };
+  const [v, setV] = useState(function(){ return _evpKitLegCache[ch] || doKit(); });
+  useEffect(function(){ if(!_evpKitLegCache[ch]) setV(doKit()); }, [kit, ch]);
+  useEffect(function(){ const f = function(e){ if(e && e.detail && e.detail.ch === ch) setV(e.detail.v); }; window.addEventListener("evp-kit-leg", f); return function(){ window.removeEventListener("evp-kit-leg", f); }; }, [ch]);
+  const gravar = function(nv){ const x = Object.assign({}, v, nv); _evpKitLegCache[ch] = x; setV(x); try{ window.dispatchEvent(new CustomEvent("evp-kit-leg", { detail:{ ch:ch, v:x } })); }catch(_){} };
+  return [v, gravar];
+}
+
+/* prévia em CSS (o mesmo jeito da legenda do vídeo, em miniatura) */
+const _EVLP_CSS = "@keyframes evlpPop{0%,12%{transform:scale(.55);opacity:0}24%{transform:scale(1.08);opacity:1}32%,100%{transform:scale(1)}}" +
+  "@keyframes evlpCresce{0%,15%{transform:scale(1)}35%,80%{transform:scale(1.22)}100%{transform:scale(1)}}" +
+  "@keyframes evlpPulso{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}" +
+  "@keyframes evlpBalanca{0%,100%{transform:rotate(0)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}" +
+  "@keyframes evlpQuica{0%,20%,60%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}" +
+  "@keyframes evlpAcende{0%,20%{opacity:.35}45%,100%{opacity:1}}" +
+  "@keyframes evlpDigita{0%,15%{opacity:0}16%,100%{opacity:1}}" +
+  "@keyframes evlpSobe{0%{transform:translateY(10px);opacity:0}30%,100%{transform:none;opacity:1}}" +
+  "@keyframes evlpDesce{0%{transform:translateY(-10px);opacity:0}30%,100%{transform:none;opacity:1}}" +
+  "@keyframes evlpAparece{0%{opacity:0}30%,100%{opacity:1}}" +
+  "@keyframes evlpZoom{0%{transform:scale(.5);opacity:0}22%{transform:scale(1.08);opacity:1}32%,100%{transform:scale(1)}}" +
+  "@keyframes evlpDesliza{0%{transform:translateX(-18px);opacity:0}30%,100%{transform:none;opacity:1}}" +
+  "@keyframes evlpEstica{0%{transform:scaleX(.25);opacity:0}25%{transform:scaleX(1.06);opacity:1}35%,100%{transform:scaleX(1)}}" +
+  ".evlp-a{display:inline-block;animation-duration:1.8s;animation-iteration-count:infinite;animation-timing-function:ease-out}";
+function _evlpEstilo(){ try{ if(document.getElementById("evlp-css")) return; const st = document.createElement("style"); st.id = "evlp-css"; st.textContent = _EVLP_CSS; document.head.appendChild(st); }catch(_){} }
+function _evlpRgba(hex, a){ const c = _evpHexRgb(hex) || [0, 0, 0]; return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + Math.max(0, Math.min(1, a)).toFixed(3) + ")"; }
+function _evlpFonteCss(lg, kit){ const f = lg.fonte || (kit && kit.fonte) || "Montserrat"; return "\"" + f + "\", Montserrat, system-ui, sans-serif"; }
+/* sombra/contorno/letra de uma palavra na miniatura (k = tamanho da prévia ÷ tamanho no vídeo) */
+function _evlpLetraCss(lg, k, cor){
+  const ok = function(c){ return /^#[0-9a-fA-F]{6}$/.test(String(c || "")); };
+  const sK = Math.max(0, Math.min(1, _evpNum(lg.sombra, 0.5))), cK = Math.max(0, Math.min(1, _evpNum(lg.contorno, 0.3)));
+  const sCor = ok(lg.sombraCor) ? lg.sombraCor : "#000000", ang = _evpNum(lg.sombraAng, 90) * Math.PI / 180;
+  const desf = lg.sombraDesf == null || lg.sombraDesf === "" ? (4 + 26 * sK) : 44 * _evpNum(lg.sombraDesf, 0.5);
+  const dist = lg.sombraDist == null || lg.sombraDist === "" ? 4 * sK : 30 * _evpNum(lg.sombraDist, 0.2);
+  const st = { color:cor };
+  let sh = "none";
+  if(sK > 0){
+    if(lg.sombraTipo === "longa"){ const n = Math.round(4 + 22 * (lg.sombraDist == null || lg.sombraDist === "" ? 0.35 : _evpNum(lg.sombraDist, 0.35))), pas = 1.4 * k, a = [];
+      for(let i=1;i<=n;i++) a.push((Math.cos(ang) * pas * i).toFixed(2) + "px " + (Math.sin(ang) * pas * i).toFixed(2) + "px 0 " + _evlpRgba(sCor, sK)); sh = a.join(","); }
+    else sh = (Math.cos(ang) * dist * k).toFixed(2) + "px " + (Math.sin(ang) * dist * k).toFixed(2) + "px " + (desf * k).toFixed(2) + "px " + _evlpRgba(sCor, 0.9 * sK);
+  }
+  st.textShadow = sh;
+  const lw = 12 * cK * k;
+  if(lw > 0.25){ const borda = ok(lg.contornoCor) ? lg.contornoCor : (ok(lg.corTexto) && _evpLuz(lg.corTexto) < 0.35 ? "rgba(255,255,255,.92)" : "rgba(0,0,0,.88)");
+    st.WebkitTextStroke = lw.toFixed(2) + "px " + borda; st.paintOrder = "stroke fill"; }
+  if(ok(lg.corTexto2) && cor === (lg.corTexto || "#ffffff")){ st.backgroundImage = "linear-gradient(180deg," + cor + "," + lg.corTexto2 + ")"; st.WebkitBackgroundClip = "text"; st.backgroundClip = "text"; st.color = "transparent";
+    st.filter = sh !== "none" && lg.sombraTipo !== "longa" ? "drop-shadow(" + sh.split(",")[0] + ")" : undefined; st.textShadow = "none"; }
+  return st;
+}
+function _EvpLegPrevia({ lg, kit, alto, texto, animar, ent, palavra, grande }){
+  _evlpEstilo();
+  const ok = function(c){ return /^#[0-9a-fA-F]{6}$/.test(String(c || "")); };
+  const corKit = ok(kit && kit.cor_principal) ? kit.cor_principal : "#7c3aed";
+  const est = lg.estilo || (kit && kit.legenda_estilo) || "palavra";
+  const fs = grande ? 21 : alto ? 15 : 12.5, k = fs / 70 * (_evpNum(lg.tam, 1) || 1);
+  const dest = ok(lg.corDestaque) ? lg.corDestaque : lg.cor === "amarelo" ? "#facc15" : lg.cor === "branco" ? "#ffffff" : corKit;
+  const corT = ok(lg.corTexto) ? lg.corTexto : "#ffffff", corK = ok(lg.corChave) ? lg.corChave : dest;
+  const peso = lg.peso === "normal" ? 500 : lg.peso === "fino" ? 300 : lg.peso === "extra" ? 900 : 800;
+  const ps = String(texto || "sua obra em 30 dias").split(" "), at = palavra == null ? 1 : palavra;
+  const fundo = ["bloco", "linha", "palavra"].indexOf(lg.fundo) >= 0 ? lg.fundo : (est === "caixa" && lg.fundo !== "nenhum" ? "bloco" : "");
+  const fBg = _evlpRgba(ok(lg.fundoCor) ? lg.fundoCor : "#0b1020", _evpNum(lg.fundoOp, 0.72)), fR = 3 + 8 * _evpNum(lg.fundoRaio, 0.45);
+  const anim = animar ? (lg.anim || "nenhuma") : "nenhuma", entr = animar ? (ent != null ? ent : (lg.entrada || (lg.anim === "sobe" ? "sobe" : ""))) : "";
+  const velS = (1.8 / (_evClamp(_evpNum(lg.velAnim, 1) || 1, 0.4, 2.5))).toFixed(2) + "s";
+  const nomeAnim = { pop:"evlpPop", cresce:"evlpCresce", pulso:"evlpPulso", balanca:"evlpBalanca", quica:"evlpQuica", acende:"evlpAcende", digitar:"evlpDigita" };
+  const nomeEnt = { sobe:"evlpSobe", desce:"evlpDesce", aparece:"evlpAparece", zoom:"evlpZoom", desliza:"evlpDesliza", estica:"evlpEstica" };
+  const caixa = function(s){ return lg.caixa === "alta" || lg.caixaAlta ? s.toUpperCase() : lg.caixa === "baixa" ? s.toLowerCase() : s; };
+  const base = { fontFamily:_evlpFonteCss(lg, kit), fontWeight:peso, fontStyle:lg.italico ? "italic" : "normal", fontSize:fs, lineHeight:1.2, letterSpacing:(_evpNum(lg.espaco, 0) || 0) + "em", whiteSpace:"nowrap" };
+  const palavras = ps.map(function(w, i){
+    const atual = i === at, falada = i <= at, chave = /\d/.test(w) && lg.chaves !== "nao" && !atual;   // número = palavra-chave (como no vídeo)
+    let cor = corT;
+    if(est === "karaoke" && falada) cor = dest; else if((est === "chave" && i === at) || chave) cor = corK; else if(est === "caixa" && atual) cor = dest; else if(est === "neon" && atual) cor = dest;
+    let st = Object.assign({ display:"inline-block", margin:"0 " + (fs * 0.13) + "px", padding:fundo === "palavra" ? "0 " + (fs * 0.18) + "px" : 0, borderRadius:fundo === "palavra" ? fR : 0, background:fundo === "palavra" ? fBg : "transparent" }, _evlpLetraCss(lg, k, cor));
+    if(est === "palavra" && atual) st = Object.assign(st, { background:dest, color:_evpLuz(dest) > 0.6 ? "#0f172a" : "#ffffff", WebkitTextStroke:"0", textShadow:"none", backgroundImage:"none", WebkitBackgroundClip:"border-box", backgroundClip:"border-box", filter:"none", borderRadius:4, padding:"0 " + (fs * 0.2) + "px" });
+    if(est === "neon"){ st.textShadow = "0 0 " + (atual ? 8 : 4) + "px " + dest + ",0 0 " + (atual ? 14 : 8) + "px " + dest; st.WebkitTextStroke = "0"; }
+    if(est === "contorno"){ st.WebkitTextStroke = (atual ? 2.4 : 1.8) * Math.max(0.7, _evpNum(lg.contorno, 0.3)) + "px " + (atual ? dest : (ok(lg.contornoCor) ? lg.contornoCor : "rgba(0,0,0,.88)")); st.paintOrder = "stroke fill"; }
+    if(est === "sublinhado" && atual) st.boxShadow = "inset 0 -3px 0 " + dest;
+    let cls = "", anSt = {};
+    if(anim !== "nenhuma" && nomeAnim[anim]){
+      const so = anim === "pop" || anim === "digitar" || anim === "acende";
+      if(atual || so){ cls = "evlp-a"; anSt = { animationName:nomeAnim[anim], animationDuration:velS, animationDelay:so ? (i * 0.18).toFixed(2) + "s" : "0s" }; }
+    }
+    if(_evpNum(lg.escFalada, 0) > 1 && atual && anim !== "pulso" && anim !== "cresce" && !cls) anSt.transform = "scale(" + _evpNum(lg.escFalada, 1) + ")";
+    return <span key={i} className={cls} style={Object.assign(st, anSt)}>{caixa(w)}</span>;
+  });
+  const wrapSt = Object.assign({}, base, { display:"inline-block", padding:fundo === "bloco" || fundo === "linha" ? (fs * 0.22) + "px " + (fs * 0.4) + "px" : 0, borderRadius:fundo === "bloco" || fundo === "linha" ? fR : 0, background:fundo === "bloco" || fundo === "linha" ? fBg : "transparent" });
+  const entSt = entr && nomeEnt[entr] ? { animationName:nomeEnt[entr], animationDuration:velS } : {};
+  return <span className={entr ? "evlp-a" : ""} style={Object.assign(wrapSt, entSt)}>{palavras}</span>;
+}
+function _EvpLegCartao({ on, onClick, rot, children, alto, dica, extra }){
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on} title={dica || rot}
+      style={{font:"inherit",padding:0,borderRadius:10,cursor:"pointer",overflow:"hidden",border:"1.5px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),boxShadow:on ? "0 0 0 3px rgba(124,58,237,.18)" : "none",background:_EVP_COR.campo,position:"relative",minWidth:0}}>
+      <div style={{height:alto || 50,display:"grid",placeItems:"center",padding:"0 4px",overflow:"hidden",background:"linear-gradient(160deg,#3f5f7f,#1f2f3f 60%,#29402a)"}}>{children}</div>
+      <div style={{fontSize:10.5,fontWeight:700,padding:"4px 3px",color:on ? _EVP_COR.roxo : _EVP_COR.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rot}</div>
+      {extra}
+    </button>);
+}
+/* cores: as do cliente primeiro, depois as básicas, conta-gotas e o código */
+function _EvpLegCores({ kit, atual, onCor, rotPadrao, aoVivo, fim }){
+  const ok = function(c){ return /^#[0-9a-fA-F]{6}$/.test(String(c || "")); };
+  const doCli = [kit && kit.cor_principal, kit && kit.cor_secundaria].concat((kit && Array.isArray(kit.cores)) ? kit.cores : []).filter(function(c, i, a){ return ok(c) && a.map(function(x){ return String(x).toLowerCase(); }).indexOf(String(c).toLowerCase()) === i; }).slice(0, 6);
+  const basicas = ["#ffffff","#facc15","#22c55e","#f97316","#ef4444","#ec4899","#3b82f6","#06b6d4","#111111"];
+  const [hex, setHex] = useState(atual || "");
+  useEffect(function(){ setHex(atual || ""); }, [atual]);
+  const bola = function(c, rot){ const on = String(atual || "").toLowerCase() === c.toLowerCase();
+    return <button key={rot + c} type="button" onClick={function(){ onCor(c); }} title={rot} aria-label={rot}
+      style={{width:24,height:24,borderRadius:99,border:"2px solid " + (on ? _EVP_COR.roxo : "rgba(127,127,127,.35)"),background:c,cursor:"pointer",padding:0,boxShadow:on ? "0 0 0 2px rgba(124,58,237,.25)" : "none",flexShrink:0}}/>; };
+  return (
+    <div style={{marginBottom:8}}>
+      {doCli.length > 0 && <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+        <span style={{fontSize:10.5,fontWeight:700,color:_EVP_COR.fraco,minWidth:44}}>Cliente</span>{doCli.map(function(c, i){ return bola(c, "Cor do cliente " + (i + 1)); })}</div>}
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        {rotPadrao && <button type="button" onClick={function(){ onCor(""); }} style={Object.assign(_evpChip(!atual), {padding:"3px 8px",fontSize:10.5})}>{rotPadrao}</button>}
+        {basicas.map(function(c){ return bola(c, c); })}
+        <input type="color" value={ok(atual) ? atual : "#ffffff"} aria-label="Outra cor" title="Outra cor (conta-gotas)"
+          onChange={function(e){ (aoVivo || onCor)(e.target.value); }} onBlur={fim} style={{width:28,height:26,border:0,padding:0,background:"none",cursor:"pointer"}}/>
+        <input value={hex} placeholder="#rrggbb" aria-label="Código da cor" onChange={function(e){ const v = e.target.value.trim(); setHex(v); const h = v.charAt(0) === "#" ? v : "#" + v; if(ok(h)) onCor(h.toLowerCase()); }}
+          style={{font:"inherit",width:74,padding:"4px 6px",borderRadius:7,border:"1px solid " + _EVP_COR.linha,fontSize:11,fontFamily:_EVP_MONO,background:_EVP_COR.campo,color:_EVP_COR.ink}}/>
+      </div>
+    </div>);
+}
+const _EVP_LEG_SOMBRAS = [
+  { id:"sem", label:"Sem", look:{ sombra:0 } },
+  { id:"suave", label:"Suave", look:{ sombra:0.5, sombraTipo:"", sombraDesf:null, sombraDist:null, sombraAng:90, sombraCor:"" } },
+  { id:"forte", label:"Forte", look:{ sombra:1, sombraTipo:"", sombraDesf:0.35, sombraDist:0.25, sombraAng:90, sombraCor:"" } },
+  { id:"brilho", label:"Brilho", look:{ sombra:0.9, sombraTipo:"", sombraDesf:0.55, sombraDist:0, sombraAng:90, sombraCor:"#facc15" } },
+  { id:"deslocada", label:"Deslocada", look:{ sombra:1, sombraTipo:"", sombraDesf:0, sombraDist:0.18, sombraAng:45, sombraCor:"" } },
+  { id:"longa", label:"Longa 3D", look:{ sombra:1, sombraTipo:"longa", sombraDesf:null, sombraDist:0.4, sombraAng:45, sombraCor:"" } } ];
+const _EVP_LEG_DIRECOES = [[225,"↖"],[270,"↑"],[315,"↗"],[180,"←"],[null,"·"],[0,"→"],[135,"↙"],[90,"↓"],[45,"↘"]];
+
+function _EvpLegendaPro({ p, kit, mudar, ctl, cli }){
+  const lg = p.legenda || {};
+  const [kl, gravarKl] = _evpUsarKitLeg(kit, cli);
+  const est = lg.estilo || kit.legenda_estilo || "palavra";
+  const caixa = lg.caixa || (lg.caixaAlta ? "alta" : "");
+  const [aba, setAba] = useState(function(){ try{ return localStorage.getItem("pxev-legpro-aba") || "texto"; }catch(_){ return "texto"; } });
+  const irAba = function(a){ setAba(a); try{ localStorage.setItem("pxev-legpro-aba", a); }catch(_){} };
+  const [nomeNovo, setNomeNovo] = useState(null), [salvando, setSalvando] = useState(false), [verFontes, setVerFontes] = useState(false), [busca, setBusca] = useState(""), [subindo, setSubindo] = useState(null);
+  const inpFonte = useRef(null);
+  const pct = function(v){ return Math.round(v * 100) + "%"; };
+  const set = function(campos){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda, campos); }); };
+  const L = function(campo){ return function(np, v){ np.legenda[campo] = v; }; };
+  const tit = function(x, d){ return <div style={{display:"flex",alignItems:"baseline",gap:6,fontSize:12.5,fontWeight:700,color:_EVP_COR.ink,margin:"14px 0 6px"}}>{x}{d && <span style={{fontSize:10.5,fontWeight:600,color:_EVP_COR.fraco}}>{d}</span>}</div>; };
+  const fontesCli = (kl.fontes || []).concat((p.fontes || []).filter(function(f){ return !(kl.fontes || []).some(function(q){ return q.nome === f.nome; }); }));
+  useEffect(function(){ try{ _evpFontesCarregar(fontesCli, function(){}); }catch(_){} }, [fontesCli.map(function(f){ return f.nome; }).join("|")]);
+  useEffect(function(){ if(lg.fonte && !fontesCli.some(function(f){ return f.nome === lg.fonte; })) try{ _evCarregarFonte(lg.fonte); }catch(_){} }, [lg.fonte]);
+  useEffect(function(){ if(verFontes) _EV_FONTES.forEach(function(f){ try{ _evCarregarFonte(f); }catch(_){} }); }, [verFontes]);
+  const rpcOk = !!(window._sb && cli && cli.cliente);
+  /* ── estilos do cliente ── */
+  const meu = (kl.legendas || []).find(function(x){ return x && x.id === lg.estiloCliente; }) || null;
+  const padrao = (kl.legendas || []).find(function(x){ return x && x.id === kl.padrao; }) || null;
+  const usarEstilo = function(e){ mudar(function(np){ _evpLegAplicarLook(np, e.look || {}, fontesCli, e.id); }); _evToast("success", "Legenda no estilo “" + e.nome + "”"); };
+  const chamar = async function(acao, extra){
+    if(!rpcOk){ _evToast("warning", "Sem cliente: abra pelo card para guardar no kit."); return null; }
+    setSalvando(true);
+    try{ const r = await window._sb.rpc("criacao_kit_legenda", Object.assign({ p_client:cli.cliente, p_unidade:cli.unidade || "", p_acao:acao, p_id:"", p_nome:"", p_look:{} }, extra));
+      if(r.error) throw new Error(r.error.message); const d = r.data || {};
+      gravarKl({ legendas:Array.isArray(d.legendas) ? d.legendas : kl.legendas, padrao:d.padrao != null ? d.padrao : kl.padrao }); return d; }
+    catch(e){ _evToast("error", "Não guardou: " + ((e && e.message) || e)); return null; }
+    finally{ setSalvando(false); }
+  };
+  const salvarNoCliente = async function(){
+    const nome = String(nomeNovo || "").trim(); if(!nome){ _evToast("warning", "Dê um nome ao estilo."); return; }
+    const look = _evpLegLook(lg); delete look.dx;
+    const d = await chamar("salvar", { p_nome:nome, p_look:look, p_id:"" });
+    if(d && d.id){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda, { estiloCliente:d.id }); }); setNomeNovo(null);
+      _evToast("success", "Estilo “" + nome + "” guardado no cliente" + ((kl.legendas || []).length ? "" : " e virou o padrão (edições novas já nascem nele)")); }
+  };
+  const atualizarEstilo = async function(e){ const look = _evpLegLook(lg); delete look.dx; const d = await chamar("salvar", { p_id:e.id, p_nome:e.nome, p_look:look }); if(d) _evToast("success", "Estilo “" + e.nome + "” atualizado"); };
+  /* ── copiar / colar ── */
+  const copiar = function(){ try{ localStorage.setItem("pxev-leg-copia", JSON.stringify({ look:_evpLegLook(lg), fontes:fontesCli.filter(function(f){ return f.nome === lg.fonte; }) })); _evToast("success", "Estilo da legenda copiado — abra outro vídeo e clique em Colar"); }catch(_){ _evToast("error", "Não copiou"); } };
+  const colar = function(){ try{ const c = JSON.parse(localStorage.getItem("pxev-leg-copia") || "null"); if(!c || !c.look){ _evToast("warning", "Nada copiado ainda"); return; }
+    mudar(function(np){ _evpLegAplicarLook(np, c.look, (c.fontes || []).concat(fontesCli), null); }); _evToast("success", "Estilo colado"); }catch(_){ _evToast("error", "Não colou"); } };
+  /* ── fonte do cliente (.ttf/.otf/.woff) ── */
+  const enviarFonte = async function(fl){
+    const nmA = String((fl && fl.name) || "");
+    if(!/\.(ttf|otf|woff2?)$/i.test(nmA)){ _evToast("warning", "Use uma fonte .ttf, .otf, .woff ou .woff2."); return; }
+    if(fl.size > 8 * 1024 * 1024){ _evToast("warning", "Fonte acima de 8 MB."); return; }
+    const nome = nmA.replace(/\.[^.]+$/, "").replace(/[^A-Za-z0-9 _-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40) || "Fonte";
+    setSubindo(0);
+    try{
+      const ext = nmA.split(".").pop().toLowerCase(), pasta = String((cli && cli.cliente) || "sem-cliente").replace(/[^A-Za-z0-9_-]/g, "");
+      const path = "kits/" + pasta + "/fontes/legenda-" + Date.now() + "." + ext;
+      await pxUploadResumable(fl, path, function(pc){ setSubindo(pc); });
+      const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+      if(rpcOk){ const r = await window._sb.rpc("criacao_kit_fonte", { p_client:cli.cliente, p_unidade:cli.unidade || "", p_nome:nome, p_url:url, p_tirar:false });
+        if(r.error) _evToast("warning", "A fonte entrou no vídeo, mas não no kit: " + r.error.message); else if(Array.isArray(r.data)) gravarKl({ fontes:r.data }); }
+      try{ await _evpFontesCarregar([{ nome:nome, url:url }]); }catch(_){}
+      mudar(function(np){ np.fontes = (np.fontes || []).filter(function(x){ return x.nome !== nome; }).concat([{ nome:nome, url:url }]).slice(-12); np.legenda = Object.assign({}, np.legenda, { fonte:nome }); });
+      _evToast("success", "Fonte “" + nome + "” na legenda" + (rpcOk ? " e guardada no cliente" : ""));
+    }catch(e){ _evToast("error", "Não subiu a fonte: " + ((e && e.message) || e)); }
+    setSubindo(null);
+  };
+  const escolherFonte = function(nome){ const f = fontesCli.find(function(x){ return x.nome === nome; });
+    if(!f && nome) try{ _evCarregarFonte(nome); }catch(_){}
+    mudar(function(np){ np.legenda = Object.assign({}, np.legenda, { fonte:nome }); if(f) np.fontes = (np.fontes || []).filter(function(x){ return x.nome !== f.nome; }).concat([{ nome:f.nome, url:f.url }]).slice(-12); }); };
+  const linhaFonte = function(nome, rot, on){ return <button key={rot + nome} type="button" onClick={function(){ escolherFonte(nome); }} aria-pressed={on}
+    style={{font:"inherit",display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid " + (on ? _EVP_COR.roxo : "transparent"),background:on ? _EVP_COR.roxoSoft : "transparent",cursor:"pointer",color:_EVP_COR.ink,textAlign:"left"}}>
+    <span style={{fontFamily:"\"" + (nome || kit.fonte || "Montserrat") + "\", system-ui",fontWeight:800,fontSize:17,minWidth:34}}>Aa</span>
+    <span style={{fontFamily:"\"" + (nome || kit.fonte || "Montserrat") + "\", system-ui",fontSize:13,fontWeight:600,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rot}</span>
+    {on && <span style={{fontSize:11,color:_EVP_COR.roxo,fontWeight:800}}>✓</span>}</button>; };
+  const casa = function(n){ return !busca || _evNorm(n).indexOf(_evNorm(busca)) >= 0; };
+  const sombraAtual = (function(){ const s = _evpNum(lg.sombra, 0.5); if(s <= 0) return "sem"; if(lg.sombraTipo === "longa") return "longa";
+    const f = _EVP_LEG_SOMBRAS.find(function(o){ return o.id !== "sem" && o.id !== "longa" && Object.keys(o.look).every(function(k){ const a = lg[k] == null || lg[k] === "" ? null : lg[k], b = o.look[k] == null || o.look[k] === "" ? null : o.look[k]; return a === b || (k === "sombraAng" && a == null && b === 90); }); });
+    return f ? f.id : ""; })();
+  const ABAS = [["texto","Texto"],["cores","Cores"],["sombra","Sombra"],["contorno","Contorno"],["fundo","Fundo"],["anim","Animação"],["lugar","Lugar"]];
+  const pos = lg.posicao || (kit.legenda_posicao === "centro" ? "centro" : "segura");
+  const [areaSegura, setAreaSegura] = _evpUsarLS("pxev-area-segura");
+  return (
+    <div data-legenda-pro="1">
+      {/* prévia grande do estilo atual */}
+      <div style={{height:64,borderRadius:12,display:"grid",placeItems:"center",marginBottom:10,background:"linear-gradient(160deg,#3f5f7f,#1f2f3f 60%,#29402a)",overflow:"hidden"}}>
+        <_EvpLegPrevia lg={lg} kit={kit} alto animar/></div>
+
+      {/* estilos do cliente */}
+      <div style={{display:"flex",alignItems:"center",gap:6,margin:"2px 0 6px"}}>
+        <span style={{fontSize:12.5,fontWeight:700,color:_EVP_COR.ink}}>Estilos do cliente</span>
+        {meu && <span style={{fontSize:10.5,fontWeight:700,color:_EVP_COR.roxo,background:_EVP_COR.roxoSoft,borderRadius:99,padding:"2px 8px"}}>usando: {meu.nome}</span>}
+      </div>
+      {padrao && lg.estiloCliente !== padrao.id && <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",borderRadius:9,background:_EVP_COR.aviso,fontSize:11.5,marginBottom:8}}>
+        <span style={{flex:1}}>Este vídeo não está no estilo padrão do cliente.</span>
+        <button type="button" onClick={function(){ usarEstilo(padrao); }} style={Object.assign(_evpBtn(), {padding:"4px 9px",fontSize:11.5})}>Usar “{padrao.nome}”</button></div>}
+      {(kl.legendas || []).length > 0 ? <div data-leg-cliente="1" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+        {(kl.legendas || []).map(function(e){ const on = lg.estiloCliente === e.id, ehPad = kl.padrao === e.id;
+          return <_EvpLegCartao key={e.id} on={on} rot={(ehPad ? "★ " : "") + e.nome} dica={ehPad ? "Padrão do cliente: edições novas já nascem neste estilo" : "Usar este estilo"} onClick={function(){ usarEstilo(e); }}>
+            <_EvpLegPrevia lg={e.look || {}} kit={kit}/></_EvpLegCartao>; })}
+      </div> : <_EvpDica>Nenhum estilo guardado para este cliente ainda. Ajuste a legenda e clique em “Guardar no cliente”: o primeiro vira o padrão.</_EvpDica>}
+      {meu && <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
+        {kl.padrao !== meu.id && <button type="button" disabled={salvando} onClick={function(){ chamar("padrao", { p_id:meu.id }).then(function(d){ if(d) _evToast("success", "“" + meu.nome + "” é o padrão do cliente"); }); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>★ Tornar padrão</button>}
+        <button type="button" disabled={salvando} onClick={function(){ atualizarEstilo(meu); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})} title="Guarda os ajustes de agora neste estilo do cliente">Atualizar “{meu.nome}”</button>
+        <button type="button" disabled={salvando} onClick={function(){ chamar("tirar", { p_id:meu.id }).then(function(d){ if(d){ mudar(function(np){ np.legenda = Object.assign({}, np.legenda); delete np.legenda.estiloCliente; }); _evToast("success", "Estilo tirado do cliente (o vídeo continua igual)"); } }); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>Tirar do cliente</button>
+      </div>}
+      {nomeNovo == null
+        ? <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+            <button type="button" data-leg-guardar="1" onClick={function(){ setNomeNovo(""); }} style={Object.assign(_evpBtn("suave"), {padding:"6px 10px",fontSize:12})}>+ Guardar no cliente</button>
+            <button type="button" onClick={copiar} style={Object.assign(_evpBtn(), {padding:"6px 10px",fontSize:12})}>Copiar estilo</button>
+            <button type="button" onClick={colar} style={Object.assign(_evpBtn(), {padding:"6px 10px",fontSize:12})}>Colar estilo</button></div>
+        : <div style={{display:"flex",gap:6,marginTop:8}}>
+            <input autoFocus value={nomeNovo} onChange={function(e){ setNomeNovo(e.target.value.slice(0, 40)); }} onKeyDown={function(e){ if(e.key === "Enter") salvarNoCliente(); if(e.key === "Escape") setNomeNovo(null); }}
+              placeholder="Nome (ex.: Legenda Bioter)" aria-label="Nome do estilo" style={{font:"inherit",flex:1,minWidth:0,padding:"6px 9px",borderRadius:8,border:"1px solid " + _EVP_COR.linha,fontSize:12.5,background:_EVP_COR.campo,color:_EVP_COR.ink}}/>
+            <button type="button" disabled={salvando} onClick={salvarNoCliente} style={Object.assign(_evpBtn("primario"), {padding:"6px 10px",fontSize:12})}>{salvando ? "Guardando…" : "Guardar"}</button>
+            <button type="button" onClick={function(){ setNomeNovo(null); }} style={Object.assign(_evpBtn(), {padding:"6px 8px",fontSize:12})}>✕</button></div>}
+
+      {/* modelos (o jeito de destacar a palavra falada) */}
+      {tit("Modelo", "como a palavra falada aparece")}
+      <div data-leg-modelos="1" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+        {_EVP_LEG_ESTILOS.map(function(o){ return <_EvpLegCartao key={o.id} on={est === o.id} rot={o.label} onClick={function(){ set({ estilo:o.id }); }}>
+          <_EvpLegPrevia lg={Object.assign({}, lg, { estilo:o.id })} kit={kit}/></_EvpLegCartao>; })}
+      </div>
+
+      {/* abas */}
+      <div role="radiogroup" aria-label="Ajustes da legenda" style={{marginTop:14,display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:3,padding:3,borderRadius:10,background:_EVP_COR.linha2,border:"1px solid " + _EVP_COR.linha}}>
+        {ABAS.map(function(o){ const on = aba === o[0];
+          return <button key={o[0]} type="button" role="radio" aria-checked={on} onClick={function(){ irAba(o[0]); }}
+            style={{font:"inherit",minWidth:0,padding:"6px 2px",borderRadius:8,border:0,cursor:"pointer",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+              background:on ? _EVP_COR.painel : "transparent",color:on ? _EVP_COR.roxo : _EVP_COR.sub,boxShadow:on ? "0 1px 3px rgba(0,0,0,.18)" : "none"}}>{o[1]}</button>; })}
+      </div>
+      <div key={aba} className="evp-entra" data-leg-aba={aba} style={{marginTop:10}}>
+      {aba === "texto" && (<div>
+        {tit("Fonte")}
+        <button type="button" data-leg-fonte="1" onClick={function(){ setVerFontes(!verFontes); }} aria-expanded={verFontes}
+          style={{font:"inherit",display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 11px",borderRadius:10,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,cursor:"pointer"}}>
+          <span style={{fontFamily:_evlpFonteCss(lg, kit),fontWeight:800,fontSize:18}}>Aa</span>
+          <span style={{flex:1,textAlign:"left",fontSize:13,fontWeight:600}}>{lg.fonte || ("Fonte do kit (" + (kit.fonte || "Montserrat") + ")")}</span>
+          <span style={{color:_EVP_COR.fraco,transform:verFontes ? "rotate(90deg)" : "none",transition:"transform .15s"}}>›</span></button>
+        {verFontes && <div className="evp-entra" style={{marginTop:6,border:"1px solid " + _EVP_COR.linha,borderRadius:10,padding:6,maxHeight:320,overflow:"auto",background:_EVP_COR.campo}}>
+          <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Procurar fonte" aria-label="Procurar fonte"
+            style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"6px 9px",borderRadius:8,border:"1px solid " + _EVP_COR.linha,fontSize:12.5,marginBottom:6,background:_EVP_COR.painel,color:_EVP_COR.ink}}/>
+          <div style={{fontSize:10.5,fontWeight:800,color:_EVP_COR.fraco,margin:"4px 6px"}}>DO CLIENTE</div>
+          {linhaFonte("", "Fonte do kit (" + (kit.fonte || "Montserrat") + ")", !lg.fonte)}
+          {fontesCli.filter(function(f){ return casa(f.nome); }).map(function(f){ return linhaFonte(f.nome, f.nome + " · enviada", lg.fonte === f.nome); })}
+          <button type="button" onClick={function(){ if(inpFonte.current) inpFonte.current.click(); }} disabled={subindo != null}
+            style={{font:"inherit",display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"1px dashed " + _EVP_COR.linha,background:"transparent",cursor:"pointer",color:_EVP_COR.roxo,fontWeight:700,fontSize:12.5,margin:"4px 0"}}>
+            {subindo != null ? "Enviando a fonte… " + Math.round(subindo || 0) + "%" : "+ Enviar a fonte do cliente (.ttf, .otf, .woff)"}</button>
+          <input ref={inpFonte} type="file" accept=".ttf,.otf,.woff,.woff2" style={{display:"none"}} onChange={function(e){ const f = e.target.files && e.target.files[0]; e.target.value = ""; if(f) enviarFonte(f); }}/>
+          {_EV_FONTES_GRUPOS.map(function(g){ const fs2 = g[1].filter(casa); if(!fs2.length) return null;
+            return <div key={g[0]}><div style={{fontSize:10.5,fontWeight:800,color:_EVP_COR.fraco,margin:"8px 6px 4px"}}>{g[0].toUpperCase()}</div>
+              {fs2.map(function(f){ return linhaFonte(f, f, lg.fonte === f); })}</div>; })}
+        </div>}
+        <div style={{marginTop:12}}><_EvpSlider ctl={ctl} rotulo="Tamanho" v={_evpNum(lg.tam, 1)} min={0.6} max={1.6} step={0.05} padrao={1} fmt={pct} aplicar={L("tam")}/></div>
+        {tit("Peso")}
+        <_EvpSeg rotulo="Peso da letra" opcoes={_EVP_LEG_PESOS.map(function(o){ return [o.id, o.label]; })} valor={lg.peso || "negrito"} onChange={function(v){ set({ peso:v }); }}/>
+        {tit("Letras")}
+        <_EvpSeg rotulo="Maiúsculas" opcoes={_EVP_LEG_CAIXAS.map(function(o){ return [o.id, o.id === "" ? "Como falado" : o.id === "alta" ? "ABC" : "abc", o.label]; })} valor={caixa} onChange={function(v){ set({ caixa:v, caixaAlta:v === "alta" }); }}/>
+        <div style={{marginTop:10}}><_EvpInterruptor on={!!lg.italico} onChange={function(v){ set({ italico:v }); }} label="Itálico"/></div>
+        <div style={{marginTop:8}}><_EvpSlider ctl={ctl} rotulo="Espaço entre letras" v={_evpNum(lg.espaco, 0)} min={-0.05} max={0.4} step={0.01} padrao={0} fmt={function(v){ return (v > 0 ? "+" : "") + Math.round(v * 100); }} aplicar={L("espaco")}/></div>
+        <_EvpSlider ctl={ctl} rotulo="Espaço entre linhas" v={_evpNum(lg.alturaLinha, 1.3)} min={0.9} max={1.9} step={0.05} padrao={1.3} fmt={function(v){ return v.toFixed(2).replace(".", ","); }} aplicar={L("alturaLinha")}/>
+        {_evpNum(lg.linhas, 1) !== 2 && <_EvpDica>O espaço entre linhas aparece com “Até 2 linhas” (aba Lugar).</_EvpDica>}
+      </div>)}
+      {aba === "cores" && (<div>
+        {tit("Letra")}
+        <_EvpLegCores kit={kit} atual={lg.corTexto} rotPadrao="Branco" onCor={function(v){ set({ corTexto:v }); }} aoVivo={function(v){ ctl.vivo(function(np){ np.legenda.corTexto = v; }); }} fim={ctl.fim}/>
+        <_EvpInterruptor on={!!lg.corTexto2} onChange={function(v){ set({ corTexto2:v ? (lg.corDestaque || "#facc15") : "" }); }} label="Degradê na letra" dica="De cima para baixo, da cor da letra para esta"/>
+        {!!lg.corTexto2 && <_EvpLegCores kit={kit} atual={lg.corTexto2} onCor={function(v){ set({ corTexto2:v }); }} aoVivo={function(v){ ctl.vivo(function(np){ np.legenda.corTexto2 = v; }); }} fim={ctl.fim}/>}
+        {tit("Destaque", "a palavra falada")}
+        <_EvpLegCores kit={kit} atual={lg.corDestaque} rotPadrao="Cor do cliente" onCor={function(v){ set({ corDestaque:v }); }} aoVivo={function(v){ ctl.vivo(function(np){ np.legenda.corDestaque = v; }); }} fim={ctl.fim}/>
+        {tit("Palavras-chave", "números, marca, verbos de ação")}
+        <_EvpInterruptor on={lg.chaves !== "nao"} onChange={function(v){ set({ chaves:v ? "auto" : "nao" }); }} label="Destacar palavras-chave"/>
+        {lg.chaves !== "nao" && <_EvpLegCores kit={kit} atual={lg.corChave} rotPadrao="Igual ao destaque" onCor={function(v){ set({ corChave:v }); }} aoVivo={function(v){ ctl.vivo(function(np){ np.legenda.corChave = v; }); }} fim={ctl.fim}/>}
+        <_EvpDica>Cor só num trecho (ex.: colab): selecione o pedaço da legenda e use “Cor do pedaço”.</_EvpDica>
+      </div>)}
+      {aba === "sombra" && (<div>
+        <div data-leg-sombras="1" style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+          {_EVP_LEG_SOMBRAS.map(function(o){ return <_EvpLegCartao key={o.id} on={sombraAtual === o.id} rot={o.label} alto={42} onClick={function(){ set(o.look); }}>
+            <_EvpLegPrevia lg={Object.assign({}, lg, o.look, { estilo:"frase" })} kit={kit} texto="obra" grande/></_EvpLegCartao>; })}
+        </div>
+        <div style={{marginTop:12}}><_EvpSlider ctl={ctl} rotulo="Intensidade" v={_evpNum(lg.sombra, 0.5)} min={0} max={1} step={0.05} padrao={0.5} fmt={function(v){ return v ? pct(v) : "sem"; }} aplicar={function(np, v){ np.legenda.sombra = Math.round(v * 100) / 100; }}/></div>
+        {_evpNum(lg.sombra, 0.5) > 0 && <div>
+          {lg.sombraTipo !== "longa" && <_EvpSlider ctl={ctl} rotulo="Desfoque" v={lg.sombraDesf == null || lg.sombraDesf === "" ? (4 + 26 * _evpNum(lg.sombra, 0.5)) / 44 : _evpNum(lg.sombraDesf, 0.5)} min={0} max={1} step={0.02} fmt={pct} aplicar={L("sombraDesf")}/>}
+          <_EvpSlider ctl={ctl} rotulo={lg.sombraTipo === "longa" ? "Comprimento" : "Distância"} v={lg.sombraDist == null || lg.sombraDist === "" ? (lg.sombraTipo === "longa" ? 0.35 : 4 * _evpNum(lg.sombra, 0.5) / 30) : _evpNum(lg.sombraDist, 0.2)} min={0} max={1} step={0.02} fmt={pct} aplicar={L("sombraDist")}/>
+          {tit("Direção")}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,34px)",gap:4}}>
+            {_EVP_LEG_DIRECOES.map(function(d, i){ const atual = _evpNum(lg.sombraAng, 90), on = d[0] != null && Math.abs(((atual - d[0]) % 360 + 360) % 360) < 1;
+              return d[0] == null ? <span key={i} style={{display:"grid",placeItems:"center",color:_EVP_COR.fraco}}>●</span>
+                : <button key={i} type="button" onClick={function(){ set({ sombraAng:d[0] }); }} aria-label={"Sombra para " + d[1]} aria-pressed={on} style={Object.assign(_evpChip(on), {justifyContent:"center",padding:"5px 0",fontSize:14})}>{d[1]}</button>; })}
+          </div>
+          {tit("Cor da sombra")}
+          <_EvpLegCores kit={kit} atual={lg.sombraCor} rotPadrao="Preta" onCor={function(v){ set({ sombraCor:v }); }} aoVivo={function(v){ ctl.vivo(function(np){ np.legenda.sombraCor = v; }); }} fim={ctl.fim}/>
+          <_EvpInterruptor on={lg.sombraTipo === "longa"} onChange={function(v){ set({ sombraTipo:v ? "longa" : "" }); }} label="Sombra longa (3D)" dica="Cópias sólidas na direção escolhida"/>
+        </div>}
+      </div>)}
+      {aba === "contorno" && (<div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6}}>
+          {[[0,"Sem"],[0.3,"Fino"],[0.6,"Médio"],[1,"Grosso"]].map(function(o){ const on = Math.abs(_evpNum(lg.contorno, 0.3) - o[0]) < 0.01;
+            return <_EvpLegCartao key={o[0]} on={on} rot={o[1]} alto={42} onClick={function(){ set({ contorno:o[0] }); }}><_EvpLegPrevia lg={Object.assign({}, lg, { contorno:o[0], sombra:0, estilo:"frase" })} kit={kit} texto="obra" grande/></_EvpLegCartao>; })}
+        </div>
+        <div style={{marginTop:12}}><_EvpSlider ctl={ctl} rotulo="Espessura" v={_evpNum(lg.contorno, 0.3)} min={0} max={1} step={0.05} padrao={0.3} fmt={function(v){ return v ? pct(v) : "sem"; }} aplicar={function(np, v){ np.legenda.contorno = Math.round(v * 100) / 100; }}/></div>
+        {tit("Cor do contorno")}
+        <_EvpLegCores kit={kit} atual={lg.contornoCor} rotPadrao="Automática" onCor={function(v){ set({ contornoCor:v }); }} aoVivo={function(v){ ctl.vivo(function(np){ np.legenda.contornoCor = v; }); }} fim={ctl.fim}/>
+        <_EvpDica>Automática = preto na letra clara e branco na letra escura.</_EvpDica>
+      </div>)}
+      {aba === "fundo" && (<div>
+        <div data-leg-fundos="1" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6}}>
+          {_EVP_LEG_FUNDOS.map(function(o){ const atual = ["bloco", "linha", "palavra"].indexOf(lg.fundo) >= 0 ? lg.fundo : (lg.fundo === "nenhum" ? "" : (est === "caixa" ? "bloco" : ""));
+            return <_EvpLegCartao key={o.id || "sem"} on={atual === o.id} rot={o.label} onClick={function(){ set({ fundo:o.id || (est === "caixa" ? "nenhum" : "") }); }}>
+              <_EvpLegPrevia lg={Object.assign({}, lg, { fundo:o.id || "nenhum" })} kit={kit}/></_EvpLegCartao>; })}
+        </div>
+        {(["bloco", "linha", "palavra"].indexOf(lg.fundo) >= 0 || (est === "caixa" && lg.fundo !== "nenhum")) && <div>
+          {tit("Cor do fundo")}
+          <_EvpLegCores kit={kit} atual={lg.fundoCor} rotPadrao="Escuro" onCor={function(v){ set({ fundoCor:v }); }} aoVivo={function(v){ ctl.vivo(function(np){ np.legenda.fundoCor = v; }); }} fim={ctl.fim}/>
+          <_EvpSlider ctl={ctl} rotulo="Opacidade" v={_evpNum(lg.fundoOp, 0.72)} min={0.1} max={1} step={0.02} padrao={0.72} fmt={pct} aplicar={L("fundoOp")}/>
+          <_EvpSlider ctl={ctl} rotulo="Cantos arredondados" v={_evpNum(lg.fundoRaio, 0.45)} min={0} max={1} step={0.05} padrao={0.45} fmt={pct} aplicar={L("fundoRaio")}/>
+        </div>}
+      </div>)}
+      {aba === "anim" && (<div>
+        {tit("Entrada da frase")}
+        <div data-leg-entradas="1" style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+          {_EVP_LEG_ENTRADAS.map(function(o){ const atual = lg.entrada != null && lg.entrada !== "" ? lg.entrada : (lg.anim === "sobe" ? "sobe" : "");
+            return <_EvpLegCartao key={o.id || "sem"} on={atual === o.id} rot={o.label} alto={42} onClick={function(){ set(Object.assign({ entrada:o.id }, lg.anim === "sobe" ? { anim:"nenhuma" } : {})); }}>
+              <_EvpLegPrevia lg={Object.assign({}, lg, { anim:"nenhuma" })} kit={kit} texto="sua obra" animar ent={o.id}/></_EvpLegCartao>; })}
+        </div>
+        {tit("Palavra falada")}
+        <div data-leg-anims="1" style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+          {_EVP_LEG_ANIMS.filter(function(o){ return o.id !== "sobe"; }).map(function(o){ const atual = lg.anim && lg.anim !== "sobe" ? lg.anim : "nenhuma";
+            return <_EvpLegCartao key={o.id} on={atual === o.id} rot={o.label.replace(" (palavra pula)", "")} alto={42} onClick={function(){ set(Object.assign({ anim:o.id }, lg.anim === "sobe" && !lg.entrada ? { entrada:"sobe" } : {})); }}>
+              <_EvpLegPrevia lg={Object.assign({}, lg, { anim:o.id, entrada:"" })} kit={kit} texto="sua obra" animar ent=""/></_EvpLegCartao>; })}
+        </div>
+        <div style={{marginTop:12}}><_EvpSlider ctl={ctl} rotulo="Velocidade" v={_evpNum(lg.velAnim, 1)} min={0.5} max={2} step={0.05} padrao={1} fmt={function(v){ return v.toFixed(2).replace(".", ",") + "×"; }} aplicar={L("velAnim")}/></div>
+        <_EvpSlider ctl={ctl} rotulo="Tamanho da palavra falada" v={_evpNum(lg.escFalada, 1) || 1} min={1} max={1.5} step={0.02} padrao={1} fmt={pct} aplicar={function(np, v){ np.legenda.escFalada = v > 1.001 ? Math.round(v * 100) / 100 : null; }}/>
+      </div>)}
+      {aba === "lugar" && (<div>
+        <_EvpSeg rotulo="Posição da legenda" opcoes={_EVP_LEG_POS.map(function(o){ return [o.id, o.id === "segura" ? "Segura" : o.id === "anuncio" ? "Anúncio" : o.id === "centro" ? "Meio" : "Embaixo", o.label]; })}
+          valor={lg.y == null ? pos : null} onChange={function(v){ set({ posicao:v, y:null, dx:0 }); }}/>
+        <div style={{marginTop:12}}><_EvpSlider ctl={ctl} rotulo="Altura na tela" v={lg.y != null ? _evpNum(lg.y, 0.72) : (pos === "centro" ? 0.52 : pos === "baixo" ? 0.75 : pos === "anuncio" ? 0.61 : 0.755)} min={0.15} max={0.9} step={0.005} fmt={pct} aplicar={L("y")}/></div>
+        {tit("Linhas")}
+        <_EvpSeg rotulo="Linhas da legenda" opcoes={[[1, "Uma linha"], [2, "Até 2 linhas"]]} valor={_evpNum(lg.linhas, 1) === 2 ? 2 : 1} onChange={function(v){ set({ linhas:v }); }}/>
+        <div style={{marginTop:10}}>
+          <_EvpInterruptor on={_evpLegBoa(lg)} onChange={function(v){ set({ quebra:v ? "boa" : "simples" }); }} label="Quebra inteligente" dica="Sem artigo no fim nem palavra sozinha"/>
+          <_EvpInterruptor on={areaSegura} onChange={setAreaSegura} label="Mostrar área segura na prévia"/>
+        </div>
+        <_EvpDica>Para mover, arraste a legenda no vídeo.</_EvpDica>
       </div>)}
       </div>
     </div>
@@ -135726,7 +136215,7 @@ function _EvpInspetor({ fotosCard, tCard, p, calc, sel, selObj, ferr, nomeItem, 
         {ferr === "pintar" && <_EvpPintarLegenda b={b} k={sel.id} p={p} kit={kit} mudar={mudar}/>}
         {ferr === "estilo" && (<div>
           <_EvpInterruptor on={p.legenda.ativa !== false} onChange={function(v){ mudar(function(np){ np.legenda.ativa = v; }); }} label="Mostrar legenda"/>
-          <_EvpEstiloLegenda p={p} kit={kit} mudar={mudar} ctl={ctl}/>
+          <_EvpEstiloLegenda p={p} kit={kit} mudar={mudar} ctl={ctl} cli={{ cliente:tCard && tCard.client, unidade:edUnidade || "" }}/>
         </div>)}
       </div>
     );
