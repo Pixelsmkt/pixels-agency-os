@@ -122933,6 +122933,13 @@ function _evpThumbEm(clipe, tt){
 }
 
 /* áudio do bruto (mono, 48 kHz) + forma de onda (pico a cada 20 ms) */
+/* v76 (07/10/2026): no PC do escritório o SOM vem da cópia leve (mesmo som, mesmo tempo), não da versão FullHD/4K de gravação.
+   Antes o Estúdio do PC baixava o arquivo inteiro de cada vídeo de gravação (centenas de MB) só para tirar o som — com 6 a 20 vídeos a
+   página ficava sem memória e parava em silêncio (prévia da ETA - Sid 02, 3 tentativas). A imagem continua vindo do original. */
+function _evAudioDe(c){
+  try{ const tr = window.__CFG && window.__CFG.trocas;
+    if(tr && c && c.preview_url && /^https?:/.test(c.preview_url) && (tr[c.url] || tr[c.preview_url])) return c.preview_url; }catch(_){}
+  return _evLeve(c); }
 async function _evpAudio(clipe, url){
   const m = _evpM(clipe);
   if(m.audioProm) return m.audioProm;
@@ -127567,7 +127574,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     const usa = {}; usadosAbrir.forEach(function(id){ usa[id] = 1; });
     const ord = clipes.filter(function(c){ return usa[c.id]; }).concat(clipes.filter(function(c){ return !usa[c.id]; }));
     (async function(){ for(const c of ord){ if(!vivo) return; const u = _evLeve(c);
-      try{ await _evpMiniaturas(c.id, u); }catch(_){} if(!vivo) return; try{ await _evpAudio(c.id, u); }catch(_){} } })();
+      try{ await _evpMiniaturas(c.id, u); }catch(_){} if(!vivo) return; try{ await _evpAudio(c.id, _evAudioDe(c)); }catch(_){} } })();
     return function(){ vivo = false; };
   }, [ed.id, midiaPronta]);
   const trKey = trechosAu.length ? JSON.stringify(trechosAu.map(function(r){ return [r.t0, r.t1, r.forca, !!r.pc]; })) + "|" + (calc.clips || []).map(function(c){ return c.clipe + "@" + c.t0 + ":" + c.ini + ":" + (c.vel || 1); }).join(",") + "|" + Object.keys(vozesPC).sort().join(",") : "";   // v75
@@ -127593,7 +127600,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           const a2 = await _evpAudio("pc:" + c.id, vozesPC[c.id]);
           if(a2){ const b2 = await _evpTratar("pc:" + c.id, { ruido:false, voz:false, eco:!!p.audio.eco, nivelar:!!p.audio.nivelar }); if(b2){ out[c.id] = b2; met = "estudio"; return; } }
         }
-        const a = await _evpAudio(c.id, _evLeve(c)); if(!a) return;
+        const a = await _evpAudio(c.id, _evAudioDe(c)); if(!a) return;
         const b = await _evpTratar(c.id, p.audio); if(b){ out[c.id] = b; if(b._metodoRuido && met !== "estudio") met = b._metodoRuido; } };
       let k = 0;
       const fila = async function(){ while(k < lista.length){ const c = lista[k++]; try{ await trata(c); }catch(_){ /* um vídeo que falha não trava os outros */ } } };
@@ -127628,7 +127635,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       for(const [i, n] of (p.narracoes || []).entries()){
         const vale = !n.mudo && !n.off;
         if(n.fonte === "clipe"){ const inf = clipes.find(function(c){ return c.id === n.clipe; }); if(!inf) continue;      // v24: som separado do clipe
-          const a0 = await _evpAudio(n.clipe, _evLeve(inf)); if(!a0){ if(vale) falhas.push(nomeN(n, i)); continue; } const b0 = await _evpTratar(n.clipe, p.audio); if(b0) out[n.id] = b0; else if(vale) falhas.push(nomeN(n, i)); continue; }
+          const a0 = await _evpAudio(n.clipe, _evAudioDe(inf)); if(!a0){ if(vale) falhas.push(nomeN(n, i)); continue; } const b0 = await _evpTratar(n.clipe, p.audio); if(b0) out[n.id] = b0; else if(vale) falhas.push(nomeN(n, i)); continue; }
         const a = await _evpAudio("narr:" + n.id, n.url); if(!a){ if(vale) falhas.push(nomeN(n, i)); continue; }
         const b = n.musica ? a : await _evpTratar("narr:" + n.id, { ruido:!!p.audio.ruido && !n.ia, voz:!!p.audio.voz && !n.ia, eco:!!p.audio.eco && !n.ia, nivelar:!!p.audio.nivelar,
           hum:n.ia ? 0 : p.audio.hum, cliques:!n.ia && !!p.audio.cliques, pops:!n.ia && !!p.audio.pops, eq:p.audio.eq });   // v11: trilha extra (música) sem limpeza de voz
@@ -129022,6 +129029,33 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
           alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}
           fala={ed.fala} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }} ctxMenu={abrirCtx} io={io} abrirHist={function(){ setHistK(true); }} travarFaixa={travarFaixa} mob={isMob}/>;
+  /* v76 (07/10/2026): NO PC, O ESTÚDIO DIZ O QUE ESTÁ ESPERANDO E NUNCA FICA MUDO. A cada 15 s conta para o PC o que falta (som da fala,
+     narração, medir tremido, foco, ação, trecho ao contrário, PC). Depois de 2,5 min, o que não é essencial é deixado de lado e a gravação
+     começa (com aviso). O que é essencial (som da fala e narração) segura até 5 min e então falha COM O MOTIVO — antes ficava 10 min mudo
+     e o PC desistia com "parou de responder", sem dizer por quê. */
+  const pcFalta = (function(){ const e = [], r = [];
+    if(tratandoAudio) e.push("som da fala"); if(narrCarregando) e.push("narração");
+    if(!dicPronto) r.push("dicionário do cliente"); const nA = Object.keys(analisando).length; if(nA) r.push("medir tremido (" + nA + ")");
+    const nM = Object.keys(medindoAcao).length; if(nM) r.push("acompanhar a ação (" + nM + ")"); const nR = Object.keys(prepRev).length; if(nR) r.push("trecho ao contrário (" + nR + ")");
+    if(precisaPC && !trat) r.push("tratamentos do PC"); const nF = precisaFoco.length + Object.keys(medindoFoco).length; if(nF) r.push("achar a pessoa nos vídeos deitados (" + nF + ")");
+    return { essencial:e, resto:r }; })();
+  const [pcForcar, setPcForcar] = useState(false);
+  const pcFaltaRef = useRef(pcFalta); pcFaltaRef.current = pcFalta;
+  const pcExpRef = useRef(exp); pcExpRef.current = exp;
+  useEffect(function(){
+    if(!pcAuto || !pcAuto.onEstado) return; const t0 = Date.now(); let forcou = false;
+    const iv = setInterval(function(){
+      if(pcExpRef.current) { clearInterval(iv); return; }                      // a gravação começou: quem conta é o exportar
+      const f = pcFaltaRef.current, seg = Math.round((Date.now() - t0) / 1000);
+      if(!f.essencial.length && !f.resto.length) return;
+      const lista = f.essencial.concat(f.resto).join(", ");
+      if(!forcou && seg >= 150 && !f.essencial.length){ forcou = true; setPcForcar(true);
+        pcAuto.onEstado({ fase:"aviso", msg:"Gravando sem esperar mais por: " + f.resto.join(", ") + " (passou de 2,5 min)" }); return; }
+      if(seg >= 300 && f.essencial.length){ clearInterval(iv); pcAuto.onEstado({ fase:"erro", msg:"o Estúdio esperou 5 min por: " + lista + " — não gravei para não sair sem som" }); return; }
+      pcAuto.onEstado({ fase:"aguardando", msg:"Esperando: " + lista + " (" + seg + " s)" });
+    }, 15000);
+    return function(){ clearInterval(iv); };
+  }, []);
   const elExtras = <Fragment>
       {!midiaPronta && <_EvpCarregandoMidias carga={carga} isMob={isMob} onAbrir={function(){ setMidiaPronta(true); }}/>}
       <div role={verExp ? "dialog" : undefined} aria-label="Exportar" aria-hidden={!verExp} onPointerDown={function(e){ if(e.target === e.currentTarget && !expAtivo) setVerExp(false); }}
@@ -129033,8 +129067,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
             onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
             narrFalha={narrFalha}
-            prontoPC={!!pcAuto && dicPronto && !tratandoAudio && !narrCarregando && !Object.keys(analisando).length && !Object.keys(medindoAcao).length && !Object.keys(prepRev).length && (!precisaPC || !!trat)
-              && !precisaFoco.length && !Object.keys(medindoFoco).length}/>
+            prontoPC={!!pcAuto && !pcFalta.essencial.length && (!pcFalta.resto.length || pcForcar)}/>
         </div>
       </div>
       <_EvpExtrasK ctx={ctxK} setCtx={setCtxK} ctxItens={ctxItens} paleta={paleta} setPaleta={setPaleta} comandos={comandosK} colarAtr={colarAtr} setColarAtr={setColarAtr} copiaAtr={copiaAtr} colarAtrib={colarAtrib}
@@ -130940,7 +130973,7 @@ function _EvpSincPainel({ c, p, mudar, infoClipe, clipes }){
     if(!outro) return; setCalc2(true); setRes(null);
     try{
       const ia = infoClipe[c.clipe] || {}, ib = infoClipe[outro] || {};
-      const [a, b] = await Promise.all([_evpAudio(c.clipe, _evLeve(ia)), _evpAudio(outro, _evLeve(ib))]);      // v32: cópia leve (antes o original inteiro)
+      const [a, b] = await Promise.all([_evpAudio(c.clipe, _evAudioDe(ia)), _evpAudio(outro, _evAudioDe(ib))]);      // v32: cópia leve (antes o original inteiro)
       if(!a || !b) throw new Error("um dos vídeos não tem som");
       await new Promise(function(r){ setTimeout(r, 30); });
       const r = _evpSincronizarSom(a, b, 120); if(!r) throw new Error("não achei o encaixe");
