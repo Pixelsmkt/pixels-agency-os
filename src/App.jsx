@@ -142299,23 +142299,41 @@ function _eaEscolherVariantes(fc, ctx){
   });
   return avisos;
 }
-/* ── FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação e a caixa da obra (frações 0–1) ── */
+/* ── FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação, a caixa da obra e as caixas de entulho (frações 0–1) ── */
 async function _eaAnalisarFotoObra(url){
   if(typeof askGPTBlocos !== "function") return null;
-  const r = await askGPTBlocos({ max_tokens:220, origem:"arte_foto_obra",
-    system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout. Responda SÓ um JSON, sem texto fora dele.",
+  const r = await askGPTBlocos({ max_tokens:420, origem:"arte_foto_obra",
+    system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; estime com uma casa decimal); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "ceu": fração da altura ocupada por céu (0 se não tem céu)}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com entulho, lixo, bagunça, materiais soltos, máquinas paradas ou sujeira ao redor da obra que deveriam ser removidos para a foto ficar limpa — NÃO inclua a própria obra nem pessoas trabalhando; [] se a cena está limpa}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
   const n = function(v, a, b){ v = Number(v); return isFinite(v) ? Math.max(a, Math.min(b, v)) : null; };
-  const ob = j.obra && typeof j.obra === "object" ? { x0:n(j.obra.x0, 0, 1), y0:n(j.obra.y0, 0, 1), x1:n(j.obra.x1, 0, 1), y1:n(j.obra.y1, 0, 1) } : null;
-  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, obra:(ob && ob.x1 > ob.x0 && ob.y1 > ob.y0) ? ob : null, ceu:n(j.ceu, 0, 1) };
+  const caixa = function(c){ if(!c || typeof c !== "object") return null; const o = { x0:n(c.x0, 0, 1), y0:n(c.y0, 0, 1), x1:n(c.x1, 0, 1), y1:n(c.y1, 0, 1) }; return (o.x0 != null && o.y0 != null && o.x1 > o.x0 && o.y1 > o.y0) ? o : null; };
+  const ob = caixa(j.obra);
+  const ent = (Array.isArray(j.entulho) ? j.entulho : []).map(caixa).filter(Boolean).filter(function(c){ return !ob || !((c.x0 >= ob.x0 && c.x1 <= ob.x1 && c.y0 >= ob.y0 && c.y1 <= ob.y1)); }).slice(0, 6);   // dentro da obra não conta
+  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent };
 }
-/* encaixa a foto no espaço FOTO respeitando: obra livre de texto e de mapa · céu na altura do mapa · horizonte reto */
-async function _eaEncaixarFotoObra(fc, o, url){
-  const avisos = [];
+/* pede ao servidor (gpt-image-1) para completar o que falta e limpar o entulho; devolve <img> ou null */
+async function _eaFotoIA(base, mascara, prompt, client){
+  const w = base.width, h = base.height, r = w / h;
+  const tam = r < 0.8 ? [1024, 1536] : r > 1.25 ? [1536, 1024] : [1024, 1024];
+  const k = Math.min(tam[0] / w, tam[1] / h), dw = Math.round(w * k), dh = Math.round(h * k), dx = Math.floor((tam[0] - dw) / 2), dy = Math.floor((tam[1] - dh) / 2);
+  const A = document.createElement("canvas"); A.width = tam[0]; A.height = tam[1]; A.getContext("2d").drawImage(base, dx, dy, dw, dh);
+  const M = document.createElement("canvas"); M.width = tam[0]; M.height = tam[1]; M.getContext("2d").drawImage(mascara, dx, dy, dw, dh);   // fora da foto fica transparente = a IA pode preencher
+  const resp = await _eaFn({ acao:"foto", imagem:A.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt, tamanho:tam[0] + "x" + tam[1], qualidade:"medium", client_id:client || null });
+  if(!resp || !resp.imagem) return null;
+  const img = await _eaCarregarImg("data:image/png;base64," + resp.imagem);
+  const out = document.createElement("canvas"); out.width = w; out.height = h;
+  out.getContext("2d").drawImage(img, dx * img.width / tam[0], dy * img.height / tam[1], dw * img.width / tam[0], dh * img.height / tam[1], 0, 0, w, h);
+  out.__custo = resp.custo_brl;
+  return out;
+}
+/* encaixa a foto no espaço FOTO respeitando: obra livre de texto e de mapa · céu na altura do mapa · horizonte reto ·
+   se faltar céu/chão a foto encolhe e a IA completa · entulho ao redor da obra é removido pela IA */
+async function _eaEncaixarFotoObra(fc, o, url, ctx){
+  const avisos = []; ctx = ctx || {};
   let an = null; try{ an = await _eaAnalisarFotoObra(url); }catch(e){ avisos.push("não consegui analisar a foto (" + _eaErro(e) + ") — entrou centralizada"); }
   if(!an){ await _eaTrocarFotoMantendoForma(o, url); return { avisos:avisos }; }
   const velha = o.getElement && o.getElement(); const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
@@ -142332,36 +142350,65 @@ async function _eaEncaixarFotoObra(fc, o, url){
   const nova = await _eaCarregarImg(url);
   const ang = -(an.inclinacao || 0) * Math.PI / 180;                       // gira pra deixar o horizonte reto
   const folga = 1 + Math.abs(Math.sin(ang)) * 1.4;                         // zoom extra pra não sobrar canto vazio depois de girar
-  const sMin = Math.max(w / nova.width, h / nova.height) * folga;
+  const sCobre = Math.max(w / nova.width, h / nova.height) * folga;
   const cruza = function(a, b){ return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0; };
-  let melhor = null;
-  for(let zi = 0; zi <= 8; zi++){
-    const s = sMin * (1 + zi * 0.1);                                        // até 1,8× de zoom
-    const dw = nova.width * s, dh = nova.height * s;
-    const oxC = (w - dw) / 2;
-    for(let yi = 0; yi <= 20; yi++){
-      const oy = (h - dh) * (yi / 20);                                      // de "mostra o topo" até "mostra a base"
-      let pena = 0;
-      if(an.horizonte != null && mapaBase != null){ const hy = oy + an.horizonte * dh; if(hy < mapaBase + h * 0.03) pena += (mapaBase + h * 0.03 - hy) * 4; }   // na altura do mapa tem que ser céu
-      if(an.obra){ const ob = { x0:oxC + an.obra.x0 * dw, y0:oy + an.obra.y0 * dh, x1:oxC + an.obra.x1 * dw, y1:oy + an.obra.y1 * dh };
-        textos.forEach(function(t){ if(cruza(ob, t)){ const inter = Math.min(ob.y1, t.y1) - Math.max(ob.y0, t.y0); pena += inter * 3; } });
-        mapas.forEach(function(m){ if(cruza(ob, m)){ pena += (Math.min(ob.y1, m.y1) - Math.max(ob.y0, m.y0)) * 3; } });
-        if(ob.y1 > h) pena += (ob.y1 - h) * 2; if(ob.y0 < 0) pena += -ob.y0 * 2;     // obra cortada
+  const procurar = function(podeEncolher){
+    let melhor = null;
+    for(let zi = (podeEncolher ? -4 : 0); zi <= 8; zi++){
+      const s = sCobre * (1 + zi * 0.1);                                    // de 0,6× (sobra pra IA completar) até 1,8× de zoom
+      const dw = nova.width * s, dh = nova.height * s;
+      const ox = (w - dw) / 2;
+      const y0 = Math.min(0, h - dh), y1 = Math.max(0, h - dh);
+      for(let yi = 0; yi <= 20; yi++){
+        const oy = y0 + (y1 - y0) * (yi / 20);
+        let pena = 0;
+        if(an.horizonte != null && mapaBase != null){ const hy = oy + an.horizonte * dh; if(hy < mapaBase + h * 0.03) pena += (mapaBase + h * 0.03 - hy) * 4; }   // na altura do mapa tem que ser céu
+        if(an.obra){ const ob = { x0:ox + an.obra.x0 * dw, y0:oy + an.obra.y0 * dh, x1:ox + an.obra.x1 * dw, y1:oy + an.obra.y1 * dh };
+          textos.forEach(function(t){ if(cruza(ob, t)) pena += (Math.min(ob.y1, t.y1) - Math.max(ob.y0, t.y0)) * 3; });
+          mapas.forEach(function(m){ if(cruza(ob, m)) pena += (Math.min(ob.y1, m.y1) - Math.max(ob.y0, m.y0)) * 3; });
+          if(ob.y1 > h) pena += (ob.y1 - h) * 2; if(ob.y0 < 0) pena += -ob.y0 * 2;     // obra cortada
+        }
+        const vazio = Math.max(0, h - dh) * w + Math.max(0, w - dw) * h;      // área que a IA teria que completar
+        pena += vazio / Math.max(1, w) * 0.6 + Math.max(0, zi) * h * 0.02 + Math.abs(oy - (h - dh) / 2) * 0.15;
+        if(!melhor || pena < melhor.pena) melhor = { s:s, ox:ox, oy:oy, dw:dw, dh:dh, pena:pena, zi:zi, vazio:vazio, viol:pena - vazio / Math.max(1, w) * 0.6 >= h * 0.08 };
       }
-      pena += zi * h * 0.02 + Math.abs(oy - (h - dh) / 2) * 0.15;         // prefere menos zoom e mais centralizado
-      if(!melhor || pena < melhor.pena) melhor = { s:s, ox:oxC, oy:oy, pena:pena, zoom:zi, viol:pena >= h * 0.08 };
     }
-  }
-  const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
-  x.save(); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2);
-  x.drawImage(nova, melhor.ox, melhor.oy, nova.width * melhor.s, nova.height * melhor.s); x.restore();
-  if(velha){ x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
+    return melhor;
+  };
+  const podeIA = typeof _eaFn === "function" && !(ctx.semIA);
+  let m = procurar(podeIA);
+  const desenhar = function(pl){
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
+    x.save(); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2); x.drawImage(nova, pl.ox, pl.oy, pl.dw, pl.dh); x.restore();
+    return cv;
+  };
+  let cv = desenhar(m);
+  const precisaCompletar = m.vazio > w * h * 0.005, temEntulho = (an.entulho || []).length > 0;
+  if(podeIA && (precisaCompletar || temEntulho)){
+    try{
+      // máscara: transparente onde a IA pode mexer (o que falta da foto + caixas de entulho); o resto (a obra) fica intacto
+      const M = document.createElement("canvas"); M.width = w; M.height = h; const mx = M.getContext("2d");
+      mx.fillStyle = "#000"; mx.fillRect(0, 0, w, h);
+      mx.globalCompositeOperation = "destination-in"; mx.drawImage(cv, 0, 0);                   // onde não tem foto → transparente
+      mx.globalCompositeOperation = "destination-out";
+      (an.entulho || []).forEach(function(c){ const f = w * 0.03; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
+      const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
+      if(precisaCompletar) partes.push("Complete as áreas transparentes continuando a cena com naturalidade — céu, terreno, vegetação — coerente com a luz, as cores e a perspectiva da foto.");
+      if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue.");
+      partes.push("Não altere a obra principal nem sua estrutura, cores ou proporções. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
+      const r = await _eaFotoIA(cv, M, partes.join(" "), ctx.client);
+      if(r){ cv = r; if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA"); if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)"); if(r.__custo) avisos.push("IA da foto: R$ " + Number(r.__custo).toFixed(2)); }
+    }catch(e){
+      avisos.push("IA da foto não rodou (" + _eaErro(e) + ")" + (precisaCompletar ? " — a foto entrou cobrindo o espaço, sem completar" : ""));
+      if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
+    }
+  } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
+  if(velha){ const x = cv.getContext("2d"); x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
   await o.setSrc(cv.toDataURL("image/png"));
   o.set({ width:w, height:h }); o.setCoords();
   if(Math.abs(an.inclinacao || 0) >= 0.8) avisos.push("foto girada " + Math.abs(an.inclinacao).toFixed(1) + "° pra deixar o horizonte reto");
-  if(melhor.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
-  if(an.ceu != null && an.ceu < 0.12 && mapaBase != null) avisos.push("a foto quase não tem céu — o mapa pode ficar em cima da obra (preencher céu com IA ainda não está ligado)");
-  return { avisos:avisos, analise:an, encaixe:melhor };
+  if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
+  return { avisos:avisos, analise:an, encaixe:m };
 }
 async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const passo = function(m){ try{ if(onPasso) onPasso(m); }catch(_){ } };
@@ -142414,7 +142461,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     const f = fotos[iFoto++];
     if(!f){ avisos.push("faltou foto no material do card (o modelo pede mais uma)"); continue; }
     try{
-      if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, inclinação)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, entulho)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url, { client:task.client }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       else await _eaTrocarFotoMantendoForma(o, f.url);
     }catch(e){ avisos.push("foto: " + _eaErro(e)); try{ await _eaTrocarFotoMantendoForma(o, f.url); }catch(_){ } }
   }
