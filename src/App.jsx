@@ -141169,6 +141169,27 @@ function _eaEspacoDoNome(nome){
   return "";
 }
 
+/* (07/10/2026, Gustavo) PSD COM VÁRIAS PRANCHETAS ("1", "2", … "11" — um layout em cada) → cada prancheta vira
+   uma PÁGINA (no editor) ou um TEMPLATE (em Templates). Não precisa separar o arquivo nem nomear camada. */
+function _eaPsdPranchetas(psd){
+  const out = [];
+  (psd.children || []).forEach(function(l){
+    const r = l.artboard && l.artboard.rect;
+    if(l.children && r && (r.right - r.left) > 8 && (r.bottom - r.top) > 8)
+      out.push({ nome:String(l.name || ("Prancheta " + (out.length + 1))).slice(0, 40), x:r.left, y:r.top, w:r.right - r.left, h:r.bottom - r.top, children:l.children, hidden:!!l.hidden, grupo:l });
+  });
+  return out.length >= 2 ? out : [];   // uma prancheta só = PSD normal
+}
+/* move as coordenadas das camadas (recursivo) pra origem da prancheta */
+function _eaPsdDeslocar(lista, dx, dy){
+  (lista || []).forEach(function(l){
+    if(typeof l.left === "number") l.left -= dx; if(typeof l.right === "number") l.right -= dx;
+    if(typeof l.top === "number") l.top -= dy; if(typeof l.bottom === "number") l.bottom -= dy;
+    if(l.mask){ if(typeof l.mask.left === "number") l.mask.left -= dx; if(typeof l.mask.right === "number") l.mask.right -= dx; if(typeof l.mask.top === "number") l.mask.top -= dy; if(typeof l.mask.bottom === "number") l.mask.bottom -= dy; }
+    if(l.vectorMask && l.vectorMask.paths) l.vectorMask.paths.forEach(function(p){ (p.knots || []).forEach(function(k){ if(k.points) for(let i = 0; i < 6; i += 2){ k.points[i] -= dx; k.points[i + 1] -= dy; } }); });
+    if(l.children) _eaPsdDeslocar(l.children, dx, dy);
+  });
+}
 async function _eaAbrirPsd(a, arquivo, op){
   const mb = Math.round((arquivo.size || 0) / 1048576);
   if(mb > 700) throw new Error("PSD de " + mb + " MB é grande demais para abrir no navegador. No Photoshop: Arquivo › Salvar uma cópia com menos camadas ou menor, e mande de novo.");
@@ -141177,8 +141198,22 @@ async function _eaAbrirPsd(a, arquivo, op){
   _eaToast("info", "Abrindo " + arquivo.name + "…");
   const buf = await arquivo.arrayBuffer();
   const psd = ag.readPsd(buf, { skipThumbnail:true, skipCompositeImageData:false, skipLayerImageData:false, useImageData:false, logMissingFeatures:false });
-  const W = psd.width, H = psd.height, lib = a.lib, avisos = [], objs = [];
-  if(psd.colorMode !== undefined && psd.colorMode !== 3) avisos.push(arquivo.name + ": o PSD não é RGB (é CMYK ou outro). As cores foram convertidas para RGB.");
+  const prs = (op && op.naPagina) ? [] : _eaPsdPranchetas(psd);
+  if(!prs.length) return _eaAbrirPsdLido(a, psd, arquivo.name, op, null);
+  const vis = prs.filter(function(p){ return !p.hidden; });
+  _eaToast("info", arquivo.name + ": " + vis.length + " pranchetas — cada uma vira " + (op && op.template ? "um template" : "uma página"));
+  for(let i = 0; i < vis.length; i++){
+    const pr = vis[i];
+    _eaPsdDeslocar(pr.children, pr.x, pr.y);
+    if(op && op.onPrancheta) op.onPrancheta(i, vis.length, pr);
+    await _eaAbrirPsdLido(a, psd, arquivo.name, op, pr);
+  }
+  return vis.length;
+}
+async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
+  const arquivo = { name:nomeArq };
+  const W = pr ? pr.w : psd.width, H = pr ? pr.h : psd.height, lib = a.lib, avisos = [], objs = [], infos = [];
+  if(!pr && psd.colorMode !== undefined && psd.colorMode !== 3) avisos.push(arquivo.name + ": o PSD não é RGB (é CMYK ou outro). As cores foram convertidas para RGB.");
   // camadas de baixo para cima, com o que vem do grupo (escondido, opacidade, máscaras) e a camada-base do recorte
   const camadas = [];
   (function andar(lista, pai){
@@ -141194,10 +141229,11 @@ async function _eaAbrirPsd(a, arquivo, op){
       camadas.push(item);
       if(!l.clipping) base = item;
     });
-  })(psd.children, { escondido:false, prefixo:"", opacidade:1, grupos:[] });
-  // original achatado do Photoshop (para comparar) — escondido, embaixo de tudo
+  })(pr ? pr.children : psd.children, { escondido:false, prefixo:"", opacidade:1, grupos:[] });
+  // original achatado do Photoshop (para comparar) — escondido, embaixo de tudo (na prancheta: só o pedaço dela)
   if(psd.canvas && psd.canvas.width){
-    try{ const up0 = await _eaSubir(await _eaCanvasBlob(psd.canvas), "arte/" + a.projetoId, "psd-original.png");
+    try{ let orig = psd.canvas; if(pr){ orig = _eaPsdCv(W, H); orig.getContext("2d").drawImage(psd.canvas, -pr.x, -pr.y); }
+      const up0 = await _eaSubir(await _eaCanvasBlob(orig), "arte/" + a.projetoId, "psd-original.png");
       objs.push(await _eaImagemDeUrl(lib, up0.url, { left:0, top:0, nome:"Original do Photoshop (achatado — para comparar)", visible:false, origem:"psd", naoEditavel:true,
         aviso:"É a imagem pronta que o Photoshop guardou no PSD. Ligue o olho para comparar ou para usar como está." })); }catch(_){ }
   }
@@ -141227,10 +141263,11 @@ async function _eaAbrirPsd(a, arquivo, op){
         fontFamily:familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
         lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },
         simples ? {} : { nome:(c.nome + (temDesenho ? " (texto editável" + (ok ? "" : ", fonte trocada") + ")" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
+      infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:Math.max(4, (st.fontSize || 24) * esc) });
       if(simples){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
       /* (07/10) camada de TEXTO marcada como espaço: entra só o texto editável e visível (o texto vai ser trocado
          pela copy — a imagem do texto antigo não pode ficar por baixo) */
-      if(_esp){ if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — o espaço " + _esp + " usa Montserrat. Mande o arquivo da fonte em Edição de arte › Identidade visual para ficar igual.");
+      if(_esp || (op && op.template)){ if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (_esp ? "o espaço " + _esp : "o texto") + " usa Montserrat. Mande o arquivo da fonte em Edição de arte › Identidade visual para ficar igual.");
         t.set({ visible:base.visible, nome:c.nome.slice(0,80), alturaMax:Math.round(_eaCaixa(t).height * 1.15) }); objs.push(t); continue; }
       if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (temDesenho
         ? "entrou igual ao PSD (imagem) e tem uma cópia em TEXTO EDITÁVEL escondida logo acima, com fonte parecida (ligue o olho em Camadas para editar)."
@@ -141249,8 +141286,12 @@ async function _eaAbrirPsd(a, arquivo, op){
     if(temEfeito){ extra.aviso = "Efeitos do Photoshop desenhados na camada (sombra, contorno, cor…): para mudar o efeito, edite no Photoshop."; }
     const img = await _eaImagemDeUrl(lib, up.url, extra);
     objs.push(img);
+    infos.push({ o:img, tipo:(l.text && l.text.text) ? "texto-desenhado" : (l.vectorMask && !(l.canvas && l.canvas.width)) ? "forma" : l.placedLayer ? "smart" : "pixel",
+      nome:c.nome, cores:(l.canvas && l.canvas.width) ? _eaPsdContarCores(l.canvas) : (l.vectorFill ? 1 : 0), x:r.x, y:r.y, w:r.cv.width, h:r.cv.height, alfa:!!(l.canvas && l.canvas.width && (l.canvas.width < W * 0.98 || l.canvas.height < H * 0.98)) });
     if(l.__textoEditavel) objs.push(l.__textoEditavel);
   }
+  // (07/10) ninguém nomeou camada? então ADIVINHA os espaços (título, texto, CTA, foto, logo, telefone, cidade, fundo)
+  if(!objs.some(function(o){ return o.espaco; })){ const ad = _eaAdivinharEspacos(infos, W, H); if(ad.length) avisos.push((pr ? pr.nome + ": " : "") + "espaços adivinhados — " + ad.join(", ") + ". Confira em Espaços e corrija se precisar."); }
   // v2: ACRESCENTAR na página aberta — encaixa o PSD no tamanho da arte (sem esticar) e centraliza; cada camada continua separada
   if(op && op.naPagina && a.fc){
     const k = Math.min(1, (a.W || W) / Math.max(1, W), (a.H || H) / Math.max(1, H)), dx = ((a.W || W) - W * k) / 2, dy = ((a.H || H) - H * k) / 2;
@@ -141262,13 +141303,69 @@ async function _eaAbrirPsd(a, arquivo, op){
     return;
   }
   const d = a.doc();
-  const pag = { id:_eaUid(), nome:arquivo.name.replace(/\.[^.]+$/,"").slice(0,40), largura:W, altura:H, fabric:{ objects:[], background:"#ffffff" } };
+  const pag = { id:_eaUid(), nome:(pr ? pr.nome : arquivo.name.replace(/\.[^.]+$/,"")).slice(0,40), largura:W, altura:H, fabric:{ objects:[], background:"#ffffff" } };
   d.paginas.push(pag);
   await a.abrirPagina(d.paginas.length - 1);
   a.pausar(true); objs.forEach(function(o){ a.fc.add(o); }); a.pausar(false);
   a.mudou(); a.zoomCaber();
   if(avisos.length) a.setAvisos(avisos);
-  _eaToast("success", arquivo.name + ": " + objs.length + " camada(s) abertas" + (avisos.length ? " (veja os avisos)" : ""));
+  _eaToast("success", (pr ? pr.nome : arquivo.name) + ": " + objs.length + " camada(s) abertas" + (avisos.length ? " (veja os avisos)" : ""));
+}
+/* quantas cores diferentes (grosseiro) uma camada tem — foto tem muitas, logo/ícone/forma tem poucas */
+function _eaPsdContarCores(cv){
+  try{
+    const k = _eaPsdCv(32, 32), x = k.getContext("2d"); x.drawImage(cv, 0, 0, 32, 32);
+    const d = x.getImageData(0, 0, 32, 32).data, set = {}; let n = 0, op = 0;
+    for(let i = 0; i < d.length; i += 4){ if(d[i + 3] < 40) continue; op++; const key = (d[i] >> 5) + "," + (d[i + 1] >> 5) + "," + (d[i + 2] >> 5); if(!set[key]){ set[key] = 1; n++; } }
+    return op ? n : 0;
+  }catch(_){ return 0; }
+}
+/* (07/10/2026, Gustavo) "não dá pra nomear camada em cada template" → ADIVINHA os espaços pelo que a camada é:
+   texto maior = TÍTULO · texto comprido = TEXTO · texto curto em cima de um botão = CTA · telefone e "Cidade - UF" pelo formato ·
+   imagem grande com muitas cores = FOTO · imagem pequena com poucas cores perto de um canto = LOGO · forma que cobre tudo = FUNDO.
+   Só roda quando NENHUMA camada foi nomeada; nome de camada sempre tem prioridade. Devolve o que marcou (pra aviso). */
+function _eaAdivinharEspacos(infos, W, H){
+  const marcou = [], area = W * H;
+  const marca = function(o, esp){ if(!o || o.espaco) return; o.set({ espaco:esp }); if(_eaTipo(o) === "texto") o.set("alturaMax", Math.round(_eaCaixa(o).height * 1.15)); marcou.push(esp + " = " + (_eaNomeTipo(o) || o.nome || "").slice(0, 24)); };
+  const vis = infos.filter(function(i){ return i.o && i.o.visible !== false; });
+  // textos editáveis
+  const textos = vis.filter(function(i){ return i.tipo === "texto"; }).map(function(i){ const c = _eaCaixa(i.o); return Object.assign({}, i, { txt:String(i.o.text || "").replace(/\s+/g, " ").trim(), c:c, fs:i.fonte * (i.o.scaleX || 1) }); })
+    .filter(function(i){ return i.txt.length > 0; });
+  const livres = [];
+  textos.forEach(function(i){
+    if(/\(?\d{2}\)?\s?9?\d{4}[-.\s]?\d{4}/.test(i.txt) && i.txt.length < 40) marca(i.o, "PHONE");
+    else if(/^@[\w.]+$/.test(i.txt) || /^(https?:\/\/|www\.)/i.test(i.txt)) ;   // instagram / site: fica fixo
+    else if(/^[A-ZÀ-Ú][\wÀ-ú.' ]{2,30}\s?[-\/–]\s?[A-Z]{2}$/.test(i.txt)) marca(i.o, "LOCATION");
+    else if(/^R\$\s?\d/.test(i.txt)) marca(i.o, "PRICE");
+    else livres.push(i);
+  });
+  // CTA: texto curto em cima de uma forma tipo botão (larga, baixa, ocupando pouco da arte)
+  const formas = vis.filter(function(i){ return i.tipo === "forma" || (i.tipo === "pixel" && i.cores > 0 && i.cores <= 6); });
+  const dentro = function(c, f){ return c.left >= f.x - 6 && c.top >= f.y - 6 && c.left + c.width <= f.x + f.w + 6 && c.top + c.height <= f.y + f.h + 6; };
+  const restam = [];
+  livres.forEach(function(i){
+    const botao = i.txt.length <= 32 && formas.find(function(f){ return f.w * f.h < area * 0.12 && f.w / Math.max(1, f.h) >= 1.8 && f.h < H * 0.14 && dentro(i.c, f); });
+    if(botao){ marca(i.o, "CTA"); if(!botao.o.espaco) botao.o.set({ espaco:"CTA" }); } else restam.push(i);
+  });
+  // TÍTULO = maior fonte; TEXTO = o mais comprido dos outros (ou o segundo maior)
+  if(restam.length){
+    restam.sort(function(a, b){ return b.fs - a.fs; });
+    const tit = restam[0]; marca(tit.o, "HEADLINE");
+    const outros = restam.slice(1);
+    if(outros.length){ outros.sort(function(a, b){ return b.txt.length - a.txt.length; }); const sub = outros[0].txt.length >= 18 ? outros[0] : outros.sort(function(a, b){ return b.fs - a.fs; })[0]; marca(sub.o, "SUBTITLE");
+      outros.filter(function(i){ return i !== sub && i.txt.length >= 18 && i.fs <= sub.fs * 1.05; }).slice(0, 2).forEach(function(i){ marca(i.o, "BENEFIT"); }); }
+  }
+  // FOTO = imagem grande com muitas cores (até 2); LOGO = pequena, poucas cores, com transparência, perto de um canto
+  const imgs = vis.filter(function(i){ return (i.tipo === "pixel" || i.tipo === "smart") && i.w && i.h; });
+  const texturas = function(i){ return /noise|textur|grain|ruido|ru[ií]do|pattern|padr[aã]o|overlay|sombra|shadow|glow|brilho|degrad|gradient|efeito/i.test(i.nome); };
+  imgs.filter(function(i){ return !texturas(i) && i.cores >= 28 && i.w * i.h >= area * 0.08; }).sort(function(a, b){ return b.w * b.h - a.w * a.h; }).slice(0, 2).forEach(function(i){ marca(i.o, "PRODUCT_IMAGE"); });
+  const cantos = function(i){ const cx = i.x + i.w / 2, cy = i.y + i.h / 2; return (cx < W * 0.3 || cx > W * 0.7) && (cy < H * 0.22 || cy > H * 0.78); };
+  const logos = imgs.filter(function(i){ return !texturas(i) && i.cores > 0 && i.cores <= 24 && i.alfa && i.w * i.h <= area * 0.06 && i.w * i.h >= area * 0.0025 && i.w / Math.max(1, i.h) >= 0.8 && (/logo|marca|brand/i.test(i.nome) || cantos(i)); });
+  if(logos.length){ logos.sort(function(a, b){ return (/logo|marca|brand/i.test(b.nome) ? 1 : 0) - (/logo|marca|brand/i.test(a.nome) ? 1 : 0) || b.w * b.h - a.w * a.h; }); marca(logos[0].o, "LOGO"); }
+  // FUNDO = forma/cor cobrindo a arte inteira (a de baixo)
+  const fundo = vis.find(function(i){ return (i.tipo === "forma" || (i.tipo === "pixel" && i.cores > 0 && i.cores <= 3)) && i.w >= W * 0.97 && i.h >= H * 0.97 && !texturas(i); });
+  if(fundo) marca(fundo.o, "BACKGROUND");
+  return marcou;
 }
 
 /* PDF e AI (salvo "compatível com PDF") → página(s) com a imagem fiel + textos (escondidos) para usar */
@@ -141871,28 +141968,36 @@ async function _eaPsdParaTemplate(arquivo, op){
   passo("carregando o motor…");
   const lib = await _eaFabric();
   const doc = { versao:1, paginas:[] }, avisos = [];
+  let atual = -1;
+  const fechar = function(){ if(a.fc && atual >= 0 && doc.paginas[atual]){ a.fc.renderAll(); doc.paginas[atual].fabric = _eaJsonPagina(a.fc); doc.paginas[atual].__thumb = _eaMiniatura(a.fc, a.W, 420); doc.paginas[atual].__espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
+      doc.paginas[atual].__titulo = (function(){ const t = a.fc.getObjects().find(function(o){ return o.espaco === "HEADLINE" && o.text; }); return t ? String(t.text).replace(/\s+/g, " ").trim().slice(0, 40) : ""; })(); } };
   const a = { lib:lib, projetoId:"modelos/" + _eaUid(), fc:null, W:0, H:0, kit:null, proj:{ client_id:op.client },
     doc:function(){ return doc; },
-    abrirPagina:async function(i){ const pg = doc.paginas[i]; const el = document.createElement("canvas"); el.width = pg.largura; el.height = pg.altura;
+    abrirPagina:async function(i){ fechar(); const pg = doc.paginas[i]; const el = document.createElement("canvas"); el.width = pg.largura; el.height = pg.altura;
       if(a.fc){ try{ a.fc.dispose(); }catch(_){ } }
-      a.fc = new lib.StaticCanvas(el, { width:pg.largura, height:pg.altura, enableRetinaScaling:false, renderOnAddRemove:false }); a.W = pg.largura; a.H = pg.altura; },
+      a.fc = new lib.StaticCanvas(el, { width:pg.largura, height:pg.altura, enableRetinaScaling:false, renderOnAddRemove:false }); a.W = pg.largura; a.H = pg.altura; atual = i; },
     pausar:function(){}, mudou:function(){}, zoomCaber:function(){}, toque:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
   passo("abrindo o PSD (camada por camada)…");
   if(/\.(svg)$/i.test(arquivo.name)) await _eaAbrirSvg(a, await arquivo.text(), arquivo.name, {});
-  else await _eaAbrirPsd(a, arquivo);
+  else await _eaAbrirPsd(a, arquivo, { template:true, onPrancheta:function(i, n, pr){ passo("prancheta " + (i + 1) + " de " + n + " (" + pr.nome + ")…"); } });
+  fechar();
   if(!doc.paginas.length || !a.fc) throw new Error("O arquivo não tem camadas que deem para abrir");
-  const pg = doc.paginas[0]; a.fc.renderAll();
-  pg.fabric = _eaJsonPagina(a.fc);
-  const espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
-  passo("salvando o template…");
-  let thumb = null; try{ const up = await _eaSubir(_eaDataUrlBlob(_eaMiniatura(a.fc, a.W, 420)), "arte/modelos", "modelo.jpg"); thumb = up.url; }catch(_){ }
-  const f = _EA_FORMATOS.find(function(x){ return x.w === a.W && x.h === a.H; });
-  const nome = (op.nome || arquivo.name.replace(/\.[^.]+$/, "")).trim().slice(0, 80);
-  const r = await _eaRpc("arte_modelo_salvar", { p_id:null, p_client:op.client, p_nome:nome, p_formato:f ? f.id : "custom", p_largura:a.W, p_altura:a.H,
-    p_doc:{ versao:1, paginas:[pg], meta:{ origem:"psd", arquivo:arquivo.name, tipo_card:op.tipo_card, modo:op.modo } }, p_espacos:espacos, p_thumb:thumb });
-  await _eaRpc("arte_modelo_config", { p_id:r.id, p_tipo_card:op.tipo_card || "arte", p_modo:op.modo || "fixo", p_padrao:!!op.padrao, p_unidade:op.unidade || "", p_arquivo_nome:arquivo.name });
+  passo("salvando " + (doc.paginas.length > 1 ? doc.paginas.length + " templates…" : "o template…"));
+  const base = (op.nome || arquivo.name.replace(/\.[^.]+$/, "")).trim().slice(0, 60);
+  const feitos = [];
+  for(let i = 0; i < doc.paginas.length; i++){
+    const pg = doc.paginas[i];
+    const espacos = pg.__espacos || [], thumbData = pg.__thumb, titulo = pg.__titulo; delete pg.__espacos; delete pg.__thumb; delete pg.__titulo;
+    let thumb = null; try{ if(thumbData){ const up = await _eaSubir(_eaDataUrlBlob(thumbData), "arte/modelos", "modelo.jpg"); thumb = up.url; } }catch(_){ }
+    const f = _EA_FORMATOS.find(function(x){ return x.w === pg.largura && x.h === pg.altura; });
+    const nome = (doc.paginas.length > 1 ? base + " · " + pg.nome + (titulo ? " — " + titulo : "") : base).slice(0, 80);
+    const r = await _eaRpc("arte_modelo_salvar", { p_id:null, p_client:op.client, p_nome:nome, p_formato:f ? f.id : "custom", p_largura:pg.largura, p_altura:pg.altura,
+      p_doc:{ versao:1, paginas:[pg], meta:{ origem:"psd", arquivo:arquivo.name, prancheta:pg.nome, tipo_card:op.tipo_card, modo:op.modo } }, p_espacos:espacos, p_thumb:thumb });
+    await _eaRpc("arte_modelo_config", { p_id:r.id, p_tipo_card:op.tipo_card || "arte", p_modo:op.modo || "fixo", p_padrao:!!op.padrao && i === 0, p_unidade:op.unidade || "", p_arquivo_nome:arquivo.name });
+    feitos.push({ id:r.id, nome:nome, espacos:espacos, largura:pg.largura, altura:pg.altura, camadas:(pg.fabric.objects || []).length });
+  }
   try{ a.fc.dispose(); }catch(_){ }
-  return { id:r.id, espacos:espacos, avisos:avisos, largura:a.W, altura:a.H, camadas:(pg.fabric.objects || []).length };
+  return { id:feitos[0] && feitos[0].id, templates:feitos, espacos:feitos[0] ? feitos[0].espacos : [], avisos:avisos, largura:feitos[0] && feitos[0].largura, altura:feitos[0] && feitos[0].altura, camadas:feitos.reduce(function(n, t){ return n + t.camadas; }, 0) };
 }
 /* template padrão para um card: do cliente, do tipo do card, da unidade (ou geral), marcado como padrão */
 function _eaTemplatePadrao(lista, client, tipo, unidade){
@@ -141920,7 +142025,7 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir }){
       const jaTem = (lista || []).some(function(m){ return (m.tipo_card || "arte") === form.tipo_card && (m.unidade || "") === (form.unidade || ""); });
       const r = await _eaPsdParaTemplate(arq, { client:cliente, nome:form.nome, tipo_card:form.tipo_card, modo:form.modo, unidade:form.unidade, padrao:!jaTem, onPasso:setPasso });
       setResultado(r); setArq(null); if(inputRef.current) inputRef.current.value = ""; carregar();
-      _eaToast("success", "Template salvo: " + r.camadas + " camada(s), " + r.espacos.length + " espaço(s)" + (!jaTem ? " · virou o padrão de " + _eaRotuloTipoCard(form.tipo_card) : ""));
+      _eaToast("success", (r.templates.length > 1 ? r.templates.length + " templates salvos (um por prancheta)" : "Template salvo") + (!jaTem ? " · o primeiro virou o padrão de " + _eaRotuloTipoCard(form.tipo_card) : ""));
     }catch(e){ setErro(_eaErro(e)); }
     setPasso("");
   };
@@ -141945,7 +142050,7 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir }){
   return <div>
     {!isMob && <div style={{marginTop:14,background:"#fff",border:"1px solid "+_EA.linha,borderRadius:14,padding:14}}>
       <div style={{fontWeight:800,fontSize:14}}>Mandar template de {_eaNomeCliente(cliente)}</div>
-      <div style={{fontSize:12.5,color:_EA.sub,marginTop:3,lineHeight:1.5}}>O PSD oficial do designer (ex.: <i>Template {_eaNomeCliente(cliente)}.psd</i>). As camadas pelo NOME viram espaços: <b>TITULO</b>, <b>TEXTO</b> ou <b>FRASE</b>, <b>FOTO</b>, <b>LOGO</b>, <b>CIDADE</b>, <b>PIN</b>, <b>TELEFONE</b>, <b>CTA</b>, <b>FUNDO</b>. O resto entra fixo, igual ao Photoshop. PSD muito pesado (mais de ~500 MB)? No Photoshop salve uma cópia só com as camadas do template.</div>
+      <div style={{fontSize:12.5,color:_EA.sub,marginTop:3,lineHeight:1.5}}>O PSD oficial do designer (ex.: <i>Template {_eaNomeCliente(cliente)}.psd</i>), do jeito que está. <b>Cada prancheta vira um template</b> e os espaços (título, texto, CTA, foto, logo, telefone, cidade, fundo) são <b>adivinhados</b> pelo que a camada é — não precisa nomear nada. Se quiser garantir, nomeie a camada (TITULO, FRASE, FOTO, LOGO, CIDADE, PIN) que o nome tem prioridade. PSD muito pesado (mais de ~500 MB)? No Photoshop salve uma cópia só com as camadas do template.</div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginTop:12}}>
         <label style={{flex:"1 1 260px",padding:"14px 12px",borderRadius:12,border:"2px dashed "+(arq?_EA.roxo:_EA.roxoBorda),background:arq?_EA.roxoClaro:"#faf5ff",cursor:"pointer",textAlign:"center",fontSize:13,fontWeight:700,color:_EA.roxo}}
           onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ e.preventDefault(); escolher(e.dataTransfer.files && e.dataTransfer.files[0]); }}>
@@ -141967,7 +142072,8 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir }){
       </div>
       {passo && <div style={{marginTop:10,fontSize:12.5,color:_EA.roxo,fontWeight:700}}>{passo}</div>}
       {resultado && <div style={{marginTop:10,padding:"10px 12px",borderRadius:10,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:12.5,color:"#166534",lineHeight:1.5}}>
-        <b>Template salvo.</b> {resultado.largura}×{resultado.altura} · {resultado.camadas} camada(s) · espaços: {resultado.espacos.length ? resultado.espacos.join(", ") : "nenhum (nomeie as camadas no Photoshop: TITULO, FRASE, FOTO, LOGO, CIDADE, PIN…)"}
+        <b>{resultado.templates.length > 1 ? resultado.templates.length + " templates salvos (um por prancheta)." : "Template salvo."}</b> {resultado.camadas} camada(s) no total. Os espaços foram adivinhados pelo que cada camada é — confira abaixo e, se algo estiver errado, "Abrir no editor" › Espaços › corrige › "Salvar de volta no template".
+        {resultado.templates.map(function(t){ return <div key={t.id} style={{marginTop:4}}>• <b>{t.nome}</b> · {t.largura}×{t.altura} · {t.espacos.length ? t.espacos.join(", ") : <span style={{color:"#92400e"}}>nenhum espaço achado</span>}</div>; })}
         {resultado.avisos.length > 0 && <div style={{marginTop:6,color:"#92400e"}}>{resultado.avisos.slice(0, 6).map(function(x, i){ return <div key={i}>• {x}</div>; })}{resultado.avisos.length > 6 ? <div>• … e mais {resultado.avisos.length - 6}</div> : null}</div>}
       </div>}
     </div>}
