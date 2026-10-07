@@ -140179,6 +140179,10 @@ function _eaRotuloUnidade(u){
 function _eaChaveCidade(s){ return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 /* fontes que o cliente mandou (Identidade visual) — ficam registradas no navegador e valem antes do Google Fonts */
 const _eaFontesCarregadas = {};
+/* a família ganhou arquivo novo (cliente/PC): esquece o que já se sabia dela pra testar de novo */
+function _eaEsquecerFonte(familia){
+  try{ const f = String(familia || ""); Object.keys(_eaFontesOk).forEach(function(k){ if(k.split("|")[0] === f) delete _eaFontesOk[k]; }); delete _eaFontesInfo[f]; }catch(_){ }
+}
 async function _eaRegistrarFontes(fontes){
   if(typeof window === "undefined" || typeof FontFace === "undefined") return;
   window.__EA_FONTES_URL = window.__EA_FONTES_URL || {};
@@ -140188,7 +140192,7 @@ async function _eaRegistrarFontes(fontes){
     (window.__EA_FONTES_URL[k] = window.__EA_FONTES_URL[k] || []);
     if(window.__EA_FONTES_URL[k].indexOf(f.url) < 0) window.__EA_FONTES_URL[k].push(f.url);
     if(_eaFontesCarregadas[f.url]) continue;
-    _eaFontesCarregadas[f.url] = true; delete _eaFontesOk[f.familia];
+    _eaFontesCarregadas[f.url] = true; _eaEsquecerFonte(f.familia);
     try{ const ff = new FontFace(f.familia, "url(" + f.url + ")", { weight:String(f.peso || "400"), style:f.italico ? "italic" : "normal" }); const l = await ff.load(); document.fonts.add(l); }
     catch(_){ delete _eaFontesCarregadas[f.url]; }
   }
@@ -140232,9 +140236,54 @@ async function _eaImportarFontesLocais(familias, client, unidade){
   if(novas.length){
     try{ await _eaRpc("arte_identidade_salvar", { p_client:client, p_unidade:unidade || "", p_dados:{ fontes:jaTem.concat(novas) } }); }catch(_){ }
     await _eaRegistrarFontes(novas);
-    novas.forEach(function(n){ delete _eaFontesOk[n.familia]; });
+    novas.forEach(function(n){ _eaEsquecerFonte(n.familia); });
   }
   return importadas;
+}
+/* (07/10) lê o NOME DE VERDADE da fonte dentro do arquivo .ttf/.otf (tabela "name": família, estilo; "OS/2": peso),
+   em vez de adivinhar pelo nome do arquivo ("gilroy-extrabold (1).otf" → Gilroy, 800) */
+function _eaLerFonteArquivo(buf){
+  try{
+    const dv = new DataView(buf); let off = 0;
+    let tag = dv.getUint32(0); if(tag === 0x74746366){ off = dv.getUint32(12); }          // 'ttcf': primeira fonte da coleção
+    const num = dv.getUint16(off + 4); const tabelas = {};
+    for(let i = 0; i < num; i++){ const p = off + 12 + i * 16; const t = String.fromCharCode(dv.getUint8(p), dv.getUint8(p+1), dv.getUint8(p+2), dv.getUint8(p+3)); tabelas[t] = { off:dv.getUint32(p + 8), len:dv.getUint32(p + 12) }; }
+    const out = { familia:"", subfamilia:"", peso:"", italico:false };
+    if(tabelas["name"]){
+      const n = tabelas["name"].off, count = dv.getUint16(n + 2), strOff = n + dv.getUint16(n + 4), nomes = {};
+      for(let i = 0; i < count; i++){ const r = n + 6 + i * 12; const plat = dv.getUint16(r), enc = dv.getUint16(r + 2), lang = dv.getUint16(r + 4), id = dv.getUint16(r + 6), len = dv.getUint16(r + 8), so = dv.getUint16(r + 10);
+        if(![1, 2, 4, 16, 17].includes(id)) continue;
+        let s = "";
+        if(plat === 3 || plat === 0){ for(let j = 0; j < len; j += 2) s += String.fromCharCode(dv.getUint16(strOff + so + j)); }
+        else { for(let j = 0; j < len; j++) s += String.fromCharCode(dv.getUint8(strOff + so + j)); }
+        const prefer = (plat === 3 && lang === 0x409) || plat === 1; if(!nomes[id] || prefer) nomes[id] = s.trim(); }
+      out.familia = nomes[16] || nomes[1] || ""; out.subfamilia = nomes[17] || nomes[2] || "";
+    }
+    if(tabelas["OS/2"]){ const o = tabelas["OS/2"].off; const wc = dv.getUint16(o + 4); if(wc >= 100 && wc <= 900) out.peso = String(Math.round(wc / 100) * 100); const fs = dv.getUint16(o + 62); out.italico = !!(fs & 1); }
+    if(!out.peso){ const g = _eaFontePsd((out.familia || "") + "-" + (out.subfamilia || "").replace(/\s+/g, "")); out.peso = g.peso; }
+    if(!out.italico) out.italico = /italic|oblique/i.test(out.subfamilia);
+    return out.familia ? out : null;
+  }catch(_){ return null; }
+}
+/* sobe arquivos de fonte pra Identidade visual do cliente e devolve a lista nova (já registrada no navegador) */
+async function _eaSubirFontesArquivos(files, cliente, unidade){
+  const lista = Array.from(files || []).filter(function(f){ return /\.(ttf|otf|woff2?)$/i.test(f.name); });
+  if(!lista.length) throw new Error("Mande arquivos .ttf, .otf ou .woff");
+  let ident = null; try{ ident = await _eaRpc("arte_identidade", { p_client:cliente, p_unidade:unidade || "" }); }catch(_){ }
+  const todas = ((ident && ident.fontes) || []).slice(), novas = [];
+  for(const f of lista){
+    let g = null; try{ if(/\.(ttf|otf)$/i.test(f.name)) g = _eaLerFonteArquivo(await f.arrayBuffer()); }catch(_){ }
+    if(!g){ const p = _eaFontePsd(f.name.replace(/\.[^.]+$/, "").replace(/[\s_]+/g, "-").replace(/\(\d+\)$/, "")); g = { familia:p.familia, peso:p.peso, italico:p.italico }; }
+    const fam = String(g.familia).replace(/\s+(Thin|ExtraLight|Light|Regular|Book|Medium|SemiBold|Bold|ExtraBold|Heavy|Black)$/i, "").trim();
+    const up = await _eaSubir(f, "arte/fontes/" + cliente, f.name);
+    const nova = { familia:fam, peso:String(g.peso || "400"), italico:!!g.italico, url:up.url, arquivo:f.name };
+    const i = todas.findIndex(function(x){ return _eaFamiliaNorm(x.familia) === _eaFamiliaNorm(fam) && String(x.peso) === nova.peso && !!x.italico === nova.italico; });
+    if(i >= 0) todas[i] = nova; else todas.push(nova);
+    novas.push(nova);
+  }
+  const r = await _eaRpc("arte_identidade_salvar", { p_client:cliente, p_unidade:unidade || "", p_dados:{ fontes:todas } });
+  await _eaRegistrarFontes((r && r.dados && r.dados.fontes) || todas);
+  return { novas:novas, todas:(r && r.dados && r.dados.fontes) || todas };
 }
 async function _eaFontesDoCliente(client, unidade){
   if(!client) return null;
@@ -140323,25 +140372,92 @@ async function _eaJsPdf(){
   try{ await _eaScript(_eaLib("svg2pdf"), "svg2pdf"); }catch(_){ /* sem svg2pdf: PDF sai como imagem */ }
   return window.jspdf;
 }
-const _eaFontesOk = {};
-function _eaCarregarFonte(nome){
-  if(!nome || typeof document==="undefined") return Promise.resolve(false);
-  if(_eaFontesOk[nome]) return _eaFontesOk[nome];
-  const id = "ea-fonte-" + nome.replace(/\s+/g,"-").toLowerCase();
-  const doCliente = !!(window.__EA_FONTES_URL && window.__EA_FONTES_URL[nome.toLowerCase()] && window.__EA_FONTES_URL[nome.toLowerCase()].length);   // (07/10) fonte do cliente já registrada
-  if(!doCliente && !document.getElementById(id) && (window.__EA_SEM_GOOGLE_FONTS !== true)){
-    const l = document.createElement("link"); l.id = id; l.rel = "stylesheet";
-    l.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(nome).replace(/%20/g,"+") + ":ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&display=swap";
-    document.head.appendChild(l);
-  }
-  _eaFontesOk[nome] = (async function(){
+/* ─── FONTES (07/10, Gustavo: "o template abriu em Times, tamanhos errados") ─────────────────────────────────────────
+   O que dava errado: 1) o Google Fonts era pedido com pesos que a família não tem (800/900) → o Google devolve ERRO e a
+   fonte nunca chega; 2) o <link> do Google era criado mesmo quando a fonte já estava INSTALADA no PC → a regra @font-face
+   "sombreia" a fonte local e, enquanto o download não termina, o canvas desenha com a fonte padrão (Times);
+   3) só os pesos 400/800 eram esperados — a Khand 500/700 do título entrava sem estar pronta.
+   Agora: cada fonte tem ORIGEM (cliente → local do PC → Google), o Google é pedido UM PESO POR VEZ (só o que o texto usa),
+   e antes de desenhar/exportar esperamos TODOS os pesos usados estarem carregados. ─── */
+const _eaFontesOk = {};          // "Família|peso|italico" → Promise<boolean>
+const _eaFontesInfo = {};        // "Família" → { origem:"cliente"|"local"|"google"|null, pesos:{} }
+function _eaFonteInfo(nome){ return _eaFontesInfo[nome] || null; }
+function _eaFontePeso(p){ const s = String(p == null ? "400" : p).toLowerCase(); if(s === "bold") return "700"; if(s === "normal") return "400"; const n = parseInt(s, 10); return (n >= 100 && n <= 900) ? String(Math.round(n / 100) * 100) : "400"; }
+function _eaEsperar(ms){ return new Promise(function(ok){ setTimeout(ok, ms); }); }
+function _eaFontsLoad(decl, ms){ try{ return Promise.race([document.fonts.load(decl), _eaEsperar(ms || 6000)]); }catch(_){ return Promise.resolve([]); } }
+/* carrega UM peso de uma família; devolve true se, no fim, o canvas desenha com ela */
+function _eaCarregarFontePeso(nome, peso, italico){
+  const k = nome + "|" + peso + "|" + (italico ? "i" : "n");
+  if(_eaFontesOk[k]) return _eaFontesOk[k];
+  _eaFontesOk[k] = (async function(){
     try{
-      await new Promise(function(ok){ setTimeout(ok, 60); });
-      await Promise.race([Promise.all([document.fonts.load('400 40px "' + nome + '"'), document.fonts.load('800 40px "' + nome + '"')]), new Promise(function(ok){ setTimeout(ok, 2500); })]);
-      return _eaFonteExiste(nome);
+      const info = (_eaFontesInfo[nome] = _eaFontesInfo[nome] || { origem:null, pesos:{} });
+      const decl = (italico ? "italic " : "") + peso + ' 40px "' + nome + '"';
+      // 1) fonte do CLIENTE (Identidade visual) — já registrada com FontFace
+      const k2 = nome.toLowerCase();
+      if(window.__EA_FONTES_URL && window.__EA_FONTES_URL[k2] && window.__EA_FONTES_URL[k2].length){
+        await _eaFontsLoad(decl, 8000); if(_eaFonteExiste(nome)){ info.origem = "cliente"; info.pesos[peso] = true; return true; }
+      }
+      // 2) fonte INSTALADA no PC — só dá pra saber antes de o Google criar uma @font-face com o mesmo nome
+      if(info.origem === "local"){ info.pesos[peso] = true; return true; }
+      if(!info.google && _eaFonteExiste(nome)){ info.origem = "local"; info.pesos[peso] = true; return true; }
+      if(window.__EA_SEM_GOOGLE_FONTS === true) return false;
+      // 3) Google Fonts — um peso por pedido (peso que a família não tem = erro só desse pedido)
+      info.google = true;
+      const id = "ea-fonte-" + nome.replace(/\s+/g, "-").toLowerCase() + "-" + peso + (italico ? "i" : "");
+      let el = document.getElementById(id);
+      if(!el){
+        el = document.createElement("link"); el.id = id; el.rel = "stylesheet";
+        el.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(nome).replace(/%20/g, "+") + ":" + (italico ? "ital,wght@1," : "wght@") + peso + "&display=swap";
+        el.__ea = new Promise(function(ok){ el.onload = function(){ ok(true); }; el.onerror = function(){ ok(false); }; setTimeout(function(){ ok(null); }, 7000); });
+        document.head.appendChild(el);
+      }
+      const chegou = await el.__ea;
+      if(chegou === false){ el.__eaErro = true; return false; }
+      await _eaEsperar(30);
+      await _eaFontsLoad(decl, 8000);
+      const ok = _eaFonteExiste(nome) && (function(){ try{ return document.fonts.check(decl); }catch(_){ return true; } })();
+      if(ok){ info.origem = info.origem || "google"; info.pesos[peso] = true; }
+      return ok;
     }catch(_){ return false; }
   })();
-  return _eaFontesOk[nome];
+  return _eaFontesOk[k];
+}
+/* carrega a família nos pesos pedidos (padrão: 400 e 700); true se pelo menos um peso ficou pronto */
+function _eaCarregarFonte(nome, pesos, italico){
+  if(!nome || typeof document === "undefined") return Promise.resolve(false);
+  nome = String(nome).split(",")[0].replace(/["']/g, "").trim(); if(!nome) return Promise.resolve(false);
+  const lista = Array.from(new Set((Array.isArray(pesos) && pesos.length ? pesos : ["400", "700"]).map(_eaFontePeso)));
+  return Promise.all(lista.map(function(p){ return _eaCarregarFontePeso(nome, p, !!italico); })).then(function(rs){ return rs.some(Boolean); });
+}
+/* fontes + pesos usados num JSON de página { "Khand":{ "500":true, "700":true }, ... } */
+function _eaFontesEPesosDoJson(j){
+  const m = {};
+  const add = function(f, w, it){ if(!f) return; const n = String(f).split(",")[0].replace(/["']/g, "").trim(); if(!n) return; (m[n] = m[n] || {})[_eaFontePeso(w) + (it === "italic" ? "i" : "")] = true; };
+  const ver = function(o){ if(!o) return; add(o.fontFamily, o.fontWeight, o.fontStyle);
+    if(o.styles && typeof o.styles === "object") Object.values(o.styles).forEach(function(l){ Object.values(l || {}).forEach(function(st){ if(st && typeof st === "object") add(st.fontFamily || o.fontFamily, st.fontWeight || o.fontWeight, st.fontStyle || o.fontStyle); }); });
+    (o.objects || []).forEach(ver); };
+  (j && j.objects || []).forEach(ver);
+  return m;
+}
+async function _eaCarregarFontesDoJson(j){
+  const m = _eaFontesEPesosDoJson(j);
+  await Promise.all(Object.keys(m).map(function(f){ const ks = Object.keys(m[f]); const n = ks.filter(function(k){ return !/i$/.test(k); }), i = ks.filter(function(k){ return /i$/.test(k); }).map(function(k){ return k.slice(0, -1); });
+    return Promise.all([n.length ? _eaCarregarFonte(f, n) : null, i.length ? _eaCarregarFonte(f, i, true) : null]); }));
+  return m;
+}
+/* antes de desenhar a miniatura / exportar: garante que TODOS os pesos usados no canvas estão prontos (senão sai em Times) */
+async function _eaEsperarFontes(fc){
+  try{
+    if(!fc || typeof document === "undefined" || !document.fonts) return;
+    const j = { objects:fc.getObjects().map(function(o){ return { fontFamily:o.fontFamily, fontWeight:o.fontWeight, fontStyle:o.fontStyle, styles:o.styles, objects:o._objects }; }) };
+    const m = _eaFontesEPesosDoJson(j);
+    const decls = [];
+    Object.keys(m).forEach(function(f){ Object.keys(m[f]).forEach(function(k){ decls.push((/i$/.test(k) ? "italic " : "") + k.replace(/i$/, "") + ' 40px "' + f + '"'); }); });
+    await Promise.race([Promise.all(decls.map(function(d){ return _eaFontsLoad(d, 6000); })), _eaEsperar(9000)]);
+    try{ await Promise.race([document.fonts.ready, _eaEsperar(3000)]); }catch(_){ }
+    fc.getObjects().forEach(function(o){ if(o.initDimensions){ try{ o.initDimensions(); o.setCoords(); }catch(_){ } } });
+  }catch(_){ }
 }
 /* a fonte existe mesmo? (document.fonts.check diz "sim" até para fonte que não existe) — mede o texto contra as genéricas */
 function _eaFonteExiste(nome){
@@ -140767,8 +140883,7 @@ function _eaFontesDoJson(j){
   return Array.from(s).filter(Boolean);
 }
 async function _eaCarregarJson(fc, j){
-  const fontes = _eaFontesDoJson(j);
-  await Promise.all(fontes.map(_eaCarregarFonte));
+  await _eaCarregarFontesDoJson(j);     // (07/10) família + PESOS usados (Khand 500/700…), não só 400/700
   await fc.loadFromJSON(j || { objects:[] });
   fc.backgroundColor = (j && j.background) || "#ffffff";
   fc.getObjects().forEach(function(o){ if(!o.id) o.id = _eaUid(); if(_eaTipo(o)==="texto" && o.initDimensions){ try{ o.initDimensions(); }catch(_){ } } o.setCoords(); });
@@ -141949,7 +142064,7 @@ async function _eaAbrirSvg(a, texto, nome, opt){
 
 /* PSD → página nova do tamanho do PSD, camada por camada */
 function _eaFontePsd(nome){
-  const n = String(nome || "").replace(/MT$|PSMT$/,"");
+  const n = String(nome || "").replace(/MT$|PSMT$/,"").replace(/^([A-Za-z0-9]+?)Roman([-_ ]|$)/, "$1$2");   // "MontserratRoman-Bold" → Montserrat Bold
   const m = n.match(/^([A-Za-z0-9]+?)(?:[-_ ]?(Thin|ExtraLight|UltraLight|Light|Regular|Book|Medium|SemiBold|DemiBold|Bold|ExtraBold|UltraBold|Heavy|Black)(Italic|It)?)?$/i);
   const pesos = { thin:"100", extralight:"200", ultralight:"200", light:"300", regular:"400", book:"400", medium:"500", semibold:"600", demibold:"600", bold:"700", extrabold:"800", ultrabold:"800", heavy:"900", black:"900" };
   let fam = (m ? m[1] : n.split("-")[0]) || "Montserrat";
@@ -141960,6 +142075,47 @@ const _EA_MISTURA = { "multiply":"multiply", "screen":"screen", "overlay":"overl
   "hard light":"hard-light", "soft light":"soft-light", "difference":"difference", "exclusion":"exclusion", "hue":"hue", "saturation":"saturation", "color":"color", "luminosity":"luminosity",
   // (07/10) aproximações: o canvas não tem estes, usa o mais parecido em vez de virar "normal"
   "linear burn":"multiply", "darker color":"darken", "linear dodge":"lighter", "lighter color":"lighten", "vivid light":"hard-light", "linear light":"hard-light", "pin light":"hard-light", "hard mix":"hard-light", "subtract":"difference", "divide":"screen" };
+/* (07/10, mapa 3D da Bioter) modos que o canvas NÃO tem: quando a camada está em cima de uma vizinha que a contém
+   (o "YOUR COLOR" em Subexposição Linear sobre o render cinza), é mesclada PIXEL A PIXEL com a fórmula exata do Photoshop
+   em vez da aproximação — o verde sai igual ao Photoshop. */
+const _EA_MISTURA_PIXEL = { "linear burn":1, "linear dodge":1, "linear light":1, "vivid light":1, "pin light":1, "hard mix":1, "darker color":1, "lighter color":1, "subtract":1, "divide":1 };
+function _eaPsdMisturarPixels(dest, dx, dy, src, modo, alfa){
+  const W = dest.width, H = dest.height, sw = src.width, sh = src.height;
+  const x0 = Math.max(0, dx), y0 = Math.max(0, dy), x1 = Math.min(W, dx + sw), y1 = Math.min(H, dy + sh);
+  if(x1 <= x0 || y1 <= y0) return;
+  const dc = dest.getContext("2d"), sc = src.getContext("2d");
+  const D = dc.getImageData(x0, y0, x1 - x0, y1 - y0), S = sc.getImageData(x0 - dx, y0 - dy, x1 - x0, y1 - y0), d = D.data, s = S.data;
+  const lum = function(r, g, b){ return 0.3 * r + 0.59 * g + 0.11 * b; };
+  const f = {
+    "linear burn":  function(b, s){ return Math.max(0, b + s - 1); },
+    "linear dodge": function(b, s){ return Math.min(1, b + s); },
+    "linear light": function(b, s){ return Math.max(0, Math.min(1, b + 2 * s - 1)); },
+    "vivid light":  function(b, s){ return s <= 0.5 ? (s <= 0 ? 0 : 1 - Math.min(1, (1 - b) / (2 * s))) : (s >= 1 ? 1 : Math.min(1, b / (2 * (1 - s)))); },
+    "pin light":    function(b, s){ return s <= 0.5 ? Math.min(b, 2 * s) : Math.max(b, 2 * s - 1); },
+    "hard mix":     function(b, s){ return b + s < 1 ? 0 : 1; },
+    "subtract":     function(b, s){ return Math.max(0, b - s); },
+    "divide":       function(b, s){ return s <= 0 ? 1 : Math.min(1, b / s); },
+  }[modo];
+  const porCor = modo === "darker color" || modo === "lighter color";
+  const A = alfa == null ? 1 : alfa;
+  for(let i = 0; i < d.length; i += 4){
+    const as = (s[i + 3] / 255) * A; if(as <= 0) continue;
+    const ab = d[i + 3] / 255;
+    const br = d[i] / 255, bg = d[i + 1] / 255, bb = d[i + 2] / 255, sr = s[i] / 255, sg = s[i + 1] / 255, sb = s[i + 2] / 255;
+    let rr, rg, rb;
+    if(porCor){ const pegaS = modo === "darker color" ? lum(sr, sg, sb) < lum(br, bg, bb) : lum(sr, sg, sb) > lum(br, bg, bb); rr = pegaS ? sr : br; rg = pegaS ? sg : bg; rb = pegaS ? sb : bb; }
+    else { rr = f(br, sr); rg = f(bg, sg); rb = f(bb, sb); }
+    // onde a base é transparente, vale a cor da fonte; depois compõe por cima (source-over)
+    const cr = (1 - ab) * sr + ab * rr, cg = (1 - ab) * sg + ab * rg, cb = (1 - ab) * sb + ab * rb;
+    const ao = as + ab * (1 - as);
+    d[i]     = Math.round(((cr * as + br * ab * (1 - as)) / (ao || 1)) * 255);
+    d[i + 1] = Math.round(((cg * as + bg * ab * (1 - as)) / (ao || 1)) * 255);
+    d[i + 2] = Math.round(((cb * as + bb * ab * (1 - as)) / (ao || 1)) * 255);
+    d[i + 3] = Math.round(ao * 255);
+  }
+  dc.putImageData(D, x0, y0);
+}
+function _eaPsdDentro(l, v){ const m = 3; return (l.left || 0) >= (v.left || 0) - m && (l.top || 0) >= (v.top || 0) - m && (l.right || 0) <= (v.right || 0) + m && (l.bottom || 0) <= (v.bottom || 0) + m && ((l.right || 0) - (l.left || 0)) > 2; }
 
 /* ─── (07/10/2026, Gustavo: "sem cor, parece CMYK") PERFIL DE COR DO PSD ───────────────────────────────────────────
    O Photoshop mostra as cores pelo perfil embutido (Adobe RGB, ProPhoto, Display P3…); o navegador trata os números
@@ -142024,7 +142180,19 @@ function _eaConversorPerfil(id){
       x.putImageData(d, 0, 0); cv.__perfilOk = true;
     }catch(_){ }
   };
-  const cor = function(c){ if(!c || c.__perfilOk) return; if(c.r != null){ const o = px(Math.max(0, Math.min(255, Math.round(c.r))), Math.max(0, Math.min(255, Math.round(c.g || 0))), Math.max(0, Math.min(255, Math.round(c.b || 0)))); c.r = o[0]; c.g = o[1]; c.b = o[2]; c.__perfilOk = true; } };
+  // (07/10) cores de preenchimento/degradê vêm também como fr/fg/fb (0–1) e HSB — antes só r/g/b era convertido e o
+  //   "YOUR COLOR" do mapa 3D ficava com o verde lavado do Adobe RGB
+  const cl = function(v){ return Math.max(0, Math.min(255, Math.round(v || 0))); };
+  const cor = function(c){
+    if(!c || typeof c !== "object" || c.__perfilOk) return;
+    let r = null, g = null, b = null;
+    if(c.r != null){ r = c.r; g = c.g; b = c.b; }
+    else if(c.fr != null){ r = c.fr * 255; g = c.fg * 255; b = c.fb * 255; }
+    else if(c.h != null && c.s != null && c.b != null){ const hh = ((c.h % 360) + 360) % 360 / 60, s = c.s / 100, v = c.b / 100, i = Math.floor(hh), f = hh - i, p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f)); const m = [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i % 6]; r = m[0] * 255; g = m[1] * 255; b = m[2] * 255; }
+    else return;
+    const o = px(cl(r), cl(g), cl(b));
+    c.r = o[0]; c.g = o[1]; c.b = o[2]; delete c.fr; delete c.fg; delete c.fb; delete c.h; delete c.s; c.__perfilOk = true;
+  };
   return { px:px, canvas:canvas, cor:cor };
 }
 /* converte TODO o PSD lido (camadas, composto, cores de texto/forma/efeitos) pra sRGB */
@@ -142255,12 +142423,15 @@ async function _eaPsdEstilosTexto(t, l, texto, esc, fonteOk, corPadrao){
   const hex = function(c){ return c ? "#" + [c.r, c.g, c.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : corPadrao; };
   // mapa: índice no texto bruto → índice no texto limpo (\r e \u0003 viraram \n; \r\n virou 1 char)
   const estilos = {}; let linha = 0, col = 0, pos = 0;
+  const escDoc = (l.__escDoc > 0) ? l.__escDoc : 1;
   for(let r = 0; r < runs.length; r++){
     const run = runs[r], st = run.style || {}, fo = _eaFontePsd(st.font && st.font.name);
-    const okRun = fonteOk ? await _eaCarregarFonte(fo.familia) : false;
-    const e = { fontWeight:fo.peso || (st.fauxBold ? "700" : "400"), fontStyle:(fo.italico || st.fauxItalic) ? "italic" : "normal", fill:hex(st.fillColor) };
-    if(okRun) e.fontFamily = fo.familia;
-    if(st.fontSize) e.fontSize = Math.max(4, st.fontSize * esc);
+    const peso = fo.peso || (st.fauxBold ? "700" : "400"), ital = !!(fo.italico || st.fauxItalic);
+    const okRun = fonteOk ? await _eaCarregarFonte(fo.familia, [peso], ital) : false;    // (07/10) carrega o PESO que o trecho usa
+    const e = { fontWeight:peso, fontStyle:ital ? "italic" : "normal", fill:hex(st.fillColor) };
+    e.fontFamily = okRun ? fo.familia : "Montserrat";                                        // fonte que não temos → Montserrat (nunca Times)
+    if(!okRun){ l.__fontesFaltando = l.__fontesFaltando || {}; l.__fontesFaltando[fo.familia] = (l.__fontesFaltando[fo.familia] || []).concat(peso); }
+    if(st.fontSize) e.fontSize = Math.max(4, st.fontSize * esc * escDoc);
     for(let i = 0; i < (run.length || 0) && pos < bruto.length; i++, pos++){
       const ch = bruto[pos];
       if(ch === "\r" && bruto[pos + 1] === "\n") continue;
@@ -142270,14 +142441,23 @@ async function _eaPsdEstilosTexto(t, l, texto, esc, fonteOk, corPadrao){
   }
   t.set("styles", estilos); try{ t.initDimensions(); }catch(_){ }
 }
-/* confere a altura do texto desenhado contra a altura da camada no PSD e corrige a escala da fonte (documento em 150/300 ppi, etc.) */
+/* (07/10) resolução do documento: o Photoshop guarda o tamanho da fonte em PONTOS; num documento de 150/300 ppi o pixel
+   é maior (ppi/72). Em 72 ppi (o normal pra Instagram) não muda nada. */
+function _eaPsdEscalaDoc(psd){
+  try{ const ri = psd && psd.imageResources && psd.imageResources.resolutionInfo; if(!ri || !(ri.horizontalResolution > 0)) return 1;
+    const ppi = /PPCM/i.test(String(ri.horizontalResolutionUnit || "")) ? ri.horizontalResolution * 2.54 : ri.horizontalResolution;
+    const k = ppi / 72; return (k > 0.5 && k < 8 && Math.abs(k - 1) > 0.02) ? k : 1; }catch(_){ return 1; }
+}
+/* SÓ CONFERE (não "corrige" mais): a altura da camada no PSD é a caixa de TINTA do texto (muda com acento/descendente),
+   então antes isso ENCOLHIA textos certos (Carambeí/PR saiu em 22 px em vez de 30). Agora só mexe quando o tamanho está
+   absurdamente fora (documento em outra resolução sem a informação de ppi) — fora disso, vale o tamanho que o PSD diz. */
 function _eaPsdAjustarTamanhoTexto(t, l){
   const alvo = (l.bottom || 0) - (l.top || 0); if(!(alvo > 4)) return;
   try{ t.initDimensions(); }catch(_){ }
   const h = _eaCaixa(t).height; if(!(h > 1)) return;
   const k = alvo / h;
-  if(k > 0.92 && k < 1.08) return;                      // está certo
-  if(k < 0.4 || k > 6) return;                          // medida estranha (camada com efeito/sombra enorme): não mexe
+  if(k > 0.45 && k < 2.2) return;                       // dentro do normal (tinta × caixa da linha): vale o tamanho do PSD
+  if(k < 0.2 || k > 6) return;                          // medida estranha (camada com efeito/sombra enorme): não mexe
   t.set("fontSize", Math.max(4, (t.fontSize || 24) * k));
   if(t.styles) Object.keys(t.styles).forEach(function(li){ Object.keys(t.styles[li]).forEach(function(ci){ const e = t.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(4, e.fontSize * k); }); });
   t.set("width", Math.max(20, ((l.right || 0) - (l.left || 0)) * 1.08));
@@ -142297,14 +142477,23 @@ async function _eaAbrirPsd(a, arquivo, op){
   if(perfil){ const conv = _eaConversorPerfil(perfil.id); if(conv){ _eaToast("info", "PSD em " + perfil.nome + ": convertendo as cores pra sRGB…"); try{ _eaConverterPsdParaSrgb(psd, conv); }catch(_){ } psd.__perfilConvertido = perfil.nome; } }
   // (07/10) fontes do PSD que não temos → tenta pegar do PC (lista guardada no clique) e subir pra Identidade do cliente
   try{
-    const fams = {}; (function andar(lista){ (lista || []).forEach(function(l){ if(l.text){ const n = l.text.style && l.text.style.font && l.text.style.font.name; if(n) fams[_eaFontePsd(n).familia] = 1; (l.text.styleRuns || []).forEach(function(r){ const m = r.style && r.style.font && r.style.font.name; if(m) fams[_eaFontePsd(m).familia] = 1; }); } if(l.children) andar(l.children); }); })(psd.children);
-    const faltam = []; for(const fam of Object.keys(fams)){ if(!(await _eaCarregarFonte(fam))) faltam.push(fam); }
     const cid = a.proj && a.proj.client_id;
-    if(faltam.length && cid){
-      const imp = await _eaImportarFontesLocais(faltam, cid, (a.proj && a.proj.unidade) || "");
-      if(imp.length) _eaToast("success", "Fonte(s) " + imp.join(", ") + " copiada(s) do seu PC pra Identidade visual de " + _eaNomeCliente(cid));
-      else if(typeof window !== "undefined" && typeof window.queryLocalFonts !== "function") _eaToast("warning", "Fonte(s) " + faltam.join(", ") + " não encontrada(s). Mande o arquivo em Identidade visual › Fontes (ou use o Chrome/Edge, que copia do PC sozinho).");
+    if(cid) await _eaFontesDoCliente(cid, (a.proj && a.proj.unidade) || "");     // fontes da Identidade visual primeiro (valem pra todo mundo)
+    const fams = {}; const add = function(n){ if(!n) return; const g = _eaFontePsd(n); (fams[g.familia] = fams[g.familia] || {})[(g.peso || "400") + (g.italico ? "i" : "")] = true; };
+    (function andar(lista){ (lista || []).forEach(function(l){ if(l.text){ add(l.text.style && l.text.style.font && l.text.style.font.name); (l.text.styleRuns || []).forEach(function(r){ add(r.style && r.style.font && r.style.font.name); }); } if(l.children) andar(l.children); }); })(psd.children);
+    for(const fam of Object.keys(fams)){ const ks = Object.keys(fams[fam]); const n = ks.filter(function(k){ return !/i$/.test(k); }), i = ks.filter(function(k){ return /i$/.test(k); }).map(function(k){ return k.slice(0, -1); });
+      if(n.length) await _eaCarregarFonte(fam, n); if(i.length) await _eaCarregarFonte(fam, i, true); }
+    // fonte que não é do cliente nem do Google (só instalada neste PC, ou nem isso) → tenta copiar do PC pra Identidade visual
+    const origem = function(f){ const inf = _eaFonteInfo(f); return inf ? inf.origem : null; };
+    const precisam = Object.keys(fams).filter(function(f){ return origem(f) !== "cliente" && origem(f) !== "google"; });
+    if(precisam.length && cid){
+      const imp = await _eaImportarFontesLocais(precisam, cid, (a.proj && a.proj.unidade) || "");
+      if(imp.length){ _eaToast("success", "Fonte(s) " + imp.join(", ") + " copiada(s) do seu PC pra Identidade visual de " + _eaNomeCliente(cid)); for(const f of imp){ const ks = Object.keys(fams[f] || {}); await _eaCarregarFonte(f, ks.map(function(k){ return k.replace(/i$/, ""); })); } }
     }
+    const faltando = Object.keys(fams).filter(function(f){ return !origem(f); }), soAqui = Object.keys(fams).filter(function(f){ return origem(f) === "local"; });
+    psd.__fontes = { usadas:fams, faltando:faltando, soNestePc:soAqui }; a.__fontes = psd.__fontes;
+    if(faltando.length) _eaToast("warning", "Falta a fonte " + faltando.join(", ") + ": os textos saem em Montserrat até você mandar o arquivo (.otf/.ttf) em Identidade visual › Fontes.");
+    else if(soAqui.length) _eaToast("warning", "A fonte " + soAqui.join(", ") + " só existe neste PC — mande o arquivo em Identidade visual › Fontes pra valer em todos os computadores.");
   }catch(_){ }
   const prs = (op && op.naPagina) ? [] : _eaPsdPranchetas(psd);
   if(!prs.length) return _eaAbrirPsdLido(a, psd, arquivo.name, op, null);
@@ -142342,7 +142531,7 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
           opacidade:pai.opacidade * (l.opacity == null ? 1 : l.opacity), grupos:pai.grupos.concat((l.mask || l.vectorMask) ? [l] : []) });
         base = null; return;
       }
-      const item = { l:l, escondido:escondido, nome:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Camada"), opacidade:pai.opacidade, grupos:pai.grupos, base:l.clipping ? base : null, variante:variante };
+      const item = { l:l, escondido:escondido, nome:(pai.prefixo ? pai.prefixo + " › " : "") + (l.name || "Camada"), opacidade:pai.opacidade, grupos:pai.grupos, base:l.clipping ? base : null, vizinho:base, variante:variante };
       camadas.push(item);
       if(!l.clipping) base = item;
     });
@@ -142351,6 +142540,10 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
   //   (ex.: "YOUR COLOR" em modo Cor/Escurecer em cima do render 3D do mapa). Antes cada uma virava um objeto solto,
   //   e a cor cobria o render como uma mancha chapada. Agora a de cima é mesclada na de baixo e sobe um objeto só.
   camadas.forEach(function(c){ if(c.l.clipping && c.base && !c.base.l.text && !c.l.text && !c.escondido){ (c.base.recortados = c.base.recortados || []).push(c); c.mesclarNoBase = true; } });
+  // (07/10) modo de mistura que o canvas não tem (Subexposição Linear…) em camada que cabe dentro da vizinha de baixo:
+  //   mescla pixel a pixel na vizinha (fórmula exata) em vez da aproximação — o mapa 3D sai com o verde do Photoshop
+  camadas.forEach(function(c){ if(!c.l.clipping && !c.l.text && !c.escondido && c.vizinho && !c.vizinho.l.text && !c.vizinho.escondido && c.vizinho.l.clipping !== true && _EA_MISTURA_PIXEL[c.l.blendMode] && _eaPsdDentro(c.l, c.vizinho.l)){
+    c.base = c.vizinho; c.semRecorte = true; (c.vizinho.recortados = c.vizinho.recortados || []).push(c); c.mesclarNoBase = true; } });
   // original achatado do Photoshop (para comparar) — escondido, embaixo de tudo (na prancheta: só o pedaço dela)
   if(psd.canvas && psd.canvas.width){
     try{ let orig = psd.canvas; if(pr){ orig = _eaPsdCv(W, H); orig.getContext("2d").drawImage(psd.canvas, -pr.x, -pr.y); }
@@ -142372,34 +142565,40 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
     //   (se o PSD tem o desenho do texto, ele entra como imagem igual ao PSD e a cópia editável fica escondida logo acima)
     if(l.text && l.text.text){
       const st = (l.text.style || {}), fo = _eaFontePsd(st.font && st.font.name);
-      const ok = await _eaCarregarFonte(fo.familia);
+      const pesoBase = fo.peso || (st.fauxBold ? "700" : "400"), italBase = !!(fo.italico || st.fauxItalic);
+      const ok = await _eaCarregarFonte(fo.familia, [pesoBase], italBase);     // (07/10) o PESO que o texto usa, não 400/800
       const tr = l.text.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
+      const escDoc = _eaPsdEscalaDoc(psd); l.__escDoc = escDoc;
       const cor = st.fillColor ? "#" + [st.fillColor.r, st.fillColor.g, st.fillColor.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : "#000000";
       const al = { left:"left", center:"center", right:"right", justifyLeft:"justify", justifyCenter:"justify", justifyRight:"justify", justifyAll:"justify" }[(l.text.paragraphStyle && l.text.paragraphStyle.justification) || "left"] || "left";
       const temLimites = ((l.right||0) - (l.left||0)) > 4;
-      const larg = temLimites ? Math.max(20, ((l.right||0) - (l.left||0)) * 1.08) : 4000;   // sem limites: mede o texto numa linha só e ajusta depois
+      const largPsd = (l.right||0) - (l.left||0);
+      const larg = temLimites ? Math.max(20, largPsd * 1.08) : 4000;   // sem limites: mede o texto numa linha só e ajusta depois
       const temDesenho = !!(l.canvas && l.canvas.width && l.canvas.height);
       const simples = ok && !temEfeito && !temMascara;
       const familia = ok ? fo.familia : "Montserrat";
-      if(!ok) await _eaCarregarFonte("Montserrat");
+      if(!ok){ await _eaCarregarFonte("Montserrat", [pesoBase]); l.__fontesFaltando = l.__fontesFaltando || {}; l.__fontesFaltando[fo.familia] = (l.__fontesFaltando[fo.familia] || []).concat(pesoBase); }
       const textoPsd = String(l.text.text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\u0003/g, "\n").replace(/\n$/, "");
-      const t = new lib.Textbox(textoPsd, Object.assign({}, base, { left:l.left||0, top:l.top||0, width:larg,
-        fontFamily:familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
-        lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },
+      // (07/10) caixa alargada em 8% pra não quebrar linha antes da hora — centrada na caixa original (antes deslocava o texto 4% pra direita)
+      const t = new lib.Textbox(textoPsd, Object.assign({}, base, { left:(l.left||0) - (temLimites ? largPsd * 0.04 : 0), top:l.top||0, width:larg,
+        fontFamily:familia, fontWeight:pesoBase, fontStyle:italBase ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc * escDoc), fill:cor, textAlign:al,
+        lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize / 1.13)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },   // o Fabric já multiplica a entrelinha por 1,13; entrelinha fixa do PSD precisa dividir por isso
         simples ? {} : { nome:(c.nome + (temDesenho ? " (texto editável" + (ok ? "" : ", fonte trocada") + ")" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
       /* (07/10, Gustavo: "tamanhos diferentes, espaçamentos não respeitados") — 1) trechos com estilo diferente dentro do
          mesmo texto (1ª linha leve, 2ª negrito, tamanhos/cores diferentes) viram estilos por caractere; 2) o tamanho da fonte
          é CONFERIDO contra a altura real da camada no PSD (resolução do documento muda a escala) e corrigido. */
-      try{ await _eaPsdEstilosTexto(t, l, textoPsd, esc, ok, cor); }catch(_){ }
+      try{ await _eaPsdEstilosTexto(t, l, textoPsd, esc, true, cor); }catch(_){ }   // (07/10) cada trecho carrega a PRÓPRIA fonte — antes, se a fonte-base faltava, os trechos nem tentavam
       try{ _eaPsdAjustarTamanhoTexto(t, l); }catch(_){ }
       if(!temLimites){ try{ t.initDimensions(); let mw = 0; for(let li = 0; li < (t._textLines || []).length; li++) mw = Math.max(mw, t.getLineWidth(li)); t.set("width", Math.max(20, mw + 6)); t.initDimensions(); t.setCoords(); }catch(_){ } }
       infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:t.fontSize || Math.max(4, (st.fontSize || 24) * esc) });
-      if(simples){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
+      const faltouFonte = !ok || !!(l.__fontesFaltando && Object.keys(l.__fontesFaltando).length);
+      const nomeFaltou = l.__fontesFaltando ? Object.keys(l.__fontesFaltando).join(", ") : ((st.font && st.font.name) || "?");
+      if(simples && !faltouFonte){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
       /* (07/10) camada de TEXTO marcada como espaço: entra só o texto editável e visível (o texto vai ser trocado
          pela copy — a imagem do texto antigo não pode ficar por baixo) */
-      if(_esp || (op && op.template)){ if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (_esp ? "o espaço " + _esp : "o texto") + " usa Montserrat. Mande o arquivo da fonte em Edição de arte › Identidade visual para ficar igual.");
+      if(_esp || (op && op.template) || (simples && faltouFonte)){ if(faltouFonte) avisos.push(c.nome + ": fonte \"" + nomeFaltou + "\" não encontrada — " + (_esp ? "o espaço " + _esp : "o texto") + " usa Montserrat. Mande o arquivo da fonte em Edição de arte › Identidade visual para ficar igual.");
         t.set({ visible:base.visible, nome:c.nome.slice(0,80), alturaMax:Math.round(_eaCaixa(t).height * 1.15) }); objs.push(t); continue; }
-      if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (temDesenho
+      if(faltouFonte) avisos.push(c.nome + ": fonte \"" + nomeFaltou + "\" não encontrada — " + (temDesenho
         ? "entrou igual ao PSD (imagem) e tem uma cópia em TEXTO EDITÁVEL escondida logo acima, com fonte parecida (ligue o olho em Camadas para editar)."
         : "entrou como texto editável com fonte parecida (Montserrat). Para ficar igual, mande o arquivo da fonte em Edição de arte › Identidade visual."));
       if(!temDesenho){ objs.push(t); continue; }
@@ -142413,20 +142612,26 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
     r.avisos.forEach(function(x){ avisos.push(c.nome + ": " + x); });
     (c.recortados || []).forEach(function(cc){
       try{
-        const rc = _eaPsdDesenhar(cc.l, W, H, { grupos:cc.grupos, base:r }); if(!rc) return;
+        const rc = _eaPsdDesenhar(cc.l, W, H, { grupos:cc.grupos, base:cc.semRecorte ? null : r }); if(!rc) return;
         rc.avisos.forEach(function(x){ avisos.push(cc.nome + ": " + x); });
         const efc = (cc.l.effects && !cc.l.effects.disabled) ? cc.l.effects : {};
         const semPreench = cc.l.fillOpacity != null && cc.l.fillOpacity < 0.05;
-        let modo = (cc.l.blendMode && cc.l.blendMode !== "normal" && cc.l.blendMode !== "pass through") ? (_EA_MISTURA[cc.l.blendMode] || null) : null;
-        if(!modo && semPreench){ const sf = _eaPsdAtivos(efc.solidFill)[0] || _eaPsdAtivos(efc.gradientOverlay)[0]; if(sf && sf.blendMode) modo = _EA_MISTURA[sf.blendMode] || null; }   // só o efeito aparece: o modo dele é o que vale
-        if(cc.l.blendMode && cc.l.blendMode !== "normal" && cc.l.blendMode !== "pass through" && !_EA_MISTURA[cc.l.blendMode]) avisos.push(cc.nome + ": modo de mistura \"" + cc.l.blendMode + "\" virou normal.");
-        const x = r.cv.getContext("2d"); x.save(); x.globalCompositeOperation = modo || "source-over"; x.globalAlpha = (cc.l.opacity == null ? 1 : cc.l.opacity);
-        x.drawImage(rc.cv, rc.x - r.x, rc.y - r.y); x.restore();
+        let modoPsd = (cc.l.blendMode && cc.l.blendMode !== "normal" && cc.l.blendMode !== "pass through") ? cc.l.blendMode : null;
+        if(!modoPsd && semPreench){ const sf = _eaPsdAtivos(efc.solidFill)[0] || _eaPsdAtivos(efc.gradientOverlay)[0]; if(sf && sf.blendMode) modoPsd = sf.blendMode; }   // só o efeito aparece: o modo dele é o que vale
+        const opac = (cc.l.opacity == null ? 1 : cc.l.opacity);
+        if(modoPsd && _EA_MISTURA_PIXEL[modoPsd]){ _eaPsdMisturarPixels(r.cv, Math.round(rc.x - r.x), Math.round(rc.y - r.y), rc.cv, modoPsd, opac); }   // fórmula exata (o canvas não tem esse modo)
+        else {
+          const modo = modoPsd ? (_EA_MISTURA[modoPsd] || null) : null;
+          if(modoPsd && !modo) avisos.push(cc.nome + ": modo de mistura \"" + modoPsd + "\" virou normal.");
+          const x = r.cv.getContext("2d"); x.save(); x.globalCompositeOperation = modo || "source-over"; x.globalAlpha = opac;
+          x.drawImage(rc.cv, rc.x - r.x, rc.y - r.y); x.restore();
+        }
       }catch(e){ avisos.push(cc.nome + ": não deu pra mesclar no recorte (" + _eaErro(e) + ")"); }
     });
     const up = await _eaSubir(await _eaCanvasBlob(r.cv), "arte/" + a.projetoId, "psd.png");
     const extra = Object.assign({}, base, { left:r.x, top:r.y });
-    if((c.recortados || []).length) extra.nome = (c.nome + " (+" + c.recortados.length + " recorte" + (c.recortados.length > 1 ? "s" : "") + ")").slice(0, 80);
+    if((c.recortados || []).length){ const nr = c.recortados.filter(function(x){ return !x.semRecorte; }).length, nm = c.recortados.length - nr;
+      extra.nome = (c.nome + " (+" + [nr ? nr + " recorte" + (nr > 1 ? "s" : "") : "", nm ? nm + " mesclada" + (nm > 1 ? "s" : "") : ""].filter(Boolean).join(", ") + ")").slice(0, 80); }
     // camada sem preenchimento (só efeito) que mistura com o que está embaixo: o objeto leva o modo do efeito
     if(!l.clipping && l.fillOpacity != null && l.fillOpacity < 0.05 && (!l.blendMode || l.blendMode === "normal")){ const ef0 = (l.effects && !l.effects.disabled) ? l.effects : {}; const sf0 = _eaPsdAtivos(ef0.solidFill)[0] || _eaPsdAtivos(ef0.gradientOverlay)[0]; if(sf0 && sf0.blendMode && _EA_MISTURA[sf0.blendMode] && !extra.globalCompositeOperation) extra.globalCompositeOperation = _EA_MISTURA[sf0.blendMode]; }
     if(l.placedLayer) extra.aviso = "Objeto inteligente do Photoshop: entrou como imagem (dá para mover, redimensionar e esconder).";
@@ -142598,6 +142803,7 @@ async function _eaRemoverFundo(a, o){
 /* ─── exportar ─── */
 async function _eaExportarPagina(a, formato, escala){
   const fc = a.fc, W = a.W, H = a.H;
+  await _eaEsperarFontes(fc);     // (07/10) fontes prontas antes de exportar
   return _eaTamanhoReal(fc, W, H, async function(){
     if(formato === "svg"){ const s = fc.toSVG({ width:W, height:H, viewBox:{ x:0, y:0, width:W, height:H } }); return new Blob([s], { type:"image/svg+xml" }); }
     const du = fc.toDataURL({ format:formato === "jpg" ? "jpeg" : "png", quality:0.93, multiplier:escala || 1, enableRetinaScaling:false });
@@ -143117,18 +143323,19 @@ async function _eaPsdParaTemplate(arquivo, op){
   const lib = await _eaFabric();
   const doc = { versao:1, paginas:[] }, avisos = [];
   let atual = -1;
-  const fechar = function(){ if(a.fc && atual >= 0 && doc.paginas[atual]){ a.fc.renderAll(); doc.paginas[atual].fabric = _eaJsonPagina(a.fc); doc.paginas[atual].__thumb = a.fc.toDataURL({ format:"jpeg", quality:0.86, multiplier:Math.min(1, 1080 / a.W) }); doc.paginas[atual].__espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
+  const fechar = async function(){ if(a.fc && atual >= 0 && doc.paginas[atual]){ await _eaEsperarFontes(a.fc); a.fc.renderAll(); doc.paginas[atual].fabric = _eaJsonPagina(a.fc); doc.paginas[atual].__thumb = a.fc.toDataURL({ format:"jpeg", quality:0.86, multiplier:Math.min(1, 1080 / a.W) }); doc.paginas[atual].__espacos = Array.from(new Set(a.fc.getObjects().map(function(o){ return o.espaco; }).filter(Boolean)));
       doc.paginas[atual].__titulo = (function(){ const t = a.fc.getObjects().find(function(o){ return o.espaco === "HEADLINE" && o.text; }); return t ? String(t.text).replace(/\s+/g, " ").trim().slice(0, 40) : ""; })(); } };
   const a = { lib:lib, projetoId:"modelos/" + _eaUid(), fc:null, W:0, H:0, kit:null, proj:{ client_id:op.client, unidade:op.unidade || "" },
     doc:function(){ return doc; },
-    abrirPagina:async function(i){ fechar(); const pg = doc.paginas[i]; const el = document.createElement("canvas"); el.width = pg.largura; el.height = pg.altura;
+    abrirPagina:async function(i){ await fechar(); const pg = doc.paginas[i]; const el = document.createElement("canvas"); el.width = pg.largura; el.height = pg.altura;
       if(a.fc){ try{ a.fc.dispose(); }catch(_){ } }
       a.fc = new lib.StaticCanvas(el, { width:pg.largura, height:pg.altura, enableRetinaScaling:false, renderOnAddRemove:false }); a.W = pg.largura; a.H = pg.altura; atual = i; },
     pausar:function(){}, mudou:function(){}, zoomCaber:function(){}, toque:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
   passo("abrindo o PSD (camada por camada)…");
   if(/\.(svg)$/i.test(arquivo.name)) await _eaAbrirSvg(a, await arquivo.text(), arquivo.name, {});
   else await _eaAbrirPsd(a, arquivo, { template:true, onPrancheta:function(i, n, pr){ passo("prancheta " + (i + 1) + " de " + n + " (" + pr.nome + ")…"); } });
-  fechar();
+  passo("conferindo as fontes e desenhando a miniatura…");
+  await fechar();
   if(!doc.paginas.length || !a.fc) throw new Error("O arquivo não tem camadas que deem para abrir");
   passo("salvando " + (doc.paginas.length > 1 ? doc.paginas.length + " templates…" : "o template…"));
   const base = (op.nome || arquivo.name.replace(/\.[^.]+$/, "")).trim().slice(0, 60);
@@ -143149,7 +143356,7 @@ async function _eaPsdParaTemplate(arquivo, op){
     feitos.push({ id:antigo ? antigo.id : r.id, nome:nome, espacos:espacos, largura:pg.largura, altura:pg.altura, camadas:(pg.fabric.objects || []).length, atualizado:!!antigo });
   }
   try{ a.fc.dispose(); }catch(_){ }
-  return { id:feitos[0] && feitos[0].id, templates:feitos, espacos:feitos[0] ? feitos[0].espacos : [], avisos:avisos, largura:feitos[0] && feitos[0].largura, altura:feitos[0] && feitos[0].altura, camadas:feitos.reduce(function(n, t){ return n + t.camadas; }, 0) };
+  return { id:feitos[0] && feitos[0].id, templates:feitos, espacos:feitos[0] ? feitos[0].espacos : [], avisos:avisos, fontes:a.__fontes || null, largura:feitos[0] && feitos[0].largura, altura:feitos[0] && feitos[0].altura, camadas:feitos.reduce(function(n, t){ return n + t.camadas; }, 0) };
 }
 /* template padrão para um card: do cliente, do tipo do card, da unidade (ou geral), marcado como padrão */
 function _eaTemplatePadrao(lista, client, tipo, unidade){
@@ -143170,23 +143377,37 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
   const [ampliado, setAmpliado] = useState(null);     // template aberto em tamanho grande
   const [real, setReal] = useState(false);            // 100% (tamanho real) ou cabendo na tela
   const inputRef = useRef(null);
+  const arqRef = useRef(null);                        // (07/10) guarda o último PSD enviado pra refazer sozinho quando a fonte chegar
+  const [subindoFonte, setSubindoFonte] = useState(false);
   const carregar = function(){ _eaRpc("arte_modelos_lista", { p_client:cliente }).then(function(l){ const m = (Array.isArray(l) ? l : []).filter(function(x){ return x.client_id === cliente; }); setLista(m); if(onContagem) onContagem(m.length); }).catch(function(e){ setErro(_eaErro(e)); setLista([]); }); };
   useEffect(carregar, [cliente]);
   useEffect(function(){ setForm(function(f){ return Object.assign({}, f, { unidade:unidade || "" }); }); }, [unidade]);
   const escolher = function(f){ if(!f) return; setArq(f); setResultado(null); const tipo = _eaTipoCardDoNomeArquivo(f.name);
     setForm(function(x){ return Object.assign({}, x, { nome:f.name.replace(/\.[^.]+$/, ""), tipo_card:tipo, modo:tipo === "foto_obra" ? "fixo" : x.modo }); }); };
-  const enviar = async function(){
-    if(!arq) return; setErro(""); setPasso("começando…");
+  const enviar = async function(arquivo){
+    const f = (arquivo && arquivo.name) ? arquivo : arq;
+    if(!f) return; setErro(""); setPasso("começando…");
     try{ await _eaPrepararFontesLocais(); }catch(_){ }   // precisa ser no clique (permissão do navegador pra ler as fontes do PC)
     try{
       const jaTem = (lista || []).some(function(m){ return (m.tipo_card || "arte") === form.tipo_card && (m.unidade || "") === (form.unidade || ""); });
-      const r = await _eaPsdParaTemplate(arq, { client:cliente, nome:form.nome, tipo_card:form.tipo_card, modo:form.modo, unidade:form.unidade, padrao:!jaTem, onPasso:setPasso });
+      const r = await _eaPsdParaTemplate(f, { client:cliente, nome:form.nome, tipo_card:form.tipo_card, modo:form.modo, unidade:form.unidade, padrao:!jaTem, onPasso:setPasso });
+      arqRef.current = f;
       setResultado(r); setArq(null); if(inputRef.current) inputRef.current.value = ""; carregar();
       _eaToast("success", (r.templates.length > 1 ? r.templates.length + " templates salvos (um por prancheta)" : "Template salvo") + (!jaTem ? " · o primeiro virou o padrão de " + _eaRotuloTipoCard(form.tipo_card) : ""));
     }catch(e){ setErro(_eaErro(e)); }
     setPasso("");
   };
   const config = async function(m, mud){ try{ await _eaRpc("arte_modelo_config", Object.assign({ p_id:m.id }, mud)); carregar(); }catch(e){ _eaToast("error", _eaErro(e)); } };
+  /* (07/10, Gustavo: "se precisa que suba a fonte, avisa") — sobe a fonte que faltou pra Identidade visual e REFAZ o template na hora */
+  const subirFonteFaltando = async function(files){
+    setSubindoFonte(true);
+    try{
+      const r = await _eaSubirFontesArquivos(files, cliente, form.unidade || "");
+      _eaToast("success", r.novas.map(function(n){ return n.familia + " " + n.peso; }).join(", ") + " guardada(s) na Identidade visual de " + nomeCli);
+      if(arqRef.current){ _eaToast("info", "Refazendo o template com a fonte certa…"); await enviar(arqRef.current); }
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+    setSubindoFonte(false);
+  };
   const tirar = async function(m){
     if(!window.confirm("Tirar o template \"" + m.nome + "\" da lista? (Ele continua guardado no histórico.)")) return;
     try{ await _eaRpc("arte_modelo_tirar", { p_id:m.id }); carregar(); }catch(e){ _eaToast("error", _eaErro(e)); }
@@ -143246,8 +143467,19 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
       {resultado && <div style={{marginTop:14,padding:"12px 14px",borderRadius:12,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:12.5,color:"#166534",lineHeight:1.55}}>
         <b>{resultado.templates.length > 1 ? resultado.templates.length + " templates salvos (um por prancheta)." : (resultado.templates[0] && resultado.templates[0].atualizado ? "Template atualizado (mesmo arquivo — tipo, modo e ★ padrão mantidos)." : "Template salvo.")}</b> {resultado.camadas} camada(s). Espaços reconhecidos abaixo — se algo estiver errado: abrir no editor › Espaços › corrigir › "Salvar de volta no template".
         {resultado.templates.map(function(t){ return <div key={t.id} style={{marginTop:4}}>• <b>{t.nome}</b> · {t.largura}×{t.altura} · {t.espacos.length ? t.espacos.join(", ") : <span style={{color:"#92400e"}}>nenhum espaço achado</span>}</div>; })}
-        {(function(){ const fontes = Array.from(new Set(resultado.avisos.map(function(x){ const m = String(x).match(/fonte "([^"]+)" não encontrada/); return m ? m[1].replace(/-(Bold|Light|Regular|Medium|SemiBold|Black|Thin|Heavy|ExtraBold|Italic|BoldItalic)$/i, "") : null; }).filter(Boolean)));
-          return fontes.length ? <div style={{marginTop:8,padding:"8px 10px",borderRadius:8,background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e"}}><b>Fonte que falta: {fontes.join(", ")}.</b> Os textos do template vão sair em Montserrat até você mandar o arquivo da fonte em <b>Identidade visual › Fontes do cliente</b>. Depois disso, é só mandar o PSD de novo (ele atualiza o template).</div> : null; })()}
+        {(function(){
+          const fi = resultado.fontes || {}; const usadas = fi.usadas || {};
+          const pesosDe = function(f){ return Object.keys(usadas[f] || {}).map(function(k){ return k.replace(/i$/, "") + (/i$/.test(k) ? " itálico" : ""); }).join(", "); };
+          const faltando = fi.faltando || Array.from(new Set(resultado.avisos.map(function(x){ const m = String(x).match(/fonte "([^"]+)" não encontrada/); return m ? m[1].replace(/-(Bold|Light|Regular|Medium|SemiBold|Black|Thin|Heavy|ExtraBold|Italic|BoldItalic)$/i, "") : null; }).filter(Boolean)));
+          const soAqui = fi.soNestePc || [];
+          if(!faltando.length && !soAqui.length) return <div style={{marginTop:8,fontSize:12,color:"#166534"}}>✓ Fontes: {Object.keys(usadas).map(function(f){ const inf = _eaFonteInfo(f); return f + " (" + pesosDe(f) + (inf && inf.origem ? " · " + ({ cliente:"Identidade visual", google:"Google Fonts", local:"deste PC" })[inf.origem] : "") + ")"; }).join(" · ") || "—"}</div>;
+          const botao = <label style={_eaBt("primario",{padding:"8px 12px",fontSize:12.5,opacity:subindoFonte||passo?.6:1,display:"inline-flex",marginTop:8})}>
+            <input type="file" multiple accept=".ttf,.otf,.woff,.woff2" style={{display:"none"}} disabled={subindoFonte||!!passo} onChange={function(e){ subirFonteFaltando(e.target.files); e.target.value = ""; }}/>{subindoFonte ? "Subindo…" : "Mandar o arquivo da fonte (.otf/.ttf) e refazer o template"}</label>;
+          return <div style={{marginTop:8,padding:"10px 12px",borderRadius:10,background:faltando.length?"#fef2f2":"#fffbeb",border:"1px solid "+(faltando.length?"#fecaca":"#fde68a"),color:faltando.length?"#991b1b":"#92400e"}}>
+            {faltando.length > 0 && <div><b>FALTA A FONTE: {faltando.map(function(f){ return f + " (" + pesosDe(f) + ")"; }).join(" · ")}.</b> Ela não é do Google e não está na Identidade visual de {nomeCli}, então os textos saíram em Montserrat (errado). Pegue o arquivo na pasta de fontes do designer (ou em C:\Windows\Fonts) e mande aqui — o template é refeito sozinho.</div>}
+            {soAqui.length > 0 && <div style={{marginTop:faltando.length?6:0}}><b>Só neste PC: {soAqui.map(function(f){ return f + " (" + pesosDe(f) + ")"; }).join(" · ")}.</b> O template saiu certo aqui, mas em outro computador cai pra Montserrat. Mande o arquivo pra valer em todos.</div>}
+            {botao}
+          </div>; })()}
         {resultado.avisos.length > 0 && <div style={{marginTop:6,color:"#92400e"}}>{resultado.avisos.filter(function(x){ return !/fonte "[^"]+" não encontrada/.test(x); }).slice(0, 6).map(function(x, i){ return <div key={i}>• {x}</div>; })}</div>}
       </div>}
     </_EaCard>}
@@ -143326,13 +143558,9 @@ function _EaIdentidade({ isMob, cliente, unidade, kit }){
     if(!lista.length){ _eaToast("info", "Mande arquivos .ttf, .otf ou .woff"); return; }
     setSubindo(true);
     try{
-      const novas = fontes.slice();
-      for(const f of lista){
-        const up = await _eaSubir(f, "arte/fontes/" + cliente, f.name);
-        const g = _eaFontePsd(f.name.replace(/\.[^.]+$/, ""));
-        novas.push({ familia:g.familia, peso:g.peso, italico:g.italico, url:up.url, arquivo:f.name });
-      }
-      if(await salvar({ fontes:novas })) _eaToast("success", lista.length + " fonte(s) guardada(s) — os templates já abrem com ela");
+      const r = await _eaSubirFontesArquivos(lista, cliente, unidade);     // (07/10) lê família/peso de dentro do arquivo
+      setDados(function(d){ return Object.assign({}, d || {}, { fontes:r.todas }); });
+      _eaToast("success", r.novas.map(function(n){ return n.familia + " " + n.peso + (n.italico ? " itálico" : ""); }).join(", ") + " guardada(s) — os templates já abrem com ela");
     }catch(e){ _eaToast("error", _eaErro(e)); }
     setSubindo(false);
   };
@@ -143782,12 +144010,12 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const pg = doc.paginas[0], W = pg.largura || modelo.largura, H = pg.altura || modelo.altura;
   const el = document.createElement("canvas"); el.width = W; el.height = H;
   const fc = new lib.StaticCanvas(el, { width:W, height:H, enableRetinaScaling:false, renderOnAddRemove:false });
-  await _eaCarregarJson(fc, pg.fabric);
   const uns = String(task.bioterUnit || task.bioter_unit || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
   const unid = uns.length === 1 ? uns[0] : "";
-  let kit = null; try{ kit = await _eaRpc("arte_kit", { p_client:task.client, p_unidade:unid }); }catch(_){ }
-  // (07/10) identidade do cliente: fontes (registra no navegador antes de encaixar os textos) e pins do mapa
+  // (07/10) identidade do cliente: fontes (registradas ANTES de abrir o modelo, senão o Fabric mede o texto com a fonte errada) e pins do mapa
   const ident = (await _eaFontesDoCliente(task.client, unid)) || {};
+  await _eaCarregarJson(fc, pg.fabric);
+  let kit = null; try{ kit = await _eaRpc("arte_kit", { p_client:task.client, p_unidade:unid }); }catch(_){ }
   const tipoCard = modelo.tipo_card || _eaTipoCardDoTask(task);
   const fotoObra = tipoCard === "foto_obra";
   const copy = _eaSecoesCopy(task.desc || task.description || "");
@@ -143860,6 +144088,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
   try{ await _eaPreencherEspacos(stub, { silencioso:true }); }catch(_){ }
   travados.forEach(function(o){ o.bloqueado = false; });
+  await _eaEsperarFontes(fc);     // (07/10) todos os pesos prontos antes de exportar — senão o PNG sai em Times
   fc.renderAll();
   pg.fabric = _eaJsonPagina(fc); pg.largura = W; pg.altura = H;
   doc.meta = Object.assign({}, doc.meta || {}, { tipo_card:tipoCard, cidade:copy.cidade || "", modelo_id:modelo.id || null, gerada_em:new Date().toISOString() });
