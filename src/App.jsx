@@ -48417,6 +48417,7 @@ function _cardPodeSerResp(u){
   const [client,setClient]=useState(task.client||"");
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
   const [contentType,setContentType]=useState(task.contentType||"");
+  const [gerarArteAberto,setGerarArteAberto]=useState(false);   // (07/10/2026) arte automática pelo modelo (PSD do designer)
   // (06/10/2026, Gustavo) Material gráfico: valor do freela digitado no card (varia por material).
   const [valorPers,setValorPers]=useState((task.valorPersonalizado!=null&&task.valorPersonalizado!=="")?String(task.valorPersonalizado):"");
   // (14/09/2026) Somente story: o post vai pro story e nao tem arte de feed pra produzir.
@@ -51213,6 +51214,15 @@ function _cardPodeSerResp(u){
                 </button>
                 </>;
               })()}
+              {/* (07/10/2026, Gustavo) GERAR ARTE DO MODELO — copy + fotos do material entram no PSD-modelo do
+                  designer; a arte vai pro card e o card vai direto pra Avaliação de design. */}
+              {canEdit&&!task._isDraft&&["recebida","execucao","ajustes"].indexOf(String(task.status||""))>=0&&["arte","foto",""].indexOf(String(contentType||task.contentType||""))>=0&&typeof PxGerarArteModal==="function"&&(
+                <button onClick={function(){ setGerarArteAberto(true); }} title="Usa um modelo (PSD do designer) do cliente: entra a copy e as fotos do material, e a arte vai pra Avaliação de design"
+                  style={_pxBtnAcaoSt("#7c3aed","124,58,237",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>
+                  <span style={{display:"block",lineHeight:1}}>Gerar arte do modelo</span>
+                </button>)}
+              {gerarArteAberto&&typeof PxGerarArteModal==="function"&&<PxGerarArteModal task={Object.assign({},((tasks||[]).find(function(t){ return t.id===task.id; }))||task)} setTasks={setTasks}
+                onClose={function(ok){ setGerarArteAberto(false); if(ok) onClose(); }}/>}
               {/* Drive folder — shown when approved */}
               {task.status==="aprovado"&&_bl("acao.drive")&&(()=>{
                 const cl=CLIENTS.find(c=>c.id===task.client);
@@ -140393,6 +140403,27 @@ function _eaPsdDesenhar(l, W, H, ctx){
   return { cv:O, x:A.x, y:A.y, S:S, avisos:avisos };
 }
 
+/* (07/10/2026, Gustavo) MODELO PELO NOME DA CAMADA — o designer nomeia no Photoshop (TITULO, TEXTO, FOTO, LOGO,
+   TELEFONE, CTA, LOCAL, FUNDO, PRECO, BENEFICIO; com ou sem colchetes, maiúsculo ou não) e o espaço já vem marcado. */
+const _EA_NOMES_ESPACO = [
+  [/^(titulo|title|headline|manchete) ?\d*$/, "HEADLINE"],
+  [/^(texto|texto ?na ?arte|subtitulo|subtitle|apoio|descricao|legenda) ?\d*$/, "SUBTITLE"],
+  [/^(foto|imagem|image|produto|product|product ?image|foto ?produto) ?\d*$/, "PRODUCT_IMAGE"],
+  [/^(logo|logotipo|marca)$/, "LOGO"],
+  [/^(telefone|fone|whats|whatsapp|phone|contato)$/, "PHONE"],
+  [/^(cta|chamada|botao|button)$/, "CTA"],
+  [/^(local|endereco|cidade|location)$/, "LOCATION"],
+  [/^(fundo|background|bg)$/, "BACKGROUND"],
+  [/^(preco|price|valor)$/, "PRICE"],
+  [/^(beneficio|benefit)$/, "BENEFIT"],
+];
+function _eaEspacoDoNome(nome){
+  const ult = String(nome || "").split(" › ").pop();
+  const limpo = ult.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\[\]{}()#_\-:.]/g, " ").replace(/\s+/g, " ").trim();
+  for(let i = 0; i < _EA_NOMES_ESPACO.length; i++) if(_EA_NOMES_ESPACO[i][0].test(limpo)) return _EA_NOMES_ESPACO[i][1];
+  return "";
+}
+
 async function _eaAbrirPsd(a, arquivo, op){
   const mb = Math.round((arquivo.size || 0) / 1048576);
   if(mb > 700) throw new Error("PSD de " + mb + " MB é grande demais para abrir no navegador. No Photoshop: Arquivo › Salvar uma cópia com menos camadas ou menor, e mande de novo.");
@@ -140430,6 +140461,7 @@ async function _eaAbrirPsd(a, arquivo, op){
     const l = c.l; n++;
     if(n % 5 === 0) _eaToast("info", "Camadas: " + n + " de " + camadas.length);
     const base = { nome:c.nome.slice(0,80), visible:!c.escondido, opacity:(l.opacity === undefined ? 1 : l.opacity) * c.opacidade, origem:"psd" };
+    const _esp = _eaEspacoDoNome(c.nome); if(_esp) base.espaco = _esp;   // (07/10) espaço pelo nome da camada
     if(l.blendMode && l.blendMode !== "normal" && l.blendMode !== "pass through"){ const gco = _EA_MISTURA[l.blendMode]; if(gco) base.globalCompositeOperation = gco; else avisos.push(c.nome + ": modo de mistura \"" + l.blendMode + "\" virou normal."); }
     const temEfeito = !!(l.effects && !l.effects.disabled && Object.keys(l.effects).some(function(k){ return _eaPsdAtivos(l.effects[k]).length > 0 && k !== "scale" && k !== "disabled"; }));
     const temMascara = !!((l.mask && !l.mask.disabled && !l.mask.fromVectorData) || (l.vectorMask && !l.vectorMask.disable) || l.clipping || (c.grupos || []).length || (l.fillOpacity != null && l.fillOpacity < 1));
@@ -140450,7 +140482,11 @@ async function _eaAbrirPsd(a, arquivo, op){
         fontFamily:familia, fontWeight:fo.peso, fontStyle:fo.italico ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc), fill:cor, textAlign:al,
         lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },
         simples ? {} : { nome:(c.nome + (temDesenho ? " (texto editável" + (ok ? "" : ", fonte trocada") + ")" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
-      if(simples){ objs.push(t); continue; }
+      if(simples){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
+      /* (07/10) camada de TEXTO marcada como espaço: entra só o texto editável e visível (o texto vai ser trocado
+         pela copy — a imagem do texto antigo não pode ficar por baixo) */
+      if(_esp){ if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — o espaço " + _esp + " usa Montserrat. Envie a fonte do cliente pro Kit para ficar igual.");
+        t.set({ visible:base.visible, nome:c.nome.slice(0,80), alturaMax:Math.round(_eaCaixa(t).height * 1.15) }); objs.push(t); continue; }
       if(!ok) avisos.push(c.nome + ": fonte \"" + ((st.font && st.font.name) || "?") + "\" não encontrada — " + (temDesenho
         ? "entrou igual ao PSD (imagem) e tem uma cópia em TEXTO EDITÁVEL escondida logo acima, com fonte parecida (ligue o olho em Camadas para editar)."
         : "entrou como texto editável com fonte parecida (Montserrat). Para ficar igual, envie a fonte do cliente."));
@@ -141015,6 +141051,151 @@ function _EaAprende({ isMob }){
     {lista && !filtradas.length && <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EA.linha,textAlign:"center",color:_EA.sub}}>Nenhuma regra ainda.</div>}
   </div>;
 }
+
+/* ═══ ARTE AUTOMÁTICA PELO MODELO (07/10/2026, Gustavo) ═════════════════════════════════════════════
+   "fazer artes automaticamente com base nos PSDs (templates) criados pelos designers". Decisões dele:
+   • o designer marca no PSD pelo NOME DA CAMADA (TITULO, TEXTO, FOTO, LOGO…) — _eaEspacoDoNome;
+   • a arte é gerada por um BOTÃO NO CARD ("Gerar arte do modelo");
+   • pronta, vai DIRETO pra Avaliação de design.
+   O que entra: • TÍTULO do briefing → [HEADLINE]; • TEXTO NA ARTE → [SUBTITLE]; fotos do material do card →
+   [PRODUCT_IMAGE] (na ordem; mantém o formato/máscara da foto do modelo); logo, telefone, cidade e cores →
+   cadastro e Kit do cliente. A arte fica salva na Edição de arte (editável) e o PNG vai pro card. */
+function _eaSecoesCopy(html){
+  const t = _eaSemHtml(html || "").replace(/\r/g, "");
+  const out = { titulo:"", texto:"", cta:"" }; let cur = null; const buf = { titulo:[], texto:[], cta:[] };
+  t.split("\n").forEach(function(l){
+    const s = l.trim(), m = s.replace(/^[•*\-]\s*/, "").toUpperCase();
+    if(/^[•*\-]?\s*T[ÍI]TULO\b/i.test(s)){ cur = "titulo"; const r = s.replace(/^[•*\-]?\s*T[ÍI]TULO\s*:?\s*/i, ""); if(r) buf.titulo.push(r); return; }
+    if(/^[•*\-]?\s*(TEXTO NA ARTE|TEXTO|FRASE NA ARTE)\b/i.test(s)){ cur = "texto"; const r = s.replace(/^[•*\-]?\s*(TEXTO NA ARTE|TEXTO|FRASE NA ARTE)\s*:?\s*/i, ""); if(r) buf.texto.push(r); return; }
+    if(/^[•*\-]?\s*(CTA|CHAMADA)\b/i.test(s)){ cur = "cta"; const r = s.replace(/^[•*\-]?\s*(CTA|CHAMADA)\s*:?\s*/i, ""); if(r) buf.cta.push(r); return; }
+    if(/^[•*]\s*[A-ZÁÉÍÓÚÂÊÔÃÕÇ ]{3,}$/.test(s) && m === m.toUpperCase()){ cur = null; return; }   // outro rótulo
+    if(cur) buf[cur].push(l);
+  });
+  out.titulo = buf.titulo.join("\n").trim(); out.texto = buf.texto.join("\n").replace(/\n{3,}/g, "\n\n").trim(); out.cta = buf.cta.join(" ").trim();
+  return out;
+}
+function _eaFotosDoCard(task){
+  return (Array.isArray(task && task.files) ? task.files : []).filter(function(f){
+    return f && f.url && !f.isAnnotation && !f.isRef && (!f.tipo || f.tipo === "material") && /\.(jpe?g|png|webp)(\?|#|$)/i.test(String(f.name || f.url));
+  });
+}
+function _eaCarregarImg(url){ return new Promise(function(ok, erro){ const i = new Image(); i.crossOrigin = "anonymous"; i.onload = function(){ ok(i); }; i.onerror = function(){ erro(new Error("não abriu a foto")); }; i.src = url; }); }
+/* troca a foto mantendo o FORMATO do modelo: a nova cobre a caixa e é recortada pelo alfa da foto original */
+async function _eaTrocarFotoMantendoForma(o, url){
+  const velha = o.getElement && o.getElement(); const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
+  const nova = await _eaCarregarImg(url);
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
+  const s = Math.max(w / nova.width, h / nova.height); x.drawImage(nova, (w - nova.width * s) / 2, (h - nova.height * s) / 2, nova.width * s, nova.height * s);
+  if(velha){ x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
+  await o.setSrc(cv.toDataURL("image/png"));
+  o.set({ width:w, height:h }); o.setCoords();
+}
+async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
+  const passo = function(m){ try{ if(onPasso) onPasso(m); }catch(_){ } };
+  if(!task || !modelo || !modelo.doc || !Array.isArray(modelo.doc.paginas) || !modelo.doc.paginas.length) throw new Error("Modelo sem página");
+  passo("abrindo o modelo…");
+  const lib = await _eaFabric();
+  const doc = JSON.parse(JSON.stringify(modelo.doc)); doc.paginas = doc.paginas.slice(0, 1); doc.paginas.forEach(function(p){ p.id = _eaUid(); });
+  const pg = doc.paginas[0], W = pg.largura || modelo.largura, H = pg.altura || modelo.altura;
+  const el = document.createElement("canvas"); el.width = W; el.height = H;
+  const fc = new lib.StaticCanvas(el, { width:W, height:H, enableRetinaScaling:false, renderOnAddRemove:false });
+  await _eaCarregarJson(fc, pg.fabric);
+  const uns = String(task.bioterUnit || task.bioter_unit || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+  let kit = null; try{ kit = await _eaRpc("arte_kit", { p_client:task.client, p_unidade:(uns.length === 1 ? uns[0] : "") }); }catch(_){ }
+  const copy = _eaSecoesCopy(task.desc || task.description || "");
+  const fotos = _eaFotosDoCard(task); let iFoto = 0; const avisos = [];
+  passo("preenchendo com a copy e as fotos…");
+  for(const o of fc.getObjects().slice()){
+    if(!o.espaco) continue;
+    const tipo = _eaTipo(o);
+    try{
+      if(tipo === "texto" && o.espaco === "HEADLINE"){ if(copy.titulo){ o.set("text", copy.titulo); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TÍTULO"); }
+      else if(tipo === "texto" && o.espaco === "SUBTITLE"){ if(copy.texto){ o.set("text", copy.texto); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TEXTO NA ARTE"); }
+      else if(tipo === "texto" && o.espaco === "CTA" && copy.cta){ o.set("text", copy.cta); _eaCaberTexto(o); }
+      else if(o.espaco === "PRODUCT_IMAGE" && tipo === "imagem"){
+        const f = fotos[iFoto++];
+        if(f) await _eaTrocarFotoMantendoForma(o, f.url); else avisos.push("faltou foto no material do card (o modelo pede mais uma)");
+      }
+    }catch(e){ avisos.push((o.nome || o.espaco) + ": " + _eaErro(e)); }
+  }
+  // logo, telefone, cidade, cores e fonte: cadastro + Kit (mesma função do editor)
+  const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
+  try{ await _eaPreencherEspacos(stub, { silencioso:true }); }catch(_){ }
+  fc.renderAll();
+  pg.fabric = _eaJsonPagina(fc); pg.largura = W; pg.altura = H;
+  passo("salvando a arte…");
+  const nome = _eaNomeArquivo(task.title || modelo.nome || "arte");
+  const p = await _eaRpc("arte_projeto_criar", { p_client:task.client || null, p_unidade:(uns.length === 1 ? uns[0] : ""), p_task:task.id, p_titulo:String(task.title || modelo.nome || "Arte").slice(0,120),
+    p_formato:modelo.formato || "custom", p_largura:W, p_altura:H, p_doc:doc, p_modelo:modelo.id || null });
+  let thumb = null; try{ const t = await _eaSubir(_eaDataUrlBlob(fc.toDataURL({ format:"jpeg", quality:0.82, multiplier:360 / W })), "arte/" + p.id, "thumb.jpg"); thumb = t.url; }catch(_){ }
+  try{ await _eaRpc("arte_projeto_salvar", { p_id:p.id, p_doc:doc, p_motivo:"gerada pelo modelo “" + (modelo.nome || "") + "”", p_thumb:thumb }); }catch(_){ }
+  const blob = _eaDataUrlBlob(fc.toDataURL({ format:"png", multiplier:1, enableRetinaScaling:false }));
+  const up = await _eaSubir(blob, "tasks/" + task.id, nome + ".png");
+  const f = await _eaRpc("arte_projeto_final", { p_id:p.id, p_file:{ url:up.url, storagePath:up.path, name:nome + ".png", type:"image/png", size:blob.size } });
+  // DIRETO pra Avaliação de design
+  const agora = new Date().toISOString(), quem = (typeof CURRENT_USER !== "undefined" && CURRENT_USER && CURRENT_USER.name) || "";
+  if(typeof setTasks === "function") setTasks(function(l){ return (l || []).map(function(t){ if(String(t.id) !== String(task.id)) return t;
+    const fs = (Array.isArray(t.files) ? t.files : []).some(function(x){ return x && x.url === f.url; }) ? t.files : (t.files || []).concat([f]);
+    return Object.assign({}, t, { files:fs, status:"avaliacao", colEnteredAt:agora,
+      timeline:(t.timeline || []).concat([{ type:"status", from:t.status, to:"avaliacao", fromLabel:"", toLabel:"Avaliação", at:agora, atFmt:(typeof nowFmt === "function" ? nowFmt() : ""), user:quem,
+        note:"Arte gerada automaticamente pelo modelo “" + (modelo.nome || "") + "”" + (avisos.length ? " — atenção: " + avisos.join("; ") : "") }]) }); }); });
+  return { arquivo:f, projetoId:p.id, avisos:avisos };
+}
+if(typeof window !== "undefined"){ window.pxGerarArteDoModelo = pxGerarArteDoModelo; }
+
+/* Janela do card: escolhe o modelo do cliente e gera. */
+function PxGerarArteModal({ task, setTasks, onClose }){
+  const [modelos, setModelos] = useState(null);
+  const [sel, setSel] = useState("");
+  const [passo, setPasso] = useState("");
+  const [erro, setErro] = useState("");
+  useEffect(function(){
+    _eaRpc("arte_modelos_lista", { p_client:task.client || null }).then(function(m){
+      const l = (Array.isArray(m) ? m : []).filter(function(x){ return !x.client_id || x.client_id === task.client; })
+        .sort(function(a, b){ return (b.client_id ? 1 : 0) - (a.client_id ? 1 : 0); });
+      setModelos(l); if(l[0]) setSel(l[0].id);
+    }).catch(function(e){ setErro(_eaErro(e)); setModelos([]); });
+  }, [task.id]);
+  const copy = _eaSecoesCopy(task.desc || task.description || ""), fotos = _eaFotosDoCard(task);
+  const gerar = async function(){
+    const m = (modelos || []).find(function(x){ return x.id === sel; }); if(!m) return;
+    setErro("");
+    try{
+      const r = await pxGerarArteDoModelo(task, m, setTasks, setPasso);
+      _eaToast("success", "Arte gerada e enviada pra Avaliação de design" + (r.avisos.length ? " (veja o aviso no histórico)" : ""));
+      onClose(true);
+    }catch(e){ setErro(_eaErro(e)); setPasso(""); }
+  };
+  const lin = function(ok, txt){ return <div style={{display:"flex",gap:8,alignItems:"center",fontSize:12.5,color:ok?"#166534":"#b45309"}}><span>{ok ? "✓" : "!"}</span>{txt}</div>; };
+  return <div onClick={function(){ if(!passo) onClose(false); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:10050,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:18,width:"min(620px,100%)",maxHeight:"90vh",overflow:"auto",padding:20,boxShadow:"0 24px 60px rgba(15,23,42,.3)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{fontWeight:800,fontSize:17,color:_EA.texto}}>Gerar arte do modelo</div>
+      <div style={{fontSize:12.5,color:_EA.sub,marginTop:3}}>A copy e as fotos do material deste card entram no modelo escolhido. A arte sai pronta, fica editável na Edição de arte e o card vai direto pra Avaliação de design.</div>
+      <div style={{display:"flex",flexDirection:"column",gap:4,margin:"12px 0",padding:"10px 12px",background:"#f8fafc",borderRadius:10}}>
+        {lin(!!copy.titulo, copy.titulo ? "Título: " + copy.titulo.slice(0,70) : "O briefing não tem • TÍTULO")}
+        {lin(!!copy.texto, copy.texto ? "Texto na arte: " + copy.texto.replace(/\n+/g," ").slice(0,70) + (copy.texto.length > 70 ? "…" : "") : "O briefing não tem • TEXTO NA ARTE")}
+        {lin(fotos.length > 0, fotos.length ? fotos.length + " foto(s) no material do card" : "Sem fotos no material do card (o espaço FOTO fica com a do modelo)")}
+      </div>
+      {modelos === null ? <div style={{color:_EA.sub,fontSize:13}}>Carregando modelos…</div>
+        : !modelos.length ? <div style={{color:_EA.sub,fontSize:13,lineHeight:1.5}}>Nenhum modelo para {_eaNomeCliente(task.client)} ainda. Na <b>Edição de arte</b>: abra o PSD do designer (camadas nomeadas TITULO, TEXTO, FOTO, LOGO…) e use <b>Espaços › Salvar como modelo</b>.</div>
+        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
+          {modelos.map(function(m){ const on = m.id === sel;
+            return <button key={m.id} type="button" onClick={function(){ setSel(m.id); }} style={{font:"inherit",textAlign:"left",padding:8,borderRadius:12,cursor:"pointer",border:"2px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff"}}>
+              <div style={{aspectRatio:"1",borderRadius:8,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>{m.thumb ? <img src={m.thumb} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:11}}>{m.largura}×{m.altura}</span>}</div>
+              <div style={{fontSize:12.5,fontWeight:800,marginTop:6,color:_EA.texto}}>{m.nome}</div>
+              <div style={{fontSize:11,color:_EA.sub}}>{(m.espacos || []).join(" · ") || "sem espaços"}{m.client_id ? "" : " · todos"}</div>
+            </button>; })}
+        </div>}
+      {erro && <div style={{marginTop:12,padding:10,borderRadius:10,background:"#fef2f2",color:"#b91c1c",fontSize:13}}>{erro}</div>}
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16,alignItems:"center"}}>
+        {passo && <span style={{fontSize:12.5,color:_EA.roxo,fontWeight:700,marginRight:"auto"}}>{passo}</span>}
+        <button disabled={!!passo} onClick={function(){ onClose(false); }} style={{font:"inherit",padding:"10px 16px",borderRadius:10,border:"1px solid "+_EA.linha,background:"#fff",cursor:"pointer",fontWeight:700}}>Cancelar</button>
+        <button disabled={!!passo || !sel} onClick={gerar} style={{font:"inherit",padding:"10px 18px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",cursor:"pointer",fontWeight:800,opacity:(passo || !sel)?.6:1}}>{passo ? "Gerando…" : "Gerar e enviar pra avaliação"}</button>
+      </div>
+    </div>
+  </div>;
+}
+if(typeof window !== "undefined"){ window.PxGerarArteModal = PxGerarArteModal; }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    55_plano_crescimento.jsx — Gestão › Plano de Crescimento (01/10/2026, Gustavo)
