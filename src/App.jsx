@@ -119645,7 +119645,7 @@ const _EVP_TRANS_DUR = 0.35;
    Proteção para os olhos: nenhum flash passa de 70% de branco; brilho e luz somam no máximo ~0,75. */
 const _EVP_TRANS_GRUPOS = [
   { id:"basicas", label:"Básicas", ids:["corte", "fade", "preto", "zoom", "deslizar", "whip"] },
-  { id:"luz", label:"Luz", ids:["flash", "brilho", "vazamento", "exposicao", "lente"] },
+  { id:"luz", label:"Luz", ids:["brilho_dourado", "flash", "brilho", "vazamento", "exposicao", "lente"] },
   { id:"mov", label:"Movimento", ids:["zoom_entra", "zoom_sai", "giro", "empurrar"] },
   { id:"outras", label:"Desfoque e glitch", ids:["desfoque", "glitch"] },
   { id:"cinema", label:"Cinema", ids:["chicote_mov", "match", "mascara", "profundidade"] },   // v34
@@ -119657,15 +119657,16 @@ const _EVP_TRANS_NOVAS = [
   { id:"empurrar", label:"Empurrar para cima" }, { id:"desfoque", label:"Desfoque" }, { id:"glitch", label:"Glitch leve" },
   { id:"marca", label:"Marca (cores do cliente)" },                                         // v30
   { id:"chicote_mov", label:"Chicote no movimento" }, { id:"match", label:"Encaixe do assunto" }, { id:"mascara", label:"Revelar com forma" },   // v34
-  { id:"profundidade", label:"Profundidade 3D" }, { id:"luz_marca", label:"Luz da marca" },                                                         // v34
+  { id:"profundidade", label:"Profundidade 3D" }, { id:"luz_marca", label:"Luz da marca" },
+  { id:"brilho_dourado", label:"Brilho dourado" },                                                                     // v59                                                         // v34
 ];
 _EVP_TRANS_NOVAS.forEach(function(o){ if(!_EVP_TRANS.some(function(q){ return q.id === o.id; })) _EVP_TRANS.push(o); });
-const _EVP_TRANS_LUZ = ["flash", "brilho", "vazamento", "exposicao", "lente", "luz_marca"];   // v34: luz da marca
+const _EVP_TRANS_LUZ = ["brilho_dourado", "flash", "brilho", "vazamento", "exposicao", "lente", "luz_marca"];   // v34: luz da marca
 /* v30: a transição "marca" usa as cores do kit (o motor atualiza ao abrir o projeto); o apoio em tela cheia entra e sai com estas */
 let _EVP_MARCA_CORES = ["#7c3aed", "#ffffff"];
-const _EVP_TRANS_APOIO = ["corte", "fade", "desfoque", "deslizar", "empurrar", "whip", "zoom", "zoom_entra", "marca",
+const _EVP_TRANS_APOIO = ["corte", "brilho_dourado", "fade", "desfoque", "deslizar", "empurrar", "whip", "zoom", "zoom_entra", "marca",
   "chicote_mov", "mascara", "match", "profundidade", "luz_marca"];                                                     // v34
-const _EVP_TRANS_APOIO_ROT = { corte:"Corte seco", fade:"Fundir", desfoque:"Desfoque", deslizar:"Deslizar", empurrar:"Empurrar", whip:"Chicote", zoom:"Zoom", zoom_entra:"Zoom + desfoque", marca:"Marca",
+const _EVP_TRANS_APOIO_ROT = { corte:"Corte seco", brilho_dourado:"Brilho dourado", fade:"Fundir", desfoque:"Desfoque", deslizar:"Deslizar", empurrar:"Empurrar", whip:"Chicote", zoom:"Zoom", zoom_entra:"Zoom + desfoque", marca:"Marca",
   chicote_mov:"Chicote no movimento", mascara:"Revelar com forma", match:"Encaixe do assunto", profundidade:"Profundidade 3D", luz_marca:"Luz da marca" };   // v34
 function _evpHexRgb(h){ const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "")); if(!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function _evpMisturaHex(a, b, k){ const x = _evpHexRgb(a) || [124, 58, 237], y = _evpHexRgb(b) || [0, 0, 0];
@@ -119859,6 +119860,52 @@ function _evpTrV34(ctx, W, H, tipo, e, m, A, B, info, mistura){
   if(!inf.cA) inf.cA = _evpTrCentro(_evpTrAmostra(A, W, H));
   return _evpTrMatch(ctx, W, H, e, A, B, inf.cA, inf.cB);
 }
+/* v59 (06/10/2026): BRILHO DOURADO — referência do sócio (o "Brilho 2" do CapCut, medida quadro a quadro a 60 qps):
+   1) a imagem esquenta: primeiro rosa/vermelho, depois laranja e amarelo, clareando e desfocando;
+   2) estoura em creme quente (nunca branco puro: no máximo 75%) e a troca A→B acontece escondida no estouro (50% do tempo);
+   3) o clipe novo nasce laranja e desfocado, com um brilho de lente (estrela + risco horizontal) que some até o fim.
+   Usa o tempo LINEAR (a referência tem esse desenho) e não leva efeito sonoro (pedido do sócio). */
+function _evpTrBrilhoDourado(ctx, W, H, p, A, B){
+  const sm = function(a, b, x){ const k = _evClamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
+  const corte = 0.5, depois = p >= corte;
+  const w = depois ? 1 - sm(0.55, 0.95, p) : sm(0.0, 0.36, p);              // quanto a luz quente pega
+  const estouro = sm(0.30, 0.42, p) * (1 - sm(0.52, 0.62, p));               // o creme do meio
+  const quente = depois ? 0.6 : sm(0.12, 0.32, p);                          // 0 = rosa/vermelho · 1 = laranja/amarelo
+  const src = depois ? B : A, esc = W / 1080;
+  const r = 12 * esc * Math.pow(w, 2);
+  if(r >= 0.6){ const t = _evpTrTela("bd1", W, H), tx = t.getContext("2d"); tx.clearRect(0, 0, W, H); tx.filter = "brightness(" + (1 + 0.15 * w).toFixed(3) + ") saturate(" + (1 + 0.4 * w).toFixed(3) + ")";
+    _evpTrBorrado(tx, src, W, H, r); tx.filter = "none"; ctx.drawImage(t, 0, 0); }
+  else { ctx.filter = "brightness(" + (1 + 0.15 * w).toFixed(3) + ") saturate(" + (1 + 0.4 * w).toFixed(3) + ")"; ctx.drawImage(src, 0, 0, W, H); ctx.filter = "none"; }
+  const mix = function(c1, c2, k){ return [0, 1, 2].map(function(i){ return Math.round(c1[i] + (c2[i] - c1[i]) * k); }); };
+  const rgba = function(c, a){ return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + Math.max(0, Math.min(1, a)).toFixed(3) + ")"; };
+  const topo = mix([255, 40, 120], depois ? [255, 70, 140] : [255, 160, 50], quente), meio = mix([230, 30, 60], [255, 125, 20], quente), base = mix([255, 90, 40], [255, 185, 35], quente);
+  if(w > 0.004){
+    // 1) tinge (sobreposição): a cena fica vermelha/laranja sem clarear tudo
+    const g1 = ctx.createLinearGradient(0, 0, W * 0.55, H);
+    g1.addColorStop(0, rgba(topo, 1)); g1.addColorStop(0.5, rgba(meio, 1)); g1.addColorStop(1, rgba(base, 1));
+    ctx.globalCompositeOperation = "overlay"; ctx.globalAlpha = Math.min(1, 1.1 * w); ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
+    // 2) clareia (tela): o laranja/amarelo vira luz perto do estouro
+    ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = 0.5 * Math.pow(w, 2); ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+  if(estouro > 0.004){ ctx.fillStyle = "rgba(255,244,205," + (0.75 * estouro).toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); }
+  // 3) brilho de lente depois da troca
+  const fl = sm(0.52, 0.6, p) * (1 - sm(0.8, 1.0, p));
+  if(fl > 0.004){
+    const fx = W * (0.6 + 0.08 * (p - corte)), fy = H * 0.44, R = W * 0.16;
+    ctx.globalCompositeOperation = "screen";
+    const rg = ctx.createRadialGradient(fx, fy, 0, fx, fy, R);
+    rg.addColorStop(0, "rgba(255,255,250," + (0.95 * fl).toFixed(3) + ")"); rg.addColorStop(0.12, "rgba(255,240,215," + (0.55 * fl).toFixed(3) + ")"); rg.addColorStop(1, "rgba(255,200,150,0)");
+    ctx.fillStyle = rg; ctx.fillRect(fx - R, fy - R, 2 * R, 2 * R);
+    const lg = ctx.createLinearGradient(0, 0, W, 0), hh = Math.max(2, 5 * esc);
+    lg.addColorStop(0, "rgba(200,225,255,0)"); lg.addColorStop(Math.max(0.01, fx / W - 0.25), "rgba(220,235,255," + (0.35 * fl).toFixed(3) + ")");
+    lg.addColorStop(fx / W, "rgba(255,255,255," + (0.85 * fl).toFixed(3) + ")"); lg.addColorStop(Math.min(0.99, fx / W + 0.25), "rgba(220,235,255," + (0.35 * fl).toFixed(3) + ")"); lg.addColorStop(1, "rgba(200,225,255,0)");
+    ctx.save(); ctx.translate(fx, fy); ctx.rotate(-0.06); ctx.translate(-fx, -fy); ctx.fillStyle = lg; ctx.fillRect(0, fy - hh / 2, W, hh);
+    ctx.globalAlpha = 0.6 * fl; ctx.fillRect(0, fy - hh * 2.5, W, hh * 5); ctx.restore();
+    ctx.save(); ctx.translate(fx, fy); ctx.rotate(Math.PI / 2 - 0.06); ctx.globalAlpha = 0.5 * fl; ctx.fillStyle = "rgba(255,255,255,1)"; ctx.fillRect(-R * 0.5, -hh * 0.35, R, hh * 0.7); ctx.restore();
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+}
 /* desenha a transição: A = último quadro do clipe anterior, B = quadro do clipe novo (os dois do tamanho da tela), p = 0..1 */
 function _evpTransPinta(ctx, W, H, tipo, p0, A, B, curva, info){
   const e = _evpEase(curva || "io", _evClamp(p0, 0, 1)), m = Math.sin(Math.PI * e), sm = function(a, b, x){ const k = _evClamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
@@ -119956,6 +120003,7 @@ function _evpTransPinta(ctx, W, H, tipo, p0, A, B, curva, info){
       ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
     }
   }
+  else if(tipo === "brilho_dourado"){ _evpTrBrilhoDourado(ctx, W, H, _evClamp(p0, 0, 1), A, B); }   // v59
   else if(_EVP_TRANS_V34.indexOf(tipo) >= 0){ _evpTrV34(ctx, W, H, tipo, e, m, A, B, info, mistura); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; }   // v34
   else ctx.drawImage(B, 0, 0, W, H);
   ctx.restore();
