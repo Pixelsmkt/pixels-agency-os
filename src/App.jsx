@@ -139856,6 +139856,10 @@ function _eaTipoCardDoTask(task){
     return "arte";
   }catch(_){ return "arte"; }
 }
+function _eaRotuloUnidade(u){
+  try{ const x = (typeof BIOTER_UNITS !== "undefined" && Array.isArray(BIOTER_UNITS)) ? BIOTER_UNITS.find(function(b){ return b.id === u; }) : null; if(x) return x.pickerLabel || x.label; }catch(_){ }
+  return String(u || "").replace(/(^|[\s_-])([a-zà-ú])/g, function(_, a, b){ return (a === "_" || a === "-" ? " " : a) + b.toUpperCase(); });
+}
 function _eaChaveCidade(s){ return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 /* fontes que o cliente mandou (Identidade visual) — ficam registradas no navegador e valem antes do Google Fonts */
 const _eaFontesCarregadas = {};
@@ -140207,10 +140211,10 @@ function PageEdicaoArte({ isMob, tasks, onAbrirCard }){
               <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:6}}>
                 {cli && contagem.templates != null && <_EaChip cor={_EA_UI.sub} fundo={_EA_UI.borda2}>{contagem.templates} template{contagem.templates===1?"":"s"}</_EaChip>}
                 {contagem.artes != null && <_EaChip cor={_EA_UI.sub} fundo={_EA_UI.borda2}>{contagem.artes} arte{contagem.artes===1?"":"s"}</_EaChip>}
-                {cli && kit && kit.base && kit.base.cidade && <_EaChip cor={_EA_UI.sub} fundo={_EA_UI.borda2}>📍 {kit.base.cidade}</_EaChip>}
-                {cli && unidades.length > 0 && <span style={{display:"inline-flex",gap:4,alignItems:"center",marginLeft:4}}>
+                {cli && unidades.length > 0 && <span style={{display:"inline-flex",gap:6,alignItems:"center",flexWrap:"wrap",marginLeft:6}}>
+                  <span style={{fontSize:11,fontWeight:800,color:_EA_UI.fraco,textTransform:"uppercase",letterSpacing:".06em",marginRight:2}}>Unidade</span>
                   {[""].concat(unidades).map(function(u){ const on = unidade === u;
-                    return <button key={u || "geral"} onClick={function(){ setUnidade(u); }} style={{font:"inherit",padding:"3px 10px",borderRadius:999,border:"1px solid "+(on?_EA_UI.aBorda:_EA_UI.borda),background:on?_EA_UI.aSoft:"#fff",color:on?_EA_UI.a:_EA_UI.sub,fontWeight:700,fontSize:11.5,cursor:"pointer"}}>{u || "Geral"}</button>; })}
+                    return <button key={u || "geral"} onClick={function(){ setUnidade(u); }} style={{font:"inherit",padding:"6px 14px",borderRadius:999,border:"1px solid "+(on?_EA_UI.a:_EA_UI.borda),background:on?_EA_UI.a:"#fff",color:on?"#fff":_EA_UI.tx,fontWeight:on?800:600,fontSize:13,cursor:"pointer",boxShadow:on?"0 1px 2px rgba(124,58,237,.25)":"none"}}>{u ? _eaRotuloUnidade(u) : "Todas"}</button>; })}
                 </span>}
               </div>
             </div>
@@ -140264,7 +140268,7 @@ function _EaLista({ isMob, tasks, onAbrir, onAbrirCard, clienteFixo, onContagem 
             </button>
             <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:3,flex:1}}>
               <div style={{fontWeight:800,fontSize:13.5,lineHeight:1.25,color:_EA_UI.tx}}>{p.titulo}</div>
-              <div style={{fontSize:12,color:_EA_UI.sub}}>{clienteFixo ? "" : _eaNomeCliente(p.client_id)}{!clienteFixo && p.unidade ? " · " : ""}{p.unidade || ""}</div>
+              <div style={{fontSize:12,color:_EA_UI.sub}}>{clienteFixo ? "" : _eaNomeCliente(p.client_id)}{!clienteFixo && p.unidade ? " · " : ""}{p.unidade ? _eaRotuloUnidade(p.unidade) : ""}</div>
               <div style={{fontSize:11.5,color:_EA_UI.fraco}}>v{p.versao} · {_eaDataHora(p.atualizado_em)}</div>
               {t && <button onClick={function(){ if(onAbrirCard) onAbrirCard(t); }} style={{font:"inherit",marginTop:6,alignSelf:"flex-start",border:0,background:"none",padding:0,color:_EA_UI.a,fontWeight:700,fontSize:12,cursor:"pointer",textAlign:"left"}}>Card: {t.title}</button>}
             </div>
@@ -140334,7 +140338,7 @@ function _EaNova({ tasks, clientes, clienteIni, onFechar, onCriado }){
         {unidades.length>0 && <div>{rot("Unidade")}
           <select value={unidade} onChange={function(e){ setUnidade(e.target.value); }} style={campo}>
             <option value="">Todas / geral</option>
-            {unidades.map(function(u){ return <option key={u} value={u}>{u}</option>; })}
+            {unidades.map(function(u){ return <option key={u} value={u}>{_eaRotuloUnidade(u)}</option>; })}
           </select></div>}
         {rot("Card (opcional — a arte pronta vai para ele)")}
         <select value={task} onChange={function(e){ setTask(e.target.value); }} style={campo}>
@@ -142692,7 +142696,7 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
                 <option value="fixo">Fixo — só troca texto, foto e pin</option><option value="base">Base — a IA pode mexer no layout</option></select></div>
             {(unidades || []).length > 0 && <div><div style={_eaRot}>Unidade</div>
               <select value={form.unidade} onChange={function(e){ setForm(Object.assign({}, form, { unidade:e.target.value })); }} style={Object.assign({}, sel, {width:"100%"})}>
-                <option value="">Todas</option>{unidades.map(function(u){ return <option key={u} value={u}>{u}</option>; })}</select></div>}
+                <option value="">Todas</option>{unidades.map(function(u){ return <option key={u} value={u}>{_eaRotuloUnidade(u)}</option>; })}</select></div>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:"auto"}}>
             <button disabled={!arq || !!passo} onClick={enviar} style={_eaBt("primario",{opacity:(!arq || passo)?.55:1,padding:"10px 18px"})}>{passo ? "Salvando…" : "Salvar template"}</button>
@@ -142718,7 +142722,7 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
             <div style={{position:"absolute",top:8,left:8,display:"flex",gap:4,flexWrap:"wrap"}}>
               {m.padrao && <_EaChip cor="#fff" fundo={_EA_UI.a}>★ Padrão</_EaChip>}
               <_EaChip cor={_EA_UI.tx} fundo="rgba(255,255,255,.92)">{m.modo === "base" ? "Base" : "Fixo"}</_EaChip>
-              {m.unidade && <_EaChip cor={_EA_UI.tx} fundo="rgba(255,255,255,.92)">{m.unidade}</_EaChip>}
+              {m.unidade && <_EaChip cor={_EA_UI.tx} fundo="rgba(255,255,255,.92)">{_eaRotuloUnidade(m.unidade)}</_EaChip>}
             </div>
           </div>
           <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:8,flex:1}}>
@@ -142731,7 +142735,7 @@ function _EaTemplates({ isMob, cliente, unidade, unidades, onAbrir, onContagem }
               <select value={m.tipo_card || "arte"} onChange={function(e){ config(m, { p_tipo_card:e.target.value }); }} title="Tipo de card" style={Object.assign({}, miniSel, {flex:1})}>
                 {_EA_TIPOS_CARD.map(function(t){ return <option key={t[0]} value={t[0]}>{t[1]}</option>; })}</select>
               <select value={m.modo || "fixo"} onChange={function(e){ config(m, { p_modo:e.target.value }); }} title="Modo" style={miniSel}><option value="fixo">Fixo</option><option value="base">Base</option></select>
-              {(unidades || []).length > 0 && <select value={m.unidade || ""} onChange={function(e){ config(m, { p_unidade:e.target.value }); }} title="Unidade" style={miniSel}><option value="">Todas</option>{unidades.map(function(u){ return <option key={u} value={u}>{u}</option>; })}</select>}
+              {(unidades || []).length > 0 && <select value={m.unidade || ""} onChange={function(e){ config(m, { p_unidade:e.target.value }); }} title="Unidade" style={miniSel}><option value="">Todas</option>{unidades.map(function(u){ return <option key={u} value={u}>{_eaRotuloUnidade(u)}</option>; })}</select>}
             </div>}
             {!isMob && <div style={{display:"flex",gap:6,alignItems:"center"}}>
               <input defaultValue={m.arquivo_url || ""} placeholder="Link do PSD original (Drive) — aparece pro designer no Playbook" title="Link do PSD original no Drive: fica disponível pro designer baixar em Playbook › Design › Templates"
@@ -142792,7 +142796,7 @@ function _EaIdentidade({ isMob, cliente, unidade, kit }){
   return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) minmax(0,1fr)",gap:16,alignItems:"start"}}>
     {erro && <div style={{gridColumn:"1 / -1",padding:12,borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:13}}>{erro}</div>}
     <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
-      <_EaCard icone="◈" titulo={"Kit do cliente" + (unidade ? " · " + unidade : "")} sub="Preenche logo, cores, telefone e cidade nos templates. Edita em Clientes › Kit.">
+      <_EaCard icone="◈" titulo={"Kit do cliente" + (unidade ? " · " + _eaRotuloUnidade(unidade) : "")} sub="Preenche logo, cores, telefone e cidade nos templates. Edita em Clientes › Kit.">
         {!kit ? <div style={{color:_EA_UI.sub,fontSize:13}}>Carregando…</div> : <div>
           {linha("Cor principal", k.cor_principal || base.cor, cor(k.cor_principal || base.cor))}
           {linha("Cor secundária", k.cor_secundaria, cor(k.cor_secundaria))}
