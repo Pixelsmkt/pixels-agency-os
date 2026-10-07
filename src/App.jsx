@@ -142361,6 +142361,38 @@ async function pxFotosReferenciaDoCliente(task, n){
   out.sort(function(a, b){ return b.pts - a.pts || String(b.data).localeCompare(String(a.data)); });
   const vistos = {}; return out.filter(function(x){ if(vistos[x.url]) return false; vistos[x.url] = 1; return true; }).slice(0, n || 4);
 }
+/* (07/10, Gustavo) INTELIGÊNCIA DO PLAYBOOK pra guiar a arte: "Instruções ao designer", "Orientações visuais" (Design),
+   descrição dos templates, checklist do designer, produtos (com foto oficial) e regras aprovadas do Aprendizado. */
+async function pxInteligenciaDesign(client, unidade){
+  const out = { instrucoes:"", orientacoes:"", checklist:[], templates:[], produtos:[], regras:[], comunicacao:"" };
+  if(!client || !window._sb) return out;
+  try{
+    const r = await window._sb.from("playbooks").select("data").eq("client_id", client).maybeSingle();
+    const d = (r && r.data && r.data.data) || {}, des = d.design || {};
+    out.instrucoes = String(d.instrucoesDesigner || "").trim();
+    out.orientacoes = String(des.orientacoes || "").trim();
+    out.comunicacao = String(d.comunicacao || "").trim();
+    out.checklist = Array.isArray(des.checklist) ? des.checklist.map(String) : [];
+    out.templates = (Array.isArray(des.templates) ? des.templates : Array.isArray(d.templates) ? d.templates : []).map(function(t){ return { titulo:String(t.title || t.titulo || ""), descricao:String(t.descricao || t.summary || ""), regras:Array.isArray(t.rules) ? t.rules.map(String) : [] }; }).filter(function(t){ return t.titulo && (t.descricao || t.regras.length); });
+    out.produtos = (Array.isArray(d.produtos) ? d.produtos : []).map(function(p){ return { nome:String(p.nome || ""), imgUrl:p.imgUrl || "", toks:_eaTokens(String(p.nome || "") + " " + (Array.isArray(p.aliases) ? p.aliases.join(" ") : "")), prioridade:p.prioridade || "" }; }).filter(function(p){ return p.nome; });
+  }catch(_){ }
+  try{ const rs = await _eaRpc("arte_regras_lista", { p_client:client }); out.regras = (Array.isArray(rs) ? rs : []).filter(function(r){ return r.status === "aprovado" && (!r.client_id || r.client_id === client) && (!r.unidade || r.unidade === (unidade || "")); }).map(function(r){ return String(r.regra); }); }catch(_){ }
+  return out;
+}
+function pxInteligenciaDesignTexto(intel, tipoCard, max){
+  if(!intel) return "";
+  const L = [];
+  if(intel.instrucoes) L.push("INSTRUÇÕES AO DESIGNER (Playbook): " + intel.instrucoes);
+  if(intel.orientacoes) L.push("ORIENTAÇÕES VISUAIS: " + intel.orientacoes);
+  (intel.templates || []).forEach(function(t){ if(!tipoCard || _eaChaveCidade(t.titulo).indexOf(_eaChaveCidade(_eaRotuloTipoCard(tipoCard))) >= 0 || tipoCard === "arte") L.push("TEMPLATE " + t.titulo + ": " + [t.descricao].concat(t.regras).filter(Boolean).join("; ")); });
+  if((intel.regras || []).length) L.push("REGRAS APROVADAS: " + intel.regras.join(" · "));
+  return L.join("\n").replace(/\s+\n/g, "\n").slice(0, max || 1800);
+}
+/* produtos do Playbook citados no card (título + briefing) → foto oficial do produto vira a 1ª referência */
+function pxProdutosCitadosNoCard(intel, task){
+  const bag = _eaTokens([task.title, _eaSemHtml(task.desc || task.description || "")].join(" "));
+  return (intel && intel.produtos || []).filter(function(p){ return p.prioridade !== "inativo" && p.toks.length && p.toks.some(function(t){ return bag.indexOf(t) >= 0; }); });
+}
 async function _eaImgParaB64(url, max){
   const img = await _eaCarregarImg(url); const k = Math.min(1, (max || 1024) / Math.max(img.width, img.height));
   const cv = document.createElement("canvas"); cv.width = Math.max(1, Math.round(img.width * k)); cv.height = Math.max(1, Math.round(img.height * k));
@@ -142375,11 +142407,14 @@ async function _eaGerarFotoPorReferencia(task, refs, W, H, ctx){
   const copy = _eaSecoesCopy(task.desc || task.description || "");
   const rr = W / H, tam = rr < 0.8 ? "1024x1536" : rr > 1.25 ? "1536x1024" : "1024x1024";
   const obs = (ctx && ctx.identidade && ctx.identidade.observacoes) ? String(ctx.identidade.observacoes).slice(0, 400) : "";
+  const estilo = (function(){ try{ return typeof pxEstiloCard === "function" ? pxEstiloCard(task) : ""; }catch(_){ return ""; } })();
+  const intelTxt = ctx && ctx.intel ? pxInteligenciaDesignTexto(ctx.intel, ctx.tipoCard, 1200) : "";
   const prompt = ["Fotografia publicitária realista do MESMO produto que aparece nas imagens de referência (mesmo produto, mesmo material, mesmas proporções e acabamento), em uma cena nova e limpa.",
-    "Tema do post: " + String(task.title || "").slice(0, 120) + (copy.titulo ? ". Título: " + copy.titulo.slice(0, 120) : "") + (copy.texto ? ". Texto: " + copy.texto.replace(/\s+/g, " ").slice(0, 200) : "") + ".",
-    "Ambiente rural/industrial coerente com o produto, luz natural, ângulo que valorize o produto, sem pessoas em destaque, sem texto, sem logotipo, sem placas, sem marca d'água.",
+    "Tema do post: " + String(task.title || "").slice(0, 120) + (estilo === "comemorativa" ? " (data comemorativa)" : "") + (copy.titulo ? ". Título: " + copy.titulo.slice(0, 120) : "") + (copy.texto ? ". Texto: " + copy.texto.replace(/\s+/g, " ").slice(0, 200) : "") + ".",
+    "Ambiente coerente com o produto e com as orientações do cliente abaixo, luz natural, ângulo que valorize o produto, sem texto, sem logotipo, sem placas, sem marca d'água.",
     "Não invente um produto diferente nem acrescente partes que não existem nas referências. Composição com espaço de céu/fundo limpo no terço superior.",
-    obs ? "Observações do cliente: " + obs : ""].filter(Boolean).join(" ");
+    intelTxt ? "ORIENTAÇÕES DO CLIENTE (siga): " + intelTxt.replace(/\n/g, " ") : "",
+    obs ? "Observações da identidade: " + obs : ""].filter(Boolean).join(" ").slice(0, 3200);
   const resp = await _eaFn({ acao:"foto", referencias:b64s, prompt:prompt, tamanho:tam, qualidade:"medium", client_id:task.client || null });
   if(!resp || !resp.imagem) return null;
   return { url:"data:image/png;base64," + resp.imagem, custo:resp.custo_brl, refs:refs.slice(0, b64s.length) };
@@ -142512,7 +142547,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   // fotos do card nos espaços FOTO. Foto de obra (regras do Gustavo, 07/10): texto e mapa NÃO podem ficar em cima da obra;
   // na altura do mapa/pin já tem que ser céu; horizonte reto. A IA olha a foto (horizonte, inclinação, caixa da obra) e
   // o encaixe escolhe zoom/posição que respeitem isso; se não der, a foto entra centralizada e o histórico avisa.
-  let refsCache = null; const geradas = [];
+  let refsCache = null, intel = null; const geradas = [];
   for(const o of espacosFoto){
     let f = fotos[iFoto++];
     if(!f){
@@ -142520,13 +142555,16 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
       // se o cliente permite (Identidade visual › "gerar foto com IA", ligado por padrão); 3) senão, a melhor referência entra direto.
       if(fotoObra){ avisos.push("faltou a foto da obra no material do card — Foto de obra não gera foto"); continue; }
       try{
-        if(refsCache === null){ passo("procurando fotos aprovadas deste cliente…"); refsCache = await pxFotosReferenciaDoCliente(task, 6); }
+        if(refsCache === null){ passo("procurando fotos aprovadas deste cliente…");
+          intel = await pxInteligenciaDesign(task.client, unid);
+          const prods = pxProdutosCitadosNoCard(intel, task).filter(function(p){ return p.imgUrl; }).map(function(p){ return { url:p.imgUrl, nome:p.nome, card:"Produto do Playbook: " + p.nome, pts:999, data:"" }; });
+          refsCache = prods.concat(await pxFotosReferenciaDoCliente(task, 6)); }
         const refs = refsCache.filter(function(r){ return geradas.indexOf(r.url) < 0; });
         if(!refs.length){ avisos.push("sem foto no material e sem fotos aprovadas deste cliente pra usar de referência — o espaço FOTO ficou com a imagem do template"); continue; }
         const permite = !(ident && ident.gerar_foto_ia === false);
         if(permite && typeof _eaFn === "function"){
           passo("criando uma foto nova do produto a partir das referências aprovadas…");
-          const g = await _eaGerarFotoPorReferencia(task, refs, W, H, { identidade:ident });
+          const g = await _eaGerarFotoPorReferencia(task, refs, W, H, { identidade:ident, intel:intel, tipoCard:tipoCard });
           if(g){ f = { url:g.url, name:"foto-ia.png", gerada:true }; geradas.push(refs[0].url); avisos.push("sem foto no material: foto NOVA gerada por IA a partir de " + g.refs.length + " foto(s) aprovada(s) do cliente (" + g.refs.map(function(r){ return r.card; }).filter(Boolean).slice(0, 2).join("; ") + ")" + (g.custo ? " · R$ " + Number(g.custo).toFixed(2) : "")); }
         }
         if(!f){ f = { url:refs[0].url, name:refs[0].nome }; geradas.push(refs[0].url); avisos.push("sem foto no material: entrou a foto aprovada do card “" + refs[0].card + "”" + (permite ? " (a IA não conseguiu gerar uma nova)" : " (geração por IA desligada pra este cliente)")); }
