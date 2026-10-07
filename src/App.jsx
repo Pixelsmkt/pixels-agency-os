@@ -142299,6 +142299,70 @@ function _eaEscolherVariantes(fc, ctx){
   });
   return avisos;
 }
+/* ── FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação e a caixa da obra (frações 0–1) ── */
+async function _eaAnalisarFotoObra(url){
+  if(typeof askGPTBlocos !== "function") return null;
+  const r = await askGPTBlocos({ max_tokens:220, origem:"arte_foto_obra",
+    system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout. Responda SÓ um JSON, sem texto fora dele.",
+    messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; estime com uma casa decimal); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "ceu": fração da altura ocupada por céu (0 se não tem céu)}' }] }] });
+  const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
+  const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
+  const j = JSON.parse(m[0]);
+  const n = function(v, a, b){ v = Number(v); return isFinite(v) ? Math.max(a, Math.min(b, v)) : null; };
+  const ob = j.obra && typeof j.obra === "object" ? { x0:n(j.obra.x0, 0, 1), y0:n(j.obra.y0, 0, 1), x1:n(j.obra.x1, 0, 1), y1:n(j.obra.y1, 0, 1) } : null;
+  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, obra:(ob && ob.x1 > ob.x0 && ob.y1 > ob.y0) ? ob : null, ceu:n(j.ceu, 0, 1) };
+}
+/* encaixa a foto no espaço FOTO respeitando: obra livre de texto e de mapa · céu na altura do mapa · horizonte reto */
+async function _eaEncaixarFotoObra(fc, o, url){
+  const avisos = [];
+  let an = null; try{ an = await _eaAnalisarFotoObra(url); }catch(e){ avisos.push("não consegui analisar a foto (" + _eaErro(e) + ") — entrou centralizada"); }
+  if(!an){ await _eaTrocarFotoMantendoForma(o, url); return { avisos:avisos }; }
+  const velha = o.getElement && o.getElement(); const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
+  const B = _eaCaixa(o), kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);   // página → pixels do canvas da foto
+  const paraCanvas = function(c){ return { x0:(c.left - B.left) * kx, y0:(c.top - B.top) * ky, x1:(c.left + c.width - B.left) * kx, y1:(c.top + c.height - B.top) * ky }; };
+  const textos = [], mapas = [];
+  fc.getObjects().forEach(function(x){
+    if(x === o || x.visible === false) return;
+    const tipo = _eaTipo(x);
+    if(tipo === "texto" && ["HEADLINE","SUBTITLE","CTA","BENEFIT"].indexOf(x.espaco) >= 0) textos.push(paraCanvas(_eaCaixa(x)));
+    else if(x.espaco === "PIN" || (x.variante && /map|mapa|cidade|pin|render/i.test(x.variante.grupo + " " + x.variante.nome))) mapas.push(paraCanvas(_eaCaixa(x)));
+  });
+  const mapaBase = mapas.length ? Math.max.apply(null, mapas.map(function(m){ return m.y1; })) : null;
+  const nova = await _eaCarregarImg(url);
+  const ang = -(an.inclinacao || 0) * Math.PI / 180;                       // gira pra deixar o horizonte reto
+  const folga = 1 + Math.abs(Math.sin(ang)) * 1.4;                         // zoom extra pra não sobrar canto vazio depois de girar
+  const sMin = Math.max(w / nova.width, h / nova.height) * folga;
+  const cruza = function(a, b){ return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0; };
+  let melhor = null;
+  for(let zi = 0; zi <= 8; zi++){
+    const s = sMin * (1 + zi * 0.1);                                        // até 1,8× de zoom
+    const dw = nova.width * s, dh = nova.height * s;
+    const oxC = (w - dw) / 2;
+    for(let yi = 0; yi <= 20; yi++){
+      const oy = (h - dh) * (yi / 20);                                      // de "mostra o topo" até "mostra a base"
+      let pena = 0;
+      if(an.horizonte != null && mapaBase != null){ const hy = oy + an.horizonte * dh; if(hy < mapaBase + h * 0.03) pena += (mapaBase + h * 0.03 - hy) * 4; }   // na altura do mapa tem que ser céu
+      if(an.obra){ const ob = { x0:oxC + an.obra.x0 * dw, y0:oy + an.obra.y0 * dh, x1:oxC + an.obra.x1 * dw, y1:oy + an.obra.y1 * dh };
+        textos.forEach(function(t){ if(cruza(ob, t)){ const inter = Math.min(ob.y1, t.y1) - Math.max(ob.y0, t.y0); pena += inter * 3; } });
+        mapas.forEach(function(m){ if(cruza(ob, m)){ pena += (Math.min(ob.y1, m.y1) - Math.max(ob.y0, m.y0)) * 3; } });
+        if(ob.y1 > h) pena += (ob.y1 - h) * 2; if(ob.y0 < 0) pena += -ob.y0 * 2;     // obra cortada
+      }
+      pena += zi * h * 0.02 + Math.abs(oy - (h - dh) / 2) * 0.15;         // prefere menos zoom e mais centralizado
+      if(!melhor || pena < melhor.pena) melhor = { s:s, ox:oxC, oy:oy, pena:pena, zoom:zi, viol:pena >= h * 0.08 };
+    }
+  }
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
+  x.save(); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2);
+  x.drawImage(nova, melhor.ox, melhor.oy, nova.width * melhor.s, nova.height * melhor.s); x.restore();
+  if(velha){ x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
+  await o.setSrc(cv.toDataURL("image/png"));
+  o.set({ width:w, height:h }); o.setCoords();
+  if(Math.abs(an.inclinacao || 0) >= 0.8) avisos.push("foto girada " + Math.abs(an.inclinacao).toFixed(1) + "° pra deixar o horizonte reto");
+  if(melhor.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
+  if(an.ceu != null && an.ceu < 0.12 && mapaBase != null) avisos.push("a foto quase não tem céu — o mapa pode ficar em cima da obra (preencher céu com IA ainda não está ligado)");
+  return { avisos:avisos, analise:an, encaixe:melhor };
+}
 async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const passo = function(m){ try{ if(onPasso) onPasso(m); }catch(_){ } };
   if(!task || !modelo || !modelo.doc || !Array.isArray(modelo.doc.paginas) || !modelo.doc.paginas.length) throw new Error("Modelo sem página");
@@ -142317,7 +142381,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const tipoCard = modelo.tipo_card || _eaTipoCardDoTask(task);
   const fotoObra = tipoCard === "foto_obra";
   const copy = _eaSecoesCopy(task.desc || task.description || "");
-  const fotos = _eaFotosDoCard(task); let iFoto = 0; const avisos = []; const travados = [];
+  const fotos = _eaFotosDoCard(task); let iFoto = 0; const avisos = []; const travados = []; const espacosFoto = [];
   passo("preenchendo com a copy e as fotos…");
   for(const o of fc.getObjects().slice()){
     if(!o.espaco) continue;
@@ -142338,14 +142402,22 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
         else if(p && p.W && p.H){ o.set({ left:p.x * W / p.W, top:p.y * H / p.H }); o.setCoords(); }
         else avisos.push("pin: a cidade “" + copy.cidade + "” ainda não tem posição no mapa — posicione o pin no editor e use Espaços › Guardar posição do pin (fica guardado pra próxima)");
       }
-      else if(o.espaco === "PRODUCT_IMAGE" && tipo === "imagem"){
-        const f = fotos[iFoto++];
-        if(f) await _eaTrocarFotoMantendoForma(o, f.url); else avisos.push("faltou foto no material do card (o modelo pede mais uma)");
-      }
+      else if(o.espaco === "PRODUCT_IMAGE" && tipo === "imagem"){ espacosFoto.push(o); }   // fotos entram depois dos textos (pra saber onde o texto ficou)
     }catch(e){ avisos.push((o.nome || o.espaco) + ": " + _eaErro(e)); }
   }
   // (07/10) grupos de alternativas do template (CIDADES, ÍCONES, MAPA…): liga a que casa com o briefing, apaga as outras
   try{ _eaEscolherVariantes(fc, { cidade:copy.cidade, unidade:unid, textos:[task.title, copy.titulo, copy.frase, copy.texto, task.produto, task.product, _eaSemHtml(task.desc || task.description || "")] }).forEach(function(x){ avisos.push(x); }); }catch(_){ }
+  // fotos do card nos espaços FOTO. Foto de obra (regras do Gustavo, 07/10): texto e mapa NÃO podem ficar em cima da obra;
+  // na altura do mapa/pin já tem que ser céu; horizonte reto. A IA olha a foto (horizonte, inclinação, caixa da obra) e
+  // o encaixe escolhe zoom/posição que respeitem isso; se não der, a foto entra centralizada e o histórico avisa.
+  for(const o of espacosFoto){
+    const f = fotos[iFoto++];
+    if(!f){ avisos.push("faltou foto no material do card (o modelo pede mais uma)"); continue; }
+    try{
+      if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, inclinação)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      else await _eaTrocarFotoMantendoForma(o, f.url);
+    }catch(e){ avisos.push("foto: " + _eaErro(e)); try{ await _eaTrocarFotoMantendoForma(o, f.url); }catch(_){ } }
+  }
   // logo, telefone, cidade, cores e fonte: cadastro + Kit (mesma função do editor)
   const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
   try{ await _eaPreencherEspacos(stub, { silencioso:true }); }catch(_){ }
