@@ -140176,7 +140176,7 @@ function PageEdicaoArte({ isMob, tasks, onAbrirCard }){
     {painel}
   </div>;
   return (
-    <div style={{padding:isMob?"14px 12px 90px":"22px 28px 48px",maxWidth:1280,margin:"0 auto",color:_EA_UI.tx,background:_EA_UI.bg,minHeight:"100%",fontFamily:"inherit"}}>
+    <div style={{padding:isMob?"14px 12px 90px":"20px 24px 40px",width:"100%",boxSizing:"border-box",color:_EA_UI.tx,background:_EA_UI.bg,minHeight:"100%",fontFamily:"inherit"}}>
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
         <div>
           <div style={{fontSize:_eaF(11.5,isMob),fontWeight:800,color:_EA.rosa,letterSpacing:".08em",textTransform:"uppercase"}}>Criação</div>
@@ -140190,7 +140190,7 @@ function PageEdicaoArte({ isMob, tasks, onAbrirCard }){
           return <button key={c.id||"todos"} onClick={function(){ setCliente(c.id); }} style={{font:"inherit",flex:"0 0 auto",display:"flex",alignItems:"center",gap:8,padding:"7px 12px 7px 7px",borderRadius:999,border:"1px solid "+(on?_EA_UI.aBorda:_EA_UI.borda),background:on?_EA_UI.aSoft:"#fff",color:on?_EA_UI.a:_EA_UI.tx,fontWeight:on?800:600,fontSize:12.5,cursor:"pointer"}}>
             {c.id ? logoBox(c.id, c.name, 24) : null}{c.name}</button>; })}
       </div>}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"236px minmax(0,1fr)",gap:isMob?12:20,marginTop:isMob?8:20,alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"248px minmax(0,1fr)",gap:isMob?12:20,marginTop:isMob?8:20,alignItems:"start"}}>
         {!isMob && <aside style={{position:"sticky",top:12,background:_EA_UI.card,border:"1px solid "+_EA_UI.borda,borderRadius:_EA_UI.r,boxShadow:_EA_UI.sombra,padding:10,maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",gap:6}}>
           <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar cliente…" style={Object.assign({}, _eaInp, {width:"100%",boxSizing:"border-box",padding:"8px 10px",fontSize:13,background:_EA_UI.bg})}/>
           <div style={{overflowY:"auto",display:"flex",flexDirection:"column",gap:2,paddingRight:2}}>
