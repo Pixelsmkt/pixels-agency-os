@@ -143863,6 +143863,16 @@ function _eaPsdEscalaDoc(psd){
    o PSD guarda os pixels que o Photoshop desenhou pra cada camada de texto. Comparamos a largura da TINTA desse desenho
    com a tinta do nosso texto (mesma fonte) e corrigimos o tamanho; depois alinhamos o centro da tinta ao do Photoshop.
    Isso absorve resolução, transformações, tracking e diferença de versão da fonte — sem adivinhar nada. */
+/* garante que as fontes/pesos DESTE texto estão carregadas e remede (sem isso a calibração mede com a fonte reserva) */
+async function _eaGarantirFontesDoTexto(t){
+  try{
+    const m = _eaFontesEPesosDoJson({ objects:[{ fontFamily:t.fontFamily, fontWeight:t.fontWeight, fontStyle:t.fontStyle, styles:t.styles }] });
+    const decls = []; Object.keys(m).forEach(function(f){ Object.keys(m[f]).forEach(function(k){ decls.push((/i$/.test(k) ? "italic " : "") + k.replace(/i$/, "") + ' 40px "' + f + '"'); }); });
+    await Promise.race([Promise.all(decls.map(function(d){ return _eaFontsLoad(d, 5000); })), _eaEsperar(6000)]);
+    Object.keys(m).forEach(function(f){ _eaLimparCacheFontes(f); });
+    try{ t.initDimensions(); t.setCoords(); }catch(_){ }
+  }catch(_){ }
+}
 function _eaPsdCalibrarTexto(t, l, podeEscalar){
   try{
     if(!(l.canvas && l.canvas.width && l.canvas.height)) return false;
@@ -143871,18 +143881,32 @@ function _eaPsdCalibrarTexto(t, l, podeEscalar){
     try{ t.initDimensions(); }catch(_){ }
     let T = _eaCaixa(t), k = _eaCaixaTintaTexto(t); if(!(k.w > 2)) return false;
     const multi = (t._textLines || []).length > 1;
+    // só confia na medida quando o nosso texto tem as MESMAS linhas que o Photoshop (quebra igual); se quebrou diferente, só reposiciona
+    const linhasLogicas = String(t.text || "").split("\n").length, mesmasLinhas = (t._textLines || []).length === linhasLogicas;
     const r = inkW / k.w;
-    if(podeEscalar && r > 0.72 && r < 1.4 && Math.abs(r - 1) > 0.012 && (!multi || Math.abs(r - 1) < 0.2)){
+    if(podeEscalar && mesmasLinhas && r > 0.72 && r < 1.4 && Math.abs(r - 1) > 0.012 && (!multi || Math.abs(r - 1) < 0.2)){
       t.set("fontSize", Math.max(4, (t.fontSize || 24) * r));
       if(t.styles) Object.keys(t.styles).forEach(function(li){ Object.keys(t.styles[li] || {}).forEach(function(ci){ const e = t.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(4, e.fontSize * r); }); });
       if(t.width >= 3000 || !l.__temLimites){ t.set("width", 4000); try{ t.initDimensions(); }catch(_){ } let mw = 0; for(let i = 0; i < (t._textLines || []).length; i++) mw = Math.max(mw, t.getLineWidth(i)); t.set("width", Math.max(20, mw + 6)); }
       try{ t.initDimensions(); }catch(_){ } t.setCoords();
       T = _eaCaixa(t); k = _eaCaixaTintaTexto(t);
     }
+    // (08/10, Gustavo: "o espaçamento entre as linhas é um pouco menor — isso é regra") ENTRELINHA pelo Photoshop:
+    //   com 2+ linhas, ajusta lineHeight até a altura da tinta bater com a do desenho do Photoshop (2 iterações lineares)
+    if(podeEscalar && mesmasLinhas && (t._textLines || []).length > 1 && inkH > 8 && k.h > 8 && Math.abs(inkH - k.h) > 1.5 && Math.abs(inkW / k.w - 1) < 0.08){
+      const medir = function(lh){ t.set("lineHeight", lh); try{ t.initDimensions(); }catch(_){ } return _eaCaixaTintaTexto(t).h; };
+      let lh = t.lineHeight || 1.16, h0 = k.h;
+      for(let it = 0; it < 3 && Math.abs(h0 - inkH) > 1.5; it++){
+        const d = 0.08, h1 = medir(lh + d), slope = (h1 - h0) / d;
+        if(!(slope > 0.5)) { medir(lh); break; }
+        lh = Math.max(0.7, Math.min(1.6, lh + (inkH - h0) / slope)); h0 = medir(lh);
+      }
+      t.setCoords(); T = _eaCaixa(t); k = _eaCaixaTintaTexto(t);
+    }
     // centro da tinta no mesmo lugar do Photoshop (absorve a diferença de linha-base entre o Fabric e o Photoshop)
     const cxF = T.left + k.dx + k.w / 2, cyF = T.top + k.dy + k.h / 2, cxP = inkX + inkW / 2, cyP = inkY + inkH / 2;
     if(isFinite(cxF) && isFinite(cyF)){ t.set({ left:(t.left || 0) + (cxP - cxF), top:(t.top || 0) + (cyP - cyF) }); t.setCoords(); }
-    t.__calibrado = { r:r, inkW:inkW, fabW:k.w };
+    t.__calibrado = { r:r, inkW:inkW, fabW:k.w, escalou:!!podeEscalar, multi:multi, linhas:(t._textLines || []).length, inkH:inkH, fabH:k.h, lh:t.lineHeight };
     return true;
   }catch(_){ return false; }
 }
@@ -144015,7 +144039,8 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       const temDesenho = !!(l.canvas && l.canvas.width && l.canvas.height);
       const simples = ok && !temEfeito && !temMascara;
       const familia = ok ? fo.familia : "Montserrat";
-      if(!ok){ await _eaCarregarFonte("Montserrat", [pesoBase]); l.__fontesFaltando = l.__fontesFaltando || {}; l.__fontesFaltando[fo.familia] = (l.__fontesFaltando[fo.familia] || []).concat(pesoBase); }
+      const runsCobrem = !!(l.text && Array.isArray(l.text.styleRuns) && l.text.styleRuns.length >= 2);   // com trechos, a fonte-base nem aparece
+      if(!ok){ await _eaCarregarFonte("Montserrat", [pesoBase]); if(!runsCobrem){ l.__fontesFaltando = l.__fontesFaltando || {}; l.__fontesFaltando[fo.familia] = (l.__fontesFaltando[fo.familia] || []).concat(pesoBase); } }
       const textoPsd = String(l.text.text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\u0003/g, "\n").replace(/\n$/, "");
       // (07/10) entrelinha: a do estilo-base ou, se ela só existe nos trechos (styleRuns), a do trecho de letra maior (é ele que manda na linha)
       const entrelinha = (function(){
@@ -144036,11 +144061,12 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       if(!temLimites){ try{ t.initDimensions(); let mw = 0; for(let li = 0; li < (t._textLines || []).length; li++) mw = Math.max(mw, t.getLineWidth(li)); t.set("width", Math.max(20, mw + 6)); t.initDimensions(); t.setCoords(); }catch(_){ } }
       l.__temLimites = temLimites;
       // (07/10) calibra tamanho e posição pelo desenho que o Photoshop guardou da camada (só escala se a fonte certa está carregada)
-      const fonteCerta = ok && !(l.__fontesFaltando && Object.keys(l.__fontesFaltando).length);
+      const fonteCerta = (ok || runsCobrem) && !(l.__fontesFaltando && Object.keys(l.__fontesFaltando).length);
+      if(fonteCerta) await _eaGarantirFontesDoTexto(t);     // mede com a fonte certa (não com a reserva)
       let calibrou = false; try{ calibrou = _eaPsdCalibrarTexto(t, l, fonteCerta); }catch(_){ }
       if(!calibrou && escDoc === 1 && !(psd.imageResources && psd.imageResources.resolutionInfo)){ try{ _eaPsdAjustarTamanhoTexto(t, l); }catch(_){ } }   // sem desenho e sem ppi: última conferência grosseira
       infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:(function(){ let m = t.fontSize || Math.max(4, (st.fontSize || 24) * esc); try{ Object.values(t.styles || {}).forEach(function(li){ Object.values(li || {}).forEach(function(e){ if(e && e.fontSize > m) m = e.fontSize; }); }); }catch(_){ } return m; })() });
-      const faltouFonte = !ok || !!(l.__fontesFaltando && Object.keys(l.__fontesFaltando).length);
+      const faltouFonte = (!ok && !runsCobrem) || !!(l.__fontesFaltando && Object.keys(l.__fontesFaltando).length);
       const nomeFaltou = l.__fontesFaltando ? Object.keys(l.__fontesFaltando).join(", ") : ((st.font && st.font.name) || "?");
       if(simples && !faltouFonte){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
       /* (07/10) camada de TEXTO marcada como espaço: entra só o texto editável e visível (o texto vai ser trocado
@@ -145454,7 +145480,10 @@ function _eaCaixaOpaca(o){
 function _eaCaixaTintaTexto(t){
   const c = _eaCaixa(t);
   try{
-    const el = t.toCanvasElement({ withoutShadow:true, withoutTransform:false, enableRetinaScaling:false, multiplier:1 }); if(!el || !el.width) return { dx:0, dy:0, w:c.width, h:c.height };
+    // objeto escondido/transparente não desenha nada: mede com ele visível e devolve como estava
+    const vis0 = t.visible, op0 = t.opacity; t.visible = true; t.opacity = 1;
+    let el = null; try{ el = t.toCanvasElement({ withoutShadow:true, withoutTransform:false, enableRetinaScaling:false, multiplier:1 }); } finally { t.visible = vis0; t.opacity = op0; }
+    if(!el || !el.width) return { dx:0, dy:0, w:c.width, h:c.height };
     const x = el.getContext("2d"), w = el.width, h = el.height, d = x.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
     for(let y = 0; y < h; y++) for(let xx = 0; xx < w; xx++){ if(d[(y * w + xx) * 4 + 3] > 60){ if(xx < x0) x0 = xx; if(xx > x1) x1 = xx; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
     if(x1 < x0) return { dx:0, dy:0, w:c.width, h:c.height };
