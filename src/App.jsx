@@ -37295,9 +37295,16 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               if(!_sentAtTs && current.updated_at) _sentAtTs = _parseT(current.updated_at);
             } else {
               // ═════ DESIGN/VIDEO: quem subiu arquivo final ═════
-              if(_last){
-                _senderName = _last.addedBy || "";
-                _sentAtTs = _parseT(_last.addedAtIso) || _parseT(_last.addedAt) || 0;
+              // (08/10, Gustavo) a data/hora é da LÂMINA selecionada (cada imagem tem a sua), não do card inteiro
+              let _ref = _last;
+              try{
+                const _uSel = allImgs[Math.min(imgIdx, allImgs.length - 1)];
+                const _sel = _finalFiles.find(function(f){ return f && f.url && _fixUrl(f.url) === _uSel; });
+                if(_sel && (_sel.addedAtIso || _sel.addedAt)) _ref = _sel;
+              }catch(_){}
+              if(_ref){
+                _senderName = _ref.addedBy || "";
+                _sentAtTs = _parseT(_ref.addedAtIso) || _parseT(_ref.addedAt) || 0;
               }
               if(!_sentAtTs && current.colEnteredAt){
                 _sentAtTs = _parseT(current.colEnteredAt);
@@ -146434,6 +146441,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       if(precisaCompletar) partes.push("Complete as áreas transparentes continuando a cena com naturalidade — estenda o céu para cima e o terreno/vegetação para baixo — coerente com a luz, as cores e a perspectiva da foto. Mantenha exatamente o mesmo brilho e a mesma exposição da foto: não escureça nada.");
       if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue. Se a marca estiver sobre a obra, remova apenas a sujeira solta, mantendo a estrutura por baixo intacta.");
       partes.push("NÃO re-renderize nem repinte o resto da foto: a obra principal, a vegetação e o terreno fora das áreas marcadas devem permanecer idênticos, com a mesma textura. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
+      if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
       const r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
       if(r){
         const gLuz = _eaCasarLuz(cv, r);
@@ -146743,7 +146751,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     if(!f0) avisos.push("faltou a foto da obra no material do card — Foto de obra não gera foto, ficou a imagem do template");
     else{
       passo("olhando a foto da obra (horizonte, obra, entulho)…");
-      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id, passo:passo }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       catch(e){ avisos.push("foto: " + _eaErro(e)); }
       if(fotos.length > 1) avisos.push("o material tem " + fotos.length + " fotos — na Foto de obra entra a 1ª (" + (f0.name || "") + ")");
     }
@@ -146776,7 +146784,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
       }catch(e){ avisos.push("foto: " + _eaErro(e)); continue; }
     }
     try{
-      if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, entulho)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url, { client:task.client, task:task.id, projeto:p.id }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, entulho)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url, { client:task.client, task:task.id, projeto:p.id, passo:passo }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       else await _eaTrocarFotoMantendoForma(o, f.url);
     }catch(e){ avisos.push("foto: " + _eaErro(e)); try{ await _eaTrocarFotoMantendoForma(o, f.url); }catch(_){ } }
   }
@@ -146862,7 +146870,23 @@ function PxGerarArteModal({ task, setTasks, onClose }){
   const [auto, setAuto] = useState(null);
   const [passo, setPasso] = useState("");
   const [erro, setErro] = useState("");
+  const [pct, setPct] = useState(0);
+  const tetoRef = useRef(0);
   const rodouRef = useRef(false);
+  // (08/10, Gustavo: "a porcentagem continua sem progredir") cada passo tem um alvo de % e, entre um passo e outro
+  // (a IA da foto demora ~1 min), a barra segue andando devagar até um teto — nunca fica parada
+  const _pctDoPasso = function(m){ m = String(m || "");
+    if(/abrindo/.test(m)) return 6; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
+    if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
+    if(/completando|limpando/.test(m)) return 56; if(/salvando/.test(m)) return 86; return null; };
+  const setPassoPct = function(m){ setPasso(m);
+    const t = _pctDoPasso(m);
+    if(t != null){ tetoRef.current = Math.min(t + 38, 94); setPct(function(v){ return Math.max(v, t); }); } };
+  useEffect(function(){
+    if(!passo) return;
+    const it = setInterval(function(){ setPct(function(v){ const teto = tetoRef.current; return v < teto ? Math.min(teto, v + 0.5 + (teto - v) * 0.012) : v; }); }, 700);
+    return function(){ clearInterval(it); };
+  }, [!!passo]);
   const padraoRef = useRef(null);   // (08/10) o padrão EXISTIA — se a geração falhar, a mensagem não pode dizer "sem padrão"
   const tipo = _eaTipoCardDoTask(task);
   const uns = String(task.bioterUnit || task.bioter_unit || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
@@ -146882,10 +146906,11 @@ function PxGerarArteModal({ task, setTasks, onClose }){
     m = m || (modelos || []).find(function(x){ return x.id === sel; }); if(!m) return;
     setErro("");
     try{
-      const r = await pxGerarArteDoModelo(task, m, setTasks, setPasso);
+      const r = await pxGerarArteDoModelo(task, m, setTasks, setPassoPct);
+      setPct(100);
       _eaToast("success", "Arte gerada e enviada pra Avaliação de design" + (r.avisos.length ? " (veja o aviso no histórico)" : ""));
       onClose(true);
-    }catch(e){ setErro(_eaErro(e)); setPasso(""); setAuto(null); }
+    }catch(e){ setErro(_eaErro(e)); setPasso(""); setPct(0); tetoRef.current = 0; setAuto(null); }
   };
   useEffect(function(){ if(auto && !rodouRef.current){ rodouRef.current = true; gerar(auto); } }, [auto]);
   /* (08/10, Gustavo: "esse box tá horroroso e velho, moderniza — fontes grandes nada a ver") layout novo:
@@ -146893,20 +146918,20 @@ function PxGerarArteModal({ task, setTasks, onClose }){
   const fotoObra = tipo === "foto_obra";
   const chip = function(txt, destaque){ return <span style={{fontSize:10.5,fontWeight:700,letterSpacing:.2,padding:"3px 9px",borderRadius:999,whiteSpace:"nowrap",
     background:destaque?_EA.roxoClaro:_EA.linha2,color:destaque?_EA.roxo:_EA.sub,border:"1px solid "+(destaque?_EA.roxoBorda:"transparent")}}>{txt}</span>; };
-  const lin = function(ok, rotulo, valor){ return <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px"}}>
-    <span style={{width:7,height:7,borderRadius:999,flex:"0 0 auto",background:ok?"#22c55e":"#f59e0b",boxShadow:"0 0 0 3px "+(ok?"rgba(34,197,94,.14)":"rgba(245,158,11,.14)")}}/>
-    <span style={{fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",color:_EA.fraco,flex:"0 0 92px"}}>{rotulo}</span>
-    <span style={{fontSize:12,color:ok?_EA.texto:_EA.amarelo,fontWeight:ok?600:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{valor}</span>
+  const lin = function(ok, rotulo, valor){ return <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 12px"}}>
+    <span style={{width:7,height:7,borderRadius:999,flex:"0 0 auto",marginTop:4,background:ok?"#22c55e":"#f59e0b",boxShadow:"0 0 0 3px "+(ok?"rgba(34,197,94,.14)":"rgba(245,158,11,.14)")}}/>
+    <span style={{fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",color:_EA.fraco,flex:"0 0 86px",marginTop:1.5}}>{rotulo}</span>
+    <span style={{fontSize:12.5,color:ok?_EA.texto:_EA.amarelo,fontWeight:ok?600:500,lineHeight:1.45,minWidth:0,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{valor}</span>
   </div>; };
   const divisor = <div style={{height:1,background:_EA.linha2,margin:"0 12px"}}/>;
   return <div onClick={function(){ if(!passo) onClose(false); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",backdropFilter:"blur(3px)",WebkitBackdropFilter:"blur(3px)",zIndex:10050,display:"flex",alignItems:"center",justifyContent:"center",padding:16,animation:"fadeIn .15s ease"}}>
-    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(460px,100%)",maxHeight:"88vh",overflow:"auto",boxShadow:"0 20px 50px rgba(15,23,42,.25)",border:"1px solid "+_EA.linha,fontFamily:"'Inter',system-ui,sans-serif",animation:"slideInUp .22s ease"}}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(560px,100%)",maxHeight:"88vh",overflow:"auto",boxShadow:"0 20px 50px rgba(15,23,42,.25)",border:"1px solid "+_EA.linha,fontFamily:"'Inter',system-ui,sans-serif",animation:"slideInUp .22s ease"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"16px 18px 12px"}}>
         <div style={{width:38,height:38,borderRadius:12,flex:"0 0 auto",background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:17,boxShadow:"0 6px 14px rgba(124,58,237,.3)"}}>✦</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:14.5,fontWeight:800,letterSpacing:-.2,color:_EA.texto}}>Gerar arte</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:5}}>
-            {chip(_eaRotuloTipoCard(tipo))}{unid ? chip(_eaNomeCliente(task.client) + " · " + unid) : chip(_eaNomeCliente(task.client))}{auto ? chip(auto.nome, true) : null}
+            {chip(_eaRotuloTipoCard(tipo))}{unid ? chip(_eaNomeCliente(task.client) + " · " + (typeof _eaRotuloUnidade === "function" ? _eaRotuloUnidade(unid) : unid)) : chip(_eaNomeCliente(task.client))}{auto ? chip(auto.nome, true) : null}
           </div>
         </div>
         <button disabled={!!passo} onClick={function(){ onClose(false); }} title="Fechar" style={{font:"inherit",width:28,height:28,borderRadius:999,border:0,background:_EA.linha2,color:_EA.sub,cursor:passo?"default":"pointer",fontSize:13,lineHeight:"28px",opacity:passo?.4:1,flex:"0 0 auto"}}>✕</button>
@@ -146916,11 +146941,11 @@ function PxGerarArteModal({ task, setTasks, onClose }){
         {fotoObra ? <>
           {lin(!!copy.cidade, "Pin no mapa", copy.cidade || "não achei a cidade no briefing")}
           {divisor}
-          {lin(!!copy.frase, "Frase", copy.frase ? copy.frase.slice(0,90) : "o briefing não tem • FRASE NA ARTE")}
+          {lin(!!copy.frase, "Frase", copy.frase ? copy.frase.slice(0,180) : "o briefing não tem • FRASE NA ARTE")}
         </> : <>
-          {lin(!!copy.titulo, "Título", copy.titulo ? copy.titulo.slice(0,90) : "o briefing não tem • TÍTULO")}
+          {lin(!!copy.titulo, "Título", copy.titulo ? copy.titulo.slice(0,180) : "o briefing não tem • TÍTULO")}
           {divisor}
-          {lin(!!copy.texto, "Texto", copy.texto ? copy.texto.replace(/\n+/g," ").slice(0,90) : "o briefing não tem • TEXTO NA ARTE")}
+          {lin(!!copy.texto, "Texto", copy.texto ? copy.texto.replace(/\n+/g," ").slice(0,180) : "o briefing não tem • TEXTO NA ARTE")}
         </>}
         {divisor}
         {lin(fotos.length > 0, "Material", fotos.length ? fotos.length + " foto(s) do card entram na arte" : "sem fotos — fica a imagem do template")}
@@ -146941,13 +146966,21 @@ function PxGerarArteModal({ task, setTasks, onClose }){
             </button>; })}
           </div></div>}
       {erro && <div style={{margin:"12px 14px 0",padding:"9px 12px",borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:12,lineHeight:1.5}}>{erro}</div>}
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center",padding:"14px 18px 16px"}}>
-        {passo && <span style={{display:"flex",alignItems:"center",gap:8,marginRight:"auto",minWidth:0}}>
-          <span style={{width:14,height:14,flex:"0 0 auto",borderRadius:999,border:"2px solid "+_EA.roxoBorda,borderTopColor:_EA.roxo,animation:"spin .8s linear infinite"}}/>
-          <span style={{fontSize:11.5,color:_EA.roxo,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{passo}</span>
-        </span>}
-        {!passo && <button onClick={function(){ onClose(false); }} style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:0,background:_EA.linha2,color:_EA.texto,cursor:"pointer",fontWeight:600,fontSize:12.5}}>Cancelar</button>}
-        {!auto && <button disabled={!!passo || !sel} onClick={function(){ gerar(); }} style={{font:"inherit",padding:"8px 16px",borderRadius:10,border:0,background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:12.5,boxShadow:"0 6px 14px rgba(124,58,237,.25)",opacity:(passo || !sel)?.55:1}}>{passo ? "Gerando…" : "Gerar arte"}</button>}
+      <div style={{padding:"14px 18px 16px"}}>
+        {passo ? <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:9}}>
+            <span style={{width:14,height:14,flex:"0 0 auto",borderRadius:999,border:"2px solid "+_EA.roxoBorda,borderTopColor:_EA.roxo,animation:"spin .8s linear infinite"}}/>
+            <span style={{flex:1,fontSize:12,color:_EA.roxo,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{passo}</span>
+            <span style={{flex:"0 0 auto",fontSize:12,fontWeight:800,color:_EA.roxo,fontFeatureSettings:"'tnum'"}}>{Math.round(pct)}%</span>
+          </div>
+          <div style={{height:6,borderRadius:999,background:_EA.linha2,overflow:"hidden"}}>
+            <div style={{height:"100%",width:pct + "%",borderRadius:999,background:"linear-gradient(90deg,"+_EA.roxo+","+_EA.rosa+")",transition:"width .6s ease"}}/>
+          </div>
+        </div>
+        : <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center"}}>
+          <button onClick={function(){ onClose(false); }} style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:0,background:_EA.linha2,color:_EA.texto,cursor:"pointer",fontWeight:600,fontSize:12.5}}>Cancelar</button>
+          {!auto && <button disabled={!sel} onClick={function(){ gerar(); }} style={{font:"inherit",padding:"8px 16px",borderRadius:10,border:0,background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:12.5,boxShadow:"0 6px 14px rgba(124,58,237,.25)",opacity:!sel?.55:1}}>Gerar arte</button>}
+        </div>}
       </div>
     </div>
   </div>;
