@@ -2569,7 +2569,7 @@ function smartFormatTitle(input){
 
 /* ─── DESIGNER PAYMENTS ─── */
 // Tabela BASE — vigente até 08/2026.
-const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50, versao: 0, trocaTexto: 10 };  // versao (07/10): versão ES do Grupo Bioter, custo 0 · trocaTexto (08/10, Gustavo): "Troca de texto" — só trocar o texto numa arte pronta (ex.: versão em espanhol), R$10
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50, versao: 0, trocaTexto: 5 };  // versao (07/10): versão ES do Grupo Bioter, custo 0 · trocaTexto (08/10, Gustavo): "Troca de texto" — só trocar o texto numa arte pronta (ex.: versão em espanhol), R$5 (era R$10 na 1ª versão, mesmo dia)
 
 // ── Reajustes datados ────────────────────────────────────────────────────
 // O pagamento é calculado sob demanda a partir das tasks do mês. Se a gente
@@ -2798,7 +2798,7 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     const assigned=t.assignee===designerId||(Array.isArray(t.assignees)&&t.assignees.includes(designerId));
     if(!assigned)return;
     // (07/10/2026, Gustavo) versão em espanhol do Grupo Bioter conta junto com o original — não paga de novo
-    // (08/10, Gustavo) …mas a versão criada pelo botão "Duplicar pra Paraguai" é Troca de texto (R$10) e PAGA
+    // (08/10, Gustavo) …mas a versão criada pelo botão "Duplicar pra Paraguai" é Troca de texto (R$5) e PAGA
     if(Array.isArray(t.tags)&&t.tags.indexOf("Versão espanhol")>=0&&String(t.contentType||"")!=="troca_texto")return;
     // Descarta deletados + cards ainda em fase de copy (rascunhos, Copys=demanda, Alteração de copy).
     // Considera pra pagamento a partir de "Demanda" (recebida) em diante: execução, avaliação,
@@ -5451,7 +5451,7 @@ async function pxDuplicarParaParaguai(task,setTasks){
       tags:tags, files:files, comments:[], copyVersoes:[], paidAt:null, paid_at:null, valorPersonalizado:null, valor_personalizado:null,
       completedAt:null, completed_at:null, approvedBy:null, approved_by:null, approvedAt:null, approved_at:null,
       colEnteredAt:agora, col_entered_at:agora, ajustar:false, _isDraft:false,
-      timeline:[{type:"created",label:"Duplicado pra Bioter Paraguay (espanhol) a partir de “"+(o.title||"")+"” — mesma data, mesmas pessoas, mesmo mês de pagamento; briefing e legenda traduzidos com o playbook da Bioter Paraguay; tipo Troca de texto (R$10): só trocar o texto na arte pronta",at:agora,atFmt:(typeof nowFmt==="function"?nowFmt():""),user:pxAutorNome()}],
+      timeline:[{type:"created",label:"Duplicado pra Bioter Paraguay (espanhol) a partir de “"+(o.title||"")+"” — mesma data, mesmas pessoas, mesmo mês de pagamento; briefing e legenda traduzidos com o playbook da Bioter Paraguay; tipo Troca de texto (R$5): só trocar o texto na arte pronta",at:agora,atFmt:(typeof nowFmt==="function"?nowFmt():""),user:pxAutorNome()}],
     });
     const row=(typeof taskToRow==="function")?taskToRow(tk):null;
     if(!row) throw new Error("não consegui montar o card");
@@ -5459,7 +5459,7 @@ async function pxDuplicarParaParaguai(task,setTasks){
     const ins=await sb.from("tasks").insert(row).select("*").single();
     if(ins.error) throw ins.error;
     if(typeof setTasks==="function"&&typeof rowToTask==="function"){ const nt=rowToTask(ins.data); setTasks(function(p){ return (p||[]).some(function(x){return x.id===nt.id;})?p:(p||[]).concat([nt]); }); }
-    if(typeof pixelsToast!=="undefined") pixelsToast.success("Versão Paraguay criada em Demanda: “"+tk.title+"” — mesma data, Troca de texto (R$10).",5000);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Versão Paraguay criada em Demanda: “"+tk.title+"” — mesma data, Troca de texto (R$5).",5000);
     if(typeof pxCascataVarrer==="function") setTimeout(function(){ try{ pxCascataVarrer(idEs); }catch(_){} },2000);
     return ins.data;
   }catch(e){ console.warn("[duplicar ES]",e); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui duplicar pra Paraguay: "+((e&&e.message)||e),6000); return null; }
@@ -6131,7 +6131,7 @@ const PX_TIPOS_CONTEUDO=[
   {id:"carrossel",      label:"Carrossel",          grupo:"design", quando:"o conteúdo precisa de várias lâminas em sequência"},
   {id:"folder",         label:"Material gráfico",   grupo:"design", quando:"folder, catálogo, cartão, banner, material impresso ou PDF — valor do freela definido no card"},
   {id:"versao",         label:"Versão",             grupo:"design", quando:"outra versão (ex.: espanhol do Grupo Bioter) de um card já pago — custo 0"},
-  {id:"troca_texto",    label:"Troca de texto",     grupo:"design", quando:"a arte já existe e só o texto muda (ex.: versão em espanhol pro Paraguay de uma arte da Bioter Brasil) — R$10"},
+  {id:"troca_texto",    label:"Troca de texto",     grupo:"design", quando:"a arte já existe e só o texto muda (ex.: versão em espanhol pro Paraguay de uma arte da Bioter Brasil) — R$5"},
   {id:"corte",          label:"Corte de vídeo",     grupo:"video",  quando:"já existe um vídeo gravado e é só cortar, legendar ou adaptar"},
   {id:"video_feira",    label:"Vídeo básico",       grupo:"video",  quando:"vídeo simples, pouca edição — registro de feira, bastidor, recado rápido"},
   {id:"video",          label:"Vídeo",              grupo:"video",  quando:"vídeo editado de verdade, com roteiro, cenas e trilha"},
@@ -52077,7 +52077,7 @@ function _cardPodeSerResp(u){
                 const _vBri=canEdit&&_bl("ia.briefing");
                 /* (08/10/2026, Gustavo) "Duplicar pra Paraguai (ES)": só em card da Bioter BRASIL (qualquer unidade que não seja Paraguay),
                    com a copy já aprovada (Demanda em diante) e sem versão ES ainda. Clona tudo (mesma data, pessoas, mês de pagamento,
-                   materiais), traduz com a inteligência da Bioter Paraguay e nasce em Demanda como "Troca de texto" (R$10). */
+                   materiais), traduz com a inteligência da Bioter Paraguay e nasce em Demanda como "Troca de texto" (R$5). */
                 const _unAtual=String(bioterUnit||task.bioterUnit||task.bioter_unit||"");
                 const _jaTemES=(tasks||[]).some(function(t){ return t&&String(t.id)===String(task.id)+"-es"&&!t.deletedAt; });
                 const _vES=canEdit&&task.client==="bioter"&&!/paragua/i.test(_unAtual)&&!(typeof pxEhVersaoES==="function"&&pxEhVersaoES(task))
@@ -52110,10 +52110,10 @@ function _cardPodeSerResp(u){
                   {_vES&&<PxBotaoIA icone="globe"
                     loading={dupES}
                     label={_jaTemES?"Versão Paraguai já existe":dupES?"Duplicando pra Paraguai…":"Duplicar pra Paraguai (ES)"}
-                    title="Cria um clone deste card pra Bioter Paraguay: mesma data de publicação, mesmas pessoas, mesmo mês de pagamento e os mesmos materiais. O briefing e a legenda são traduzidos pro espanhol com o playbook e os produtos da Bioter Paraguay. Nasce em Demanda como 'Troca de texto' (R$10): o designer só troca o texto na arte pronta."
+                    title="Cria um clone deste card pra Bioter Paraguay: mesma data de publicação, mesmas pessoas, mesmo mês de pagamento e os mesmos materiais. O briefing e a legenda são traduzidos pro espanhol com o playbook e os produtos da Bioter Paraguay. Nasce em Demanda como 'Troca de texto' (R$5): o designer só troca o texto na arte pronta."
                     onClick={async function(){
                       if(_jaTemES){ pixelsToast.info("Este card já tem a versão em espanhol (id "+task.id+"-es)."); return; }
-                      if(!window.confirm("Duplicar “"+(task.title||"")+"” pra Bioter Paraguay (espanhol)?\n\nMesma data, mesmas pessoas, mesmo mês de pagamento e os materiais; briefing e legenda traduzidos. Nasce em Demanda como Troca de texto (R$10).")) return;
+                      if(!window.confirm("Duplicar “"+(task.title||"")+"” pra Bioter Paraguay (espanhol)?\n\nMesma data, mesmas pessoas, mesmo mês de pagamento e os materiais; briefing e legenda traduzidos. Nasce em Demanda como Troca de texto (R$5).")) return;
                       setDupES(true);
                       try{ await pxDuplicarParaParaguai(task,setTasks); }catch(e){ pixelsToast.error("Não duplicou: "+((e&&e.message)||e)); }
                       setDupES(false);
@@ -54041,7 +54041,7 @@ function _cardPodeSerResp(u){
                 /* (05/10/2026) Linha 3: jeito da voz — gravam content_type "video" + tasks.narracao_ia.modo */
                 {id:"video_narrado_ia",label:"Vídeo narrado IA",icon:"sparkles",modo:"ia"},
                 {id:"video_audio_cliente",label:"Vídeo áudio cliente",icon:"mic",modo:"audio_cliente"},
-                /* (08/10/2026, Gustavo) Troca de texto: a arte já existe e só o texto muda (versão ES pro Paraguay) — R$10 */
+                /* (08/10/2026, Gustavo) Troca de texto: a arte já existe e só o texto muda (versão ES pro Paraguay) — R$5 */
                 {id:"troca_texto",label:"Troca de texto",icon:"edit"},
                 /* "video_short" (short vindo do Drive do cliente) existe como valor — o sync do Drive grava —
                    mas não é escolhido à mão, então não aparece aqui. */
