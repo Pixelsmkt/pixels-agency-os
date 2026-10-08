@@ -2569,7 +2569,7 @@ function smartFormatTitle(input){
 
 /* ─── DESIGNER PAYMENTS ─── */
 // Tabela BASE — vigente até 08/2026.
-const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50, versao: 0 };  // versao (07/10): versão ES do Grupo Bioter, custo 0
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50, versao: 0, trocaTexto: 10 };  // versao (07/10): versão ES do Grupo Bioter, custo 0 · trocaTexto (08/10, Gustavo): "Troca de texto" — só trocar o texto numa arte pronta (ex.: versão em espanhol), R$10
 
 // ── Reajustes datados ────────────────────────────────────────────────────
 // O pagamento é calculado sob demanda a partir das tasks do mês. Se a gente
@@ -2619,6 +2619,7 @@ const _CT_BUCKET = {
   video:["video","tasksVideo"], corte:["corte","tasksCorte"],
   video_complexo:["videoComplexo","tasksVideoComplexo"],
   video_feira:["videoFeira","tasksVideoFeira"],
+  troca_texto:["trocaTexto","tasksTrocaTexto"],
 };
 // "reprovado" entra porque o material foi produzido — paga igual.
 // Sócio pode reprovar quem reprova é o cliente; produção já gastou hora/recurso.
@@ -2790,14 +2791,15 @@ function pxCriarParcelamento(freelaId, startMonth, total, n, motivo){
 /* Quanto ainda falta da dívida DEPOIS desta parcela (pra mostrar "restam R$ X"). */
 function pxParcRestante(parc){ if(!parc) return 0; var r=(Number(parc.total)||0)-(Number(parc.valor)||0)*(Number(parc.i)||0); return r>0?Math.round(r*100)/100:0; }
 function calcDesignerPayments(tasks, designerId, refMonth){
-  const out = { total:0, fotoObra:0, arte:0, carrossel:0, folder:0, valorFolder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
-                tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
+  const out = { total:0, fotoObra:0, arte:0, carrossel:0, folder:0, valorFolder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, trocaTexto:0, naoClassificado:0,
+                tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksTrocaTexto:[], tasksOutros:[] };
   (tasks||[]).forEach(t=>{
     if(!t)return;
     const assigned=t.assignee===designerId||(Array.isArray(t.assignees)&&t.assignees.includes(designerId));
     if(!assigned)return;
     // (07/10/2026, Gustavo) versão em espanhol do Grupo Bioter conta junto com o original — não paga de novo
-    if(Array.isArray(t.tags)&&t.tags.indexOf("Versão espanhol")>=0)return;
+    // (08/10, Gustavo) …mas a versão criada pelo botão "Duplicar pra Paraguai" é Troca de texto (R$10) e PAGA
+    if(Array.isArray(t.tags)&&t.tags.indexOf("Versão espanhol")>=0&&String(t.contentType||"")!=="troca_texto")return;
     // Descarta deletados + cards ainda em fase de copy (rascunhos, Copys=demanda, Alteração de copy).
     // Considera pra pagamento a partir de "Demanda" (recebida) em diante: execução, avaliação,
     // aprovado, agendado, publicado, reprovado, pausado, ajustes.
@@ -3051,7 +3053,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         const _pc=c._prices||DESIGNER_PRICES;   // preços do mês/designer, não a tabela base
         const items=r.isEditor
           ?[{l:"Vídeo",n:c.video,p:_pc.video},{l:"Corte",n:c.corte,p:_pc.corte},{l:"V. dinâmico",n:c.videoComplexo,p:_pc.videoComplexo},{l:"V. básico",n:c.videoFeira,p:_pc.videoFeira}]
-          :[{l:"Ajuste de template",n:c.fotoObra,p:_pc.fotoObra},{l:"Arte única",n:c.arte,p:_pc.arte},{l:"Carrossel",n:c.carrossel,p:_pc.carrossel},{l:"Material gráfico",n:c.folder,p:_pc.folder,v:c.valorFolder}];
+          :[{l:"Ajuste de template",n:c.fotoObra,p:_pc.fotoObra},{l:"Arte única",n:c.arte,p:_pc.arte},{l:"Carrossel",n:c.carrossel,p:_pc.carrossel},{l:"Material gráfico",n:c.folder,p:_pc.folder,v:c.valorFolder},{l:"Troca de texto",n:c.trocaTexto||0,p:_pc.trocaTexto}];
         // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
         const hasAny=items.some(function(it){return it.n>0;});
         return <div key={fr.id} style={{background:"linear-gradient(180deg,"+accent+"08 0%, #fff 60%)",border:"1px solid "+accent+"22",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 4px 14px "+accent+"10, 0 1px 3px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
@@ -3119,7 +3121,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               }
               // Só o mês selecionado — sem prev/next pra não confundir.
               const cc=calcDesignerPayments(tasks||[], fr.id, refMonth);
-              const items=[].concat(cc.tasksFotoObra,cc.tasksArte,cc.tasksCarrossel,cc.tasksFolder,cc.tasksVideo,cc.tasksCorte,cc.tasksVideoComplexo,cc.tasksVideoFeira);
+              const items=[].concat(cc.tasksFotoObra,cc.tasksArte,cc.tasksCarrossel,cc.tasksFolder,cc.tasksVideo,cc.tasksCorte,cc.tasksVideoComplexo,cc.tasksVideoFeira,cc.tasksTrocaTexto||[]);
               if(items.length===0) return null;
               // Ordena ENTREGAS mais recentes primeiro.
               // Tasks vêm em camelCase do state local; snake_case usado como fallback (Supabase raw).
@@ -3201,7 +3203,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
             onMouseEnter={function(e){e.currentTarget.style.background=accent+"10";}}
             onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            Ver detalhe ({(c.fotoObra+c.arte+c.carrossel+c.folder+c.video+c.corte+c.videoComplexo+c.videoFeira)||0} itens)
+            Ver detalhe ({(c.fotoObra+c.arte+c.carrossel+c.folder+c.video+c.corte+c.videoComplexo+c.videoFeira+(c.trocaTexto||0))||0} itens)
           </button>
 
           {/* (23/09/2026) AJUSTES NO VALOR DEVIDO · PAGAMENTOS FEITOS · SALDO — três blocos, três
@@ -3390,6 +3392,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         {key:"tasksCorte",     label:"Corte de vídeo",      price:_pd.corte,         color:"#0284c7"},
         {key:"tasksVideoComplexo",label:"Vídeo dinâmico",   price:_pd.videoComplexo, color:"#7e22ce"},
         {key:"tasksVideoFeira",label:"Vídeo básico",        price:_pd.videoFeira,    color:"#0369a1"},
+        {key:"tasksTrocaTexto",label:"Troca de texto",      price:_pd.trocaTexto,    color:"#059669"},
         {key:"tasksOutros",    label:"Não classificado",    price:0,                             color:"#64748b"},
       ];
       const _statusLabel={demanda:"Copys",alteracao_copy:"Alteração",preencher_material:"Preencher material",recebida:"Demanda",execucao:"Execução",avaliacao:"Avaliação",aprovado:"Aprovado",aprovacao_final:"Aprovado pelo cliente",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado",reprovado:"Reprovado",ajustes:"Ajustes",rascunhos:"Rascunho"};
@@ -5381,7 +5384,81 @@ async function pxCriarVersaoES(task,setTasks,opts){
   }catch(e){ console.warn("[versao ES]",e); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui criar a versão em espanhol: "+((e&&e.message)||e),6000); return null; }
   finally{ delete _pxVersaoESEmCurso[id]; }
 }
-if(typeof window!=="undefined"){ window.pxCriarVersaoES=pxCriarVersaoES; window.pxEhVersaoES=pxEhVersaoES; }
+/* ── (08/10/2026, Gustavo) BOTÃO "DUPLICAR PRA PARAGUAI (ES)" dentro do card da Bioter Brasil ─────────────────────
+   "quero um botão dentro do card de duplicar pra versão espanhol.. usa os arquivos que tem dentro (materiais) e traduz
+    o conteúdo pra espanhol levando em conta os playbooks e inteligência da Bioter Paraguay, produtos etc.. sai no mesmo
+    dia da original, marcado Bioter Paraguay, as mesmas pessoas, mesmo mês de pagamento.. tipo de conteúdo Troca de texto, R$10"
+   Diferente do pxCriarVersaoES (que nasce na aprovação da copy, custo 0): aqui a ARTE JÁ EXISTE — o designer só troca o
+   texto. Clone idêntico (id <original>-es) em Demanda, com os materiais/editáveis copiados e a arte PT como referência. */
+async function pxDuplicarParaParaguai(task,setTasks){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const o=task||{}; const id=String(o.id||"");
+  if(!sb||!id) return null;
+  if(/-es$/.test(id)){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Este card já é a versão em espanhol."); return null; }
+  if(_pxVersaoESEmCurso[id]) return null;
+  _pxVersaoESEmCurso[id]=true;
+  try{
+    const idEs=id+"-es";
+    const ja=await sb.from("tasks").select("id,deleted_at").eq("id",idEs).limit(1);
+    if(ja.data&&ja.data.length){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Já existe a versão em espanhol deste card ("+idEs+")"+(ja.data[0].deleted_at?" — está na lixeira":"")+"."); return null; }
+    if(typeof askIA!=="function") throw new Error("a IA não está disponível");
+    const brief=_pxHtmlParaTexto(o.desc||o.description||""), leg=_pxHtmlParaTexto(o.caption||"");
+    // inteligência da Bioter Paraguay: playbook (tom, proibidas, marcações), produtos com nome em espanhol, contato da unidade
+    let ctx=null; try{ ctx=await pxContextoCopy("bioter","paraguay",o); }catch(_){ ctx=null; }
+    const pb=(ctx&&ctx.playbook)||{};
+    let gloss=""; try{ gloss=pxProdutosOficiais(ctx,"paraguay").filter(function(p){ return p.nomeEs&&p.nomeEs.toLowerCase()!==p.nome.toLowerCase(); }).map(function(p){ return "- "+p.nome+" → "+p.nomeEs; }).join("\n"); }catch(_){ }
+    let contatoPy=""; try{ const cu=(pb.contatos_por_unidade&&typeof pb.contatos_por_unidade==="object")?pb.contatos_por_unidade.paraguay:null; contatoPy=_pxCtxTxt(cu).slice(0,300); }catch(_){ }
+    let marc=""; try{ marc=_pxCtxTxt(pb.marcacoes).slice(0,400); }catch(_){ }
+    let tom=""; try{ tom=_pxCtxTxt(pb.comunicacao).slice(0,900); }catch(_){ }
+    let proib=""; try{ proib=_pxCtxTxt(pb.chamadas_proibidas).slice(0,500); }catch(_){ }
+    const sys="Você traduz copy de redes sociais do português do Brasil para o ESPANHOL do Paraguai (agronegócio — Bioter Paraguay). "+
+      "Traduz com naturalidade, sem acrescentar nem tirar ideia. Os RÓTULOS do briefing (• TÍTULO, • TEXTO NA ARTE, • LEGENDA, • ROTEIRO, Lâmina 2 —, Cena 1 —, • Pin no mapa, • Frase na arte etc.) ficam EXATAMENTE como estão, em português; "+
+      "o conteúdo depois de cada rótulo vai em espanhol. NOMES DE PRODUTO: use SEMPRE o nome oficial em espanhol do glossário (nunca traduza por conta). "+
+      "Telefone/WhatsApp: se houver contato do Paraguay informado, troque o do Brasil por ele; senão mantenha. @perfis e hashtags de marca: use as do Paraguay se informadas. Hashtags comuns podem ir para o espanhol. "+
+      "Respeite o tom de voz e nunca use as chamadas proibidas. "+
+      "Responda só neste formato, texto puro:\n===TITULO===\n(título do card em espanhol)\n===BRIEFING===\n(briefing)\n===LEGENDA===\n(legenda)";
+    let u="";
+    if(gloss) u+="GLOSSÁRIO DE PRODUTOS (português → espanhol oficial da Bioter Paraguay):\n"+gloss+"\n\n";
+    if(tom) u+="TOM DE VOZ DA MARCA:\n"+tom+"\n\n";
+    if(proib) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+proib+"\n\n";
+    if(marc) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA (Paraguay): "+marc+"\n\n";
+    if(contatoPy) u+="CONTATO DA BIOTER PARAGUAY: "+contatoPy+"\n\n";
+    u+="TÍTULO DO CARD: "+(o.title||"")+"\n\nBRIEFING:\n"+(brief||"(vazio)")+"\n\nLEGENDA:\n"+(leg||"(vazia)");
+    const data=await askIA({model:PX_IA_MODELO,max_tokens:4000,system:sys,messages:[{role:"user",content:u}]});
+    const txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+    const pega=function(k,prox){ const i=txt.indexOf("==="+k+"==="); if(i<0) return ""; const j=prox?txt.indexOf("==="+prox+"===",i):-1; return txt.slice(i+k.length+6,j>i?j:undefined).trim(); };
+    const tit=pega("TITULO","BRIEFING")||(o.title||""), b2=pega("BRIEFING","LEGENDA"), l2=pega("LEGENDA");
+    if(!b2&&!l2&&(brief||leg)) throw new Error("a tradução veio vazia");
+    const agora=new Date().toISOString();
+    const tags=(Array.isArray(o.tags)?o.tags:[]).filter(function(x){return x!==PX_TAG_VERSAO_ES;}).concat([PX_TAG_VERSAO_ES]);
+    // arquivos: materiais, referências e editáveis vão iguais; a ARTE FINAL em português vira referência "(PT) …" pro designer trocar o texto
+    const files=(Array.isArray(o.files)?o.files:[]).filter(function(f){ return f&&f.url&&!f.isAnnotation&&!f.uploading; }).map(function(f){
+      const tipo=f.tipo||"final";
+      if(tipo==="final") return Object.assign({},f,{tipo:"referencia",name:"(PT) "+(f.name||"arte"),comentario:"arte original em português — só trocar o texto"});
+      return Object.assign({},f);
+    });
+    const tk=Object.assign({},o,{
+      id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioterUnit:"paraguay", bioter_unit:"paraguay",
+      status:"recebida", contentType:"troca_texto", content_type:"troca_texto",
+      desc:b2?_pxTextoParaHtml(b2):"", description:b2?_pxTextoParaHtml(b2):"", caption:l2?_pxTextoParaHtml(l2):"",
+      tags:tags, files:files, comments:[], copyVersoes:[], paidAt:null, paid_at:null, valorPersonalizado:null, valor_personalizado:null,
+      completedAt:null, completed_at:null, approvedBy:null, approved_by:null, approvedAt:null, approved_at:null,
+      colEnteredAt:agora, col_entered_at:agora, ajustar:false, _isDraft:false,
+      timeline:[{type:"created",label:"Duplicado pra Bioter Paraguay (espanhol) a partir de “"+(o.title||"")+"” — mesma data, mesmas pessoas, mesmo mês de pagamento; briefing e legenda traduzidos com o playbook da Bioter Paraguay; tipo Troca de texto (R$10): só trocar o texto na arte pronta",at:agora,atFmt:(typeof nowFmt==="function"?nowFmt():""),user:pxAutorNome()}],
+    });
+    const row=(typeof taskToRow==="function")?taskToRow(tk):null;
+    if(!row) throw new Error("não consegui montar o card");
+    row.traducao_pt={titulo:o.title||"",briefing:o.desc||o.description||"",legenda:o.caption||""};
+    const ins=await sb.from("tasks").insert(row).select("*").single();
+    if(ins.error) throw ins.error;
+    if(typeof setTasks==="function"&&typeof rowToTask==="function"){ const nt=rowToTask(ins.data); setTasks(function(p){ return (p||[]).some(function(x){return x.id===nt.id;})?p:(p||[]).concat([nt]); }); }
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Versão Paraguay criada em Demanda: “"+tk.title+"” — mesma data, Troca de texto (R$10).",5000);
+    if(typeof pxCascataVarrer==="function") setTimeout(function(){ try{ pxCascataVarrer(idEs); }catch(_){} },2000);
+    return ins.data;
+  }catch(e){ console.warn("[duplicar ES]",e); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui duplicar pra Paraguay: "+((e&&e.message)||e),6000); return null; }
+  finally{ delete _pxVersaoESEmCurso[id]; }
+}
+if(typeof window!=="undefined"){ window.pxCriarVersaoES=pxCriarVersaoES; window.pxEhVersaoES=pxEhVersaoES; window.pxDuplicarParaParaguai=pxDuplicarParaParaguai; }
 function _pxHtmlParaTexto(html){
   return String(html||"")
     .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n")
@@ -6047,6 +6124,7 @@ const PX_TIPOS_CONTEUDO=[
   {id:"carrossel",      label:"Carrossel",          grupo:"design", quando:"o conteúdo precisa de várias lâminas em sequência"},
   {id:"folder",         label:"Material gráfico",   grupo:"design", quando:"folder, catálogo, cartão, banner, material impresso ou PDF — valor do freela definido no card"},
   {id:"versao",         label:"Versão",             grupo:"design", quando:"outra versão (ex.: espanhol do Grupo Bioter) de um card já pago — custo 0"},
+  {id:"troca_texto",    label:"Troca de texto",     grupo:"design", quando:"a arte já existe e só o texto muda (ex.: versão em espanhol pro Paraguay de uma arte da Bioter Brasil) — R$10"},
   {id:"corte",          label:"Corte de vídeo",     grupo:"video",  quando:"já existe um vídeo gravado e é só cortar, legendar ou adaptar"},
   {id:"video_feira",    label:"Vídeo básico",       grupo:"video",  quando:"vídeo simples, pouca edição — registro de feira, bastidor, recado rápido"},
   {id:"video",          label:"Vídeo",              grupo:"video",  quando:"vídeo editado de verdade, com roteiro, cenas e trilha"},
@@ -26293,7 +26371,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                             <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0,flex:1,overflow:"hidden"}}>
                               {/* Icone do tipo — ANTES da logo da empresa */}
                               {(function(){
-                                const TYPE_TITLE = {arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",corte:"Corte de vídeo"};
+                                const TYPE_TITLE = {arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",corte:"Corte de vídeo",troca_texto:"Troca de texto",versao:"Versão"};
                                 const ttl = TYPE_TITLE[tipo];
                                 if(!ttl) return null;
                                 let svg = null;
@@ -29411,6 +29489,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         video:{label:"Vídeo",icon:"play"},
                         video_complexo:{label:"Vídeo dinâmico",icon:"film"},
                         video_feira:{label:"Vídeo básico",icon:"flag"},
+                        troca_texto:{label:"Troca de texto",icon:"edit"},
                         foto:{label:"Ajuste de template",icon:"camera"},
                         corte:{label:"Corte de vídeo",icon:"scissors"},
                       };
@@ -36115,7 +36194,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           {/* ── Header de chips: cliente, unidade, responsáveis, tipo, publicação, entrega, pagamento ── */}
           {(()=>{
             const ct=(current.contentType||current.tipo||"").toLowerCase();
-            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"},troca_texto:{label:"Troca de texto",icon:"edit"}};
             const ctCfg=CT_MAP[ct];
             const pubD=current.publishDate||current.publish_date||"";
             const pubT=current.publishTime||current.publish_time||"";
@@ -36649,7 +36728,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               corpo=_o.join("\n").replace(/\n{3,}/g,"\n\n").trim();
             }catch(_){}
             const _ct=String((current&&(current.contentType||current.content_type))||"");
-            const _CT={arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",folder:"Material gráfico",versao:"Versão",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",video_short:"Short",corte:"Corte de vídeo"};
+            const _CT={arte:"Arte única",carrossel:"Carrossel",foto:"Ajuste de template",folder:"Material gráfico",versao:"Versão",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",video_short:"Short",corte:"Corte de vídeo",troca_texto:"Troca de texto"};
             const _nLam=(corpo.match(/^\*L[âa]mina\s*\d+/gim)||[]).length;
             const _uni=(cl&&cl.id==="bioter"&&typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit).map(function(u){return u.label;}).join(", "):"";
             const _cli=cl?(String(cl.name||cl.id)+(_uni?(" · "+_uni):"")):"";
@@ -36794,7 +36873,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                  Quem não aprova continua só lendo, e bloco sem valor nem aparece. */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
-              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Material gráfico",icon:"file-text"},versao:{label:"Versão",icon:"copy"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Material gráfico",icon:"file-text"},versao:{label:"Versão",icon:"copy"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"},troca_texto:{label:"Troca de texto",icon:"edit"}};
               const ctCfg=CT_MAP[ct];
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
@@ -48071,6 +48150,8 @@ function PxBotaoIA({label,hint,title,onClick,icone,loading}){
   const _tip=[title,hint].filter(Boolean).join("\n\n");
   const _ic=icone==="video"
     ?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
+    :icone==="globe"
+    ?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/></svg>
     :<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>;
   return <button type="button" className="px-ia-btn" onClick={loading?undefined:onClick} disabled={!!loading} title={_tip}
     style={{cursor:loading?"wait":"pointer",opacity:loading?.75:1}}>
@@ -51984,7 +52065,15 @@ function _cardPodeSerResp(u){
                 const _temB=_pxTextoPuro(desc).length>20;
                 const _vRot=pxPodeVirarRoteiro(task)&&_temB&&_bl("ia.roteiro");
                 const _vBri=canEdit&&_bl("ia.briefing");
-                if(!_vRot&&!_vBri) return null;
+                /* (08/10/2026, Gustavo) "Duplicar pra Paraguai (ES)": só em card da Bioter BRASIL (qualquer unidade que não seja Paraguay),
+                   com a copy já aprovada (Demanda em diante) e sem versão ES ainda. Clona tudo (mesma data, pessoas, mês de pagamento,
+                   materiais), traduz com a inteligência da Bioter Paraguay e nasce em Demanda como "Troca de texto" (R$10). */
+                const _unAtual=String(bioterUnit||task.bioterUnit||task.bioter_unit||"");
+                const _jaTemES=(tasks||[]).some(function(t){ return t&&String(t.id)===String(task.id)+"-es"&&!t.deletedAt; });
+                const _vES=canEdit&&task.client==="bioter"&&!/paragua/i.test(_unAtual)&&!(typeof pxEhVersaoES==="function"&&pxEhVersaoES(task))
+                  &&["recebida","execucao","ajustes","avaliacao","aprovado","aprovacao_final","agendado","publicado"].indexOf(String(task.status||""))>=0
+                  &&typeof pxDuplicarParaParaguai==="function";
+                if(!_vRot&&!_vBri&&!_vES) return null;
                 return <div className="px-ia-bar" style={{marginTop:-12,marginBottom:24}}>{/* 30/09 (Gustavo): no meio do espaço entre as abas e a caixa do briefing */}
                   {_vBri&&<PxBotaoIA
                     label={_temB?"Ajustar briefing":"Gerar briefing"}
@@ -52007,6 +52096,17 @@ function _cardPodeSerResp(u){
                         const txt=await pxRoteiro60(task,_nome);
                         setRoteiroSt({texto:txt});
                       }catch(e){ setRoteiroSt({erro:(e&&e.message)||String(e)}); }
+                    }}/>}
+                  {_vES&&<PxBotaoIA icone="globe"
+                    loading={!!(window.__pxDupES&&window.__pxDupES[task.id])}
+                    label={_jaTemES?"Versão Paraguai já existe":(window.__pxDupES&&window.__pxDupES[task.id])?"Duplicando pra Paraguai…":"Duplicar pra Paraguai (ES)"}
+                    title="Cria um clone deste card pra Bioter Paraguay: mesma data de publicação, mesmas pessoas, mesmo mês de pagamento e os mesmos materiais. O briefing e a legenda são traduzidos pro espanhol com o playbook e os produtos da Bioter Paraguay. Nasce em Demanda como 'Troca de texto' (R$10): o designer só troca o texto na arte pronta."
+                    onClick={async function(){
+                      if(_jaTemES){ pixelsToast.info("Este card já tem a versão em espanhol (id "+task.id+"-es)."); return; }
+                      if(!window.confirm("Duplicar “"+(task.title||"")+"” pra Bioter Paraguay (espanhol)?\n\nMesma data, mesmas pessoas, mesmo mês de pagamento e os materiais; briefing e legenda traduzidos. Nasce em Demanda como Troca de texto (R$10).")) return;
+                      window.__pxDupES=window.__pxDupES||{}; window.__pxDupES[task.id]=true; setRoteiroSt(function(x){ return Object.assign({},x||{}); });
+                      try{ await pxDuplicarParaParaguai(task,setTasks); }catch(e){ pixelsToast.error("Não duplicou: "+((e&&e.message)||e)); }
+                      delete window.__pxDupES[task.id]; setRoteiroSt(function(x){ return Object.assign({},x||{}); });
                     }}/>}
                 </div>;
               })()}
@@ -53931,6 +54031,8 @@ function _cardPodeSerResp(u){
                 /* (05/10/2026) Linha 3: jeito da voz — gravam content_type "video" + tasks.narracao_ia.modo */
                 {id:"video_narrado_ia",label:"Vídeo narrado IA",icon:"sparkles",modo:"ia"},
                 {id:"video_audio_cliente",label:"Vídeo áudio cliente",icon:"mic",modo:"audio_cliente"},
+                /* (08/10/2026, Gustavo) Troca de texto: a arte já existe e só o texto muda (versão ES pro Paraguay) — R$10 */
+                {id:"troca_texto",label:"Troca de texto",icon:"edit"},
                 /* "video_short" (short vindo do Drive do cliente) existe como valor — o sync do Drive grava —
                    mas não é escolhido à mão, então não aparece aqui. */
               ].map(opt=>{
@@ -55522,7 +55624,8 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
       ...(calc.tasksCorte||[]).map(t=>({...t,_cat:"Corte de vídeo",_price:(calc._prices||DESIGNER_PRICES).corte}))]
     :[...(calc.tasksFotoObra||[]).map(t=>({...t,_cat:"Ajuste de template",_price:(calc._prices||DESIGNER_PRICES).fotoObra})),
       ...(calc.tasksArte||[]).map(t=>({...t,_cat:"Arte única",_price:(calc._prices||DESIGNER_PRICES).arte})),
-      ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:(calc._prices||DESIGNER_PRICES).carrossel}))];
+      ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:(calc._prices||DESIGNER_PRICES).carrossel})),
+      ...(calc.tasksTrocaTexto||[]).map(t=>({...t,_cat:"Troca de texto",_price:(calc._prices||DESIGNER_PRICES).trocaTexto}))];
   return <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
     {/* Header com mês picker + total */}
     <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
@@ -55549,6 +55652,7 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
         <CardCat label="Ajuste de template" count={calc.fotoObra} price={(calc._prices||DESIGNER_PRICES).fotoObra} color="#16a34a"/>
         <CardCat label="Arte única" count={calc.arte} price={(calc._prices||DESIGNER_PRICES).arte} color="#16a34a"/>
         <CardCat label="Carrossel" count={calc.carrossel} price={(calc._prices||DESIGNER_PRICES).carrossel} color="#16a34a"/>
+        {(calc.trocaTexto||0)>0&&<CardCat label="Troca de texto" count={calc.trocaTexto} price={(calc._prices||DESIGNER_PRICES).trocaTexto} color="#16a34a"/>}
       </div>}
     {calc.naoClassificado>0&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11,borderRadius:8,padding:"10px 14px",lineHeight:1.5}}>
       <strong>{calc.naoClassificado} demanda(s) sem tipo de conteúdo definido</strong> — ainda não entram no cálculo. Os sócios precisam abrir e classificar.
@@ -74355,6 +74459,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
       video_dinamico:"Vídeo dinâmico",
       video_basico:"Vídeo básico",
       video_feira:"Vídeo básico",         // legacy
+      troca_texto:"Troca de texto",
       video_short:"Short",
       foto:"Foto de obra",
       folder:"Material gráfico",
@@ -95205,7 +95310,7 @@ function DashColabV2(props){
   const calc = (typeof calcDesignerPayments==="function") ? calcDesignerPayments(my, user.id, refMonth) : {total:0};
   const valorReceber = calc.total||0;
   // Tasks que entram no cálculo
-  const tasksPagas = [].concat(calc.tasksFotoObra||[], calc.tasksArte||[], calc.tasksCarrossel||[], calc.tasksFolder||[], calc.tasksVideo||[], calc.tasksCorte||[], calc.tasksVideoComplexo||[], calc.tasksVideoFeira||[]);
+  const tasksPagas = [].concat(calc.tasksFotoObra||[], calc.tasksArte||[], calc.tasksCarrossel||[], calc.tasksFolder||[], calc.tasksVideo||[], calc.tasksCorte||[], calc.tasksVideoComplexo||[], calc.tasksVideoFeira||[], calc.tasksTrocaTexto||[]);
   const valorMedio = tasksPagas.length>0 ? valorReceber/tasksPagas.length : 0;
 
   // ── Detalhamento por tipo (pra cards do pagamento) ──
@@ -95221,6 +95326,7 @@ function DashColabV2(props){
         {label:"Arte única",      count:calc.arte||0,          price:(calc._prices||DESIGNER_PRICES).arte,          tasks:calc.tasksArte||[]},
         {label:"Carrossel",       count:calc.carrossel||0,     price:(calc._prices||DESIGNER_PRICES).carrossel,     tasks:calc.tasksCarrossel||[]},
         {label:"Material gráfico", count:calc.folder||0,       price:(calc._prices||DESIGNER_PRICES).folder,        tasks:calc.tasksFolder||[], v:calc.valorFolder},
+        {label:"Troca de texto",  count:calc.trocaTexto||0,    price:(calc._prices||DESIGNER_PRICES).trocaTexto,    tasks:calc.tasksTrocaTexto||[]},
       ];
 
   // ── Status geral do mês ──
@@ -95390,7 +95496,7 @@ function DashColabV2(props){
           {tasksPagas.map(function(t){
             const cl = clientObj(t.client);
             const ct = String(t.contentType||"").toLowerCase();
-            const price = ct==="foto"?(calc._prices||DESIGNER_PRICES).fotoObra : ct==="arte"?(calc._prices||DESIGNER_PRICES).arte : ct==="carrossel"?(calc._prices||DESIGNER_PRICES).carrossel : ct==="folder"?(calc._prices||DESIGNER_PRICES).folder : ct==="video"?(calc._prices||DESIGNER_PRICES).video : ct==="corte"?(calc._prices||DESIGNER_PRICES).corte : ct==="video_complexo"?(calc._prices||DESIGNER_PRICES).videoComplexo : ct==="video_feira"?(calc._prices||DESIGNER_PRICES).videoFeira : 0;
+            const price = ct==="foto"?(calc._prices||DESIGNER_PRICES).fotoObra : ct==="arte"?(calc._prices||DESIGNER_PRICES).arte : ct==="carrossel"?(calc._prices||DESIGNER_PRICES).carrossel : ct==="folder"?(calc._prices||DESIGNER_PRICES).folder : ct==="video"?(calc._prices||DESIGNER_PRICES).video : ct==="corte"?(calc._prices||DESIGNER_PRICES).corte : ct==="video_complexo"?(calc._prices||DESIGNER_PRICES).videoComplexo : ct==="video_feira"?(calc._prices||DESIGNER_PRICES).videoFeira : ct==="troca_texto"?(calc._prices||DESIGNER_PRICES).trocaTexto : 0;
             const dateRef = t.completedAt || t.publishDate || "";
             const dateStr = dateRef && dateRef.length>=10 ? dateRef.slice(8,10)+"/"+dateRef.slice(5,7) : "—";
             return <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:11,transition:"all .15s"}}
