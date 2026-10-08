@@ -125093,6 +125093,48 @@ function _evpSegmentar(fonte){
   });
 }
 
+/* v92 (08/10/2026) som sem sanfona: MÁSCARA DA FALA para abaixar a música/trilhas/sons. Antes cada 0,1 s olhava o pico CRU do bruto com
+   limite fixo (0,05): fala mais baixa (WhatsApp, lapela longe) não contava como fala → a música SUBIA no meio da frase e descia de novo
+   ("sanfona"). Agora: limite pelo nível do PRÓPRIO bruto (25% do pico típico da fala dele), pausas curtas (< 1,2 s) contam como fala
+   (a música fica embaixo a frase inteira), e só volta a subir em pausa longa de verdade. */
+const _EVP_MASC_PASSO = 0.05, _EVP_MASC_SEGURA = 1.2, _EVP_MASC_FOLGA = 0.25;
+const _evpLimFalaCache = {};
+function _evpLimFala(clipe){
+  if(_evpLimFalaCache[clipe] != null) return _evpLimFalaCache[clipe];
+  const pz = _evpMidia[clipe] && _evpMidia[clipe].peaks; if(!pz || !pz.length) return 0.02;     // sem onda ainda: não guarda (a onda chega depois)
+  const ord = Array.from(pz).filter(function(v){ return v > 0.002; }).sort(function(a, b){ return a - b; });
+  const p90 = ord.length ? ord[Math.floor(ord.length * 0.9)] : 0.2;
+  const lim = Math.max(0.006, Math.min(0.05, p90 * 0.25));
+  _evpLimFalaCache[clipe] = lim; return lim;
+}
+function _evpMascaraFala(envVoz, t0, t1, calc){
+  const n = Math.max(1, Math.ceil((t1 - t0) / _EVP_MASC_PASSO) + 1), m = new Uint8Array(n);
+  /* v92b (08/10/2026) pelo TEXTO: quando a edição tem a transcrição (palavras com tempo na linha do tempo), fala = do começo ao fim das
+     PALAVRAS de verdade — não pelo volume (barulho, "um, dois, três" de fundo ou respiração não contam; fala baixa conta). Sem texto: pelo volume. */
+  const pal = []; ((calc && calc.blocos) || []).forEach(function(b){ ((b && b.words) || []).forEach(function(w){ if(w && isFinite(w.a) && isFinite(w.b) && w.b > w.a && String(w.p || "").trim()) pal.push([w.a, w.b]); }); });
+  if(pal.length){
+    pal.forEach(function(w){ const a = Math.max(0, Math.floor((w[0] - t0) / _EVP_MASC_PASSO)), z = Math.min(n - 1, Math.ceil((w[1] - t0) / _EVP_MASC_PASSO)); for(let k = a; k <= z; k++) m[k] = 1; });
+  } else for(let k = 0; k < n; k++){
+    const x = t0 + k * _EVP_MASC_PASSO;
+    for(let q = 0; q < envVoz.length; q++){ const e = envVoz[q]; if(x < e[0] || x >= e[1]) continue;
+      const pz = _evpMidia[e[2]] && _evpMidia[e[2]].peaks; if(!pz){ m[k] = 1; break; }        // sem onda: na dúvida é fala (música fica embaixo)
+      const lim = _evpLimFala(e[2]), j0 = Math.floor((e[3] + (x - e[0]) * e[4]) / 0.02); let mx = 0;
+      for(let j = j0 - 3; j <= j0 + 3; j++){ if(pz[j] > mx) mx = pz[j]; }
+      if(mx > lim){ m[k] = 1; break; } }
+  }
+  const seg = Math.round(_EVP_MASC_SEGURA / _EVP_MASC_PASSO), fol = Math.round(_EVP_MASC_FOLGA / _EVP_MASC_PASSO);
+  let ult = -1e9;                                                                                 // pausa curta entre falas = fala
+  for(let k = 0; k < n; k++){ if(m[k]){ if(k - ult > 1 && k - ult <= seg) for(let j = ult + 1; j < k; j++) m[j] = 1; ult = k; } }
+  const out = new Uint8Array(n);                                                                  // folga antes e depois
+  for(let k = 0; k < n; k++) if(m[k]) for(let j = Math.max(0, k - fol); j <= Math.min(n - 1, k + fol); j++) out[j] = 1;
+  return function(x){ const k = Math.round((x - t0) / _EVP_MASC_PASSO); return k >= 0 && k < n ? out[k] === 1 : false; };
+}
+/* curva suave da música: desce em ~0,3 s, sobe em ~0,8 s (sem bombear) */
+function _evpSuavizarDuck(pts, passo){
+  const aD = 1 - Math.exp(-passo / 0.12), aS = 1 - Math.exp(-passo / 0.35);
+  for(let k = 1; k < pts.length; k++){ const a = pts[k] < pts[k-1] ? aD : aS; pts[k] = pts[k-1] + (pts[k] - pts[k-1]) * a; }
+  return pts;
+}
 /* ─── v10e: VOLUME DA MÚSICA — média das partes com som (janelas de 400 ms acima de −50 dBFS), a mesma conta do "nivelar" da voz (−18 dB) ─── */
 function _evpNivelDb(buf){
   try{
@@ -127214,20 +127256,20 @@ function _evpMotor(canvas, o){
       if(ini < fim){
         const off = esticado ? ((ini - t0M) % Math.max(0.1, bufM.duration)) : ((iniM + (ini - t0M) * vM) % Math.max(0.1, musBuf.duration));
         // curva: fade in, abaixa na fala (duck), fade out
-        const passo = 0.1, pts = []; const pk = function(clipe){ return _evpMidia[clipe] && _evpMidia[clipe].peaks; };
+        const passo = 0.1, pts = []; let mascFala = null;
         for(let x = ini; x <= fim + 0.001; x += passo){
           let v = mu.volPts && mu.volPts.length ? _evpVolEm(mu.volPts, x - _evpNum(mu.t0, 0), _evpNum(mu.vol, 0.15)) * ganhoCanal("A2") : vol;     // v24: pontos ◆
           const fi = _evpNum(mu.fadeIn, 0.5), fo = _evpNum(mu.fadeOut, 1.5);
           if(x - _evpNum(mu.t0, 0) < fi) v *= Math.max(0, (x - _evpNum(mu.t0, 0)) / Math.max(0.01, fi));
           if(fim - x < fo) v *= Math.max(0, (fim - x) / Math.max(0.01, fo));
           if(mu.duck !== false){
-            const es = envVoz.filter(function(q){ return x >= q[0] && x < q[1]; });
-            if(es.some(function(e){ const p = pk(e[2]); if(!p) return false; const k = Math.floor((e[3] + (x - e[0]) * e[4]) / 0.02); let mx = 0; for(let j=k-10;j<=k+10;j++){ if(p[j] > mx) mx = p[j]; } return mx > 0.05; })) v *= _evpNum(mu.abaixa, 0.45);     // v10e: 0,45 ≈ −7 dB (antes 0,3 = −10 dB e a música sumia)
+            if(!mascFala) mascFala = _evpMascaraFala(envVoz, Math.max(0, ini - 1), fim + 1, calc);     // v92 som sem sanfona: máscara da fala (nível do bruto + pausa curta = fala)
+            if(mascFala(x)) v *= _evpNum(mu.abaixa, 0.45);     // v10e: 0,45 ≈ −7 dB (antes 0,3 = −10 dB e a música sumia)
           }
           pts.push(v);
         }
-        // suaviza (ataque 0,15 s / volta 0,4 s)
-        for(let k=1;k<pts.length;k++){ const a = pts[k] < pts[k-1] ? 0.5 : 0.22; pts[k] = pts[k-1] + (pts[k] - pts[k-1]) * a; }
+        // v92 som sem sanfona: desce em ~0,3 s e sobe em ~0,8 s (antes 0,15 s / 0,4 s, que bombeava nas pausas)
+        _evpSuavizarDuck(pts, passo);
         g.gain.setValueAtTime(pts[0] || 0, quando);
         for(let k=1;k<pts.length;k++) g.gain.linearRampToValueAtTime(pts[k], quando + k*passo);
         const rx = vM === 1 && mu.remix && _evpNum(mu.remix.b, 0) > _evpNum(mu.remix.a, 0) ? mu.remix : null;      // v24: remix (pula o meio na batida); v41: só em 1×
@@ -127273,8 +127315,9 @@ function _evpMotor(canvas, o){
     });
     // v34: SONS AUTOMÁTICOS (motion e transições) — canal A4, abaixam na fala (pela legenda; sem legenda, pela onda da fala)
     const fsA = (calc.faixas && calc.faixas.sfx) || {};
-    const falaPk = function(a, b){ return envVoz.some(function(e){ if(b <= e[0] || a >= e[1]) return false; const pz = _evpMidia[e[2]] && _evpMidia[e[2]].peaks; if(!pz) return false;
-      for(let x = Math.max(a, e[0]); x <= Math.min(b, e[1]); x += 0.02){ if(pz[Math.floor((e[3] + (x - e[0]) * e[4]) / 0.02)] > 0.05) return true; } return false; }); };
+    let mascSfx = null;     // v92 som sem sanfona: a mesma máscara da fala (nível do bruto, pausa curta = fala)
+    const falaPk = function(a, b){ if(!envVoz.length) return false; if(!mascSfx) mascSfx = _evpMascaraFala(envVoz, Math.max(0, t - 1), Math.max(t + 1, envVoz.reduce(function(mx, e){ return Math.max(mx, e[1]); }, 0)) + 1, calc);
+      for(let x = a; x <= b; x += _EVP_MASC_PASSO){ if(mascSfx(x)) return true; } return false; };
     if(!fsA.mudo) (calc.sfxAuto || []).forEach(function(fx){
       if(!(fx.t0 >= t - 0.02) || !fx.tipo) return;
       const kb = fx.tipo + "#" + (fx.v || 0); if(!sfxBuf[kb]) sfxBuf[kb] = _evpSfxBuffer(ac, fx.tipo, fx.v); const buf = sfxBuf[kb];
@@ -127286,14 +127329,10 @@ function _evpMotor(canvas, o){
     });
     // v11: trilhas extras abaixam na fala (mesma conta da música principal)
     trilhas.forEach(function(tr){
-      const pk = function(clipe){ return _evpMidia[clipe] && _evpMidia[clipe].peaks; };
       const ab = _evpNum(calc.musica && calc.musica.abaixa, 0.45), pts = [];
-      for(let x = tr.ini; x <= tr.fim + 0.001; x += 0.1){
-        const es = envVoz.filter(function(q){ return x >= q[0] && x < q[1]; });
-        const fala = es.some(function(e){ const p2 = pk(e[2]); if(!p2) return false; const k = Math.floor((e[3] + (x - e[0]) * e[4]) / 0.02); let mx = 0; for(let j=k-10;j<=k+10;j++){ if(p2[j] > mx) mx = p2[j]; } return mx > 0.05; });
-        pts.push(fala ? tr.vol * ab : tr.vol);
-      }
-      for(let k=1;k<pts.length;k++){ const a = pts[k] < pts[k-1] ? 0.5 : 0.22; pts[k] = pts[k-1] + (pts[k] - pts[k-1]) * a; }
+      const mascT = _evpMascaraFala(envVoz, Math.max(0, tr.ini - 1), tr.fim + 1, calc);     // v92 som sem sanfona: mesma máscara da música principal
+      for(let x = tr.ini; x <= tr.fim + 0.001; x += 0.1) pts.push(mascT(x) ? tr.vol * ab : tr.vol);
+      _evpSuavizarDuck(pts, 0.1);
       try{ tr.g.gain.cancelScheduledValues(tr.quando); tr.g.gain.setValueAtTime(pts[0] || 0, tr.quando); for(let k=1;k<pts.length;k++) tr.g.gain.linearRampToValueAtTime(pts[k], tr.quando + k*0.1); }catch(_){}
     });
   }
