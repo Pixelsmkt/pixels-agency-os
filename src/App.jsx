@@ -5437,8 +5437,10 @@ async function pxDuplicarParaParaguai(task,setTasks){
       if(tipo==="final") return Object.assign({},f,{tipo:"referencia",name:"(PT) "+(f.name||"arte"),comentario:"arte original em português — só trocar o texto"});
       return Object.assign({},f);
     });
+    // capa do clone = a capa do original (ou a 1ª arte final em PT) — senão o card mostra a última referência
+    const capa=o.cover||(function(){ const f=(Array.isArray(o.files)?o.files:[]).find(function(x){ return x&&x.url&&!x.isAnnotation&&(x.tipo||"final")==="final"&&String(x.type||"").indexOf("image/")===0; }); return f?f.url:null; })();
     const tk=Object.assign({},o,{
-      id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioterUnit:"paraguay", bioter_unit:"paraguay",
+      id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioterUnit:"paraguay", bioter_unit:"paraguay", cover:capa,
       status:"recebida", contentType:"troca_texto", content_type:"troca_texto",
       desc:b2?_pxTextoParaHtml(b2):"", description:b2?_pxTextoParaHtml(b2):"", caption:l2?_pxTextoParaHtml(l2):"",
       tags:tags, files:files, comments:[], copyVersoes:[], paidAt:null, paid_at:null, valorPersonalizado:null, valor_personalizado:null,
@@ -48998,6 +49000,7 @@ function _cardPodeSerResp(u){
   const captionRef=useRef(null);
   // (11/09/2026) Transformar arte de data comemorativa em roteiro de vídeo de 60s.
   const [roteiroSt,setRoteiroSt]=useState(null); // {loading} | {texto} | {erro}
+  const [dupES,setDupES]=useState(false);        // (08/10) "Duplicar pra Paraguai (ES)" em andamento
   // (14/09/2026) "Gerar legenda": briefing curto -> 3 opções no padrão da empresa.
   // Nasceu de Foto de obra e Short (dependem da Hellen subir o arquivo), mas fica
   // em todo card — quem já tem legenda simplesmente não usa.
@@ -52098,15 +52101,15 @@ function _cardPodeSerResp(u){
                       }catch(e){ setRoteiroSt({erro:(e&&e.message)||String(e)}); }
                     }}/>}
                   {_vES&&<PxBotaoIA icone="globe"
-                    loading={!!(window.__pxDupES&&window.__pxDupES[task.id])}
-                    label={_jaTemES?"Versão Paraguai já existe":(window.__pxDupES&&window.__pxDupES[task.id])?"Duplicando pra Paraguai…":"Duplicar pra Paraguai (ES)"}
+                    loading={dupES}
+                    label={_jaTemES?"Versão Paraguai já existe":dupES?"Duplicando pra Paraguai…":"Duplicar pra Paraguai (ES)"}
                     title="Cria um clone deste card pra Bioter Paraguay: mesma data de publicação, mesmas pessoas, mesmo mês de pagamento e os mesmos materiais. O briefing e a legenda são traduzidos pro espanhol com o playbook e os produtos da Bioter Paraguay. Nasce em Demanda como 'Troca de texto' (R$10): o designer só troca o texto na arte pronta."
                     onClick={async function(){
                       if(_jaTemES){ pixelsToast.info("Este card já tem a versão em espanhol (id "+task.id+"-es)."); return; }
                       if(!window.confirm("Duplicar “"+(task.title||"")+"” pra Bioter Paraguay (espanhol)?\n\nMesma data, mesmas pessoas, mesmo mês de pagamento e os materiais; briefing e legenda traduzidos. Nasce em Demanda como Troca de texto (R$10).")) return;
-                      window.__pxDupES=window.__pxDupES||{}; window.__pxDupES[task.id]=true; setRoteiroSt(function(x){ return Object.assign({},x||{}); });
+                      setDupES(true);
                       try{ await pxDuplicarParaParaguai(task,setTasks); }catch(e){ pixelsToast.error("Não duplicou: "+((e&&e.message)||e)); }
-                      delete window.__pxDupES[task.id]; setRoteiroSt(function(x){ return Object.assign({},x||{}); });
+                      setDupES(false);
                     }}/>}
                 </div>;
               })()}
@@ -54035,7 +54038,17 @@ function _cardPodeSerResp(u){
                 {id:"troca_texto",label:"Troca de texto",icon:"edit"},
                 /* "video_short" (short vindo do Drive do cliente) existe como valor — o sync do Drive grava —
                    mas não é escolhido à mão, então não aparece aqui. */
-              ].map(opt=>{
+              ].filter(function(opt){
+                /* (08/10/2026, Gustavo) designer só vê os tipos de design; editor de vídeo só os de vídeo;
+                   sócios, coordenação e gestão veem tudo. O tipo já marcado no card sempre aparece. */
+                const _dash=String((typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.dash)||"");
+                const _ehVideoOpt=/^(video|corte|video_feira|video_complexo|video_narrado_ia|video_audio_cliente)$/.test(opt.id)||!!opt.modo;
+                const _marcado=opt.modo?(contentType==="video"&&vozModo===opt.modo):contentType===opt.id;
+                if(_marcado) return true;
+                if(_dash==="designer") return !_ehVideoOpt;
+                if(_dash==="editor") return _ehVideoOpt;
+                return true;
+              }).map(opt=>{
                 const isSel=opt.modo?(contentType==="video"&&vozModo===opt.modo):opt.id==="video"?(contentType==="video"&&!vozModo):contentType===opt.id;
                 const _canPick=canEdit&&canEditContentType&&!(opt.modo&&vozModo===null);
                 return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;const _newType=isSel?"":(opt.modo?"video":opt.id);setContentType(_newType);
