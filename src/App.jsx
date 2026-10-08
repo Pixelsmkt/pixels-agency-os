@@ -51440,7 +51440,7 @@ function _cardPodeSerResp(u){
               })()}
               {/* (07/10/2026, Gustavo) GERAR ARTE DO MODELO — copy + fotos do material entram no PSD-modelo do
                   designer; a arte vai pro card e o card vai direto pra Avaliação de design. */}
-              {canEdit&&!task._isDraft&&["recebida","execucao","ajustes"].indexOf(String(task.status||""))>=0&&["arte","foto",""].indexOf(String(contentType||task.contentType||""))>=0&&typeof PxGerarArteModal==="function"&&(
+              {canEdit&&!task._isDraft&&["recebida","execucao","ajustes","avaliacao"].indexOf(String(task.status||""))>=0&&["arte","foto",""].indexOf(String(contentType||task.contentType||""))>=0&&typeof PxGerarArteModal==="function"&&(
                 <button onClick={function(){ setGerarArteAberto(true); }} title="Usa o template padrão do cliente pro tipo deste card (Foto de obra, Arte, Story…): entra a copy e as fotos do material, e a arte vai pra Avaliação de design"
                   style={_pxBtnAcaoSt("#7c3aed","124,58,237",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>
                   <span style={{display:"block",lineHeight:1}}>Gerar arte</span>
@@ -145440,19 +145440,48 @@ function _eaQuebrarEmDuas(texto, produtos){
   let corte = -1;
   (produtos || []).forEach(function(pr){ (pr.aliases || [pr.nome]).concat([pr.nome]).filter(Boolean).forEach(function(al){ const an = norm(String(al)); if(an.length >= 4){ const i = tn.indexOf(an); if(i > 0 && (corte < 0 || i < corte)) corte = i; } }); });
   if(corte > 0 && corte < t.length - 3 && corte >= t.length * 0.25){ return [t.slice(0, corte).trim(), t.slice(corte).trim()]; }
-  // senão: divide no meio por palavras, sem deixar preposição/artigo sozinho no fim da 1ª linha
+  // senão: divide por palavras equilibrando a LARGURA (a 2ª linha é em negrito e maior — peso = fonte2/fonte1),
+  // sem deixar preposição/artigo sozinho no fim da 1ª linha
+  const peso = (arguments.length > 2 && arguments[2] > 0) ? arguments[2] : 1;
   const palavras = t.split(" "); if(palavras.length < 3) return [t, ""];
   let melhor = 1, melhorDif = Infinity;
-  for(let i = 1; i < palavras.length; i++){ const a = palavras.slice(0, i).join(" ").length, b = palavras.slice(i).join(" ").length; const d = Math.abs(a - b); if(d < melhorDif){ melhorDif = d; melhor = i; } }
+  for(let i = 1; i < palavras.length; i++){ const a = palavras.slice(0, i).join(" ").length, b = palavras.slice(i).join(" ").length; const d = Math.abs(a - b * peso); if(d < melhorDif){ melhorDif = d; melhor = i; } }
   const soltas = ["a","o","e","de","da","do","das","dos","com","em","na","no","nas","nos","para","pra","por","que","um","uma","ao","à"];
   while(melhor > 1 && soltas.indexOf(norm(palavras[melhor - 1])) >= 0) melhor--;
   return [palavras.slice(0, melhor).join(" "), palavras.slice(melhor).join(" ")];
+}
+/* (08/10, Gustavo: "maiúscula só a primeira letra da primeira frase") Briefing em CAIXA ALTA vira frase normal:
+   tudo minúsculo, 1ª letra maiúscula; siglas e nomes conhecidos voltam pro jeito certo; /uf vira /UF. */
+const _EA_VOLTA_MAIUSC = { eta:"ETA", ete:"ETE", pead:"PEAD", pvc:"PVC", ia:"IA", bioter:"Bioter", eteb:"ETEB" };
+function _eaFraseCapital(s){
+  s = String(s || "").trim(); if(!s) return s;
+  const letras = s.replace(/[^A-Za-zÀ-ÿ]/g, ""); if(!letras) return s;
+  const mai = (letras.match(/[A-ZÀ-Þ]/g) || []).length;
+  if(mai / letras.length > 0.7) s = s.toLowerCase();          // briefing em caixa alta → minúsculas
+  s = s.replace(/^([^A-Za-zÀ-ÿ]*)([a-zà-ÿ])/, function(_, a, b){ return a + b.toUpperCase(); });
+  s = s.replace(/[A-Za-zÀ-ÿ]{2,6}/g, function(w){ return _EA_VOLTA_MAIUSC[w.toLowerCase()] || w; });
+  s = s.replace(/\/([a-z]{2})(?![a-zà-ÿ])/g, function(_, u){ return "/" + u.toUpperCase(); });
+  // a palavra colada em "/UF" volta com inicial maiúscula ("toledo/PR" → "Toledo/PR")
+  s = s.replace(/(^|[\s(])([a-zà-ÿ'’-]+)\/(?=[A-Z]{2})/g, function(_, a, w){ return a + w.charAt(0).toUpperCase() + w.slice(1) + "/"; });
+  return s;
+}
+/* a frase tem que caber no número de linhas da hierarquia (2): se quebrar em mais, encolhe a fonte até caber */
+function _eaCaberLinhas(o, maxLinhas){
+  try{ o.initDimensions(); }catch(_){ }
+  const escalar = function(k){
+    if(o.styles) Object.keys(o.styles).forEach(function(li){ Object.keys(o.styles[li] || {}).forEach(function(ci){ const e = o.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(8, e.fontSize * k); }); });
+    o.set("fontSize", Math.max(8, (o.fontSize || 24) * k)); try{ o.initDimensions(); }catch(_){ }
+  };
+  let n = 0;
+  while((o._textLines || []).length > maxLinhas && (o.fontSize || 0) > 8 && n < 40){ escalar(0.95); n++; }
+  o.setCoords();
 }
 function _eaTextoComHierarquia(o, texto, produtos){
   const hier = _eaEstilosPorLinha(o);
   const temQuebra = /\n/.test(String(texto || ""));
   if(!hier){ o.set("text", String(texto || "")); o.set("styles", {}); return; }
-  const partes = temQuebra ? String(texto).split(/\n+/).map(function(x){ return x.trim(); }).filter(Boolean) : _eaQuebrarEmDuas(texto, produtos);
+  const peso = (hier && hier[0] && hier[1] && hier[0].fontSize > 0 && hier[1].fontSize > 0) ? hier[1].fontSize / hier[0].fontSize : 1;
+  const partes = temQuebra ? String(texto).split(/\n+/).map(function(x){ return x.trim(); }).filter(Boolean) : _eaQuebrarEmDuas(texto, produtos, peso);
   const l0 = partes[0] || "", l1 = partes.slice(1).join(" ");
   const novo = l1 ? l0 + "\n" + l1 : l0;
   const styles = {};
@@ -145573,16 +145602,17 @@ async function _eaGerarFotoPorReferencia(task, refs, W, H, ctx){
 
 /* encaixa a foto no espaço FOTO respeitando: obra livre de texto e de mapa · céu na altura do mapa · horizonte reto ·
    se faltar céu/chão a foto encolhe e a IA completa · entulho ao redor da obra é removido pela IA */
-async function _eaEncaixarFotoObra(fc, o, url, ctx){
+async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
+  // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
   let an = null; try{ an = await _eaAnalisarFotoObra(url); }catch(e){ avisos.push("não consegui analisar a foto (" + _eaErro(e) + ") — entrou centralizada"); }
-  if(!an){ await _eaTrocarFotoMantendoForma(o, url); return { avisos:avisos }; }
-  const velha = o.getElement && o.getElement(); const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
-  const B = _eaCaixa(o), kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);   // página → pixels do canvas da foto
+  if(!an){ return { cv:null, avisos:avisos }; }
+  const w = cfg.w, h = cfg.h, pular = cfg.pular || [];
+  const B = cfg.B, kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);   // página → pixels do canvas da foto
   const paraCanvas = function(c){ return { x0:(c.left - B.left) * kx, y0:(c.top - B.top) * ky, x1:(c.left + c.width - B.left) * kx, y1:(c.top + c.height - B.top) * ky }; };
   const textos = [], mapas = [], icones = [];
   fc.getObjects().forEach(function(x){
-    if(x === o || x.visible === false) return;
+    if(pular.indexOf(x) >= 0 || x.visible === false) return;
     const tipo = _eaTipo(x);
     if(tipo === "texto" && ["HEADLINE","SUBTITLE","CTA","BENEFIT"].indexOf(x.espaco) >= 0) textos.push(paraCanvas(_eaCaixa(x)));
     else if(x.espaco === "PIN" || (x.variante && /map|mapa|cidade|pin|render/i.test(x.variante.grupo + " " + x.variante.nome))) mapas.push(paraCanvas(_eaCaixa(x)));
@@ -145651,12 +145681,58 @@ async function _eaEncaixarFotoObra(fc, o, url, ctx){
       if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
     }
   } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
-  if(velha){ const x = cv.getContext("2d"); x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
-  await o.setSrc(cv.toDataURL("image/png"));
-  o.set({ width:w, height:h }); o.setCoords();
   if(Math.abs(an.inclinacao || 0) >= 0.8) avisos.push("foto girada " + Math.abs(an.inclinacao).toFixed(1) + "° pra deixar o horizonte reto");
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
-  return { avisos:avisos, analise:an, encaixe:m };
+  return { cv:cv, avisos:avisos, analise:an, encaixe:m };
+}
+async function _eaEncaixarFotoObra(fc, o, url, ctx){
+  const velha = o.getElement && o.getElement();
+  const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
+  const r = await _eaEncaixarFotoObraNucleo(fc, { B:_eaCaixa(o), w:w, h:h, pular:[o] }, url, ctx);
+  if(!r.cv){ await _eaTrocarFotoMantendoForma(o, url); return { avisos:r.avisos }; }
+  if(velha){ const x = r.cv.getContext("2d"); x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
+  await o.setSrc(r.cv.toDataURL("image/png"));
+  o.set({ width:w, height:h }); o.setCoords();
+  return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe };
+}
+/* (08/10, Gustavo: "não usou a imagem do material — usou a do template") O PSD da Bioter tem a MESMA foto em mais de uma
+   camada marcada como FOTO (uma parte embaixo e uma cópia inteira por cima). Antes cada camada pedia uma foto do material:
+   a 1ª recebia a nova e a 2ª (por cima) ficava com a do template — parecia que nada mudou. Agora as camadas de foto viram
+   UM CONJUNTO: a foto do material é encaixada uma vez (regras da obra) e carimbada em cada camada, com o recorte de cada uma. */
+async function _eaEncaixarFotoObraGrupo(fc, objs, url, ctx){
+  objs = (objs || []).filter(Boolean);
+  if(!objs.length) return { avisos:[] };
+  if(objs.length === 1) return _eaEncaixarFotoObra(fc, objs[0], url, ctx);
+  let U = null;
+  objs.forEach(function(o){ const c = _eaCaixa(o);
+    U = U ? { left:Math.min(U.left, c.left), top:Math.min(U.top, c.top), right:Math.max(U.right, c.left + c.width), bottom:Math.max(U.bottom, c.top + c.height) }
+          : { left:c.left, top:c.top, right:c.left + c.width, bottom:c.top + c.height }; });
+  const B = { left:U.left, top:U.top, width:U.right - U.left, height:U.bottom - U.top };
+  const w = Math.max(8, Math.round(B.width)), h = Math.max(8, Math.round(B.height));
+  const r = await _eaEncaixarFotoObraNucleo(fc, { B:B, w:w, h:h, pular:objs }, url, ctx);
+  let cv = r.cv;
+  if(!cv){
+    // sem análise da IA: a foto cobre a caixa toda de uma vez (sem girar) — mesmo assim TODAS as camadas recebem a foto nova
+    try{
+      const nova = await _eaCarregarImg(url);
+      cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
+      const esc = Math.max(w / nova.width, h / nova.height);
+      x.drawImage(nova, (w - nova.width * esc) / 2, (h - nova.height * esc) / 2, nova.width * esc, nova.height * esc);
+    }catch(e){ r.avisos.push("foto: " + _eaErro(e)); return { avisos:r.avisos }; }
+  }
+  const kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);
+  for(const o of objs){
+    try{
+      const c = _eaCaixa(o), wp = Math.max(1, Math.round(o.width || 1)), hp = Math.max(1, Math.round(o.height || 1));
+      const pc = document.createElement("canvas"); pc.width = wp; pc.height = hp; const x = pc.getContext("2d");
+      x.drawImage(cv, (c.left - B.left) * kx, (c.top - B.top) * ky, Math.max(1, c.width * kx), Math.max(1, c.height * ky), 0, 0, wp, hp);
+      const velha = o.getElement && o.getElement();
+      if(velha){ x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, wp, hp); }
+      await o.setSrc(pc.toDataURL("image/png"));
+      o.set({ width:wp, height:hp }); o.setCoords();
+    }catch(e){ r.avisos.push((o.nome || "foto") + ": " + _eaErro(e)); }
+  }
+  return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe };
 }
 /* (07/10, Gustavo) cidade que NÃO existe no grupo CIDADES do template: escreve a cidade numa das opções (a que o template
    deixa acesa) e ajusta o retângulo de fundo ao tamanho do texto, com a mesma sobra dos lados do original. O lado ancorado
@@ -145826,9 +145902,10 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     const tipo = _eaTipo(o);
     try{
       if(fotoObra && tipo === "texto" && (o.espaco === "HEADLINE" || o.espaco === "SUBTITLE")){
-        // Foto de obra: a FRASE do briefing vai no texto (título ou frase, o que o template tiver), mantendo a hierarquia das linhas
-        const txt = o.espaco === "HEADLINE" ? (copy.titulo || copy.frase) : (copy.frase || copy.texto);
-        if(txt){ _eaTextoComHierarquia(o, txt, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • FRASE NA ARTE");
+        // Foto de obra: a FRASE do briefing vai no texto (título ou frase, o que o template tiver), mantendo a hierarquia das linhas.
+        // (08/10, Gustavo) regras: SÓ a primeira letra da frase em maiúscula (briefing em CAIXA ALTA é normalizado) e SÓ 2 linhas.
+        const txt = _eaFraseCapital(o.espaco === "HEADLINE" ? (copy.titulo || copy.frase) : (copy.frase || copy.texto));
+        if(txt){ _eaTextoComHierarquia(o, txt, produtosCtx); _eaCaberLinhas(o, String(o.text || "").split("\n").length); _eaCaberTexto(o); } else avisos.push("o briefing não tem • FRASE NA ARTE");
       }
       else if(tipo === "texto" && o.espaco === "HEADLINE"){ if(copy.titulo){ _eaTextoComHierarquia(o, copy.titulo, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TÍTULO"); }
       else if(tipo === "texto" && o.espaco === "SUBTITLE"){ if(copy.texto){ _eaTextoComHierarquia(o, copy.texto, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TEXTO NA ARTE"); }
@@ -145851,6 +145928,17 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   // na altura do mapa/pin já tem que ser céu; horizonte reto. A IA olha a foto (horizonte, inclinação, caixa da obra) e
   // o encaixe escolhe zoom/posição que respeitem isso; se não der, a foto entra centralizada e o histórico avisa.
   let refsCache = null, intel = null; const geradas = [];
+  if(fotoObra && espacosFoto.length){
+    const f0 = fotos[0];
+    if(!f0) avisos.push("faltou a foto da obra no material do card — Foto de obra não gera foto, ficou a imagem do template");
+    else{
+      passo("olhando a foto da obra (horizonte, obra, entulho)…");
+      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      catch(e){ avisos.push("foto: " + _eaErro(e)); }
+      if(fotos.length > 1) avisos.push("o material tem " + fotos.length + " fotos — na Foto de obra entra a 1ª (" + (f0.name || "") + ")");
+    }
+    espacosFoto.length = 0;
+  }
   for(const o of espacosFoto){
     let f = fotos[iFoto++];
     if(!f){
