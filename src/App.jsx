@@ -145368,6 +145368,15 @@ function _eaFotosDoCard(task){
   });
 }
 function _eaCarregarImg(url){ return new Promise(function(ok, erro){ const i = new Image(); i.crossOrigin = "anonymous"; i.onload = function(){ ok(i); }; i.onerror = function(){ erro(new Error("não abriu a foto")); }; i.src = url; }); }
+/* (08/10) "Arte grande demais": o projeto no banco aceita até 4 MB — imagem composta NUNCA entra como base64 no doc;
+   sobe pro armazenamento e a camada guarda só o endereço. */
+async function _eaSetSrcArmazenado(o, cv){
+  try{
+    const up = await _eaSubir(await _eaCanvasBlob(cv), "arte/geradas", "foto.png");
+    await o.setSrc(up.url, { crossOrigin:"anonymous" });
+  }catch(_){ await o.setSrc(cv.toDataURL("image/png")); }
+  o.set({ width:cv.width, height:cv.height }); o.setCoords();
+}
 /* troca a foto mantendo o FORMATO do modelo: a nova cobre a caixa e é recortada pelo alfa da foto original */
 async function _eaTrocarFotoMantendoForma(o, url){
   const velha = o.getElement && o.getElement(); const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
@@ -145375,8 +145384,7 @@ async function _eaTrocarFotoMantendoForma(o, url){
   const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
   const s = Math.max(w / nova.width, h / nova.height); x.drawImage(nova, (w - nova.width * s) / 2, (h - nova.height * s) / 2, nova.width * s, nova.height * s);
   if(velha){ x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
-  await o.setSrc(cv.toDataURL("image/png"));
-  o.set({ width:w, height:h }); o.setCoords();
+  await _eaSetSrcArmazenado(o, cv);
 }
 /* escolhe, em cada grupo de alternativas, a camada que casa com o briefing (cidade · unidade · palavras do produto/frase) */
 function _eaTokens(s){ return _eaChaveCidade(s).split(" ").filter(function(t){ return t.length >= 3 && ["com","para","por","que","uma","dos","das","nas","nos","usar","obras","obra","icone","icon","copiar","copy","render","map","mapa","3d","de","em","do","da"].indexOf(t) < 0; }).map(function(t){ return t.slice(0, 5); }); }
@@ -145691,8 +145699,7 @@ async function _eaEncaixarFotoObra(fc, o, url, ctx){
   const r = await _eaEncaixarFotoObraNucleo(fc, { B:_eaCaixa(o), w:w, h:h, pular:[o] }, url, ctx);
   if(!r.cv){ await _eaTrocarFotoMantendoForma(o, url); return { avisos:r.avisos }; }
   if(velha){ const x = r.cv.getContext("2d"); x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
-  await o.setSrc(r.cv.toDataURL("image/png"));
-  o.set({ width:w, height:h }); o.setCoords();
+  await _eaSetSrcArmazenado(o, r.cv);
   return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe };
 }
 /* (08/10, Gustavo: "não usou a imagem do material — usou a do template") O PSD da Bioter tem a MESMA foto em mais de uma
@@ -145728,8 +145735,7 @@ async function _eaEncaixarFotoObraGrupo(fc, objs, url, ctx){
       x.drawImage(cv, (c.left - B.left) * kx, (c.top - B.top) * ky, Math.max(1, c.width * kx), Math.max(1, c.height * ky), 0, 0, wp, hp);
       const velha = o.getElement && o.getElement();
       if(velha){ x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, wp, hp); }
-      await o.setSrc(pc.toDataURL("image/png"));
-      o.set({ width:wp, height:hp }); o.setCoords();
+      await _eaSetSrcArmazenado(o, pc);
     }catch(e){ r.avisos.push((o.nome || "foto") + ": " + _eaErro(e)); }
   }
   return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe };
@@ -146007,6 +146013,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
   const [passo, setPasso] = useState("");
   const [erro, setErro] = useState("");
   const rodouRef = useRef(false);
+  const padraoRef = useRef(null);   // (08/10) o padrão EXISTIA — se a geração falhar, a mensagem não pode dizer "sem padrão"
   const tipo = _eaTipoCardDoTask(task);
   const uns = String(task.bioterUnit || task.bioter_unit || "").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
   const unid = uns.length === 1 ? uns[0] : "";
@@ -146016,7 +146023,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
       const pad = _eaTemplatePadrao(todos, task.client, tipo, unid);
       const doCliente = todos.filter(function(x){ return x.client_id === task.client; });
       const l = (doCliente.length ? doCliente : todos).sort(function(a, b){ return (b.padrao ? 1 : 0) - (a.padrao ? 1 : 0) || (b.client_id ? 1 : 0) - (a.client_id ? 1 : 0); });
-      setModelos(l); if(pad){ setSel(pad.id); setAuto(pad); } else if(l[0]) setSel(l[0].id);
+      setModelos(l); if(pad){ padraoRef.current = pad; setSel(pad.id); setAuto(pad); } else if(l[0]) setSel(l[0].id);
     }).catch(function(e){ setErro(_eaErro(e)); setModelos([]); });
   }, [task.id]);
   const copy = _eaSecoesCopy(task.desc || task.description || ""), fotos = _eaFotosDoCard(task);
@@ -146052,7 +146059,9 @@ function PxGerarArteModal({ task, setTasks, onClose }){
         : auto ? null
         : !modelos.length ? <div style={{color:_EA.sub,fontSize:13,lineHeight:1.5}}>{_eaNomeCliente(task.client)} ainda não tem template. Em <b>Edição de arte › {_eaNomeCliente(task.client)} › Templates</b>, mande o PSD do designer (camadas nomeadas TITULO, FRASE, FOTO, LOGO, PIN…). O primeiro já vira o padrão.</div>
         : <div>
-          <div style={{fontSize:12.5,color:"#b45309",marginBottom:8}}>Sem template padrão de <b>{_eaRotuloTipoCard(tipo)}</b> para {_eaNomeCliente(task.client)}. Escolha um abaixo (ou marque um como padrão em Edição de arte › Templates).</div>
+          {padraoRef.current
+            ? <div style={{fontSize:12.5,color:_EA.sub,marginBottom:8}}>A geração com o template padrão <b style={{color:_EA.texto}}>{padraoRef.current.nome}</b> falhou — o erro está abaixo. Clique em <b>Gerar</b> pra tentar de novo, ou escolha outro template.</div>
+            : <div style={{fontSize:12.5,color:"#b45309",marginBottom:8}}>Sem template padrão de <b>{_eaRotuloTipoCard(tipo)}</b> para {_eaNomeCliente(task.client)}. Escolha um abaixo (ou marque um como padrão em Edição de arte › Templates).</div>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
           {modelos.map(function(m){ const on = m.id === sel;
             return <button key={m.id} type="button" onClick={function(){ setSel(m.id); }} style={{font:"inherit",textAlign:"left",padding:8,borderRadius:12,cursor:"pointer",border:"2px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff"}}>
