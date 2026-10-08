@@ -146052,6 +146052,32 @@ function _eaCaberLinhas(o, maxLinhas){
   while((o._textLines || []).length > maxLinhas && (o.fontSize || 0) > 8 && n < 40){ escalar(0.95); n++; }
   o.setCoords();
 }
+/* (08/10, Gustavo: "a fonte ainda não está no tamanho correto") a frase não só CABE — ela PREENCHE a arte como o
+   designer faz: a caixa vira ~90% da largura, centrada, e a fonte escala (pra cima ou pra baixo) até a linha mais
+   larga ocupar ~97% da caixa, mantendo a hierarquia e as 2 linhas. */
+function _eaFrasePreencherLargura(o, W){
+  try{
+    const alvo = Math.round(W * 0.9);
+    const cx = (o.left || 0) + (o.width || 0) * (o.scaleX || 1) / 2;
+    o.set({ width:alvo / (o.scaleX || 1), left:(W - alvo) / 2 + (isFinite(cx) ? 0 : 0) }); // caixa larga, centrada na arte
+    o.set("left", (W - alvo) / 2);
+    try{ o.initDimensions(); }catch(_){ }
+    const logicas = String(o.text || "").split("\n").length;
+    const escalar = function(k){
+      if(o.styles) Object.keys(o.styles).forEach(function(li){ Object.keys(o.styles[li] || {}).forEach(function(ci){ const e = o.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(8, e.fontSize * k); }); });
+      o.set("fontSize", Math.max(8, (o.fontSize || 24) * k)); try{ o.initDimensions(); }catch(_){ }
+    };
+    for(let it = 0; it < 3; it++){
+      let max = 0; for(let i = 0; i < (o._textLines || []).length; i++) max = Math.max(max, o.getLineWidth(i));
+      if(!(max > 1)) break;
+      const k = Math.max(0.6, Math.min(2.2, (alvo * 0.97) / max));
+      if(Math.abs(k - 1) < 0.02) break;
+      escalar(k);
+      _eaCaberLinhas(o, logicas);          // se o aumento quebrou em 3 linhas, volta até caber nas 2
+    }
+    o.setCoords();
+  }catch(_){ }
+}
 function _eaTextoComHierarquia(o, texto, produtos){
   const hier = _eaEstilosPorLinha(o);
   const temQuebra = /\n/.test(String(texto || ""));
@@ -146072,7 +146098,7 @@ async function _eaAnalisarFotoObra(url){
   const r = await askGPTBlocos({ max_tokens:420, origem:"arte_foto_obra",
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com entulho, lixo, bagunça, materiais soltos, máquinas paradas ou sujeira ao redor da obra que deveriam ser removidos para a foto ficar limpa — NÃO inclua a própria obra nem pessoas trabalhando; [] se a cena está limpa}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com QUALQUER coisa ao redor da obra que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia. Na dúvida, MARQUE (é melhor limpar do que deixar). NÃO inclua a própria obra, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -146178,6 +146204,43 @@ async function _eaGerarFotoPorReferencia(task, refs, W, H, ctx){
 
 /* encaixa a foto no espaço FOTO respeitando: obra livre de texto e de mapa · céu na altura do mapa · horizonte reto ·
    se faltar céu/chão a foto encolhe e a IA completa · entulho ao redor da obra é removido pela IA */
+/* (08/10, Gustavo: "boa vibratilidade de cores — aumentar os verdes, um pouco a saturação; dar um grau no céu")
+   Calibragem automática, caso a caso: mede a saturação média da foto e aplica só o que falta (vibrance — pixels
+   lavados ganham mais), reforça os verdes da vegetação e enriquece o azul do céu acima do horizonte. Nada exagerado. */
+function _eaVibrarFotoObra(cv, horizonteY){
+  try{
+    const x = cv.getContext("2d"), w = cv.width, h = cv.height;
+    const d = x.getImageData(0, 0, w, h), a = d.data;
+    // 1ª passada: saturação média (amostrada) pra dosar a correção
+    let soma = 0, n = 0;
+    for(let i = 0; i < a.length; i += 64){ const r = a[i] / 255, g = a[i + 1] / 255, b = a[i + 2] / 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); soma += mx > 0 ? (mx - mn) / mx : 0; n++; }
+    const satMedia = n ? soma / n : 0.4;
+    const forca = Math.max(0, Math.min(1, (0.46 - satMedia) / 0.28));   // foto já vibrante → quase nada; foto lavada → mais
+    const hy = (horizonteY == null || !isFinite(horizonteY)) ? h * 0.42 : Math.max(0, Math.min(h, horizonteY));
+    for(let i = 0, px = 0; i < a.length; i += 4, px++){
+      if(a[i + 3] === 0) continue;
+      let r = a[i] / 255, g = a[i + 1] / 255, b = a[i + 2] / 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), delta = mx - mn;
+      const v = mx; let sat = mx > 0 ? delta / mx : 0;
+      let hue = 0;
+      if(delta > 0){ if(mx === r) hue = 60 * (((g - b) / delta) % 6); else if(mx === g) hue = 60 * ((b - r) / delta + 2); else hue = 60 * ((r - g) / delta + 4); if(hue < 0) hue += 360; }
+      const y = Math.floor(px / w);
+      let ganho = 1 + (0.10 + 0.16 * (1 - sat)) * forca;                       // vibrance geral
+      if(hue >= 65 && hue <= 170) ganho *= 1 + 0.12 * forca;                   // vegetação
+      let alvoHue = hue;
+      if(y < hy && hue >= 180 && hue <= 260 && sat > 0.06){ ganho *= 1 + 0.14 * forca; alvoHue = hue + (212 - hue) * 0.22 * forca; }   // céu: azul mais rico
+      sat = Math.min(1, sat * ganho);
+      let v2 = Math.min(1, Math.max(0, 0.5 + (v - 0.5) * (1 + 0.05 * forca)));   // contraste leve
+      // HSV → RGB
+      const c = v2 * sat, hh = ((alvoHue % 360) + 360) % 360 / 60, xx = c * (1 - Math.abs(hh % 2 - 1)), m = v2 - c;
+      let rr = 0, gg = 0, bb = 0;
+      if(hh < 1){ rr = c; gg = xx; } else if(hh < 2){ rr = xx; gg = c; } else if(hh < 3){ gg = c; bb = xx; } else if(hh < 4){ gg = xx; bb = c; } else if(hh < 5){ rr = xx; bb = c; } else { rr = c; bb = xx; }
+      a[i] = Math.round((rr + m) * 255); a[i + 1] = Math.round((gg + m) * 255); a[i + 2] = Math.round((bb + m) * 255);
+    }
+    x.putImageData(d, 0, 0);
+    return { satMedia:Math.round(satMedia * 100) / 100, forca:Math.round(forca * 100) / 100 };
+  }catch(_){ return null; }
+}
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
@@ -146257,6 +146320,8 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
     }
   } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
+  const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
+  if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
   if(Math.abs(an.inclinacao || 0) >= 0.8) avisos.push("foto girada " + Math.abs(an.inclinacao).toFixed(1) + "° pra deixar o horizonte reto");
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   return { cv:cv, avisos:avisos, analise:an, encaixe:m };
@@ -146293,6 +146358,7 @@ async function _eaEncaixarFotoObraGrupo(fc, objs, url, ctx){
       cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
       const esc = Math.max(w / nova.width, h / nova.height);
       x.drawImage(nova, (w - nova.width * esc) / 2, (h - nova.height * esc) / 2, nova.width * esc, nova.height * esc);
+      if(!ctx || ctx.calibrarCor !== false) _eaVibrarFotoObra(cv, null);
     }catch(e){ r.avisos.push("foto: " + _eaErro(e)); return { avisos:r.avisos }; }
   }
   const kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);
@@ -146479,7 +146545,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
         // Foto de obra: a FRASE do briefing vai no texto (título ou frase, o que o template tiver), mantendo a hierarquia das linhas.
         // (08/10, Gustavo) regras: SÓ a primeira letra da frase em maiúscula (briefing em CAIXA ALTA é normalizado) e SÓ 2 linhas.
         const txt = _eaFraseCapital(o.espaco === "HEADLINE" ? (copy.titulo || copy.frase) : (copy.frase || copy.texto));
-        if(txt){ _eaTextoComHierarquia(o, txt, produtosCtx); _eaCaberLinhas(o, String(o.text || "").split("\n").length); _eaCaberTexto(o); } else avisos.push("o briefing não tem • FRASE NA ARTE");
+        if(txt){ _eaTextoComHierarquia(o, txt, produtosCtx); _eaFrasePreencherLargura(o, W); _eaCaberTexto(o); } else avisos.push("o briefing não tem • FRASE NA ARTE");
       }
       else if(tipo === "texto" && o.espaco === "HEADLINE"){ if(copy.titulo){ _eaTextoComHierarquia(o, copy.titulo, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TÍTULO"); }
       else if(tipo === "texto" && o.espaco === "SUBTITLE"){ if(copy.texto){ _eaTextoComHierarquia(o, copy.texto, produtosCtx); _eaCaberTexto(o); } else avisos.push("o briefing não tem • TEXTO NA ARTE"); }
@@ -146544,6 +146610,35 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
       else await _eaTrocarFotoMantendoForma(o, f.url);
     }catch(e){ avisos.push("foto: " + _eaErro(e)); try{ await _eaTrocarFotoMantendoForma(o, f.url); }catch(_){ } }
   }
+  /* (08/10, Gustavo: "não precisava tanta shadow — o fundo ali já não era claro") SOMBRA ADAPTATIVA: mede o brilho
+     da foto atrás da frase e dosa as camadas de sombra do template (SHADOW/gradiente) — fundo escuro, sombra fraca. */
+  if(fotoObra){ try{
+    const headline = fc.getObjects().find(function(x){ return x.espaco === "HEADLINE" && x.visible !== false; });
+    const fotoBase = fc.getObjects().filter(function(x){ return x.espaco === "PRODUCT_IMAGE" && _eaTipo(x) === "imagem" && x.visible !== false; })
+      .sort(function(a, b){ const ca = _eaCaixa(a), cb = _eaCaixa(b); return cb.width * cb.height - ca.width * ca.height; })[0];
+    if(headline && fotoBase && fotoBase.getElement){
+      const T = _eaCaixa(headline), B = _eaCaixa(fotoBase), el = fotoBase.getElement();
+      const kx = (el.width || 1) / Math.max(1, B.width), ky = (el.height || 1) / Math.max(1, B.height);
+      const sx = Math.max(0, Math.round((T.left - B.left) * kx)), sy = Math.max(0, Math.round((T.top - B.top) * ky));
+      const sw = Math.min((el.width || 1) - sx, Math.max(8, Math.round(T.width * kx))), sh = Math.min((el.height || 1) - sy, Math.max(8, Math.round(T.height * ky)));
+      if(sw > 4 && sh > 4){
+        const cvL = document.createElement("canvas"); cvL.width = 48; cvL.height = 48;
+        const xL = cvL.getContext("2d"); xL.drawImage(el, sx, sy, sw, sh, 0, 0, 48, 48);
+        const dL = xL.getImageData(0, 0, 48, 48).data; let lum = 0, nn = 0;
+        for(let i = 0; i < dL.length; i += 4){ if(dL[i + 3] < 20) continue; lum += 0.299 * dL[i] + 0.587 * dL[i + 1] + 0.114 * dL[i + 2]; nn++; }
+        lum = nn ? lum / nn : 255;
+        const fator = lum <= 55 ? 0.35 : lum >= 120 ? 1 : 0.35 + (lum - 55) * (0.65 / 65);
+        if(fator < 0.97){
+          let mexidas = 0;
+          fc.getObjects().forEach(function(x){ if(_eaTipo(x) !== "imagem" || x.visible === false) return;
+            const c = _eaCaixa(x); if(c.width < W * 0.9 || c.height < H * 0.9) return;
+            if(!/shadow|sombra|escurec|darken|grad/i.test(String(x.nome || ""))) return;
+            x.set("opacity", Math.max(0.05, (x.opacity == null ? 1 : x.opacity) * fator)); mexidas++; });
+          if(mexidas) avisos.push("fundo atrás da frase já é escuro (brilho " + Math.round(lum) + ") — sombra do template reduzida pra " + Math.round(fator * 100) + "%");
+        }
+      }
+    }
+  }catch(_){ } }
   // logo, telefone, cidade, cores e fonte: cadastro + Kit (mesma função do editor)
   const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
   try{ await _eaPreencherEspacos(stub, { silencioso:true }); }catch(_){ }
