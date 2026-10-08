@@ -146484,27 +146484,14 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
       let r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
       if(r){
-        const custoIA = r.__custo;
-        const rAli = _eaAlinharIA(cv, r);                                        // desfaz o deslocamento/zoom do gpt-image
-        if(rAli !== r){ r = rAli; if(r.__ajuste) avisos.push("resultado da IA realinhado com a foto (" + (r.__ajuste.s !== 1 ? "zoom " + Math.round((r.__ajuste.s - 1) * 100) + "% · " : "") + r.__ajuste.dx + "," + r.__ajuste.dy + " px)"); }
-        r.__custo = custoIA;
+        /* (08/10, Gustavo: "continua super bugado, melhor voltar pra edição com IA como estava antes?") SIM:
+           a colagem parcial (original por cima do resultado) sempre mostrava remendos, porque o gpt-image
+           re-sintetiza a imagem com distorções locais — nem o realinhamento resolve 100%. A imagem final volta
+           a ser a QUE A IA DEVOLVE, inteira e sem emendas. O que fica dos outros consertos: foto inteira sem
+           zoom, entrada opaca (menos distorção), luz casada com a original e prompt mandando preservar a obra. */
         const gLuz = _eaCasarLuz(cv, r);
-        /* (08/10, Gustavo: "mexeu muito no produto; os matos ficaram borrados — mexer o MÍNIMO") o gpt-image
-           RE-RENDERIZA a imagem inteira (a máscara é só orientação). Então o resultado da IA só vale onde PODIA
-           mexer (céu/terreno completados + caixas de entulho); em todo o resto voltam os pixels ORIGINAIS da
-           foto, com borda macia pra emendar sem costura — a obra e a vegetação ficam intactas de verdade. */
-        try{
-          const F = document.createElement("canvas"); F.width = w; F.height = h; const fx = F.getContext("2d");
-          try{ fx.filter = "blur(9px)"; }catch(_){ }
-          fx.drawImage(M, 0, 0);
-          try{ fx.filter = "none"; }catch(_){ }
-          const K = document.createElement("canvas"); K.width = w; K.height = h; const kx2 = K.getContext("2d");
-          kx2.drawImage(cv, 0, 0);
-          kx2.globalCompositeOperation = "destination-in"; kx2.drawImage(F, 0, 0);
-          r.getContext("2d").drawImage(K, 0, 0);
-        }catch(_){ }
         cv = r;
-        if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA; o resto da foto ficou com os pixels originais");
+        if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA");
         if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)");
         if(gLuz > 1.03) avisos.push("a edição da IA escureceu a foto — luz original recuperada (+" + Math.round((gLuz - 1) * 100) + "%)");
         if(r.__custo) avisos.push("IA da foto: R$ " + Number(r.__custo).toFixed(2));
