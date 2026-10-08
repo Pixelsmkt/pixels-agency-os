@@ -123757,6 +123757,10 @@ function _evpPodeMelhorarTrecho(){ try{ return typeof pxPode !== "function" || !
    Cada trecho (p.audio.trechos) agora tem: intensidade da melhora com IA (forca) e O QUE ela faz (ruido / eco / voz — sem o campo = ligado),
    IA do PC (pc), VOLUME do trecho em dB (vol), IGUALAR com o resto do clipe (igualar), SILENCIAR (mudo), GRAVES e AGUDOS em dB.
    Volume, igualar, silenciar, graves e agudos valem mesmo com a melhora em 0% (passo separado, depois da mistura). Mesmo motor na prévia e no PC. */
+/* v93 (08/10/2026): intensidade da voz de estúdio (0–100 %, de 10 em 10; sem campo = 100 % = como sempre foi) */
+function _evpEstudioForca(au){ const v = au && au.estudioForca; if(v == null || v === "") return 100; const n = Number(v); return isFinite(n) ? Math.max(0, Math.min(100, Math.round(n / 10) * 10)) : 100; }
+/* v93: a voz do PC fica guardada pelo ENDEREÇO (cada intensidade é um arquivo) */
+function _evpPcId(cid, url){ return "pc:" + cid + (url ? "@" + String(url).split("?")[0].split("/").pop() + "@" + (String(url).split("v=")[1] || "") : ""); }
 function _evpOptsMelhora(r, au){
   const base = Object.assign({}, au || {});
   return Object.assign(base, { ruido:r.ruido !== false, voz:r.voz !== false, eco:r.eco !== false, cliques:true, pops:true, hum:(au && au.hum) || 60 });
@@ -128898,8 +128902,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const precisaEstab = useMemo(function(){ const s = {}; p.clips.forEach(function(c){ if(c.estab) s[c.clipe] = 1; }); return Object.keys(s); }, [p.clips]);
   /* o que cada bruto precisa do PC: {estabilizar, imagem} (vídeo) e, se ligada, a voz de estúdio */
   const desejado = useMemo(function(){ const m = {}; p.clips.forEach(function(c){ const o = m[c.clipe] || (m[c.clipe] = { estabilizar:false, imagem:false }); if(c.estab) o.estabilizar = true; if(c.melhorar) o.imagem = true; }); return m; }, [p.clips]);
-  const estudio = !!(p.audio && p.audio.estudio);
-  const chavePC = JSON.stringify(desejado) + "|" + estudio;
+  /* v93 (08/10/2026): INTENSIDADE da voz de estúdio, 0–100 % (pedido do Vini). 100 % = a força atual (máximo); 0 % = sem efeito (som original). */
+  const estudioF = _evpEstudioForca(p.audio);
+  const estudio = !!(p.audio && p.audio.estudio) && estudioF > 0;
+  const fPC = estudio ? estudioF : 100;                                   // trecho com "IA do PC" sem a voz de estúdio ligada = 100 %
+  const chavePC = JSON.stringify(desejado) + "|" + estudio + "|" + fPC;
   const precisaPC = Object.keys(desejado).some(function(k){ return desejado[k].estabilizar || desejado[k].imagem; }) || estudio || (p.audio && Array.isArray(p.audio.trechos) && p.audio.trechos.some(function(r){ return r && r.pc && !r.off; }));   // v75: trecho com IA do PC
   useEffect(function(){
     if(!precisaPC || !window._sb) return; let vivo = true;
@@ -128914,7 +128921,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const cidsTrechoPC = useMemo(function(){ const m = {}; trechosAu.filter(function(r){ return r.pc; }).forEach(function(r){ (calc.clips || []).forEach(function(c){ if(!c.off && Math.min(r.t1, c.t1) - Math.max(r.t0, c.t0) > 0.05) m[c.clipe] = 1; }); });
     return Object.keys(m).sort(); }, [JSON.stringify(trechosAu), calc]);
   const vozesPC = useMemo(function(){ const m = {}; if(!estudio && !cidsTrechoPC.length) return m; ((trat && trat.itens) || []).forEach(function(x){ if(!estudio && cidsTrechoPC.indexOf(x.clipe_id) < 0) return;
-    if(desejado[x.clipe_id] && (x.opcoes || {}).voz && x.status === "pronto" && x.resultado && x.resultado.audio_url) m[x.clipe_id] = x.resultado.audio_url; }); return m; }, [trat, chavePC, cidsTrechoPC.join(",")]);
+    if(desejado[x.clipe_id] && (x.opcoes || {}).voz && (Number((x.opcoes || {}).voz_forca) || 100) === fPC && x.status === "pronto" && x.resultado && x.resultado.audio_url) m[x.clipe_id] = x.resultado.audio_url; }); return m; }, [trat, chavePC, cidsTrechoPC.join(",")]);   // v93: só a voz da intensidade escolhida
   /* pede ao PC sempre que muda o que é preciso (o banco não duplica pedidos iguais) */
   const pedirPC = function(cid, opcoes){
     if(!window._sb) return;
@@ -128926,8 +128933,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   useEffect(function(){
     if(soVer) return;
     Object.keys(desejado).forEach(function(cid){ const d = desejado[cid]; if(d.estabilizar || d.imagem) pedirPC(cid, { estabilizar:d.estabilizar, imagem:d.imagem }); });
-    if(estudio) Object.keys(desejado).forEach(function(cid){ pedirPC(cid, { voz:true }); });
-    else cidsTrechoPC.forEach(function(cid){ if(desejado[cid]) pedirPC(cid, { voz:true }); });                 // v75: só os brutos dos trechos com "IA do PC"
+    const opVoz = fPC < 100 ? { voz:true, voz_forca:fPC } : { voz:true };   // v93: intensidade
+    if(estudio) Object.keys(desejado).forEach(function(cid){ pedirPC(cid, opVoz); });
+    else cidsTrechoPC.forEach(function(cid){ if(desejado[cid]) pedirPC(cid, opVoz); });                 // v75: só os brutos dos trechos com "IA do PC"
   }, [chavePC, cidsTrechoPC.join(",")]);
   useEffect(function(){
     precisaEstab.forEach(function(cid){
@@ -128993,8 +129001,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       try{ await _evpMiniaturas(c.id, u); }catch(_){} if(!vivo) return; try{ await _evpAudio(c.id, _evAudioDe(c)); }catch(_){} } })();
     return function(){ vivo = false; };
   }, [ed.id, midiaPronta]);
-  const trKey = trechosAu.length ? JSON.stringify(trechosAu.map(function(r){ return [r.t0, r.t1, r.forca, !!r.pc, r.ruido, r.eco, r.voz, r.vol, r.graves, r.agudos, !!r.igualar, !!r.mudo]; })) + "|" + (calc.clips || []).map(function(c){ return c.clipe + "@" + c.t0 + ":" + c.ini + ":" + (c.vel || 1); }).join(",") + "|" + Object.keys(vozesPC).sort().join(",") : "";   // v75 · v78: + painel do trecho
-  const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + _evpChaveExtra(p.audio) + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().join(",") : "");
+  const trKey = trechosAu.length ? JSON.stringify(trechosAu.map(function(r){ return [r.t0, r.t1, r.forca, !!r.pc, r.ruido, r.eco, r.voz, r.vol, r.graves, r.agudos, !!r.igualar, !!r.mudo]; })) + "|" + (calc.clips || []).map(function(c){ return c.clipe + "@" + c.t0 + ":" + c.ini + ":" + (c.vel || 1); }).join(",") + "|" + Object.keys(vozesPC).sort().map(function(k){ return k + "=" + vozesPC[k]; }).join(",") : "";   // v75 · v78: + painel do trecho
+  const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + _evpChaveExtra(p.audio) + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().map(function(k){ return k + "=" + vozesPC[k]; }).join(",") : "");
   const [tratandoAudio, setTratandoAudio] = useState(true);   // v10b (30/09): começa "tratando" — o PC não pode gravar antes de carregar a fala (saía sem som)
   const [metodoRuido, setMetodoRuido] = useState(null);
   /* v64 (07/10/2026): ABRE MAIS RÁPIDO — o som só é baixado e tratado dos vídeos que TOCAM som (na faixa principal e vídeo por cima sem mudo),
@@ -129013,8 +129021,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       const lista = clipes.filter(function(c){ return usa[c.id]; });
       const trata = async function(c){
         if(p.audio.estudio && vozesPC[c.id]){      // voz de estúdio feita no PC (IA): só nivela
-          const a2 = await _evpAudio("pc:" + c.id, vozesPC[c.id]);
-          if(a2){ const b2 = await _evpTratar("pc:" + c.id, { ruido:false, voz:false, eco:!!p.audio.eco, ecoForca:p.audio.ecoForca, nivelar:!!p.audio.nivelar }); if(b2){ out[c.id] = b2; met = "estudio"; return; } }
+          const a2 = await _evpAudio(_evpPcId(c.id, vozesPC[c.id]), vozesPC[c.id]);
+          if(a2){ const b2 = await _evpTratar(_evpPcId(c.id, vozesPC[c.id]), { ruido:false, voz:false, eco:!!p.audio.eco, ecoForca:p.audio.ecoForca, nivelar:!!p.audio.nivelar }); if(b2){ out[c.id] = b2; met = "estudio"; return; } }
         }
         const a = await _evpAudio(c.id, _evAudioDe(c)); if(!a) return;
         const b = await _evpTratar(c.id, p.audio); if(b){ out[c.id] = b; if(b._metodoRuido && met !== "estudio") met = b._metodoRuido; } };
@@ -129026,7 +129034,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           try{
             const ivR = _evpTrechosDoClipe(calc, c.id, trechosAu, false).filter(function(iv){ return iv.f > 0; }), ivP = _evpTrechosDoClipe(calc, c.id, trechosAu, true).filter(function(iv){ return iv.f > 0; });
             if(ivP.length){ let fP = null;
-              if(vozesPC[c.id]){ const a2 = await _evpAudio("pc:" + c.id, vozesPC[c.id]); if(a2) fP = await _evpTratar("pc:" + c.id, { ruido:false, voz:false, eco:false, nivelar:!!p.audio.nivelar }); }
+              if(vozesPC[c.id]){ const a2 = await _evpAudio(_evpPcId(c.id, vozesPC[c.id]), vozesPC[c.id]); if(a2) fP = await _evpTratar(_evpPcId(c.id, vozesPC[c.id]), { ruido:false, voz:false, eco:false, nivelar:!!p.audio.nivelar }); }
               if(fP) out[c.id] = _evpMisturarTrechos(out[c.id], fP, ivP); else ivR.push.apply(ivR, ivP); }     // IA do PC ainda não voltou: usa a melhora rápida enquanto isso
             if(ivR.length){ const grupos = {};                                  // v78: cada trecho escolhe o que a IA faz (ruído / eco / voz)
               ivR.forEach(function(iv){ const o = _evpOptsMelhora(iv.r || {}, p.audio), k = (o.ruido ? "r" : "") + (o.eco ? "e" : "") + (o.voz ? "v" : ""); (grupos[k] = grupos[k] || { o:o, ivs:[] }).ivs.push(iv); });
@@ -131752,7 +131760,58 @@ function _EvpVolPontos({ pts, agora, base, fmtT, aplicarPts, ctl, mudar, maxV })
 }
 
 /* ─── v24: LIMPEZA EXTRA DA FALA, EQUALIZADOR e ANTES/DEPOIS do som ─── */
-function _EvpAudioExtra({ au, mudar }){
+/* v93 (08/10/2026): INTENSIDADE DA VOZ DE ESTÚDIO — 0 a 100 % (de 10 em 10). Grava ao soltar (cada intensidade é um pedido ao PC). */
+function _EvpForcaEstudio({ valor, onChange }){
+  const [v, setV] = useState(valor);
+  useEffect(function(){ setV(valor); }, [valor]);
+  const fim = function(n){ n = Math.max(0, Math.min(100, Math.round(Number(n) / 10) * 10)); setV(n); if(n !== valor) onChange(n); };
+  return (<div data-estudio-forca="1" style={{margin:"2px 0 10px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+      <span style={{fontSize:12,fontWeight:700}}>Intensidade</span>
+      <span style={{fontFamily:_EVP_MONO,fontSize:12,fontWeight:800,color:_EVP_COR.roxo}}>{v}%</span>
+      <span style={{fontSize:11,color:_EVP_COR.sub,marginLeft:"auto"}}>{v === 0 ? "sem efeito (som original)" : v === 100 ? "força máxima" : "parte da limpeza"}</span>
+    </div>
+    <input type="range" min={0} max={100} step={10} value={v} aria-label="Intensidade da voz de estúdio"
+      onChange={function(e){ setV(Number(e.target.value)); }} onPointerUp={function(e){ fim(e.target.value); }} onKeyUp={function(e){ fim(e.target.value); }}
+      style={{width:"100%",accentColor:_EVP_COR.roxo}}/>
+    <div style={{display:"flex",gap:5,marginTop:4}}>
+      {[0, 50, 100].map(function(n){ const nn = n; return <button key={n} data-forca-op={nn} onClick={function(){ fim(nn); }} style={Object.assign(_evpChip(v === nn), { padding:"3px 8px", fontSize:11 })}>{nn}%</button>; })}
+    </div>
+    <div style={{fontSize:10.5,color:_EVP_COR.fraco,marginTop:4}}>Mudou a intensidade? O PC prepara de novo (alguns segundos) e a prévia troca sozinha.</div>
+  </div>);
+}
+/* v93 (08/10/2026): MENU DA LIMPEZA DA FALA — pedido do Vini: "tá muito confuso… faz um menuzinho aí dentro com cada ferramenta".
+   Em cima: um botão por ferramenta (com bolinha verde = ligada). Embaixo: só a ferramenta escolhida, com uma frase do que ela faz.
+   "Ouvir antes/depois" e a situação do áudio ficam sempre visíveis no fim. A última ferramenta aberta fica lembrada neste navegador. */
+function _EvpLimpezaMenu({ itens, rodape }){
+  const lista = (itens || []).filter(Boolean);
+  const [aba, setAba] = useState(function(){ try{ const v = localStorage.getItem("evp_limpeza_aba"); if(v && lista.some(function(i){ return i.id === v; })) return v; }catch(_){} return lista.length ? lista[0].id : ""; });
+  const at = lista.find(function(i){ return i.id === aba; }) || lista[0];
+  const escolher = function(id){ setAba(id); try{ localStorage.setItem("evp_limpeza_aba", id); }catch(_){} };
+  if(!at) return null;
+  return (<div data-limpeza-menu="1">
+    <div style={{fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,margin:"2px 0 6px"}}>Escolha a ferramenta</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:6,marginBottom:10}}>
+      {lista.map(function(i){ const on = i.id === at.id;
+        return (<button key={i.id} data-limpeza-aba={i.id} onClick={function(){ escolher(i.id); }} aria-pressed={on} title={i.dica}
+          style={{display:"flex",alignItems:"center",gap:7,textAlign:"left",padding:"8px 9px",borderRadius:10,cursor:"pointer",fontSize:12,fontWeight:700,lineHeight:1.2,
+            border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),background:on ? _EVP_COR.roxo : _EVP_COR.faixa,color:on ? "#fff" : _EVP_COR.ink}}>
+          <_EvpIco n={i.icone} s={15}/>
+          <span style={{flex:1,minWidth:0}}>{i.label}</span>
+          {i.ligado != null && <span aria-label={i.ligado ? "ligado" : "desligado"} title={i.ligado ? "Ligado" : "Desligado"}
+            style={{width:8,height:8,borderRadius:99,flexShrink:0,background:i.ligado ? "#22c55e" : "transparent",border:"1.5px solid " + (i.ligado ? "#22c55e" : (on ? "rgba(255,255,255,.6)" : _EVP_COR.fraco))}}/>}
+        </button>); })}
+    </div>
+    <div data-limpeza-conteudo={at.id} style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:"10px 10px 4px",background:_EVP_COR.faixa}}>
+      <div style={{display:"flex",alignItems:"center",gap:7,fontSize:13,fontWeight:800,marginBottom:2}}><_EvpIco n={at.icone} s={16}/>{at.label}
+        {at.ligado != null && <span style={{marginLeft:"auto",fontSize:10.5,fontWeight:700,color:at.ligado ? "#22c55e" : _EVP_COR.fraco}}>{at.ligado ? "LIGADO" : "DESLIGADO"}</span>}</div>
+      {at.dica && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginBottom:8,lineHeight:1.4}}>{at.dica}</div>}
+      {at.render()}
+    </div>
+    {rodape}
+  </div>);
+}
+function _EvpAudioExtra({ au, mudar, parte }){   // v93: parte = "estalos" | "eq" | "ouvir" (menu da Limpeza da fala); sem parte = tudo, como antes
   const eq = Array.isArray(au.eq) && au.eq.length === 5 ? au.eq : [0, 0, 0, 0, 0];
   const setA = function(o){ mudar(function(np){ np.audio = Object.assign({}, np.audio, o); }); };
   const [eqLocal, setEqLocal] = useState(eq);
@@ -131761,6 +131820,31 @@ function _EvpAudioExtra({ au, mudar }){
   const PRESETS = [["Normal",[0,0,0,0,0]],["Voz clara",[-3,-1,1,4,2]],["Voz grave/rádio",[3,2,0,1,-1]],["Tirar o abafado",[-2,-3,1,3,3]],["Telefone",[-12,-4,6,2,-12]]];
   const [maisAb, setMaisAb] = useState(false);   // v68d: zumbido e equalizador atrás de "Mais ajustes" (abre sozinho se já estiver em uso)
   const mais = maisAb || _evpNum(au.hum, 0) > 0 || eq.some(function(v){ return v !== 0; });
+  const btnOuvir = <button onPointerDown={function(){ antes(true); }} onPointerUp={function(){ antes(false); }} onPointerLeave={function(){ antes(false); }}
+      title="Segure com o vídeo tocando: ouve o som original, sem nenhuma limpeza" style={Object.assign(_evpBtn("suave"), {width:"100%",justifyContent:"center",marginTop:10})}>Ouvir antes/depois (segure)</button>;
+  const blocoEq = (<div>
+    <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",margin:"2px 0 8px"}}>
+      <span style={{fontSize:12,fontWeight:700}}>Tirar zumbido (hum)</span>
+      {[[0,"Não"],[60,"60 Hz (Brasil)"],[50,"50 Hz"]].map(function(o){ return <button key={o[0]} onClick={function(){ setA({ hum:o[0] || 0 }); }} style={_evpChip(_evpNum(au.hum, 0) === o[0])}>{o[1]}</button>; })}
+    </div>
+    <div style={_EVP_TIT}>Equalizador da fala</div>
+    <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>
+      {PRESETS.map(function(pr){ return <button key={pr[0]} onClick={function(){ setA({ eq:pr[1] }); }} style={Object.assign(_evpChip(eq.join(",") === pr[1].join(",")), { padding:"3px 8px", fontSize:11 })}>{pr[0]}</button>; })}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,alignItems:"end"}}>
+      {["60","250","1k","4k","12k"].map(function(f, i){ return <div key={f} style={{textAlign:"center"}}>
+        <div style={{fontSize:10.5,fontFamily:_EVP_MONO,color:_EVP_COR.sub}}>{(eqLocal[i] > 0 ? "+" : "") + eqLocal[i]}</div>
+        <input type="range" min={-12} max={12} step={1} value={eqLocal[i]} aria-label={"Equalizador " + f + "Hz"} onChange={function(e){ const n = eqLocal.slice(); n[i] = Number(e.target.value); setEqLocal(n); }}
+          onPointerUp={function(){ setA({ eq:eqLocal }); }} onKeyUp={function(){ setA({ eq:eqLocal }); }} style={{writingMode:"vertical-lr",direction:"rtl",height:90,width:22,accentColor:_EVP_COR.roxo}}/>
+        <div style={{fontSize:10.5,color:_EVP_COR.fraco}}>{f}</div></div>; })}
+    </div>
+    </div>);
+  if(parte === "ouvir") return btnOuvir;
+  if(parte === "eq") return blocoEq;
+  if(parte === "estalos") return (<div>
+    <_EvpInterruptor on={!!au.cliques} onChange={function(v){ setA({ cliques:v }); }} label="Tirar estalos (cliques)" dica="Estalo de boca, chiado de cabo, pico de ruído curto"/>
+    <_EvpInterruptor on={!!au.pops} onChange={function(v){ setA({ pops:v }); }} label="Tirar o 'P' estourado (pops)" dica="Sopro no microfone em P e B; corta o grave que não é voz"/>
+  </div>);
   return (<div>
     <_EvpInterruptor on={!!au.cliques} onChange={function(v){ setA({ cliques:v }); }} label="Tirar estalos (cliques)" dica="Estalo de boca, chiado de cabo, pico de ruído curto"/>
     <_EvpInterruptor on={!!au.pops} onChange={function(v){ setA({ pops:v }); }} label="Tirar o 'P' estourado (pops)" dica="Sopro no microfone em P e B; corta o grave que não é voz"/>
@@ -133854,6 +133938,54 @@ function _EvpPainelMenu(q){
   S.melhorar = function(){ const selClip = sel && sel.tipo === "clip" ? (calc.clips || []).find(function(c){ return c.id === sel.id; }) : null;   // v78: painel completo do trecho (componente)
     return <_EvpMelhorarTrechos p={p} calc={calc} selClip={selClip} tempo={tempo} irPara={irPara} mudar={mudar} ctl={ctl} trat={q.trat} tocar={q.tocar} tocando={q.tocando}/>; };
   S.vocal = function(){ return <_EvpVocalAttacker p={p} mudar={mudar} med={q.vaMed} tocando={q.tocando}/>; };      // v48 (06/10/2026): Vocal Attacker
+  /* v93: Limpeza da fala com MENU (uma ferramenta por vez) */
+  S.limpezaMenu = function(){
+    const A = function(o){ mudar(function(np){ np.audio = Object.assign({}, np.audio, o); }); };
+    const eqOn = Array.isArray(au.eq) && au.eq.some(function(v){ return Number(v) !== 0; });
+    const temMic = (function(){ try{ return _evpPodeMicro() && (_evpMicArquivos(q.t).length > 0 || !!(p.micro && p.micro.mics && p.micro.mics.length)); }catch(_){ return false; } })();
+    const status = (<div style={{fontSize:11.5,fontWeight:700,color:q.tratandoAudio ? _EV.amarelo : _EV.verde,display:"flex",gap:6,alignItems:"center",marginTop:8}}>
+          <_EvpIco n={q.tratandoAudio ? "tempo" : "check"} s={14}/>
+          {q.tratandoAudio ? "Processando o áudio…" : q.metodoRuido === "estudio" ? "Voz de estúdio (IA no PC) aplicada" : au.ruido && q.metodoRuido === "rnnoise" ? "Ruído tirado com IA (RNNoise)" : au.ruido && q.metodoRuido === "porta" ? "Ruído reduzido (modo simples: a IA de ruído não carregou)" : "Áudio pronto"}
+        </div>);
+    const itens = [
+      { id:"ruido", label:"Tirar ruído", icone:"limpeza", ligado:!!au.ruido, dica:"Tira vento, ar-condicionado, chiado e barulho de fundo de todos os vídeos. Protege a fala: se a limpeza apagar sílaba, ela devolve um pouco do som original.",
+        render:function(){ return <_EvpInterruptor on={!!au.ruido} onChange={function(v){ A({ ruido:v }); }} label="Tirar ruído" dica="Vento, ar-condicionado, chiado e barulho de fundo"/>; } },
+      { id:"voz", label:"Voz mais clara", icone:"melhorarSom", ligado:!!au.voz, dica:"Realça a voz (mais presença e brilho) e segura os picos.",
+        render:function(){ return <_EvpInterruptor on={!!au.voz} onChange={function(v){ A({ voz:v }); }} label="Melhorar a voz" dica="Voz mais clara e presente"/>; } },
+      { id:"nivelar", label:"Volume igual", icone:"volume", ligado:!!au.nivelar, dica:"Deixa todos os vídeos no mesmo volume, no padrão das redes.",
+        render:function(){ return <_EvpInterruptor on={!!au.nivelar} onChange={function(v){ A({ nivelar:v }); }} label="Nivelar o volume" dica="Aumenta e iguala no padrão das redes"/>; } },
+      { id:"eco", label:"Eco da sala", icone:"audio", ligado:!!au.eco, dica:"Para gravação em galpão, sala vazia ou banheiro. Se a voz ficar robótica, use a força Leve.",
+        render:function(){ return S.limpEco(); } },
+      { id:"estalos", label:"Estalos e 'P'", icone:"sfx", ligado:!!(au.cliques || au.pops), dica:"Tira estalo de boca, chiado de cabo e o sopro do P e do B no microfone.",
+        render:function(){ return <_EvpAudioExtra au={au} mudar={mudar} parte="estalos"/>; } },
+      { id:"eq", label:"Zumbido e equalizador", icone:"mixer", ligado:_evpNum(au.hum, 0) > 0 || eqOn, dica:"Tira o zumbido da rede elétrica (60 Hz) e ajusta graves e agudos da fala.",
+        render:function(){ return <_EvpAudioExtra au={au} mudar={mudar} parte="eq"/>; } },
+      { id:"estudio", label:"Voz de estúdio (IA no PC)", icone:"robo", ligado:!!au.estudio && _evpEstudioForca(au) > 0, dica:"A IA do PC do escritório separa a voz do barulho. Leva de 1 a 3 minutos por vídeo. Escolha a intensidade: 100% é a força máxima; menos deixa um pouco do som original.",
+        render:function(){ return (<div>
+          <_EvpInterruptor on={!!au.estudio} onChange={function(v){ A({ estudio:v }); }} label="Voz de estúdio (IA no PC)" dica="Ligue e salve. O PC prepara a voz de cada vídeo."/>
+          {au.estudio && <_EvpForcaEstudio valor={_evpEstudioForca(au)} onChange={function(v){ A({ estudioForca:v === 100 ? undefined : v }); }}/>}
+          {au.estudio && _evpEstudioForca(au) > 0 && <_EvpStatusVoz trat={q.trat} clipes={clipes} usados={p.clips} infoClipe={infoClipe} pedirEstab={q.pedirEstab}/>}
+        </div>); } },
+      { id:"trecho", label:"Melhorar um trecho", icone:"melhorarTrecho", ligado:!!(au.trechos && au.trechos.length), dica:"Só para a parte que ficou ruim: marque o trecho e ajuste volume, IA, graves e agudos ali.",
+        render:function(){ return S.melhorar(); } },
+      { id:"vocal", label:"Compressor de voz", icone:"sonsAuto", ligado:!!(p.vocal_attacker && p.vocal_attacker.ativo), dica:"Vocal Attacker: nivela e comprime a voz e deixa em −14 LUFS, o padrão das redes.",
+        render:function(){ return S.vocal(); } },
+      temMic ? { id:"mic", label:"Microfone separado", icone:"gravar", ligado:!!_evpMicAtivo(p), dica:"Usa o som do microfone de lapela (arquivo de áudio do card) no lugar do som da câmera.",
+        render:function(){ return <_EvpMicPainel p={p} mudar={mudar} infoClipe={infoClipe} fala={q.fala} t={q.t} sel={sel} tempo={tempo} calc={calc}/>; } } : null
+    ];
+    return <_EvpLimpezaMenu itens={itens} rodape={<div><_EvpAudioExtra au={au} mudar={mudar} parte="ouvir"/>{status}</div>}/>; };
+  /* v93: o bloco do eco (com a força) separado, para o menu */
+  S.limpEco = function(){ return (<div>
+        <_EvpInterruptor on={!!au.eco} onChange={function(v){ mudar(function(np){ np.audio = Object.assign({}, np.audio, { eco:v }); }); }} label="Reduzir eco da sala" dica="Para gravação em galpão, sala vazia ou banheiro"/>
+        {au.eco ? (function(){ const f = _evpEcoF(au), suav = Object.keys(_evpEcoUltimo).filter(function(k){ return _evpEcoUltimo[k] && _evpEcoUltimo[k].suavizou; }).length;
+          const op = [[0.4, "Leve"], [0.7, "Médio"], [1, "Forte"]];
+          return (<div data-eco-forca="1" style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",margin:"-4px 0 10px 4px"}}>
+            <span style={{fontSize:11,color:_EVP_COR.sub}}>Força:</span>
+            {op.map(function(q){ const on = Math.abs(f - q[0]) < 0.051; return (<button key={q[1]} data-eco-op={q[1]} onClick={function(){ mudar(function(np){ np.audio = Object.assign({}, np.audio, { ecoForca:q[0] === 1 ? undefined : q[0] }); }); }}
+              style={{fontSize:11,padding:"3px 9px",borderRadius:999,cursor:"pointer",border:"1px solid " + (on ? _EVP_COR.roxo : _EVP_COR.linha),background:on ? _EVP_COR.roxo : "transparent",color:on ? "#fff" : _EVP_COR.ink}}>{q[1]}</button>); })}
+            {suav ? <span data-eco-suavizou="1" style={{fontSize:11,color:_EVP_COR.sub}}>· suavizado em {suav} vídeo(s) para a voz não ficar robótica</span> : null}
+          </div>); })() : null}
+        </div>); };
   S.titNarr = function(){ return <div style={_EVP_TIT}>Narração</div>; };
   S.gravar = function(){ return (<div style={{border:"1px solid " + (q.gravando ? "#f3b5b0" : _EVP_COR.linha),borderRadius:12,padding:10,background:q.gravando ? "#fff6f5" : _EVP_COR.faixa,marginBottom:10}}>
           <button onClick={function(){ q.gravarNarracao(ouvirGravando); }} disabled={q.subindoNarr != null} aria-label={q.gravando ? "Parar gravação" : "Gravar narração"}
@@ -134086,7 +134218,7 @@ function _EvpPainelMenu(q){
   const COMP = {
     midia:["cabMidia", "banco", "brutos", "novos", "fotos"],
     editar:["cabEditar", "ordem", "tres", "cortarFala", "ritmo", "marcadores", "comentarios", "modelo", "atalhos"],
-    audio:["cabAudio", "limpeza", "melhorar", "vocal", "titNarr", "gravar", "locucao", "narracoes", "titMixer", "mixer", "dicaVol"],
+    audio:["cabAudio", "limpezaMenu", "titNarr", "gravar", "locucao", "narracoes", "titMixer", "mixer", "dicaVol"],
     texto:["cabTexto", "textos3", "galeria", "listaTextos", "mostrarTextos"],
     imagem:["cabImagem", "formato", "camadas", "sobre", "filtros", "todos", "voltarCor", "abertura", "formas", "figurinhas", "enviarImg", "capa", "final"],
     efeitos:["cabEfeitos", "titSfx", "sfx", "transCamada", "transTodos", "luz"],
@@ -134099,7 +134231,7 @@ function _EvpPainelMenu(q){
     "ferr:editar:abertura":["abertura"], "ferr:editar:final":["final"], "ferr:editar:capa":["capa"],
     "ferr:efeitos:luz":["luz"], "ferr:efeitos:camadas":["camadas"], "ferr:figs:camadas":["camadas"], "ferr:formato:todos":["todos"], "ferr:cor:todos":["todos"], "ferr:cor:ajustar":["ajustar"],
     "ferr:cortar:silencios":["silencios"], "ferr:cortar:ritmo":["ritmo"], "ferr:cortar:ordem":["ordem"], "ferr:cortar:comentarios":["comentarios"],
-    "ferr:audio:sfx":["sfx"], "ferr:audio:locucao":["locucao"], "ferr:audio:mixer":["mixer", "dicaVol"], "ferr:audio:limpeza":["limpeza", "melhorar", "vocal"], "ferr:audio:melhorar":["melhorar"], "ferr:audio:vocal":["vocal"], "ferr:audio:sfxauto":["sfxauto"],
+    "ferr:audio:sfx":["sfx"], "ferr:audio:locucao":["locucao"], "ferr:audio:mixer":["mixer", "dicaVol"], "ferr:audio:limpeza":["limpezaMenu"], "ferr:audio:melhorar":["melhorar"], "ferr:audio:vocal":["vocal"], "ferr:audio:sfxauto":["sfxauto"],
     "ferr:texto:lista":["listaTextos", "mostrarTextos"],
     "ferr:imagem:camadas":["camadas"], "ferr:imagem:formato":["formato"], "ferr:imagem:todos":["todos"], "ferr:imagem:abertura":["abertura"], "ferr:imagem:final":["final"], "ferr:imagem:capa":["capa"],
     "ferr:cor:filtros":["filtros", "voltarCor"],
@@ -135505,7 +135637,7 @@ function _EvpStatusVoz({ trat, usados, infoClipe, pedirEstab }){
       {ids.map(function(cid){
         const its = itens.filter(function(x){ return x.clipe_id === cid && (x.opcoes || {}).voz; }), it = its[its.length - 1];
         const st = !it ? "pedindo" : it.status;
-        const txt = st === "pronto" ? ((it.resultado || {}).metodo_voz === "deepfilternet" ? "pronta (IA)" : "pronta (modo simples: IA não instalada no PC)")
+        const txt = st === "pronto" ? (/^deepfilternet/.test(String((it.resultado || {}).metodo_voz || "")) ? "pronta (IA)" : "pronta (modo simples: IA não instalada no PC)")
           : st === "processando" ? "no PC… tentativa " + Math.min(3, (it.tentativas || 0) + 1) + " de 3" : st === "fila" ? (trat && trat.pc_online ? "na fila do PC" : "esperando o PC responder")
           : st === "navegador" || st === "erro" ? "PC indisponível: usando a limpeza do navegador" : "pedindo ao PC…";
         const cor = st === "pronto" ? _EV.verde : st === "navegador" || st === "erro" ? _EV.amarelo : _EVP_COR.sub;
