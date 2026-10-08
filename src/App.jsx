@@ -146830,43 +146830,66 @@ function PxGerarArteModal({ task, setTasks, onClose }){
     }catch(e){ setErro(_eaErro(e)); setPasso(""); setAuto(null); }
   };
   useEffect(function(){ if(auto && !rodouRef.current){ rodouRef.current = true; gerar(auto); } }, [auto]);
-  const lin = function(ok, txt){ return <div style={{display:"flex",gap:8,alignItems:"center",fontSize:12.5,color:ok?"#166534":"#b45309"}}><span>{ok ? "✓" : "!"}</span>{txt}</div>; };
+  /* (08/10, Gustavo: "esse box tá horroroso e velho, moderniza — fontes grandes nada a ver") layout novo:
+     compacto, tipografia pequena, chips no cabeçalho, checklist em linhas com ponto de status e rodapé com spinner. */
   const fotoObra = tipo === "foto_obra";
-  return <div onClick={function(){ if(!passo) onClose(false); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:10050,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:18,width:"min(620px,100%)",maxHeight:"90vh",overflow:"auto",padding:20,boxShadow:"0 24px 60px rgba(15,23,42,.3)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{fontWeight:800,fontSize:17,color:_EA.texto}}>Gerar arte · {_eaRotuloTipoCard(tipo)}{unid ? " · " + unid : ""}</div>
-      {auto ? <div style={{fontSize:12.5,color:_EA.sub,marginTop:3}}>Usando o template padrão <b style={{color:_EA.texto}}>{auto.nome}</b>. A arte sai pronta, fica editável na Edição de arte e o card vai direto pra Avaliação de design.</div>
-        : <div style={{fontSize:12.5,color:_EA.sub,marginTop:3}}>A copy e as fotos do material deste card entram no template. A arte sai pronta, fica editável na Edição de arte e o card vai direto pra Avaliação de design.</div>}
-      <div style={{display:"flex",flexDirection:"column",gap:4,margin:"12px 0",padding:"10px 12px",background:"#f8fafc",borderRadius:10}}>
-        {fotoObra ? <>
-          {lin(!!copy.cidade, copy.cidade ? "Pin no mapa: " + copy.cidade : "O briefing não tem • PIN NO MAPA")}
-          {lin(!!copy.frase, copy.frase ? "Frase na arte: " + copy.frase.slice(0,80) : "O briefing não tem • FRASE NA ARTE")}
-        </> : <>
-          {lin(!!copy.titulo, copy.titulo ? "Título: " + copy.titulo.slice(0,70) : "O briefing não tem • TÍTULO")}
-          {lin(!!copy.texto, copy.texto ? "Texto na arte: " + copy.texto.replace(/\n+/g," ").slice(0,70) + (copy.texto.length > 70 ? "…" : "") : "O briefing não tem • TEXTO NA ARTE")}
-        </>}
-        {lin(fotos.length > 0, fotos.length ? fotos.length + " foto(s) no material do card" : "Sem fotos no material do card (o espaço FOTO fica com a do template)")}
+  const chip = function(txt, destaque){ return <span style={{fontSize:10.5,fontWeight:700,letterSpacing:.2,padding:"3px 9px",borderRadius:999,whiteSpace:"nowrap",
+    background:destaque?_EA.roxoClaro:_EA.linha2,color:destaque?_EA.roxo:_EA.sub,border:"1px solid "+(destaque?_EA.roxoBorda:"transparent")}}>{txt}</span>; };
+  const lin = function(ok, rotulo, valor){ return <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px"}}>
+    <span style={{width:7,height:7,borderRadius:999,flex:"0 0 auto",background:ok?"#22c55e":"#f59e0b",boxShadow:"0 0 0 3px "+(ok?"rgba(34,197,94,.14)":"rgba(245,158,11,.14)")}}/>
+    <span style={{fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",color:_EA.fraco,flex:"0 0 92px"}}>{rotulo}</span>
+    <span style={{fontSize:12,color:ok?_EA.texto:_EA.amarelo,fontWeight:ok?600:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{valor}</span>
+  </div>; };
+  const divisor = <div style={{height:1,background:_EA.linha2,margin:"0 12px"}}/>;
+  return <div onClick={function(){ if(!passo) onClose(false); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",backdropFilter:"blur(3px)",WebkitBackdropFilter:"blur(3px)",zIndex:10050,display:"flex",alignItems:"center",justifyContent:"center",padding:16,animation:"fadeIn .15s ease"}}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(460px,100%)",maxHeight:"88vh",overflow:"auto",boxShadow:"0 20px 50px rgba(15,23,42,.25)",border:"1px solid "+_EA.linha,fontFamily:"'Inter',system-ui,sans-serif",animation:"slideInUp .22s ease"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"16px 18px 12px"}}>
+        <div style={{width:38,height:38,borderRadius:12,flex:"0 0 auto",background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:17,boxShadow:"0 6px 14px rgba(124,58,237,.3)"}}>✦</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14.5,fontWeight:800,letterSpacing:-.2,color:_EA.texto}}>Gerar arte</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:5}}>
+            {chip(_eaRotuloTipoCard(tipo))}{unid ? chip(_eaNomeCliente(task.client) + " · " + unid) : chip(_eaNomeCliente(task.client))}{auto ? chip(auto.nome, true) : null}
+          </div>
+        </div>
+        <button disabled={!!passo} onClick={function(){ onClose(false); }} title="Fechar" style={{font:"inherit",width:28,height:28,borderRadius:999,border:0,background:_EA.linha2,color:_EA.sub,cursor:passo?"default":"pointer",fontSize:13,lineHeight:"28px",opacity:passo?.4:1,flex:"0 0 auto"}}>✕</button>
       </div>
-      {modelos === null ? <div style={{color:_EA.sub,fontSize:13}}>Procurando o template padrão…</div>
+      <div style={{fontSize:11.5,color:_EA.sub,lineHeight:1.5,padding:"0 18px 12px"}}>A copy e as fotos do material entram no template{auto ? " padrão" : ""}; a arte fica editável na Edição de arte e o card vai direto pra <b style={{color:_EA.texto,fontWeight:600}}>Avaliação de design</b>.</div>
+      <div style={{margin:"0 14px",background:_EA.fundo,border:"1px solid "+_EA.linha2,borderRadius:14,overflow:"hidden"}}>
+        {fotoObra ? <>
+          {lin(!!copy.cidade, "Pin no mapa", copy.cidade || "não achei a cidade no briefing")}
+          {divisor}
+          {lin(!!copy.frase, "Frase", copy.frase ? copy.frase.slice(0,90) : "o briefing não tem • FRASE NA ARTE")}
+        </> : <>
+          {lin(!!copy.titulo, "Título", copy.titulo ? copy.titulo.slice(0,90) : "o briefing não tem • TÍTULO")}
+          {divisor}
+          {lin(!!copy.texto, "Texto", copy.texto ? copy.texto.replace(/\n+/g," ").slice(0,90) : "o briefing não tem • TEXTO NA ARTE")}
+        </>}
+        {divisor}
+        {lin(fotos.length > 0, "Material", fotos.length ? fotos.length + " foto(s) do card entram na arte" : "sem fotos — fica a imagem do template")}
+      </div>
+      {modelos === null ? <div style={{color:_EA.sub,fontSize:12,padding:"12px 18px 0"}}>Procurando o template padrão…</div>
         : auto ? null
-        : !modelos.length ? <div style={{color:_EA.sub,fontSize:13,lineHeight:1.5}}>{_eaNomeCliente(task.client)} ainda não tem template. Em <b>Edição de arte › {_eaNomeCliente(task.client)} › Templates</b>, mande o PSD do designer (camadas nomeadas TITULO, FRASE, FOTO, LOGO, PIN…). O primeiro já vira o padrão.</div>
-        : <div>
+        : !modelos.length ? <div style={{color:_EA.sub,fontSize:12,lineHeight:1.55,padding:"12px 18px 0"}}>{_eaNomeCliente(task.client)} ainda não tem template. Em <b style={{color:_EA.texto}}>Edição de arte › {_eaNomeCliente(task.client)} › Templates</b>, mande o PSD do designer (camadas nomeadas TITULO, FRASE, FOTO, LOGO, PIN…). O primeiro já vira o padrão.</div>
+        : <div style={{padding:"12px 14px 0"}}>
           {padraoRef.current
-            ? <div style={{fontSize:12.5,color:_EA.sub,marginBottom:8}}>A geração com o template padrão <b style={{color:_EA.texto}}>{padraoRef.current.nome}</b> falhou — o erro está abaixo. Clique em <b>Gerar</b> pra tentar de novo, ou escolha outro template.</div>
-            : <div style={{fontSize:12.5,color:"#b45309",marginBottom:8}}>Sem template padrão de <b>{_eaRotuloTipoCard(tipo)}</b> para {_eaNomeCliente(task.client)}. Escolha um abaixo (ou marque um como padrão em Edição de arte › Templates).</div>}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
+            ? <div style={{fontSize:11.5,color:_EA.sub,marginBottom:8,lineHeight:1.5}}>A geração com o template padrão <b style={{color:_EA.texto}}>{padraoRef.current.nome}</b> falhou — o erro está abaixo. Tente de novo ou escolha outro template.</div>
+            : <div style={{fontSize:11.5,color:_EA.amarelo,marginBottom:8,lineHeight:1.5}}>Sem template padrão de <b>{_eaRotuloTipoCard(tipo)}</b> pra {_eaNomeCliente(task.client)} — escolha um abaixo (dá pra marcar um como padrão em Edição de arte › Templates).</div>}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(128px,1fr))",gap:8}}>
           {modelos.map(function(m){ const on = m.id === sel;
-            return <button key={m.id} type="button" onClick={function(){ setSel(m.id); }} style={{font:"inherit",textAlign:"left",padding:8,borderRadius:12,cursor:"pointer",border:"2px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff"}}>
-              <div style={{aspectRatio:"1",borderRadius:8,overflow:"hidden",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>{m.thumb_url ? <img src={m.thumb_url} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:11}}>{m.largura}×{m.altura}</span>}</div>
-              <div style={{fontSize:12.5,fontWeight:800,marginTop:6,color:_EA.texto}}>{m.nome}</div>
-              <div style={{fontSize:11,color:_EA.sub}}>{_eaRotuloTipoCard(m.tipo_card || "arte")}{m.padrao ? " · padrão" : ""}{m.client_id ? "" : " · todos"}</div>
+            return <button key={m.id} type="button" onClick={function(){ setSel(m.id); }} style={{font:"inherit",textAlign:"left",padding:6,borderRadius:12,cursor:"pointer",transition:"border-color .12s",border:"1.5px solid "+(on?_EA.roxo:_EA.linha),background:on?_EA.roxoClaro:"#fff"}}>
+              <div style={{aspectRatio:"1",borderRadius:9,overflow:"hidden",background:_EA.linha2,display:"flex",alignItems:"center",justifyContent:"center"}}>{m.thumb_url ? <img src={m.thumb_url} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/> : <span style={{color:_EA.fraco,fontSize:10}}>{m.largura}×{m.altura}</span>}</div>
+              <div style={{fontSize:11.5,fontWeight:700,marginTop:5,color:_EA.texto,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.nome}</div>
+              <div style={{fontSize:10,color:_EA.fraco}}>{_eaRotuloTipoCard(m.tipo_card || "arte")}{m.padrao ? " · padrão" : ""}{m.client_id ? "" : " · todos"}</div>
             </button>; })}
           </div></div>}
-      {erro && <div style={{marginTop:12,padding:10,borderRadius:10,background:"#fef2f2",color:"#b91c1c",fontSize:13}}>{erro}</div>}
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16,alignItems:"center"}}>
-        {passo && <span style={{fontSize:12.5,color:_EA.roxo,fontWeight:700,marginRight:"auto"}}>{passo}</span>}
-        <button disabled={!!passo} onClick={function(){ onClose(false); }} style={{font:"inherit",padding:"10px 16px",borderRadius:10,border:"1px solid "+_EA.linha,background:"#fff",cursor:"pointer",fontWeight:700}}>Cancelar</button>
-        {!auto && <button disabled={!!passo || !sel} onClick={function(){ gerar(); }} style={{font:"inherit",padding:"10px 18px",borderRadius:10,border:0,background:_EA.roxo,color:"#fff",cursor:"pointer",fontWeight:800,opacity:(passo || !sel)?.6:1}}>{passo ? "Gerando…" : "Gerar e enviar pra avaliação"}</button>}
+      {erro && <div style={{margin:"12px 14px 0",padding:"9px 12px",borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:12,lineHeight:1.5}}>{erro}</div>}
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center",padding:"14px 18px 16px"}}>
+        {passo && <span style={{display:"flex",alignItems:"center",gap:8,marginRight:"auto",minWidth:0}}>
+          <span style={{width:14,height:14,flex:"0 0 auto",borderRadius:999,border:"2px solid "+_EA.roxoBorda,borderTopColor:_EA.roxo,animation:"spin .8s linear infinite"}}/>
+          <span style={{fontSize:11.5,color:_EA.roxo,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{passo}</span>
+        </span>}
+        {!passo && <button onClick={function(){ onClose(false); }} style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:0,background:_EA.linha2,color:_EA.texto,cursor:"pointer",fontWeight:600,fontSize:12.5}}>Cancelar</button>}
+        {!auto && <button disabled={!!passo || !sel} onClick={function(){ gerar(); }} style={{font:"inherit",padding:"8px 16px",borderRadius:10,border:0,background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:12.5,boxShadow:"0 6px 14px rgba(124,58,237,.25)",opacity:(passo || !sel)?.55:1}}>{passo ? "Gerando…" : "Gerar arte"}</button>}
       </div>
     </div>
   </div>;
