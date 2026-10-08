@@ -5437,17 +5437,13 @@ async function pxDuplicarParaParaguai(task,setTasks){
       if(tipo==="final") return Object.assign({},f,{tipo:"referencia",name:"(PT) "+(f.name||"arte"),comentario:"arte original em português — só trocar o texto",__eraFinal:true});
       return Object.assign({},f);
     });
-    // CAPA do clone = a capa do original. O card mostra como capa a ÚLTIMA mídia anexada (estilo Trello) — então a arte que
-    // era capa no original (lâmina 1 no carrossel; a última final nos outros) vai pro FIM da lista. Quando o designer subir a
-    // arte em espanhol, ela entra depois e vira a capa sozinha.
-    (function(){
-      const finais=files.filter(function(f){ return f.__eraFinal; });
-      const ehCar=String(o.contentType||o.content_type||"")==="carrossel";
-      const capa=ehCar?finais[0]:finais[finais.length-1];
-      if(capa){ const i=files.indexOf(capa); if(i>=0){ files.splice(i,1); files.push(capa); } }
-      files.forEach(function(f){ delete f.__eraFinal; });
-    })();
-    const capa=o.cover||null;
+    // CAPA do clone = a capa do original (lâmina 1 no carrossel; a última final nos outros), gravada em "cover".
+    // Os arquivos ficam NA MESMA ORDEM do original (referências na sequência das lâminas).
+    const finais=files.filter(function(f){ return f.__eraFinal; });
+    const _ehCar=String(o.contentType||o.content_type||"")==="carrossel";
+    const _capaF=(typeof pxOrdenarFeedStory==="function"&&_ehCar)?(pxOrdenarFeedStory(finais)[0]||finais[0]):(_ehCar?finais[0]:finais[finais.length-1]);
+    files.forEach(function(f){ delete f.__eraFinal; });
+    const capa=(o.cover&&/^https?:/.test(String(o.cover)))?o.cover:((_capaF&&_capaF.url)||o.cover||null);
     const tk=Object.assign({},o,{
       id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioterUnit:"paraguay", bioter_unit:"paraguay", cover:capa,
       status:"recebida", contentType:"troca_texto", content_type:"troca_texto",
@@ -51225,7 +51221,9 @@ function _cardPodeSerResp(u){
       {/* ESCONDE quando card está em "Ajustes" — o vídeo já aparece grande no painel de solicitação de ajuste, sem repetir */}
       {task.status!=="ajustes" && task.status!=="ajustar" && (()=>{
         const _ordFin=(typeof pxOrdenarFeedStory==="function"?pxOrdenarFeedStory(finItems):finItems);
-        const last=(_ehCarrossel&&_ordFin[0])||[...attachments].reverse().find(a=>(isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url);
+        // (08/10) card sem arte final ainda e com capa definida (ex.: clone Paraguai) → mostra a capa gravada
+        const _capaGravada=(!finItems.length&&typeof task.cover==="string"&&/^https?:/.test(task.cover))?(attachments.find(a=>a&&a.url===task.cover)||{url:task.cover,name:"capa",type:"image/png"}):null;
+        const last=_capaGravada||(_ehCarrossel&&_ordFin[0])||[...attachments].reverse().find(a=>(isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url);
         if(!last)return null;
         const _isVideo = isVid(last);
         return <div data-cover-wrap="1" onClick={function(){setLightbox({url:last.url,name:last.name||"capa",storagePath:last.storagePath});}} title="Clique pra abrir em tela cheia"
