@@ -143050,6 +143050,33 @@ function _eaPsdEscalaDoc(psd){
     const ppi = /PPCM/i.test(String(ri.horizontalResolutionUnit || "")) ? ri.horizontalResolution * 2.54 : ri.horizontalResolution;
     const k = ppi / 72; return (k > 0.5 && k < 8 && Math.abs(k - 1) > 0.02) ? k : 1; }catch(_){ return 1; }
 }
+/* (07/10, Gustavo: "fonte da cidade ficou maior / frase ficou super pequena") CALIBRA PELO PRÓPRIO PHOTOSHOP:
+   o PSD guarda os pixels que o Photoshop desenhou pra cada camada de texto. Comparamos a largura da TINTA desse desenho
+   com a tinta do nosso texto (mesma fonte) e corrigimos o tamanho; depois alinhamos o centro da tinta ao do Photoshop.
+   Isso absorve resolução, transformações, tracking e diferença de versão da fonte — sem adivinhar nada. */
+function _eaPsdCalibrarTexto(t, l, podeEscalar){
+  try{
+    if(!(l.canvas && l.canvas.width && l.canvas.height)) return false;
+    const a = _eaPsdCaixaAlfa(l.canvas); if(!(a.w > 3 && a.h > 3) || (a.w >= l.canvas.width - 1 && a.h >= l.canvas.height - 1 && l.canvas.width > 1000)) return false;
+    const inkX = (l.left || 0) + a.x, inkY = (l.top || 0) + a.y, inkW = a.w, inkH = a.h;
+    try{ t.initDimensions(); }catch(_){ }
+    let T = _eaCaixa(t), k = _eaCaixaTintaTexto(t); if(!(k.w > 2)) return false;
+    const multi = (t._textLines || []).length > 1;
+    const r = inkW / k.w;
+    if(podeEscalar && r > 0.72 && r < 1.4 && Math.abs(r - 1) > 0.012 && (!multi || Math.abs(r - 1) < 0.2)){
+      t.set("fontSize", Math.max(4, (t.fontSize || 24) * r));
+      if(t.styles) Object.keys(t.styles).forEach(function(li){ Object.keys(t.styles[li] || {}).forEach(function(ci){ const e = t.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(4, e.fontSize * r); }); });
+      if(t.width >= 3000 || !l.__temLimites){ t.set("width", 4000); try{ t.initDimensions(); }catch(_){ } let mw = 0; for(let i = 0; i < (t._textLines || []).length; i++) mw = Math.max(mw, t.getLineWidth(i)); t.set("width", Math.max(20, mw + 6)); }
+      try{ t.initDimensions(); }catch(_){ } t.setCoords();
+      T = _eaCaixa(t); k = _eaCaixaTintaTexto(t);
+    }
+    // centro da tinta no mesmo lugar do Photoshop (absorve a diferença de linha-base entre o Fabric e o Photoshop)
+    const cxF = T.left + k.dx + k.w / 2, cyF = T.top + k.dy + k.h / 2, cxP = inkX + inkW / 2, cyP = inkY + inkH / 2;
+    if(isFinite(cxF) && isFinite(cyF)){ t.set({ left:(t.left || 0) + (cxP - cxF), top:(t.top || 0) + (cyP - cyF) }); t.setCoords(); }
+    t.__calibrado = { r:r, inkW:inkW, fabW:k.w };
+    return true;
+  }catch(_){ return false; }
+}
 /* SÓ CONFERE (não "corrige" mais): a altura da camada no PSD é a caixa de TINTA do texto (muda com acento/descendente),
    então antes isso ENCOLHIA textos certos (Carambeí/PR saiu em 22 px em vez de 30). Agora só mexe quando o tamanho está
    absurdamente fora (documento em outra resolução sem a informação de ppi) — fora disso, vale o tamanho que o PSD diz. */
@@ -143197,9 +143224,13 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
          mesmo texto (1ª linha leve, 2ª negrito, tamanhos/cores diferentes) viram estilos por caractere; 2) o tamanho da fonte
          é CONFERIDO contra a altura real da camada no PSD (resolução do documento muda a escala) e corrigido. */
       try{ await _eaPsdEstilosTexto(t, l, textoPsd, esc, true, cor); }catch(_){ }   // (07/10) cada trecho carrega a PRÓPRIA fonte — antes, se a fonte-base faltava, os trechos nem tentavam
-      try{ _eaPsdAjustarTamanhoTexto(t, l); }catch(_){ }
       if(!temLimites){ try{ t.initDimensions(); let mw = 0; for(let li = 0; li < (t._textLines || []).length; li++) mw = Math.max(mw, t.getLineWidth(li)); t.set("width", Math.max(20, mw + 6)); t.initDimensions(); t.setCoords(); }catch(_){ } }
-      infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:t.fontSize || Math.max(4, (st.fontSize || 24) * esc) });
+      l.__temLimites = temLimites;
+      // (07/10) calibra tamanho e posição pelo desenho que o Photoshop guardou da camada (só escala se a fonte certa está carregada)
+      const fonteCerta = ok && !(l.__fontesFaltando && Object.keys(l.__fontesFaltando).length);
+      let calibrou = false; try{ calibrou = _eaPsdCalibrarTexto(t, l, fonteCerta); }catch(_){ }
+      if(!calibrou && escDoc === 1 && !(psd.imageResources && psd.imageResources.resolutionInfo)){ try{ _eaPsdAjustarTamanhoTexto(t, l); }catch(_){ } }   // sem desenho e sem ppi: última conferência grosseira
+      infos.push({ o:t, tipo:"texto", nome:c.nome, fonte:(function(){ let m = t.fontSize || Math.max(4, (st.fontSize || 24) * esc); try{ Object.values(t.styles || {}).forEach(function(li){ Object.values(li || {}).forEach(function(e){ if(e && e.fontSize > m) m = e.fontSize; }); }); }catch(_){ } return m; })() });
       const faltouFonte = !ok || !!(l.__fontesFaltando && Object.keys(l.__fontesFaltando).length);
       const nomeFaltou = l.__fontesFaltando ? Object.keys(l.__fontesFaltando).join(", ") : ((st.font && st.font.name) || "?");
       if(simples && !faltouFonte){ if(_esp) t.set("alturaMax", Math.round(_eaCaixa(t).height * 1.15)); objs.push(t); continue; }
@@ -144298,9 +144329,14 @@ function _eaEscolherVariantes(fc, ctx){
   const cid = _eaChaveCidade(ctx.cidade || ""), cidTok = cid.split(" ").filter(function(t){ return t.length >= 3; });
   const un = _eaChaveCidade(ctx.unidade || "");
   const bag = _eaTokens((ctx.textos || []).filter(Boolean).join(" "));
-  Object.keys(grupos).forEach(function(g){
+  /* (07/10, Gustavo: "quando for Paraguai, alternar pra camada do mapa do Paraguai") — primeiro os grupos de CIDADE;
+     a cidade escolhida diz o PAÍS (no PSD da Bioter as cidades do Paraguai não têm "/UF"), e o país decide o MAPA. */
+  let pais = /paragua/.test(un) ? "paraguai" : (un ? "brasil" : "");
+  const ordem = Object.keys(grupos).sort(function(a, b){ return (/cidade|city|local/i.test(b) ? 1 : 0) - (/cidade|city|local/i.test(a) ? 1 : 0); });
+  ordem.forEach(function(g){
     const objs = grupos[g], nomes = {}; objs.forEach(function(o){ nomes[o.variante.nome] = nomes[o.variante.nome] || []; nomes[o.variante.nome].push(o); });
     const opcoes = Object.keys(nomes); if(opcoes.length < 2) return;
+    const ehCidade = /cidade|city|local/i.test(g), ehMapa = /map|mapa|render|pais|país/i.test(g);
     let melhor = null, nota = 0;
     opcoes.forEach(function(n){
       const k = _eaChaveCidade(n); let pts = 0;
@@ -144311,9 +144347,15 @@ function _eaEscolherVariantes(fc, ctx){
       else if(cidTok.length && cidTok.every(function(t){ return k.indexOf(t) >= 0; })) pts += 80;
       else if(cidTok.length && kt && cidTok.every(function(t){ return kt.indexOf(t) >= 0; })) pts += 70;
       if(un && (k.indexOf(un) >= 0 || un.indexOf(k) >= 0 || (/paragua/.test(un) && /paragua/.test(k)) || (!/paragua/.test(un) && /brasil|brazil/.test(k)))) pts += 40;
+      if(ehMapa && pais){ if(pais === "paraguai" && /paragua/.test(k)) pts += 60; if(pais === "brasil" && /brasil|brazil/.test(k)) pts += 60; }
       const tk = _eaTokens(n); tk.forEach(function(t){ if(bag.indexOf(t) >= 0) pts += 10; });
       if(pts > nota){ nota = pts; melhor = n; }
     });
+    if(ehCidade && melhor && nota >= 70){
+      const txt = nomes[melhor].filter(function(o){ return _eaTipo(o) === "texto"; }).map(function(o){ return String(o.text || ""); }).join(" ");
+      const temUf = /\/\s*[A-Z]{2}\b/.test(txt) || /-[A-Z]{2}$/.test(String(melhor).trim());
+      if(!pais) pais = temUf ? "brasil" : (/paragua|py\b/i.test(melhor + " " + txt) || !temUf ? "paraguai" : "brasil");
+    }
     const confiavel = /cidades?|icones?|ícones?|variantes?|alternativas?|opcoes|opções|mapas?|map\b|render|estados?|unidades?|produtos?/i.test(g);
     if(nota < (confiavel ? 10 : 20)) melhor = null;   // grupo que só "parece" alternativa precisa casar melhor
     if(!melhor){ avisos.push("alternativas de " + g + ": nenhuma casa com o briefing (" + opcoes.slice(0, 6).join(", ") + (opcoes.length > 6 ? "…" : "") + ") — ficou como no template"); return; }
