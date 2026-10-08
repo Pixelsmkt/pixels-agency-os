@@ -146052,29 +146052,39 @@ function _eaCaberLinhas(o, maxLinhas){
   while((o._textLines || []).length > maxLinhas && (o.fontSize || 0) > 8 && n < 40){ escalar(0.95); n++; }
   o.setCoords();
 }
-/* (08/10, Gustavo: "a fonte ainda não está no tamanho correto") a frase não só CABE — ela PREENCHE a arte como o
-   designer faz: a caixa vira ~90% da largura, centrada, e a fonte escala (pra cima ou pra baixo) até a linha mais
-   larga ocupar ~97% da caixa, mantendo a hierarquia e as 2 linhas. */
+/* (08/10, Gustavo: "as fontes têm tamanho FIXO — não ficam alterando em porcentagem da arte") A frase entra no
+   TAMANHO DO TEMPLATE, sempre. A caixa é larga (90% da arte, centrada) só pra não quebrar antes da hora. Se mesmo
+   assim não couber em 2 linhas, tenta OUTRA quebra de palavras no mesmo tamanho; encolher é o último recurso. */
 function _eaFrasePreencherLargura(o, W){
   try{
     const alvo = Math.round(W * 0.9);
-    const cx = (o.left || 0) + (o.width || 0) * (o.scaleX || 1) / 2;
-    o.set({ width:alvo / (o.scaleX || 1), left:(W - alvo) / 2 + (isFinite(cx) ? 0 : 0) }); // caixa larga, centrada na arte
-    o.set("left", (W - alvo) / 2);
+    o.set({ width:alvo / (o.scaleX || 1), left:(W - alvo) / 2 });
     try{ o.initDimensions(); }catch(_){ }
     const logicas = String(o.text || "").split("\n").length;
-    const escalar = function(k){
-      if(o.styles) Object.keys(o.styles).forEach(function(li){ Object.keys(o.styles[li] || {}).forEach(function(ci){ const e = o.styles[li][ci]; if(e && e.fontSize) e.fontSize = Math.max(8, e.fontSize * k); }); });
-      o.set("fontSize", Math.max(8, (o.fontSize || 24) * k)); try{ o.initDimensions(); }catch(_){ }
-    };
-    for(let it = 0; it < 3; it++){
-      let max = 0; for(let i = 0; i < (o._textLines || []).length; i++) max = Math.max(max, o.getLineWidth(i));
-      if(!(max > 1)) break;
-      const k = Math.max(0.6, Math.min(2.2, (alvo * 0.97) / max));
-      if(Math.abs(k - 1) < 0.02) break;
-      escalar(k);
-      _eaCaberLinhas(o, logicas);          // se o aumento quebrou em 3 linhas, volta até caber nas 2
+    if((o._textLines || []).length <= logicas){ o.setCoords(); return; }   // coube no tamanho fixo — não mexe em nada
+    const txt0 = String(o.text || ""), st0 = JSON.parse(JSON.stringify(o.styles || {}));
+    if(logicas === 2 && o.styles && o.styles[0] && o.styles[1]){
+      const e0 = o.styles[0][0] || {}, e1 = o.styles[1][0] || {};
+      const palavras = txt0.replace(/\n/g, " ").split(" ").filter(Boolean);
+      const soltas = ["a","o","e","de","da","do","das","dos","com","em","na","no","nas","nos","para","pra","por","que","um","uma","ao","à"];
+      const norm = function(w){ return String(w).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); };
+      const aplicar = function(i){
+        const l0 = palavras.slice(0, i).join(" "), l1 = palavras.slice(i).join(" ");
+        const st = { 0:{}, 1:{} };
+        for(let c = 0; c < l0.length; c++) st[0][c] = Object.assign({}, e0);
+        for(let c = 0; c < l1.length; c++) st[1][c] = Object.assign({}, e1);
+        o.set({ text:l0 + "\n" + l1, styles:st }); try{ o.initDimensions(); }catch(_){ }
+        return (o._textLines || []).length === 2;
+      };
+      let achou = false;
+      // de baixo pra cima: a 1ª quebra que cabe é a que deixa o NEGRITO (2ª linha) mais comprido — o jeito do designer
+      for(let i = 1; i < palavras.length && !achou; i++){
+        if(soltas.indexOf(norm(palavras[i - 1])) >= 0) continue;   // não termina a 1ª linha em preposição/artigo
+        achou = aplicar(i);
+      }
+      if(!achou){ o.set({ text:txt0, styles:st0 }); try{ o.initDimensions(); }catch(_){ } }
     }
+    if((o._textLines || []).length > logicas) _eaCaberLinhas(o, logicas);   // último recurso: encolhe o mínimo necessário
     o.setCoords();
   }catch(_){ }
 }
