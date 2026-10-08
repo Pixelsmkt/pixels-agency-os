@@ -145140,6 +145140,99 @@ function _eaSecoesCopy(html){
   out.texto = buf.texto.join("\n").replace(/\n{3,}/g, "\n\n").trim() || out.frase;
   return out;
 }
+/* (08/10, Gustavo: "cidades novas: escrever conforme o briefing ou o nome do arquivo em Materiais") CIDADE DO CARD sem rótulo:
+   1) "• Pin no mapa" · 2) "Cidade:/Local:/Município:" · 3) nome de cidade do template citado no título/briefing/arquivos ·
+   4) padrão "Nome/UF" ou "Nome - UF" no título, briefing e nos nomes dos arquivos de Materiais */
+const _EA_UFS = "AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO";
+function _eaCidadeDoCard(task, copy, opcoesTemplate){
+  if(copy && copy.cidade) return { cidade:copy.cidade, origem:"briefing (Pin no mapa)" };
+  const desc = _eaSemHtml((task && (task.desc || task.description)) || "");
+  const titulo = String((task && task.title) || "");
+  const arquivos = (Array.isArray(task && task.files) ? task.files : []).map(function(f){ return String((f && f.name) || "").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[_]+/g, " "); });
+  const arrumar = function(c){ return String(c || "").trim().replace(/[.;]$/, "").replace(/\s*[\/,\-–]\s*([A-Za-z]{2})\s*$/, function(_, uf){ return "/" + uf.toUpperCase(); }); };   // "Palotina - PR" → "Palotina/PR"
+  const soltas = /^(?:obra|obras|lagoa|cisterna|galp[aã]o|biodigestor|eta|unidade|foto|fotos|fazenda|granja|s[ií]tio|projeto|cliente|entrega|cidade|munic[ií]pio|reservat[oó]rio|silo|aviário|aviario|pocilga|est[aá]bulo)\s+/i;
+  let m = desc.match(/^\s*[•*\-]?\s*(?:cidade|local|munic[ií]pio|localiza[cç][aã]o)\s*:\s*(.+)$/im);
+  if(m && m[1].trim()) return { cidade:arrumar(m[1]), origem:"briefing (Cidade:)" };
+  const fontes = [["título", titulo], ["briefing", desc]].concat(arquivos.map(function(a){ return ["arquivo " + a.slice(0, 30), a]; }));
+  // cidade que já existe no template (CIDADES › …) citada em algum lugar
+  const ops = (opcoesTemplate || []).map(function(o){ const nome = (o && typeof o === "object") ? (o.texto || o.nome) : o; return { nome:String(nome || ""), k:_eaChaveCidade(String(nome || "").replace(/[-\/]\s*[A-Z]{2}$/i, "")) }; }).filter(function(o){ return o.k.length >= 4; }).sort(function(a, b){ return b.k.length - a.k.length; });
+  for(const f of fontes){ const k = " " + _eaChaveCidade(f[1]) + " "; const hit = ops.find(function(o){ return k.indexOf(" " + o.k + " ") >= 0; }); if(hit) return { cidade:arrumar(hit.nome), origem:f[0] }; }
+  // "Nome/UF" · "Nome - UF" · "Nome, UF"
+  const re = new RegExp("([A-ZÀ-Ú][A-Za-zÀ-ú'’]+(?:\\s(?:d[aeo]s?\\s)?[A-ZÀ-Ú][A-Za-zÀ-ú'’]+){0,3})\\s*[\\/,\\-–]\\s*(" + _EA_UFS + ")(?![A-Za-z])");
+  for(const f of fontes){ const r = f[1].match(re); if(r){ let nome = r[1].trim(); for(let i = 0; i < 3 && soltas.test(nome); i++) nome = nome.replace(soltas, ""); return { cidade:nome + "/" + r[2].toUpperCase(), origem:f[0] }; } }
+  return { cidade:"", origem:"" };
+}
+/* ── PIN NO MAPA PARA CIDADE NOVA (08/10): o template já tem dezenas de cidades com pin; aprendemos o mapa com elas.
+   lat/lon de cada cidade (Nominatim/OpenStreetMap, com IA de reserva) → ajuste afim lon/lat → x/y pelos pins do
+   template (mínimos quadrados) → pin da cidade nova. Fica guardado em Identidade visual › Pins pra próxima. ── */
+const _EA_UF_NOME = { AC:"Acre", AL:"Alagoas", AP:"Amapá", AM:"Amazonas", BA:"Bahia", CE:"Ceará", DF:"Distrito Federal", ES:"Espírito Santo", GO:"Goiás", MA:"Maranhão", MT:"Mato Grosso", MS:"Mato Grosso do Sul", MG:"Minas Gerais", PA:"Pará", PB:"Paraíba", PR:"Paraná", PE:"Pernambuco", PI:"Piauí", RJ:"Rio de Janeiro", RN:"Rio Grande do Norte", RS:"Rio Grande do Sul", RO:"Rondônia", RR:"Roraima", SC:"Santa Catarina", SP:"São Paulo", SE:"Sergipe", TO:"Tocantins" };
+function _eaGeoCache(){ try{ return JSON.parse(localStorage.getItem("pixels-ea-geo") || "{}") || {}; }catch(_){ return {}; } }
+function _eaGeoGuardar(k, v){ try{ const c = _eaGeoCache(); c[k] = v; localStorage.setItem("pixels-ea-geo", JSON.stringify(c)); }catch(_){ } }
+async function _eaGeo(cidade, pais, cacheRemoto){
+  const nome = String(cidade || "").trim(); if(!nome) return null;
+  const k = _eaChaveCidade(nome) + "|" + (pais || "");
+  const c = _eaGeoCache(); if(c[k] && isFinite(c[k].lat)) return c[k];
+  if(cacheRemoto && cacheRemoto[k] && isFinite(cacheRemoto[k].lat)){ _eaGeoGuardar(k, cacheRemoto[k]); return cacheRemoto[k]; }
+  const m = nome.match(/^(.*?)\s*[\/,\-–]\s*([A-Za-z]{2})$/); const base = (m ? m[1] : nome).trim(), uf = m ? m[2].toUpperCase() : "";
+  const q = base + (uf && _EA_UF_NOME[uf] ? ", " + _EA_UF_NOME[uf] : "") + ", " + (pais === "paraguai" ? "Paraguay" : "Brasil");
+  let r = null;
+  try{
+    const ctrl = new AbortController(); const tm = setTimeout(function(){ ctrl.abort(); }, 5000);
+    const resp = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=pt-BR&q=" + encodeURIComponent(q), { signal:ctrl.signal, headers:{ "Accept":"application/json" } });
+    clearTimeout(tm);
+    const j = await resp.json(); if(Array.isArray(j) && j[0] && isFinite(Number(j[0].lat))) r = { lat:Number(j[0].lat), lon:Number(j[0].lon), fonte:"osm" };
+  }catch(_){ }
+  if(!r && typeof askGPTBlocos === "function"){
+    try{
+      const g = await askGPTBlocos({ max_tokens:80, origem:"arte_geo", system:"Responda SÓ um JSON {\"lat\":número,\"lon\":número} com as coordenadas da sede do município pedido. Sem texto fora do JSON.", messages:[{ role:"user", content:q }] });
+      const t = ((g && g.content && g.content[0] && g.content[0].text) || "").match(/\{[\s\S]*\}/); if(t){ const j = JSON.parse(t[0]); if(isFinite(Number(j.lat)) && isFinite(Number(j.lon))) r = { lat:Number(j.lat), lon:Number(j.lon), fonte:"ia" }; }
+    }catch(_){ }
+  }
+  if(r) _eaGeoGuardar(k, r);
+  return r;
+}
+/* ponta do pin (onde ele "fura" o mapa): centro x da parte opaca, base da parte opaca */
+function _eaPontaDoPin(pin){ const c = _eaCaixaOpaca(pin); return { x:c.left + c.width / 2, y:c.top + c.height, dx:(c.left + c.width / 2) - (pin.left || 0), dy:(c.top + c.height) - (pin.top || 0) }; }
+/* ajuste afim por mínimos quadrados: [lon, lat, 1] → x e → y */
+function _eaAjusteAfim(pts){
+  if(pts.length < 3) return null;
+  const A = [[0,0,0],[0,0,0],[0,0,0]], bx = [0,0,0], by = [0,0,0];
+  pts.forEach(function(p){ const v = [p.lon, p.lat, 1]; for(let i = 0; i < 3; i++){ for(let j = 0; j < 3; j++) A[i][j] += v[i] * v[j]; bx[i] += v[i] * p.x; by[i] += v[i] * p.y; } });
+  const inv = function(M){ const m = M.map(function(r){ return r.slice(); }), I = [[1,0,0],[0,1,0],[0,0,1]];
+    for(let c = 0; c < 3; c++){ let piv = c; for(let r = c + 1; r < 3; r++) if(Math.abs(m[r][c]) > Math.abs(m[piv][c])) piv = r; if(Math.abs(m[piv][c]) < 1e-9) return null;
+      [m[c], m[piv]] = [m[piv], m[c]]; [I[c], I[piv]] = [I[piv], I[c]]; const d = m[c][c]; for(let j = 0; j < 3; j++){ m[c][j] /= d; I[c][j] /= d; }
+      for(let r = 0; r < 3; r++) if(r !== c){ const f = m[r][c]; for(let j = 0; j < 3; j++){ m[r][j] -= f * m[c][j]; I[r][j] -= f * I[c][j]; } } }
+    return I; };
+  const Ai = inv(A); if(!Ai) return null;
+  const sol = function(b){ return [0,1,2].map(function(i){ return Ai[i][0] * b[0] + Ai[i][1] * b[1] + Ai[i][2] * b[2]; }); };
+  const cx = sol(bx), cy = sol(by);
+  const f = function(lon, lat){ return { x:cx[0] * lon + cx[1] * lat + cx[2], y:cy[0] * lon + cy[1] * lat + cy[2] }; };
+  let erro = 0; pts.forEach(function(p){ const q = f(p.lon, p.lat); erro = Math.max(erro, Math.hypot(q.x - p.x, q.y - p.y)); });
+  return { cx:cx, cy:cy, f:f, erroMax:erro, n:pts.length };
+}
+/* calibra o mapa do país com as cidades do template que têm pin (geocodifica até 12, guarda em Identidade › mapa) */
+async function _eaCalibrarMapa(fc, pais, ident, client, unidade){
+  const grupos = {}; fc.getObjects().forEach(function(o){ if(o.variante && /cidade|city|local/i.test(o.variante.grupo)) (grupos[o.variante.nome] = grupos[o.variante.nome] || []).push(o); });
+  const cand = [];
+  Object.keys(grupos).forEach(function(n){
+    const txt = grupos[n].find(function(o){ return _eaTipo(o) === "texto"; }), pin = grupos[n].find(function(o){ return _eaTipo(o) !== "texto" && /pin|alfinete|marcador/i.test(o.nome || ""); });
+    if(!txt || !pin) return;
+    const nome = String(txt.text || "").trim(), temUf = /\/\s*[A-Z]{2}\s*$/.test(nome);
+    if((pais === "paraguai") === temUf) return;        // só as cidades do mesmo país/mapa
+    cand.push({ nome:nome, ponta:_eaPontaDoPin(pin) });
+  });
+  if(cand.length < 3) return null;
+  const geo = (ident && ident.mapa && ident.mapa.geo) || {};
+  const pts = []; const passo = Math.max(1, Math.floor(cand.length / 12));
+  for(let i = 0; i < cand.length && pts.length < 12; i += passo){
+    const g = await _eaGeo(cand[i].nome, pais, geo); if(!g) continue;
+    pts.push({ lon:g.lon, lat:g.lat, x:cand[i].ponta.x, y:cand[i].ponta.y }); geo[_eaChaveCidade(cand[i].nome) + "|" + pais] = { lat:g.lat, lon:g.lon, fonte:g.fonte };
+    if(g.fonte === "osm") await _eaEsperar(1100);     // 1 pedido/segundo (regra do OpenStreetMap)
+  }
+  const aj = _eaAjusteAfim(pts); if(!aj) return null;
+  try{ await _eaRpc("arte_identidade_salvar", { p_client:client, p_unidade:unidade || "", p_dados:{ mapa:Object.assign({}, (ident && ident.mapa) || {}, { geo:geo }) } }); }catch(_){ }
+  return aj;
+}
 function _eaFotosDoCard(task){
   return (Array.isArray(task && task.files) ? task.files : []).filter(function(f){
     return f && f.url && !f.isAnnotation && !f.isRef && (!f.tipo || f.tipo === "material") && /\.(jpe?g|png|webp)(\?|#|$)/i.test(String(f.name || f.url));
@@ -145514,8 +145607,8 @@ function _eaFundoDoTexto(txt, candidatos){
       return cxT >= f.c.left && cxT <= f.c.left + f.c.width && cyT >= f.c.top && cyT <= f.c.top + f.c.height && f.c.height <= T.height * 3.5 && f.c.width <= Math.max(T.width * 4, T.width + 200); })
     .sort(function(a, b){ return a.c.width * a.c.height - b.c.width * b.c.height; })[0] || null;
 }
-async function _eaEscreverCidade(fc, cidade, ident, W, H){
-  const avisos = []; if(!cidade) return avisos;
+async function _eaEscreverCidade(fc, cidade, ident, W, H, ctx){
+  const avisos = []; if(!cidade) return avisos; ctx = ctx || {};
   const grupos = {}; fc.getObjects().forEach(function(o){ if(o.variante && /cidade|city|local/i.test(o.variante.grupo)){ (grupos[o.variante.grupo] = grupos[o.variante.grupo] || {}); (grupos[o.variante.grupo][o.variante.nome] = grupos[o.variante.grupo][o.variante.nome] || []).push(o); } });
   const cid = _eaChaveCidade(cidade);
   for(const g of Object.keys(grupos)){
@@ -145550,8 +145643,23 @@ async function _eaEscreverCidade(fc, cidade, ident, W, H){
     const pin = ops[acesa].find(function(o){ return o !== txt && (!fundo || o !== fundo.o) && /pin|alfinete|marcador/i.test(o.nome || ""); });
     if(pin){ pin.espaco = "PIN";
       const p = ident && ident.pins && ident.pins[cid];
-      if(p && p.W && p.H){ pin.set({ left:p.x * W / p.W, top:p.y * H / p.H }); pin.setCoords(); }
-      else avisos.push("a cidade “" + cidade + "” não existe no template: escrevi o nome e ajustei o fundo, mas o pin ficou no lugar da " + acesa + " — arraste o pin no editor e guarde a posição (vale pra próxima)"); }
+      if(p && p.W && p.H){ pin.set({ left:p.x * W / p.W, top:p.y * H / p.H }); pin.setCoords(); avisos.push("cidade nova “" + cidade + "”: nome escrito, fundo ajustado e pin na posição guardada"); }
+      else {
+        // (08/10) sem posição guardada: aprende o mapa com as cidades do template (lat/lon → pixel) e coloca o pin sozinho
+        let colocou = false;
+        try{
+          const pais = /\/\s*[A-Z]{2}\s*$/.test(String(cidade)) ? "brasil" : ((ctx && ctx.pais) || "brasil");
+          const aj = await _eaCalibrarMapa(fc, pais, ident, ctx && ctx.client, ctx && ctx.unidade);
+          const g = aj ? await _eaGeo(cidade, pais, ident && ident.mapa && ident.mapa.geo) : null;
+          if(aj && g){
+            const q = aj.f(g.lon, g.lat), pt = _eaPontaDoPin(pin);
+            pin.set({ left:q.x - pt.dx, top:q.y - pt.dy }); pin.setCoords(); colocou = true;
+            avisos.push("cidade nova “" + cidade + "”: nome escrito, fundo ajustado e pin colocado pelo mapa (" + aj.n + " cidades do template, erro máx. " + Math.round(aj.erroMax) + " px) — confira e, se mover, guarde a posição");
+            try{ if(ctx && ctx.client){ const o = {}; o[cid] = { x:pin.left, y:pin.top, W:W, H:H, cidade:String(cidade), origem:"mapa" }; await _eaRpc("arte_identidade_salvar", { p_client:ctx.client, p_unidade:ctx.unidade || "", p_dados:{ pins:o } }); } }catch(_){ }
+          }
+        }catch(e){ avisos.push("pin pelo mapa: " + _eaErro(e)); }
+        if(!colocou) avisos.push("a cidade “" + cidade + "” não existe no template: escrevi o nome e ajustei o fundo, mas o pin ficou no lugar da " + acesa + " — arraste o pin no editor e guarde a posição (vale pra próxima)");
+      } }
     else avisos.push("a cidade “" + cidade + "” não existe no template: escrevi o nome e ajustei o fundo");
   }
   return avisos;
@@ -145575,6 +145683,12 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const fotoObra = tipoCard === "foto_obra";
   const copy = _eaSecoesCopy(task.desc || task.description || "");
   const fotos = _eaFotosDoCard(task); let iFoto = 0; const avisos = []; const travados = []; const espacosFoto = [];
+  // (08/10) cidade sem o rótulo "• Pin no mapa": procura no briefing, no título e nos nomes dos arquivos de Materiais
+  if(fotoObra && !copy.cidade){
+    const opsCid = []; fc.getObjects().forEach(function(o){ if(o.variante && /cidade|city|local/i.test(o.variante.grupo) && _eaTipo(o) === "texto" && o.text) opsCid.push({ nome:o.variante.nome, texto:String(o.text).trim() }); });
+    const ach = _eaCidadeDoCard(task, copy, opsCid);
+    if(ach.cidade){ copy.cidade = ach.cidade; avisos.push("cidade lida do " + ach.origem + ": " + ach.cidade); }
+  }
   // produtos do Playbook (pra saber o que vai em negrito na frase)
   let produtosCtx = []; try{ const it = await pxInteligenciaDesign(task.client, unid); produtosCtx = (it.produtos || []).map(function(p){ return { nome:p.nome, aliases:[p.nome] }; }); }catch(_){ }
   passo("preenchendo com a copy e as fotos…");
@@ -145603,7 +145717,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   // (07/10) grupos de alternativas do template (CIDADES, ÍCONES, MAPA…): liga a que casa com o briefing, apaga as outras
   try{ _eaEscolherVariantes(fc, { cidade:copy.cidade, unidade:unid, textos:[task.title, copy.titulo, copy.frase, copy.texto, task.produto, task.product, _eaSemHtml(task.desc || task.description || "")] })
     .filter(function(x){ return !(copy.cidade && /alternativas de [^:]*(cidade|city|local)/i.test(x)); }).forEach(function(x){ avisos.push(x); }); }catch(_){ }
-  try{ (await _eaEscreverCidade(fc, copy.cidade, ident, W, H)).forEach(function(x){ avisos.push(x); }); }catch(e){ avisos.push("cidade: " + _eaErro(e)); }
+  try{ (await _eaEscreverCidade(fc, copy.cidade, ident, W, H, { client:task.client, unidade:unid, pais:(/paragua/i.test(unid) ? "paraguai" : "brasil") })).forEach(function(x){ avisos.push(x); }); }catch(e){ avisos.push("cidade: " + _eaErro(e)); }
   // fotos do card nos espaços FOTO. Foto de obra (regras do Gustavo, 07/10): texto e mapa NÃO podem ficar em cima da obra;
   // na altura do mapa/pin já tem que ser céu; horizonte reto. A IA olha a foto (horizonte, inclinação, caixa da obra) e
   // o encaixe escolhe zoom/posição que respeitem isso; se não der, a foto entra centralizada e o histórico avisa.
@@ -145689,6 +145803,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
     }).catch(function(e){ setErro(_eaErro(e)); setModelos([]); });
   }, [task.id]);
   const copy = _eaSecoesCopy(task.desc || task.description || ""), fotos = _eaFotosDoCard(task);
+  if(!copy.cidade){ try{ const a = _eaCidadeDoCard(task, copy, []); if(a.cidade) copy.cidade = a.cidade + " (" + a.origem + ")"; }catch(_){ } }   // (08/10) cidade lida do briefing/título/arquivos
   const gerar = async function(m){
     m = m || (modelos || []).find(function(x){ return x.id === sel; }); if(!m) return;
     setErro("");
