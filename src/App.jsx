@@ -146710,9 +146710,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
       const th = String(pAnt.thumb_url || "").match(/agency-files\/(arte\/[^"?]+)/); if(th && lixo.indexOf(th[1]) < 0) lixo.push(th[1]);
     }
   }catch(_){ }
-  const finaisAntigos = (Array.isArray(task.files) ? task.files : []).filter(function(x){ return x && x.origem === "edicao_arte" && x.storagePath && /^tasks\//.test(String(x.storagePath)) && String(x.name || "") === nome + ".png"; });
-  const idsAntigos = finaisAntigos.map(function(x){ return x.id; }).filter(Boolean);
-  const p = pAnt ? { id:pAnt.id } : await _eaRpc("arte_projeto_criar", { p_client:task.client || null, p_unidade:(uns.length === 1 ? uns[0] : ""), p_task:task.id, p_titulo:String(task.title || modelo.nome || "Arte").slice(0,120),
+  const p = pAnt ? { id:pAnt.id } : await _eaRpc("arte_projeto_criar",{ p_client:task.client || null, p_unidade:(uns.length === 1 ? uns[0] : ""), p_task:task.id, p_titulo:String(task.title || modelo.nome || "Arte").slice(0,120),
     p_formato:modelo.formato || "custom", p_largura:W, p_altura:H, p_doc:doc, p_modelo:modelo.id || null });
   passo("preenchendo com a copy e as fotos…");
   for(const o of fc.getObjects().slice()){
@@ -146833,8 +146831,10 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const blob = _eaDataUrlBlob(fc.toDataURL({ format:"png", multiplier:1, enableRetinaScaling:false }));
   const up = await _eaSubir(blob, "tasks/" + task.id, nome + ".png");
   const f = await _eaRpc("arte_projeto_final", { p_id:p.id, p_file:{ url:up.url, storagePath:up.path, name:nome + ".png", type:"image/png", size:blob.size } });
-  // limpa o que ficou velho (PNG anterior no card + camadas/miniatura antigas) e põe a arte nova como 1ª LÂMINA
-  // (08/10, Gustavo: "sempre que for criada uma nova imagem, deve aparecer por primeiro na Avaliação de design")
+  // limpa o que ficou velho e põe a arte nova como 1ª LÂMINA
+  // (08/10, Gustavo: "a primeira lâmina DEVE ser a mais recente" + "regerar substitui, não acumula")
+  // o PNG anterior era achado pelo NOME EXATO — mas o nome mudava a cada rodada ("…-2.png") e nada era removido.
+  // Agora: TODO final gerado pela Edição de arte que não seja o novo sai do card (lido FRESCO do banco, não do estado).
   const _ehFinal = function(x){ return x && x.url && !x.isRef && !x.isAnnotation && x.tipo !== "referencia" && x.tipo !== "material"; };
   const _novaPrimeiro = function(l){
     const ix = l.findIndex(function(x){ return x && x.url === f.url; });
@@ -146843,18 +146843,21 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     l.splice(alvo, 0, novo);
     return l;
   };
+  let idsVelhos = [];
   try{
     const fresco = await window._sb.from("tasks").select("files").eq("id", task.id).single();
     const atuais = Array.isArray(fresco.data && fresco.data.files) ? fresco.data.files : [];
-    const semVelhos = _novaPrimeiro(atuais.filter(function(x){ return !(x && idsAntigos.indexOf(x.id) >= 0); }));
+    const velhos = atuais.filter(function(x){ return x && x.origem === "edicao_arte" && String(x.id || "") !== String(f.id || "") && String(x.url || "") !== String(f.url || ""); });
+    idsVelhos = velhos.map(function(x){ return x.id; }).filter(Boolean);
+    velhos.forEach(function(x){ if(x.storagePath && /^tasks\//.test(String(x.storagePath)) && lixo.indexOf(x.storagePath) < 0) lixo.push(x.storagePath); });
+    const semVelhos = _novaPrimeiro(atuais.filter(function(x){ return !(x && idsVelhos.indexOf(x.id) >= 0); }));
     await window._sb.from("tasks").update({ files:semVelhos, updated_at:new Date().toISOString() }).eq("id", task.id);
-    finaisAntigos.forEach(function(x){ if(lixo.indexOf(x.storagePath) < 0) lixo.push(x.storagePath); });
   }catch(_){ }
   if(lixo.length){ try{ for(let i = 0; i < lixo.length; i += 90) await window._sb.storage.from("agency-files").remove(lixo.slice(i, i + 90)); avisos.push("arte regerada: " + lixo.length + " arquivo(s) da versão anterior removidos do armazenamento"); }catch(_){ } }
   // DIRETO pra Avaliação de design
   const agora = new Date().toISOString(), quem = (typeof CURRENT_USER !== "undefined" && CURRENT_USER && CURRENT_USER.name) || "";
   if(typeof setTasks === "function") setTasks(function(l){ return (l || []).map(function(t){ if(String(t.id) !== String(task.id)) return t;
-    const fs = _novaPrimeiro((Array.isArray(t.files) ? t.files : []).filter(function(x){ return !(x && idsAntigos.indexOf(x.id) >= 0); }).slice());
+    const fs = _novaPrimeiro((Array.isArray(t.files) ? t.files : []).filter(function(x){ return !(x && idsVelhos.indexOf(x.id) >= 0); }).slice());
     return Object.assign({}, t, { files:fs, status:"avaliacao", colEnteredAt:agora,
       timeline:(t.timeline || []).concat([{ type:"status", from:t.status, to:"avaliacao", fromLabel:"", toLabel:"Avaliação", at:agora, atFmt:(typeof nowFmt === "function" ? nowFmt() : ""), user:quem,
         note:"Arte gerada automaticamente pelo modelo “" + (modelo.nome || "") + "”" + (avisos.length ? " — atenção: " + avisos.join("; ") : "") }]) }); }); });
