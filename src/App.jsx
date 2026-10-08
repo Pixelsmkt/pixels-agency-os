@@ -146253,7 +146253,8 @@ function _eaVibrarFotoObra(cv, horizonteY){
       let alvoHue = hue;
       if(y < hy && hue >= 180 && hue <= 260 && sat > 0.06){ ganho *= 1 + 0.14 * forca; alvoHue = hue + (212 - hue) * 0.22 * forca; }   // céu: azul mais rico
       sat = Math.min(1, sat * ganho);
-      let v2 = Math.min(1, Math.max(0, 0.5 + (v - 0.5) * (1 + 0.05 * forca)));   // contraste leve
+      let v2 = Math.min(1, Math.max(0, 0.5 + (v - 0.5) * (1 + 0.03 * forca)));   // contraste bem leve (08/10: o 0.05 escurecia demais a lona/área escura)
+      v2 = Math.min(1, v2 * (1 + 0.025 * forca));                                // e um fio de luz — a foto fica viva, nunca mais escura que a original
       // HSV → RGB
       const c = v2 * sat, hh = ((alvoHue % 360) + 360) % 360 / 60, xx = c * (1 - Math.abs(hh % 2 - 1)), m = v2 - c;
       let rr = 0, gg = 0, bb = 0;
@@ -146263,6 +146264,27 @@ function _eaVibrarFotoObra(cv, horizonteY){
     x.putImageData(d, 0, 0);
     return { satMedia:Math.round(satMedia * 100) / 100, forca:Math.round(forca * 100) / 100 };
   }catch(_){ return null; }
+}
+/* (08/10, Gustavo: "o resultado ficou muito escuro — aqui a foto é mais clara, viva") a edição do gpt-image às vezes
+   devolve tudo mais escuro. Compara a luz média da foto ANTES e DEPOIS da edição (só na área que já era foto) e,
+   se escureceu, devolve a luz — só clareia, nunca escurece. Devolve o ganho aplicado (1 = nada). */
+function _eaCasarLuz(ref, cv){
+  try{
+    const dr = ref.getContext("2d").getImageData(0, 0, ref.width, ref.height).data;
+    const xc = cv.getContext("2d"), ic = xc.getImageData(0, 0, cv.width, cv.height), dc = ic.data;
+    let sr = 0, sc = 0, n = 0;
+    for(let i = 0; i < dr.length && i < dc.length; i += 64){
+      if(dr[i + 3] === 0) continue;                                             // só onde a foto original existia
+      sr += 0.299 * dr[i] + 0.587 * dr[i + 1] + 0.114 * dr[i + 2];
+      sc += 0.299 * dc[i] + 0.587 * dc[i + 1] + 0.114 * dc[i + 2]; n++;
+    }
+    if(!n || sc <= 0) return 1;
+    const g = Math.max(1, Math.min(1.35, sr / sc));                              // só clareia
+    if(g <= 1.03) return 1;
+    for(let i = 0; i < dc.length; i += 4){ dc[i] = Math.min(255, dc[i] * g); dc[i + 1] = Math.min(255, dc[i + 1] * g); dc[i + 2] = Math.min(255, dc[i + 2] * g); }
+    xc.putImageData(ic, 0, 0);
+    return g;
+  }catch(_){ return 1; }
 }
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
@@ -146288,17 +146310,22 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   const ang = -(an.inclinacao || 0) * Math.PI / 180;                       // gira pra deixar o horizonte reto
   const folga = 1 + Math.abs(Math.sin(ang)) * 1.4;                         // zoom extra pra não sobrar canto vazio depois de girar
   const sCobre = Math.max(w / nova.width, h / nova.height) * folga;
+  const sDentro = Math.min(w / nova.width, h / nova.height) * folga;       // foto INTEIRA visível — a IA completa o que faltar
   const cruza = function(a, b){ return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0; };
+  /* (08/10, Gustavo: "é pra preencher o céu e a terra, NÃO dar zoom") com IA disponível, CORTAR a foto é o caro e
+     completar céu/terreno é o barato — a foto entra inteira (sem corte lateral) e a IA estende o que faltar.
+     Sem IA (podeEncolher=false), vale o contrário: cobrir o espaço, porque não tem quem complete o vazio. */
   const procurar = function(podeEncolher){
     let melhor = null;
-    for(let zi = (podeEncolher ? -4 : 0); zi <= 8; zi++){
-      const s = sCobre * (1 + zi * 0.1);                                    // de 0,6× (sobra pra IA completar) até 1,8× de zoom
+    const escalas = podeEncolher ? [sDentro] : [];
+    for(let zi = (podeEncolher ? -4 : 0); zi <= 8; zi++) escalas.push(sCobre * (1 + zi * 0.1));
+    for(const s of escalas){
       const dw = nova.width * s, dh = nova.height * s;
       const ox = (w - dw) / 2;
       const y0 = Math.min(0, h - dh), y1 = Math.max(0, h - dh);
       for(let yi = 0; yi <= 20; yi++){
         const oy = y0 + (y1 - y0) * (yi / 20);
-        let pena = 0;
+        let pena = 0;                                                        // só as REGRAS da obra (texto/mapa/faixa)
         if(an.horizonte != null && mapaBase != null){ const hy = oy + an.horizonte * dh; if(hy < mapaBase + h * 0.03) pena += (mapaBase + h * 0.03 - hy) * 4; }   // na altura do mapa tem que ser céu
         if(an.obra){ const ob = { x0:ox + an.obra.x0 * dw, y0:oy + an.obra.y0 * dh, x1:ox + an.obra.x1 * dw, y1:oy + an.obra.y1 * dh };
           textos.forEach(function(t){ if(cruza(ob, t)) pena += (Math.min(ob.y1, t.y1) - Math.max(ob.y0, t.y0)) * 3; });
@@ -146309,8 +146336,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           if(ob.y1 > h) pena += (ob.y1 - h) * 2; if(ob.y0 < 0) pena += -ob.y0 * 2;     // obra cortada
         }
         const vazio = Math.max(0, h - dh) * w + Math.max(0, w - dw) * h;      // área que a IA teria que completar
-        pena += vazio / Math.max(1, w) * 0.6 + Math.max(0, zi) * h * 0.02 + Math.abs(oy - (h - dh) / 2) * 0.15;
-        if(!melhor || pena < melhor.pena) melhor = { s:s, ox:ox, oy:oy, dw:dw, dh:dh, pena:pena, zi:zi, vazio:vazio, viol:pena - vazio / Math.max(1, w) * 0.6 >= h * 0.08 };
+        const corte = Math.max(0, dw - w) * Math.min(dh, h) + Math.max(0, dh - h) * Math.min(dw, w);   // área da foto jogada fora
+        const custo = (podeEncolher ? (vazio * 0.12 + corte * 0.9) : vazio * 0.6) / Math.max(1, w)
+          + Math.max(0, s / sCobre - 1) * h * 0.2 + Math.abs(oy - (h - dh) / 2) * 0.15;
+        if(!melhor || pena + custo < melhor.pena) melhor = { s:s, ox:ox, oy:oy, dw:dw, dh:dh, pena:pena + custo, vazio:vazio, viol:pena >= h * 0.08 };
       }
     }
     return melhor;
@@ -146333,11 +146362,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       mx.globalCompositeOperation = "destination-out";
       (an.entulho || []).forEach(function(c){ const f = w * 0.03; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
-      if(precisaCompletar) partes.push("Complete as áreas transparentes continuando a cena com naturalidade — céu, terreno, vegetação — coerente com a luz, as cores e a perspectiva da foto.");
+      if(precisaCompletar) partes.push("Complete as áreas transparentes continuando a cena com naturalidade — estenda o céu para cima e o terreno/vegetação para baixo — coerente com a luz, as cores e a perspectiva da foto. Mantenha exatamente o mesmo brilho e a mesma exposição da foto: não escureça nada.");
       if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue.");
       partes.push("Não altere a obra principal nem sua estrutura, cores ou proporções. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
       const r = await _eaFotoIA(cv, M, partes.join(" "), ctx.client);
-      if(r){ cv = r; if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA"); if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)"); if(r.__custo) avisos.push("IA da foto: R$ " + Number(r.__custo).toFixed(2)); }
+      if(r){ const gLuz = _eaCasarLuz(cv, r); cv = r; if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA"); if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)"); if(gLuz > 1.03) avisos.push("a edição da IA escureceu a foto — luz original recuperada (+" + Math.round((gLuz - 1) * 100) + "%)"); if(r.__custo) avisos.push("IA da foto: R$ " + Number(r.__custo).toFixed(2)); }
     }catch(e){
       avisos.push("IA da foto não rodou (" + _eaErro(e) + ")" + (precisaCompletar ? " — a foto entrou cobrindo o espaço, sem completar" : ""));
       if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
@@ -146650,7 +146679,9 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
         const dL = xL.getImageData(0, 0, 48, 48).data; let lum = 0, nn = 0;
         for(let i = 0; i < dL.length; i += 4){ if(dL[i + 3] < 20) continue; lum += 0.299 * dL[i] + 0.587 * dL[i + 1] + 0.114 * dL[i + 2]; nn++; }
         lum = nn ? lum / nn : 255;
-        const fator = lum <= 55 ? 0.35 : lum >= 120 ? 1 : 0.35 + (lum - 55) * (0.65 / 65);
+        // (08/10, Gustavo: "o resultado ficou muito escuro") sombra CHEIA só em fundo realmente claro (lum ≥ 150);
+        // fundo médio (areia ao entardecer, ~100) fica com ~65% — a arte continua legível sem apagar a foto
+        const fator = lum <= 50 ? 0.3 : lum >= 150 ? 1 : 0.3 + (lum - 50) * (0.7 / 100);
         if(fator < 0.97){
           let mexidas = 0;
           fc.getObjects().forEach(function(x){ if(_eaTipo(x) !== "imagem" || x.visible === false) return;
