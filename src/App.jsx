@@ -146328,6 +146328,46 @@ function _eaVibrarFotoObra(cv, horizonteY){
     return { satMedia:Math.round(satMedia * 100) / 100, forca:Math.round(forca * 100) / 100 };
   }catch(_){ return null; }
 }
+/* (08/10) o gpt-image NÃO devolve a imagem alinhada pixel a pixel: ele re-sintetiza com um deslocamento/zoom
+   pequeno (1–3%). Qualquer colagem parcial (manter o original, usar a IA só nas áreas marcadas) mostra emendas.
+   Aqui a gente MEDE esse desvio (busca de escala ±4% e deslocamento ±6px numa versão 128px, só onde a foto
+   original existe) e DESFAZ no resultado da IA antes da colagem. Devolve o canvas alinhado (ou o próprio cv). */
+function _eaAlinharIA(ref, cv){
+  try{
+    const N = 128, H = Math.max(16, Math.round(N * ref.height / ref.width));
+    const peq = function(c){ const t = document.createElement("canvas"); t.width = N; t.height = H; t.getContext("2d").drawImage(c, 0, 0, N, H); return t; };
+    const da = peq(ref).getContext("2d").getImageData(0, 0, N, H).data;
+    const db = peq(cv).getContext("2d").getImageData(0, 0, N, H).data;
+    const luma = function(d, i){ return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
+    let melhor = { err:1e18, s:1, dx:0, dy:0 };
+    for(let s = 0.96; s <= 1.0401; s += 0.01){
+      for(let dy = -6; dy <= 6; dy++){
+        for(let dx = -6; dx <= 6; dx++){
+          let err = 0, n = 0;
+          for(let y = 0; y < H; y += 2){
+            for(let x = 0; x < N; x += 2){
+              const i = (y * N + x) * 4; if(da[i + 3] === 0) continue;
+              const xs = Math.round((x - N / 2) * s + N / 2 + dx), ys = Math.round((y - H / 2) * s + H / 2 + dy);
+              if(xs < 0 || ys < 0 || xs >= N || ys >= H) continue;
+              const d = luma(da, i) - luma(db, (ys * N + xs) * 4); err += d * d; n++;
+            }
+          }
+          if(n > 400){ err /= n; if(err < melhor.err) melhor = { err:err, s:s, dx:dx, dy:dy }; }
+        }
+      }
+    }
+    if(Math.abs(melhor.s - 1) < 0.005 && Math.abs(melhor.dx) < 0.7 && Math.abs(melhor.dy) < 0.7) return cv;
+    const k = ref.width / N, cx = cv.width / 2, cy = cv.height / 2;
+    const out = document.createElement("canvas"); out.width = cv.width; out.height = cv.height; const ox = out.getContext("2d");
+    ox.drawImage(cv, 0, 0);                                                     // fundo: evita faixa vazia na borda após o ajuste
+    ox.save();
+    ox.translate(cx, cy); ox.scale(1 / melhor.s, 1 / melhor.s); ox.translate(-cx - melhor.dx * k, -cy - melhor.dy * k);
+    ox.drawImage(cv, 0, 0);
+    ox.restore();
+    out.__ajuste = { s:melhor.s, dx:Math.round(melhor.dx * k), dy:Math.round(melhor.dy * k) };
+    return out;
+  }catch(_){ return cv; }
+}
 /* (08/10, Gustavo: "o resultado ficou muito escuro — aqui a foto é mais clara, viva") a edição do gpt-image às vezes
    devolve tudo mais escuro. Compara a luz média da foto ANTES e DEPOIS da edição (só na área que já era foto) e,
    se escureceu, devolve a luz — só clareia, nunca escurece. Devolve o ganho aplicado (1 = nada). */
@@ -146442,8 +146482,12 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue. Se a marca estiver sobre a obra, remova apenas a sujeira solta, mantendo a estrutura por baixo intacta.");
       partes.push("NÃO re-renderize nem repinte o resto da foto: a obra principal, a vegetação e o terreno fora das áreas marcadas devem permanecer idênticos, com a mesma textura. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
-      const r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
+      let r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
       if(r){
+        const custoIA = r.__custo;
+        const rAli = _eaAlinharIA(cv, r);                                        // desfaz o deslocamento/zoom do gpt-image
+        if(rAli !== r){ r = rAli; if(r.__ajuste) avisos.push("resultado da IA realinhado com a foto (" + (r.__ajuste.s !== 1 ? "zoom " + Math.round((r.__ajuste.s - 1) * 100) + "% · " : "") + r.__ajuste.dx + "," + r.__ajuste.dy + " px)"); }
+        r.__custo = custoIA;
         const gLuz = _eaCasarLuz(cv, r);
         /* (08/10, Gustavo: "mexeu muito no produto; os matos ficaram borrados — mexer o MÍNIMO") o gpt-image
            RE-RENDERIZA a imagem inteira (a máscara é só orientação). Então o resultado da IA só vale onde PODIA
@@ -146451,7 +146495,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
            foto, com borda macia pra emendar sem costura — a obra e a vegetação ficam intactas de verdade. */
         try{
           const F = document.createElement("canvas"); F.width = w; F.height = h; const fx = F.getContext("2d");
-          try{ fx.filter = "blur(6px)"; }catch(_){ }
+          try{ fx.filter = "blur(9px)"; }catch(_){ }
           fx.drawImage(M, 0, 0);
           try{ fx.filter = "none"; }catch(_){ }
           const K = document.createElement("canvas"); K.width = w; K.height = h; const kx2 = K.getContext("2d");
