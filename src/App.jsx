@@ -142901,7 +142901,8 @@ function _EaLista({ isMob, tasks, onAbrir, onAbrirCard, clienteFixo, onContagem 
             <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:3,flex:1}}>
               <div style={{fontWeight:800,fontSize:13.5,lineHeight:1.25,color:_EA_UI.tx}}>{p.titulo}</div>
               <div style={{fontSize:12,color:_EA_UI.sub}}>{clienteFixo ? "" : _eaNomeCliente(p.client_id)}{!clienteFixo && p.unidade ? " · " : ""}{p.unidade ? _eaRotuloUnidade(p.unidade) : ""}</div>
-              <div style={{fontSize:11.5,color:_EA_UI.fraco}}>v{p.versao} · {_eaDataHora(p.atualizado_em)}</div>
+              <div style={{fontSize:11.5,color:_EA_UI.fraco,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>v{p.versao} · {_eaDataHora(p.atualizado_em)}
+                {Number(p.custo_brl) > 0 && <span title="Quanto a IA gastou nesta arte (análise da foto, completar céu/terreno, limpar entulho, pedidos à IA)" style={{fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:999,background:_EA.roxoClaro,color:_EA.roxo,border:"1px solid "+_EA.roxoBorda}}>IA R$ {Number(p.custo_brl).toFixed(2).replace(".", ",")}</span>}</div>
               {t && <button onClick={function(){ if(onAbrirCard) onAbrirCard(t); }} style={{font:"inherit",marginTop:6,alignSelf:"flex-start",border:0,background:"none",padding:0,color:_EA_UI.a,fontWeight:700,fontSize:12,cursor:"pointer",textAlign:"left"}}>Card: {t.title}</button>}
             </div>
           </div>; })}
@@ -146155,12 +146156,12 @@ function _eaTextoComHierarquia(o, texto, produtos){
 }
 
 /* ── FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação, a caixa da obra e as caixas de entulho (frações 0–1) ── */
-async function _eaAnalisarFotoObra(url){
+async function _eaAnalisarFotoObra(url, card){
   if(typeof askGPTBlocos !== "function") return null;
-  const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra",
+  const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra", card:card || undefined,
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -146179,13 +146180,21 @@ async function _eaAnalisarFotoObra(url){
   return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent };
 }
 /* pede ao servidor (gpt-image-1) para completar o que falta e limpar o entulho; devolve <img> ou null */
-async function _eaFotoIA(base, mascara, prompt, client){
+async function _eaFotoIA(base, mascara, prompt, client, projeto){
   const w = base.width, h = base.height, r = w / h;
   const tam = r < 0.8 ? [1024, 1536] : r > 1.25 ? [1536, 1024] : [1024, 1024];
   const k = Math.min(tam[0] / w, tam[1] / h), dw = Math.round(w * k), dh = Math.round(h * k), dx = Math.floor((tam[0] - dw) / 2), dy = Math.floor((tam[1] - dh) / 2);
-  const A = document.createElement("canvas"); A.width = tam[0]; A.height = tam[1]; A.getContext("2d").drawImage(base, dx, dy, dw, dh);
+  const A = document.createElement("canvas"); A.width = tam[0]; A.height = tam[1];
+  const ax = A.getContext("2d");
+  // (08/10) nada de faixa transparente no que vai pra IA (ela reenquadra a cena): o fundo das faixas laterais
+  // é a própria imagem esticada cobrindo tudo, borrada — a máscara é quem diz onde pode mexer
+  const gC = Math.max(tam[0] / w, tam[1] / h) * 1.02;
+  try{ ax.filter = "blur(30px)"; }catch(_){ }
+  ax.drawImage(base, (tam[0] - w * gC) / 2, (tam[1] - h * gC) / 2, w * gC, h * gC);
+  try{ ax.filter = "none"; }catch(_){ }
+  ax.drawImage(base, dx, dy, dw, dh);
   const M = document.createElement("canvas"); M.width = tam[0]; M.height = tam[1]; M.getContext("2d").drawImage(mascara, dx, dy, dw, dh);   // fora da foto fica transparente = a IA pode preencher
-  const resp = await _eaFn({ acao:"foto", imagem:A.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt, tamanho:tam[0] + "x" + tam[1], qualidade:"medium", client_id:client || null });
+  const resp = await _eaFn({ acao:"foto", imagem:A.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt, tamanho:tam[0] + "x" + tam[1], qualidade:"medium", client_id:client || null, projeto_id:projeto || null });
   if(!resp || !resp.imagem) return null;
   const img = await _eaCarregarImg("data:image/png;base64," + resp.imagem);
   const out = document.createElement("canvas"); out.width = w; out.height = h;
@@ -146267,7 +146276,7 @@ async function _eaGerarFotoPorReferencia(task, refs, W, H, ctx){
     "Não invente um produto diferente nem acrescente partes que não existem nas referências. Composição com espaço de céu/fundo limpo no terço superior.",
     intelTxt ? "ORIENTAÇÕES DO CLIENTE (siga): " + intelTxt.replace(/\n/g, " ") : "",
     obs ? "Observações da identidade: " + obs : ""].filter(Boolean).join(" ").slice(0, 3200);
-  const resp = await _eaFn({ acao:"foto", referencias:b64s, prompt:prompt, tamanho:tam, qualidade:"medium", client_id:task.client || null });
+  const resp = await _eaFn({ acao:"foto", referencias:b64s, prompt:prompt, tamanho:tam, qualidade:"medium", client_id:task.client || null, projeto_id:(ctx && ctx.projeto) || null });
   if(!resp || !resp.imagem) return null;
   return { url:"data:image/png;base64," + resp.imagem, custo:resp.custo_brl, refs:refs.slice(0, b64s.length) };
 }
@@ -146336,7 +146345,7 @@ function _eaCasarLuz(ref, cv){
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
-  let an = null; try{ an = await _eaAnalisarFotoObra(url); }catch(e){ avisos.push("não consegui analisar a foto (" + _eaErro(e) + ") — entrou centralizada"); }
+  let an = null; try{ an = await _eaAnalisarFotoObra(url, ctx.task); }catch(e){ avisos.push("não consegui analisar a foto (" + _eaErro(e) + ") — entrou centralizada"); }
   if(!an){ return { cv:null, avisos:avisos }; }
   const w = cfg.w, h = cfg.h, pular = cfg.pular || [];
   const B = cfg.B, kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);   // página → pixels do canvas da foto
@@ -146367,8 +146376,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      Sem IA (podeEncolher=false), vale o contrário: cobrir o espaço, porque não tem quem complete o vazio. */
   const procurar = function(podeEncolher){
     let melhor = null;
+    // a foto NUNCA fica menor que sDentro (inteira na largura/altura): encolher além disso não ajuda em nada
     const escalas = podeEncolher ? [sDentro] : [];
-    for(let zi = (podeEncolher ? -4 : 0); zi <= 8; zi++) escalas.push(sCobre * (1 + zi * 0.1));
+    for(let zi = (podeEncolher ? -4 : 0); zi <= 8; zi++){ const s0 = sCobre * (1 + zi * 0.1); escalas.push(podeEncolher ? Math.max(sDentro, s0) : s0); }
     for(const s of escalas){
       const dw = nova.width * s, dh = nova.height * s;
       const ox = (w - dw) / 2;
@@ -146411,11 +146421,20 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       mx.globalCompositeOperation = "destination-in"; mx.drawImage(cv, 0, 0);                   // onde não tem foto → transparente
       mx.globalCompositeOperation = "destination-out";
       (an.entulho || []).forEach(function(c){ const f = w * 0.03; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
+      /* (08/10) o gpt-image REENQUADRA a cena quando recebe imagem com áreas transparentes (foi a "colagem" de Juti):
+         a imagem enviada vai SEM transparência — por baixo entra a própria foto cobrindo tudo, bem borrada, só de guia.
+         A máscara continua dizendo onde pode mexer; o que era pra manter volta do original na colagem final. */
+      const E = document.createElement("canvas"); E.width = w; E.height = h; const ex2 = E.getContext("2d");
+      const sFundo = Math.max(w / nova.width, h / nova.height) * 1.04;
+      try{ ex2.filter = "blur(36px)"; }catch(_){ }
+      ex2.drawImage(nova, (w - nova.width * sFundo) / 2, (h - nova.height * sFundo) / 2, nova.width * sFundo, nova.height * sFundo);
+      try{ ex2.filter = "none"; }catch(_){ }
+      ex2.drawImage(cv, 0, 0);
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
       if(precisaCompletar) partes.push("Complete as áreas transparentes continuando a cena com naturalidade — estenda o céu para cima e o terreno/vegetação para baixo — coerente com a luz, as cores e a perspectiva da foto. Mantenha exatamente o mesmo brilho e a mesma exposição da foto: não escureça nada.");
       if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue. Se a marca estiver sobre a obra, remova apenas a sujeira solta, mantendo a estrutura por baixo intacta.");
       partes.push("NÃO re-renderize nem repinte o resto da foto: a obra principal, a vegetação e o terreno fora das áreas marcadas devem permanecer idênticos, com a mesma textura. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
-      const r = await _eaFotoIA(cv, M, partes.join(" "), ctx.client);
+      const r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
       if(r){
         const gLuz = _eaCasarLuz(cv, r);
         /* (08/10, Gustavo: "mexeu muito no produto; os matos ficaram borrados — mexer o MÍNIMO") o gpt-image
@@ -146659,6 +146678,34 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   }
   // produtos do Playbook (pra saber o que vai em negrito na frase)
   let produtosCtx = []; try{ const it = await pxInteligenciaDesign(task.client, unid); produtosCtx = (it.produtos || []).map(function(p){ return { nome:p.nome, aliases:[p.nome] }; }); }catch(_){ }
+  /* (08/10, Gustavo: "não achei onde aparece o custo de cada arte") o projeto é criado/reaproveitado ANTES da foto,
+     pra IA receber o projeto_id — aí o servidor soma cada chamada em arte_projetos.custo_brl e o custo aparece
+     em Artes feitas. Regerar substitui (não acumula): reaproveita o projeto gerado anterior deste card. */
+  doc.meta = Object.assign({}, doc.meta || {}, { tipo_card:tipoCard, cidade:copy.cidade || "", modelo_id:modelo.id || null, gerada_em:new Date().toISOString() });   // marcado já na criação: se falhar no meio, a próxima geração REAPROVEITA este projeto (nada de órfão acumulando)
+  const nome = _eaNomeArquivo(task.title || modelo.nome || "arte");
+  let pAnt = null; const lixo = [];
+  try{
+    const ls = await _eaRpc("arte_projetos_lista", { p_client:task.client || null, p_task:task.id });
+    for(const c of (Array.isArray(ls) ? ls : []).filter(Boolean).slice(0, 12)){
+      try{
+        const pr = await _eaRpc("arte_projeto", { p_id:c.id });
+        const meta = pr && pr.doc && pr.doc.meta;
+        if(meta && meta.gerada_em && String(meta.modelo_id || "") === String(modelo.id || "")){
+          pr.id = pr.id || c.id;
+          if(!pAnt || String(pr.atualizado_em || "") > String(pAnt.atualizado_em || "")) pAnt = pr;
+        }
+      }catch(_){ }
+    }
+    if(pAnt){
+      const str = JSON.stringify(pAnt.doc || {}); const re = /agency-files\/(arte\/geradas\/[^"?\\]+)/g; let mm;
+      while((mm = re.exec(str))) if(lixo.indexOf(mm[1]) < 0) lixo.push(mm[1]);
+      const th = String(pAnt.thumb_url || "").match(/agency-files\/(arte\/[^"?]+)/); if(th && lixo.indexOf(th[1]) < 0) lixo.push(th[1]);
+    }
+  }catch(_){ }
+  const finaisAntigos = (Array.isArray(task.files) ? task.files : []).filter(function(x){ return x && x.origem === "edicao_arte" && x.storagePath && /^tasks\//.test(String(x.storagePath)) && String(x.name || "") === nome + ".png"; });
+  const idsAntigos = finaisAntigos.map(function(x){ return x.id; }).filter(Boolean);
+  const p = pAnt ? { id:pAnt.id } : await _eaRpc("arte_projeto_criar", { p_client:task.client || null, p_unidade:(uns.length === 1 ? uns[0] : ""), p_task:task.id, p_titulo:String(task.title || modelo.nome || "Arte").slice(0,120),
+    p_formato:modelo.formato || "custom", p_largura:W, p_altura:H, p_doc:doc, p_modelo:modelo.id || null });
   passo("preenchendo com a copy e as fotos…");
   for(const o of fc.getObjects().slice()){
     if(!o.espaco) continue;
@@ -146696,7 +146743,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     if(!f0) avisos.push("faltou a foto da obra no material do card — Foto de obra não gera foto, ficou a imagem do template");
     else{
       passo("olhando a foto da obra (horizonte, obra, entulho)…");
-      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       catch(e){ avisos.push("foto: " + _eaErro(e)); }
       if(fotos.length > 1) avisos.push("o material tem " + fotos.length + " fotos — na Foto de obra entra a 1ª (" + (f0.name || "") + ")");
     }
@@ -146722,14 +146769,14 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
         const permite = !(ident && ident.gerar_foto_ia === false);
         if(permite && typeof _eaFn === "function"){
           passo("criando uma foto nova do produto a partir das referências aprovadas…");
-          const g = await _eaGerarFotoPorReferencia(task, refs, W, H, { identidade:ident, intel:intel, tipoCard:tipoCard });
+          const g = await _eaGerarFotoPorReferencia(task, refs, W, H, { identidade:ident, intel:intel, tipoCard:tipoCard, projeto:p.id });
           if(g){ f = { url:g.url, name:"foto-ia.png", gerada:true }; g.refs.forEach(function(r){ geradas.push(r.url); }); avisos.push("sem foto no material: foto NOVA gerada por IA a partir de " + g.refs.length + " foto(s) aprovada(s) do cliente (" + g.refs.map(function(r){ return r.card; }).filter(Boolean).slice(0, 2).join("; ") + ")" + (g.custo ? " · R$ " + Number(g.custo).toFixed(2) : "")); }
         }
         if(!f){ f = { url:refs[0].url, name:refs[0].nome }; geradas.push(refs[0].url); avisos.push("sem foto no material: entrou a foto aprovada do card “" + refs[0].card + "”" + (permite ? " (a IA não conseguiu gerar uma nova)" : " (geração por IA desligada pra este cliente)")); }
       }catch(e){ avisos.push("foto: " + _eaErro(e)); continue; }
     }
     try{
-      if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, entulho)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url, { client:task.client }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, entulho)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url, { client:task.client, task:task.id, projeto:p.id }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       else await _eaTrocarFotoMantendoForma(o, f.url);
     }catch(e){ avisos.push("foto: " + _eaErro(e)); try{ await _eaTrocarFotoMantendoForma(o, f.url); }catch(_){ } }
   }
@@ -146773,54 +146820,33 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   pg.fabric = _eaJsonPagina(fc); pg.largura = W; pg.altura = H;
   doc.meta = Object.assign({}, doc.meta || {}, { tipo_card:tipoCard, cidade:copy.cidade || "", modelo_id:modelo.id || null, gerada_em:new Date().toISOString() });
   passo("salvando a arte…");
-  const nome = _eaNomeArquivo(task.title || modelo.nome || "arte");
-  /* (08/10, Gustavo: "cada arte é uma foto nova — não precisa salvar camadas antigas") REGERAR SUBSTITUI, não acumula:
-     reaproveita o projeto gerado anterior deste card (mesmo modelo), e depois de salvar remove do armazenamento as
-     camadas compostas e a miniatura antigas, e troca o PNG anterior no card. Projetos feitos à mão não são tocados. */
-  let pAnt = null; const lixo = [];
-  try{
-    const ls = await _eaRpc("arte_projetos_lista", { p_client:task.client || null, p_task:task.id });
-    for(const c of (Array.isArray(ls) ? ls : []).filter(Boolean).slice(0, 12)){
-      try{
-        const pr = await _eaRpc("arte_projeto", { p_id:c.id });
-        const meta = pr && pr.doc && pr.doc.meta;
-        if(meta && meta.gerada_em && String(meta.modelo_id || "") === String(modelo.id || "")){
-          pr.id = pr.id || c.id;
-          if(!pAnt || String(pr.atualizado_em || "") > String(pAnt.atualizado_em || "")) pAnt = pr;
-        }
-      }catch(_){ }
-    }
-    if(pAnt){
-      const str = JSON.stringify(pAnt.doc || {}); const re = /agency-files\/(arte\/geradas\/[^"?\\]+)/g; let mm;
-      while((mm = re.exec(str))) if(lixo.indexOf(mm[1]) < 0) lixo.push(mm[1]);
-      const th = String(pAnt.thumb_url || "").match(/agency-files\/(arte\/[^"?]+)/); if(th && lixo.indexOf(th[1]) < 0) lixo.push(th[1]);
-    }
-  }catch(_){ }
-  const finaisAntigos = (Array.isArray(task.files) ? task.files : []).filter(function(x){ return x && x.origem === "edicao_arte" && x.storagePath && /^tasks\//.test(String(x.storagePath)) && String(x.name || "") === nome + ".png"; });
-  const idsAntigos = finaisAntigos.map(function(x){ return x.id; }).filter(Boolean);
-  const p = pAnt ? { id:pAnt.id } : await _eaRpc("arte_projeto_criar", { p_client:task.client || null, p_unidade:(uns.length === 1 ? uns[0] : ""), p_task:task.id, p_titulo:String(task.title || modelo.nome || "Arte").slice(0,120),
-    p_formato:modelo.formato || "custom", p_largura:W, p_altura:H, p_doc:doc, p_modelo:modelo.id || null });
   let thumb = null; try{ const t = await _eaSubir(_eaDataUrlBlob(fc.toDataURL({ format:"jpeg", quality:0.82, multiplier:360 / W })), "arte/" + p.id, "thumb.jpg"); thumb = t.url; }catch(_){ }
   try{ await _eaRpc("arte_projeto_salvar", { p_id:p.id, p_doc:doc, p_motivo:(pAnt ? "regerada" : "gerada") + " pelo modelo “" + (modelo.nome || "") + "”", p_thumb:thumb }); }catch(_){ }
   const blob = _eaDataUrlBlob(fc.toDataURL({ format:"png", multiplier:1, enableRetinaScaling:false }));
   const up = await _eaSubir(blob, "tasks/" + task.id, nome + ".png");
   const f = await _eaRpc("arte_projeto_final", { p_id:p.id, p_file:{ url:up.url, storagePath:up.path, name:nome + ".png", type:"image/png", size:blob.size } });
-  // limpa o que ficou velho (só o que a geração anterior criou): PNG anterior no card + camadas/miniatura antigas
-  if(idsAntigos.length){
-    try{
-      const fresco = await window._sb.from("tasks").select("files").eq("id", task.id).single();
-      const atuais = Array.isArray(fresco.data && fresco.data.files) ? fresco.data.files : [];
-      const semVelhos = atuais.filter(function(x){ return !(x && idsAntigos.indexOf(x.id) >= 0); });
-      if(semVelhos.length !== atuais.length) await window._sb.from("tasks").update({ files:semVelhos, updated_at:new Date().toISOString() }).eq("id", task.id);
-      finaisAntigos.forEach(function(x){ if(lixo.indexOf(x.storagePath) < 0) lixo.push(x.storagePath); });
-    }catch(_){ }
-  }
+  // limpa o que ficou velho (PNG anterior no card + camadas/miniatura antigas) e põe a arte nova como 1ª LÂMINA
+  // (08/10, Gustavo: "sempre que for criada uma nova imagem, deve aparecer por primeiro na Avaliação de design")
+  const _ehFinal = function(x){ return x && x.url && !x.isRef && !x.isAnnotation && x.tipo !== "referencia" && x.tipo !== "material"; };
+  const _novaPrimeiro = function(l){
+    const ix = l.findIndex(function(x){ return x && x.url === f.url; });
+    const novo = ix >= 0 ? l.splice(ix, 1)[0] : f;
+    let alvo = l.findIndex(_ehFinal); if(alvo < 0) alvo = l.length;
+    l.splice(alvo, 0, novo);
+    return l;
+  };
+  try{
+    const fresco = await window._sb.from("tasks").select("files").eq("id", task.id).single();
+    const atuais = Array.isArray(fresco.data && fresco.data.files) ? fresco.data.files : [];
+    const semVelhos = _novaPrimeiro(atuais.filter(function(x){ return !(x && idsAntigos.indexOf(x.id) >= 0); }));
+    await window._sb.from("tasks").update({ files:semVelhos, updated_at:new Date().toISOString() }).eq("id", task.id);
+    finaisAntigos.forEach(function(x){ if(lixo.indexOf(x.storagePath) < 0) lixo.push(x.storagePath); });
+  }catch(_){ }
   if(lixo.length){ try{ for(let i = 0; i < lixo.length; i += 90) await window._sb.storage.from("agency-files").remove(lixo.slice(i, i + 90)); avisos.push("arte regerada: " + lixo.length + " arquivo(s) da versão anterior removidos do armazenamento"); }catch(_){ } }
   // DIRETO pra Avaliação de design
   const agora = new Date().toISOString(), quem = (typeof CURRENT_USER !== "undefined" && CURRENT_USER && CURRENT_USER.name) || "";
   if(typeof setTasks === "function") setTasks(function(l){ return (l || []).map(function(t){ if(String(t.id) !== String(task.id)) return t;
-    const base = (Array.isArray(t.files) ? t.files : []).filter(function(x){ return !(x && idsAntigos.indexOf(x.id) >= 0); });
-    const fs = base.some(function(x){ return x && x.url === f.url; }) ? base : base.concat([f]);
+    const fs = _novaPrimeiro((Array.isArray(t.files) ? t.files : []).filter(function(x){ return !(x && idsAntigos.indexOf(x.id) >= 0); }).slice());
     return Object.assign({}, t, { files:fs, status:"avaliacao", colEnteredAt:agora,
       timeline:(t.timeline || []).concat([{ type:"status", from:t.status, to:"avaliacao", fromLabel:"", toLabel:"Avaliação", at:agora, atFmt:(typeof nowFmt === "function" ? nowFmt() : ""), user:quem,
         note:"Arte gerada automaticamente pelo modelo “" + (modelo.nome || "") + "”" + (avisos.length ? " — atenção: " + avisos.join("; ") : "") }]) }); }); });
