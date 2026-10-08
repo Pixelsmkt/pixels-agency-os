@@ -4721,7 +4721,7 @@ async function askGPT({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]
    base64 / image url), converte pro formato da OpenAI e devolve como o askClaude devolve —
    inclusive stop_reason ("max_tokens" quando o GPT parou por limite), pra continuação. Bloco
    "document" (PDF) não existe na OpenAI por URL: quem chama manda as páginas como imagem. */
-async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[],origem,card}){
+async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[],origem,card,reasoning_effort}){
   const sb=window._sb;
   if(!sb)throw new Error("Supabase client indisponível");
   const msgs=[];
@@ -4744,13 +4744,26 @@ async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messa
     else msgs.push({role:m.role||"user",content:parts});
   });
   // o modelo é SEMPRE o da OpenAI — quem chama costuma passar o nome do Claude (PX_IA_MODELO_RAPIDO)
-  const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:PX_IA_MODELO_GPT,max_tokens:max_tokens,messages:msgs,origem:origem||undefined,card:card?String(card):undefined}});
-  if(error)throw new Error("Pixels IA (GPT) indisponível: "+(error.message||"erro"));
-  if(data&&data.error)throw new Error(String(data.error.message||data.error));
-  const ch=(((data||{}).choices||[])[0])||{};
-  const out=(ch.message&&ch.message.content)||"";
-  if(!out)throw new Error("O GPT respondeu vazio.");
-  return {content:[{type:"text",text:out}],stop_reason:(ch.finish_reason==="length"?"max_tokens":"end_turn")};
+  // (08/10/2026) o GPT 5 "pensa" antes de responder e o pensamento CONTA no max_tokens: com teto pequeno ele gasta
+  // tudo pensando e a resposta vem vazia (foi o que quebrou a análise da foto de obra — tokens_sai = teto, texto vazio).
+  // Por isso: dá pra pedir reasoning_effort ("low" = pensa pouco) e, se mesmo assim estourar o teto pensando,
+  // tenta UMA vez de novo com 4× mais espaço antes de desistir.
+  let _mt=max_tokens,_re=reasoning_effort||undefined,_err=null;
+  for(let _t=0;_t<3;_t++){
+    const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:PX_IA_MODELO_GPT,max_tokens:_mt,reasoning_effort:_re,messages:msgs,origem:origem||undefined,card:card?String(card):undefined}});
+    if(error||(data&&data.error)){
+      _err=error?new Error("Pixels IA (GPT) indisponível: "+(error.message||"erro")):new Error(String(data.error.message||data.error));
+      if(_re){ _re=undefined; continue; }   // pode ser o modelo recusando o reasoning_effort — tenta sem
+      throw _err;
+    }
+    const ch=(((data||{}).choices||[])[0])||{};
+    const out=(ch.message&&ch.message.content)||"";
+    if(out)return {content:[{type:"text",text:out}],stop_reason:(ch.finish_reason==="length"?"max_tokens":"end_turn")};
+    _err=new Error("O GPT respondeu vazio.");
+    if(ch.finish_reason!=="length"||_mt>=8000)break;
+    _mt=Math.min(_mt*4,8000);
+  }
+  throw _err||new Error("O GPT respondeu vazio.");
 }
 if(typeof window!=="undefined"){ window.askGPTBlocos=askGPTBlocos; }
 
@@ -145881,7 +145894,7 @@ async function _eaGeo(cidade, pais, cacheRemoto){
   }catch(_){ }
   if(!r && typeof askGPTBlocos === "function"){
     try{
-      const g = await askGPTBlocos({ max_tokens:80, origem:"arte_geo", system:"Responda SÓ um JSON {\"lat\":número,\"lon\":número} com as coordenadas da sede do município pedido. Sem texto fora do JSON.", messages:[{ role:"user", content:q }] });
+      const g = await askGPTBlocos({ max_tokens:600, reasoning_effort:"low", origem:"arte_geo", system:"Responda SÓ um JSON {\"lat\":número,\"lon\":número} com as coordenadas da sede do município pedido. Sem texto fora do JSON.", messages:[{ role:"user", content:q }] });
       const t = ((g && g.content && g.content[0] && g.content[0].text) || "").match(/\{[\s\S]*\}/); if(t){ const j = JSON.parse(t[0]); if(isFinite(Number(j.lat)) && isFinite(Number(j.lon))) r = { lat:Number(j.lat), lon:Number(j.lon), fonte:"ia" }; }
     }catch(_){ }
   }
@@ -146105,7 +146118,7 @@ function _eaTextoComHierarquia(o, texto, produtos){
 /* ── FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação, a caixa da obra e as caixas de entulho (frações 0–1) ── */
 async function _eaAnalisarFotoObra(url){
   if(typeof askGPTBlocos !== "function") return null;
-  const r = await askGPTBlocos({ max_tokens:420, origem:"arte_foto_obra",
+  const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra",
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
       { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com QUALQUER coisa ao redor da obra que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia. Na dúvida, MARQUE (é melhor limpar do que deixar). NÃO inclua a própria obra, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
