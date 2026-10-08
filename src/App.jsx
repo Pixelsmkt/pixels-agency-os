@@ -143903,9 +143903,10 @@ function _eaPsdCalibrarTexto(t, l, podeEscalar){
       }
       t.setCoords(); T = _eaCaixa(t); k = _eaCaixaTintaTexto(t);
     }
-    // centro da tinta no mesmo lugar do Photoshop (absorve a diferença de linha-base entre o Fabric e o Photoshop)
+    // centro da tinta no mesmo lugar do Photoshop (absorve a diferença de linha-base entre o Fabric e o Photoshop).
+    // Se o nosso texto quebrou em outro número de linhas, só alinha na horizontal (o centro vertical de 4 linhas não é o de 2)
     const cxF = T.left + k.dx + k.w / 2, cyF = T.top + k.dy + k.h / 2, cxP = inkX + inkW / 2, cyP = inkY + inkH / 2;
-    if(isFinite(cxF) && isFinite(cyF)){ t.set({ left:(t.left || 0) + (cxP - cxF), top:(t.top || 0) + (cyP - cyF) }); t.setCoords(); }
+    if(isFinite(cxF) && isFinite(cyF)){ t.set({ left:(t.left || 0) + (cxP - cxF), top:(t.top || 0) + (mesmasLinhas ? (cyP - cyF) : (inkY - (T.top + k.dy))) }); t.setCoords(); }
     t.__calibrado = { r:r, inkW:inkW, fabW:k.w, escalou:!!podeEscalar, multi:multi, linhas:(t._textLines || []).length, inkH:inkH, fabH:k.h, lh:t.lineHeight };
     return true;
   }catch(_){ return false; }
@@ -144030,7 +144031,9 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       const pesoBase = fo.peso || (st.fauxBold ? "700" : "400"), italBase = !!(fo.italico || st.fauxItalic);
       const ok = await _eaCarregarFonte(fo.familia, [pesoBase], italBase);     // (07/10) o PESO que o texto usa, não 400/800
       const tr = l.text.transform || [1,0,0,1,0,0], esc = Math.sqrt(tr[0]*tr[0] + tr[1]*tr[1]) || 1;
-      const escDoc = _eaPsdEscalaDoc(psd); l.__escDoc = escDoc;
+      // (08/10) NÃO multiplicar pela resolução do documento: o Photoshop já põe o ppi/72 na transformação do texto
+      //   (o PSD da Bioter é 80 ppi e o transform é 1,111 = 80/72). Multiplicar de novo deixava tudo 11% maior → 4 linhas.
+      const escDoc = 1; l.__escDoc = 1;
       const cor = st.fillColor ? "#" + [st.fillColor.r, st.fillColor.g, st.fillColor.b].map(function(v){ return Math.max(0, Math.min(255, Math.round(v||0))).toString(16).padStart(2,"0"); }).join("") : "#000000";
       const al = { left:"left", center:"center", right:"right", justifyLeft:"justify", justifyCenter:"justify", justifyRight:"justify", justifyAll:"justify" }[(l.text.paragraphStyle && l.text.paragraphStyle.justification) || "left"] || "left";
       const temLimites = ((l.right||0) - (l.left||0)) > 4;
