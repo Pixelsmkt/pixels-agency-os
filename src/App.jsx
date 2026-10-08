@@ -146831,10 +146831,9 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const blob = _eaDataUrlBlob(fc.toDataURL({ format:"png", multiplier:1, enableRetinaScaling:false }));
   const up = await _eaSubir(blob, "tasks/" + task.id, nome + ".png");
   const f = await _eaRpc("arte_projeto_final", { p_id:p.id, p_file:{ url:up.url, storagePath:up.path, name:nome + ".png", type:"image/png", size:blob.size } });
-  // limpa o que ficou velho e põe a arte nova como 1ª LÂMINA
-  // (08/10, Gustavo: "a primeira lâmina DEVE ser a mais recente" + "regerar substitui, não acumula")
-  // o PNG anterior era achado pelo NOME EXATO — mas o nome mudava a cada rodada ("…-2.png") e nada era removido.
-  // Agora: TODO final gerado pela Edição de arte que não seja o novo sai do card (lido FRESCO do banco, não do estado).
+  // (08/10, Gustavo: "era pra ter todas as versões ali" + "a primeira deve ser a mais recente")
+  // As VERSÕES antigas FICAM no card — a arte nova só entra como 1ª lâmina. O que não acumula são as
+  // camadas compostas e a miniatura do projeto (arte/geradas, já no lixo acima) — isso é interno.
   const _ehFinal = function(x){ return x && x.url && !x.isRef && !x.isAnnotation && x.tipo !== "referencia" && x.tipo !== "material"; };
   const _novaPrimeiro = function(l){
     const ix = l.findIndex(function(x){ return x && x.url === f.url; });
@@ -146843,21 +146842,16 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     l.splice(alvo, 0, novo);
     return l;
   };
-  let idsVelhos = [];
   try{
     const fresco = await window._sb.from("tasks").select("files").eq("id", task.id).single();
     const atuais = Array.isArray(fresco.data && fresco.data.files) ? fresco.data.files : [];
-    const velhos = atuais.filter(function(x){ return x && x.origem === "edicao_arte" && String(x.id || "") !== String(f.id || "") && String(x.url || "") !== String(f.url || ""); });
-    idsVelhos = velhos.map(function(x){ return x.id; }).filter(Boolean);
-    velhos.forEach(function(x){ if(x.storagePath && /^tasks\//.test(String(x.storagePath)) && lixo.indexOf(x.storagePath) < 0) lixo.push(x.storagePath); });
-    const semVelhos = _novaPrimeiro(atuais.filter(function(x){ return !(x && idsVelhos.indexOf(x.id) >= 0); }));
-    await window._sb.from("tasks").update({ files:semVelhos, updated_at:new Date().toISOString() }).eq("id", task.id);
+    await window._sb.from("tasks").update({ files:_novaPrimeiro(atuais), updated_at:new Date().toISOString() }).eq("id", task.id);
   }catch(_){ }
   if(lixo.length){ try{ for(let i = 0; i < lixo.length; i += 90) await window._sb.storage.from("agency-files").remove(lixo.slice(i, i + 90)); avisos.push("arte regerada: " + lixo.length + " arquivo(s) da versão anterior removidos do armazenamento"); }catch(_){ } }
   // DIRETO pra Avaliação de design
   const agora = new Date().toISOString(), quem = (typeof CURRENT_USER !== "undefined" && CURRENT_USER && CURRENT_USER.name) || "";
   if(typeof setTasks === "function") setTasks(function(l){ return (l || []).map(function(t){ if(String(t.id) !== String(task.id)) return t;
-    const fs = _novaPrimeiro((Array.isArray(t.files) ? t.files : []).filter(function(x){ return !(x && idsVelhos.indexOf(x.id) >= 0); }).slice());
+    const fs = _novaPrimeiro((Array.isArray(t.files) ? t.files : []).slice());
     return Object.assign({}, t, { files:fs, status:"avaliacao", colEnteredAt:agora,
       timeline:(t.timeline || []).concat([{ type:"status", from:t.status, to:"avaliacao", fromLabel:"", toLabel:"Avaliação", at:agora, atFmt:(typeof nowFmt === "function" ? nowFmt() : ""), user:quem,
         note:"Arte gerada automaticamente pelo modelo “" + (modelo.nome || "") + "”" + (avisos.length ? " — atenção: " + avisos.join("; ") : "") }]) }); }); });
