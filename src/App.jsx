@@ -123867,25 +123867,58 @@ try {
       _itA.push({ key:"criacao.ia_auto", label:"IA usa as ferramentas sozinha (v88)", desc:"Na montagem e no Ajustar com IA: imagem de apoio cobrindo os pulos depois do gancho, luz nas trocas em vídeo de energia, um som por tipo de momento (variando entre clientes), desespelhar e contraluz pelo que a IA vê. Padrão: fechado (só sócios)", padrao:false });
   }
 } catch(_e){}
+/* v93 (08/10/2026): PROTEÇÃO DA FALA na limpeza de ruído — regra do Vini: "se não ficou bom, não pode deixar… é melhor entrar um pouco de
+   ruído do que não dar para entender e parecer falha do vídeo". O RNNoise às vezes apaga sílabas de fala mais baixa (BeeSwarm, "para vocês",
+   0:26–0:29: caía 40–60 dB, parecia que cortava). Agora, onde TEM FALA (a própria IA do ruído diz que é voz, ou som bem acima do chão de ruído
+   perto de voz), a limpeza tira NO MÁXIMO 8 dB: o que ela tirou a mais volta do som original, na medida. No silêncio entre frases continua
+   limpando tudo. Quadro de 10 ms, passagem suave (sem estalo). Devolve quantos quadros foram protegidos (para o relatório). */
+function _evpProtegerFala(orig, x, F, vads){
+  const n = Math.floor(x.length / F); if(n < 3) return null;
+  const MAX_RED = Math.pow(10, -8 / 10);                       // energia: tira no máximo 8 dB
+  const eo = new Float32Array(n), er = new Float32Array(n);
+  for(let q=0;q<n;q++){ let a = 0, b = 0; const i0 = q * F; for(let k=0;k<F;k++){ const o = orig[i0+k], r = x[i0+k]; a += o*o; b += r*r; } eo[q] = a / F; er[q] = b / F; }
+  const ord = Array.from(eo).filter(function(v){ return v > 1e-12; }).sort(function(a, b){ return a - b; });
+  const chao = ord.length ? ord[Math.floor(ord.length * 0.1)] : 1e-10;  // chão de ruído (10% mais baixos)
+  const perto = new Uint8Array(n), J = 30;                    // até 300 ms de um quadro com voz clara
+  for(let q=0;q<n;q++){ if((vads[q] || 0) > 0.5){ for(let j=Math.max(0, q-J); j<=Math.min(n-1, q+J); j++) perto[j] = 1; } }
+  const k = new Float32Array(n); let prot = 0;
+  if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpProtDbg = { vads:Array.from(vads), eo:Array.from(eo), er:Array.from(er), chao:chao };
+  for(let q=0;q<n;q++){
+    let vmax = 0; for(let j=Math.max(0, q-3); j<=Math.min(n-1, q+3); j++) if((vads[j] || 0) > vmax) vmax = vads[j];
+    const fala = vmax > 0.2 || (perto[q] && eo[q] > chao * 4);    // voz pela IA do ruído, ou som 6 dB acima do chão perto de voz (sílaba fraca)
+    if(!fala || eo[q] <= 0) continue;
+    const alvo = eo[q] * MAX_RED; if(er[q] >= alvo) continue;
+    k[q] = Math.min(1, Math.sqrt((alvo - er[q]) / eo[q])); prot++;
+  }
+  if(!prot) return { quadros:0, total:n };
+  for(let q=0;q<n;q++){                                          // passagem suave: interpola entre os centros dos quadros
+    const k0 = q > 0 ? k[q-1] : k[q], k1 = k[q], k2 = q < n-1 ? k[q+1] : k[q], i0 = q * F;
+    if(!k0 && !k1 && !k2) continue;
+    for(let s=0;s<F;s++){ const t = s / F, g = t < 0.5 ? (k0 + (k1 - k0) * (t + 0.5)) : (k1 + (k2 - k1) * (t - 0.5)); x[i0+s] += orig[i0+s] * g; }
+  }
+  return { quadros:prot, total:n };
+}
 async function _evpTratar(clipe, opcoes){
   const m = _evpM(clipe); if(!m.audio) return null;
   const chave = (opcoes.ruido?"r":"") + (opcoes.eco?"e":"") + (opcoes.voz?"v":"") + (opcoes.nivelar?"n":"") + _evpChaveExtra(opcoes);   // v24
   if(!chave) return m.audio;
   if(m.tratado[chave]) return m.tratado[chave];
   const sr = m.audio.sampleRate, x = new Float32Array(m.audio.getChannelData(0));
-  let metodoRuido = null;
+  let metodoRuido = null, protecao = null;
   if(opcoes.ruido){
     try{
       if(sr !== 48000) throw new Error("taxa");
       const rn = await _evpRnnoise(); const st = rn.createDenoiseState(); const F = rn.frameSize || 480; const fr = new Float32Array(F);
+      const orig = opcoes.protegerFala === false ? null : new Float32Array(x), vads = [];   // v93: guarda o som de antes da limpeza (proteção da fala)
       let desde = performance.now();
       for(let i=0; i + F <= x.length; i += F){
         for(let k=0;k<F;k++) fr[k] = x[i+k] * 32768;
-        st.processFrame(fr);
+        const vad = st.processFrame(fr); vads.push(typeof vad === "number" ? vad : 0);
         for(let k=0;k<F;k++) x[i+k] = fr[k] / 32768;
         if(performance.now() - desde > 30){ await new Promise(function(r){ setTimeout(r, 0); }); desde = performance.now(); }   // não trava a tela
       }
       st.destroy(); metodoRuido = "rnnoise";
+      if(orig){ try{ protecao = _evpProtegerFala(orig, x, F, vads); }catch(_){ } }
     }catch(_){ _evpPortaRuido(x, sr); metodoRuido = "porta"; }
   }
   let ecoInfo = null;
@@ -123926,7 +123959,7 @@ async function _evpTratar(clipe, opcoes){
     }
   }
   const out = new AudioBuffer({ length:y.length, numberOfChannels:1, sampleRate:sr }); out.copyToChannel(y instanceof Float32Array ? y : new Float32Array(y), 0);
-  out._metodoRuido = metodoRuido;
+  out._metodoRuido = metodoRuido; if(protecao) out._protecaoFala = protecao;   // v93
   if(ecoInfo){ out._eco = ecoInfo; if(!/^narr:/.test(String(clipe))) _evpEcoUltimo[clipe] = ecoInfo; if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpEco = Object.assign({}, _evpEcoUltimo); }   // v88
   m.tratado[chave] = out; _evpAvisar();
   return out;
