@@ -5434,11 +5434,20 @@ async function pxDuplicarParaParaguai(task,setTasks){
     // arquivos: materiais, referências e editáveis vão iguais; a ARTE FINAL em português vira referência "(PT) …" pro designer trocar o texto
     const files=(Array.isArray(o.files)?o.files:[]).filter(function(f){ return f&&f.url&&!f.isAnnotation&&!f.uploading; }).map(function(f){
       const tipo=f.tipo||"final";
-      if(tipo==="final") return Object.assign({},f,{tipo:"referencia",name:"(PT) "+(f.name||"arte"),comentario:"arte original em português — só trocar o texto"});
+      if(tipo==="final") return Object.assign({},f,{tipo:"referencia",name:"(PT) "+(f.name||"arte"),comentario:"arte original em português — só trocar o texto",__eraFinal:true});
       return Object.assign({},f);
     });
-    // capa do clone = a capa do original (ou a 1ª arte final em PT) — senão o card mostra a última referência
-    const capa=o.cover||(function(){ const f=(Array.isArray(o.files)?o.files:[]).find(function(x){ return x&&x.url&&!x.isAnnotation&&(x.tipo||"final")==="final"&&String(x.type||"").indexOf("image/")===0; }); return f?f.url:null; })();
+    // CAPA do clone = a capa do original. O card mostra como capa a ÚLTIMA mídia anexada (estilo Trello) — então a arte que
+    // era capa no original (lâmina 1 no carrossel; a última final nos outros) vai pro FIM da lista. Quando o designer subir a
+    // arte em espanhol, ela entra depois e vira a capa sozinha.
+    (function(){
+      const finais=files.filter(function(f){ return f.__eraFinal; });
+      const ehCar=String(o.contentType||o.content_type||"")==="carrossel";
+      const capa=ehCar?finais[0]:finais[finais.length-1];
+      if(capa){ const i=files.indexOf(capa); if(i>=0){ files.splice(i,1); files.push(capa); } }
+      files.forEach(function(f){ delete f.__eraFinal; });
+    })();
+    const capa=o.cover||null;
     const tk=Object.assign({},o,{
       id:idEs, title:String(tit).replace(/\s*\(ES\)\s*$/i,"")+" (ES)", bioterUnit:"paraguay", bioter_unit:"paraguay", cover:capa,
       status:"recebida", contentType:"troca_texto", content_type:"troca_texto",
