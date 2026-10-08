@@ -146160,15 +146160,23 @@ async function _eaAnalisarFotoObra(url){
   const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra",
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com QUALQUER coisa ao redor da obra que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia. Na dúvida, MARQUE (é melhor limpar do que deixar). NÃO inclua a própria obra, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
   const n = function(v, a, b){ v = Number(v); return isFinite(v) ? Math.max(a, Math.min(b, v)) : null; };
   const caixa = function(c){ if(!c || typeof c !== "object") return null; const o = { x0:n(c.x0, 0, 1), y0:n(c.y0, 0, 1), x1:n(c.x1, 0, 1), y1:n(c.y1, 0, 1) }; return (o.x0 != null && o.y0 != null && o.x1 > o.x0 && o.y1 > o.y0) ? o : null; };
   const ob = caixa(j.obra);
-  const ent = (Array.isArray(j.entulho) ? j.entulho : []).map(caixa).filter(Boolean).filter(function(c){ return !ob || !((c.x0 >= ob.x0 && c.x1 <= ob.x1 && c.y0 >= ob.y0 && c.y1 <= ob.y1)); }).slice(0, 6);   // dentro da obra não conta
-  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent };
+  // (08/10, Gustavo: "mexer o MÍNIMO no produto — só sujeira óbvia jogada nela") entulho DENTRO da obra só vale se
+  // for mancha pequena (≤ 15% da área da obra) — nunca uma caixa que repintaria a obra inteira
+  const ent = (Array.isArray(j.entulho) ? j.entulho : []).map(caixa).filter(Boolean).filter(function(c){
+    if(!ob) return true;
+    const dentro = c.x0 >= ob.x0 && c.x1 <= ob.x1 && c.y0 >= ob.y0 && c.y1 <= ob.y1;
+    if(!dentro) return true;
+    const aObra = Math.max(1e-6, (ob.x1 - ob.x0) * (ob.y1 - ob.y0));
+    return ((c.x1 - c.x0) * (c.y1 - c.y0)) / aObra <= 0.15;
+  }).slice(0, 6);
+  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent };
 }
 /* pede ao servidor (gpt-image-1) para completar o que falta e limpar o entulho; devolve <img> ou null */
 async function _eaFotoIA(base, mascara, prompt, client){
@@ -146346,7 +146354,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      teto = base do bloco mapa + cidade · piso = topo do ícone (ou do texto). A obra inteira tem que caber nessa faixa. */
   const teto = mapaBase, piso = (icones.length || textos.length) ? Math.min.apply(null, icones.concat(textos).map(function(t){ return t.y0; })) : null;
   const nova = await _eaCarregarImg(url);
-  const ang = -(an.inclinacao || 0) * Math.PI / 180;                       // gira pra deixar o horizonte reto
+  /* (08/10, Gustavo: "a borda superior da obra continua deitada pra esquerda — alinhar em linha reta horizontal")
+     o giro alinha pela BORDA DE CIMA DA OBRA (é ela que faz a foto parecer torta); sem essa medida, vale o horizonte */
+  const giro = (an.borda != null && isFinite(an.borda)) ? an.borda : (an.inclinacao || 0);
+  const ang = -giro * Math.PI / 180;
   const folga = 1 + Math.abs(Math.sin(ang)) * 1.4;                         // zoom extra pra não sobrar canto vazio depois de girar
   const sCobre = Math.max(w / nova.width, h / nova.height) * folga;
   const sDentro = Math.min(w / nova.width, h / nova.height) * folga;       // foto INTEIRA visível — a IA completa o que faltar
@@ -146402,10 +146413,31 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       (an.entulho || []).forEach(function(c){ const f = w * 0.03; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
       if(precisaCompletar) partes.push("Complete as áreas transparentes continuando a cena com naturalidade — estenda o céu para cima e o terreno/vegetação para baixo — coerente com a luz, as cores e a perspectiva da foto. Mantenha exatamente o mesmo brilho e a mesma exposição da foto: não escureça nada.");
-      if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue.");
-      partes.push("Não altere a obra principal nem sua estrutura, cores ou proporções. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
+      if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue. Se a marca estiver sobre a obra, remova apenas a sujeira solta, mantendo a estrutura por baixo intacta.");
+      partes.push("NÃO re-renderize nem repinte o resto da foto: a obra principal, a vegetação e o terreno fora das áreas marcadas devem permanecer idênticos, com a mesma textura. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
       const r = await _eaFotoIA(cv, M, partes.join(" "), ctx.client);
-      if(r){ const gLuz = _eaCasarLuz(cv, r); cv = r; if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA"); if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)"); if(gLuz > 1.03) avisos.push("a edição da IA escureceu a foto — luz original recuperada (+" + Math.round((gLuz - 1) * 100) + "%)"); if(r.__custo) avisos.push("IA da foto: R$ " + Number(r.__custo).toFixed(2)); }
+      if(r){
+        const gLuz = _eaCasarLuz(cv, r);
+        /* (08/10, Gustavo: "mexeu muito no produto; os matos ficaram borrados — mexer o MÍNIMO") o gpt-image
+           RE-RENDERIZA a imagem inteira (a máscara é só orientação). Então o resultado da IA só vale onde PODIA
+           mexer (céu/terreno completados + caixas de entulho); em todo o resto voltam os pixels ORIGINAIS da
+           foto, com borda macia pra emendar sem costura — a obra e a vegetação ficam intactas de verdade. */
+        try{
+          const F = document.createElement("canvas"); F.width = w; F.height = h; const fx = F.getContext("2d");
+          try{ fx.filter = "blur(6px)"; }catch(_){ }
+          fx.drawImage(M, 0, 0);
+          try{ fx.filter = "none"; }catch(_){ }
+          const K = document.createElement("canvas"); K.width = w; K.height = h; const kx2 = K.getContext("2d");
+          kx2.drawImage(cv, 0, 0);
+          kx2.globalCompositeOperation = "destination-in"; kx2.drawImage(F, 0, 0);
+          r.getContext("2d").drawImage(K, 0, 0);
+        }catch(_){ }
+        cv = r;
+        if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA; o resto da foto ficou com os pixels originais");
+        if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)");
+        if(gLuz > 1.03) avisos.push("a edição da IA escureceu a foto — luz original recuperada (+" + Math.round((gLuz - 1) * 100) + "%)");
+        if(r.__custo) avisos.push("IA da foto: R$ " + Number(r.__custo).toFixed(2));
+      }
     }catch(e){
       avisos.push("IA da foto não rodou (" + _eaErro(e) + ")" + (precisaCompletar ? " — a foto entrou cobrindo o espaço, sem completar" : ""));
       if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
@@ -146413,7 +146445,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
   const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
   if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
-  if(Math.abs(an.inclinacao || 0) >= 0.8) avisos.push("foto girada " + Math.abs(an.inclinacao).toFixed(1) + "° pra deixar o horizonte reto");
+  if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   return { cv:cv, avisos:avisos, analise:an, encaixe:m };
 }
