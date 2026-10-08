@@ -140789,7 +140789,7 @@ async function _eaRegistrarFontes(fontes){
     if(window.__EA_FONTES_URL[k].indexOf(f.url) < 0) window.__EA_FONTES_URL[k].push(f.url);
     if(_eaFontesCarregadas[f.url]) continue;
     _eaFontesCarregadas[f.url] = true; _eaEsquecerFonte(f.familia);
-    try{ const ff = new FontFace(f.familia, "url(" + f.url + ")", { weight:String(f.peso || "400"), style:f.italico ? "italic" : "normal" }); const l = await ff.load(); document.fonts.add(l); }
+    try{ const ff = new FontFace(f.familia, "url(" + f.url + ")", { weight:String(f.peso || "400"), style:f.italico ? "italic" : "normal" }); const l = await ff.load(); document.fonts.add(l); _eaLimparCacheFontes(f.familia); }
     catch(_){ delete _eaFontesCarregadas[f.url]; }
   }
 }
@@ -140992,7 +140992,7 @@ function _eaCarregarFontePeso(nome, peso, italico){
       // 1) fonte do CLIENTE (Identidade visual) — já registrada com FontFace
       const k2 = nome.toLowerCase();
       if(window.__EA_FONTES_URL && window.__EA_FONTES_URL[k2] && window.__EA_FONTES_URL[k2].length){
-        await _eaFontsLoad(decl, 8000); if(_eaFonteExiste(nome)){ info.origem = "cliente"; info.pesos[peso] = true; return true; }
+        await _eaFontsLoad(decl, 8000); if(_eaFonteExiste(nome)){ info.origem = "cliente"; info.pesos[peso] = true; _eaLimparCacheFontes(nome); return true; }
       }
       // 2) fonte INSTALADA no PC — só dá pra saber antes de o Google criar uma @font-face com o mesmo nome
       if(info.origem === "local"){ info.pesos[peso] = true; return true; }
@@ -141013,7 +141013,7 @@ function _eaCarregarFontePeso(nome, peso, italico){
       await _eaEsperar(30);
       await _eaFontsLoad(decl, 8000);
       const ok = _eaFonteExiste(nome) && (function(){ try{ return document.fonts.check(decl); }catch(_){ return true; } })();
-      if(ok){ info.origem = info.origem || "google"; info.pesos[peso] = true; }
+      if(ok){ info.origem = info.origem || "google"; info.pesos[peso] = true; _eaLimparCacheFontes(nome); }   // remede as letras (o Fabric guarda largura medida antes da fonte chegar)
       return ok;
     }catch(_){ return false; }
   })();
@@ -141042,6 +141042,9 @@ async function _eaCarregarFontesDoJson(j){
     return Promise.all([n.length ? _eaCarregarFonte(f, n) : null, i.length ? _eaCarregarFonte(f, i, true) : null]); }));
   return m;
 }
+function _eaLimparCacheFontes(familia){
+  try{ const f = (typeof window !== "undefined" && window.fabric) || null; if(f && f.cache && typeof f.cache.clearFontCache === "function") f.cache.clearFontCache(familia || undefined); }catch(_){ }
+}
 /* antes de desenhar a miniatura / exportar: garante que TODOS os pesos usados no canvas estão prontos (senão sai em Times) */
 async function _eaEsperarFontes(fc){
   try{
@@ -141052,6 +141055,9 @@ async function _eaEsperarFontes(fc){
     Object.keys(m).forEach(function(f){ Object.keys(m[f]).forEach(function(k){ decls.push((/i$/.test(k) ? "italic " : "") + k.replace(/i$/, "") + ' 40px "' + f + '"'); }); });
     await Promise.race([Promise.all(decls.map(function(d){ return _eaFontsLoad(d, 6000); })), _eaEsperar(9000)]);
     try{ await Promise.race([document.fonts.ready, _eaEsperar(3000)]); }catch(_){ }
+    // o Fabric GUARDA a largura de cada letra medida na 1ª vez (cache por família): se mediu antes de a fonte chegar,
+    // a quebra de linha fica errada pra sempre (o título da Bioter saía em 4 linhas em vez de 2). Limpa e remede.
+    _eaLimparCacheFontes();
     fc.getObjects().forEach(function(o){ if(o.initDimensions){ try{ o.initDimensions(); o.setCoords(); }catch(_){ } } });
   }catch(_){ }
 }
@@ -143175,10 +143181,17 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       const familia = ok ? fo.familia : "Montserrat";
       if(!ok){ await _eaCarregarFonte("Montserrat", [pesoBase]); l.__fontesFaltando = l.__fontesFaltando || {}; l.__fontesFaltando[fo.familia] = (l.__fontesFaltando[fo.familia] || []).concat(pesoBase); }
       const textoPsd = String(l.text.text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\u0003/g, "\n").replace(/\n$/, "");
+      // (07/10) entrelinha: a do estilo-base ou, se ela só existe nos trechos (styleRuns), a do trecho de letra maior (é ele que manda na linha)
+      const entrelinha = (function(){
+        const cands = [st].concat((l.text.styleRuns || []).map(function(r){ return r.style || {}; })).filter(function(x){ return x && x.leading > 0 && x.fontSize > 0 && !x.autoLeading; });
+        if(!cands.length) return 1.16;
+        const x = cands.reduce(function(a, b){ return (b.fontSize > a.fontSize) ? b : a; });
+        return Math.max(0.6, Math.min(3, x.leading / x.fontSize / 1.13));     // o Fabric já multiplica a entrelinha por 1,13
+      })();
       // (07/10) caixa alargada em 8% pra não quebrar linha antes da hora — centrada na caixa original (antes deslocava o texto 4% pra direita)
       const t = new lib.Textbox(textoPsd, Object.assign({}, base, { left:(l.left||0) - (temLimites ? largPsd * 0.04 : 0), top:l.top||0, width:larg,
         fontFamily:familia, fontWeight:pesoBase, fontStyle:italBase ? "italic" : "normal", fontSize:Math.max(4, (st.fontSize || 24) * esc * escDoc), fill:cor, textAlign:al,
-        lineHeight:st.leading && st.fontSize && !st.autoLeading ? Math.max(0.6, Math.min(3, st.leading / st.fontSize / 1.13)) : 1.16, charSpacing:st.tracking || 0, id:_eaUid() },   // o Fabric já multiplica a entrelinha por 1,13; entrelinha fixa do PSD precisa dividir por isso
+        lineHeight:entrelinha, charSpacing:st.tracking || 0, id:_eaUid() },
         simples ? {} : { nome:(c.nome + (temDesenho ? " (texto editável" + (ok ? "" : ", fonte trocada") + ")" : " (fonte trocada)")).slice(0, 80), visible:temDesenho ? false : base.visible }));
       /* (07/10, Gustavo: "tamanhos diferentes, espaçamentos não respeitados") — 1) trechos com estilo diferente dentro do
          mesmo texto (1ª linha leve, 2ª negrito, tamanhos/cores diferentes) viram estilos por caractere; 2) o tamanho da fonte
@@ -143238,6 +143251,13 @@ async function _eaAbrirPsdLido(a, psd, nomeArq, op, pr){
       nome:c.nome, cores:(l.canvas && l.canvas.width) ? _eaPsdContarCores(l.canvas) : (l.vectorFill ? 1 : 0), x:r.x, y:r.y, w:r.cv.width, h:r.cv.height, alfa:!!(l.canvas && l.canvas.width && (l.canvas.width < W * 0.98 || l.canvas.height < H * 0.98)) });
     if(l.__textoEditavel) objs.push(l.__textoEditavel);
   }
+  // (07/10, Gustavo) texto curto em cima de uma pílula (cidade) → centrado na caixa OPACA da pílula, nos dois eixos
+  (function(){
+    const porOpcao = {}; objs.forEach(function(o){ if(o.variante && o.variante.grupo){ const k = o.variante.grupo + "\u0001" + o.variante.nome; (porOpcao[k] = porOpcao[k] || []).push(o); } });
+    Object.keys(porOpcao).forEach(function(k){ const lista = porOpcao[k];
+      lista.filter(function(o){ return _eaTipo(o) === "texto" && String(o.text || "").length <= 40 && !/\n/.test(String(o.text || "")); }).forEach(function(t){
+        const f = _eaFundoDoTexto(t, lista); if(f) _eaCentrarTextoNoFundo(t, f.o); }); });
+  })();
   (function(){ const gs = {}; objs.forEach(function(o){ if(o.variante && o.variante.grupo){ gs[o.variante.grupo] = (gs[o.variante.grupo] || 0) + 1; } });
     const ks = Object.keys(gs); if(ks.length) avisos.push((pr ? pr.nome + ": " : "") + "grupos de alternativas: " + ks.map(function(k){ return k + " (" + gs[k] + ")"; }).join(", ") + " — na geração entra só a opção que casa com o briefing."); })();
   // (07/10) ninguém nomeou camada? então ADIVINHA os espaços (título, texto, CTA, foto, logo, telefone, cidade, fundo)
@@ -144461,14 +144481,18 @@ async function _eaEncaixarFotoObra(fc, o, url, ctx){
   const velha = o.getElement && o.getElement(); const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
   const B = _eaCaixa(o), kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);   // página → pixels do canvas da foto
   const paraCanvas = function(c){ return { x0:(c.left - B.left) * kx, y0:(c.top - B.top) * ky, x1:(c.left + c.width - B.left) * kx, y1:(c.top + c.height - B.top) * ky }; };
-  const textos = [], mapas = [];
+  const textos = [], mapas = [], icones = [];
   fc.getObjects().forEach(function(x){
     if(x === o || x.visible === false) return;
     const tipo = _eaTipo(x);
     if(tipo === "texto" && ["HEADLINE","SUBTITLE","CTA","BENEFIT"].indexOf(x.espaco) >= 0) textos.push(paraCanvas(_eaCaixa(x)));
     else if(x.espaco === "PIN" || (x.variante && /map|mapa|cidade|pin|render/i.test(x.variante.grupo + " " + x.variante.nome))) mapas.push(paraCanvas(_eaCaixa(x)));
+    else if(x.variante && /icone|ícone|icon/i.test(x.variante.grupo)) icones.push(paraCanvas(_eaCaixa(x)));
   });
   const mapaBase = mapas.length ? Math.max.apply(null, mapas.map(function(m){ return m.y1; })) : null;
+  /* (07/10, Gustavo: "a obra sempre deve ficar ENTRE o ícone e o nome da cidade, pra não ser escondida por nenhum dos dois")
+     teto = base do bloco mapa + cidade · piso = topo do ícone (ou do texto). A obra inteira tem que caber nessa faixa. */
+  const teto = mapaBase, piso = (icones.length || textos.length) ? Math.min.apply(null, icones.concat(textos).map(function(t){ return t.y0; })) : null;
   const nova = await _eaCarregarImg(url);
   const ang = -(an.inclinacao || 0) * Math.PI / 180;                       // gira pra deixar o horizonte reto
   const folga = 1 + Math.abs(Math.sin(ang)) * 1.4;                         // zoom extra pra não sobrar canto vazio depois de girar
@@ -144488,6 +144512,9 @@ async function _eaEncaixarFotoObra(fc, o, url, ctx){
         if(an.obra){ const ob = { x0:ox + an.obra.x0 * dw, y0:oy + an.obra.y0 * dh, x1:ox + an.obra.x1 * dw, y1:oy + an.obra.y1 * dh };
           textos.forEach(function(t){ if(cruza(ob, t)) pena += (Math.min(ob.y1, t.y1) - Math.max(ob.y0, t.y0)) * 3; });
           mapas.forEach(function(m){ if(cruza(ob, m)) pena += (Math.min(ob.y1, m.y1) - Math.max(ob.y0, m.y0)) * 3; });
+          icones.forEach(function(m){ if(cruza(ob, m)) pena += (Math.min(ob.y1, m.y1) - Math.max(ob.y0, m.y0)) * 3; });
+          if(teto != null && ob.y0 < teto) pena += (teto - ob.y0) * 6;          // obra subindo pra faixa do mapa/cidade
+          if(piso != null && ob.y1 > piso) pena += (ob.y1 - piso) * 6;          // obra descendo pra faixa do ícone/frase
           if(ob.y1 > h) pena += (ob.y1 - h) * 2; if(ob.y0 < 0) pena += -ob.y0 * 2;     // obra cortada
         }
         const vazio = Math.max(0, h - dh) * w + Math.max(0, w - dw) * h;      // área que a IA teria que completar
@@ -144554,6 +144581,59 @@ async function _eaEsticarImagemH(o, novaLarg, ancora){
   if(ancora === "right") o.set("left", direita - alvo * sx);
   o.setCoords();
 }
+/* (07/10, Gustavo: "o nome da cidade deve ser centralizado com referência do próprio box")
+   caixa OPACA de uma imagem (sem a margem transparente da sombra) — em coordenadas do canvas */
+function _eaCaixaOpaca(o){
+  const c = _eaCaixa(o);
+  try{
+    const el = o.getElement && o.getElement(); if(!el || !el.width) return c;
+    if(!o.__opaca){
+      const k = Math.min(1, 256 / Math.max(el.width, el.height)), w = Math.max(1, Math.round(el.width * k)), h = Math.max(1, Math.round(el.height * k));
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d"); x.drawImage(el, 0, 0, w, h);
+      const d = x.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for(let y = 0; y < h; y++) for(let xx = 0; xx < w; xx++){ if(d[(y * w + xx) * 4 + 3] > 200){ if(xx < x0) x0 = xx; if(xx > x1) x1 = xx; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
+      o.__opaca = x1 >= x0 ? { x:x0 / k, y:y0 / k, w:(x1 - x0 + 1) / k, h:(y1 - y0 + 1) / k, ew:el.width, eh:el.height } : null;
+    }
+    const p = o.__opaca; if(!p) return c;
+    const kx = c.width / p.ew, ky = c.height / p.eh;
+    return { left:c.left + p.x * kx, top:c.top + p.y * ky, width:p.w * kx, height:p.h * ky };
+  }catch(_){ return c; }
+}
+/* caixa de TINTA de um texto (onde as letras realmente estão), relativa ao canto da caixa do objeto */
+function _eaCaixaTintaTexto(t){
+  const c = _eaCaixa(t);
+  try{
+    const el = t.toCanvasElement({ withoutShadow:true, withoutTransform:false, enableRetinaScaling:false, multiplier:1 }); if(!el || !el.width) return { dx:0, dy:0, w:c.width, h:c.height };
+    const x = el.getContext("2d"), w = el.width, h = el.height, d = x.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for(let y = 0; y < h; y++) for(let xx = 0; xx < w; xx++){ if(d[(y * w + xx) * 4 + 3] > 60){ if(xx < x0) x0 = xx; if(xx > x1) x1 = xx; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
+    if(x1 < x0) return { dx:0, dy:0, w:c.width, h:c.height };
+    // toCanvasElement desenha com uma folga em volta: o desenho fica centrado na mesma caixa do objeto
+    const fx = (w - c.width) / 2, fy = (h - c.height) / 2;
+    return { dx:x0 - fx, dy:y0 - fy, w:x1 - x0 + 1, h:y1 - y0 + 1 };
+  }catch(_){ return { dx:0, dy:0, w:c.width, h:c.height }; }
+}
+/* centraliza um texto curto (cidade) na caixa opaca do fundo (a pílula), nos dois eixos, pela tinta das letras */
+function _eaCentrarTextoNoFundo(txt, fundo){
+  try{
+    const F = _eaCaixaOpaca(fundo), sx = txt.scaleX || 1;
+    txt.set({ width:4000 }); const larg = _eaLarguraTexto(txt);
+    // a caixa do texto passa a ser a própria pílula (centrado nela): se a fonte certa chegar depois com outra largura, continua no centro
+    txt.set({ width:Math.max((larg / sx) + 6, (F.width - 4) / sx), textAlign:"center" }); try{ txt.initDimensions(); }catch(_){ } txt.setCoords();
+    const T = _eaCaixa(txt), tinta = _eaCaixaTintaTexto(txt);
+    const cx = T.left + tinta.dx + tinta.w / 2, cy = T.top + tinta.dy + tinta.h / 2;
+    txt.set({ left:(txt.left || 0) + (F.left + F.width / 2 - cx), top:(txt.top || 0) + (F.top + F.height / 2 - cy) }); txt.setCoords();
+    return true;
+  }catch(_){ return false; }
+}
+/* fundo de um texto curto: imagem/forma no mesmo grupo que contém o texto e não é muito maior que ele (a pílula da cidade) */
+function _eaFundoDoTexto(txt, candidatos){
+  const T = _eaCaixa(txt);
+  return (candidatos || []).filter(function(o){ return o !== txt && _eaTipo(o) !== "texto"; })
+    .map(function(o){ return { o:o, c:_eaCaixaOpaca(o) }; })
+    .filter(function(f){ const cxT = T.left + T.width / 2, cyT = T.top + T.height / 2;
+      return cxT >= f.c.left && cxT <= f.c.left + f.c.width && cyT >= f.c.top && cyT <= f.c.top + f.c.height && f.c.height <= T.height * 3.5 && f.c.width <= Math.max(T.width * 4, T.width + 200); })
+    .sort(function(a, b){ return a.c.width * a.c.height - b.c.width * b.c.height; })[0] || null;
+}
 async function _eaEscreverCidade(fc, cidade, ident, W, H){
   const avisos = []; if(!cidade) return avisos;
   const grupos = {}; fc.getObjects().forEach(function(o){ if(o.variante && /cidade|city|local/i.test(o.variante.grupo)){ (grupos[o.variante.grupo] = grupos[o.variante.grupo] || {}); (grupos[o.variante.grupo][o.variante.nome] = grupos[o.variante.grupo][o.variante.nome] || []).push(o); } });
@@ -144566,25 +144646,24 @@ async function _eaEscreverCidade(fc, cidade, ident, W, H){
     // escreve a cidade na opção acesa
     nomes.forEach(function(n){ ops[n].forEach(function(o){ o.set("visible", n === acesa); }); });
     const al = txt.textAlign || "left", sxT = txt.scaleX || 1;
-    const larg0 = _eaLarguraTexto(txt), esq0 = al === "right" ? (txt.left + txt.width * sxT - larg0) : al === "center" ? (txt.left + (txt.width * sxT - larg0) / 2) : txt.left;
-    const fundo = ops[acesa].filter(function(o){ return o !== txt && _eaTipo(o) !== "texto"; }).map(function(o){ return { o:o, c:_eaCaixa(o) }; })
-      .filter(function(f){ const t = _eaCaixa(txt); return f.c.left <= t.left + t.width && f.c.left + f.c.width >= t.left && f.c.top <= t.top + 4 && f.c.top + f.c.height >= t.top + t.height - 4; })
-      .sort(function(a, b){ return a.c.width * a.c.height - b.c.width * b.c.height; })[0] || null;
-    // sobra igual dos dois lados (média do original; a caixa do texto do PSD vem um pouco mais larga que o texto)
-    const sobra = fundo ? Math.max(16, ((esq0 - fundo.c.left) + (fundo.c.left + fundo.c.width - (esq0 + larg0))) / 2) : 0;
-    const sobraE = sobra, sobraD = sobra;
-    const direita = fundo && al === "right" ? fundo.c.left + fundo.c.width - sobraD : txt.left + txt.width * sxT;
+    const fundo = _eaFundoDoTexto(txt, ops[acesa]);     // a pílula (caixa OPACA, sem a margem da sombra)
+    // sobra dos lados = a do original (tinta do texto × caixa opaca da pílula), igual dos dois lados
+    let sobra = 0;
+    if(fundo){ const T0 = _eaCaixa(txt), k0 = _eaCaixaTintaTexto(txt); const e0 = T0.left + k0.dx - fundo.c.left, d0 = (fundo.c.left + fundo.c.width) - (T0.left + k0.dx + k0.w); sobra = Math.max(12, (e0 + d0) / 2); }
     txt.set({ text:String(cidade).trim(), width:4000 });          // largo pra medir numa linha só
     const larg1 = _eaLarguraTexto(txt);
-    txt.set("width", (larg1 / sxT) + 4); try{ txt.initDimensions(); }catch(_){ }
-    if(al === "right") txt.set("left", direita - txt.width * sxT);
+    txt.set("width", (larg1 / sxT) + 6); try{ txt.initDimensions(); }catch(_){ }
     txt.setCoords();
     if(fundo){
-      const novaLarg = larg1 + sobraE + sobraD;
+      const k1 = _eaCaixaTintaTexto(txt);
+      const novaLarg = Math.round(k1.w + 2 * sobra) * (_eaCaixa(fundo.o).width / Math.max(1, fundo.c.width));   // largura do ELEMENTO (com a margem da sombra)
       try{
-        if(_eaTipo(fundo.o) === "imagem") await _eaEsticarImagemH(fundo.o, novaLarg, al === "right" ? "right" : "left");
-        else { const sxF = fundo.o.scaleX || 1, dir = fundo.c.left + fundo.c.width; fundo.o.set("width", novaLarg / sxF); if(al === "right") fundo.o.set("left", dir - novaLarg); fundo.o.setCoords(); }
-        if(al !== "right"){ const tL = _eaCaixa(txt); fundo.o.set("left", (fundo.o.left || 0) + (tL.left - sobraE - _eaCaixa(fundo.o).left)); fundo.o.setCoords(); }
+        const direitaOpaca = fundo.c.left + fundo.c.width;
+        if(_eaTipo(fundo.o) === "imagem") await _eaEsticarImagemH(fundo.o, novaLarg, al === "left" ? "left" : "right");
+        else { const sxF = fundo.o.scaleX || 1, dir = _eaCaixa(fundo.o).left + _eaCaixa(fundo.o).width; fundo.o.set("width", novaLarg / sxF); if(al !== "left") fundo.o.set("left", dir - novaLarg); fundo.o.setCoords(); }
+        delete fundo.o.__opaca;
+        if(al !== "left"){ const F1 = _eaCaixaOpaca(fundo.o); fundo.o.set("left", (fundo.o.left || 0) + (direitaOpaca - (F1.left + F1.width))); fundo.o.setCoords(); delete fundo.o.__opaca; }   // mantém a borda direita onde estava
+        _eaCentrarTextoNoFundo(txt, fundo.o);        // nome centrado na pílula, nos dois eixos
       }catch(e){ avisos.push("fundo da cidade: " + _eaErro(e)); }
     }
     // pin: posição guardada dessa cidade (Identidade visual › Pins), senão fica onde estava e avisa
