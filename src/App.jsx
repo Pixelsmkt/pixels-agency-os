@@ -34958,14 +34958,6 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       if(typeof pixelsToast!=="undefined") pixelsToast.info(filtroCli&&!filtroTipo?"Acabaram as copys desse cliente — mostrando a fila inteira.":"Acabaram as copys desse filtro — mostrando a fila inteira.",3500);
     }
   },[filtroTipo,filtroCli,copyQueue.length,copyQueueTudo.length]);
-  useEffect(function(){
-    const tudo=tab==="video"?pubVideoQueueTudo.length:tab==="publicacao"?pubQueueTudo.length:0;
-    const fila=tab==="video"?pubVideoQueue.length:tab==="publicacao"?pubQueue.length:0;
-    if((filtroAvTipo||filtroAvCli)&&tudo>0&&fila===0){
-      setFiltroAvTipo(""); setFiltroAvCli("");
-      if(typeof pixelsToast!=="undefined") pixelsToast.info("Acabaram os cards desse filtro — mostrando a fila inteira.",3500);
-    }
-  },[tab,filtroAvTipo,filtroAvCli,pubQueue.length,pubVideoQueue.length,pubQueueTudo.length,pubVideoQueueTudo.length]);
   // Ajuste queue: cards marcados para ajuste
   // (06/10/2026 · A-3) a marca "ajustar" fica no card como histórico (retrabalho); a fila só mostra o que ainda não foi entregue.
   // Antes: 167 cards (135 já publicados); agora só os que ainda estão em produção/avaliação.
@@ -34983,6 +34975,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const pubVideoQueue=pubVideoQueueTudo.filter(_fAv);
   // Demandas Internas queue
   const internasQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="interno_avaliacao"));
+  useEffect(function(){
+    const tudo=tab==="video"?pubVideoQueueTudo.length:tab==="publicacao"?pubQueueTudo.length:0;
+    const fila=tab==="video"?pubVideoQueue.length:tab==="publicacao"?pubQueue.length:0;
+    if((filtroAvTipo||filtroAvCli)&&tudo>0&&fila===0){
+      setFiltroAvTipo(""); setFiltroAvCli("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.info("Acabaram os cards desse filtro — mostrando a fila inteira.",3500);
+    }
+  },[tab,filtroAvTipo,filtroAvCli,pubQueue.length,pubVideoQueue.length,pubQueueTudo.length,pubVideoQueueTudo.length]);
 
   const pushNotif=(notif)=>{
     if(setGlobalNotifs)setGlobalNotifs(p=>[{id:"n"+Date.now(),read:false,...notif},...p]);
