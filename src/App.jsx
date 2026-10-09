@@ -36637,7 +36637,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               title={allImgs.length>0&&!_curIsVideo?"Clique pra ampliar":""}
               style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",cursor:(allImgs.length>0&&!_curIsVideo)?"zoom-in":"default"}}>
             {_ladoALado&&(<div onClick={e=>e.stopPropagation()} title="Foto original do material (como veio do cliente)"
-              style={{alignSelf:"stretch",flex:"0 0 42%",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",background:"#0b1220",borderRight:"1px solid rgba(148,163,184,.3)",cursor:"default"}}>
+              style={{alignSelf:"stretch",flex:"0 0 41%",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",background:"#0b1220",borderRadius:12,margin:"12px 16px 12px 12px",cursor:"default"}}>
               <img src={_matFoto.url} alt="foto original" referrerPolicy="no-referrer" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
               <span style={{position:"absolute",top:10,left:10,background:"rgba(15,23,42,.82)",color:"#e2e8f0",fontSize:10,fontWeight:800,letterSpacing:.5,padding:"4px 10px",borderRadius:7,textTransform:"uppercase",pointerEvents:"none"}}>Foto original · material</span>
             </div>)}
