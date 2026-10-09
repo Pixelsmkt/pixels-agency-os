@@ -146358,15 +146358,13 @@ async function _eaFotoIA(base, mascara, prompt, client, projeto){
   const k = Math.min(tam[0] / w, tam[1] / h), dw = Math.round(w * k), dh = Math.round(h * k), dx = Math.floor((tam[0] - dw) / 2), dy = Math.floor((tam[1] - dh) / 2);
   const A = document.createElement("canvas"); A.width = tam[0]; A.height = tam[1];
   const ax = A.getContext("2d");
-  // (08/10) nada de faixa transparente no que vai pra IA (ela reenquadra a cena): o fundo das faixas laterais
-  // é a própria imagem esticada cobrindo tudo, borrada — a máscara é quem diz onde pode mexer
+  // (09/10) nada de faixa transparente no que vai pra IA (ela reenquadra a cena): as faixas do letterbox são a
+  // própria imagem esticada cobrindo tudo, NÍTIDA (fundo borrado fazia a IA devolver neblina) — a máscara manda
   const gC = Math.max(tam[0] / w, tam[1] / h) * 1.02;
-  try{ ax.filter = "blur(30px)"; }catch(_){ }
   ax.drawImage(base, (tam[0] - w * gC) / 2, (tam[1] - h * gC) / 2, w * gC, h * gC);
-  try{ ax.filter = "none"; }catch(_){ }
   ax.drawImage(base, dx, dy, dw, dh);
   const M = document.createElement("canvas"); M.width = tam[0]; M.height = tam[1]; M.getContext("2d").drawImage(mascara, dx, dy, dw, dh);   // fora da foto fica transparente = a IA pode preencher
-  const resp = await _eaFn({ acao:"foto", imagem:A.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt, tamanho:tam[0] + "x" + tam[1], qualidade:"medium", client_id:client || null, projeto_id:projeto || null });
+  const resp = await _eaFn({ acao:"foto", imagem:A.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt, tamanho:tam[0] + "x" + tam[1], qualidade:"high", client_id:client || null, projeto_id:projeto || null });   // (09/10) high: medium devolvia preenchimento borrado
   if(!resp || !resp.imagem) return null;
   const img = await _eaCarregarImg("data:image/png;base64," + resp.imagem);
   const out = document.createElement("canvas"); out.width = w; out.height = h;
@@ -146632,20 +146630,22 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       mx.fillStyle = "#000"; mx.fillRect(0, 0, w, h);
       mx.globalCompositeOperation = "destination-in"; mx.drawImage(cv, 0, 0);                   // onde não tem foto → transparente
       mx.globalCompositeOperation = "destination-out";
-      (an.entulho || []).forEach(function(c){ const f = w * 0.03; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
-      /* (08/10) o gpt-image REENQUADRA a cena quando recebe imagem com áreas transparentes (foi a "colagem" de Juti):
-         a imagem enviada vai SEM transparência — por baixo entra a própria foto cobrindo tudo, bem borrada, só de guia.
-         A máscara continua dizendo onde pode mexer; o que era pra manter volta do original na colagem final. */
+      (an.entulho || []).forEach(function(c){ const f = w * 0.012; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
+      /* (09/10, testado de verdade pelo Claude com a foto de Juti — ver pipe.cjs) RECEITA QUE FUNCIONA:
+         1) a imagem vai SEM transparência (o gpt-image reenquadra quando vê área vazia);
+         2) o preenchimento provisório das faixas é ESPELHAMENTO NÍTIDO da própria foto — o fundo borrado de
+            antes fazia a IA devolver neblina/borrão (era a "mancha" que o Gustavo via);
+         3) prompt proíbe borrão e manda textura fotográfica real;  4) qualidade high no _eaFotoIA. */
       const E = document.createElement("canvas"); E.width = w; E.height = h; const ex2 = E.getContext("2d");
       const sFundo = Math.max(w / nova.width, h / nova.height) * 1.04;
-      try{ ex2.filter = "blur(36px)"; }catch(_){ }
-      ex2.drawImage(nova, (w - nova.width * sFundo) / 2, (h - nova.height * sFundo) / 2, nova.width * sFundo, nova.height * sFundo);
-      try{ ex2.filter = "none"; }catch(_){ }
+      ex2.drawImage(nova, (w - nova.width * sFundo) / 2, (h - nova.height * sFundo) / 2, nova.width * sFundo, nova.height * sFundo);   // cobre cantos (giro)
+      if(m.oy > 0){ const alt = Math.ceil(m.oy); ex2.save(); ex2.translate(0, m.oy); ex2.scale(1, -1); ex2.drawImage(cv, 0, m.oy, w, alt, 0, 0, w, alt); ex2.restore(); }
+      const fimF = m.oy + m.dh; if(fimF < h){ const alt = Math.ceil(h - fimF); ex2.save(); ex2.translate(0, fimF); ex2.scale(1, -1); ex2.drawImage(cv, 0, fimF - alt, w, alt, 0, -alt, w, alt); ex2.restore(); }
       ex2.drawImage(cv, 0, 0);
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
-      if(precisaCompletar) partes.push("Complete as áreas transparentes continuando a cena com naturalidade — estenda o céu para cima e o terreno/vegetação para baixo — coerente com a luz, as cores e a perspectiva da foto. Mantenha exatamente o mesmo brilho e a mesma exposição da foto: não escureça nada.");
-      if(temEntulho) partes.push("Nas áreas marcadas, remova entulho, lixo, bagunça, materiais soltos e sujeira, deixando o terreno limpo e organizado, como se a obra estivesse entregue. Se a marca estiver sobre a obra, remova apenas a sujeira solta, mantendo a estrutura por baixo intacta.");
-      partes.push("NÃO re-renderize nem repinte o resto da foto: a obra principal, a vegetação e o terreno fora das áreas marcadas devem permanecer idênticos, com a mesma textura. Não acrescente texto, pessoas, placas ou objetos novos. Resultado realista, mesma câmera.");
+      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade — mais céu com nuvens em cima, mais terreno (areia/grama/vegetação) embaixo — nítidas, com textura fotográfica real, na mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
+      if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
+      partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
       let r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
       if(r){
