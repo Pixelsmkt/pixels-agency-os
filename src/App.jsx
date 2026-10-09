@@ -86356,6 +86356,36 @@ function _prodArqTam(n){ n=Number(n||0); return n>1024*1024?(n/1024/1024).toFixe
 function _prodEhTexto(nome,tipo){ return /\.(txt|md|csv|json|html?)$/i.test(String(nome||""))||/^text\//.test(String(tipo||"")); }
 function _prodEhImagem(nome,tipo){ return /\.(png|jpe?g|webp|gif)$/i.test(String(nome||""))||/^image\//.test(String(tipo||"")); }
 function _prodEhAudio(nome,tipo){ return /\.(mp3|m4a|wav|ogg|opus|aac)$/i.test(String(nome||""))||/^audio\//.test(String(tipo||"")); }
+function _prodEhVideo(nome,tipo){ return /\.(mp4|mov|webm|mkv|m4v)$/i.test(String(nome||""))||/^video\//.test(String(tipo||"")); }
+/* ─── Transcrição de áudio/vídeo NA ABA (09/10/2026, Gustavo: "arrastar vídeo
+   (gravação de reunião), áudio…") — mesmo Whisper local da Pixels IA (Xenova,
+   roda no navegador, custo zero). Vídeo funciona porque o decodeAudioData
+   extrai a trilha de áudio do arquivo. ─── */
+async function _prodWhisper(onProgress){
+  if(window.__pxProdWhisper) return window.__pxProdWhisper;
+  if(onProgress) onProgress("carregando o modelo de transcrição (1ª vez baixa ~75MB)…");
+  const tx = await import(/* @vite-ignore */ "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
+  tx.env.allowLocalModels = false; tx.env.useBrowserCache = true;
+  const pipe = await tx.pipeline("automatic-speech-recognition", "Xenova/whisper-base", { quantized:true,
+    progress_callback:function(d){ if(onProgress&&d&&d.status==="progress"&&d.file&&typeof d.progress==="number") onProgress("baixando "+d.file+": "+Math.round(d.progress)+"%"); } });
+  window.__pxProdWhisper = pipe;
+  return pipe;
+}
+async function _prodTranscrever(file, onProgress){
+  const pipe = await _prodWhisper(onProgress);
+  if(onProgress) onProgress("extraindo o áudio…");
+  const ab = await file.arrayBuffer();
+  const AC = window.AudioContext||window.webkitAudioContext; const ac = new AC();
+  const buf = await ac.decodeAudioData(ab);
+  let audio = buf.getChannelData(0);
+  if(buf.numberOfChannels>1){ const a=buf.getChannelData(0), b=buf.getChannelData(1); const m=new Float32Array(a.length); for(let i=0;i<a.length;i++) m[i]=(a[i]+b[i])/2; audio=m; }
+  if(buf.sampleRate!==16000){ const r=buf.sampleRate/16000, n=Math.floor(audio.length/r); const o=new Float32Array(n); for(let i=0;i<n;i++) o[i]=audio[Math.floor(i*r)]; audio=o; }
+  try{ ac.close(); }catch(_){ }
+  const dur = audio.length/16000;
+  if(onProgress) onProgress("transcrevendo "+Math.round(dur/60)+" min de áudio… (leva um tempinho, pode seguir mexendo no app)");
+  const res = await pipe(audio, { chunk_length_s:30, stride_length_s:5, language:"portuguese", task:"transcribe" });
+  return ((res&&res.text)||"").trim();
+}
 function _prodLerTexto(file){
   return new Promise(function(res){
     if(file.size>400*1024) return res("");
@@ -86404,13 +86434,48 @@ async function _prodDestrincharIA(p, cfg){
     else semLeitura.push(m.name);
   });
   if(semLeitura.length) blocos.push({type:"text",text:"MATERIAIS QUE NÃO PUDE LER (só o nome): "+semLeitura.join("; ")});
-  blocos.push({type:"text",text:"Destrinche este produto da agência. Escreva em português, direto, sem enrolação, nestas seções:\n1) O QUE É — em 3 linhas.\n2) COMO FUNCIONA NA PRÁTICA — passo a passo da entrega, do fechamento ao encerramento.\n3) O QUE O CLIENTE RECEBE — lista concreta.\n4) O QUE A PIXELS PRECISA FAZER/TER — funções envolvidas, ferramentas, pré-requisitos.\n5) PONTOS EM ABERTO — o que os materiais não explicam e precisa ser decidido (perguntas objetivas).\nUse SOMENTE o que está nos materiais e no que foi preenchido; não invente números nem promessas."});
-  const r=await askGPTBlocos({ max_tokens:3500, origem:"produto_materiais",
-    system:"Você é o estrategista da agência Pixels. Analisa materiais brutos (briefings, anotações, prints) e explica como um produto/serviço funciona, com clareza de quem vai vender e entregar.",
+  blocos.push({type:"text",text:'Destrinche este produto da agência e DEVOLVA SÓ UM JSON, neste formato exato:\n{"analise":"texto corrido em português com as seções: 1) O QUE É (3 linhas); 2) COMO FUNCIONA NA PRÁTICA (passo a passo, do fechamento ao encerramento); 3) O QUE O CLIENTE RECEBE; 4) O QUE A PIXELS PRECISA FAZER/TER; 5) PONTOS EM ABERTO (perguntas objetivas do que os materiais não explicam)",\n"ideia":{"nome":"","categoria":"","problema":"","resultado":"","descricao":"frase única de proposta","clienteIdeal":"","segmento":""},\n"fases":[{"nome":"","objetivo":"","descricao":"","prazoDias":5,"reunioes":0}],\n"entregaveis":[{"nome":"","descricao":"","formato":"Documento|Dashboard|Apresentação|Planilha|Reunião|Vídeo|Treinamento|Outro","fase":"nome da fase a que pertence"}]}\nRegras: use SOMENTE o que está nos materiais e no que já foi preenchido; não invente números, preços nem promessas; em "ideia" preencha só o que os materiais sustentam (campo sem base = string vazia); fases na ordem real da entrega.'});
+  const r=await askGPTBlocos({ max_tokens:6000, origem:"produto_materiais",
+    system:"Você é o estrategista da agência Pixels. Analisa materiais brutos (briefings, transcrições de reunião, anotações, prints) e estrutura como um produto/serviço funciona, com clareza de quem vai vender e entregar. Responde SÓ com o JSON pedido.",
     messages:[{role:"user",content:blocos}] });
   const texto=((r&&r.content&&r.content[0])||{}).text||"";
   if(!texto) throw new Error("o GPT respondeu vazio");
-  return texto;
+  const mj=texto.replace(/```json|```/g,"").match(/\{[\s\S]*\}/);
+  if(!mj) return { analise:texto };
+  try{ const j=JSON.parse(mj[0]); if(!j.analise) j.analise=texto; return j; }catch(_){ return { analise:texto }; }
+}
+/* aplica o que a IA estruturou SEM atropelar o que o usuário já digitou:
+   campo da Ideia só entra se estiver vazio; fases/entregáveis só se não existirem ainda */
+function _prodAplicarIA(cur, j){
+  const out=Object.assign({},cur); let campos=0, fases=0, entrs=0;
+  if(j.ideia){
+    const i=Object.assign({},out.ideia||{});
+    ["nome","categoria","problema","resultado","descricao","clienteIdeal","segmento"].forEach(function(k){
+      const v=String((j.ideia||{})[k]||"").trim();
+      if(v&&!String(i[k]||"").trim()){ i[k]=v; campos++; }
+    });
+    out.ideia=i;
+  }
+  if(Array.isArray(j.fases)&&j.fases.length&&!(out.fases||[]).length){
+    out.fases=j.fases.filter(function(f){return f&&String(f.nome||"").trim();}).map(function(f,k){
+      const nf=_prodFaseNova(k+1);
+      nf.nome=String(f.nome).slice(0,80); nf.objetivo=String(f.objetivo||"").slice(0,300); nf.descricao=String(f.descricao||"").slice(0,600);
+      nf.prazoDias=Math.max(1,Math.min(90,Math.round(Number(f.prazoDias)||5))); nf.reunioes=Math.max(0,Math.min(20,Math.round(Number(f.reunioes)||0)));
+      return nf;
+    });
+    fases=out.fases.length;
+  }
+  if(Array.isArray(j.entregaveis)&&j.entregaveis.length&&!(out.entregaveis||[]).length){
+    out.entregaveis=j.entregaveis.filter(function(e){return e&&String(e.nome||"").trim();}).map(function(e){
+      const fase=(out.fases||[]).find(function(f){ return String(f.nome||"").toLowerCase().indexOf(String(e.fase||"").toLowerCase().slice(0,20))>=0||String(e.fase||"").toLowerCase().indexOf(String(f.nome||"").toLowerCase().slice(0,20))>=0; });
+      const ne=_prodEntregavelNovo(fase?fase.id:((out.fases||[])[0]||{}).id);
+      ne.nome=String(e.nome).slice(0,100); ne.descricao=String(e.descricao||"").slice(0,300);
+      ne.formato=PROD_FORMATOS.indexOf(String(e.formato||""))>=0?String(e.formato):"Outro";
+      return ne;
+    });
+    entrs=out.entregaveis.length;
+  }
+  return { produto:out, campos:campos, fases:fases, entregaveis:entrs };
 }
 async function _prodGerarContratoIA(p, cfg, modelo){
   if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
@@ -86464,37 +86529,63 @@ function _ProdArquivoLinha({m,canEdit,onRemover,aviso}){
 function _ProdEtapaMateriais({p,set,canEdit,isMob}){
   const [busy,setBusy]=useState(false);
   const [gerando,setGerando]=useState(false);
+  const [transc,setTransc]=useState({});            // id do arquivo → status da transcrição
   const mats=p.materiais||[];
+  const transcrever=async function(novos){
+    // áudio e vídeo (gravação de reunião): transcreve AQUI MESMO, um por vez, e o texto vira material da IA
+    for(const m of novos){
+      if(!(_prodEhAudio(m.name,m.type)||_prodEhVideo(m.name,m.type))||!m.__file) continue;
+      const diz=function(s){ setTransc(function(t){ const n=Object.assign({},t); n[m.id]=s; return n; }); };
+      try{
+        const texto=await _prodTranscrever(m.__file, diz);
+        if(texto){
+          set(function(cur){ return Object.assign({},cur,{materiais:(cur.materiais||[]).map(function(x){ return x.id===m.id?Object.assign({},x,{texto:texto.slice(0,15000)}):x; })}); });
+          diz(null);
+          if(typeof pixelsToast!=="undefined") pixelsToast.success("“"+m.name+"” transcrito — a IA já consegue ler.");
+        } else diz("não saiu texto — áudio muito baixo?");
+      }catch(e){ diz("transcrição falhou: "+((e&&e.message)||e)); }
+      delete m.__file;
+    }
+  };
   const subir=function(fs){
     if(!canEdit||busy) return;
     setBusy(true);
     _prodSubirArquivos(p.id, fs, "materiais").then(function(novos){
-      set(function(cur){ return Object.assign({},cur,{materiais:(cur.materiais||[]).concat(novos)}); });
+      novos.forEach(function(m,k){ m.__file=fs[k]; });   // File original só em memória, pra transcrição
+      set(function(cur){ return Object.assign({},cur,{materiais:(cur.materiais||[]).concat(novos.map(function(m){ const c2=Object.assign({},m); delete c2.__file; return c2; }))}); });
       if(typeof pixelsToast!=="undefined") pixelsToast.success(novos.length+" arquivo"+(novos.length>1?"s":"")+" no material do produto.");
+      transcrever(novos);
     }).catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Upload falhou: "+((e&&e.message)||e)); })
       .finally(function(){ setBusy(false); });
   };
   const destrinchar=function(){
     if(gerando) return;
     if(!mats.length&&!(p.ideia&&p.ideia.descricao)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Suba algum material (ou preencha a Ideia) antes de destrinchar."); return; }
+    if(Object.keys(transc).some(function(k){return transc[k]&&!/falhou|não saiu/.test(String(transc[k]));})){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Ainda tem transcrição rodando — espere terminar pra IA ler a reunião também."); return; }
     setGerando(true);
-    _prodDestrincharIA(p).then(function(texto){
-      set(function(cur){ return Object.assign({},cur,{iaEntendimento:{texto:texto,geradoEm:new Date().toISOString(),arquivos:mats.map(function(m){return m.name;})}}); });
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Produto destrinchado pela IA.");
+    _prodDestrincharIA(p).then(function(j){
+      set(function(cur){
+        const ap=_prodAplicarIA(cur, j||{});
+        const out=ap.produto;
+        out.iaEntendimento={texto:(j&&j.analise)||"",geradoEm:new Date().toISOString(),arquivos:mats.map(function(m){return m.name;})};
+        if(typeof pixelsToast!=="undefined"){ const pcs=[]; if(ap.campos) pcs.push(ap.campos+" campo"+(ap.campos>1?"s":"")+" da Ideia"); if(ap.fases) pcs.push(ap.fases+" fases"); if(ap.entregaveis) pcs.push(ap.entregaveis+" entregáveis");
+          pixelsToast.success(pcs.length?("Produto criado pela IA — preenchi "+pcs.join(", ")+". O que você já tinha digitado ficou como estava."):"Produto destrinchado pela IA."); }
+        return out;
+      });
     }).catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("IA: "+((e&&e.message)||e)); })
       .finally(function(){ setGerando(false); });
   };
   const ia=p.iaEntendimento;
   return <>
-    <_PrdModHeader num={2} ico="folderkanban" title="Materiais do produto" subtitle="Jogue aqui tudo que explica o produto — briefings, anotações, prints, propostas antigas. A IA lê e destrincha como ele funciona, igual ao Materiais do card." done={mats.length>0||!!ia} isMob={isMob}/>
-    <_ProdUploadBox label="Arraste arquivos aqui ou clique pra escolher" hint="Texto (.txt, .md) e imagens a IA lê direto. Áudio, PDF e Word ficam guardados — pra IA ler, envie também em .txt." onFiles={subir} canEdit={canEdit} busy={busy}/>
+    <_PrdModHeader num={2} ico="folderkanban" title="Materiais do produto" subtitle="Jogue aqui tudo que explica o produto — gravação de reunião (áudio ou vídeo), briefings, anotações, prints. A IA transcreve, lê e CRIA o produto: preenche Ideia, Fases e Entregáveis e destrincha como ele funciona." done={mats.length>0||!!ia} isMob={isMob}/>
+    <_ProdUploadBox label="Arraste arquivos aqui ou clique pra escolher" hint="Áudio e vídeo de reunião são transcritos aqui mesmo (no seu navegador, sem custo). Texto (.txt, .md) e imagens a IA lê direto. PDF/Word ficam guardados — pra IA ler, cole o conteúdo num .txt." onFiles={subir} canEdit={canEdit} busy={busy}/>
     {mats.length>0&&<div style={{display:"flex",flexDirection:"column",gap:7}}>
       {mats.map(function(m){ return <_ProdArquivoLinha key={m.id||m.url} m={m} canEdit={canEdit}
-        aviso={(!m.texto&&!_prodEhImagem(m.name,m.type))?(_prodEhAudio(m.name,m.type)?"áudio: transcreva na Pixels IA e suba o .txt":"a IA não lê este formato"):null}
+        aviso={transc[m.id]||((!m.texto&&!_prodEhImagem(m.name,m.type))?((_prodEhAudio(m.name,m.type)||_prodEhVideo(m.name,m.type))?"ainda sem transcrição — suba de novo pra transcrever":"a IA não lê este formato"):null)}
         onRemover={function(){ set(function(cur){ return Object.assign({},cur,{materiais:(cur.materiais||[]).filter(function(x){return (x.id||x.url)!==(m.id||m.url);})}); }); }}/>; })}
     </div>}
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-      {canEdit&&<_PrdBtn tone="primary" ico="sparkles" onClick={destrinchar} disabled={gerando}>{gerando?"Destrinchando com o GPT…":(ia?"Destrinchar de novo":"Destrinchar produto com IA")}</_PrdBtn>}
+      {canEdit&&<_PrdBtn tone="primary" ico="sparkles" onClick={destrinchar} disabled={gerando}>{gerando?"O GPT está criando o produto…":(ia?"Destrinchar e preencher de novo":"Criar o produto com a IA")}</_PrdBtn>}
       {ia&&<span style={{color:_PRD.SOFT,fontSize:11}}>última análise: {_prodDataBR(String(ia.geradoEm||"").slice(0,10))}</span>}
     </div>
     {ia&&<div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+_PRD.PX_BD,borderRadius:16,padding:"16px 18px"}}>
