@@ -146491,7 +146491,9 @@ function _eaVibrarFotoObra(cv, horizonteY){
     let soma = 0, n = 0;
     for(let i = 0; i < a.length; i += 64){ const r = a[i] / 255, g = a[i + 1] / 255, b = a[i + 2] / 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); soma += mx > 0 ? (mx - mn) / mx : 0; n++; }
     const satMedia = n ? soma / n : 0.4;
-    const forca = Math.max(0, Math.min(1, (0.46 - satMedia) / 0.28));   // foto já vibrante → quase nada; foto lavada → mais
+    // (09/10, Gustavo: "sempre um grau de luminosidade e saturação, sem exagero, e vibrar mais o verde")
+    // piso de 30%: mesmo foto já saturada ganha um toque; foto lavada ganha mais
+    const forca = Math.max(0.3, Math.min(1, 0.3 + (0.46 - satMedia) / 0.28 * 0.7));
     const hy = (horizonteY == null || !isFinite(horizonteY)) ? h * 0.42 : Math.max(0, Math.min(h, horizonteY));
     for(let i = 0, px = 0; i < a.length; i += 4, px++){
       if(a[i + 3] === 0) continue;
@@ -146502,12 +146504,12 @@ function _eaVibrarFotoObra(cv, horizonteY){
       if(delta > 0){ if(mx === r) hue = 60 * (((g - b) / delta) % 6); else if(mx === g) hue = 60 * ((b - r) / delta + 2); else hue = 60 * ((r - g) / delta + 4); if(hue < 0) hue += 360; }
       const y = Math.floor(px / w);
       let ganho = 1 + (0.10 + 0.16 * (1 - sat)) * forca;                       // vibrance geral
-      if(hue >= 65 && hue <= 170) ganho *= 1 + 0.12 * forca;                   // vegetação
+      if(hue >= 65 && hue <= 170) ganho *= 1 + 0.2 * forca;                    // vegetação ("vibrar mais o verde", 09/10)
       let alvoHue = hue;
       if(y < hy && hue >= 180 && hue <= 260 && sat > 0.06){ ganho *= 1 + 0.14 * forca; alvoHue = hue + (212 - hue) * 0.22 * forca; }   // céu: azul mais rico
       sat = Math.min(1, sat * ganho);
       let v2 = Math.min(1, Math.max(0, 0.5 + (v - 0.5) * (1 + 0.03 * forca)));   // contraste bem leve (08/10: o 0.05 escurecia demais a lona/área escura)
-      v2 = Math.min(1, v2 * (1 + 0.025 * forca));                                // e um fio de luz — a foto fica viva, nunca mais escura que a original
+      v2 = Math.min(1, v2 * (1 + 0.05 * forca));                                 // luz ("mais luminosidade", 09/10) — a foto fica viva, nunca mais escura
       // HSV → RGB
       const c = v2 * sat, hh = ((alvoHue % 360) + 360) % 360 / 60, xx = c * (1 - Math.abs(hh % 2 - 1)), m = v2 - c;
       let rr = 0, gg = 0, bb = 0;
@@ -146630,7 +146632,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           icones.forEach(function(m){ if(cruza(ob, m)) pena += (Math.min(ob.y1, m.y1) - Math.max(ob.y0, m.y0)) * 3; });
           if(teto != null && ob.y0 < teto) pena += (teto - ob.y0) * 6;          // obra subindo pra faixa do mapa/cidade
           if(piso != null && ob.y1 > piso) pena += (ob.y1 - piso) * 6;          // obra descendo pra faixa do ícone/frase
-          if(ob.y1 > h) pena += (ob.y1 - h) * 2; if(ob.y0 < 0) pena += -ob.y0 * 2;     // obra cortada
+          /* (09/10, Gustavo: "a foto tinha 4 biodigestores e você mostrou 2") cortar a OBRA é quase proibido,
+             em QUALQUER lado — a obra inteira tem que caber no quadro (peso alto, inclusive nas laterais). */
+          if(ob.y1 > h) pena += (ob.y1 - h) * 8; if(ob.y0 < 0) pena += -ob.y0 * 8;
+          if(ob.x0 < 0) pena += -ob.x0 * 8; if(ob.x1 > w) pena += (ob.x1 - w) * 8;
         }
         const vazio = Math.max(0, h - dh) * w + Math.max(0, w - dw) * h;      // área que a IA teria que completar
         const corte = Math.max(0, dw - w) * Math.min(dh, h) + Math.max(0, dh - h) * Math.min(dw, w);   // área da foto jogada fora
@@ -146672,7 +146677,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
       if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade — mais céu com nuvens em cima, mais terreno (areia/grama/vegetação) embaixo — nítidas, com textura fotográfica real, na mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
       if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
-      partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
+      partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. A obra aparece INTEIRA e com as proporções e alturas EXATAS da foto (mesma quantidade de estruturas, nenhuma mais alta, mais baixa ou maior que na foto). Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
       let r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
       if(r){
@@ -147051,16 +147056,33 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
         for(let i = 0; i < dL.length; i += 4){ if(dL[i + 3] < 20) continue; lum += 0.299 * dL[i] + 0.587 * dL[i + 1] + 0.114 * dL[i + 2]; nn++; }
         lum = nn ? lum / nn : 255;
         // (08/10, Gustavo: "o resultado ficou muito escuro") sombra CHEIA só em fundo realmente claro (lum ≥ 150);
-        // fundo médio (areia ao entardecer, ~100) fica com ~65% — a arte continua legível sem apagar a foto
+        // fundo médio fica com ~65% — a arte continua legível sem apagar a foto
         const fator = lum <= 50 ? 0.3 : lum >= 150 ? 1 : 0.3 + (lum - 50) * (0.7 / 100);
-        if(fator < 0.97){
-          let mexidas = 0;
-          fc.getObjects().forEach(function(x){ if(_eaTipo(x) !== "imagem" || x.visible === false) return;
-            const c = _eaCaixa(x); if(c.width < W * 0.9 || c.height < H * 0.9) return;
-            if(!/shadow|sombra|escurec|darken|grad/i.test(String(x.nome || ""))) return;
-            x.set("opacity", Math.max(0.05, (x.opacity == null ? 1 : x.opacity) * fator)); mexidas++; });
-          if(mexidas) avisos.push("fundo atrás da frase já é escuro (brilho " + Math.round(lum) + ") — sombra do template reduzida pra " + Math.round(fator * 100) + "%");
+        /* (09/10, Gustavo: "a sombra é SOMENTE atrás do texto, pra facilitar leitura — a foto original é bem
+           mais vívida e clara, você deixou toda escura") a camada de sombra do template cobria a arte INTEIRA.
+           Agora vira uma FAIXA: acima da frase a sombra some (borda macia), da frase pra baixo fica — e a
+           opacidade segue dosada pelo brilho do fundo. */
+        let mexidas = 0;
+        for(const x of fc.getObjects()){
+          if(_eaTipo(x) !== "imagem" || x.visible === false) continue;
+          const c = _eaCaixa(x); if(c.width < W * 0.9 || c.height < H * 0.9) continue;
+          if(!/shadow|sombra|escurec|darken|grad/i.test(String(x.nome || ""))) continue;
+          try{
+            const elS = x.getElement(); if(!elS || !elS.width) continue;
+            const kyS = elS.height / Math.max(1, c.height);
+            const yIni = Math.max(0, (T.top - H * 0.16 - c.top) * kyS);        // a faixa começa um pouco acima da frase
+            const pluma = Math.max(8, H * 0.09 * kyS);
+            const c2 = document.createElement("canvas"); c2.width = elS.width; c2.height = elS.height;
+            const x2 = c2.getContext("2d"); x2.drawImage(elS, 0, 0, c2.width, c2.height);
+            const gr = x2.createLinearGradient(0, Math.max(0, yIni - pluma), 0, yIni + pluma);
+            gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(1, "rgba(255,255,255,1)");
+            x2.globalCompositeOperation = "destination-in";
+            x2.fillStyle = gr; x2.fillRect(0, 0, c2.width, c2.height);
+            await _eaSetSrcArmazenado(x, c2);
+            x.set("opacity", Math.max(0.05, (x.opacity == null ? 1 : x.opacity) * fator)); mexidas++;
+          }catch(_){ }
         }
+        if(mexidas) avisos.push("sombra do template virou FAIXA atrás da frase (fundo com brilho " + Math.round(lum) + " → " + Math.round(fator * 100) + "% de força) — o resto da foto fica claro");
       }
     }
   }catch(_){ } }
