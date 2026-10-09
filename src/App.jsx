@@ -108025,25 +108025,29 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
                 </div>; })}
               </div>}
               {(it.resumo||resGerando===it.id||resEdit===it.id)&&<div style={{marginTop:8,background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:10,padding:"9px 11px"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                  <span style={{color:"#6d28d9",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>O que a IA entendeu — é isso que vai pro cérebro</span>
-                  {isAdmin&&resEdit!==it.id&&resGerando!==it.id&&<button type="button" title="Editar o entendimento na mão" onClick={function(){ setResEdit(it.id); setResTxt(it.resumo||""); }}
-                    style={{background:"transparent",border:"none",padding:2,color:"#8b5cf6",cursor:"pointer",display:"inline-flex"}}><Ico n="edit" size={12}/></button>}
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                  <span style={{color:"#6d28d9",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flex:1,minWidth:0}}>O que a IA entendeu — é isso que vai pro cérebro</span>
+                  {isAdmin&&resEdit!==it.id&&resGerando!==it.id&&<button type="button" onClick={function(e){ e.stopPropagation(); setResEdit(it.id); setResTxt(it.resumo||""); }}
+                    style={{background:"#fff",border:"1px solid #ddd6fe",borderRadius:8,padding:"4px 11px",color:"#6d28d9",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}><Ico n="edit" size={11}/>Editar</button>}
                   {isAdmin&&resEdit!==it.id&&<button type="button" title="Pedir pra IA escrever de novo" disabled={resGerando===it.id}
-                    onClick={function(){ gerarResumo(it.id, _conteudoDe(it.regra, (Array.isArray(it.anexos)?it.anexos:[]).map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean))); }}
-                    style={{background:"transparent",border:"none",padding:2,color:"#8b5cf6",cursor:resGerando===it.id?"default":"pointer",fontSize:12,fontWeight:800}}>↻</button>}
+                    onClick={function(e){ e.stopPropagation(); gerarResumo(it.id, _conteudoDe(it.regra, (Array.isArray(it.anexos)?it.anexos:[]).map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean))); }}
+                    style={{background:"#fff",border:"1px solid #ddd6fe",borderRadius:8,padding:"4px 11px",color:"#6d28d9",fontSize:11,fontWeight:800,cursor:resGerando===it.id?"default":"pointer",fontFamily:"inherit"}}>↻ Refazer</button>}
                 </div>
                 {resGerando===it.id&&<div style={{color:"#f97316",fontSize:11.5,fontWeight:700}}>a IA está escrevendo o que entendeu…</div>}
                 {resEdit===it.id
                   ? <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      <_PbAutoTextarea value={resTxt} onChange={function(e){setResTxt(e.target.value);}} rows={4}
-                        style={{border:"1px solid #ddd6fe",borderRadius:8,padding:"8px 10px",fontSize:12,fontFamily:"inherit",lineHeight:1.55,width:"100%",boxSizing:"border-box",background:"#fff",outline:"none",minHeight:80,overflow:"hidden",resize:"none"}}/>
+                      <textarea value={resTxt} onChange={function(e){setResTxt(e.target.value);}} rows={Math.max(5,String(resTxt||"").split("\n").length+1)} autoFocus
+                        style={{border:"1px solid #ddd6fe",borderRadius:8,padding:"8px 10px",fontSize:12,fontFamily:"inherit",lineHeight:1.55,width:"100%",boxSizing:"border-box",background:"#fff",outline:"none",resize:"vertical"}}/>
                       <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
                         <button type="button" onClick={function(){setResEdit(null);}} style={{background:"transparent",border:"1px solid #ddd6fe",borderRadius:8,padding:"5px 11px",color:"#64748b",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
                         <button type="button" onClick={function(){salvarResumo(it.id,resTxt);}} style={{background:"#6d28d9",border:"none",borderRadius:8,padding:"5px 13px",color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Salvar entendimento</button>
                       </div>
                     </div>
-                  : (resGerando!==it.id&&it.resumo&&<div style={{color:"#3b2a63",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{it.resumo}</div>)}
+                  : (resGerando!==it.id&&it.resumo&&<div title={isAdmin?"Clique pra editar o entendimento":undefined}
+                      onClick={isAdmin?function(){ setResEdit(it.id); setResTxt(it.resumo||""); }:undefined}
+                      style={{color:"#3b2a63",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap",cursor:isAdmin?"text":"default",borderRadius:6}}
+                      onMouseEnter={isAdmin?function(ev){ev.currentTarget.style.background="#ede9fe";}:undefined}
+                      onMouseLeave={isAdmin?function(ev){ev.currentTarget.style.background="transparent";}:undefined}>{it.resumo}</div>)}
               </div>}
               {isAdmin&&!it.resumo&&resGerando!==it.id&&resEdit!==it.id&&Array.isArray(it.anexos)&&it.anexos.some(function(a){return a.transcricao;})&&
                 <button type="button" onClick={function(){ gerarResumo(it.id, _conteudoDe(it.regra, it.anexos.map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean))); }}
