@@ -146907,6 +146907,30 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     const ach = _eaCidadeDoCard(task, copy, opsCid);
     if(ach.cidade){ copy.cidade = ach.cidade; avisos.push("cidade lida do " + ach.origem + ": " + ach.cidade); }
   }
+  /* (09/10, Gustavo: "sem briefing nem cidade, RECUSE") trava dura: sem o essencial, a arte sairia com o
+     texto e a cidade do TEMPLATE — melhor parar e pedir o briefing. */
+  if(fotoObra && (!copy.cidade || !copy.frase)){
+    const fx = []; if(!copy.cidade) fx.push("a cidade (• Pin no mapa)"); if(!copy.frase) fx.push("a frase (• FRASE NA ARTE)");
+    throw new Error("Não gero sem briefing: falta " + fx.join(" e ") + " no card.");
+  }
+  if(!fotoObra && !(copy.titulo || copy.texto || copy.frase)) throw new Error("Não gero sem briefing: o card não tem título nem texto da arte.");
+  /* (09/10, Gustavo: "se tá Paraguay marcado, a copy será em ESPANHOL") traduz a copy da arte pro
+     espanhol do Paraguai antes de entrar no template (se já estiver em espanhol, a IA devolve igual). */
+  if(/paragua/i.test(unid) && typeof askGPTBlocos === "function"){
+    passo("traduzindo a copy pro espanhol…");
+    try{
+      const campos = {}; ["titulo","frase","texto"].forEach(function(k){ if(copy[k]) campos[k] = String(copy[k]); });
+      if(Object.keys(campos).length){
+        const rT = await askGPTBlocos({ max_tokens:700, reasoning_effort:"low", origem:"arte_traducao", card:task.id,
+          system:'Traduza os campos recebidos para espanhol do Paraguai (es-PY), tom comercial do agronegócio. Mantenha siglas (ETE, ETA, PEAD, PVC), nomes próprios e a marca Bioter. Campo que já estiver em espanhol volta igual. Responda SÓ um JSON com os MESMOS campos recebidos.',
+          messages:[{ role:"user", content:JSON.stringify(campos) }] });
+        const mT = ((rT.content && rT.content[0] && rT.content[0].text) || "").replace(/```json|```/g, "").match(/\{[\s\S]*\}/);
+        if(mT){ const jT = JSON.parse(mT[0]); let mudou = false;
+          Object.keys(campos).forEach(function(k){ if(jT[k] && String(jT[k]).trim() && String(jT[k]).trim() !== campos[k]){ copy[k] = String(jT[k]).trim(); mudou = true; } });
+          if(mudou) avisos.push("unidade Paraguay: copy da arte traduzida pro espanhol"); }
+      }
+    }catch(e){ avisos.push("não consegui traduzir a copy pro espanhol (" + _eaErro(e) + ") — entrou como está no briefing"); }
+  }
   // produtos do Playbook (pra saber o que vai em negrito na frase)
   let produtosCtx = []; try{ const it = await pxInteligenciaDesign(task.client, unid); produtosCtx = (it.produtos || []).map(function(p){ return { nome:p.nome, aliases:[p.nome] }; }); }catch(_){ }
   /* (08/10, Gustavo: "não achei onde aparece o custo de cada arte") o projeto é criado/reaproveitado ANTES da foto,
@@ -147096,7 +147120,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
   // (08/10, Gustavo: "a porcentagem continua sem progredir") cada passo tem um alvo de % e, entre um passo e outro
   // (a IA da foto demora ~1 min), a barra segue andando devagar até um teto — nunca fica parada
   const _pctDoPasso = function(m){ m = String(m || "");
-    if(/abrindo/.test(m)) return 6; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
+    if(/abrindo/.test(m)) return 6; if(/traduzindo/.test(m)) return 12; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
     if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
     if(/completando|limpando/.test(m)) return 56; if(/salvando/.test(m)) return 86; return null; };
   const setPassoPct = function(m){ setPasso(m);
@@ -147122,8 +147146,16 @@ function PxGerarArteModal({ task, setTasks, onClose }){
   }, [task.id]);
   const copy = _eaSecoesCopy(task.desc || task.description || ""), fotos = _eaFotosDoCard(task);
   if(!copy.cidade){ try{ const a = _eaCidadeDoCard(task, copy, []); if(a.cidade) copy.cidade = a.cidade + " (" + a.origem + ")"; }catch(_){ } }   // (08/10) cidade lida do briefing/título/arquivos
+  /* (09/10, Gustavo: "quando não tem briefing nem cidade, RECUSE a fazer — precisa dessas informações")
+     sem o essencial do briefing, não gera: a arte sairia com o texto e a cidade do template, errados. */
+  const _tipoAqui = _eaTipoCardDoTask(task);
+  const faltandoGerar = (_tipoAqui === "foto_obra"
+    ? [[!copy.cidade, "a cidade (• Pin no mapa)"], [!copy.frase, "a frase (• FRASE NA ARTE)"]]
+    : [[!(copy.titulo || copy.texto || copy.frase), "o título ou o texto da arte"]]
+  ).filter(function(x){ return x[0]; }).map(function(x){ return x[1]; });
   const gerar = async function(m){
     m = m || (modelos || []).find(function(x){ return x.id === sel; }); if(!m) return;
+    if(faltandoGerar.length){ setErro("Não gero sem briefing: falta " + faltandoGerar.join(" e ") + ". Preenche no card e clica em Gerar arte de novo."); return; }
     setErro("");
     try{
       const r = await pxGerarArteDoModelo(task, m, setTasks, setPassoPct);
@@ -147132,7 +147164,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
       onClose(true);
     }catch(e){ setErro(_eaErro(e)); setPasso(""); setPct(0); tetoRef.current = 0; setAuto(null); }
   };
-  useEffect(function(){ if(auto && !rodouRef.current){ rodouRef.current = true; gerar(auto); } }, [auto]);
+  useEffect(function(){ if(auto && !rodouRef.current && !faltandoGerar.length){ rodouRef.current = true; gerar(auto); } }, [auto]);
   /* (08/10, Gustavo: "esse box tá horroroso e velho, moderniza — fontes grandes nada a ver") layout novo:
      compacto, tipografia pequena, chips no cabeçalho, checklist em linhas com ponto de status e rodapé com spinner. */
   const fotoObra = tipo === "foto_obra";
@@ -147185,6 +147217,8 @@ function PxGerarArteModal({ task, setTasks, onClose }){
               <div style={{fontSize:10,color:_EA.fraco}}>{_eaRotuloTipoCard(m.tipo_card || "arte")}{m.padrao ? " · padrão" : ""}{m.client_id ? "" : " · todos"}</div>
             </button>; })}
           </div></div>}
+      {faltandoGerar.length > 0 && !erro && <div style={{margin:"12px 14px 0",padding:"9px 12px",borderRadius:12,background:_EA.amareloClaro,border:"1px solid #fde68a",color:_EA.amarelo,fontSize:12,lineHeight:1.5}}>
+        Falta no briefing: <b>{faltandoGerar.join(" e ")}</b>. Sem isso a arte sairia com o texto do template — preenche o briefing do card e tenta de novo.</div>}
       {erro && <div style={{margin:"12px 14px 0",padding:"9px 12px",borderRadius:12,background:_EA.vermClaro,color:_EA.verm,fontSize:12,lineHeight:1.5}}>{erro}</div>}
       <div style={{padding:"14px 18px 16px"}}>
         {passo ? <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -147199,7 +147233,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
         </div>
         : <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center"}}>
           <button onClick={function(){ onClose(false); }} style={{font:"inherit",padding:"8px 14px",borderRadius:10,border:0,background:_EA.linha2,color:_EA.texto,cursor:"pointer",fontWeight:600,fontSize:12.5}}>Cancelar</button>
-          {!auto && <button disabled={!sel} onClick={function(){ gerar(); }} style={{font:"inherit",padding:"8px 16px",borderRadius:10,border:0,background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:12.5,boxShadow:"0 6px 14px rgba(124,58,237,.25)",opacity:!sel?.55:1}}>Gerar arte</button>}
+          {(!auto || faltandoGerar.length > 0) && <button disabled={faltandoGerar.length > 0 || (!auto && !sel)} onClick={function(){ gerar(); }} title={faltandoGerar.length ? "Preenche o briefing primeiro" : ""} style={{font:"inherit",padding:"8px 16px",borderRadius:10,border:0,background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:12.5,boxShadow:"0 6px 14px rgba(124,58,237,.25)",opacity:(faltandoGerar.length > 0 || (!auto && !sel))?.55:1}}>Gerar arte</button>}
         </div>}
       </div>
     </div>
