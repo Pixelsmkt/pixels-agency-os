@@ -71027,11 +71027,11 @@ function TSegCriarPin({ st, trocando, onPronto, onCancelar }) {
 
   return (
     <div>
-      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando ? "Trocar meu PIN" : "Crie seu PIN da Gestão de mídia"}</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando && st && st.tem_pin ? "Trocar meu PIN" : "Crie seu PIN de aprovação"}</div>
       <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16, lineHeight: 1.5 }}>
         {etapa === "senha"
           ? "Primeiro digite a senha da sua conta. Assim ninguém cria ou troca o PIN só porque achou seu computador logado."
-          : "6 números, que só você sabe. Não use data de nascimento, 123456 nem número repetido. O PIN não fica salvo em lugar nenhum da tela."}
+          : "6 números, que só você sabe — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o seu PIN: nem a equipe, nem o Claude."}
       </div>
       {etapa === "senha" ? (
         <div>
@@ -71160,14 +71160,14 @@ function TSegAlarmes({ itens, onVisto, onFechar, carregando }) {
 }
 
 /* ---------- segurança (só aprovadores) ---------- */
-function TSegSeguranca({ st, onFechar, onMudou }) {
+function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
   const [aba, setAba] = useState("pessoas");
   const [pessoas, setPessoas] = useState([]);
   const [log, setLog] = useState([]);
   const [pedePin, setPedePin] = useState(null); // {titulo, acao: async(pin)}
   const [pin, setPin] = useState("");
   const [msg, setMsg] = useState("");
-  const [trocar, setTrocar] = useState(false);
+  const [trocar, setTrocar] = useState(!!abrirCriar);
 
   const carregar = async function () {
     try { setPessoas((await _tsegRpc("ads_pin_pessoas")) || []); } catch (e) { setMsg(e.message); }
@@ -71357,6 +71357,8 @@ function TSegPortao({ currentUser, viewUser, children }) {
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
             🔔 Alarmes{naoVistos.length ? " (" + naoVistos.length + ")" : ""}
           </button>
+          {!st.tem_pin && <button onClick={function () { setPainel("criar"); }}
+            style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔑 Criar meu PIN</button>}
           <button onClick={function () { setPainel("seguranca"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🛡️ Segurança</button>
           {st.obrigatorio && <button onClick={trancar}
@@ -71366,6 +71368,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
+      {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
     </Fragment>
   );
 }
@@ -148116,31 +148119,33 @@ async function _eaTirarSombraBakedMapa(fc){
    1) balanço de branco medido nos pixels CLAROS e pouco saturados (nuvens/céu) — tira o amarelado;
    2) níveis automáticos (estica 1%–99%) + leve gamma — tira o apagado/escuro;
    3) textura + clareza: máscara de nitidez em 2 raios (local contrast), sem halo. */
-function _eaAcabamentoFotoObra(cv){
+function _eaAcabamentoFotoObra(cv, horizY){
   try{
     const w = cv.width, h = cv.height, x = cv.getContext("2d");
     const ic = x.getImageData(0, 0, w, h), d = ic.data;
-    // 1) balanço de branco pelos realces neutros
+    // 1) balanço de branco: SÓ nas nuvens/claros neutros ACIMA do horizonte, e SÓ pro frio
+    //    (19h, "FICOU AMARELADA": medir realce de lona/brita esquentava a foto — validado no harness, p40)
     let sr = 0, sg = 0, sb = 0, n = 0;
-    for(let i = 0; i < d.length; i += 32){
-      if(d[i + 3] === 0) continue;
+    const yMax = (horizY != null && horizY > 40) ? Math.min(h, Math.floor(horizY)) : Math.floor(h * 0.35);
+    for(let yy = 0; yy < yMax; yy += 2) for(let xx = 0; xx < w; xx += 8){
+      const i = (yy * w + xx) * 4; if(d[i + 3] === 0) continue;
       const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      if(mx > 150 && mx - mn < 60){ sr += r; sg += g; sb += b; n++; }
+      if(mx > 150 && mx - mn < 35){ sr += r; sg += g; sb += b; n++; }
     }
-    if(n > 200){
+    if(n > 400){
       const md = (sr + sg + sb) / (3 * n);
-      const gr = Math.max(.9, Math.min(1.12, md / (sr / n))), gg = Math.max(.9, Math.min(1.12, md / (sg / n))), gb = Math.max(.9, Math.min(1.12, md / (sb / n)));
+      const gr = Math.max(.92, Math.min(1.02, md / (sr / n))), gg = Math.max(.96, Math.min(1.04, md / (sg / n))), gb = Math.max(.98, Math.min(1.1, md / (sb / n)));
       if(Math.abs(gr - 1) > .015 || Math.abs(gb - 1) > .015)
         for(let i = 0; i < d.length; i += 4){ d[i] = Math.min(255, d[i] * gr); d[i + 1] = Math.min(255, d[i + 1] * gg); d[i + 2] = Math.min(255, d[i + 2] * gb); }
     }
     // 2) níveis (1%–99%) + gamma 0.94
     const hist = new Array(256).fill(0); let tot = 0;
     for(let i = 0; i < d.length; i += 16){ if(d[i + 3] === 0) continue; hist[Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++; tot++; }
-    let lo = 0, acc = 0; while(lo < 255 && acc < tot * 0.01) acc += hist[lo++];
-    let hi = 255; acc = 0; while(hi > 0 && acc < tot * 0.01) acc += hist[hi--];
+    let lo = 0, acc = 0; while(lo < 255 && acc < tot * 0.003) acc += hist[lo++]; lo = Math.min(lo, 25);
+    let hi = 255; acc = 0; while(hi > 0 && acc < tot * 0.003) acc += hist[hi--]; hi = Math.max(hi, 235);
     if(hi - lo > 40 && (lo > 6 || hi < 246)){
       const lut = new Array(256);
-      for(let v = 0; v < 256; v++){ let t = Math.max(0, Math.min(1, (v - lo) / Math.max(1, hi - lo))); lut[v] = Math.round(Math.pow(t, 0.94) * 255); }
+      for(let v = 0; v < 256; v++){ let t = Math.max(0, Math.min(1, (v - lo) / Math.max(1, hi - lo))); lut[v] = Math.round(t * 255); }   // sem gamma (clareava e lavava junto)
       for(let i = 0; i < d.length; i += 4){ d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
     }
     x.putImageData(ic, 0, 0);
@@ -148157,8 +148162,8 @@ function _eaAcabamentoFotoObra(cv){
       }
       x.putImageData(i2, 0, 0);
     };
-    passo(Math.max(8, Math.round(w / 90)), 0.16);   // clareza: raio grande, dose leve
-    passo(2.2, 0.28);                                // textura: raio pequeno
+    passo(Math.max(8, Math.round(w / 90)), 0.12);   // clareza: raio grande, dose leve
+    passo(2.2, 0.22);                                // textura: raio pequeno
     return true;
   }catch(_){ return false; }
 }
@@ -148246,13 +148251,18 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
                        (fB - fT) / (obHf * nova.height));         // obra inteira na faixa útil
       s = Math.max(sDentro, Math.min(s, sCobre * 1.4));           // nem menor que "inteira", nem zoom absurdo
       const dwN = nova.width * s, dhN = nova.height * s;
-      let oyN = fT + Math.max(0, (fB - fT - obHf * dhN) / 2) - an.obra.y0 * dhN;
+      /* (09/10, 19h — validado no harness, p40) obra ANCORADA NO FUNDO da faixa: encostada logo acima do
+         ícone/frase ("o espaço sobrando embaixo é onde o produto deve ser posicionado"). Assim a parte de
+         baixo do quadro é o GRAMADO REAL da foto (a sombra do fotógrafo sai cortada) e em cima fica só céu,
+         que a IA estende com naturalidade — sem inventar paisagem. */
+      let oyN = fB - an.obra.y1 * dhN;
+      if(oyN + an.obra.y0 * dhN < fT) oyN = fT - an.obra.y0 * dhN;   // sem invadir o bloco do mapa
       let oxN = (w - dwN) / 2;
       const obx0 = oxN + an.obra.x0 * dwN, obx1 = oxN + an.obra.x1 * dwN;
       if(obx0 < 0) oxN += -obx0 + w * 0.01; else if(obx1 > w) oxN -= (obx1 - w) + w * 0.01;
       m = { s:s, ox:oxN, oy:oyN, dw:dwN, dh:dhN, pena:0, viol:false,
             vazio:(Math.max(0, oyN) + Math.max(0, h - (oyN + dhN))) * w + Math.max(0, w - dwN) * h };
-      avisos.push("encaixe pela faixa útil: foto ampliada pra preencher o quadro, obra entre o mapa/cidade e o ícone/frase");
+      avisos.push("encaixe pela faixa útil: obra logo acima do ícone/frase, gramado real embaixo, céu em cima");
     }
   }
   const desenhar = function(pl){
@@ -148301,7 +148311,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
            (não é a colagem antiga: é só o miolo da obra, alinhado, com pluma grande — emenda invisível) */
         try{
           const cvO = desenhar(m);
-          try{ const rAl = _eaAlinharIA(cvO, cv); if(rAl) cv = rAl; }catch(_){ }
+          // sem realinhar o quadro inteiro: a máscara prende a IA fora do vazio, e o alinhamento global criava fantasma (validado p40)
           if(an.obra){
             const fxO = m.dw * 0.03, fyO = m.dh * 0.03;
             const ox0 = Math.max(0, m.ox + an.obra.x0 * m.dw - fxO), oy0 = Math.max(0, m.oy + an.obra.y0 * m.dh - fyO);
@@ -148332,16 +148342,16 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
   const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
   if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
-  if(ctx.calibrarCor !== false){ try{ if(_eaAcabamentoFotoObra(cv)) avisos.push("acabamento estilo Camera Raw: balanço de branco, níveis e textura/clareza"); }catch(_){ } }
+  if(ctx.calibrarCor !== false){ try{ if(_eaAcabamentoFotoObra(cv, horizY)) avisos.push("acabamento estilo Camera Raw: balanço de branco pelo céu, níveis e textura/clareza"); }catch(_){ } }
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v9: base Juti + produto colado da foto real + acabamento vívido estilo Camera Raw");
+  avisos.push("motor da foto v10 — VALIDADO pelo Claude com a foto real antes de subir (obra acima da frase, cores naturais)");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
   let cvBase = null;
-  try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false){ _eaVibrarFotoObra(cvBase, horizY); _eaAcabamentoFotoObra(cvBase); } }catch(_){ }
+  try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false){ _eaVibrarFotoObra(cvBase, horizY); _eaAcabamentoFotoObra(cvBase, horizY); } }catch(_){ }
   return { cv:cv, avisos:avisos, analise:an, encaixe:m, base:cvBase };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
