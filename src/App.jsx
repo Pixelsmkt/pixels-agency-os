@@ -147070,7 +147070,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra", card:card || undefined,
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 10) de caixas {"x0","y0","x1","y1","na_estrutura":true|false} com coisas que um cliente não deveria ver numa foto de entrega (na_estrutura = true SÓ quando a coisa está EM CIMA DA LONA/membrana da estrutura; qualquer objeto na terra, no cascalho, na margem ou na grama é na_estrutura:false — placas e blocos de CONCRETO BRANCO, bancadas, tábuas e caixas ao redor das lagoas são entulho na_estrutura:false e DEVEM ser marcados): entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora), a SOMBRA DO FOTÓGRAFO projetada no chão (marque a mancha INTEIRA com folga — braços e cabeça incluídos, sobrando margem de todos os lados) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, pessoas trabalhando, nem CONSTRUÇÕES e estruturas permanentes da paisagem (galpões, barracões, lagoas, cercas, postes, estradas ao fundo); [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -147662,7 +147662,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           icones.forEach(function(m){ if(cruza(ob, m)) pena += (Math.min(ob.y1, m.y1) - Math.max(ob.y0, m.y0)) * 3; });
           if(teto != null && ob.y0 < teto) pena += (teto - ob.y0) * 6;          // obra subindo pra faixa do mapa/cidade
           if(piso != null && ob.y1 > piso) pena += (ob.y1 - piso) * 6;          // obra descendo pra faixa do ícone/frase
-          /* (09/10, Gustavo: "a foto tinha 4 biodigestores e você mostrou 2") cortar a OBRA é quase proibido,
+            /* (09/10, Gustavo: "a foto tinha 4 biodigestores e você mostrou 2") cortar a OBRA é quase proibido,
              em QUALQUER lado — a obra inteira tem que caber no quadro (peso alto, inclusive nas laterais). */
           if(ob.y1 > h) pena += (ob.y1 - h) * 8; if(ob.y0 < 0) pena += -ob.y0 * 8;
           if(ob.x0 < 0) pena += -ob.x0 * 8; if(ob.x1 > w) pena += (ob.x1 - w) * 8;
@@ -147684,152 +147684,56 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
     return cv;
   };
   let cv = desenhar(m);
-  /* (09/10, Gustavo: "tá alterando totalmente a estrutura do biodigestor — não é pra alterar os produtos";
-     RECEITA VALIDADA no harness com a foto dos 4 biodigestores, ver pipe2.cjs):
-     1) o CÉU que falta em cima é estendido POR NÓS, deterministicamente — gradiente contínuo tirado da
-        própria borda da foto, coluna a coluna (emenda impossível; o gpt pintava céu de outro tom);
-     2) a IA (gpt-image, high) fica só com o que faz bem: completar o CHÃO de baixo e apagar entulho/sombra;
-     3) o resultado é REALINHADO (o gpt desloca/zoom 1–10%), tem a COR casada por canal com a original,
-        e a FOTO ORIGINAL é colada por cima de tudo que era pra manter, com pluma larga — produto intocado. */
-  if(m.oy > 0){
-    let _ceuOk = false;
-    try{ _ceuOk = await _eaCeuBonito(cv, Math.ceil(m.oy), w); if(_ceuOk) avisos.push("céu novo: azul da própria foto + nuvens bonitas (asset fixo, sem custo)"); }catch(_){ }
-    if(!_ceuOk){ try{ _eaEstenderCeu(cv, Math.ceil(m.oy), w); avisos.push("céu estendido a partir da própria foto (sem IA — gradiente contínuo)"); }catch(_){ } }
-  }
-  // laterais que o giro deixou vazias: repete a última coluna da própria foto (determinístico, sem IA)
-  try{
-    const xc0 = cv.getContext("2d"); const ic0 = xc0.getImageData(0, 0, w, h), d0 = ic0.data;
-    let mexeuLat = false;
-    for(let yy = 0; yy < h; yy++){
-      let first = -1, last = -1;
-      for(let xx = 0; xx < w; xx++){ if(d0[(yy * w + xx) * 4 + 3] > 0){ if(first < 0) first = xx; last = xx; } }
-      if(first < 0) continue;
-      for(let xx = 0; xx < first; xx++){ const i = (yy * w + xx) * 4, j = (yy * w + first) * 4; d0[i] = d0[j]; d0[i + 1] = d0[j + 1]; d0[i + 2] = d0[j + 2]; d0[i + 3] = 255; mexeuLat = true; }
-      for(let xx = last + 1; xx < w; xx++){ const i = (yy * w + xx) * 4, j = (yy * w + last) * 4; d0[i] = d0[j]; d0[i + 1] = d0[j + 1]; d0[i + 2] = d0[j + 2]; d0[i + 3] = 255; mexeuLat = true; }
-    }
-    if(mexeuLat) xc0.putImageData(ic0, 0, 0);
-  }catch(_){ }
-  // frestas VERTICAIS que o giro deixa entre o céu e a foto: desce coluna a coluna repetindo o último pixel opaco
-  try{
-    const xcV = cv.getContext("2d"); const icV = xcV.getImageData(0, 0, w, h), dV = icV.data;
-    const fimS = Math.max(0, Math.min(h, Math.ceil(m.oy + m.dh) - 5)); let mexeuV = false;
-    for(let xx = 0; xx < w; xx++){
-      let ult = -1;
-      for(let yy = 0; yy < fimS; yy++){
-        const i = (yy * w + xx) * 4;
-        if(dV[i + 3] > 0) ult = i;
-        else if(ult >= 0){ dV[i] = dV[ult]; dV[i + 1] = dV[ult + 1]; dV[i + 2] = dV[ult + 2]; dV[i + 3] = 255; mexeuV = true; }
-      }
-    }
-    if(mexeuV) xcV.putImageData(icV, 0, 0);
-  }catch(_){ }
-  const vazioBaixo = Math.max(0, h - (m.oy + m.dh)) * w;
-  const precisaCompletar = vazioBaixo > w * h * 0.005, temEntulho = (an.entulho || []).length > 0;
-  /* ENTULHO (09/10, Gustavo: "continua tudo remendado"): mancha PEQUENA some bem com clone da própria foto
-     (sem IA, sem custo), mas em área GRANDE — a sombra do fotógrafo — o espelho fica visível, parece remendo.
-     Área grande (> 1,2% da foto) vai pra IA num RECORTE LOCAL quadrado (sem o letterbox que causava o zoom):
-     ela apaga o objeto e pinta grama nova de verdade, e só o miolo volta pra arte, com pluma. */
-  if(temEntulho){
-    // folga proporcional: a visão costuma marcar a mancha um pouco menor que ela é (braços da sombra, bordas)
-    const cxs = an.entulho.map(function(c){
-      const fx = Math.max(w * 0.012, (c.x1 - c.x0) * m.dw * 0.25), fy = Math.max(w * 0.012, (c.y1 - c.y0) * m.dh * 0.25);
-      return { x:m.ox + c.x0 * m.dw - fx, y:m.oy + c.y0 * m.dh - fy, w:(c.x1 - c.x0) * m.dw + 2 * fx, h:(c.y1 - c.y0) * m.dh + 2 * fy };
-    });
-    const areaFoto = Math.max(1, m.dw * m.dh);
-    // mancha grande COLADA NA OBRA não vai pra IA: repintar a margem da lagoa criava um degradê falso —
-    // alterar a obra é o pecado maior, então ali fica como está (entulho de canteiro faz parte da cena)
-    /* (09/10, Gustavo: "você não removeu as coisas de concreto jogadas na cena") a trava antiga protegia
-       pelo RETÂNGULO da obra — que cobre a faixa inteira, margens incluídas, então blocos de concreto na
-       terra ficavam. Agora é a própria VISÃO que diz o que está EM CIMA da estrutura (na_estrutura): só
-       isso fica intocado; o resto (concreto, placas, entulho no chão ao redor) é limpo. */
-    const limpar = [], soLona = [];
-    cxs.forEach(function(c, k){ if((an.entulho[k] || {}).na_estrutura === true) soLona.push(c); else limpar.push(c); });
-    if(soLona.length) avisos.push(soLona.length + " mancha(s) em cima da própria lona ficaram como estão (mexer ali alteraria a obra)");
-    /* (09/10, 14:29 — "continua o erro de colagem") o CLONE borrava em cascalho/terra e deixava cara de
-       remendo. Agora TODA mancha marcada vai pra IA em recorte local (caixas vizinhas viram um recorte só);
-       o clone ficou apenas como reserva se a IA falhar. */
-    const grupos = _eaJuntarCaixas(limpar, Math.round(w * 0.05));
-    /* (09/10, validado nos testes p4/p8): em GRAMA o clone espelhado fica perfeito (textura rica em volta)
-       e a IA inventava solo errado; em TERRA/CASCALHO é o contrário — o clone borra e a IA pinta certinho.
-       Então o ANEL ao redor decide: verde/palha → clone; terra/cascalho → IA local. */
-    const xAn = cv.getContext("2d");
-    const _anel = function(c){ let r2 = 0, g2 = 0, b2 = 0, n2 = 0;
-      const am = function(ax, ay, aw2, ah2){ try{ const dd = xAn.getImageData(Math.max(0, Math.round(ax)), Math.max(0, Math.round(ay)), Math.max(2, Math.round(aw2)), Math.max(2, Math.round(ah2))).data;
-        for(let i = 0; i < dd.length; i += 16){ if(dd[i + 3] === 0) continue; r2 += dd[i]; g2 += dd[i + 1]; b2 += dd[i + 2]; n2++; } }catch(_){ } };
-      am(c.x, c.y - 16, c.w, 14); am(c.x, c.y + c.h + 2, c.w, 14); am(c.x - 16, c.y, 14, c.h); am(c.x + c.w + 2, c.y, 14, c.h);
-      return n2 ? { r:r2 / n2, g:g2 / n2, b:b2 / n2 } : null; };
-    let custoEnt = 0, nEnt = 0, nClone = 0;
-    for(const cg of grupos){
-      const an2 = _anel(cg);
-      const ehGrama = an2 && an2.g >= an2.r * 0.92 && an2.g > an2.b * 1.05;    // verde OU grama palha; terra/cascalho ficam de fora
-      if(ehGrama || !podeIA){
-        try{ if(_eaLimparEntulhoClone(cv, [cg])) nClone++; }catch(_){ }
-        continue;
-      }
-      try{
-        if(typeof ctx.passo === "function"){ try{ ctx.passo("apagando entulho/concreto com IA (" + (nEnt + 1) + ")…"); }catch(_){ } }
-        const cIA = await _eaLimparEntulhoIA(cv, cg, { topo:m.oy, fimF:m.oy + m.dh, obraTipo:an.obraTipo, client:ctx.client, projeto:ctx.projeto });
-        nEnt++; if(cIA) custoEnt += Number(cIA) || 0;
-      }catch(e){
-        try{ _eaLimparEntulhoClone(cv, [cg]); nClone++; avisos.push("IA de uma área falhou (" + _eaErro(e) + ") — entrou clone da própria foto"); }catch(_){ }
-      }
-    }
-    if(nEnt) avisos.push("entulho/concreto apagados com IA em " + nEnt + " recorte(s) de terra/cascalho" + (custoEnt ? " · R$ " + custoEnt.toFixed(2) : ""));
-    if(nClone) avisos.push("sombra/mancha na grama limpa por clone da própria grama em " + nClone + " área(s) (sem IA)");
-  }
-  if(podeIA && precisaCompletar){
+  const precisaCompletar = m.vazio > w * h * 0.005, temEntulho = (an.entulho || []).length > 0;
+  if(podeIA && (precisaCompletar || temEntulho)){
     try{
-      /* (09/10, Gustavo: "parece uma colagem por cima da outra") a IA agora recebe só um RECORTE da banda de
-         baixo (o vazio + ~320px de foto de contexto), cortado pra casar com a proporção 3:2 do gpt-image
-         (1536×1024) — sem o letterbox gigante da arte 9:16 inteira, que fazia o gpt devolver tudo com até 10%
-         de zoom e espalhar resíduo deslocado pela foto. O resto da arte nem passa pela IA. */
-      const fimF = m.oy + m.dh;
-      const hIdeal = Math.round(w / 1.5);                                       // 1080 → 720: encaixe EXATO no 1536×1024
-      const y0R = Math.max(0, Math.round(Math.min(fimF - 320, h - hIdeal)));
-      const hR = h - y0R;
-      // recorte SEM transparência (o gpt reenquadra quando vê vazio): espelho do chão cobre o vazio, foto por cima
-      const Rec = document.createElement("canvas"); Rec.width = w; Rec.height = hR; const rx2 = Rec.getContext("2d");
-      const altV = Math.ceil(h - fimF);
-      if(altV > 0){ rx2.save(); rx2.translate(0, fimF - y0R); rx2.scale(1, -1); rx2.drawImage(cv, 0, fimF - altV, w, altV, 0, -altV, w, altV); rx2.restore(); }
-      rx2.drawImage(cv, 0, y0R, w, hR, 0, 0, w, hR);
-      // máscara do recorte: transparente SÓ onde não tem foto (o vazio de baixo) — ali a IA pode pintar
-      const MR = document.createElement("canvas"); MR.width = w; MR.height = hR; const mrx = MR.getContext("2d");
-      mrx.fillStyle = "#000"; mrx.fillRect(0, 0, w, hR);
-      mrx.globalCompositeOperation = "destination-in"; mrx.drawImage(cv, 0, y0R, w, hR, 0, 0, w, hR);
-      const prompt = "Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + ". A faixa de BAIXO da imagem está preenchida com um reflexo provisório: REDESENHE só ela continuando o terreno de verdade (grama/areia/vegetação) — nítida, com textura fotográfica real, na mesma luz, cor e perspectiva do terreno de cima. Proibido deixar qualquer região borrada, nebulosa ou desfocada. Todo o resto permanece idêntico, mesma textura e mesmo brilho. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.";
-      if(typeof ctx.passo === "function"){ try{ ctx.passo("completando o terreno com IA…"); }catch(_){ } }
-      const r = await _eaFotoIA(Rec, MR, prompt, ctx.client, ctx.projeto);
+      // máscara: transparente onde a IA pode mexer (o que falta da foto + caixas de entulho); o resto (a obra) fica intacto
+      const M = document.createElement("canvas"); M.width = w; M.height = h; const mx = M.getContext("2d");
+      mx.fillStyle = "#000"; mx.fillRect(0, 0, w, h);
+      mx.globalCompositeOperation = "destination-in"; mx.drawImage(cv, 0, 0);                   // onde não tem foto → transparente
+      mx.globalCompositeOperation = "destination-out";
+      (an.entulho || []).forEach(function(c){ const f = w * 0.012; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
+      /* (09/10, testado de verdade pelo Claude com a foto de Juti — ver pipe.cjs) RECEITA QUE FUNCIONA:
+         1) a imagem vai SEM transparência (o gpt-image reenquadra quando vê área vazia);
+         2) o preenchimento provisório das faixas é ESPELHAMENTO NÍTIDO da própria foto — o fundo borrado de
+            antes fazia a IA devolver neblina/borrão (era a "mancha" que o Gustavo via);
+         3) prompt proíbe borrão e manda textura fotográfica real;  4) qualidade high no _eaFotoIA. */
+      const E = document.createElement("canvas"); E.width = w; E.height = h; const ex2 = E.getContext("2d");
+      const sFundo = Math.max(w / nova.width, h / nova.height) * 1.04;
+      ex2.drawImage(nova, (w - nova.width * sFundo) / 2, (h - nova.height * sFundo) / 2, nova.width * sFundo, nova.height * sFundo);   // cobre cantos (giro)
+      if(m.oy > 0){ const alt = Math.ceil(m.oy); ex2.save(); ex2.translate(0, m.oy); ex2.scale(1, -1); ex2.drawImage(cv, 0, m.oy, w, alt, 0, 0, w, alt); ex2.restore(); }
+      const fimF = m.oy + m.dh; if(fimF < h){ const alt = Math.ceil(h - fimF); ex2.save(); ex2.translate(0, fimF); ex2.scale(1, -1); ex2.drawImage(cv, 0, fimF - alt, w, alt, 0, -alt, w, alt); ex2.restore(); }
+      ex2.drawImage(cv, 0, 0);
+      const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
+      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade — mais céu com nuvens em cima, mais terreno (areia/grama/vegetação) embaixo — nítidas, com textura fotográfica real, na mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
+      if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
+      partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
+      if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
+      let r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
       if(r){
-        const custoIA = r.__custo;
-        // referência do alinhamento/cor: o recorte SÓ com a foto real (sem o espelho provisório)
-        const RecFoto = document.createElement("canvas"); RecFoto.width = w; RecFoto.height = hR;
-        RecFoto.getContext("2d").drawImage(cv, 0, y0R, w, hR, 0, 0, w, hR);
-        const rA = _eaAlinharIA(RecFoto, r);                                    // desfaz deslocamento/zoom residual do gpt
-        if(rA.__ajuste) avisos.push("banda da IA realinhada (" + (rA.__ajuste.s !== 1 ? "zoom " + Math.round((rA.__ajuste.s - 1) * 100) + "% · " : "") + rA.__ajuste.dx + "," + rA.__ajuste.dy + " px)");
-        _eaCasarCor(RecFoto, rA);                                               // cor por canal igual à da foto
-        // cola de volta SÓ a banda do vazio, com pluma vertical subindo pela foto — o resto fica intacto
-        const K = document.createElement("canvas"); K.width = w; K.height = hR; const kx2 = K.getContext("2d");
-        kx2.drawImage(rA, 0, 0);
-        kx2.globalCompositeOperation = "destination-in";
-        const gv = kx2.createLinearGradient(0, (fimF - y0R) - 60, 0, Math.min(hR, (fimF - y0R) + 6));
-        gv.addColorStop(0, "rgba(255,255,255,0)"); gv.addColorStop(1, "rgba(255,255,255,1)");
-        kx2.fillStyle = gv; kx2.fillRect(0, 0, w, hR);
-        cv.getContext("2d").drawImage(K, 0, y0R);
-        avisos.push("terreno de baixo completado com IA só na banda final — o resto da arte nem passou pela IA");
-        if(custoIA) avisos.push("IA da foto: R$ " + Number(custoIA).toFixed(2));
+        /* (08/10, Gustavo: "continua super bugado, melhor voltar pra edição com IA como estava antes?") SIM:
+           a colagem parcial (original por cima do resultado) sempre mostrava remendos, porque o gpt-image
+           re-sintetiza a imagem com distorções locais — nem o realinhamento resolve 100%. A imagem final volta
+           a ser a QUE A IA DEVOLVE, inteira e sem emendas. O que fica dos outros consertos: foto inteira sem
+           zoom, entrada opaca (menos distorção), luz casada com a original e prompt mandando preservar a obra. */
+        const gLuz = _eaCasarLuz(cv, r);
+        cv = r;
+        if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA");
+        if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)");
+        if(gLuz > 1.03) avisos.push("a edição da IA escureceu a foto — luz original recuperada (+" + Math.round((gLuz - 1) * 100) + "%)");
+        if(r.__custo) avisos.push("IA da foto: R$ " + Number(r.__custo).toFixed(2));
       }
     }catch(e){
-      avisos.push("IA da foto não rodou (" + _eaErro(e) + ") — a foto entrou cobrindo o espaço, sem completar");
-      m = procurar(false); cv = desenhar(m);
+      avisos.push("IA da foto não rodou (" + _eaErro(e) + ")" + (precisaCompletar ? " — a foto entrou cobrindo o espaço, sem completar" : ""));
+      if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
     }
-  } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }   // sem IA: cobre o espaço (não tem quem complete o chão)
+  } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
   const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
   if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
-  // carimbo de versão do motor (09/10): aparece no histórico do card — é como a gente confere se o
-  // navegador rodou o código NOVO ou um bundle velho em cache (stale bundle já enganou o teste 4+ vezes)
-  avisos.push("motor da foto v7 (toda mancha marcada vai pra IA em recorte local · mapa num tom só, o claro)");
+  // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
+  avisos.push("motor da foto: o MESMO da última arte de Juti (a IA devolve a foto inteira, sem emendas) + mapa num tom só");
   return { cv:cv, avisos:avisos, analise:an, encaixe:m };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
