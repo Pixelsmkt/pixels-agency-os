@@ -147573,7 +147573,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra", card:card || undefined,
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -147717,12 +147717,12 @@ function _eaVibrarFotoObra(cv, horizonteY){
       if(delta > 0){ if(mx === r) hue = 60 * (((g - b) / delta) % 6); else if(mx === g) hue = 60 * ((b - r) / delta + 2); else hue = 60 * ((r - g) / delta + 4); if(hue < 0) hue += 360; }
       const y = Math.floor(px / w);
       let ganho = 1 + (0.10 + 0.16 * (1 - sat)) * forca;                       // vibrance geral
-      if(hue >= 65 && hue <= 170) ganho *= 1 + 0.2 * forca;                    // vegetação ("vibrar mais o verde", 09/10)
+      if(hue >= 65 && hue <= 170) ganho *= 1 + 0.32 * forca;                   // vegetação (20:17, Gustavo: "mais vibratilidade de verdes")
       let alvoHue = hue;
       if(y < hy && hue >= 180 && hue <= 260 && sat > 0.06){ ganho *= 1 + 0.14 * forca; alvoHue = hue + (212 - hue) * 0.22 * forca; }   // céu: azul mais rico
       sat = Math.min(1, sat * ganho);
       let v2 = Math.min(1, Math.max(0, 0.5 + (v - 0.5) * (1 + 0.03 * forca)));   // contraste bem leve (08/10: o 0.05 escurecia demais a lona/área escura)
-      v2 = Math.min(1, v2 * (1 + 0.05 * forca));                                 // luz ("mais luminosidade", 09/10) — a foto fica viva, nunca mais escura
+      v2 = Math.min(1, v2 * (1 + 0.10 * forca));                                 // luz (20:17, Gustavo: "ainda sinto ela escura") — nunca mais escura que a original
       // HSV → RGB
       const c = v2 * sat, hh = ((alvoHue % 360) + 360) % 360 / 60, xx = c * (1 - Math.abs(hh % 2 - 1)), m = v2 - c;
       let rr = 0, gg = 0, bb = 0;
@@ -148185,7 +148185,12 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   const nova = await _eaCarregarImg(url);
   /* (08/10, Gustavo: "a borda superior da obra continua deitada pra esquerda — alinhar em linha reta horizontal")
      o giro alinha pela BORDA DE CIMA DA OBRA (é ela que faz a foto parecer torta); sem essa medida, vale o horizonte */
-  const giro = (an.borda != null && isFinite(an.borda)) ? an.borda : (an.inclinacao || 0);
+  /* (20:17, Gustavo, cisterna: "faltou ajustar a linha do horizonte numa linha reta") a borda da obra só
+     manda quando está MAIS torta que o horizonte (lagoa de borda reta); numa cúpula/cisterna a borda é curva
+     e devolvia ~0, deixando o horizonte inclinado — agora vale o maior desvio dos dois. */
+  const _bOk = (an.borda != null && isFinite(an.borda)) ? an.borda : null;
+  const _iOk = (an.inclinacao != null && isFinite(an.inclinacao)) ? an.inclinacao : 0;
+  const giro = (_bOk != null && Math.abs(_bOk) >= Math.abs(_iOk)) ? _bOk : _iOk;
   const ang = -giro * Math.PI / 180;
   const folga = 1 + Math.abs(Math.sin(ang)) * 1.4;                         // zoom extra pra não sobrar canto vazio depois de girar
   const sCobre = Math.max(w / nova.width, h / nova.height) * folga;
@@ -148197,8 +148202,12 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   const procurar = function(podeEncolher){
     let melhor = null;
     // a foto NUNCA fica menor que sDentro (inteira na largura/altura): encolher além disso não ajuda em nada
+    /* (09/10 20:17, Gustavo, cisterna de Campos Novos: "você deu zoom, mas NÃO é pra dar zoom — é pra usar
+       toda a imagem lateralmente, ou o máximo possível, e preencher o céu e a terra com IA") com IA
+       disponível a escala é UMA só: a foto inteira (sDentro) — o custo de vazio preferia o zoom e cortava
+       as laterais. Sem IA continua valendo cobrir o espaço (não tem quem complete o vazio). */
     const escalas = podeEncolher ? [sDentro] : [];
-    for(let zi = (podeEncolher ? -4 : 0); zi <= 8; zi++){ const s0 = sCobre * (1 + zi * 0.1); escalas.push(podeEncolher ? Math.max(sDentro, s0) : s0); }
+    if(!podeEncolher) for(let zi = 0; zi <= 8; zi++) escalas.push(sCobre * (1 + zi * 0.1));
     for(const s of escalas){
       const dw = nova.width * s, dh = nova.height * s;
       const ox = (w - dw) / 2;
@@ -148304,7 +148313,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto: Juti das 18:19 restaurado + só o acabamento de cor (saturação/iluminação/céu) por cima");
+  avisos.push("motor da foto: Juti aprovado + cor (verdes e luz reforçados) · sem zoom lateral · horizonte reto");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
