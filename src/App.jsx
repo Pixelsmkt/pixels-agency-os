@@ -86371,20 +86371,40 @@ async function _prodWhisper(onProgress){
   window.__pxProdWhisper = pipe;
   return pipe;
 }
+/* onProgress(msg, pct) — pct 0..100 (null = sem como medir essa fase).
+   (09/10, Gustavo: "faz um tempão que tá em Extraindo o áudio, não tem uma barra de progresso")
+   A transcrição agora roda em PEDAÇOS de 30s tocados por nós: a cada pedaço a barra anda de verdade
+   ("transcrevendo… 12 de 38 min"). A extração do áudio do vídeo é uma chamada única do navegador
+   (sem progresso possível), então ela avisa o tamanho e quanto costuma demorar. */
 async function _prodTranscrever(file, onProgress){
-  const pipe = await _prodWhisper(onProgress);
-  if(onProgress) onProgress("extraindo o áudio…");
+  const diz=function(m,p){ if(onProgress) onProgress(m, p==null?null:Math.max(0,Math.min(100,Math.round(p)))); };
+  const pipe = await _prodWhisper(function(m){ const mm=String(m||"" ); const pm=mm.match(/(\d+)%/); diz(mm, pm?Number(pm[1])*0.10:2); });
+  const mb = Math.round((file.size||0)/1024/1024);
+  diz("extraindo o áudio do "+(_prodEhVideo(file.name,file.type)?"vídeo":"arquivo")+" ("+mb+" MB — essa parte o navegador faz de uma vez, sem % · ~"+Math.max(1,Math.ceil(mb/80))+" min)…", 12);
   const ab = await file.arrayBuffer();
   const AC = window.AudioContext||window.webkitAudioContext; const ac = new AC();
-  const buf = await ac.decodeAudioData(ab);
+  let buf;
+  try{ buf = await ac.decodeAudioData(ab); }
+  catch(e){ try{ ac.close(); }catch(_){ } throw new Error("o navegador não conseguiu extrair o áudio deste formato ("+String(file.name||"").split(".").pop()+") — converta pra .mp4 ou .mp3 e suba de novo"); }
   let audio = buf.getChannelData(0);
   if(buf.numberOfChannels>1){ const a=buf.getChannelData(0), b=buf.getChannelData(1); const m=new Float32Array(a.length); for(let i=0;i<a.length;i++) m[i]=(a[i]+b[i])/2; audio=m; }
   if(buf.sampleRate!==16000){ const r=buf.sampleRate/16000, n=Math.floor(audio.length/r); const o=new Float32Array(n); for(let i=0;i<n;i++) o[i]=audio[Math.floor(i*r)]; audio=o; }
   try{ ac.close(); }catch(_){ }
-  const dur = audio.length/16000;
-  if(onProgress) onProgress("transcrevendo "+Math.round(dur/60)+" min de áudio… (leva um tempinho, pode seguir mexendo no app)");
-  const res = await pipe(audio, { chunk_length_s:30, stride_length_s:5, language:"portuguese", task:"transcribe" });
-  return ((res&&res.text)||"").trim();
+  const SR=16000, dur=audio.length/SR, minTot=Math.max(1,Math.round(dur/60));
+  // pedaços de 30s com 2s de sobra de cada lado (emenda não corta palavra); barra anda por pedaço
+  const PASSO=30*SR, SOBRA=2*SR, partes=[];
+  const n=Math.max(1,Math.ceil(audio.length/PASSO));
+  for(let i=0;i<n;i++){
+    const ini=Math.max(0,i*PASSO-SOBRA), fim=Math.min(audio.length,(i+1)*PASSO+SOBRA);
+    const feito=Math.round(i*30/60);
+    diz("transcrevendo… "+Math.min(feito,minTot)+" de "+minTot+" min (pode seguir mexendo no app)", 18+78*(i/n));
+    const res=await pipe(audio.subarray(ini,fim), { language:"portuguese", task:"transcribe" });
+    const t=((res&&res.text)||"").trim();
+    if(t) partes.push(t);
+    await new Promise(function(r){ setTimeout(r,0); });                      // respiro pra UI atualizar
+  }
+  diz("finalizando…", 98);
+  return partes.join(" ").replace(/\s+/g," ").trim();
 }
 function _prodLerTexto(file){
   return new Promise(function(res){
@@ -86513,12 +86533,28 @@ function _ProdUploadBox({label,hint,onFiles,canEdit,busy}){
     <div style={{color:_PRD.SOFT,fontSize:11.5,marginTop:4}}>{hint}</div>
   </div>;
 }
-function _ProdArquivoLinha({m,canEdit,onRemover,aviso}){
+function _ProdArquivoLinha({m,canEdit,onRemover,aviso,prog}){
   return <div style={{display:"flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"9px 12px"}}>
     {typeof _PxIco==="function"&&<_PxIco n={_prodEhImagem(m.name,m.type)?"layout":_prodEhAudio(m.name,m.type)?"mic":"clipboard"} size={16} color={_PRD.PX_DK}/>}
     <div style={{flex:1,minWidth:0}}>
       <a href={m.url} target="_blank" rel="noreferrer" style={{color:_PRD.INK,fontWeight:700,fontSize:12.5,textDecoration:"none",display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.name}</a>
-      <div style={{color:_PRD.SOFT,fontSize:10.5,marginTop:1}}>{_prodArqTam(m.size)+" · "+(m.addedBy||"")+" · "+_prodDataBR(String(m.addedAtIso||"").slice(0,10))+(aviso?(" · "+aviso):"")}</div>
+      <div style={{color:_PRD.SOFT,fontSize:10.5,marginTop:1}}>{_prodArqTam(m.size)+" · "+(m.addedBy||"")+" · "+_prodDataBR(String(m.addedAtIso||"").slice(0,10))+((!prog&&aviso)?(" · "+aviso):"")}</div>
+      {prog&&(function(){
+        const erro=/falhou|não saiu|não consegui/i.test(String(prog.msg||""));
+        if(erro) return <div style={{color:_PRD.BAD,fontSize:10.5,fontWeight:700,marginTop:4}}>{prog.msg}</div>;
+        return <div style={{marginTop:5}}>
+          <style>{"@keyframes prdPulsa{0%{background-position:0% 0}100%{background-position:200% 0}}"}</style>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{flex:1,height:5,borderRadius:99,background:"#efeaf8",overflow:"hidden"}}>
+              {prog.pct!=null
+                ?<div style={{width:prog.pct+"%",height:"100%",borderRadius:99,background:"linear-gradient(90deg,#a855f7,#7c3aed)",transition:"width .4s"}}/>
+                :<div style={{width:"100%",height:"100%",borderRadius:99,background:"linear-gradient(90deg,#e9d8fe,#a855f7,#e9d8fe)",backgroundSize:"200% 100%",animation:"prdPulsa 1.2s linear infinite"}}/>}
+            </div>
+            {prog.pct!=null&&<span style={{color:_PRD.PX_DK,fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{prog.pct}%</span>}
+          </div>
+          <div style={{color:_PRD.PX_DK,fontSize:10.5,fontWeight:700,marginTop:3}}>{prog.msg}</div>
+        </div>;
+      })()}
     </div>
     {m.texto&&<span style={{background:_PRD.OK_BG,color:_PRD.OK,fontSize:9.5,fontWeight:800,padding:"3px 8px",borderRadius:99,whiteSpace:"nowrap"}}>IA LÊ ✓</span>}
     {_prodEhImagem(m.name,m.type)&&<span style={{background:_PRD.PX_BG,color:_PRD.PX_DK,fontSize:9.5,fontWeight:800,padding:"3px 8px",borderRadius:99,whiteSpace:"nowrap"}}>IA VÊ ✓</span>}
@@ -86535,7 +86571,7 @@ function _ProdEtapaMateriais({p,set,canEdit,isMob}){
     // áudio e vídeo (gravação de reunião): transcreve AQUI MESMO, um por vez, e o texto vira material da IA
     for(const m of novos){
       if(!(_prodEhAudio(m.name,m.type)||_prodEhVideo(m.name,m.type))||!m.__file) continue;
-      const diz=function(s){ setTransc(function(t){ const n=Object.assign({},t); n[m.id]=s; return n; }); };
+      const diz=function(s,p){ setTransc(function(t){ const n=Object.assign({},t); n[m.id]=(s==null?null:{msg:s,pct:(p==null?null:p)}); return n; }); };
       try{
         const texto=await _prodTranscrever(m.__file, diz);
         if(texto){
@@ -86561,7 +86597,7 @@ function _ProdEtapaMateriais({p,set,canEdit,isMob}){
   const destrinchar=function(){
     if(gerando) return;
     if(!mats.length&&!(p.ideia&&p.ideia.descricao)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Suba algum material (ou preencha a Ideia) antes de destrinchar."); return; }
-    if(Object.keys(transc).some(function(k){return transc[k]&&!/falhou|não saiu/.test(String(transc[k]));})){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Ainda tem transcrição rodando — espere terminar pra IA ler a reunião também."); return; }
+    if(Object.keys(transc).some(function(k){return transc[k]&&!/falhou|não saiu/.test(String(transc[k].msg||""));})){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Ainda tem transcrição rodando — espere terminar pra IA ler a reunião também."); return; }
     setGerando(true);
     _prodDestrincharIA(p).then(function(j){
       set(function(cur){
@@ -86580,8 +86616,8 @@ function _ProdEtapaMateriais({p,set,canEdit,isMob}){
     <_PrdModHeader num={2} ico="folderkanban" title="Materiais do produto" subtitle="Jogue aqui tudo que explica o produto — gravação de reunião (áudio ou vídeo), briefings, anotações, prints. A IA transcreve, lê e CRIA o produto: preenche Ideia, Fases e Entregáveis e destrincha como ele funciona." done={mats.length>0||!!ia} isMob={isMob}/>
     <_ProdUploadBox label="Arraste arquivos aqui ou clique pra escolher" hint="Áudio e vídeo de reunião são transcritos aqui mesmo (no seu navegador, sem custo). Texto (.txt, .md) e imagens a IA lê direto. PDF/Word ficam guardados — pra IA ler, cole o conteúdo num .txt." onFiles={subir} canEdit={canEdit} busy={busy}/>
     {mats.length>0&&<div style={{display:"flex",flexDirection:"column",gap:7}}>
-      {mats.map(function(m){ return <_ProdArquivoLinha key={m.id||m.url} m={m} canEdit={canEdit}
-        aviso={transc[m.id]||((!m.texto&&!_prodEhImagem(m.name,m.type))?((_prodEhAudio(m.name,m.type)||_prodEhVideo(m.name,m.type))?"ainda sem transcrição — suba de novo pra transcrever":"a IA não lê este formato"):null)}
+      {mats.map(function(m){ return <_ProdArquivoLinha key={m.id||m.url} m={m} canEdit={canEdit} prog={transc[m.id]||null}
+        aviso={(!m.texto&&!_prodEhImagem(m.name,m.type))?((_prodEhAudio(m.name,m.type)||_prodEhVideo(m.name,m.type))?"ainda sem transcrição — suba de novo pra transcrever":"a IA não lê este formato"):null}
         onRemover={function(){ set(function(cur){ return Object.assign({},cur,{materiais:(cur.materiais||[]).filter(function(x){return (x.id||x.url)!==(m.id||m.url);})}); }); }}/>; })}
     </div>}
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
