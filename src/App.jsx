@@ -146357,7 +146357,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra", card:card || undefined,
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora), a SOMBRA DO FOTÓGRAFO projetada no chão (marque a mancha da sombra) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, pessoas trabalhando, nem CONSTRUÇÕES e estruturas permanentes da paisagem (galpões, barracões, lagoas, cercas, postes, estradas ao fundo); [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora), a SOMBRA DO FOTÓGRAFO projetada no chão (marque a mancha INTEIRA com folga — braços e cabeça incluídos, sobrando margem de todos os lados) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, pessoas trabalhando, nem CONSTRUÇÕES e estruturas permanentes da paisagem (galpões, barracões, lagoas, cercas, postes, estradas ao fundo); [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -146538,11 +146538,13 @@ function _eaEstenderCeu(cv, topo, w){
   for(let xx = 0; xx < w; xx++){ let r = 0, g = 0, b = 0, n = 0;
     for(let k = -120; k <= 120; k++){ const p = base[Math.max(0, Math.min(w - 1, xx + k))]; r += p[0]; g += p[1]; b += p[2]; n++; }
     suave[xx] = [r / n, g / n, b / n]; }
-  const alt = Math.min(cv.height, topo + 6);
+  const alt = Math.min(cv.height, topo + 160);
   const ic = x.getImageData(0, 0, w, alt), dc2 = ic.data;
   for(let yy = 0; yy < alt; yy++){
     const t = Math.max(0, (topo - yy) / Math.max(1, topo));
-    const mescla = yy > topo ? 0 : (yy > topo - 6 ? (topo - yy) / 6 : 1);        // 6px de fusão com a foto
+    // (09/10, Gustavo: "a linha da emenda do céu ainda aparece") fusão em RAMPA LONGA: da emenda pra baixo,
+    // 160px misturando o céu sintético com o céu real da foto — a transição some de vez
+    const mescla = yy >= topo ? Math.max(0, (topo + 160 - yy) / 160) : 1;
     for(let xx = 0; xx < w; xx++){
       const i = (yy * w + xx) * 4, p = suave[xx];
       const r = p[0] * (1 - 0.22 * t), g = p[1] * (1 - 0.16 * t), b = p[2] * (1 - 0.08 * t);
@@ -146627,6 +146629,119 @@ function _eaCasarLuz(ref, cv){
     xc.putImageData(ic, 0, 0);
     return g;
   }catch(_){ return 1; }
+}
+/* (09/10, Gustavo: "parece uma colagem por cima da outra") ENTULHO SEM IA: cada área marcada é coberta com um
+   CLONE espelhado da faixa vizinha da própria foto (logo abaixo, ou acima se não couber), com pluma macia na
+   borda — determinístico, nunca deforma a cena e custa zero. O gpt-image redesenhava a imagem INTEIRA e, quando
+   vinha com zoom/deslocamento, o buraco do entulho ficava com um pedaço deslocado da cena (o efeito "colagem").
+   Validado no harness (clone-test.cjs) com a foto dos 4 biodigestores. caixas = [{x,y,w,h}] em px do canvas. */
+function _eaLimparEntulhoClone(cv, caixas){
+  const x = cv.getContext("2d"), W = cv.width, H = cv.height; let n = 0;
+  const medir = function(sx, sy, sw, sh){                                       // cor média + cobertura opaca da faixa
+    try{ const d = x.getImageData(sx, sy, sw, sh).data; let r = 0, g = 0, b = 0, o = 0, t = 0;
+      for(let i = 0; i < d.length; i += 16){ t++; if(d[i + 3] > 0){ o++; r += d[i]; g += d[i + 1]; b += d[i + 2]; } }
+      return o ? { r:r / o, g:g / o, b:b / o, cob:o / Math.max(1, t) } : { r:0, g:0, b:0, cob:0 };
+    }catch(_){ return { r:0, g:0, b:0, cob:0 }; }
+  };
+  (caixas || []).forEach(function(c){
+    let bx = Math.max(0, Math.round(c.x)), by = Math.max(0, Math.round(c.y));
+    let bw = Math.min(W - bx, Math.round(c.w)), bh = Math.min(H - by, Math.round(c.h));
+    if(bw < 2 || bh < 2) return;
+    // encolhe a caixa pros limites OPACOS da foto (a sombra na borda de baixo ganhava pedaço fora da foto)
+    try{
+      const da = x.getImageData(bx, by, bw, bh).data;
+      let x0 = bw, x1 = -1, y0 = bh, y1 = -1;
+      for(let yy = 0; yy < bh; yy++) for(let xx = 0; xx < bw; xx++){
+        if(da[(yy * bw + xx) * 4 + 3] > 0){ if(xx < x0) x0 = xx; if(xx > x1) x1 = xx; if(yy < y0) y0 = yy; if(yy > y1) y1 = yy; }
+      }
+      if(x1 < 0) return;                                                        // caixa toda fora da foto
+      bx += x0; by += y0; bw = x1 - x0 + 1; bh = y1 - y0 + 1;
+      if(bw < 2 || bh < 2) return;
+    }catch(_){ }
+    /* fonte: faixa vizinha de mesmo tamanho (baixo, cima, esquerda ou direita), espelhada pra emenda casar.
+       Válida só se tem foto de verdade em TODA a faixa, e pontuada pela PIOR célula de uma grade 2×2 contra a
+       cor do entorno da mancha — na média a faixa de cima da sombra parecia grama, mas um canto era a borda
+       da lagoa e o clone trazia terra vermelha pro meio da grama. */
+    const borda = [];                                                           // anel ao redor da caixa (8px)
+    if(by >= 8) borda.push(medir(bx, by - 8, bw, 8));
+    if(by + bh + 8 <= H) borda.push(medir(bx, by + bh, bw, 8));
+    if(bx >= 8) borda.push(medir(bx - 8, by, 8, bh));
+    if(bx + bw + 8 <= W) borda.push(medir(bx + bw, by, 8, bh));
+    const anel = borda.filter(function(m2){ return m2.cob > 0.5; });
+    if(!anel.length) return;
+    const alvo = { r:anel.reduce(function(s, m2){ return s + m2.r; }, 0) / anel.length,
+                   g:anel.reduce(function(s, m2){ return s + m2.g; }, 0) / anel.length,
+                   b:anel.reduce(function(s, m2){ return s + m2.b; }, 0) / anel.length };
+    const nota = function(sx, sy){                                              // pior célula 2×2 da candidata
+      const cw = Math.max(1, Math.floor(bw / 2)), ch = Math.max(1, Math.floor(bh / 2));
+      let pior = 0;
+      for(let gy = 0; gy < 2; gy++) for(let gx = 0; gx < 2; gx++){
+        const m2 = medir(sx + gx * cw, sy + gy * ch, cw, ch);
+        if(m2.cob < 0.95) return null;
+        const d2 = Math.abs(m2.r - alvo.r) + Math.abs(m2.g - alvo.g) + Math.abs(m2.b - alvo.b);
+        if(d2 > pior) pior = d2;
+      }
+      return pior;
+    };
+    const cand = [];
+    if(by + bh + bh <= H) cand.push({ sx:bx, sy:by + bh, flipV:true });
+    if(by - bh >= 0) cand.push({ sx:bx, sy:by - bh, flipV:true });
+    if(bx - bw >= 0) cand.push({ sx:bx - bw, sy:by, flipH:true });
+    if(bx + bw + bw <= W) cand.push({ sx:bx + bw, sy:by, flipH:true });
+    let fonte = null;
+    cand.forEach(function(cd){
+      const dist = nota(cd.sx, cd.sy); if(dist == null) return;
+      if(!fonte || dist < fonte.dist){ fonte = { sx:cd.sx, sy:cd.sy, flipV:cd.flipV, flipH:cd.flipH, dist:dist }; }
+    });
+    if(!fonte || fonte.dist > 150) return;                                      // nenhuma vizinha parecida: melhor não mexer
+    const tmp = document.createElement("canvas"); tmp.width = bw; tmp.height = bh; const tx = tmp.getContext("2d");
+    tx.save();
+    if(fonte.flipV){ tx.scale(1, -1); tx.drawImage(cv, fonte.sx, fonte.sy, bw, bh, 0, -bh, bw, bh); }
+    else { tx.scale(-1, 1); tx.drawImage(cv, fonte.sx, fonte.sy, bw, bh, -bw, 0, bw, bh); }
+    tx.restore();
+    const f = Math.min(14, Math.floor(Math.min(bw, bh) / 3));                  // pluma: borda macia de até 14px
+    const msk = document.createElement("canvas"); msk.width = bw; msk.height = bh; const mx = msk.getContext("2d");
+    mx.fillStyle = "#fff"; mx.fillRect(f, f, bw - 2 * f, bh - 2 * f);
+    if(f > 1){                                                                  // borrão barato: encolhe e estica a máscara
+      const t2 = document.createElement("canvas"); t2.width = Math.max(2, Math.round(bw / f)); t2.height = Math.max(2, Math.round(bh / f));
+      t2.getContext("2d").drawImage(msk, 0, 0, t2.width, t2.height);
+      mx.clearRect(0, 0, bw, bh); mx.drawImage(t2, 0, 0, bw, bh);
+    }
+    tx.globalCompositeOperation = "destination-in"; tx.drawImage(msk, 0, 0);
+    x.drawImage(tmp, bx, by); n++;
+  });
+  return n;
+}
+/* (09/10, Gustavo: "ainda não corrigiu a sombra no mapa") no template do Paraguai a "sombra" é a extrusão
+   CINZA do render 3D branco que fica POR BAIXO da camada verde (blend darken): o verde cobre só a face de
+   cima e a lateral cinza sobra como mancha suja seguindo o contorno. Não é camada separada, então a sombra
+   adaptativa em faixa não alcança. Aqui ela é removida pixel a pixel nas camadas de MAPA: tons ESCUROS E SEM
+   COR (cinza — sat < 32, luz < 140) viram transparentes; o verde (saturado) fica, inclusive a borda 3D
+   verde-escura, que é o estilo aprovado do mapa do Brasil. Só mexe quando a remoção é relevante (> 2% dos
+   pixels — o Brasil só tem anti-serrilhado escuro e passa intacto; validado no harness com os PNGs reais do
+   template). O ícone 3D tem camada própria e NÃO passa por aqui — a sombra dele fica, como pedido. */
+async function _eaTirarSombraBakedMapa(fc){
+  let mexidas = 0;
+  for(const x of fc.getObjects()){
+    if(_eaTipo(x) !== "imagem" || x.visible === false || !x.variante) continue;
+    const gn = String(x.variante.grupo || "") + " " + String(x.variante.nome || "");
+    if(!/map|mapa|render/i.test(gn) || /icone|ícone|icon/i.test(gn)) continue;
+    try{
+      const el = x.getElement(); if(!el || !el.width) continue;
+      const c2 = document.createElement("canvas"); c2.width = el.width; c2.height = el.height;
+      const x2 = c2.getContext("2d"); x2.drawImage(el, 0, 0);
+      const ic = x2.getImageData(0, 0, c2.width, c2.height), d = ic.data; let tirou = 0, tem = 0;
+      for(let i = 0; i < d.length; i += 4){
+        const a = d[i + 3]; if(a < 10) continue; tem++;
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        const sat = Math.max(r, g, b) - Math.min(r, g, b);
+        if(sat < 32 && lum < 140){ d[i + 3] = 0; tirou++; }
+      }
+      if(tirou > Math.max(50, tem * 0.02)){ x2.putImageData(ic, 0, 0); await _eaSetSrcArmazenado(x, c2); mexidas++; }
+    }catch(_){ }
+  }
+  return mexidas;
 }
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
@@ -146722,68 +146837,79 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
     }
     if(mexeuLat) xc0.putImageData(ic0, 0, 0);
   }catch(_){ }
+  // frestas VERTICAIS que o giro deixa entre o céu e a foto: desce coluna a coluna repetindo o último pixel opaco
+  try{
+    const xcV = cv.getContext("2d"); const icV = xcV.getImageData(0, 0, w, h), dV = icV.data;
+    const fimS = Math.max(0, Math.min(h, Math.ceil(m.oy + m.dh) - 5)); let mexeuV = false;
+    for(let xx = 0; xx < w; xx++){
+      let ult = -1;
+      for(let yy = 0; yy < fimS; yy++){
+        const i = (yy * w + xx) * 4;
+        if(dV[i + 3] > 0) ult = i;
+        else if(ult >= 0){ dV[i] = dV[ult]; dV[i + 1] = dV[ult + 1]; dV[i + 2] = dV[ult + 2]; dV[i + 3] = 255; mexeuV = true; }
+      }
+    }
+    if(mexeuV) xcV.putImageData(icV, 0, 0);
+  }catch(_){ }
   const vazioBaixo = Math.max(0, h - (m.oy + m.dh)) * w;
   const precisaCompletar = vazioBaixo > w * h * 0.005, temEntulho = (an.entulho || []).length > 0;
-  if(podeIA && (precisaCompletar || temEntulho)){
+  // ENTULHO: limpeza determinística por clone da própria foto (sem IA) — ver _eaLimparEntulhoClone
+  if(temEntulho){
     try{
-      // máscara: transparente onde a IA pode mexer (chão que falta + caixas de entulho); o resto fica intacto
-      const M = document.createElement("canvas"); M.width = w; M.height = h; const mx = M.getContext("2d");
-      mx.fillStyle = "#000"; mx.fillRect(0, 0, w, h);
-      mx.globalCompositeOperation = "destination-in"; mx.drawImage(cv, 0, 0);                   // onde não tem foto/céu → transparente
-      mx.globalCompositeOperation = "destination-out";
-      (an.entulho || []).forEach(function(c){ const f = w * 0.012; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
-      // imagem SEM transparência (o gpt reenquadra quando vê vazio): cobre cantos + espelha o chão de baixo
-      const E = document.createElement("canvas"); E.width = w; E.height = h; const ex2 = E.getContext("2d");
-      const sFundo = Math.max(w / nova.width, h / nova.height) * 1.04;
-      ex2.drawImage(nova, (w - nova.width * sFundo) / 2, (h - nova.height * sFundo) / 2, nova.width * sFundo, nova.height * sFundo);
-      const fimF = m.oy + m.dh; if(fimF < h){ const alt = Math.ceil(h - fimF); ex2.save(); ex2.translate(0, fimF); ex2.scale(1, -1); ex2.drawImage(cv, 0, fimF - alt, w, alt, 0, -alt, w, alt); ex2.restore(); }
-      ex2.drawImage(cv, 0, 0);
-      const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
-      if(precisaCompletar) partes.push("A faixa de BAIXO da imagem está preenchida com um reflexo provisório: REDESENHE só ela continuando o terreno de verdade (grama/areia/vegetação) — nítida, com textura fotográfica real, na mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa ou desfocada. O céu de cima já está correto: NÃO mexa nele.");
-      if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular, sombra do fotógrafo) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
-      partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho. A obra aparece INTEIRA e com as proporções e alturas EXATAS da foto. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
-      if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando o terreno e limpando a foto com IA…" : precisaCompletar ? "completando o terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
-      let r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
+      if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho e sombras (sem IA)…"); }catch(_){ } }
+      // folga proporcional: a visão costuma marcar a mancha um pouco menor que ela é (braços da sombra, bordas)
+      const cxs = an.entulho.map(function(c){
+        const fx = Math.max(w * 0.012, (c.x1 - c.x0) * m.dw * 0.25), fy = Math.max(w * 0.012, (c.y1 - c.y0) * m.dh * 0.25);
+        return { x:m.ox + c.x0 * m.dw - fx, y:m.oy + c.y0 * m.dh - fy, w:(c.x1 - c.x0) * m.dw + 2 * fx, h:(c.y1 - c.y0) * m.dh + 2 * fy };
+      });
+      const nL = _eaLimparEntulhoClone(cv, cxs);
+      if(nL) avisos.push("entulho/bagunça/sombras limpos clonando a própria foto em " + nL + " área(s) (sem IA)");
+    }catch(e){ avisos.push("limpeza de entulho não rodou (" + _eaErro(e) + ")"); }
+  }
+  if(podeIA && precisaCompletar){
+    try{
+      /* (09/10, Gustavo: "parece uma colagem por cima da outra") a IA agora recebe só um RECORTE da banda de
+         baixo (o vazio + ~320px de foto de contexto), cortado pra casar com a proporção 3:2 do gpt-image
+         (1536×1024) — sem o letterbox gigante da arte 9:16 inteira, que fazia o gpt devolver tudo com até 10%
+         de zoom e espalhar resíduo deslocado pela foto. O resto da arte nem passa pela IA. */
+      const fimF = m.oy + m.dh;
+      const hIdeal = Math.round(w / 1.5);                                       // 1080 → 720: encaixe EXATO no 1536×1024
+      const y0R = Math.max(0, Math.round(Math.min(fimF - 320, h - hIdeal)));
+      const hR = h - y0R;
+      // recorte SEM transparência (o gpt reenquadra quando vê vazio): espelho do chão cobre o vazio, foto por cima
+      const Rec = document.createElement("canvas"); Rec.width = w; Rec.height = hR; const rx2 = Rec.getContext("2d");
+      const altV = Math.ceil(h - fimF);
+      if(altV > 0){ rx2.save(); rx2.translate(0, fimF - y0R); rx2.scale(1, -1); rx2.drawImage(cv, 0, fimF - altV, w, altV, 0, -altV, w, altV); rx2.restore(); }
+      rx2.drawImage(cv, 0, y0R, w, hR, 0, 0, w, hR);
+      // máscara do recorte: transparente SÓ onde não tem foto (o vazio de baixo) — ali a IA pode pintar
+      const MR = document.createElement("canvas"); MR.width = w; MR.height = hR; const mrx = MR.getContext("2d");
+      mrx.fillStyle = "#000"; mrx.fillRect(0, 0, w, hR);
+      mrx.globalCompositeOperation = "destination-in"; mrx.drawImage(cv, 0, y0R, w, hR, 0, 0, w, hR);
+      const prompt = "Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + ". A faixa de BAIXO da imagem está preenchida com um reflexo provisório: REDESENHE só ela continuando o terreno de verdade (grama/areia/vegetação) — nítida, com textura fotográfica real, na mesma luz, cor e perspectiva do terreno de cima. Proibido deixar qualquer região borrada, nebulosa ou desfocada. Todo o resto permanece idêntico, mesma textura e mesmo brilho. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.";
+      if(typeof ctx.passo === "function"){ try{ ctx.passo("completando o terreno com IA…"); }catch(_){ } }
+      const r = await _eaFotoIA(Rec, MR, prompt, ctx.client, ctx.projeto);
       if(r){
         const custoIA = r.__custo;
-        const rA = _eaAlinharIA(cv, r);                                        // desfaz o deslocamento/zoom do gpt
-        if(rA.__ajuste) avisos.push("resultado da IA realinhado (" + (rA.__ajuste.s !== 1 ? "zoom " + Math.round((rA.__ajuste.s - 1) * 100) + "% · " : "") + rA.__ajuste.dx + "," + rA.__ajuste.dy + " px)");
-        _eaCasarCor(cv, rA);                                                   // cor por canal igual à original
-        // COLAGEM PROTEGIDA: a foto original (com o céu estendido) volta por cima de tudo que era pra manter,
-        // com pluma larga (~some em céu/grama); os buracos de entulho ficam com o resultado da IA (pluma curta)
-        const Mfoto = document.createElement("canvas"); Mfoto.width = w; Mfoto.height = h; const xmf = Mfoto.getContext("2d");
-        xmf.fillStyle = "#000"; xmf.fillRect(0, 0, w, h);
-        xmf.globalCompositeOperation = "destination-in"; xmf.drawImage(cv, 0, 0);              // manter = foto + céu (SEM os buracos de entulho)
-        const Mf = document.createElement("canvas"); Mf.width = w; Mf.height = h; const fx2 = Mf.getContext("2d");
-        try{ fx2.filter = "blur(8px)"; }catch(_){ }                               // laterais/topo: pluma CURTA (pluma larga ali misturava a IA deslocada com a foto → fantasma)
-        fx2.drawImage(Mfoto, 0, 0);
-        try{ fx2.filter = "blur(0px)"; }catch(_){ }
-        { const fimF2 = m.oy + m.dh;                                              // só na borda de BAIXO (grama da IA): pluma LARGA
-          if(fimF2 < h - 4){ fx2.globalCompositeOperation = "destination-in";
-            const gv = fx2.createLinearGradient(0, fimF2 - 80, 0, fimF2 + 6);
-            gv.addColorStop(0, "rgba(255,255,255,1)"); gv.addColorStop(1, "rgba(255,255,255,0)");
-            fx2.fillStyle = gv; fx2.fillRect(0, 0, w, h);
-            fx2.globalCompositeOperation = "source-over"; } }
-        // reabre os buracos de entulho (com borda curta) por cima da pluma larga
-        const Ent = document.createElement("canvas"); Ent.width = w; Ent.height = h; const xe = Ent.getContext("2d");
-        xe.fillStyle = "#fff";
-        (an.entulho || []).forEach(function(c){ const f = w * 0.012; xe.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
-        fx2.globalCompositeOperation = "destination-out";
-        try{ fx2.filter = "blur(8px)"; }catch(_){ }
-        fx2.drawImage(Ent, 0, 0);
-        try{ fx2.filter = "blur(0px)"; }catch(_){ }
-        const K = document.createElement("canvas"); K.width = w; K.height = h; const kx2 = K.getContext("2d");
-        kx2.drawImage(cv, 0, 0);
-        kx2.globalCompositeOperation = "destination-in"; kx2.drawImage(Mf, 0, 0);
-        rA.getContext("2d").drawImage(K, 0, 0);
-        cv = rA;
-        if(precisaCompletar) avisos.push("terreno de baixo completado com IA; a foto original ficou intacta (colagem protegida)");
-        if(temEntulho) avisos.push("entulho/bagunça/sombras removidos com IA em " + an.entulho.length + " área(s)");
+        // referência do alinhamento/cor: o recorte SÓ com a foto real (sem o espelho provisório)
+        const RecFoto = document.createElement("canvas"); RecFoto.width = w; RecFoto.height = hR;
+        RecFoto.getContext("2d").drawImage(cv, 0, y0R, w, hR, 0, 0, w, hR);
+        const rA = _eaAlinharIA(RecFoto, r);                                    // desfaz deslocamento/zoom residual do gpt
+        if(rA.__ajuste) avisos.push("banda da IA realinhada (" + (rA.__ajuste.s !== 1 ? "zoom " + Math.round((rA.__ajuste.s - 1) * 100) + "% · " : "") + rA.__ajuste.dx + "," + rA.__ajuste.dy + " px)");
+        _eaCasarCor(RecFoto, rA);                                               // cor por canal igual à da foto
+        // cola de volta SÓ a banda do vazio, com pluma vertical subindo pela foto — o resto fica intacto
+        const K = document.createElement("canvas"); K.width = w; K.height = hR; const kx2 = K.getContext("2d");
+        kx2.drawImage(rA, 0, 0);
+        kx2.globalCompositeOperation = "destination-in";
+        const gv = kx2.createLinearGradient(0, (fimF - y0R) - 60, 0, Math.min(hR, (fimF - y0R) + 6));
+        gv.addColorStop(0, "rgba(255,255,255,0)"); gv.addColorStop(1, "rgba(255,255,255,1)");
+        kx2.fillStyle = gv; kx2.fillRect(0, 0, w, hR);
+        cv.getContext("2d").drawImage(K, 0, y0R);
+        avisos.push("terreno de baixo completado com IA só na banda final — o resto da arte nem passou pela IA");
         if(custoIA) avisos.push("IA da foto: R$ " + Number(custoIA).toFixed(2));
       }
     }catch(e){
-      avisos.push("IA da foto não rodou (" + _eaErro(e) + ")" + (precisaCompletar ? " — a foto entrou cobrindo o espaço, sem completar" : ""));
-      if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
+      avisos.push("IA da foto não rodou (" + _eaErro(e) + ") — a foto entrou cobrindo o espaço, sem completar");
+      m = procurar(false); cv = desenhar(m);
     }
   } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }   // sem IA: cobre o espaço (não tem quem complete o chão)
   const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
@@ -147173,6 +147299,11 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
         if(mexidas) avisos.push("sombra do template virou FAIXA atrás da frase (fundo com brilho " + Math.round(lum) + " → " + Math.round(fator * 100) + "% de força) — o resto da foto fica claro");
       }
     }
+  }catch(_){ } }
+  // sombra gravada DENTRO do PNG do mapa (não é camada separada): removida pixel a pixel; a do ícone fica
+  if(fotoObra){ try{
+    const nM = await _eaTirarSombraBakedMapa(fc);
+    if(nM) avisos.push("sombra chapada gravada no PNG do mapa removida (" + nM + " camada(s)) — a sombra 3D do ícone continua");
   }catch(_){ } }
   // logo, telefone, cidade, cores e fonte: cadastro + Kit (mesma função do editor)
   const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
