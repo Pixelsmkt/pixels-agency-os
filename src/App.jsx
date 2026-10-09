@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 50/50 | Nao editar diretamente
+// Modulos: 51/51 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -61630,7 +61630,10 @@ export default function AgencyOS(){
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
-      case "gestaomidia":          return _menuBloco("midia.menu",effectivePerms)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
+      // 09/10/2026 IA de tráfego: portão do PIN + alarmes (só aprovadores veem; os outros veem igual a antes). Sem o 17e no juntar.py, segue normal.
+      case "gestaomidia":          return _menuBloco("midia.menu",effectivePerms)?(typeof TSegPortao==="function"
+        ? <TSegPortao currentUser={CURRENT_USER} viewUser={effectiveUser}><PageGestaoMidia {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks} onNavTo={nav}/></TSegPortao>
+        : <PageGestaoMidia {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>):<NoPerm/>;
       // Se PageGestaoRedes não existe, o problema NÃO é permissão: é que o
       // 17d_gestao_social.jsx não entrou na lista do juntar.py e ficou fora do
       // App.jsx. Mostrar "Sem acesso" aqui mandaria a gente caçar no lugar errado.
@@ -70905,6 +70908,450 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
       ? <SocCard titulo="Nenhum perfil cadastrado"><div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>Os perfis ficam em Acessos › Time › Redes sociais. Cadastre um perfil de Instagram com o identificador para ele aparecer aqui.</div></SocCard>
       : <SocPainelAgencia contas={D.contas} diario={D.diario} posts={D.posts} ultimaColeta={ultimaColeta} inv={inv} dias={dias} isMob={isMob} busca={busca} onAbrir={function(id){ setAberto(id); }}/>}
   </SocWrap>;
+}
+
+// ======= 17e_trafego_seguranca.jsx =======
+/* IA DE TRÁFEGO — ETAPA 0 e 1 (09/10/2026): portão do PIN da Gestão de mídia, alarmes e painel de segurança.
+   QUEM VÊ: só os aprovadores (Vinícius e Gustavo). Chave no banco: auto.config ads_ia_visivel_para = 'aprovadores'.
+   Para qualquer outra pessoa (ex.: Erick) o banco responde {pode:false} e esta tela devolve a Gestão de mídia
+   EXATAMENTE como sempre foi — sem PIN, sem barra, sem botão, sem texto novo.
+   SEGURANÇA DE VERDADE fica no banco: PIN só em hash, conferido no servidor, 5 erros = bloqueio, ticket de uso único para
+   cada alteração. Esta tela é só a porta; se ela falhar ao consultar o banco, mostra a Gestão de mídia normal (nunca tranca
+   os sócios fora) — as alterações continuam travadas no servidor.
+   Pode ser removido sem efeito colateral: basta tirar o <TSegPortao> em volta da PageGestaoMidia. */
+
+const _tsegRpc = async function (fn, args) {
+  const r = await window._sb.rpc(fn, args || {});
+  if (r.error) throw new Error(r.error.message || "Erro no servidor");
+  return r.data;
+};
+const _tsegHora = function (iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+};
+const _tsegQuando = function (iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + _tsegHora(iso);
+};
+const _TSEG_COR = { critico: "#dc2626", atencao: "#d97706", info: "#2563eb" };
+const _TSEG_EVENTO = {
+  pin_criado: "Criou o PIN", pin_trocado: "Trocou o PIN", pin_errado: "Errou o PIN", entrada: "Entrou na Gestão de mídia",
+  ticket_criado: "Aprovou uma alteração", ticket_segundo: "Deu a 2ª aprovação", ticket_usado: "Alteração aplicada",
+  ticket_negado: "Tentou aprovar sem permissão", ticket_adulterado: "Alteração diferente da aprovada (barrada)",
+  pin_zerado: "Zerou o PIN de alguém", pin_obrigatorio: "Mudou a exigência do PIN",
+};
+
+/* ---------- campo de PIN (6 números, nunca fica salvo) ---------- */
+function TSegCampoPin({ valor, onChange, onEnter, autoFocus, rotulo }) {
+  return (
+    <label style={{ display: "block", marginBottom: 12 }}>
+      {rotulo && <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6 }}>{rotulo}</div>}
+      <input
+        type="password" inputMode="numeric" autoComplete="off" maxLength={6} autoFocus={autoFocus}
+        value={valor}
+        onChange={function (e) { onChange(e.target.value.replace(/\D/g, "").slice(0, 6)); }}
+        onKeyDown={function (e) { if (e.key === "Enter" && onEnter) onEnter(); }}
+        style={{ width: "100%", boxSizing: "border-box", fontSize: 26, letterSpacing: 12, textAlign: "center", padding: "12px 10px",
+          border: "1.5px solid #cbd5e1", borderRadius: 12, outline: "none", fontFamily: "ui-monospace,monospace" }}
+        placeholder="••••••"
+      />
+    </label>
+  );
+}
+
+function TSegBotao({ children, onClick, desligado, tipo }) {
+  const cor = tipo === "secundario" ? { bg: "#fff", fg: "#334155", bd: "#cbd5e1" } : tipo === "perigo" ? { bg: "#dc2626", fg: "#fff", bd: "#dc2626" } : { bg: "#0f172a", fg: "#fff", bd: "#0f172a" };
+  return (
+    <button onClick={desligado ? undefined : onClick} disabled={!!desligado}
+      style={{ background: cor.bg, color: cor.fg, border: "1.5px solid " + cor.bd, borderRadius: 10, padding: "10px 16px", fontWeight: 800,
+        fontSize: 13, cursor: desligado ? "default" : "pointer", opacity: desligado ? 0.5 : 1, fontFamily: "inherit" }}>
+      {children}
+    </button>
+  );
+}
+
+/* ---------- tela de criar/trocar PIN (pede a SENHA da conta antes) ---------- */
+function TSegCriarPin({ st, trocando, onPronto, onCancelar }) {
+  const [senha, setSenha] = useState("");
+  const [p1, setP1] = useState("");
+  const [p2, setP2] = useState("");
+  const [etapa, setEtapa] = useState(st && st.senha_recente ? "pin" : "senha");
+  const [msg, setMsg] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+
+  const conferirSenha = async function () {
+    if (!senha) return;
+    setOcupado(true); setMsg("");
+    try {
+      const sb = window._sb;
+      const u = await sb.auth.getUser();
+      const email = u && u.data && u.data.user && u.data.user.email;
+      if (!email) throw new Error("Sessão sem e-mail. Saia e entre de novo.");
+      const r = await sb.auth.signInWithPassword({ email: email, password: senha });
+      if (r.error) throw new Error("Senha incorreta.");
+      setSenha(""); setEtapa("pin");
+    } catch (e) { setMsg(e.message); } finally { setOcupado(false); }
+  };
+  const salvar = async function () {
+    if (p1.length !== 6) { setMsg("O PIN precisa ter 6 números."); return; }
+    if (p1 !== p2) { setMsg("Os dois PINs não são iguais."); return; }
+    setOcupado(true); setMsg("");
+    try {
+      const r = await _tsegRpc("ads_pin_definir", { p_pin: p1 });
+      if (!r || !r.ok) {
+        if (r && r.precisa_senha) setEtapa("senha");
+        throw new Error((r && r.erro) || "Não salvou.");
+      }
+      setP1(""); setP2("");
+      onPronto && onPronto();
+    } catch (e) { setMsg(e.message); } finally { setOcupado(false); }
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando ? "Trocar meu PIN" : "Crie seu PIN da Gestão de mídia"}</div>
+      <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16, lineHeight: 1.5 }}>
+        {etapa === "senha"
+          ? "Primeiro digite a senha da sua conta. Assim ninguém cria ou troca o PIN só porque achou seu computador logado."
+          : "6 números, que só você sabe. Não use data de nascimento, 123456 nem número repetido. O PIN não fica salvo em lugar nenhum da tela."}
+      </div>
+      {etapa === "senha" ? (
+        <div>
+          <input type="password" autoComplete="current-password" value={senha} autoFocus
+            onChange={function (e) { setSenha(e.target.value); }}
+            onKeyDown={function (e) { if (e.key === "Enter") conferirSenha(); }}
+            placeholder="Senha da conta"
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 15, padding: "12px 14px", border: "1.5px solid #cbd5e1", borderRadius: 12, marginBottom: 12 }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <TSegBotao onClick={conferirSenha} desligado={ocupado || !senha}>{ocupado ? "Conferindo…" : "Continuar"}</TSegBotao>
+            {onCancelar && <TSegBotao tipo="secundario" onClick={onCancelar}>Cancelar</TSegBotao>}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <TSegCampoPin rotulo="Novo PIN" valor={p1} onChange={setP1} autoFocus />
+          <TSegCampoPin rotulo="Repita o PIN" valor={p2} onChange={setP2} onEnter={salvar} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <TSegBotao onClick={salvar} desligado={ocupado || p1.length !== 6 || p2.length !== 6}>{ocupado ? "Salvando…" : "Salvar PIN"}</TSegBotao>
+            {onCancelar && <TSegBotao tipo="secundario" onClick={onCancelar}>Cancelar</TSegBotao>}
+          </div>
+        </div>
+      )}
+      {msg && <div style={{ marginTop: 12, color: "#dc2626", fontSize: 13, fontWeight: 700 }}>{msg}</div>}
+    </div>
+  );
+}
+
+/* ---------- tela de entrada (PIN) ---------- */
+function TSegEntrada({ st, onPronto }) {
+  const [pin, setPin] = useState("");
+  const [msg, setMsg] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [modo, setModo] = useState(st && !st.tem_pin ? "criar" : "entrar");
+
+  const entrar = async function () {
+    if (pin.length !== 6) return;
+    setOcupado(true); setMsg("");
+    try {
+      const r = await _tsegRpc("ads_desbloquear", { p_pin: pin });
+      setPin("");
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não abriu.");
+      onPronto && onPronto();
+    } catch (e) { setMsg(e.message); } finally { setOcupado(false); }
+  };
+
+  const bloqueado = st && st.bloqueado_ate;
+  return (
+    <div style={{ maxWidth: 420, margin: "56px auto", background: "#fff", border: "1px solid #e5e9f0", borderRadius: 20,
+      padding: "28px 28px 24px", boxShadow: "0 10px 30px rgba(15,23,42,.06)", fontFamily: "'Inter',system-ui,sans-serif" }}>
+      <div style={{ fontSize: 30, marginBottom: 8 }}>🔒</div>
+      {modo === "criar" ? (
+        <TSegCriarPin st={st} trocando={st && st.tem_pin} onPronto={function () { setModo("entrar"); onPronto && onPronto(); }}
+          onCancelar={st && st.tem_pin ? function () { setModo("entrar"); } : null} />
+      ) : bloqueado ? (
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>PIN bloqueado</div>
+          <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
+            {String(bloqueado).indexOf("infinity") >= 0
+              ? "Muitos erros. Peça para o outro sócio zerar seu PIN em Gestão de mídia › Segurança."
+              : "Muitos erros seguidos. Tente de novo às " + _tsegHora(bloqueado) + "."}
+            {" "}O outro sócio já foi avisado.
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>Gestão de mídia trancada</div>
+          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>Digite seu PIN. Fica aberta enquanto você usa e fecha sozinha depois de {(st && st.minutos) || 30} min parada.</div>
+          <TSegCampoPin valor={pin} onChange={setPin} onEnter={entrar} autoFocus />
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <TSegBotao onClick={entrar} desligado={ocupado || pin.length !== 6}>{ocupado ? "Conferindo…" : "Entrar"}</TSegBotao>
+            <button onClick={function () { setModo("criar"); setMsg(""); }}
+              style={{ background: "none", border: "none", color: "#2563eb", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Esqueci / trocar PIN</button>
+          </div>
+          {msg && <div style={{ marginTop: 12, color: "#dc2626", fontSize: 13, fontWeight: 700 }}>{msg}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- janela (modal) simples ---------- */
+function TSegJanela({ titulo, onFechar, children, largura }) {
+  return (
+    <div onClick={onFechar} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", zIndex: 9000, display: "flex",
+      alignItems: "flex-start", justifyContent: "center", padding: "6vh 12px", overflowY: "auto" }}>
+      <div onClick={function (e) { e.stopPropagation(); }} style={{ width: "100%", maxWidth: largura || 640, background: "#fff", borderRadius: 18,
+        padding: "20px 22px", fontFamily: "'Inter',system-ui,sans-serif", boxShadow: "0 20px 50px rgba(0,0,0,.2)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 17, fontWeight: 900, color: "#0f172a" }}>{titulo}</div>
+          <button onClick={onFechar} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- alarmes ---------- */
+function TSegAlarmes({ itens, onVisto, onFechar, carregando }) {
+  return (
+    <TSegJanela titulo="🔔 Alarmes do tráfego (últimos 14 dias)" onFechar={onFechar}>
+      {carregando && <div style={{ color: "#64748b", fontSize: 13 }}>Carregando…</div>}
+      {!carregando && (!itens || !itens.length) && <div style={{ color: "#64748b", fontSize: 13 }}>Nenhum alarme. Tudo certo por aqui.</div>}
+      {(itens || []).map(function (a) {
+        const via = (a.whats || []).map(function (w) { return w.via === "texto" ? "WhatsApp enviado" : w.via === "modelo" ? "WhatsApp (modelo) enviado" : w.via === "espera_janela" ? "WhatsApp esperando a pessoa escrever no Guvi" : w.via === "erro" ? "WhatsApp com erro" : ""; }).filter(Boolean);
+        return (
+          <div key={a.id} style={{ borderLeft: "4px solid " + (_TSEG_COR[a.nivel] || "#64748b"), background: a.visto_em ? "#f8fafc" : "#fff",
+            border: "1px solid #e5e9f0", borderLeftWidth: 4, borderRadius: 12, padding: "12px 14px", marginBottom: 10, opacity: a.visto_em ? 0.7 : 1 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: "#0f172a" }}>{a.titulo}</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{_tsegQuando(a.criado_em)}</div>
+            </div>
+            <div style={{ fontSize: 13, color: "#334155", marginTop: 4, lineHeight: 1.5 }}>{a.texto}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 8, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 11, color: "#94a3b8" }}>{via.length ? Array.from(new Set(via)).join(" · ") : "Só aviso no app"}</div>
+              {a.visto_em
+                ? <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>✓ visto por {a.visto_por} {_tsegQuando(a.visto_em)}</div>
+                : <button onClick={function () { onVisto(a.id); }} style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Marcar como visto</button>}
+            </div>
+          </div>
+        );
+      })}
+    </TSegJanela>
+  );
+}
+
+/* ---------- segurança (só aprovadores) ---------- */
+function TSegSeguranca({ st, onFechar, onMudou }) {
+  const [aba, setAba] = useState("pessoas");
+  const [pessoas, setPessoas] = useState([]);
+  const [log, setLog] = useState([]);
+  const [pedePin, setPedePin] = useState(null); // {titulo, acao: async(pin)}
+  const [pin, setPin] = useState("");
+  const [msg, setMsg] = useState("");
+  const [trocar, setTrocar] = useState(false);
+
+  const carregar = async function () {
+    try { setPessoas((await _tsegRpc("ads_pin_pessoas")) || []); } catch (e) { setMsg(e.message); }
+    try { setLog((await _tsegRpc("ads_seguranca_log_ler", { p_limite: 150 })) || []); } catch (e) { setMsg(e.message); }
+  };
+  useEffect(function () { carregar(); }, []);
+
+  const confirmar = async function () {
+    if (!pedePin || pin.length !== 6) return;
+    setMsg("");
+    try {
+      const r = await pedePin.acao(pin);
+      setPin("");
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi.");
+      setPedePin(null); carregar(); onMudou && onMudou();
+      if (typeof pixelsToast !== "undefined") pixelsToast.success("Feito.", 2000);
+    } catch (e) { setMsg(e.message); }
+  };
+
+  const abaBtn = function (id, txt) {
+    return <button onClick={function () { setAba(id); }} style={{ background: aba === id ? "#0f172a" : "#f1f5f9", color: aba === id ? "#fff" : "#334155",
+      border: "none", borderRadius: 999, padding: "7px 14px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{txt}</button>;
+  };
+
+  if (trocar) {
+    return <TSegJanela titulo="🛡️ Segurança" onFechar={onFechar} largura={460}>
+      <TSegCriarPin st={st} trocando onPronto={function () { setTrocar(false); onMudou && onMudou(); }} onCancelar={function () { setTrocar(false); }} />
+    </TSegJanela>;
+  }
+
+  return (
+    <TSegJanela titulo="🛡️ Segurança da Gestão de mídia" onFechar={onFechar} largura={720}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        {abaBtn("pessoas", "PINs")}{abaBtn("registro", "Registro")}{abaBtn("ajustes", "Ajustes")}
+      </div>
+
+      {aba === "pessoas" && (
+        <div>
+          {!pessoas.length && <div style={{ fontSize: 13, color: "#64748b" }}>Ninguém criou PIN ainda.</div>}
+          {pessoas.map(function (p) {
+            return (
+              <div key={p.uid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f1f5f9", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>{p.nome} {p.aprovador ? <span style={{ fontSize: 11, color: "#16a34a" }}>· aprova</span> : null}</div>
+                  <div style={{ fontSize: 12, color: "#64748b" }}>
+                    PIN de {_tsegQuando(p.trocado_em)}{p.erros ? " · " + p.erros + " erro(s)" : ""}{p.bloqueado ? " · 🔒 bloqueado" : ""}
+                  </div>
+                </div>
+                <TSegBotao tipo="secundario" onClick={function () {
+                  setMsg(""); setPin("");
+                  setPedePin({ titulo: "Zerar o PIN de " + p.nome + "? A pessoa vai ter que criar outro (com a senha da conta).",
+                    acao: function (meuPin) { return _tsegRpc("ads_pin_resetar_pessoa", { p_uid: p.uid, p_pin: meuPin }); } });
+                }}>Zerar PIN</TSegBotao>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {aba === "registro" && (
+        <div style={{ maxHeight: "55vh", overflowY: "auto" }}>
+          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>Tudo que acontece com PIN e aprovações. Ninguém consegue apagar nem editar este registro.</div>
+          {(log || []).slice().reverse().map(function (l) {
+            const ruim = l.evento === "pin_errado" || l.evento === "ticket_negado" || l.evento === "ticket_adulterado";
+            return (
+              <div key={l.id} style={{ display: "flex", gap: 10, fontSize: 12, padding: "6px 0", borderBottom: "1px solid #f8fafc" }}>
+                <div style={{ color: "#94a3b8", width: 92, flexShrink: 0 }}>{_tsegQuando(l.em)}</div>
+                <div style={{ fontWeight: 700, width: 90, flexShrink: 0 }}>{l.nome}</div>
+                <div style={{ color: ruim ? "#dc2626" : "#334155" }}>{_TSEG_EVENTO[l.evento] || l.evento}{l.detalhe && l.detalhe.tipo ? " (" + l.detalhe.tipo + ")" : ""}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {aba === "ajustes" && (
+        <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>Pedir PIN para entrar na Gestão de mídia</div>
+            <div style={{ fontSize: 12, color: "#64748b", margin: "4px 0 10px" }}>Hoje: <b>{st && st.obrigatorio ? "sim" : "não"}</b>. Vale só para quem aprova. As alterações na Meta SEMPRE pedem PIN, com isto ligado ou não.</div>
+            <TSegBotao tipo="secundario" onClick={function () {
+              const novo = !(st && st.obrigatorio);
+              setMsg(""); setPin("");
+              setPedePin({ titulo: (novo ? "Ligar" : "Desligar") + " o PIN de entrada?",
+                acao: function (meuPin) { return _tsegRpc("ads_pin_obrigatorio_definir", { p_valor: novo, p_pin: meuPin }); } });
+            }}>{st && st.obrigatorio ? "Desligar" : "Ligar"}</TSegBotao>
+          </div>
+          <div style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>Meu PIN</div>
+            <div style={{ fontSize: 12, color: "#64748b", margin: "4px 0 10px" }}>Para trocar, o sistema pede a senha da sua conta antes.</div>
+            <TSegBotao tipo="secundario" onClick={function () { setTrocar(true); }}>Trocar meu PIN</TSegBotao>
+          </div>
+        </div>
+      )}
+
+      {pedePin && (
+        <div style={{ marginTop: 16, borderTop: "1px solid #e5e9f0", paddingTop: 14 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 8 }}>{pedePin.titulo}</div>
+          <TSegCampoPin rotulo="Seu PIN" valor={pin} onChange={setPin} onEnter={confirmar} autoFocus />
+          <div style={{ display: "flex", gap: 8 }}>
+            <TSegBotao onClick={confirmar} desligado={pin.length !== 6}>Confirmar</TSegBotao>
+            <TSegBotao tipo="secundario" onClick={function () { setPedePin(null); setPin(""); }}>Cancelar</TSegBotao>
+          </div>
+        </div>
+      )}
+      {msg && <div style={{ marginTop: 12, color: "#dc2626", fontSize: 13, fontWeight: 700 }}>{msg}</div>}
+    </TSegJanela>
+  );
+}
+
+/* ---------- O PORTÃO: vai em volta da PageGestaoMidia ---------- */
+function TSegPortao({ currentUser, viewUser, children }) {
+  const [st, setSt] = useState(null);            // resposta de ads_pin_status
+  const [falhou, setFalhou] = useState(false);   // banco não respondeu → mostra normal
+  const [painel, setPainel] = useState(null);    // "alarmes" | "seguranca"
+  const [alarmes, setAlarmes] = useState(null);
+  const [carregandoAl, setCarregandoAl] = useState(false);
+  const ultimaRenov = useRef(0);
+
+  const carregar = useCallback(async function () {
+    try { setSt(await _tsegRpc("ads_pin_status")); setFalhou(false); }
+    catch (e) { setFalhou(true); setSt({ pode: false }); console.warn("[TSeg] status", e.message); }
+  }, []);
+  useEffect(function () { carregar(); }, [carregar]);
+
+  const pode = !!(st && st.pode);
+  const aberto = pode && (!st.obrigatorio || (st.desbloqueado_ate && new Date(st.desbloqueado_ate) > new Date()));
+
+  const lerAlarmes = useCallback(async function () {
+    setCarregandoAl(true);
+    try { const r = await _tsegRpc("ads_alarmes_ler", { p_dias: 14 }); setAlarmes(r && r.ok ? (r.itens || []) : []); }
+    catch (_) { setAlarmes([]); } finally { setCarregandoAl(false); }
+  }, []);
+
+  // aberto: renova com uso (no máximo a cada 2 min), confere a hora de fechar a cada 20 s, lê alarmes a cada 5 min
+  useEffect(function () {
+    if (!aberto || !st.obrigatorio) return;
+    const renovar = function () {
+      const agora = Date.now();
+      if (agora - ultimaRenov.current < 120000) return;
+      ultimaRenov.current = agora;
+      _tsegRpc("ads_desbloqueio_renovar").then(function (r) {
+        if (r && r.ok && r.desbloqueado_ate) setSt(function (s) { return Object.assign({}, s, { desbloqueado_ate: r.desbloqueado_ate }); });
+        else if (!r || !r.ok) carregar();
+      }).catch(function () {});
+    };
+    const evs = ["pointerdown", "keydown", "wheel", "touchstart"];
+    evs.forEach(function (ev) { window.addEventListener(ev, renovar, { passive: true }); });
+    const t = setInterval(function () {
+      if (st.desbloqueado_ate && new Date(st.desbloqueado_ate) <= new Date()) carregar();
+    }, 20000);
+    return function () { evs.forEach(function (ev) { window.removeEventListener(ev, renovar); }); clearInterval(t); };
+  }, [aberto, st && st.desbloqueado_ate, st && st.obrigatorio, carregar]);
+
+  useEffect(function () {
+    if (!aberto) return;
+    lerAlarmes();
+    const t = setInterval(lerAlarmes, 300000);
+    return function () { clearInterval(t); };
+  }, [aberto, lerAlarmes]);
+
+  // quem não aprova (ex.: Erick) — e qualquer falha de consulta — vê a Gestão de mídia exatamente como sempre
+  if (st === null) return <div style={{ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Carregando…</div>;
+  if (!pode || falhou) return children;
+  if (!aberto) return <TSegEntrada st={st} onPronto={carregar} />;
+
+  const vendoOutro = viewUser && currentUser && viewUser.id && currentUser.id && viewUser.id !== currentUser.id;  // "Visualizar como"
+  const naoVistos = (alarmes || []).filter(function (a) { return !a.visto_em; });
+  const temCritico = naoVistos.some(function (a) { return a.nivel === "critico"; });
+  const trancar = async function () {
+    try { await _tsegRpc("ads_bloquear"); } catch (_) {}
+    carregar();
+  };
+  const visto = async function (id) {
+    try { await _tsegRpc("ads_alarme_visto", { p_id: id }); } catch (_) {}
+    lerAlarmes();
+  };
+
+  return (
+    <Fragment>
+      {!vendoOutro && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, margin: "0 0 10px", flexWrap: "wrap",
+          fontFamily: "'Inter',system-ui,sans-serif" }}>
+          {st.obrigatorio && <div style={{ fontSize: 11, color: "#94a3b8", marginRight: "auto" }}>🔓 Aberta — fecha sozinha após {st.minutos || 30} min sem uso</div>}
+          <button onClick={function () { setPainel("alarmes"); lerAlarmes(); }}
+            style={{ background: naoVistos.length ? (temCritico ? "#fee2e2" : "#fef3c7") : "#f1f5f9", color: naoVistos.length ? (temCritico ? "#b91c1c" : "#92400e") : "#334155",
+              border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+            🔔 Alarmes{naoVistos.length ? " (" + naoVistos.length + ")" : ""}
+          </button>
+          <button onClick={function () { setPainel("seguranca"); }}
+            style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🛡️ Segurança</button>
+          {st.obrigatorio && <button onClick={trancar}
+            style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔒 Trancar</button>}
+        </div>
+      )}
+      {children}
+      {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
+      {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
+    </Fragment>
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
