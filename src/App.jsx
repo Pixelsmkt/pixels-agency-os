@@ -34664,6 +34664,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [filtroCli,setFiltroCli]=useState("");     // (01/10/2026, Gustavo) filtro por cliente (logo) — "" = todos
   // (09/10/2026, Gustavo) mesmos filtros nas filas de DESIGN e VÍDEO ("coloca aquelas tags tal qual no copys")
   const [filtroAvTipo,setFiltroAvTipo]=useState("");
+  const [ajusteFino,setAjusteFino]=useState(false);   // modal Ajuste fino (Foto de obra): IA em área marcada / puxar da original
   const [filtroAvCli,setFiltroAvCli]=useState("");
   const [imgIdx,setImgIdx]=useState(0);
   const [imgZoom,setImgZoom]=useState(false); // Lightbox: clique na imagem → zoom fullscreen
@@ -36627,9 +36628,20 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               MAS: se for vídeo, não faz zoom — o player nativo do <video> já tem fullscreen próprio. */}
           {(()=>{
             const _curIsVideo=allImgs.length>0&&(typeof _isVideoUrl==="function")&&_isVideoUrl(allImgs[Math.min(imgIdx,allImgs.length-1)]);
+            /* (09/10, Gustavo: "como são verticais e tem espaço sobrando, coloca lado a lado com a foto
+               original do material") Foto de obra: a foto do MATERIAL entra num painel à esquerda da arte. */
+            const _ehFO=tab==="publicacao"&&current&&(typeof _eaTipoCardDoTask==="function")&&(function(){try{return _eaTipoCardDoTask(current)==="foto_obra";}catch(_){return false;}})();
+            const _matFoto=_ehFO?(((current&&current.files)||[]).find(f=>f&&f.url&&f.tipo==="material"&&(String(f.type||"").indexOf("image/")===0||/\.(jpe?g|png|webp)(\?|#|$)/i.test(String(f.name||f.url))))||null):null;
+            const _ladoALado=!!(_matFoto&&allImgs.length>0&&!_curIsVideo&&!isMob);
             return <div onClick={()=>{if(allImgs.length>0&&!_curIsVideo)setImgZoom(true);}}
               title={allImgs.length>0&&!_curIsVideo?"Clique pra ampliar":""}
               style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",cursor:(allImgs.length>0&&!_curIsVideo)?"zoom-in":"default"}}>
+            {_ladoALado&&(<div onClick={e=>e.stopPropagation()} title="Foto original do material (como veio do cliente)"
+              style={{alignSelf:"stretch",flex:"0 0 42%",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",background:"#0b1220",borderRight:"1px solid rgba(148,163,184,.3)",cursor:"default"}}>
+              <img src={_matFoto.url} alt="foto original" referrerPolicy="no-referrer" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+              <span style={{position:"absolute",top:10,left:10,background:"rgba(15,23,42,.82)",color:"#e2e8f0",fontSize:10,fontWeight:800,letterSpacing:.5,padding:"4px 10px",borderRadius:7,textTransform:"uppercase",pointerEvents:"none"}}>Foto original · material</span>
+            </div>)}
+            {_ladoALado&&(<span style={{position:"absolute",top:10,right:10,background:"rgba(124,58,237,.88)",color:"#fff",fontSize:10,fontWeight:800,letterSpacing:.5,padding:"4px 10px",borderRadius:7,textTransform:"uppercase",pointerEvents:"none",zIndex:2}}>Arte gerada</span>)}
             {allImgs.length===0&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:32,textAlign:"center"}}>
               <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
                 <Ico n="play" size={28} color="#cbd5e1"/>
@@ -36674,6 +36686,26 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           </div>;
           })()}
 
+          {/* Ajuste fino (Foto de obra): IA em área marcada / puxar da foto original (09/10, Gustavo) */}
+          {ajusteFino&&current&&allImgs.length>0&&(typeof PxFotoObraAjusteModal!=="undefined")&&(
+            <PxFotoObraAjusteModal task={current} arteUrl={allImgs[Math.min(imgIdx,allImgs.length-1)]}
+              onClose={()=>setAjusteFino(false)}
+              onSaved={(novoArq,nota)=>{
+                setAjusteFino(false);
+                const _now=new Date().toISOString();
+                if(setTasks)setTasks(p=>p.map(t=>{
+                  if(t.id!==current.id)return t;
+                  const fs=(Array.isArray(t.files)?t.files:[]).slice();
+                  let alvo=fs.findIndex(x=>x&&x.url&&!x.isRef&&!x.isAnnotation&&x.tipo!=="referencia"&&x.tipo!=="material");
+                  if(alvo<0)alvo=fs.length;
+                  fs.splice(alvo,0,novoArq);   // nova versão vira a 1ª lâmina; as anteriores ficam
+                  return {...t,files:fs,timeline:(t.timeline||[]).concat([{type:"file_upload",
+                    label:"Ajuste fino na arte ("+nota+"): "+novoArq.name,at:_now,
+                    atFmt:(typeof nowFmt==="function"?nowFmt():""),user:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||""}])};
+                }));
+                setImgIdx(0);
+              }}/>
+          )}
           {/* Lightbox fullscreen — click ou ESC pra fechar */}
           {imgZoom && allImgs.length>0 && <div
             onClick={()=>setImgZoom(false)}
@@ -37602,6 +37634,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   {chave:"pub.aprovar", label:"Aprovar publicação", color:"#16a34a", colorDark:"#15803d", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, onClick:()=>approvePub(current), kbd:"Enter"},
                   {chave:"pub.reprovar", label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ const _m=await _pedirMotivoReprovacao("este material (a produção foi feita, então ainda conta no pagamento do mês)","Reprovar"); if(_m===null) return; rejectPub(current,_m); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
                   {chave:"pub.ajuste", label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
+                  /* (09/10, Gustavo) Foto de obra: ajuste fino direto na Avaliação — marca uma área da arte e
+                     corrige SÓ ela (IA ~R$1) ou devolve a área à foto original do material (sem custo). */
+                  ...((tab==="publicacao"&&current&&(typeof _eaTipoCardDoTask==="function")&&(function(){try{return _eaTipoCardDoTask(current)==="foto_obra";}catch(_){return false;}})())?[
+                    {chave:"pub.ajuste", label:"Ajuste fino na foto (IA / original)", color:"#7c3aed", colorDark:"#6d28d9", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 4l5 5-11 11H4v-5z"/><path d="M13 6l5 5"/></svg>, onClick:()=>setAjusteFino(true), title:"Marque uma área da arte e corrija só ali: com IA (~R$1) ou puxando da foto original do material (sem custo). O resto da arte não é tocado."}
+                  ]:[]),
                   {chave:"pub.ajuste_copy", label:"Enviar para ajuste de copy", color:"#eab308", colorDark:"#ca8a04", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>, onClick:()=>sendBackToCopy(current), title:"Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."},
                   {chave:"geral.detalhes", label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
                 ];
@@ -147734,16 +147771,22 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
   avisos.push("motor da foto: o MESMO da última arte de Juti (a IA devolve a foto inteira, sem emendas) + mapa num tom só");
-  return { cv:cv, avisos:avisos, analise:an, encaixe:m };
+  /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
+     BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
+     e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
+  let cvBase = null;
+  try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false) _eaVibrarFotoObra(cvBase, horizY); }catch(_){ }
+  return { cv:cv, avisos:avisos, analise:an, encaixe:m, base:cvBase };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
   const velha = o.getElement && o.getElement();
   const w = Math.round(o.width || (velha && velha.width) || 1), h = Math.round(o.height || (velha && velha.height) || 1);
-  const r = await _eaEncaixarFotoObraNucleo(fc, { B:_eaCaixa(o), w:w, h:h, pular:[o] }, url, ctx);
+  const B = _eaCaixa(o);
+  const r = await _eaEncaixarFotoObraNucleo(fc, { B:B, w:w, h:h, pular:[o] }, url, ctx);
   if(!r.cv){ await _eaTrocarFotoMantendoForma(o, url); return { avisos:r.avisos }; }
   if(velha){ const x = r.cv.getContext("2d"); x.globalCompositeOperation = "destination-in"; x.drawImage(velha, 0, 0, w, h); }
   await _eaSetSrcArmazenado(o, r.cv);
-  return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe };
+  return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe, base:r.base, caixa:B, w:w, h:h, fotoUrl:url };
 }
 /* (08/10, Gustavo: "não usou a imagem do material — usou a do template") O PSD da Bioter tem a MESMA foto em mais de uma
    camada marcada como FOTO (uma parte embaixo e uma cópia inteira por cima). Antes cada camada pedia uma foto do material:
@@ -147782,7 +147825,7 @@ async function _eaEncaixarFotoObraGrupo(fc, objs, url, ctx){
       await _eaSetSrcArmazenado(o, pc);
     }catch(e){ r.avisos.push((o.nome || "foto") + ": " + _eaErro(e)); }
   }
-  return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe };
+  return { avisos:r.avisos, analise:r.analise, encaixe:r.encaixe, base:(r.base || cv), caixa:B, w:w, h:h, fotoUrl:url };
 }
 /* (07/10, Gustavo) cidade que NÃO existe no grupo CIDADES do template: escreve a cidade numa das opções (a que o template
    deixa acesa) e ajusta o retângulo de fundo ao tamanho do texto, com a mesma sobra dos lados do original. O lado ancorado
@@ -148027,13 +148070,13 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   // fotos do card nos espaços FOTO. Foto de obra (regras do Gustavo, 07/10): texto e mapa NÃO podem ficar em cima da obra;
   // na altura do mapa/pin já tem que ser céu; horizonte reto. A IA olha a foto (horizonte, inclinação, caixa da obra) e
   // o encaixe escolhe zoom/posição que respeitem isso; se não der, a foto entra centralizada e o histórico avisa.
-  let refsCache = null, intel = null; const geradas = [];
+  let refsCache = null, intel = null; const geradas = []; let rFO = null;
   if(fotoObra && espacosFoto.length){
     const f0 = fotos[0];
     if(!f0) avisos.push("faltou a foto da obra no material do card — Foto de obra não gera foto, ficou a imagem do template");
     else{
       passo("olhando a foto da obra (horizonte, obra, entulho)…");
-      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id, passo:passo }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id, passo:passo }); rFO = r; (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       catch(e){ avisos.push("foto: " + _eaErro(e)); }
       if(fotos.length > 1) avisos.push("o material tem " + fotos.length + " fotos — na Foto de obra entra a 1ª (" + (f0.name || "") + ")");
     }
@@ -148136,7 +148179,17 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   try{ await _eaRpc("arte_projeto_salvar", { p_id:p.id, p_doc:doc, p_motivo:(pAnt ? "regerada" : "gerada") + " pelo modelo “" + (modelo.nome || "") + "”", p_thumb:thumb }); }catch(_){ }
   const blob = _eaDataUrlBlob(fc.toDataURL({ format:"png", multiplier:1, enableRetinaScaling:false }));
   const up = await _eaSubir(blob, "tasks/" + task.id, nome + ".png");
+  /* (09/10, Gustavo) Ajuste fino na Avaliação: a FOTO-BASE (original já encaixada, sem IA) sobe junto da arte
+     e a geometria do encaixe fica gravada no arquivo — é o que permite "puxar da foto original" sem custo. */
+  let metaFO = null;
+  if(fotoObra && rFO && rFO.base && rFO.caixa){ try{
+    const upB = await _eaSubir(_eaDataUrlBlob(rFO.base.toDataURL("image/png")), "tasks/" + task.id, nome + "-base.png");
+    metaFO = { base:upB.url, foto:rFO.fotoUrl || null,
+      caixa:{ left:rFO.caixa.left, top:rFO.caixa.top, width:rFO.caixa.width, height:rFO.caixa.height },
+      w:rFO.w, h:rFO.h, pagina:{ W:W, H:H } };
+  }catch(_){ } }
   const f = await _eaRpc("arte_projeto_final", { p_id:p.id, p_file:{ url:up.url, storagePath:up.path, name:nome + ".png", type:"image/png", size:blob.size } });
+  if(metaFO) f.fotoObra = metaFO;
   // (08/10, Gustavo: "era pra ter todas as versões ali" + "a primeira deve ser a mais recente")
   // As VERSÕES antigas FICAM no card — a arte nova só entra como 1ª lâmina. O que não acumula são as
   // camadas compostas e a miniatura do projeto (arte/geradas, já no lixo acima) — isso é interno.
@@ -148144,6 +148197,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   const _novaPrimeiro = function(l){
     const ix = l.findIndex(function(x){ return x && x.url === f.url; });
     const novo = ix >= 0 ? l.splice(ix, 1)[0] : f;
+    if(f.fotoObra && novo && !novo.fotoObra) novo.fotoObra = f.fotoObra;   // geometria do ajuste fino acompanha a arte
     let alvo = l.findIndex(_ehFinal); if(alvo < 0) alvo = l.length;
     l.splice(alvo, 0, novo);
     return l;
@@ -148164,6 +148218,201 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   return { arquivo:f, projetoId:p.id, avisos:avisos };
 }
 if(typeof window !== "undefined"){ window.pxGerarArteDoModelo = pxGerarArteDoModelo; }
+
+/* ═══ AJUSTE FINO na Avaliação de design (09/10, Gustavo): "pedir ajustes específicos pra ela se aproximar
+   mais... que não mexa em outras coisas mas sim no que tá sendo pedido" + "puxar da imagem original que tá
+   em material". Marca um retângulo na arte e escolhe: a IA corrige SÓ ali (recorte local, ~R$1), ou a área
+   volta a ser a da FOTO ORIGINAL do material (foto-base guardada na geração — sem custo nenhum).
+   O resultado entra como NOVA VERSÃO (1ª lâmina) — a anterior fica no card. ═══ */
+function PxFotoObraAjusteModal({ task, arteUrl, onClose, onSaved }){
+  const [img, setImg] = useState(null);
+  const [erroAbrir, setErroAbrir] = useState("");
+  const [sel, setSel] = useState(null);            // {x,y,w,h} em px NATURAIS da arte
+  const [busy, setBusy] = useState("");
+  const [custo, setCusto] = useState(0);
+  const [mexidas, setMexidas] = useState(0);
+  const [instr, setInstr] = useState("");
+  const [vers, setVers] = useState(0);
+  const cvRef = useRef(null);                      // canvas de trabalho (tamanho natural)
+  const viewRef = useRef(null);                    // canvas visível
+  const histRef = useRef([]);                      // snapshots pro Desfazer (máx. 4)
+  const baseRef = useRef(null);                    // Image da foto-base
+  const dragRef = useRef(null);
+  const fe = ((task && task.files) || []).find(function(x){ return x && x.url === arteUrl; }) || null;
+  const meta = (fe && fe.fotoObra) || null;
+  useEffect(function(){ let vivo = true;
+    _eaCarregarImg(arteUrl).then(function(i){ if(!vivo) return;
+      const c = document.createElement("canvas"); c.width = i.width; c.height = i.height;
+      c.getContext("2d").drawImage(i, 0, 0); cvRef.current = c; setImg(i);
+    }).catch(function(e){ if(vivo) setErroAbrir("não consegui abrir a arte: " + _eaErro(e)); });
+    return function(){ vivo = false; };
+  }, [arteUrl]);
+  // redesenha o canvas visível (arte + retângulo da seleção)
+  useEffect(function(){
+    const cv = cvRef.current, vc = viewRef.current; if(!cv || !vc) return;
+    vc.width = cv.width; vc.height = cv.height;
+    const x = vc.getContext("2d"); x.drawImage(cv, 0, 0);
+    if(sel){
+      x.save();
+      x.fillStyle = "rgba(15,23,42,.38)";
+      x.fillRect(0, 0, vc.width, sel.y); x.fillRect(0, sel.y + sel.h, vc.width, vc.height - sel.y - sel.h);
+      x.fillRect(0, sel.y, sel.x, sel.h); x.fillRect(sel.x + sel.w, sel.y, vc.width - sel.x - sel.w, sel.h);
+      x.strokeStyle = "#a78bfa"; x.lineWidth = Math.max(2, Math.round(cv.width / 360)); x.setLineDash([10, 7]);
+      x.strokeRect(sel.x, sel.y, sel.w, sel.h);
+      x.restore();
+    }
+  }, [img, sel, vers]);
+  const _nat = function(e){
+    const vc = viewRef.current; if(!vc) return null;
+    const r = vc.getBoundingClientRect();
+    return { x:(e.clientX - r.left) * (vc.width / Math.max(1, r.width)), y:(e.clientY - r.top) * (vc.height / Math.max(1, r.height)) };
+  };
+  const _snap = function(){
+    const cv = cvRef.current; if(!cv) return;
+    const c = document.createElement("canvas"); c.width = cv.width; c.height = cv.height;
+    c.getContext("2d").drawImage(cv, 0, 0);
+    histRef.current.push(c); if(histRef.current.length > 4) histRef.current.shift();
+  };
+  async function puxarOriginal(){
+    if(!sel || !meta || !meta.base || busy) return;
+    setBusy("puxando da foto original…");
+    try{
+      if(!baseRef.current) baseRef.current = await _eaCarregarImg(meta.base);
+      const cv = cvRef.current;
+      const k = cv.width / Math.max(1, (meta.pagina && meta.pagina.W) || cv.width);   // arte exportada → coordenada da página
+      const cx = { left:meta.caixa.left * k, top:meta.caixa.top * k, width:meta.caixa.width * k, height:meta.caixa.height * k };
+      const x0 = Math.max(sel.x, cx.left), y0 = Math.max(sel.y, cx.top);
+      const x1 = Math.min(sel.x + sel.w, cx.left + cx.width), y1 = Math.min(sel.y + sel.h, cx.top + cx.height);
+      if(x1 - x0 < 8 || y1 - y0 < 8) throw new Error("a área marcada está fora da foto da obra");
+      const kbx = meta.w / Math.max(1, cx.width), kby = meta.h / Math.max(1, cx.height);
+      _snap();
+      const P = document.createElement("canvas"); P.width = Math.round(x1 - x0); P.height = Math.round(y1 - y0);
+      const p2 = P.getContext("2d");
+      p2.drawImage(baseRef.current, (x0 - cx.left) * kbx, (y0 - cx.top) * kby, (x1 - x0) * kbx, (y1 - y0) * kby, 0, 0, P.width, P.height);
+      const f = Math.max(8, Math.min(26, Math.round(Math.min(P.width, P.height) / 8)));
+      const Mk = document.createElement("canvas"); Mk.width = P.width; Mk.height = P.height;
+      const mk = Mk.getContext("2d"); mk.filter = "blur(" + f + "px)"; mk.fillStyle = "#fff";
+      mk.fillRect(f, f, Math.max(2, P.width - 2 * f), Math.max(2, P.height - 2 * f));
+      p2.globalCompositeOperation = "destination-in"; p2.drawImage(Mk, 0, 0);
+      cv.getContext("2d").drawImage(P, Math.round(x0), Math.round(y0));
+      setMexidas(function(n){ return n + 1; }); setVers(function(v){ return v + 1; }); setSel(null);
+      _eaToast("success", "Área devolvida à foto original (sem custo).");
+    }catch(e){ _eaToast("error", _eaErro(e)); }
+    setBusy("");
+  }
+  async function corrigirIA(){
+    if(!sel || busy) return;
+    const txt = String(instr || "").trim();
+    if(!txt){ _eaToast("warning", "Escreve o que é pra corrigir na área marcada."); return; }
+    setBusy("corrigindo com IA (só a área marcada)…");
+    try{
+      const cv = cvRef.current, w = cv.width, h = cv.height;
+      const L = Math.max(480, Math.min(Math.min(w, h), Math.round(Math.max(sel.w, sel.h) * 2.2)));
+      const rx = Math.max(0, Math.min(w - L, Math.round(sel.x + sel.w / 2 - L / 2)));
+      const ry = Math.max(0, Math.min(h - L, Math.round(sel.y + sel.h / 2 - L / 2)));
+      const Rec = document.createElement("canvas"); Rec.width = L; Rec.height = L;
+      Rec.getContext("2d").drawImage(cv, rx, ry, L, L, 0, 0, L, L);
+      const Mk = document.createElement("canvas"); Mk.width = L; Mk.height = L;
+      const mk = Mk.getContext("2d"); mk.fillStyle = "#000"; mk.fillRect(0, 0, L, L);
+      mk.globalCompositeOperation = "destination-out";
+      mk.fillRect(sel.x - rx, sel.y - ry, sel.w, sel.h);
+      const prompt = "Fotografia real. Edite SOMENTE a área marcada: " + txt + ". Fora da área marcada tudo permanece IDÊNTICO, pixel a pixel — mesma luz, mesma cor, mesma textura, mesma perspectiva. Nítido, com textura fotográfica real; proibido deixar qualquer região borrada ou nebulosa. Não acrescente texto, logos, pessoas ou objetos novos.";
+      const r = await _eaFotoIA(Rec, Mk, prompt, task && task.client, null);
+      if(!r) throw new Error("a IA não devolveu imagem");
+      const rA = (typeof _eaAlinharIA === "function") ? _eaAlinharIA(Rec, r) : r;
+      _snap();
+      const f = Math.max(8, Math.min(30, Math.round(Math.min(sel.w, sel.h) / 6)));
+      const P = document.createElement("canvas"); P.width = L; P.height = L;
+      const p2 = P.getContext("2d"); p2.drawImage(rA, 0, 0);
+      const Mv = document.createElement("canvas"); Mv.width = L; Mv.height = L;
+      const mv = Mv.getContext("2d"); mv.filter = "blur(" + f + "px)"; mv.fillStyle = "#fff";
+      mv.fillRect(sel.x - rx + f, sel.y - ry + f, Math.max(2, sel.w - 2 * f), Math.max(2, sel.h - 2 * f));
+      p2.globalCompositeOperation = "destination-in"; p2.drawImage(Mv, 0, 0);
+      cv.getContext("2d").drawImage(P, rx, ry);
+      if(r.__custo) setCusto(function(c){ return c + (Number(r.__custo) || 0); });
+      setMexidas(function(n){ return n + 1; }); setVers(function(v){ return v + 1; }); setSel(null);
+      _eaToast("success", "Área corrigida pela IA" + (r.__custo ? " · R$ " + Number(r.__custo).toFixed(2) : "") + ".");
+    }catch(e){ _eaToast("error", "IA: " + _eaErro(e)); }
+    setBusy("");
+  }
+  function desfazer(){
+    const ant = histRef.current.pop(); if(!ant) return;
+    cvRef.current = ant; setMexidas(function(n){ return Math.max(0, n - 1); }); setVers(function(v){ return v + 1; }); setSel(null);
+  }
+  async function salvar(){
+    if(!mexidas || busy){ if(!mexidas) _eaToast("info", "Nada foi mexido ainda — marca uma área e corrige primeiro."); return; }
+    setBusy("salvando a nova versão…");
+    try{
+      const cv = cvRef.current;
+      const blob = _eaDataUrlBlob(cv.toDataURL("image/png"));
+      const nomeN = String((fe && fe.name) || "arte.png").replace(/\.png$/i, "") + "-ajuste-" + Date.now().toString(36) + ".png";
+      const up = await _eaSubir(blob, "tasks/" + (task && task.id), nomeN);
+      const novo = { id:_eaUuid(), url:up.url, storagePath:up.path, name:nomeN, type:"image/png", size:blob.size,
+        tipo:"final", addedBy:(typeof CURRENT_USER !== "undefined" && CURRENT_USER && CURRENT_USER.name) || "",
+        addedAtIso:new Date().toISOString(), addedAt:_eaDataHora(new Date().toISOString()), origem:"ajuste_fino" };
+      if(meta) novo.fotoObra = meta;
+      const nota = (custo > 0 ? "IA em área marcada · R$ " + custo.toFixed(2) : "área devolvida à foto original (sem custo)");
+      if(typeof onSaved === "function") onSaved(novo, nota);
+      _eaToast("success", "Nova versão salva — virou a 1ª lâmina (a anterior continua no card).");
+    }catch(e){ _eaToast("error", "salvar: " + _eaErro(e)); setBusy(""); return; }
+    setBusy("");
+  }
+  const bt = function(cor, cheio){ return { font:"inherit", width:"100%", padding:"10px 12px", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:12.5, border:cheio ? 0 : "1px solid " + cor + "55", background:cheio ? cor : cor + "12", color:cheio ? "#fff" : cor, opacity:busy ? .55 : 1 }; };
+  return (<div style={{position:"fixed",inset:0,background:"rgba(10,12,24,.86)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:18}} onClick={function(){ if(!busy && typeof onClose === "function") onClose(); }}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:18,maxWidth:1060,width:"100%",maxHeight:"94vh",display:"flex",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.5)"}}>
+      {/* ── arte com seleção ── */}
+      <div style={{flex:1,minWidth:0,background:"#0b1020",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",padding:14}}>
+        {erroAbrir ? <div style={{color:"#fca5a5",fontSize:13,padding:24,textAlign:"center"}}>{erroAbrir}</div>
+        : !img ? <div style={{color:"#94a3b8",fontSize:13}}>abrindo a arte…</div>
+        : <canvas ref={viewRef}
+            style={{maxWidth:"100%",maxHeight:"calc(94vh - 28px)",width:"auto",height:"auto",display:"block",borderRadius:10,cursor:"crosshair",touchAction:"none"}}
+            onPointerDown={function(e){ const p = _nat(e); if(!p) return; dragRef.current = p; setSel(null); try{ e.currentTarget.setPointerCapture(e.pointerId); }catch(_){ } }}
+            onPointerMove={function(e){ const a = dragRef.current; if(!a) return; const p = _nat(e); if(!p) return;
+              setSel({ x:Math.round(Math.min(a.x, p.x)), y:Math.round(Math.min(a.y, p.y)), w:Math.round(Math.abs(p.x - a.x)), h:Math.round(Math.abs(p.y - a.y)) }); }}
+            onPointerUp={function(){ dragRef.current = null;
+              setSel(function(v){ return (v && v.w >= 24 && v.h >= 24) ? v : null; }); }}/>}
+        {busy && <div style={{position:"absolute",inset:0,background:"rgba(10,12,24,.55)",display:"flex",alignItems:"center",justifyContent:"center",color:"#e9d5ff",fontSize:13.5,fontWeight:700,gap:10}}>
+          <span style={{width:16,height:16,border:"2.5px solid #a78bfa",borderTopColor:"transparent",borderRadius:"50%",display:"inline-block",animation:"pixelsSpin .8s linear infinite"}}/>{busy}
+          <style>{"@keyframes pixelsSpin{to{transform:rotate(360deg)}}"}</style>
+        </div>}
+      </div>
+      {/* ── controles ── */}
+      <div style={{width:312,flexShrink:0,padding:"18px 18px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
+        <div>
+          <div style={{fontSize:15.5,fontWeight:800,color:"#0f172a",letterSpacing:-.2}}>Ajuste fino na arte</div>
+          <div style={{fontSize:12,color:"#64748b",lineHeight:1.55,marginTop:4}}>Arrasta na imagem pra <b>marcar a área</b> que quer corrigir. Só ela é mexida — o resto da arte fica intacto.</div>
+        </div>
+        {!sel && <div style={{background:"#f5f3ff",border:"1px dashed #c4b5fd",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#6d28d9",fontWeight:600}}>Nenhuma área marcada ainda — arrasta na imagem.</div>}
+        {sel && <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#047857",fontWeight:700}}>Área marcada: {sel.w}×{sel.h}px</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <button disabled={!sel || !meta || !meta.base || !!busy} onClick={puxarOriginal}
+            title={meta && meta.base ? "A área marcada volta a ser exatamente a foto original do material (sem IA, sem custo)." : "Disponível nas artes geradas a partir de agora (a foto-base fica guardada na geração)."}
+            style={Object.assign(bt("#0f766e", true), { opacity:(!sel || !meta || !meta.base || busy) ? .45 : 1, cursor:(!sel || !meta || !meta.base || busy) ? "not-allowed" : "pointer" })}>
+            ⤺ Puxar da foto original <span style={{fontWeight:600,opacity:.85}}>· sem custo</span>
+          </button>
+          {(!meta || !meta.base) && <div style={{fontSize:11,color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"7px 10px",lineHeight:1.5}}>Essa arte foi gerada antes do ajuste fino: dá pra corrigir com IA, mas "puxar da original" só funciona nas artes geradas daqui pra frente (regenera a arte e ela já vem preparada).</div>}
+        </div>
+        <div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontSize:11,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Ou corrigir com IA</div>
+          <textarea value={instr} onChange={function(e){ setInstr(e.target.value); }} rows={3}
+            placeholder="O que corrigir na área marcada? Ex.: tirar a sombra do chão e preencher com grama"
+            style={{font:"inherit",fontSize:12.5,padding:"9px 11px",borderRadius:10,border:"1px solid #e2e8f0",resize:"vertical",outline:"none",lineHeight:1.5}}/>
+          <button disabled={!sel || !!busy} onClick={corrigirIA}
+            style={Object.assign(bt("#7c3aed", true), { opacity:(!sel || busy) ? .45 : 1, cursor:(!sel || busy) ? "not-allowed" : "pointer" })}>
+            ✦ Corrigir só essa área com IA <span style={{fontWeight:600,opacity:.85}}>· ~R$ 1</span>
+          </button>
+        </div>
+        <div style={{marginTop:"auto",display:"flex",flexDirection:"column",gap:8,borderTop:"1px solid #e2e8f0",paddingTop:12}}>
+          {(mexidas > 0 || custo > 0) && <div style={{fontSize:12,color:"#334155",fontWeight:600}}>{mexidas} ajuste(s) feito(s){custo > 0 ? " · gasto com IA: R$ " + custo.toFixed(2) : " · sem custo"}</div>}
+          <button disabled={!histRef.current.length || !!busy} onClick={desfazer} style={Object.assign(bt("#64748b", false), { opacity:(!histRef.current.length || busy) ? .45 : 1 })}>↶ Desfazer último ajuste</button>
+          <button disabled={!mexidas || !!busy} onClick={salvar} style={Object.assign(bt("#16a34a", true), { opacity:(!mexidas || busy) ? .45 : 1 })}>Salvar como nova versão</button>
+          <button disabled={!!busy} onClick={function(){ if(typeof onClose === "function") onClose(); }} style={bt("#94a3b8", false)}>Fechar sem salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+if(typeof window !== "undefined"){ window.PxFotoObraAjusteModal = PxFotoObraAjusteModal; }
 
 /* Janela do card "Gerar arte": (07/10, Gustavo) NÃO PERGUNTA — pega o template PADRÃO do tipo do card
    (Foto de obra · Arte · Carrossel · Story) e da unidade, e já gera. Só mostra escolha se não houver padrão. */
