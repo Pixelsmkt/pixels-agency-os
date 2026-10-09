@@ -147054,7 +147054,9 @@ function _eaEstenderCeu(cv, topo, w){
     const mescla = yy >= topo ? Math.max(0, (topo + 160 - yy) / 160) : 1;
     for(let xx = 0; xx < w; xx++){
       const i = (yy * w + xx) * 4, p = suave[xx];
-      const r = p[0] * (1 - 0.22 * t), g = p[1] * (1 - 0.16 * t), b = p[2] * (1 - 0.08 * t);
+      // (09/10, Gustavo: "céu escuro, que merda é essa") escurecer o topo era exagerado em céu longo:
+      // 22% no vermelho deixava o alto azulão quase roxo. Agora é um degradê leve, céu de dia normal.
+      const r = p[0] * (1 - 0.10 * t), g = p[1] * (1 - 0.07 * t), b = p[2] * (1 - 0.04 * t);
       if(dc2[i + 3] === 0 || mescla === 1){ dc2[i] = r; dc2[i + 1] = g; dc2[i + 2] = b; dc2[i + 3] = 255; }
       else if(mescla > 0){ dc2[i] = dc2[i] * (1 - mescla) + r * mescla; dc2[i + 1] = dc2[i + 1] * (1 - mescla) + g * mescla; dc2[i + 2] = dc2[i + 2] * (1 - mescla) + b * mescla; dc2[i + 3] = 255; }
     }
@@ -147265,10 +147267,48 @@ async function _eaLimparEntulhoIA(cv, cx, o){
    template). O ícone 3D tem camada própria e NÃO passa por aqui — a sombra dele fica, como pedido. */
 async function _eaTirarSombraBakedMapa(fc){
   let mexidas = 0;
+  /* (09/10, 13:24 — a sombra que sobrava NEM ERA pintada: era o blend DARKEN da camada verde escurecendo o
+     CÉU azul em volta (min(verde, azul) = verde-sujo seguindo o contorno). Nos grupos de mapa em que uma
+     camada tinge a outra (darken/multiply), a saída validada no harness (comp-v5): a camada verde vira
+     OPACA (só os pixels verdes saturados) em source-over, e a base branca que existia só pro tingimento é
+     escondida → mapa chapado, dois tons, SEM sombra nenhuma. Grupo de camada única (Brasil) não entra aqui. */
+  const grupos = {};
+  fc.getObjects().forEach(function(x){
+    if(_eaTipo(x) !== "imagem" || x.visible === false || !x.variante) return;
+    const gn = String(x.variante.grupo || "") + " " + String(x.variante.nome || "");
+    if(!/map|mapa|render/i.test(gn) || /icone|ícone|icon/i.test(gn)) return;
+    const k = x.variante.grupo + "\u0001" + x.variante.nome;
+    (grupos[k] = grupos[k] || []).push(x);
+  });
+  for(const k of Object.keys(grupos)){
+    const objs = grupos[k];
+    const tinge = objs.filter(function(x){ return /darken|multiply/i.test(String(x.globalCompositeOperation || "")); });
+    if(objs.length < 2 || !tinge.length) continue;
+    for(const x of tinge){
+      try{
+        const el = x.getElement(); if(!el || !el.width) continue;
+        const c2 = document.createElement("canvas"); c2.width = el.width; c2.height = el.height;
+        const x2 = c2.getContext("2d"); x2.drawImage(el, 0, 0);
+        const ic = x2.getImageData(0, 0, c2.width, c2.height), d = ic.data; let mant = 0;
+        for(let i = 0; i < d.length; i += 4){
+          const a = d[i + 3], r = d[i], g = d[i + 1], b = d[i + 2];
+          const sat = Math.max(r, g, b) - Math.min(r, g, b);
+          if(a > 80 && sat > 30){ d[i + 3] = 255; mant++; } else d[i + 3] = 0;
+        }
+        if(mant < 500) continue;
+        x2.putImageData(ic, 0, 0);
+        await _eaSetSrcArmazenado(x, c2);
+        x.set("globalCompositeOperation", "source-over");
+        mexidas++;
+      }catch(_){ }
+    }
+    if(mexidas) objs.forEach(function(x){ if(tinge.indexOf(x) < 0) x.set("visible", false); });   // a base branca some
+  }
   for(const x of fc.getObjects()){
     if(_eaTipo(x) !== "imagem" || x.visible === false || !x.variante) continue;
     const gn = String(x.variante.grupo || "") + " " + String(x.variante.nome || "");
     if(!/map|mapa|render/i.test(gn) || /icone|ícone|icon/i.test(gn)) continue;
+    if(/darken|multiply/i.test(String(x.globalCompositeOperation || ""))) continue;
     try{
       const el = x.getElement(); if(!el || !el.width) continue;
       const c2 = document.createElement("canvas"); c2.width = el.width; c2.height = el.height;
@@ -147416,11 +147456,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       return (ix * iy) / Math.max(1, c.w * c.h); };
     const pequenos = [], grandes = []; let naObra = 0;
     cxs.forEach(function(c){
+      if(invadeObra(c) > 0.2){ naObra++; return; }                              // NINGUÉM mexe em cima da obra
       const grande = c.w * c.h > areaFoto * 0.012;
-      if(grande && podeIA){ if(invadeObra(c) > 0.2) naObra++; else grandes.push(c); }
-      else pequenos.push(c);
+      if(grande && podeIA) grandes.push(c); else pequenos.push(c);
     });
-    if(naObra) avisos.push(naObra + " mancha(s) grande(s) encostada(s) na obra ficaram como estão — mexer ali arriscava alterar a própria obra");
+    if(naObra) avisos.push(naObra + " mancha(s) encostada(s) na obra ficaram como estão — mexer ali arriscava alterar ou borrar a própria obra");
     if(pequenos.length){
       try{
         if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho e sombras (sem IA)…"); }catch(_){ } }
@@ -147490,7 +147530,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — é como a gente confere se o
   // navegador rodou o código NOVO ou um bundle velho em cache (stale bundle já enganou o teste 4+ vezes)
-  avisos.push("motor da foto v4 (entulho grande via IA local · mapa sem sombra chapada)");
+  avisos.push("motor da foto v5 (mapa chapado sem blend · céu claro · nada mexe em cima da obra)");
   return { cv:cv, avisos:avisos, analise:an, encaixe:m };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
@@ -147878,7 +147918,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
   // sombra gravada DENTRO do PNG do mapa (não é camada separada): removida pixel a pixel; a do ícone fica
   if(fotoObra){ try{
     const nM = await _eaTirarSombraBakedMapa(fc);
-    if(nM) avisos.push("sombra chapada gravada no PNG do mapa removida (" + nM + " camada(s)) — a sombra 3D do ícone continua");
+    if(nM) avisos.push("mapa ficou chapado e limpo, SEM sombra nenhuma (o escuro era o blend da camada verde sobre o céu) — a sombra 3D do ícone/pin continua");
   }catch(_){ } }
   // logo, telefone, cidade, cores e fonte: cadastro + Kit (mesma função do editor)
   const stub = { fc:fc, lib:lib, kit:kit, proj:{ client_id:task.client }, pausar:function(){}, mudou:function(){}, setAvisos:function(v){ (v || []).forEach(function(x){ avisos.push(x); }); } };
