@@ -71027,11 +71027,11 @@ function TSegCriarPin({ st, trocando, onPronto, onCancelar }) {
 
   return (
     <div>
-      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando && st && st.tem_pin ? "Trocar meu PIN" : "Crie seu PIN de aprovação"}</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando ? "Trocar meu PIN" : "Crie seu PIN da Gestão de mídia"}</div>
       <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16, lineHeight: 1.5 }}>
         {etapa === "senha"
           ? "Primeiro digite a senha da sua conta. Assim ninguém cria ou troca o PIN só porque achou seu computador logado."
-          : "6 números, que só você sabe — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o seu PIN: nem a equipe, nem o Claude."}
+          : "6 números, que só você sabe. Não use data de nascimento, 123456 nem número repetido. O PIN não fica salvo em lugar nenhum da tela."}
       </div>
       {etapa === "senha" ? (
         <div>
@@ -71160,14 +71160,14 @@ function TSegAlarmes({ itens, onVisto, onFechar, carregando }) {
 }
 
 /* ---------- segurança (só aprovadores) ---------- */
-function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
+function TSegSeguranca({ st, onFechar, onMudou }) {
   const [aba, setAba] = useState("pessoas");
   const [pessoas, setPessoas] = useState([]);
   const [log, setLog] = useState([]);
   const [pedePin, setPedePin] = useState(null); // {titulo, acao: async(pin)}
   const [pin, setPin] = useState("");
   const [msg, setMsg] = useState("");
-  const [trocar, setTrocar] = useState(!!abrirCriar);
+  const [trocar, setTrocar] = useState(false);
 
   const carregar = async function () {
     try { setPessoas((await _tsegRpc("ads_pin_pessoas")) || []); } catch (e) { setMsg(e.message); }
@@ -71357,8 +71357,6 @@ function TSegPortao({ currentUser, viewUser, children }) {
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
             🔔 Alarmes{naoVistos.length ? " (" + naoVistos.length + ")" : ""}
           </button>
-          {!st.tem_pin && <button onClick={function () { setPainel("criar"); }}
-            style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔑 Criar meu PIN</button>}
           <button onClick={function () { setPainel("seguranca"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🛡️ Segurança</button>
           {st.obrigatorio && <button onClick={trancar}
@@ -71368,7 +71366,6 @@ function TSegPortao({ currentUser, viewUser, children }) {
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
-      {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
     </Fragment>
   );
 }
@@ -148237,18 +148234,25 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      DETERMINÍSTICA: com o zoom já escolhido, a posição vertical deixa de ser disputa de pesos — a OBRA é
      CENTRALIZADA na faixa útil (da base do bloco mapa/cidade até o topo do ícone/frase). A IA completa o
      céu/terreno que faltar em cima ou embaixo. */
+  /* (09/10, 18h52 — "3 artes em uma só") a 1ª versão desta trava só EMPURRAVA a foto pequena pro meio:
+     sobrava um vazio enorme em cima/embaixo e a IA "continuava a cena" inventando outras paisagens.
+     Agora a foto é AMPLIADA até preencher o quadro (cortando as laterais que sobram, NUNCA a obra) com a
+     obra centralizada na faixa útil — o vazio fica mínimo e a IA só estende céu/terreno de verdade. */
   if(podeIA && an.obra && (teto != null || piso != null)){
-    const obH = (an.obra.y1 - an.obra.y0) * m.dh;
     const fT = (teto != null ? teto : 0) + h * 0.015, fB = (piso != null ? piso : h) - h * 0.015;
+    const obWf = Math.max(0.05, an.obra.x1 - an.obra.x0), obHf = Math.max(0.03, an.obra.y1 - an.obra.y0);
     if(fB - fT > h * 0.08){
-      let alvoY0 = fT + Math.max(0, (fB - fT - obH) / 2);          // obra maior que a faixa → encosta no teto (mapa ganha)
-      if(alvoY0 + obH > h) alvoY0 = Math.max(0, h - obH);          // mas nunca corta a obra no rodapé
-      const oyN = alvoY0 - an.obra.y0 * m.dh;
-      if(Math.abs(oyN - m.oy) > 4){
-        m = Object.assign({}, m, { oy:oyN });
-        m.vazio = (Math.max(0, m.oy) + Math.max(0, h - (m.oy + m.dh))) * w + Math.max(0, w - m.dw) * h;
-        avisos.push("obra centralizada na faixa útil (entre o mapa/cidade e o ícone/frase)");
-      }
+      let s = Math.min(w / (obWf * nova.width) * 0.96,            // obra inteira na largura (com folga)
+                       (fB - fT) / (obHf * nova.height));         // obra inteira na faixa útil
+      s = Math.max(sDentro, Math.min(s, sCobre * 1.4));           // nem menor que "inteira", nem zoom absurdo
+      const dwN = nova.width * s, dhN = nova.height * s;
+      let oyN = fT + Math.max(0, (fB - fT - obHf * dhN) / 2) - an.obra.y0 * dhN;
+      let oxN = (w - dwN) / 2;
+      const obx0 = oxN + an.obra.x0 * dwN, obx1 = oxN + an.obra.x1 * dwN;
+      if(obx0 < 0) oxN += -obx0 + w * 0.01; else if(obx1 > w) oxN -= (obx1 - w) + w * 0.01;
+      m = { s:s, ox:oxN, oy:oyN, dw:dwN, dh:dhN, pena:0, viol:false,
+            vazio:(Math.max(0, oyN) + Math.max(0, h - (oyN + dhN))) * w + Math.max(0, w - dwN) * h };
+      avisos.push("encaixe pela faixa útil: foto ampliada pra preencher o quadro, obra entre o mapa/cidade e o ícone/frase");
     }
   }
   const desenhar = function(pl){
