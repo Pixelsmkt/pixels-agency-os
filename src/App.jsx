@@ -2613,6 +2613,17 @@ function pxValorTaskPagamento(t,prices,chave){
 }
 if(typeof window!=="undefined"){ window.pxValorTaskPagamento=pxValorTaskPagamento; }
 // contentType → [chave de contagem, chave da lista de tasks]
+/* (09/10, Gustavo) "arte gerada por IA não precisa de tipo de conteúdo — o tipo é só pra registrar
+   pagamento, e nessas não tem freelancer". Card cuja arte veio TODA da Edição de arte (Gerar arte):
+   não conta pagamento de freela, e a aprovação não exige freelancer, tipo de conteúdo nem mês de
+   pagamento. Se um designer subir arquivo final próprio no card, volta a valer a regra normal. */
+function pxArteFeitaPorIA(t){
+  try{
+    const fs = (Array.isArray(t && t.files) ? t.files : []).filter(function(f){ return f && f.url && !f.isRef && !f.isAnnotation && f.tipo !== "referencia" && f.tipo !== "material"; });
+    return fs.length > 0 && fs.every(function(f){ return f.origem === "edicao_arte"; });
+  }catch(_){ return false; }
+}
+if(typeof window !== "undefined") window.pxArteFeitaPorIA = pxArteFeitaPorIA;
 const _CT_BUCKET = {
   foto:["fotoObra","tasksFotoObra"], arte:["arte","tasksArte"],
   carrossel:["carrossel","tasksCarrossel"], folder:["folder","tasksFolder"],
@@ -2806,6 +2817,7 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     if(t.deletedAt)return;
     const _EXCLUDED_STATUSES=["rascunhos","demanda","alteracao_copy","preencher_material"];
     if(_EXCLUDED_STATUSES.indexOf(t.status)>=0)return;
+    if(pxArteFeitaPorIA(t))return;   // (09/10, Gustavo) arte toda feita pela IA: sem freela, sem pagamento
     // Fallback robusto: pra cards reprovados publishDate/completedAt podem ser null.
     // Cascata: referenceMonth → publishDate → completedAt → deadline → colEnteredAt → updated_at → createdAt
     function _isoMonth(v){
@@ -34985,14 +34997,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     /* (29/09/2026, Gustavo) SÓ O VINICIUS marcado = peça do Vinicius (story): não tem freelancer
        nem TIPO DE CONTEÚDO — "não precisa ter tipo marcado, inclusive não deve". */
     const _soVini=_pxSoVinicius(task);
-    if(!temFreela&&!_short&&!_story&&!_soVini) f.push("freelancer (designer ou editor de vídeo)");
+    /* (09/10, Gustavo) arte GERADA PELA IA (Gerar arte): sem freelancer, então não precisa de tipo de
+       conteúdo nem mês de pagamento — "o tipo é só pra registrar pagamento, não precisamos freelas nessas". */
+    const _arteIA=(typeof pxArteFeitaPorIA==="function")&&pxArteFeitaPorIA(task);
+    if(!temFreela&&!_short&&!_story&&!_soVini&&!_arteIA) f.push("freelancer (designer ou editor de vídeo)");
     const ct=String(task.contentType||task.content_type||task.tipo||"").toLowerCase();
     /* (25/09/2026, Vinicius) Short também não precisa de TIPO DE CONTEÚDO: não vai pra edição,
        é direto da Hellen pro Gustavo — o tipo só serve pra classificar pagamento de freela. */
-    if(_PX_TIPOS_VALIDOS.indexOf(ct)<0&&!_short&&!_soVini) f.push("tipo de conteúdo");
+    if(_PX_TIPOS_VALIDOS.indexOf(ct)<0&&!_short&&!_soVini&&!_arteIA) f.push("tipo de conteúdo");
     /* (29/09, Gustavo) SÓ o Vinicius: sem mês de pagamento — com Maria/André etc. marcados, continua exigindo */
     /* (05/10/2026, Gustavo) "já falei que short não precisa mês de pagamento" — não passa por edição. */
-    if(!_soVini&&!_short&&!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
+    if(!_soVini&&!_short&&!_arteIA&&!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
     return f;
   };
   const approveCopy=(task,destino,instrucao)=>{
