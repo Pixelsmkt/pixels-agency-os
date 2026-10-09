@@ -55129,7 +55129,10 @@ function _pxBtnAcaoSt(bg,rgb,isMobile){
    Banco: criacao_ia_gasto_card · criacao_ia_creditos · criacao_ia_recarga · criacao_ia_teto (SQL v41). Edge ask-claude v17 / ask-openai v10 registram. */
 const _PX_IA_ORIGENS = { copy_ajuste:"Copy · ajustar", copy_refazer:"Copy · refazer do zero", copy_abordagem:"Copy · outra abordagem",
   legendas:"Legendas", briefing:"Briefing", pauta:"Sugerir pauta", desrepete:"Legenda sem repetir", traducao:"Tradução (Paraguay)",
-  organizar_ajuste:"Organizar pedido de ajuste", roteiro:"Roteiro de vídeo", brief_campanha:"Brief de campanha", outros:"Outras telas" };
+  organizar_ajuste:"Organizar pedido de ajuste", roteiro:"Roteiro de vídeo", brief_campanha:"Brief de campanha", outros:"Outras telas",
+  arte_foto_obra:"Arte · análise da foto de obra", arte_geo:"Arte · cidade no mapa", arte_foto:"Arte · edição da foto (IA)",
+  arte_foto_nova:"Arte · foto nova por referência", arte_pedir:"Arte · pedido à IA", arte_variacoes:"Arte · variações",
+  arte_aprender:"Arte · aprendizado", arte_voz:"Arte · voz" };
 function _pxIaOrigemNome(o){ return _PX_IA_ORIGENS[o] || String(o || "Outras telas"); }
 function _pxBRL(v){ const n = Number(v) || 0; return "R$ " + n.toFixed(2).replace(".", ","); }
 function _pxUSD(v, casas){ const n = Number(v) || 0; return "US$ " + n.toFixed(casas == null ? 2 : casas).replace(".", ","); }
@@ -55144,6 +55147,7 @@ function PxGastoIACard({ taskId }){
   if(!g || !(Number(g.total_brl) > 0)) return null;
   const partes = [];
   if(Number(g.copy_brl) > 0) partes.push("textos " + _pxBRL(g.copy_brl));
+  if(Number(g.arte_brl) > 0) partes.push("arte " + _pxBRL(g.arte_brl));   // (09/10, Gustavo) análise da foto + gpt-image + pedidos à IA da arte
   if(Number(g.video_brl) > 0) partes.push("vídeo " + _pxBRL(g.video_brl));
   return <div title={(g.por_origem || []).map(function(o){ return _pxIaOrigemNome(o.origem) + ": " + o.n + "× · " + _pxUSD(o.usd, 3); }).join("\n")}
     style={{marginBottom:14,padding:"8px 12px",borderRadius:10,background:"#f5f3ff",border:"1px solid #ddd6fe",fontSize:12,color:"#4c1d95",fontWeight:600,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
