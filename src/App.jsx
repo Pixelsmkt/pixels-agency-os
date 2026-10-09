@@ -85781,7 +85781,6 @@ function _ProdCriador({produto,cfg,setProduto,salvarVersao,duplicar,voltar,ficha
   const setIdeia=function(k,v){ set(function(cur){ return Object.assign({},cur,{ideia:Object.assign({},cur.ideia,(function(){const o={};o[k]=v;return o;})())}); }); };
   const STEPS=[
     {id:"ideia",       ico:"lightbulb",    label:"Ideia",         done:!!(p.ideia.nome&&p.ideia.problema)},
-    {id:"materiais",   ico:"folderkanban", label:"Materiais",     done:(p.materiais||[]).length>0||!!p.iaEntendimento},
     {id:"estrutura",   ico:"compass",      label:"Estrutura",     done:(p.fases||[]).length>0},
     {id:"entregaveis", ico:"checkcircle",  label:"Entregáveis",   done:(p.entregaveis||[]).length>0},
     {id:"csp",         ico:"users",        label:"CSP",           done:c.csp>0},
@@ -85792,7 +85791,7 @@ function _ProdCriador({produto,cfg,setProduto,salvarVersao,duplicar,voltar,ficha
     {id:"ficha",       ico:"clipboard",    label:"Ficha",         done:c.sinais.temPreco&&c.sinais.temFases&&c.sinais.temEntregaveis},
   ];
   const cur=STEPS[step];
-  const sub=function(st){ if(st.id==="csp"&&c.csp>0) return _prodFmt(c.csp); if(st.id==="preco"&&c.preco>0) return _prodFmt(c.preco); if(st.id==="estrutura"&&p.fases.length) return p.fases.length+" fase"+(p.fases.length>1?"s":""); if(st.id==="entregaveis"&&p.entregaveis.length) return p.entregaveis.length+" itens"; if(st.id==="indices"&&p.entregaveis.length) return "escala "+c.indices.escala; if(st.id==="materiais"&&(p.materiais||[]).length) return (p.materiais||[]).length+" arquivo"+((p.materiais||[]).length>1?"s":""); if(st.id==="contratos"){ const ct=p.contratos||{}; if((ct.gerados||[]).length) return (ct.gerados||[]).length+" gerado"+((ct.gerados||[]).length>1?"s":""); if((ct.modelos||[]).length) return (ct.modelos||[]).length+" modelo"+((ct.modelos||[]).length>1?"s":""); } return st.done?"ok":"pendente"; };
+  const sub=function(st){ if(st.id==="csp"&&c.csp>0) return _prodFmt(c.csp); if(st.id==="preco"&&c.preco>0) return _prodFmt(c.preco); if(st.id==="estrutura"&&p.fases.length) return p.fases.length+" fase"+(p.fases.length>1?"s":""); if(st.id==="entregaveis"&&p.entregaveis.length) return p.entregaveis.length+" itens"; if(st.id==="indices"&&p.entregaveis.length) return "escala "+c.indices.escala; if(st.id==="contratos"){ const ct=p.contratos||{}; if((ct.gerados||[]).length) return (ct.gerados||[]).length+" gerado"+((ct.gerados||[]).length>1?"s":""); if((ct.modelos||[]).length) return (ct.modelos||[]).length+" modelo"+((ct.modelos||[]).length>1?"s":""); } return st.done?"ok":"pendente"; };
 
   const Rail=<><style>{".prdRail::-webkit-scrollbar{display:none}"}</style>
     <div className="prdRail" style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:18,padding:isMob?7:8,display:"flex",alignItems:"stretch",gap:5,overflowX:"auto",scrollbarWidth:"none",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
@@ -85820,8 +85819,9 @@ function _ProdCriador({produto,cfg,setProduto,salvarVersao,duplicar,voltar,ficha
 
   const body=(function(){
     switch(cur.id){
-      case "ideia":       return <_ProdEtapaIdeia p={p} setIdeia={setIdeia} set={set} canEdit={canEdit} isMob={isMob}/>;
-      case "materiais":   return <_ProdEtapaMateriais p={p} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "ideia":       return <><_ProdEtapaIdeia p={p} setIdeia={setIdeia} set={set} canEdit={canEdit} isMob={isMob}/>
+        <div style={{borderTop:"1px solid #f0edf8",margin:"6px 0 0"}}/>
+        <_ProdEtapaMateriais p={p} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob} embutida/></>;
       case "contratos":   return <_ProdEtapaContratos p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "estrutura":   return <_ProdEtapaEstrutura p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "entregaveis": return <_ProdEtapaEntregaveis p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
@@ -85940,7 +85940,7 @@ function _ProdEtapaEstrutura({p,c,cfg,set,canEdit,isMob}){
   const totalDias=c.duracaoDias||1;
   const cores=["#9F43F6","#7c3aed","#a855f7","#c084fc","#6d28d9","#8b5cf6","#d8b4fe"];
   return <>
-    <_PrdModHeader num={3} ico="compass" title="Estrutura do produto" subtitle="Começo, meio e fim. Cada fase diz o que acontece, quem faz, quanto tempo leva e quantas horas consome. Produto eterno não é produto." done={p.fases.length>0} isMob={isMob}/>
+    <_PrdModHeader num={2} ico="compass" title="Estrutura do produto" subtitle="Começo, meio e fim. Cada fase diz o que acontece, quem faz, quanto tempo leva e quantas horas consome. Produto eterno não é produto." done={p.fases.length>0} isMob={isMob}/>
 
     {/* Linha do tempo */}
     {p.fases.length>0&&<div style={{background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:14,padding:"14px 16px"}}>
@@ -86009,7 +86009,7 @@ function _ProdEtapaEntregaveis({p,c,cfg,set,canEdit,isMob}){
   const n=p.entregaveis.length;
   const diverge=c.horasTotal>0&&c.horasEntregaveis>0&&Math.abs(c.horasEntregaveis-c.horasTotal)/c.horasTotal>0.25;
   return <>
-    <_PrdModHeader num={4} ico="checkcircle" title="Entregáveis" subtitle="O que o cliente recebe, em que formato e o quanto disso já é padrão. Quanto mais template e reutilização, mais escala." done={n>0} isMob={isMob}/>
+    <_PrdModHeader num={3} ico="checkcircle" title="Entregáveis" subtitle="O que o cliente recebe, em que formato e o quanto disso já é padrão. Quanto mais template e reutilização, mais escala." done={n>0} isMob={isMob}/>
     {n>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,minmax(0,1fr))",gap:10}}>
       <_PrdKpi label="Entregáveis" valor={n} ico="checkcircle"/>
       <_PrdKpi label="Com template" valor={_prodPct(c.indices.pctTemplate,0)} sub="pronto pra reaproveitar"/>
@@ -86051,7 +86051,7 @@ function _ProdEtapaCsp({p,c,cfg,set,canEdit,isMob}){
   const del=function(id){ set(function(cur){ return Object.assign({},cur,{custosExternos:(cur.custosExternos||[]).filter(function(x){return x.id!==id;})}); }); };
   const linhas=funcoes.filter(function(f){return (c.horasPorFuncao[f.id]||0)>0;});
   return <>
-    <_PrdModHeader num={5} ico="users" title="Custo do Serviço Prestado" subtitle="Quanto custa entregar UM produto. Mão de obra vem das horas por função das fases × custo-hora; o resto é o que sai do bolso pra entregar." done={c.csp>0} isMob={isMob}/>
+    <_PrdModHeader num={4} ico="users" title="Custo do Serviço Prestado" subtitle="Quanto custa entregar UM produto. Mão de obra vem das horas por função das fases × custo-hora; o resto é o que sai do bolso pra entregar." done={c.csp>0} isMob={isMob}/>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,minmax(0,1fr))",gap:10}}>
       <_PrdKpi label="Mão de obra" valor={_prodFmt(c.cspMO)} sub={c.horasTotal+"h · "+c.pessoas.length+(c.pessoas.length===1?" função":" funções")} ico="users"/>
       <_PrdKpi label="Custos externos" valor={_prodFmt(c.cspExt)} sub={(p.custosExternos||[]).length+" item"+((p.custosExternos||[]).length===1?"":"ns")} ico="handshake"/>
@@ -86094,7 +86094,7 @@ function _ProdEtapaPreco({p,c,cfg,set,canEdit,isMob}){
   const Linha=function(l,v,cor,neg,forte){ return <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"8px 0",borderTop:forte?"1px solid "+_PRD.PX_BD:"1px solid #f2f3f7",fontFeatureSettings:"'tnum'"}}><span style={{color:forte?_PRD.PX_DK:_PRD.MUTE,fontSize:forte?13:12.5,fontWeight:forte?800:600}}>{l}</span><span style={{color:cor||_PRD.INK,fontWeight:forte?900:700,fontSize:forte?15:13}}>{neg?"− ":""}{v}</span></div>; };
   const simCor=simC.mcPct>=mDes?_PRD.OK:simC.mcPct>=mMin?_PRD.WARN:_PRD.BAD;
   return <>
-    <_PrdModHeader num={6} ico="dollar" title="Precificação" subtitle="Defina o preço — ou diga a margem que quer e o sistema diz o preço. Deduções (imposto, comissão, taxa) vêm dos Parâmetros." done={c.preco>0} isMob={isMob}/>
+    <_PrdModHeader num={5} ico="dollar" title="Precificação" subtitle="Defina o preço — ou diga a margem que quer e o sistema diz o preço. Deduções (imposto, comissão, taxa) vêm dos Parâmetros." done={c.preco>0} isMob={isMob}/>
     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
       <_PrdPill label="Preço de venda desejado" active={pr.modo!=="margem"} onClick={canEdit?function(){setP({modo:"preco"});}:undefined}/>
       <_PrdPill label="Margem que quero" active={pr.modo==="margem"} onClick={canEdit?function(){setP({modo:"margem"});}:undefined}/>
@@ -86149,7 +86149,7 @@ function _ProdEtapaCapacidade({p,c,cfg,isMob}){
   const lb=function(id){ const f=funcoes.find(function(x){return x.id===id;}); return f?f.label:id; };
   const cap=c.capacidade;
   return <>
-    <_PrdModHeader num={7} ico="barchart" title="Capacidade operacional" subtitle="Dá pra vender em escala? Horas por função, duração e quantos clientes cabem ao mesmo tempo com o time de hoje." done={c.preco>0&&c.horasTotal>0} isMob={isMob}/>
+    <_PrdModHeader num={6} ico="barchart" title="Capacidade operacional" subtitle="Dá pra vender em escala? Horas por função, duração e quantos clientes cabem ao mesmo tempo com o time de hoje." done={c.preco>0&&c.horasTotal>0} isMob={isMob}/>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,minmax(0,1fr))",gap:10}}>
       <_PrdKpi label="Horas por produto" valor={c.horasTotal+"h"} sub={c.pessoas.length+(c.pessoas.length===1?" função":" funções")} ico="users"/>
       <_PrdKpi label="Duração" valor={c.duracaoDias+" dias"} sub={"≈ "+cap.mesesEntrega+" mês"+(cap.mesesEntrega>1?"es":"")+" de entrega"} ico="calendar"/>
@@ -86188,7 +86188,7 @@ function _ProdEtapaCapacidade({p,c,cfg,isMob}){
 function _ProdEtapaIndices({p,c,isMob}){
   const ix=c.indices;
   return <>
-    <_PrdModHeader num={8} ico="sliders" title="Índice de padronização" subtitle="Quatro números simples pra comparar produtos: o quanto é padrão, o quanto depende do cliente, o quanto pesa pra operar e o quanto escala." done={p.entregaveis.length>0} isMob={isMob}/>
+    <_PrdModHeader num={7} ico="sliders" title="Índice de padronização" subtitle="Quatro números simples pra comparar produtos: o quanto é padrão, o quanto depende do cliente, o quanto pesa pra operar e o quanto escala." done={p.entregaveis.length>0} isMob={isMob}/>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:18}}>
       <_PrdIndice label="Padronização" valor={ix.padronizacao} hint={"templates "+_prodPct(ix.pctTemplate,0)+" · reutilizáveis "+_prodPct(ix.pctReut,0)+" · quanto mais alto, menos trabalho do zero"}/>
       <_PrdIndice label="Dependência do cliente" valor={ix.dependencia} inverso hint="média da dependência marcada nas fases · alto = o prazo fica na mão do cliente"/>
@@ -86406,6 +86406,40 @@ async function _prodTranscrever(file, onProgress){
   diz("finalizando…", 98);
   return partes.join(" ").replace(/\s+/g," ").trim();
 }
+/* (09/10, Gustavo: "cliquei e deu erro, falou que não tinha nada no arquivo — mas tem, é o Contrato
+   Clem + Pixels Marketing [.docx]") LEITOR DE .DOCX NO NAVEGADOR: docx é um zip; a gente acha o
+   word/document.xml na central directory, descomprime com DecompressionStream("deflate-raw") e tira as
+   tags — sem biblioteca, sem colar texto na mão. */
+function _prodDocxTexto(ab){
+  return new Promise(function(res,rej){
+    try{
+      const u8=new Uint8Array(ab), dv=new DataView(ab);
+      let eocd=-1;
+      for(let i=u8.length-22;i>=Math.max(0,u8.length-66000);i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+      if(eocd<0) return rej(new Error("arquivo .docx inválido"));
+      const n=dv.getUint16(eocd+10,true), cdOff=dv.getUint32(eocd+16,true);
+      let p=cdOff, alvo=null;
+      for(let k=0;k<n;k++){
+        if(dv.getUint32(p,true)!==0x02014b50) break;
+        const comp=dv.getUint16(p+10,true), csz=dv.getUint32(p+20,true), nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), lho=dv.getUint32(p+42,true);
+        const nome=new TextDecoder().decode(u8.subarray(p+46,p+46+nl));
+        if(nome==="word/document.xml") alvo={comp:comp,csz:csz,lho:lho};
+        p+=46+nl+el+cl;
+      }
+      if(!alvo) return rej(new Error("não achei o texto dentro do .docx"));
+      const q=alvo.lho, nl2=dv.getUint16(q+26,true), el2=dv.getUint16(q+28,true);
+      const dados=u8.slice(q+30+nl2+el2, q+30+nl2+el2+alvo.csz);
+      const fim=function(xml){
+        const t=String(xml).replace(/<w:tab[^>]*\/>/g,"\t").replace(/<\/w:p>/g,"\n").replace(/<[^>]+>/g,"")
+          .replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+          .replace(/&#(\d+);/g,function(_,d){ return String.fromCharCode(Number(d)); });
+        res(t.replace(/\n{3,}/g,"\n\n").trim());
+      };
+      if(alvo.comp===0) fim(new TextDecoder().decode(dados));
+      else new Response(new Blob([dados]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text().then(fim,rej);
+    }catch(e){ rej(e); }
+  });
+}
 function _prodLerTexto(file){
   return new Promise(function(res){
     if(file.size>400*1024) return res("");
@@ -86419,7 +86453,8 @@ async function _prodSubirArquivos(produtoId, files, destino){
   if(typeof _eaSubir!=="function") throw new Error("upload indisponível");
   const out=[];
   for(const f of files){
-    const texto=_prodEhTexto(f.name,f.type)?await _prodLerTexto(f):"";
+    let texto=_prodEhTexto(f.name,f.type)?await _prodLerTexto(f):"";
+    if(!texto&&/\.docx$/i.test(f.name)){ try{ texto=(await _prodDocxTexto(await f.arrayBuffer())).slice(0,20000); }catch(_){ } }
     const up=await _eaSubir(f, "produtos/"+produtoId+"/"+destino, f.name);
     out.push({ id:_prodUid("arq-"), url:up.url, path:up.path, name:f.name, type:f.type||"", size:f.size||0,
       texto:texto||undefined,
@@ -86486,6 +86521,20 @@ function _prodAplicarIA(cur, j, cfg){
       return nf;
     });
     fases=out.fases.length;
+  }
+  if(Array.isArray(j.fases)&&j.fases.length&&(out.fases||[]).length&&!fases){
+    // fases já existiam: completa SÓ as horas das que estão sem horas (é o que alimenta o CSP)
+    let mexeu=0;
+    out.fases=out.fases.map(function(f,ix){
+      if(Object.keys(f.horas||{}).some(function(k){return Number(f.horas[k])>0;})) return f;
+      const al=String(f.nome||"").toLowerCase().slice(0,18);
+      const jf=j.fases.find(function(x){ return String(x.nome||"").toLowerCase().indexOf(al)>=0||al.indexOf(String(x.nome||"").toLowerCase().slice(0,18))>=0; })||j.fases[ix];
+      if(!jf) return f;
+      const hs={}; ["socio","estrategia","midia","video","design","estagio"].forEach(function(k){ const v=Number((jf.horas||{})[k]); if(isFinite(v)&&v>0) hs[k]=Math.min(300,Math.round(v*2)/2); });
+      if(!Object.keys(hs).length) return f;
+      mexeu++; return Object.assign({},f,{horas:hs});
+    });
+    if(mexeu) fases=-mexeu;                                           // negativo = horas mescladas em fases existentes
   }
   if(Array.isArray(j.entregaveis)&&j.entregaveis.length&&!(out.entregaveis||[]).length){
     out.entregaveis=j.entregaveis.filter(function(e){return e&&String(e.nome||"").trim();}).map(function(e){
@@ -86598,7 +86647,7 @@ function _ProdArquivoLinha({m,canEdit,onRemover,aviso,prog}){
   </div>;
 }
 /* ─── ETAPA 2 · Materiais ─────────────────────────────────────────────── */
-function _ProdEtapaMateriais({p,cfg,set,canEdit,isMob}){
+function _ProdEtapaMateriais({p,cfg,set,canEdit,isMob,embutida}){
   const [busy,setBusy]=useState(false);
   const [gerando,setGerando]=useState(false);
   const [transc,setTransc]=useState({});            // id do arquivo → status da transcrição
@@ -86640,8 +86689,8 @@ function _ProdEtapaMateriais({p,cfg,set,canEdit,isMob}){
         const ap=_prodAplicarIA(cur, j||{}, cfg);
         const out=ap.produto;
         out.iaEntendimento={texto:(j&&j.analise)||"",geradoEm:new Date().toISOString(),arquivos:mats.map(function(m){return m.name;})};
-        if(typeof pixelsToast!=="undefined"){ const pcs=[]; if(ap.campos) pcs.push(ap.campos+" campo"+(ap.campos>1?"s":"")+" da Ideia"); if(ap.fases) pcs.push(ap.fases+" fases"); if(ap.entregaveis) pcs.push(ap.entregaveis+" entregáveis");
-          if(ap.fases) pcs.push("horas estimadas por função (revise no CSP)");
+        if(typeof pixelsToast!=="undefined"){ const pcs=[]; if(ap.campos) pcs.push(ap.campos+" campo"+(ap.campos>1?"s":"")+" da Ideia"); if(ap.fases>0) pcs.push(ap.fases+" fases"); if(ap.fases<0) pcs.push("horas estimadas em "+(-ap.fases)+" fase(s) existente(s)"); if(ap.entregaveis) pcs.push(ap.entregaveis+" entregáveis");
+          if(ap.fases>0) pcs.push("horas estimadas por função (revise no CSP)");
           if(ap.precoSugerido) pcs.push("preço sugerido "+_prodFmt(ap.precoSugerido)+" (margem desejada — revise na Precificação)");
           pixelsToast.success(pcs.length?("Produto criado pela IA — preenchi "+pcs.join(", ")+". O que você já tinha digitado ficou como estava."):"Produto destrinchado pela IA."); }
         return out;
@@ -86651,7 +86700,10 @@ function _ProdEtapaMateriais({p,cfg,set,canEdit,isMob}){
   };
   const ia=p.iaEntendimento;
   return <>
-    <_PrdModHeader num={2} ico="folderkanban" title="Materiais do produto" subtitle="Jogue aqui tudo que explica o produto — gravação de reunião (áudio ou vídeo), briefings, anotações, prints. A IA transcreve, lê e CRIA o produto: preenche Ideia, Fases e Entregáveis e destrincha como ele funciona." done={mats.length>0||!!ia} isMob={isMob}/>
+    {embutida
+      ?<div><div style={{color:_PRD.SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Materiais do produto</div>
+        <div style={{color:_PRD.MUTE,fontSize:12,marginTop:3}}>Jogue aqui tudo que explica o produto — gravação de reunião (áudio ou vídeo), briefings, anotações, prints. A IA transcreve, lê e CRIA o produto: Ideia, Fases, Entregáveis, horas (CSP) e preço sugerido.</div></div>
+      :<_PrdModHeader num={2} ico="folderkanban" title="Materiais do produto" subtitle="Jogue aqui tudo que explica o produto — gravação de reunião (áudio ou vídeo), briefings, anotações, prints. A IA transcreve, lê e CRIA o produto: preenche Ideia, Fases e Entregáveis e destrincha como ele funciona." done={mats.length>0||!!ia} isMob={isMob}/>}
     <_ProdUploadBox label="Arraste arquivos aqui ou clique pra escolher" hint="Áudio e vídeo de reunião são transcritos aqui mesmo (no seu navegador, sem custo). Texto (.txt, .md) e imagens a IA lê direto. PDF/Word ficam guardados — pra IA ler, cole o conteúdo num .txt." onFiles={subir} canEdit={canEdit} busy={busy}/>
     {mats.length>0&&<div style={{display:"flex",flexDirection:"column",gap:7}}>
       {mats.map(function(m){ return <_ProdArquivoLinha key={m.id||m.url} m={m} canEdit={canEdit} prog={transc[m.id]||null}
@@ -86700,10 +86752,20 @@ function _ProdEtapaContratos({p,c,cfg,set,canEdit,isMob}){
   };
   const gerar=function(){
     if(gerando) return;
-    const modelo=(ct.modelos||[]).find(function(m){return m.id===modeloSel;})||(ct.modelos||[])[0];
+    let modelo=(ct.modelos||[]).find(function(m){return m.id===modeloSel;})||(ct.modelos||[])[0];
     if(!modelo){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Suba (ou cole) o modelo de contrato primeiro."); return; }
     setGerando(true);
-    (clienteSel?_prodDadosCliente(clienteSel):Promise.resolve("")).then(function(dados){
+    const prepararModelo=(!modelo.texto&&modelo.url&&/\.docx$/i.test(modelo.name||""))
+      ? fetch(modelo.url).then(function(r){ return r.arrayBuffer(); }).then(_prodDocxTexto).then(function(t){
+          t=String(t||"").slice(0,20000);
+          if(t){ const mid=modelo.id; setCt(function(a){ return Object.assign({},a,{modelos:(a.modelos||[]).map(function(x){ return x.id===mid?Object.assign({},x,{texto:t}):x; })}); }); modelo=Object.assign({},modelo,{texto:t});
+            if(typeof pixelsToast!=="undefined") pixelsToast.info("Li o texto do .docx do modelo automaticamente."); }
+          return modelo;
+        }).catch(function(){ return modelo; })
+      : Promise.resolve(modelo);
+    prepararModelo.then(function(mPronto){ modelo=mPronto;
+      return (clienteSel?_prodDadosCliente(clienteSel):Promise.resolve(""));
+    }).then(function(dados){
       return _prodGerarContratoIA(p, cfg, modelo, dados);
     }).then(function(texto){
       const cliNome=clienteSel?(((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===clienteSel;})||{}).name||clienteSel):"";
@@ -86715,7 +86777,7 @@ function _ProdEtapaContratos({p,c,cfg,set,canEdit,isMob}){
       .finally(function(){ setGerando(false); });
   };
   return <>
-    <_PrdModHeader num={9} ico="handshake" title="Contratos" subtitle="Suba o modelo de contrato da agência. A IA escreve o contrato DESTE produto seguindo o modelo à risca — cláusulas, ordem e tom — trocando só escopo, entregáveis, prazos e valores." done={(ct.gerados||[]).length>0} isMob={isMob}/>
+    <_PrdModHeader num={8} ico="handshake" title="Contratos" subtitle="Suba o modelo de contrato da agência. A IA escreve o contrato DESTE produto seguindo o modelo à risca — cláusulas, ordem e tom — trocando só escopo, entregáveis, prazos e valores." done={(ct.gerados||[]).length>0} isMob={isMob}/>
     <div><_PrdRotulo extra={canEdit?undefined:""}>Modelos da agência</_PrdRotulo>
       <_ProdUploadBox label="Arraste o contrato modelo ou clique pra escolher" hint="Mande em .txt ou .md pra IA ler direto. PDF/Word ficam guardados — aí é só colar o texto no botão abaixo." onFiles={subir} canEdit={canEdit} busy={busy}/>
       <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
