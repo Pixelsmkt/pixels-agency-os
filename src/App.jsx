@@ -5108,6 +5108,12 @@ function pxCtxRegrasTxt(regras){
     for(let i=0;i<mem.length;i++){
       const m=mem[i];
       const _e=String(m.tipo||"").split(":")[1]||"contexto";
+      // (09/10) com RESUMO revisado pela equipe, é ELE que entra — é o entendimento conferido na mão
+      if(m.resumo){
+        u+="- ["+_e.toUpperCase()+"] "+String(m.resumo).trim().replace(/\n/g,"\n  ")+
+           (m.origem?(" — "+m.origem):"")+"\n";
+        continue;
+      }
       u+="- ["+_e.toUpperCase()+"] "+m.regra+
          (m.porque?(" (por quê: "+m.porque+")"):"")+
          (m.origem?(" — "+m.origem):"")+
@@ -107757,12 +107763,16 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
   const [salvando,setSalvando]=useState(false);
   const [anexos,setAnexos]=useState([]);        // (09/10, Gustavo) áudio do WhatsApp, print, texto — junto do feedback
   const [anexMsg,setAnexMsg]=useState("");
+  const [anexDrag,setAnexDrag]=useState(false);
   const anexRef=useRef(null);
+  const [resGerando,setResGerando]=useState(null);   // id do feedback cujo entendimento a IA está escrevendo
+  const [resEdit,setResEdit]=useState(null);         // id do feedback com o entendimento aberto pra editar
+  const [resTxt,setResTxt]=useState("");
   const carregar=async function(){
     try{
       const sb=window._sb; if(!sb||!clientId){ setItens([]); return; }
       const {data,error}=await sb.from("claude_copy_regras")
-        .select("id,tipo,regra,porque,origem,ativa,bioter_unit,disse_quem,criado_em,anexos")
+        .select("id,tipo,regra,porque,origem,ativa,bioter_unit,disse_quem,criado_em,anexos,resumo")
         .eq("client",clientId).like("tipo","memoria:%")
         .order("criado_em",{ascending:false});
       if(error) throw error;
@@ -107817,6 +107827,32 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
       }catch(e){ setAnexMsg(""); if(typeof pixelsToast!=="undefined") pixelsToast.error("Anexo “"+f.name+"”: "+((e&&e.message)||e)); }
     }
   };
+  /* (09/10, Gustavo: "um resuminho do pedido, pra ver se você entendeu bem, e a gente poder editar —
+     quando tem o resumo, toma por base ele em vez do feedback") a IA escreve O QUE ENTENDEU; o texto fica
+     EDITÁVEL no card e, existindo, é ELE que vai pro cérebro (pxCtxRegrasTxt usa resumo no lugar do bruto). */
+  const _conteudoDe=function(regra, falas){
+    return (regra?("FEEDBACK ESCRITO:\n"+regra+"\n\n"):"")+(falas||[]).map(function(f,i){ return "ÁUDIO "+(i+1)+" (transcrição):\n"+f; }).join("\n\n");
+  };
+  const gerarResumo=async function(id, conteudo){
+    if(!id||typeof askGPTBlocos!=="function") return;
+    setResGerando(id);
+    try{
+      const r=await askGPTBlocos({ max_tokens:1200, origem:"playbook_feedback_resumo",
+        system:"Você organiza feedbacks de clientes de uma assessoria de marketing (Pixels). Recebe o texto do feedback e transcrições de áudios de WhatsApp. Devolva SÓ o resumo fiel do que foi pedido/decidido: itens curtos, um por linha começando com '- ', em português, sem inventar nada, sem opinião, mantendo nomes de produtos/máquinas como foram ditos. Máximo 10 itens.",
+        messages:[{role:"user",content:String(conteudo||"").slice(0,12000)}] });
+      const texto=String(((r&&r.content&&r.content[0])||{}).text||"").trim().slice(0,2500);
+      if(texto){ const up=await window._sb.from("claude_copy_regras").update({resumo:texto}).eq("id",id); if(up.error) throw up.error; await carregar(); }
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Não consegui escrever o entendimento agora ("+((e&&e.message)||e)+") — o cérebro usa o feedback bruto até gerar.",5000); }
+    setResGerando(null);
+  };
+  const salvarResumo=async function(id, texto){
+    try{
+      const up=await window._sb.from("claude_copy_regras").update({resumo:String(texto||"").trim()||null}).eq("id",id);
+      if(up.error) throw up.error;
+      setResEdit(null); await carregar();
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Entendimento salvo — é isso que o cérebro usa agora.");
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||e)); }
+  };
   const salvar=async function(){
     const _t=String(txt||"").trim();
     const _falas=(anexos||[]).map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean);
@@ -107835,11 +107871,18 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
         anexos:(anexos&&anexos.length)?anexos:null,
         disse_quem:String(disse||"").trim()||null,
         origem:_canal+" "+_pbDataBr(dataOrig)+(_autor?(" · "+_autor):"") };
-      const {error}=editId
-        ? await sb.from("claude_copy_regras").update(_campos).eq("id",editId)
-        : await sb.from("claude_copy_regras").insert(Object.assign({client:clientId,ativa:true},_campos));
-      if(error) throw error;
+      let _idSalvo=editId;
+      if(editId){
+        const up=await sb.from("claude_copy_regras").update(_campos).eq("id",editId);
+        if(up.error) throw up.error;
+      } else {
+        const ins=await sb.from("claude_copy_regras").insert(Object.assign({client:clientId,ativa:true},_campos)).select("id").single();
+        if(ins.error) throw ins.error;
+        _idSalvo=ins.data&&ins.data.id;
+      }
       const _era=editId;
+      // entendimento da IA: quando tem áudio ou texto comprido (feedback curto já é o próprio resumo)
+      if(_idSalvo&&(_falas.length||_t.length>200)) gerarResumo(_idSalvo, _conteudoDe(_t,_falas));
       setTxt(""); setPorque(""); setOrigem(""); setDisse(""); _fecharForm();
       await carregar();
       if(typeof pixelsToast!=="undefined") pixelsToast.success(_era?"Anotação atualizada.":"Anotado. O cérebro já usa isso na próxima copy deste cliente.",3200);
@@ -107900,13 +107943,14 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
       <div>
         <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Anexos <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· áudio do WhatsApp, gravação, print, texto — o áudio é transcrito e vai pro cérebro junto</span></div>
         <div onClick={function(){ if(!anexMsg&&anexRef.current) anexRef.current.click(); }}
-          onDragOver={function(e){ e.preventDefault(); }}
-          onDrop={function(e){ e.preventDefault(); const fs=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]); if(fs.length) anexar(fs); }}
-          style={{border:"2px dashed "+PB_BORDER,borderRadius:10,padding:"13px 12px",textAlign:"center",cursor:anexMsg?"default":"pointer",background:"#fff"}}>
+          onDragOver={function(e){ e.preventDefault(); setAnexDrag(true); }}
+          onDragLeave={function(){ setAnexDrag(false); }}
+          onDrop={function(e){ e.preventDefault(); setAnexDrag(false); const fs=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]); if(fs.length) anexar(fs); }}
+          style={{border:"2px dashed "+(anexDrag?"#f97316":PB_BORDER),borderRadius:10,padding:"13px 12px",textAlign:"center",cursor:anexMsg?"default":"pointer",background:anexDrag?"#fff7ed":"#fff",boxShadow:anexDrag?"0 0 0 4px rgba(249,115,22,.14)":"none",transform:anexDrag?"scale(1.01)":"none",transition:"all .14s"}}>
           <input ref={anexRef} type="file" multiple style={{display:"none"}}
             accept="audio/*,video/*,image/*,.txt,.md,.ogg,.oga,.opus,.mp3,.m4a,.wav,.aac,.amr,.mp4,.mkv,.mov,.webm"
             onChange={function(e){ const fs=Array.from(e.target.files||[]); e.target.value=""; if(fs.length) anexar(fs); }}/>
-          <div style={{color:anexMsg?"#f97316":"#475569",fontSize:12,fontWeight:700}}>{anexMsg||"Arraste áudios do WhatsApp, prints ou textos — ou clique pra escolher"}</div>
+          <div style={{color:(anexMsg||anexDrag)?"#f97316":"#475569",fontSize:12,fontWeight:700}}>{anexMsg||(anexDrag?"Solta aqui! 🎙":"Arraste áudios do WhatsApp, prints ou textos — ou clique pra escolher")}</div>
         </div>
         {anexos.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5,marginTop:7}}>
           {anexos.map(function(a,k){ return <div key={k} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"6px 10px"}}>
@@ -107981,11 +108025,35 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
                     ? <audio controls preload="none" src={a.url} style={{width:"100%",maxWidth:420,height:32,display:"block"}}/>
                     : <a href={a.url||"#"} target="_blank" rel="noreferrer" style={{color:"#1d4ed8",fontSize:11.5,fontWeight:700,textDecoration:"none"}}>📎 {a.name}</a>}
                   {a.transcricao&&<details style={{marginTop:2}}>
-                    <summary style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,cursor:"pointer"}}>ver transcrição (vai pro cérebro)</summary>
+                    <summary style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,cursor:"pointer"}}>ver transcrição</summary>
                     <div style={{color:"#475569",fontSize:11.5,lineHeight:1.55,whiteSpace:"pre-wrap",background:"#f8fafc",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 10px",marginTop:4}}>{a.transcricao}</div>
                   </details>}
                 </div>; })}
               </div>}
+              {(it.resumo||resGerando===it.id||resEdit===it.id)&&<div style={{marginTop:8,background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:10,padding:"9px 11px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                  <span style={{color:"#6d28d9",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>O que a IA entendeu — é isso que vai pro cérebro</span>
+                  {isAdmin&&resEdit!==it.id&&resGerando!==it.id&&<button type="button" title="Editar o entendimento na mão" onClick={function(){ setResEdit(it.id); setResTxt(it.resumo||""); }}
+                    style={{background:"transparent",border:"none",padding:2,color:"#8b5cf6",cursor:"pointer",display:"inline-flex"}}><Ico n="edit" size={12}/></button>}
+                  {isAdmin&&resEdit!==it.id&&<button type="button" title="Pedir pra IA escrever de novo" disabled={resGerando===it.id}
+                    onClick={function(){ gerarResumo(it.id, _conteudoDe(it.regra, (Array.isArray(it.anexos)?it.anexos:[]).map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean))); }}
+                    style={{background:"transparent",border:"none",padding:2,color:"#8b5cf6",cursor:resGerando===it.id?"default":"pointer",fontSize:12,fontWeight:800}}>↻</button>}
+                </div>
+                {resGerando===it.id&&<div style={{color:"#f97316",fontSize:11.5,fontWeight:700}}>a IA está escrevendo o que entendeu…</div>}
+                {resEdit===it.id
+                  ? <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <_PbAutoTextarea value={resTxt} onChange={function(e){setResTxt(e.target.value);}} rows={4}
+                        style={{border:"1px solid #ddd6fe",borderRadius:8,padding:"8px 10px",fontSize:12,fontFamily:"inherit",lineHeight:1.55,width:"100%",boxSizing:"border-box",background:"#fff",outline:"none",minHeight:80,overflow:"hidden",resize:"none"}}/>
+                      <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+                        <button type="button" onClick={function(){setResEdit(null);}} style={{background:"transparent",border:"1px solid #ddd6fe",borderRadius:8,padding:"5px 11px",color:"#64748b",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                        <button type="button" onClick={function(){salvarResumo(it.id,resTxt);}} style={{background:"#6d28d9",border:"none",borderRadius:8,padding:"5px 13px",color:"#fff",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Salvar entendimento</button>
+                      </div>
+                    </div>
+                  : (resGerando!==it.id&&it.resumo&&<div style={{color:"#3b2a63",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{it.resumo}</div>)}
+              </div>}
+              {isAdmin&&!it.resumo&&resGerando!==it.id&&resEdit!==it.id&&Array.isArray(it.anexos)&&it.anexos.some(function(a){return a.transcricao;})&&
+                <button type="button" onClick={function(){ gerarResumo(it.id, _conteudoDe(it.regra, it.anexos.map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean))); }}
+                  style={{marginTop:7,background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:8,padding:"5px 11px",color:"#6d28d9",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>✦ Gerar o entendimento da IA</button>}
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:7}}>
                 <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
                 {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
