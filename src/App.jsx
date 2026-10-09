@@ -24651,7 +24651,7 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard,
   const _elegivel=function(t){ return String(t.publishDate||"")>_hoje&&["rascunhos","demanda"].indexOf(String(t.status||""))>=0&&!_pmEhComem(t)&&!_pmEhMaterial(t)&&!_temArq(t)&&!t.somenteStory; };
   const _tipoLbl=function(t){ const ct=String(t.contentType||t.content_type||""); if(_pmEhMaterial(t)) return (typeof pxEhShort==="function"&&pxEhShort(t))?"Short":"Foto de obra"; return ct==="arte"?"Arte única":ct==="carrossel"?"Carrossel":/^video/.test(ct)||ct==="reels"||ct==="corte"?"Vídeo":ct==="foto"?"Foto de obra":(ct||"—"); };
   const _dt=function(iso){ const d=String(iso||""); return d?(d.slice(8,10)+"/"+d.slice(5,7)):"—"; };
-  const [opts,setOpts]=useState((auto&&auto.opts)||{puxar:true,criar:true,pauta:true,copy:true});
+  const [opts,setOpts]=useState((auto&&auto.opts)||{puxar:true,criar:true,pauta:true,copy:true,empurrar:false});
   const [orient,setOrient]=useState((auto&&auto.orient)||"");
   const [pronto,setPronto]=useState(false);
   const _autoRodou=useRef(false);
@@ -24736,6 +24736,15 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard,
         (r.data||[]).forEach(function(x){ novosRows.push(x); criados.push(x.id); });
         if(typeof setTasks==="function"&&typeof rowToTask==="function") setTasks(function(prev){ return (prev||[]).concat(novosRows.map(rowToTask)); });
       }
+      /* (D) (09/10, Gustavo: "opção de jogar os que já estão no mês pra frente — rodar a cascata —
+         sem refazer as datas comemorativas que já estão feitas") roda a varredura da cascata: ela
+         reorganiza a fila pelas regras de sempre (cadência, espaçamento, collabs) e por regra as
+         COMEMORATIVAS não saem do lugar; cards já feitos não são reescritos (a pauta abaixo só pega vazios). */
+      if(opts.empurrar&&typeof pxCascataVarrer==="function"){
+        setProg("Empurrando a fila pra frente (cascata)…");
+        try{ const nC=await pxCascataVarrer(null); if(typeof pixelsToast!=="undefined"&&nC) pixelsToast.info("Cascata: "+nC+" movimento"+(nC===1?"":"s")+" na fila (comemorativas ficaram no lugar).",6000); }
+        catch(eC){ console.warn("[plano] cascata:",(eC&&eC.message)||eC); }
+      }
       // (C) pauta + copy
       if(opts.pauta){
         const alvos=[];
@@ -24814,6 +24823,7 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard,
           {_chk("criar","Criar os cards que faltam pra cadência",previa?(previa.criar.length+" card"+(previa.criar.length===1?"":"s")+" · cadência "+previa.cap+"/semana · comemorativas, feiras e collabs já contam"):"calculando…")}
           {_chk("pauta","Escrever a pauta pelo peso dos produtos",_nPauta+" card"+(_nPauta===1?"":"s")+" vazio"+(_nPauta===1?"":"s")+" recebem título, produto, ângulo e chamada")}
           {_chk("copy","…e o briefing completo + legenda",opts.pauta?"uns 40–60 s por card, com progresso":"precisa da pauta ligada")}
+          {_chk("empurrar","Empurrar os que já estão no mês pra frente (cascata)","reorganiza a fila pelas regras do calendário; datas comemorativas não saem do lugar e cards já feitos não são refeitos")}
         </div>
         {/* semanas */}
         {previa&&<div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 14px"}}>
