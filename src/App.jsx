@@ -86586,20 +86586,24 @@ async function _prodGerarContratoIA(p, cfg, modelo, dadosCliente){
   if(!modelo||!modelo.texto) throw new Error("o modelo escolhido está sem texto — cole o texto do contrato nele");
   const extra=p.iaEntendimento&&p.iaEntendimento.texto?("\n\nCOMO O PRODUTO FUNCIONA (análise da IA sobre os materiais):\n"+String(p.iaEntendimento.texto).slice(0,3000)):"";
   const r=await askGPTBlocos({ max_tokens:8000, origem:"produto_contrato",
-    system:"Você redige contratos de prestação de serviços da agência Pixels Marketing Digital. Recebe um CONTRATO MODELO (o padrão da agência) e os dados de um produto. Sua tarefa: escrever o contrato DESTE produto SEGUINDO FIELMENTE a estrutura, as cláusulas, o tom e a formatação do modelo — mesmas seções, mesma ordem, mesmo estilo. Adapte apenas o que é do produto: objeto, escopo, entregáveis, etapas, prazos e valores. Onde o modelo tiver dados do cliente (nome, CNPJ, endereço), mantenha campos entre colchetes, ex.: [CONTRATANTE], [CNPJ DO CONTRATANTE]. Não acrescente cláusulas novas nem remova cláusulas do modelo sem necessidade; não invente valores que não foram informados. Responda SÓ com o texto final do contrato.",
+    system:'Você redige contratos de prestação de serviços da Pixels Marketing Digital. Recebe um CONTRATO MODELO (o padrão da agência) e os dados de um produto. Escreva o contrato DESTE produto seguindo fielmente a estrutura, as cláusulas, a ordem e o tom do modelo — adapte apenas o que é do produto: objeto, escopo, entregáveis, etapas, prazos e valores. Não acrescente cláusulas novas nem remova cláusulas sem necessidade; não invente valores não informados. Dados do contratante que não forem fornecidos ficam entre colchetes, ex.: [CONTRATANTE], [CNPJ DO CONTRATANTE].\nFORMATO DA RESPOSTA: SÓ um fragmento HTML (sem <html>, <head> ou ```), reproduzindo a DIAGRAMAÇÃO do padrão Pixels: título central <h1 style="text-align:center;font-size:15pt;margin:4px 0">CONTRATO DE PRESTAÇÃO DE SERVIÇOS</h1> e subtítulo central em negrito com o nome do plano; quadro EMPRESA CONTRATANTE | EMPRESA CONTRATADA como <table> de 2 colunas com borda (style="border-collapse:collapse;width:100%" e células style="border:1px solid #999;padding:6px 8px;vertical-align:top;font-size:10pt"), cabeçalhos de quadro com fundo cinza (style="background:#d9d9d9;font-weight:bold;text-align:center"); depois QUADRO RESUMO DE CONDIÇÕES NEGOCIAIS com os quadros DADOS DO PROJETO, ESCOPO PRINCIPAL, ENTREGAS DO PROJETO (uma coluna por fase/mês, lado a lado na mesma <table>) e INVESTIMENTO E PAGAMENTO; depois TERMOS E CONDIÇÕES GERAIS com títulos <h3 style="font-size:11pt;margin:10px 0 4px">DO OBJETO</h3> etc. e cláusulas em <p style="font-size:10pt;text-align:justify;margin:4px 0">; listas com <ul style="margin:4px 0 4px 18px"><li>. Rótulos em negrito (<b>Razão social:</b> …). Nada de CSS fora de style inline.',
     messages:[{role:"user",content:[
       {type:"text",text:"CONTRATO MODELO DA AGÊNCIA:\n\n"+String(modelo.texto).slice(0,20000)},
       {type:"text",text:"DADOS DO PRODUTO:\n"+_prodResumoPraIA(p,cfg)+extra},
       {type:"text",text:dadosCliente?("DADOS DO CONTRATANTE (cadastro do cliente no app — use pra preencher as qualificações do contratante; o que faltar aqui, deixe como campo entre colchetes):\n"+dadosCliente):"Nenhum cliente foi escolhido: deixe TODOS os dados do contratante como campos entre colchetes, ex.: [CONTRATANTE], [CNPJ DO CONTRATANTE], [ENDEREÇO]."},
     ]}] });
-  const texto=((r&&r.content&&r.content[0])||{}).text||"";
+  const texto=String(((r&&r.content&&r.content[0])||{}).text||"").replace(/```html|```/g,"").trim();
   if(!texto) throw new Error("o GPT respondeu vazio");
   return texto;
 }
+function _prodEhHtmlContrato(t){ return /<(table|h1|h2|h3|p[ >]|ul[ >])/i.test(String(t||"")); }
+function _prodContratoSemTags(t){ const d=document.createElement("div"); d.innerHTML=String(t||"").replace(/<\/(p|h1|h2|h3|li|tr)>/gi,"$&\n"); return (d.textContent||"").replace(/\n{3,}/g,"\n\n").trim(); }
 function _prodBaixarTexto(texto, nome, doc){
+  const ehHtml=_prodEhHtmlContrato(texto);
+  const corpo=ehHtml?String(texto):("<pre style='font-family:Calibri,Arial,sans-serif;font-size:11pt;white-space:pre-wrap'>"+String(texto).replace(/&/g,"&amp;").replace(/</g,"&lt;")+"</pre>");
   const blob=doc
-    ? new Blob(["<html><head><meta charset='utf-8'></head><body><pre style='font-family:Calibri,Arial,sans-serif;font-size:11pt;white-space:pre-wrap'>"+String(texto).replace(/&/g,"&amp;").replace(/</g,"&lt;")+"</pre></body></html>"],{type:"application/msword"})
-    : new Blob([texto],{type:"text/plain;charset=utf-8"});
+    ? new Blob(["<html xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><style>body{font-family:Aptos,Calibri,Arial,sans-serif;font-size:10pt;color:#111;max-width:19cm;margin:24px auto}table{border-collapse:collapse;width:100%;margin:6px 0}td,th{border:1px solid #999;padding:6px 8px;vertical-align:top}h1{font-size:15pt;text-align:center;margin:4px 0}h3{font-size:11pt;margin:10px 0 4px}p{margin:4px 0;text-align:justify}</style></head><body><p style='text-align:center;margin:0 0 6px'><img src='https://pixels-agency-os.vercel.app/logo-pixels.png' alt='Pixels' style='height:30px'/></p>"+corpo+"</body></html>"],{type:"application/msword"})
+    : new Blob([ehHtml?_prodContratoSemTags(texto):String(texto)],{type:"text/plain;charset=utf-8"});
   if(typeof _eaBaixarArquivo==="function") return _eaBaixarArquivo(blob, nome);
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nome; document.body.appendChild(a); a.click();
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1200);
@@ -86828,12 +86832,15 @@ function _ProdEtapaContratos({p,c,cfg,set,canEdit,isMob}){
           </div>
           {ab&&<div style={{borderTop:"1px solid "+_PRD.BORD,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <_PrdBtn small onClick={function(){ try{ navigator.clipboard.writeText(g.texto); if(typeof pixelsToast!=="undefined") pixelsToast.success("Contrato copiado."); }catch(_){ } }} ico="copy">Copiar</_PrdBtn>
+              <_PrdBtn small onClick={function(){ try{ navigator.clipboard.writeText(_prodEhHtmlContrato(g.texto)?_prodContratoSemTags(g.texto):g.texto); if(typeof pixelsToast!=="undefined") pixelsToast.success("Contrato copiado."); }catch(_){ } }} ico="copy">Copiar</_PrdBtn>
               <_PrdBtn small onClick={function(){ _prodBaixarTexto(g.texto, "contrato-"+_eaNomeArquivo((p.ideia&&p.ideia.nome)||"produto")+".doc", true); }}>Baixar .doc</_PrdBtn>
               <_PrdBtn small onClick={function(){ _prodBaixarTexto(g.texto, "contrato-"+_eaNomeArquivo((p.ideia&&p.ideia.nome)||"produto")+".txt", false); }}>Baixar .txt</_PrdBtn>
               {canEdit&&<_PrdBtn small tone="danger" onClick={function(){ setCt(function(a){ return Object.assign({},a,{gerados:(a.gerados||[]).filter(function(x){return x.id!==g.id;})}); }); }}>Excluir</_PrdBtn>}
             </div>
-            <div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.7,whiteSpace:"pre-wrap",maxHeight:480,overflowY:"auto",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"14px 16px"}}>{g.texto}</div>
+            {_prodEhHtmlContrato(g.texto)
+              ?<div style={{color:"#111",fontSize:12.5,lineHeight:1.6,maxHeight:520,overflowY:"auto",background:"#fff",border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"18px 22px",fontFamily:"Calibri,Arial,sans-serif"}}
+                 dangerouslySetInnerHTML={{__html:'<style>.prdCtr table{border-collapse:collapse;width:100%;margin:6px 0}.prdCtr td,.prdCtr th{border:1px solid #999;padding:6px 8px;vertical-align:top}</style><div class="prdCtr">'+g.texto+"</div>"}}/>
+              :<div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.7,whiteSpace:"pre-wrap",maxHeight:480,overflowY:"auto",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"14px 16px"}}>{g.texto}</div>}
           </div>}
         </div>;
       })}
