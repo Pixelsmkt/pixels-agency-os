@@ -5110,7 +5110,8 @@ function pxCtxRegrasTxt(regras){
       const _e=String(m.tipo||"").split(":")[1]||"contexto";
       u+="- ["+_e.toUpperCase()+"] "+m.regra+
          (m.porque?(" (por quê: "+m.porque+")"):"")+
-         (m.origem?(" — "+m.origem):"")+"\n";
+         (m.origem?(" — "+m.origem):"")+
+         (m.fala?("\n  O que foi dito no áudio anexado (transcrição): "+String(m.fala).replace(/\s+/g," ").slice(0,1500)):"")+"\n";
     }
     u+="\n";
   }
@@ -107754,11 +107755,14 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
   const [editId,setEditId]=useState(null);   // null = anotação nova
   const [autorOrig,setAutorOrig]=useState(""); // quem anotou na origem — preservado no Editar
   const [salvando,setSalvando]=useState(false);
+  const [anexos,setAnexos]=useState([]);        // (09/10, Gustavo) áudio do WhatsApp, print, texto — junto do feedback
+  const [anexMsg,setAnexMsg]=useState("");
+  const anexRef=useRef(null);
   const carregar=async function(){
     try{
       const sb=window._sb; if(!sb||!clientId){ setItens([]); return; }
       const {data,error}=await sb.from("claude_copy_regras")
-        .select("id,tipo,regra,porque,origem,ativa,bioter_unit,disse_quem,criado_em")
+        .select("id,tipo,regra,porque,origem,ativa,bioter_unit,disse_quem,criado_em,anexos")
         .eq("client",clientId).like("tipo","memoria:%")
         .order("criado_em",{ascending:false});
       if(error) throw error;
@@ -107773,18 +107777,50 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
       setTxt(it.regra||""); setPorque(it.porque||""); setEtq(_pbMemEtq(it.tipo).id);
       setUni(it.bioter_unit||""); setDisse(it.disse_quem||"");
       setCanal(o.canal); setDataOrig(o.data); setOrigem(o.livre);
+      setAnexos(Array.isArray(it.anexos)?it.anexos:[]); setAnexMsg("");
     }else{
       setEditId(null); setAutorOrig("");
       setTxt(""); setPorque(""); setEtq("produto"); setDisse("");
       // Unidade já selecionada no topo do Playbook entra como sugestão (Bioter).
       setUni(isBioter?(unitTab||""):"");
       setCanal("Reunião"); setDataOrig(_pbHojeIso()); setOrigem("");
+      setAnexos([]); setAnexMsg("");
     }
     setAbrir(true);
   };
-  const _fecharForm=function(){ setAbrir(false); setEditId(null); setAutorOrig(""); };
+  const _fecharForm=function(){ setAbrir(false); setEditId(null); setAutorOrig(""); setAnexos([]); setAnexMsg(""); };
+  /* (09/10, Gustavo: "feedbacks pontuais com áudio do WhatsApp, que não fazem sentido nos Materiais —
+     e feedback que é um CONJUNTO: texto + áudios") anexos do feedback: áudio/vídeo passa pelo MESMO
+     fluxo do Materiais (só o áudio sobe, transcreve pela edge) e a transcrição entra no cérebro
+     junto do feedback; texto vira transcrição direto; print/imagem fica guardado pra consulta. */
+  const anexar=async function(fs){
+    if(anexMsg) return;
+    for(const f of fs){
+      try{
+        if(/^(audio|video)\//.test(String(f.type||""))||/\.(mp3|m4a|wav|ogg|oga|opus|aac|amr|mp4|mkv|mov|webm)$/i.test(String(f.name||""))){
+          const out=await _pbAudioDoVideo(f,function(m){ setAnexMsg(m+" — "+f.name); });
+          setAnexMsg("guardando o áudio — "+f.name);
+          const up=await _eaSubir(out.mp3,"playbooks/"+clientId+"/feedbacks",(String(f.name||"audio").replace(/\.[^.]+$/,"")||"audio")+".mp3");
+          const tr=await _pbTranscrever(out.partes,function(m){ setAnexMsg(m+" — "+f.name); });
+          setAnexos(function(l){ return l.concat([{url:up.url,path:up.path,name:f.name,type:"audio/mpeg",size:out.mp3.size,transcricao:String(tr||"").slice(0,4000)}]); });
+          if(typeof pixelsToast!=="undefined") pixelsToast.success("“"+f.name+"” transcrito — vai pro cérebro junto do feedback.");
+        } else if(/^text\//.test(String(f.type||""))||/\.(txt|md)$/i.test(String(f.name||""))){
+          const tx=await f.text();
+          const up=await _eaSubir(f,"playbooks/"+clientId+"/feedbacks",f.name);
+          setAnexos(function(l){ return l.concat([{url:up.url,path:up.path,name:f.name,type:String(f.type||"text/plain"),size:f.size,transcricao:String(tx||"").slice(0,4000)}]); });
+        } else {
+          const up=await _eaSubir(f,"playbooks/"+clientId+"/feedbacks",f.name);
+          setAnexos(function(l){ return l.concat([{url:up.url,path:up.path,name:f.name,type:String(f.type||""),size:f.size}]); });
+          if(typeof pixelsToast!=="undefined") pixelsToast.info("“"+f.name+"” guardado no feedback (imagem/arquivo a IA não lê aqui — o que ela lê é texto e áudio transcrito).",4200);
+        }
+        setAnexMsg("");
+      }catch(e){ setAnexMsg(""); if(typeof pixelsToast!=="undefined") pixelsToast.error("Anexo “"+f.name+"”: "+((e&&e.message)||e)); }
+    }
+  };
   const salvar=async function(){
-    const _t=String(txt||"").trim(); if(!_t) return;
+    const _t=String(txt||"").trim();
+    const _falas=(anexos||[]).map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean);
+    if(!_t&&!_falas.length) return;
     const sb=window._sb; if(!sb) return;
     setSalvando(true);
     try{
@@ -107795,7 +107831,8 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
       const _autor=editId?(autorOrig||_quem):_quem;
       const _campos={
         bioter_unit:(uni||null), tipo:"memoria:"+etq,
-        regra:_t, porque:String(porque||"").trim()||null,
+        regra:_t||("🎙 "+_falas[0].replace(/\s+/g," ").slice(0,180)), porque:String(porque||"").trim()||null,
+        anexos:(anexos&&anexos.length)?anexos:null,
         disse_quem:String(disse||"").trim()||null,
         origem:_canal+" "+_pbDataBr(dataOrig)+(_autor?(" · "+_autor):"") };
       const {error}=editId
@@ -107861,10 +107898,24 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
           style={Object.assign({},_inp,{lineHeight:1.55,minHeight:64,overflow:"hidden",resize:"none"})}/>
       </div>
       <div>
-        <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Por quê <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· opcional, mas é o que faz a IA entender o motivo</span></div>
-        <_PbAutoTextarea value={porque} onChange={function(e){setPorque(e.target.value);}} rows={2}
-          placeholder="Ex.: o produtor decide olhando a rotina da granja — preço vira objeção."
-          style={Object.assign({},_inp,{lineHeight:1.55,minHeight:58,overflow:"hidden",resize:"none"})}/>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Anexos <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· áudio do WhatsApp, gravação, print, texto — o áudio é transcrito e vai pro cérebro junto</span></div>
+        <div onClick={function(){ if(!anexMsg&&anexRef.current) anexRef.current.click(); }}
+          onDragOver={function(e){ e.preventDefault(); }}
+          onDrop={function(e){ e.preventDefault(); const fs=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]); if(fs.length) anexar(fs); }}
+          style={{border:"2px dashed "+PB_BORDER,borderRadius:10,padding:"13px 12px",textAlign:"center",cursor:anexMsg?"default":"pointer",background:"#fff"}}>
+          <input ref={anexRef} type="file" multiple style={{display:"none"}}
+            accept="audio/*,video/*,image/*,.txt,.md,.ogg,.oga,.opus,.mp3,.m4a,.wav,.aac,.amr,.mp4,.mkv,.mov,.webm"
+            onChange={function(e){ const fs=Array.from(e.target.files||[]); e.target.value=""; if(fs.length) anexar(fs); }}/>
+          <div style={{color:anexMsg?"#f97316":"#475569",fontSize:12,fontWeight:700}}>{anexMsg||"Arraste áudios do WhatsApp, prints ou textos — ou clique pra escolher"}</div>
+        </div>
+        {anexos.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5,marginTop:7}}>
+          {anexos.map(function(a,k){ return <div key={k} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"6px 10px"}}>
+            <span style={{color:"#0f172a",fontSize:11.5,fontWeight:700,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
+            {a.transcricao&&<span style={{background:"#dcfce7",color:"#16a34a",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>TRANSCRITO ✓</span>}
+            <button type="button" onClick={function(){ setAnexos(function(l){ return l.filter(function(_,i){return i!==k;}); }); }}
+              style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,lineHeight:1,padding:2}}>×</button>
+          </div>; })}
+        </div>}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         {PB_MEM_ETIQUETAS.map(function(e){
@@ -107904,8 +107955,8 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button type="button" onClick={_fecharForm}
           style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"8px 15px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button type="button" onClick={salvar} disabled={salvando||!String(txt||"").trim()}
-          style={{background:(salvando||!String(txt||"").trim())?"#cbd5e1":PB_PURPLE_DK,border:"none",borderRadius:10,padding:"8px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:(salvando||!String(txt||"").trim())?"default":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":(editId?"Salvar alterações":"Salvar")}</button>
+        <button type="button" onClick={salvar} disabled={salvando||(!String(txt||"").trim()&&!(anexos||[]).some(function(a){return a.transcricao;}))||!!anexMsg}
+          style={{background:(salvando||(!String(txt||"").trim()&&!(anexos||[]).some(function(a){return a.transcricao;})))?"#cbd5e1":PB_PURPLE_DK,border:"none",borderRadius:10,padding:"8px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:salvando?"default":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":(editId?"Salvar alterações":"Salvar")}</button>
       </div>
     </div>}
 
@@ -107924,6 +107975,17 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
             <div style={{flex:1,minWidth:0}}>
               <div style={{color:"#0f172a",fontSize:13,fontWeight:700,lineHeight:1.5,wordBreak:"break-word"}}>{it.regra}</div>
               {it.porque && <div style={{color:"#64748b",fontSize:12,lineHeight:1.5,marginTop:3,wordBreak:"break-word"}}><span style={{fontWeight:700}}>Por quê:</span> {it.porque}</div>}
+              {Array.isArray(it.anexos)&&it.anexos.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5,marginTop:7}}>
+                {it.anexos.map(function(a,k){ return <div key={k}>
+                  {/^audio\//.test(String(a.type||""))&&a.url
+                    ? <audio controls preload="none" src={a.url} style={{width:"100%",maxWidth:420,height:32,display:"block"}}/>
+                    : <a href={a.url||"#"} target="_blank" rel="noreferrer" style={{color:"#1d4ed8",fontSize:11.5,fontWeight:700,textDecoration:"none"}}>📎 {a.name}</a>}
+                  {a.transcricao&&<details style={{marginTop:2}}>
+                    <summary style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,cursor:"pointer"}}>ver transcrição (vai pro cérebro)</summary>
+                    <div style={{color:"#475569",fontSize:11.5,lineHeight:1.55,whiteSpace:"pre-wrap",background:"#f8fafc",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 10px",marginTop:4}}>{a.transcricao}</div>
+                  </details>}
+                </div>; })}
+              </div>}
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:7}}>
                 <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
                 {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
