@@ -8844,17 +8844,13 @@ function pxImageDims(file){
   });
 }
 
-// ═══ "Pronto pra postar" (rosinha no calendário) — 03/09/2026 ═══
-// Regra geral: aprovado internamente já vale como pronto. Clientes que usam o portal
-// e aprovam eles mesmos precisam do "Aprovado pelo cliente" (aprovacao_final).
-// Por enquanto só a Acreforte. Pra incluir outro cliente, adiciona o id aqui.
-var PX_CLIENTES_APROVACAO_DO_CLIENTE = ["acreforte"];
+// ═══ "Pronto pra postar" (rosinha no calendário) ═══
+// (09/10/2026, Gustavo) "aprovado internamente NÃO fica rosa no calendário — só aprovado pelo
+// cliente". Vale pra TODOS os clientes agora; a lista da Acreforte deixou de ser exceção.
 function pxProntoPraPostar(t){
   if(!t)return false;
   var st=String(t.status||"");
-  if(st==="agendado"||st==="aprovacao_final")return true;
-  if(st==="aprovado") return PX_CLIENTES_APROVACAO_DO_CLIENTE.indexOf(String(t.client||""))<0;
-  return false;
+  return st==="agendado"||st==="aprovacao_final";
 }
 
 // ═══ Faststart NO UPLOAD (04/09/2026) ═══
@@ -60293,6 +60289,7 @@ export default function AgencyOS(){
         const _byTeam = {};
         rawRows.forEach(function(r){
           if(!r||!r.team_id) return;
+          if(String(r.user_type||"")==="service") return;   // (09/10) robôs internos (ex.: usuário de teste do Claude) não entram na equipe da interface
           const k = String(r.team_id);
           const prev = _byTeam[k];
           if(!prev){ _byTeam[k] = r; return; }
