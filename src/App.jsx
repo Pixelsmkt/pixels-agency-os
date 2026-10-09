@@ -85365,6 +85365,8 @@ function _prodNovo(){
     fases:[], entregaveis:[], custosExternos:[],
     preco:{ modo:"preco", valor:0, margemAlvoPct:65 },
     versoes:[],
+    materiais:[], iaEntendimento:null,
+    contratos:{ modelos:[], gerados:[] },
   };
 }
 function _prodFaseNova(n){
@@ -85779,16 +85781,18 @@ function _ProdCriador({produto,cfg,setProduto,salvarVersao,duplicar,voltar,ficha
   const setIdeia=function(k,v){ set(function(cur){ return Object.assign({},cur,{ideia:Object.assign({},cur.ideia,(function(){const o={};o[k]=v;return o;})())}); }); };
   const STEPS=[
     {id:"ideia",       ico:"lightbulb",    label:"Ideia",         done:!!(p.ideia.nome&&p.ideia.problema)},
+    {id:"materiais",   ico:"folderkanban", label:"Materiais",     done:(p.materiais||[]).length>0||!!p.iaEntendimento},
     {id:"estrutura",   ico:"compass",      label:"Estrutura",     done:(p.fases||[]).length>0},
     {id:"entregaveis", ico:"checkcircle",  label:"Entregáveis",   done:(p.entregaveis||[]).length>0},
     {id:"csp",         ico:"users",        label:"CSP",           done:c.csp>0},
     {id:"preco",       ico:"dollar",       label:"Precificação",  done:c.preco>0},
     {id:"capacidade",  ico:"barchart",     label:"Capacidade",    done:c.preco>0&&c.horasTotal>0},
     {id:"indices",     ico:"sliders",      label:"Padronização",  done:(p.entregaveis||[]).length>0},
+    {id:"contratos",   ico:"handshake",    label:"Contratos",     done:((p.contratos||{}).gerados||[]).length>0},
     {id:"ficha",       ico:"clipboard",    label:"Ficha",         done:c.sinais.temPreco&&c.sinais.temFases&&c.sinais.temEntregaveis},
   ];
   const cur=STEPS[step];
-  const sub=function(st){ if(st.id==="csp"&&c.csp>0) return _prodFmt(c.csp); if(st.id==="preco"&&c.preco>0) return _prodFmt(c.preco); if(st.id==="estrutura"&&p.fases.length) return p.fases.length+" fase"+(p.fases.length>1?"s":""); if(st.id==="entregaveis"&&p.entregaveis.length) return p.entregaveis.length+" itens"; if(st.id==="indices"&&p.entregaveis.length) return "escala "+c.indices.escala; return st.done?"ok":"pendente"; };
+  const sub=function(st){ if(st.id==="csp"&&c.csp>0) return _prodFmt(c.csp); if(st.id==="preco"&&c.preco>0) return _prodFmt(c.preco); if(st.id==="estrutura"&&p.fases.length) return p.fases.length+" fase"+(p.fases.length>1?"s":""); if(st.id==="entregaveis"&&p.entregaveis.length) return p.entregaveis.length+" itens"; if(st.id==="indices"&&p.entregaveis.length) return "escala "+c.indices.escala; if(st.id==="materiais"&&(p.materiais||[]).length) return (p.materiais||[]).length+" arquivo"+((p.materiais||[]).length>1?"s":""); if(st.id==="contratos"){ const ct=p.contratos||{}; if((ct.gerados||[]).length) return (ct.gerados||[]).length+" gerado"+((ct.gerados||[]).length>1?"s":""); if((ct.modelos||[]).length) return (ct.modelos||[]).length+" modelo"+((ct.modelos||[]).length>1?"s":""); } return st.done?"ok":"pendente"; };
 
   const Rail=<><style>{".prdRail::-webkit-scrollbar{display:none}"}</style>
     <div className="prdRail" style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:18,padding:isMob?7:8,display:"flex",alignItems:"stretch",gap:5,overflowX:"auto",scrollbarWidth:"none",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
@@ -85817,6 +85821,8 @@ function _ProdCriador({produto,cfg,setProduto,salvarVersao,duplicar,voltar,ficha
   const body=(function(){
     switch(cur.id){
       case "ideia":       return <_ProdEtapaIdeia p={p} setIdeia={setIdeia} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "materiais":   return <_ProdEtapaMateriais p={p} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "contratos":   return <_ProdEtapaContratos p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "estrutura":   return <_ProdEtapaEstrutura p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "entregaveis": return <_ProdEtapaEntregaveis p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "csp":         return <_ProdEtapaCsp p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
@@ -85934,7 +85940,7 @@ function _ProdEtapaEstrutura({p,c,cfg,set,canEdit,isMob}){
   const totalDias=c.duracaoDias||1;
   const cores=["#9F43F6","#7c3aed","#a855f7","#c084fc","#6d28d9","#8b5cf6","#d8b4fe"];
   return <>
-    <_PrdModHeader num={2} ico="compass" title="Estrutura do produto" subtitle="Começo, meio e fim. Cada fase diz o que acontece, quem faz, quanto tempo leva e quantas horas consome. Produto eterno não é produto." done={p.fases.length>0} isMob={isMob}/>
+    <_PrdModHeader num={3} ico="compass" title="Estrutura do produto" subtitle="Começo, meio e fim. Cada fase diz o que acontece, quem faz, quanto tempo leva e quantas horas consome. Produto eterno não é produto." done={p.fases.length>0} isMob={isMob}/>
 
     {/* Linha do tempo */}
     {p.fases.length>0&&<div style={{background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:14,padding:"14px 16px"}}>
@@ -86003,7 +86009,7 @@ function _ProdEtapaEntregaveis({p,c,cfg,set,canEdit,isMob}){
   const n=p.entregaveis.length;
   const diverge=c.horasTotal>0&&c.horasEntregaveis>0&&Math.abs(c.horasEntregaveis-c.horasTotal)/c.horasTotal>0.25;
   return <>
-    <_PrdModHeader num={3} ico="checkcircle" title="Entregáveis" subtitle="O que o cliente recebe, em que formato e o quanto disso já é padrão. Quanto mais template e reutilização, mais escala." done={n>0} isMob={isMob}/>
+    <_PrdModHeader num={4} ico="checkcircle" title="Entregáveis" subtitle="O que o cliente recebe, em que formato e o quanto disso já é padrão. Quanto mais template e reutilização, mais escala." done={n>0} isMob={isMob}/>
     {n>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,minmax(0,1fr))",gap:10}}>
       <_PrdKpi label="Entregáveis" valor={n} ico="checkcircle"/>
       <_PrdKpi label="Com template" valor={_prodPct(c.indices.pctTemplate,0)} sub="pronto pra reaproveitar"/>
@@ -86045,7 +86051,7 @@ function _ProdEtapaCsp({p,c,cfg,set,canEdit,isMob}){
   const del=function(id){ set(function(cur){ return Object.assign({},cur,{custosExternos:(cur.custosExternos||[]).filter(function(x){return x.id!==id;})}); }); };
   const linhas=funcoes.filter(function(f){return (c.horasPorFuncao[f.id]||0)>0;});
   return <>
-    <_PrdModHeader num={4} ico="users" title="Custo do Serviço Prestado" subtitle="Quanto custa entregar UM produto. Mão de obra vem das horas por função das fases × custo-hora; o resto é o que sai do bolso pra entregar." done={c.csp>0} isMob={isMob}/>
+    <_PrdModHeader num={5} ico="users" title="Custo do Serviço Prestado" subtitle="Quanto custa entregar UM produto. Mão de obra vem das horas por função das fases × custo-hora; o resto é o que sai do bolso pra entregar." done={c.csp>0} isMob={isMob}/>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,minmax(0,1fr))",gap:10}}>
       <_PrdKpi label="Mão de obra" valor={_prodFmt(c.cspMO)} sub={c.horasTotal+"h · "+c.pessoas.length+(c.pessoas.length===1?" função":" funções")} ico="users"/>
       <_PrdKpi label="Custos externos" valor={_prodFmt(c.cspExt)} sub={(p.custosExternos||[]).length+" item"+((p.custosExternos||[]).length===1?"":"ns")} ico="handshake"/>
@@ -86088,7 +86094,7 @@ function _ProdEtapaPreco({p,c,cfg,set,canEdit,isMob}){
   const Linha=function(l,v,cor,neg,forte){ return <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"8px 0",borderTop:forte?"1px solid "+_PRD.PX_BD:"1px solid #f2f3f7",fontFeatureSettings:"'tnum'"}}><span style={{color:forte?_PRD.PX_DK:_PRD.MUTE,fontSize:forte?13:12.5,fontWeight:forte?800:600}}>{l}</span><span style={{color:cor||_PRD.INK,fontWeight:forte?900:700,fontSize:forte?15:13}}>{neg?"− ":""}{v}</span></div>; };
   const simCor=simC.mcPct>=mDes?_PRD.OK:simC.mcPct>=mMin?_PRD.WARN:_PRD.BAD;
   return <>
-    <_PrdModHeader num={5} ico="dollar" title="Precificação" subtitle="Defina o preço — ou diga a margem que quer e o sistema diz o preço. Deduções (imposto, comissão, taxa) vêm dos Parâmetros." done={c.preco>0} isMob={isMob}/>
+    <_PrdModHeader num={6} ico="dollar" title="Precificação" subtitle="Defina o preço — ou diga a margem que quer e o sistema diz o preço. Deduções (imposto, comissão, taxa) vêm dos Parâmetros." done={c.preco>0} isMob={isMob}/>
     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
       <_PrdPill label="Preço de venda desejado" active={pr.modo!=="margem"} onClick={canEdit?function(){setP({modo:"preco"});}:undefined}/>
       <_PrdPill label="Margem que quero" active={pr.modo==="margem"} onClick={canEdit?function(){setP({modo:"margem"});}:undefined}/>
@@ -86143,7 +86149,7 @@ function _ProdEtapaCapacidade({p,c,cfg,isMob}){
   const lb=function(id){ const f=funcoes.find(function(x){return x.id===id;}); return f?f.label:id; };
   const cap=c.capacidade;
   return <>
-    <_PrdModHeader num={6} ico="barchart" title="Capacidade operacional" subtitle="Dá pra vender em escala? Horas por função, duração e quantos clientes cabem ao mesmo tempo com o time de hoje." done={c.preco>0&&c.horasTotal>0} isMob={isMob}/>
+    <_PrdModHeader num={7} ico="barchart" title="Capacidade operacional" subtitle="Dá pra vender em escala? Horas por função, duração e quantos clientes cabem ao mesmo tempo com o time de hoje." done={c.preco>0&&c.horasTotal>0} isMob={isMob}/>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,minmax(0,1fr))",gap:10}}>
       <_PrdKpi label="Horas por produto" valor={c.horasTotal+"h"} sub={c.pessoas.length+(c.pessoas.length===1?" função":" funções")} ico="users"/>
       <_PrdKpi label="Duração" valor={c.duracaoDias+" dias"} sub={"≈ "+cap.mesesEntrega+" mês"+(cap.mesesEntrega>1?"es":"")+" de entrega"} ico="calendar"/>
@@ -86182,7 +86188,7 @@ function _ProdEtapaCapacidade({p,c,cfg,isMob}){
 function _ProdEtapaIndices({p,c,isMob}){
   const ix=c.indices;
   return <>
-    <_PrdModHeader num={7} ico="sliders" title="Índice de padronização" subtitle="Quatro números simples pra comparar produtos: o quanto é padrão, o quanto depende do cliente, o quanto pesa pra operar e o quanto escala." done={p.entregaveis.length>0} isMob={isMob}/>
+    <_PrdModHeader num={8} ico="sliders" title="Índice de padronização" subtitle="Quatro números simples pra comparar produtos: o quanto é padrão, o quanto depende do cliente, o quanto pesa pra operar e o quanto escala." done={p.entregaveis.length>0} isMob={isMob}/>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:18}}>
       <_PrdIndice label="Padronização" valor={ix.padronizacao} hint={"templates "+_prodPct(ix.pctTemplate,0)+" · reutilizáveis "+_prodPct(ix.pctReut,0)+" · quanto mais alto, menos trabalho do zero"}/>
       <_PrdIndice label="Dependência do cliente" valor={ix.dependencia} inverso hint="média da dependência marcada nas fases · alto = o prazo fica na mão do cliente"/>
@@ -86332,6 +86338,275 @@ function _ProdParametros({cfg,setConfig,onBack,isMob,isSocio}){
       </div>
     </div>
   </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ETAPA 2 · MATERIAIS + ETAPA 9 · CONTRATOS (09/10/2026, Gustavo):
+   "tem que ter uma aba de jogar materiais tal qual funciona no Materiais
+   [do card], só que pra você entender o produto que estamos organizando,
+   pra destrinchar como ele funcionará.. e também uma aba onde vamos jogar
+   contratos — aí nesse produto terá a opção de gerar o contrato tal qual
+   nosso modelo, de acordo com tal produto. Com inteligência do GPT pra
+   escrever e analisar, porque ele escreve melhor."
+   Arquivos: Supabase storage (produtos/<id>/...) via _eaSubir (54_edicao_arte).
+   IA: askGPTBlocos (ask-openai, gpt) — origem produto_materiais / produto_contrato
+   pro custo cair no ia_uso como tudo da Pixels IA.
+   ═══════════════════════════════════════════════════════════════════════ */
+function _prodArqTam(n){ n=Number(n||0); return n>1024*1024?(n/1024/1024).toFixed(1)+" MB":Math.max(1,Math.round(n/1024))+" KB"; }
+function _prodEhTexto(nome,tipo){ return /\.(txt|md|csv|json|html?)$/i.test(String(nome||""))||/^text\//.test(String(tipo||"")); }
+function _prodEhImagem(nome,tipo){ return /\.(png|jpe?g|webp|gif)$/i.test(String(nome||""))||/^image\//.test(String(tipo||"")); }
+function _prodEhAudio(nome,tipo){ return /\.(mp3|m4a|wav|ogg|opus|aac)$/i.test(String(nome||""))||/^audio\//.test(String(tipo||"")); }
+function _prodLerTexto(file){
+  return new Promise(function(res){
+    if(file.size>400*1024) return res("");
+    const r=new FileReader();
+    r.onload=function(){ res(String(r.result||"").slice(0,15000)); };
+    r.onerror=function(){ res(""); };
+    r.readAsText(file);
+  });
+}
+async function _prodSubirArquivos(produtoId, files, destino){
+  if(typeof _eaSubir!=="function") throw new Error("upload indisponível");
+  const out=[];
+  for(const f of files){
+    const texto=_prodEhTexto(f.name,f.type)?await _prodLerTexto(f):"";
+    const up=await _eaSubir(f, "produtos/"+produtoId+"/"+destino, f.name);
+    out.push({ id:_prodUid("arq-"), url:up.url, path:up.path, name:f.name, type:f.type||"", size:f.size||0,
+      texto:texto||undefined,
+      addedBy:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"",
+      addedAtIso:new Date().toISOString() });
+  }
+  return out;
+}
+/* resumo do produto pro GPT (o que já está preenchido no Criador) */
+function _prodResumoPraIA(p, cfg){
+  const L=[];
+  const i=p.ideia||{};
+  L.push("PRODUTO: "+(i.nome||"(sem nome)")+(i.categoria?" · "+i.categoria:"")+(i.tipo?" · tipo "+i.tipo:""));
+  if(i.problema) L.push("PROBLEMA QUE RESOLVE: "+i.problema);
+  if(i.resultado) L.push("RESULTADO ESPERADO: "+i.resultado);
+  if(i.descricao) L.push("DESCRIÇÃO: "+i.descricao);
+  if(i.clienteIdeal) L.push("CLIENTE IDEAL: "+i.clienteIdeal+(i.segmento?" · segmento "+i.segmento:"")+(i.tamanho?" · porte "+i.tamanho:""));
+  (p.fases||[]).forEach(function(f,k){ L.push("FASE "+(k+1)+" — "+f.nome+(f.prazoDias?" ("+f.prazoDias+" dias)":"")+": "+[f.objetivo,f.descricao].filter(Boolean).join(" · ")); });
+  (p.entregaveis||[]).forEach(function(e){ L.push("ENTREGÁVEL: "+e.nome+(e.formato?" ("+e.formato+")":"")+(e.descricao?" — "+e.descricao:"")); });
+  try{ const c=prodCalc(p,cfg||undefined); if(c.preco) L.push("PREÇO DE VENDA: "+_prodFmt(c.preco)); if(c.duracaoDias) L.push("DURAÇÃO TOTAL: "+c.duracaoDias+" dias"); }catch(_){ }
+  return L.join("\n").slice(0,6000);
+}
+async function _prodDestrincharIA(p, cfg){
+  if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
+  const mats=(p.materiais||[]);
+  const blocos=[];
+  blocos.push({type:"text",text:"O QUE JÁ ESTÁ PREENCHIDO NO CRIADOR:\n"+_prodResumoPraIA(p,cfg)});
+  const semLeitura=[];
+  mats.forEach(function(m){
+    if(m.texto) blocos.push({type:"text",text:"MATERIAL “"+m.name+"” (conteúdo):\n"+m.texto});
+    else if(_prodEhImagem(m.name,m.type)) blocos.push({type:"image",source:{type:"url",url:m.url}});
+    else semLeitura.push(m.name);
+  });
+  if(semLeitura.length) blocos.push({type:"text",text:"MATERIAIS QUE NÃO PUDE LER (só o nome): "+semLeitura.join("; ")});
+  blocos.push({type:"text",text:"Destrinche este produto da agência. Escreva em português, direto, sem enrolação, nestas seções:\n1) O QUE É — em 3 linhas.\n2) COMO FUNCIONA NA PRÁTICA — passo a passo da entrega, do fechamento ao encerramento.\n3) O QUE O CLIENTE RECEBE — lista concreta.\n4) O QUE A PIXELS PRECISA FAZER/TER — funções envolvidas, ferramentas, pré-requisitos.\n5) PONTOS EM ABERTO — o que os materiais não explicam e precisa ser decidido (perguntas objetivas).\nUse SOMENTE o que está nos materiais e no que foi preenchido; não invente números nem promessas."});
+  const r=await askGPTBlocos({ max_tokens:3500, origem:"produto_materiais",
+    system:"Você é o estrategista da agência Pixels. Analisa materiais brutos (briefings, anotações, prints) e explica como um produto/serviço funciona, com clareza de quem vai vender e entregar.",
+    messages:[{role:"user",content:blocos}] });
+  const texto=((r&&r.content&&r.content[0])||{}).text||"";
+  if(!texto) throw new Error("o GPT respondeu vazio");
+  return texto;
+}
+async function _prodGerarContratoIA(p, cfg, modelo){
+  if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
+  if(!modelo||!modelo.texto) throw new Error("o modelo escolhido está sem texto — cole o texto do contrato nele");
+  const extra=p.iaEntendimento&&p.iaEntendimento.texto?("\n\nCOMO O PRODUTO FUNCIONA (análise da IA sobre os materiais):\n"+String(p.iaEntendimento.texto).slice(0,3000)):"";
+  const r=await askGPTBlocos({ max_tokens:8000, origem:"produto_contrato",
+    system:"Você redige contratos de prestação de serviços da agência Pixels Marketing Digital. Recebe um CONTRATO MODELO (o padrão da agência) e os dados de um produto. Sua tarefa: escrever o contrato DESTE produto SEGUINDO FIELMENTE a estrutura, as cláusulas, o tom e a formatação do modelo — mesmas seções, mesma ordem, mesmo estilo. Adapte apenas o que é do produto: objeto, escopo, entregáveis, etapas, prazos e valores. Onde o modelo tiver dados do cliente (nome, CNPJ, endereço), mantenha campos entre colchetes, ex.: [CONTRATANTE], [CNPJ DO CONTRATANTE]. Não acrescente cláusulas novas nem remova cláusulas do modelo sem necessidade; não invente valores que não foram informados. Responda SÓ com o texto final do contrato.",
+    messages:[{role:"user",content:[
+      {type:"text",text:"CONTRATO MODELO DA AGÊNCIA:\n\n"+String(modelo.texto).slice(0,20000)},
+      {type:"text",text:"DADOS DO PRODUTO:\n"+_prodResumoPraIA(p,cfg)+extra},
+    ]}] });
+  const texto=((r&&r.content&&r.content[0])||{}).text||"";
+  if(!texto) throw new Error("o GPT respondeu vazio");
+  return texto;
+}
+function _prodBaixarTexto(texto, nome, doc){
+  const blob=doc
+    ? new Blob(["<html><head><meta charset='utf-8'></head><body><pre style='font-family:Calibri,Arial,sans-serif;font-size:11pt;white-space:pre-wrap'>"+String(texto).replace(/&/g,"&amp;").replace(/</g,"&lt;")+"</pre></body></html>"],{type:"application/msword"})
+    : new Blob([texto],{type:"text/plain;charset=utf-8"});
+  if(typeof _eaBaixarArquivo==="function") return _eaBaixarArquivo(blob, nome);
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nome; document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1200);
+}
+/* caixa de upload compartilhada pelas duas etapas */
+function _ProdUploadBox({label,hint,onFiles,canEdit,busy}){
+  const ref=useRef(null); const [drag,setDrag]=useState(false);
+  return <div
+    onDragOver={function(e){ e.preventDefault(); if(canEdit) setDrag(true); }}
+    onDragLeave={function(){ setDrag(false); }}
+    onDrop={function(e){ e.preventDefault(); setDrag(false); if(!canEdit) return; const fs=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]); if(fs.length) onFiles(fs); }}
+    onClick={function(){ if(canEdit&&!busy&&ref.current) ref.current.click(); }}
+    style={{border:"2px dashed "+(drag?_PRD.PX:_PRD.BORD),background:drag?_PRD.PX_BG:_PRD.BG_INNER,borderRadius:14,padding:"22px 16px",textAlign:"center",cursor:canEdit&&!busy?"pointer":"default",transition:"all .18s"}}>
+    <input ref={ref} type="file" multiple style={{display:"none"}} onChange={function(e){ const fs=Array.from(e.target.files||[]); e.target.value=""; if(fs.length) onFiles(fs); }}/>
+    <div style={{color:busy?_PRD.PX_DK:_PRD.INK,fontWeight:800,fontSize:13.5}}>{busy?"Enviando…":label}</div>
+    <div style={{color:_PRD.SOFT,fontSize:11.5,marginTop:4}}>{hint}</div>
+  </div>;
+}
+function _ProdArquivoLinha({m,canEdit,onRemover,aviso}){
+  return <div style={{display:"flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"9px 12px"}}>
+    {typeof _PxIco==="function"&&<_PxIco n={_prodEhImagem(m.name,m.type)?"layout":_prodEhAudio(m.name,m.type)?"mic":"clipboard"} size={16} color={_PRD.PX_DK}/>}
+    <div style={{flex:1,minWidth:0}}>
+      <a href={m.url} target="_blank" rel="noreferrer" style={{color:_PRD.INK,fontWeight:700,fontSize:12.5,textDecoration:"none",display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.name}</a>
+      <div style={{color:_PRD.SOFT,fontSize:10.5,marginTop:1}}>{_prodArqTam(m.size)+" · "+(m.addedBy||"")+" · "+_prodDataBR(String(m.addedAtIso||"").slice(0,10))+(aviso?(" · "+aviso):"")}</div>
+    </div>
+    {m.texto&&<span style={{background:_PRD.OK_BG,color:_PRD.OK,fontSize:9.5,fontWeight:800,padding:"3px 8px",borderRadius:99,whiteSpace:"nowrap"}}>IA LÊ ✓</span>}
+    {_prodEhImagem(m.name,m.type)&&<span style={{background:_PRD.PX_BG,color:_PRD.PX_DK,fontSize:9.5,fontWeight:800,padding:"3px 8px",borderRadius:99,whiteSpace:"nowrap"}}>IA VÊ ✓</span>}
+    {canEdit&&<button onClick={onRemover} style={{background:"transparent",border:"none",color:_PRD.SOFT,cursor:"pointer",fontSize:15,lineHeight:1,padding:4}} title="Remover da lista">×</button>}
+  </div>;
+}
+/* ─── ETAPA 2 · Materiais ─────────────────────────────────────────────── */
+function _ProdEtapaMateriais({p,set,canEdit,isMob}){
+  const [busy,setBusy]=useState(false);
+  const [gerando,setGerando]=useState(false);
+  const mats=p.materiais||[];
+  const subir=function(fs){
+    if(!canEdit||busy) return;
+    setBusy(true);
+    _prodSubirArquivos(p.id, fs, "materiais").then(function(novos){
+      set(function(cur){ return Object.assign({},cur,{materiais:(cur.materiais||[]).concat(novos)}); });
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(novos.length+" arquivo"+(novos.length>1?"s":"")+" no material do produto.");
+    }).catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Upload falhou: "+((e&&e.message)||e)); })
+      .finally(function(){ setBusy(false); });
+  };
+  const destrinchar=function(){
+    if(gerando) return;
+    if(!mats.length&&!(p.ideia&&p.ideia.descricao)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Suba algum material (ou preencha a Ideia) antes de destrinchar."); return; }
+    setGerando(true);
+    _prodDestrincharIA(p).then(function(texto){
+      set(function(cur){ return Object.assign({},cur,{iaEntendimento:{texto:texto,geradoEm:new Date().toISOString(),arquivos:mats.map(function(m){return m.name;})}}); });
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Produto destrinchado pela IA.");
+    }).catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("IA: "+((e&&e.message)||e)); })
+      .finally(function(){ setGerando(false); });
+  };
+  const ia=p.iaEntendimento;
+  return <>
+    <_PrdModHeader num={2} ico="folderkanban" title="Materiais do produto" subtitle="Jogue aqui tudo que explica o produto — briefings, anotações, prints, propostas antigas. A IA lê e destrincha como ele funciona, igual ao Materiais do card." done={mats.length>0||!!ia} isMob={isMob}/>
+    <_ProdUploadBox label="Arraste arquivos aqui ou clique pra escolher" hint="Texto (.txt, .md) e imagens a IA lê direto. Áudio, PDF e Word ficam guardados — pra IA ler, envie também em .txt." onFiles={subir} canEdit={canEdit} busy={busy}/>
+    {mats.length>0&&<div style={{display:"flex",flexDirection:"column",gap:7}}>
+      {mats.map(function(m){ return <_ProdArquivoLinha key={m.id||m.url} m={m} canEdit={canEdit}
+        aviso={(!m.texto&&!_prodEhImagem(m.name,m.type))?(_prodEhAudio(m.name,m.type)?"áudio: transcreva na Pixels IA e suba o .txt":"a IA não lê este formato"):null}
+        onRemover={function(){ set(function(cur){ return Object.assign({},cur,{materiais:(cur.materiais||[]).filter(function(x){return (x.id||x.url)!==(m.id||m.url);})}); }); }}/>; })}
+    </div>}
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      {canEdit&&<_PrdBtn tone="primary" ico="sparkles" onClick={destrinchar} disabled={gerando}>{gerando?"Destrinchando com o GPT…":(ia?"Destrinchar de novo":"Destrinchar produto com IA")}</_PrdBtn>}
+      {ia&&<span style={{color:_PRD.SOFT,fontSize:11}}>última análise: {_prodDataBR(String(ia.geradoEm||"").slice(0,10))}</span>}
+    </div>
+    {ia&&<div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+_PRD.PX_BD,borderRadius:16,padding:"16px 18px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
+        <div style={{color:_PRD.PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Como o produto funciona — análise da IA</div>
+        <_PrdBtn small onClick={function(){ try{ navigator.clipboard.writeText(ia.texto); if(typeof pixelsToast!=="undefined") pixelsToast.success("Análise copiada."); }catch(_){ } }} ico="copy">Copiar</_PrdBtn>
+      </div>
+      <div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{ia.texto}</div>
+    </div>}
+  </>;
+}
+/* ─── ETAPA 9 · Contratos ─────────────────────────────────────────────── */
+function _ProdEtapaContratos({p,c,cfg,set,canEdit,isMob}){
+  const ct=p.contratos||{modelos:[],gerados:[]};
+  const [busy,setBusy]=useState(false);
+  const [gerando,setGerando]=useState(false);
+  const [modeloSel,setModeloSel]=useState((((ct.modelos||[])[0])||{}).id||null);
+  const [aberto,setAberto]=useState(null);
+  const [colando,setColando]=useState(null);         // id do modelo recebendo texto colado
+  const [textoCola,setTextoCola]=useState("");
+  const setCt=function(fn){ set(function(cur){ const atual=cur.contratos||{modelos:[],gerados:[]}; return Object.assign({},cur,{contratos:typeof fn==="function"?fn(atual):Object.assign({},atual,fn)}); }); };
+  const subir=function(fs){
+    if(!canEdit||busy) return;
+    setBusy(true);
+    _prodSubirArquivos(p.id, fs, "contratos").then(function(novos){
+      setCt(function(a){ return Object.assign({},a,{modelos:(a.modelos||[]).concat(novos)}); });
+      if(!modeloSel&&novos[0]) setModeloSel(novos[0].id);
+      const semTexto=novos.filter(function(m){return !m.texto;});
+      if(typeof pixelsToast!=="undefined"){ if(semTexto.length) pixelsToast.warning("Modelo salvo. Pra IA seguir o contrato, cole o TEXTO dele no botão “Colar texto”."); else pixelsToast.success("Modelo de contrato pronto pra usar."); }
+    }).catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Upload falhou: "+((e&&e.message)||e)); })
+      .finally(function(){ setBusy(false); });
+  };
+  const colarNovo=function(){
+    const m={ id:_prodUid("arq-"), name:"Modelo colado "+_prodDataBR(_prodHoje()), type:"text/plain", size:0, texto:"", url:"", addedBy:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"", addedAtIso:new Date().toISOString() };
+    setCt(function(a){ return Object.assign({},a,{modelos:(a.modelos||[]).concat([m])}); });
+    setModeloSel(m.id); setColando(m.id); setTextoCola("");
+  };
+  const gerar=function(){
+    if(gerando) return;
+    const modelo=(ct.modelos||[]).find(function(m){return m.id===modeloSel;})||(ct.modelos||[])[0];
+    if(!modelo){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Suba (ou cole) o modelo de contrato primeiro."); return; }
+    setGerando(true);
+    _prodGerarContratoIA(p, cfg, modelo).then(function(texto){
+      const g={ id:_prodUid("ctr-"), titulo:"Contrato — "+(p.ideia.nome||"produto")+" (modelo: "+modelo.name+")", texto:texto, modeloNome:modelo.name, geradoEm:new Date().toISOString(), geradoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"" };
+      setCt(function(a){ return Object.assign({},a,{gerados:[g].concat(a.gerados||[]).slice(0,12)}); });
+      setAberto(g.id);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Contrato gerado pelo GPT seguindo o modelo.");
+    }).catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("IA: "+((e&&e.message)||e)); })
+      .finally(function(){ setGerando(false); });
+  };
+  return <>
+    <_PrdModHeader num={9} ico="handshake" title="Contratos" subtitle="Suba o modelo de contrato da agência. A IA escreve o contrato DESTE produto seguindo o modelo à risca — cláusulas, ordem e tom — trocando só escopo, entregáveis, prazos e valores." done={(ct.gerados||[]).length>0} isMob={isMob}/>
+    <div><_PrdRotulo extra={canEdit?undefined:""}>Modelos da agência</_PrdRotulo>
+      <_ProdUploadBox label="Arraste o contrato modelo ou clique pra escolher" hint="Mande em .txt ou .md pra IA ler direto. PDF/Word ficam guardados — aí é só colar o texto no botão abaixo." onFiles={subir} canEdit={canEdit} busy={busy}/>
+      <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+        {canEdit&&<_PrdBtn small onClick={colarNovo} ico="pentool">Colar texto de um modelo</_PrdBtn>}
+      </div>
+    </div>
+    {(ct.modelos||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:7}}>
+      {(ct.modelos||[]).map(function(m){
+        const sel=m.id===modeloSel;
+        return <div key={m.id} style={{border:"1.5px solid "+(sel?_PRD.PX:_PRD.BORD),borderRadius:12,background:sel?"#faf7ff":"#fff",padding:"9px 12px",display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={function(){ setModeloSel(m.id); }}>
+            <span style={{width:15,height:15,borderRadius:"50%",border:"2px solid "+(sel?_PRD.PX:_PRD.SOFT),background:sel?_PRD.PX:"transparent",flexShrink:0}}/>
+            <div style={{flex:1,minWidth:0}}>
+              {m.url?<a href={m.url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{color:_PRD.INK,fontWeight:700,fontSize:12.5,textDecoration:"none"}}>{m.name}</a>
+                :<span style={{color:_PRD.INK,fontWeight:700,fontSize:12.5}}>{m.name}</span>}
+              <div style={{color:_PRD.SOFT,fontSize:10.5}}>{m.texto?("texto lido ✓ · "+m.texto.length.toLocaleString("pt-BR")+" caracteres"):"SEM texto — a IA não consegue seguir este modelo ainda"}</div>
+            </div>
+            {canEdit&&<_PrdBtn small onClick={function(){ setColando(colando===m.id?null:m.id); setTextoCola(m.texto||""); }}>{m.texto?"Editar texto":"Colar texto"}</_PrdBtn>}
+            {canEdit&&<button onClick={function(e){ e.stopPropagation(); setCt(function(a){ return Object.assign({},a,{modelos:(a.modelos||[]).filter(function(x){return x.id!==m.id;})}); }); if(modeloSel===m.id) setModeloSel(null); }} style={{background:"transparent",border:"none",color:_PRD.SOFT,cursor:"pointer",fontSize:15,lineHeight:1,padding:4}}>×</button>}
+          </div>
+          {colando===m.id&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <_PrdTextarea value={textoCola} onChange={setTextoCola} rows={10} placeholder="Cole aqui o texto completo do contrato modelo (abra o Word/PDF, selecione tudo, copie e cole)."/>
+            <div style={{display:"flex",gap:8}}>
+              <_PrdBtn small tone="primary" onClick={function(){ const t=textoCola; setCt(function(a){ return Object.assign({},a,{modelos:(a.modelos||[]).map(function(x){ return x.id===m.id?Object.assign({},x,{texto:t,size:x.size||t.length}):x; })}); }); setColando(null); if(typeof pixelsToast!=="undefined") pixelsToast.success("Texto do modelo salvo."); }}>Salvar texto</_PrdBtn>
+              <_PrdBtn small tone="ghost" onClick={function(){ setColando(null); }}>Cancelar</_PrdBtn>
+            </div>
+          </div>}
+        </div>;
+      })}
+    </div>}
+    {canEdit&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      <_PrdBtn tone="primary" ico="sparkles" onClick={gerar} disabled={gerando}>{gerando?"O GPT está escrevendo o contrato…":"Gerar contrato deste produto"}</_PrdBtn>
+      {c&&c.preco>0&&<span style={{color:_PRD.SOFT,fontSize:11}}>vai usar o preço {_prodFmt(c.preco)} e a duração {c.duracaoDias||"—"} dias</span>}
+    </div>}
+    {(ct.gerados||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <_PrdRotulo>Contratos gerados</_PrdRotulo>
+      {(ct.gerados||[]).map(function(g){
+        const ab=aberto===g.id;
+        return <div key={g.id} style={{border:"1px solid "+_PRD.BORD,borderRadius:14,background:"#fff",overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer"}} onClick={function(){ setAberto(ab?null:g.id); }}>
+            {typeof _PxIco==="function"&&<_PxIco n="handshake" size={16} color={_PRD.PX_DK}/>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:_PRD.INK,fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.titulo}</div>
+              <div style={{color:_PRD.SOFT,fontSize:10.5}}>{_prodDataBR(String(g.geradoEm||"").slice(0,10))+(g.geradoPor?(" · "+g.geradoPor):"")}</div>
+            </div>
+            <span style={{color:_PRD.PX_DK,fontSize:11,fontWeight:800}}>{ab?"fechar ▲":"abrir ▼"}</span>
+          </div>
+          {ab&&<div style={{borderTop:"1px solid "+_PRD.BORD,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <_PrdBtn small onClick={function(){ try{ navigator.clipboard.writeText(g.texto); if(typeof pixelsToast!=="undefined") pixelsToast.success("Contrato copiado."); }catch(_){ } }} ico="copy">Copiar</_PrdBtn>
+              <_PrdBtn small onClick={function(){ _prodBaixarTexto(g.texto, "contrato-"+_eaNomeArquivo((p.ideia&&p.ideia.nome)||"produto")+".doc", true); }}>Baixar .doc</_PrdBtn>
+              <_PrdBtn small onClick={function(){ _prodBaixarTexto(g.texto, "contrato-"+_eaNomeArquivo((p.ideia&&p.ideia.nome)||"produto")+".txt", false); }}>Baixar .txt</_PrdBtn>
+              {canEdit&&<_PrdBtn small tone="danger" onClick={function(){ setCt(function(a){ return Object.assign({},a,{gerados:(a.gerados||[]).filter(function(x){return x.id!==g.id;})}); }); }}>Excluir</_PrdBtn>}
+            </div>
+            <div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.7,whiteSpace:"pre-wrap",maxHeight:480,overflowY:"auto",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"14px 16px"}}>{g.texto}</div>
+          </div>}
+        </div>;
+      })}
+    </div>}
+  </>;
 }
 
 // ======= 20_operacional.jsx =======
