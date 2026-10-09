@@ -85821,7 +85821,7 @@ function _ProdCriador({produto,cfg,setProduto,salvarVersao,duplicar,voltar,ficha
   const body=(function(){
     switch(cur.id){
       case "ideia":       return <_ProdEtapaIdeia p={p} setIdeia={setIdeia} set={set} canEdit={canEdit} isMob={isMob}/>;
-      case "materiais":   return <_ProdEtapaMateriais p={p} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "materiais":   return <_ProdEtapaMateriais p={p} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "contratos":   return <_ProdEtapaContratos p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "estrutura":   return <_ProdEtapaEstrutura p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
       case "entregaveis": return <_ProdEtapaEntregaveis p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
@@ -86454,7 +86454,7 @@ async function _prodDestrincharIA(p, cfg){
     else semLeitura.push(m.name);
   });
   if(semLeitura.length) blocos.push({type:"text",text:"MATERIAIS QUE NÃO PUDE LER (só o nome): "+semLeitura.join("; ")});
-  blocos.push({type:"text",text:'Destrinche este produto da agência e DEVOLVA SÓ UM JSON, neste formato exato:\n{"analise":"texto corrido em português com as seções: 1) O QUE É (3 linhas); 2) COMO FUNCIONA NA PRÁTICA (passo a passo, do fechamento ao encerramento); 3) O QUE O CLIENTE RECEBE; 4) O QUE A PIXELS PRECISA FAZER/TER; 5) PONTOS EM ABERTO (perguntas objetivas do que os materiais não explicam)",\n"ideia":{"nome":"","categoria":"","problema":"","resultado":"","descricao":"frase única de proposta","clienteIdeal":"","segmento":""},\n"fases":[{"nome":"","objetivo":"","descricao":"","prazoDias":5,"reunioes":0}],\n"entregaveis":[{"nome":"","descricao":"","formato":"Documento|Dashboard|Apresentação|Planilha|Reunião|Vídeo|Treinamento|Outro","fase":"nome da fase a que pertence"}]}\nRegras: use SOMENTE o que está nos materiais e no que já foi preenchido; não invente números, preços nem promessas; em "ideia" preencha só o que os materiais sustentam (campo sem base = string vazia); fases na ordem real da entrega.'});
+  blocos.push({type:"text",text:'Destrinche este produto da agência e DEVOLVA SÓ UM JSON, neste formato exato:\n{"analise":"texto corrido em português com as seções: 1) O QUE É (3 linhas); 2) COMO FUNCIONA NA PRÁTICA (passo a passo, do fechamento ao encerramento); 3) O QUE O CLIENTE RECEBE; 4) O QUE A PIXELS PRECISA FAZER/TER; 5) PONTOS EM ABERTO (perguntas objetivas do que os materiais não explicam)",\n"ideia":{"nome":"","categoria":"","problema":"","resultado":"","descricao":"frase única de proposta","clienteIdeal":"","segmento":""},\n"fases":[{"nome":"","objetivo":"","descricao":"","prazoDias":5,"reunioes":0,"horas":{"socio":0,"estrategia":0,"midia":0,"video":0,"design":0,"estagio":0}}],\n"entregaveis":[{"nome":"","descricao":"","formato":"Documento|Dashboard|Apresentação|Planilha|Reunião|Vídeo|Treinamento|Outro","fase":"nome da fase a que pertence"}]}\nRegras: use SOMENTE o que está nos materiais e no que já foi preenchido; não invente preços nem promessas; em "ideia" preencha só o que os materiais sustentam (campo sem base = string vazia); fases na ordem real da entrega. EXCEÇÃO ÚNICA de estimativa: as "horas" de trabalho por função em cada fase (socio=sócio/gestão, estrategia, midia=gestão de mídia, video=edição de vídeo, design, estagio=estagiária) você PODE e DEVE estimar com realismo a partir do que a entrega exige — elas alimentam o custo do produto e serão revisadas por um sócio.'});
   const r=await askGPTBlocos({ max_tokens:6000, origem:"produto_materiais",
     system:"Você é o estrategista da agência Pixels. Analisa materiais brutos (briefings, transcrições de reunião, anotações, prints) e estrutura como um produto/serviço funciona, com clareza de quem vai vender e entregar. Responde SÓ com o JSON pedido.",
     messages:[{role:"user",content:blocos}] });
@@ -86466,8 +86466,8 @@ async function _prodDestrincharIA(p, cfg){
 }
 /* aplica o que a IA estruturou SEM atropelar o que o usuário já digitou:
    campo da Ideia só entra se estiver vazio; fases/entregáveis só se não existirem ainda */
-function _prodAplicarIA(cur, j){
-  const out=Object.assign({},cur); let campos=0, fases=0, entrs=0;
+function _prodAplicarIA(cur, j, cfg){
+  const out=Object.assign({},cur); let campos=0, fases=0, entrs=0, precoSugerido=0;
   if(j.ideia){
     const i=Object.assign({},out.ideia||{});
     ["nome","categoria","problema","resultado","descricao","clienteIdeal","segmento"].forEach(function(k){
@@ -86481,6 +86481,8 @@ function _prodAplicarIA(cur, j){
       const nf=_prodFaseNova(k+1);
       nf.nome=String(f.nome).slice(0,80); nf.objetivo=String(f.objetivo||"").slice(0,300); nf.descricao=String(f.descricao||"").slice(0,600);
       nf.prazoDias=Math.max(1,Math.min(90,Math.round(Number(f.prazoDias)||5))); nf.reunioes=Math.max(0,Math.min(20,Math.round(Number(f.reunioes)||0)));
+      const hs={}; ["socio","estrategia","midia","video","design","estagio"].forEach(function(k){ const v=Number((f.horas||{})[k]); if(isFinite(v)&&v>0) hs[k]=Math.min(300,Math.round(v*2)/2); });
+      nf.horas=hs;
       return nf;
     });
     fases=out.fases.length;
@@ -86495,7 +86497,14 @@ function _prodAplicarIA(cur, j){
     });
     entrs=out.entregaveis.length;
   }
-  return { produto:out, campos:campos, fases:fases, entregaveis:entrs };
+  // preço: só SUGERE quando ainda não tem — preço alvo da margem desejada, calculado das horas estimadas
+  try{
+    if(!(Number((out.preco||{}).valor)>0)){
+      const c2=prodCalc(out, cfg||undefined);
+      if(c2.precoAlvo>0){ out.preco=Object.assign({},out.preco||{},{valor:Math.ceil(c2.precoAlvo/100)*100}); precoSugerido=out.preco.valor; }
+    }
+  }catch(_){ }
+  return { produto:out, campos:campos, fases:fases, entregaveis:entrs, precoSugerido:precoSugerido };
 }
 async function _prodGerarContratoIA(p, cfg, modelo){
   if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
@@ -86562,7 +86571,7 @@ function _ProdArquivoLinha({m,canEdit,onRemover,aviso,prog}){
   </div>;
 }
 /* ─── ETAPA 2 · Materiais ─────────────────────────────────────────────── */
-function _ProdEtapaMateriais({p,set,canEdit,isMob}){
+function _ProdEtapaMateriais({p,cfg,set,canEdit,isMob}){
   const [busy,setBusy]=useState(false);
   const [gerando,setGerando]=useState(false);
   const [transc,setTransc]=useState({});            // id do arquivo → status da transcrição
@@ -86599,12 +86608,14 @@ function _ProdEtapaMateriais({p,set,canEdit,isMob}){
     if(!mats.length&&!(p.ideia&&p.ideia.descricao)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Suba algum material (ou preencha a Ideia) antes de destrinchar."); return; }
     if(Object.keys(transc).some(function(k){return transc[k]&&!/falhou|não saiu/.test(String(transc[k].msg||""));})){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Ainda tem transcrição rodando — espere terminar pra IA ler a reunião também."); return; }
     setGerando(true);
-    _prodDestrincharIA(p).then(function(j){
+    _prodDestrincharIA(p, cfg).then(function(j){
       set(function(cur){
-        const ap=_prodAplicarIA(cur, j||{});
+        const ap=_prodAplicarIA(cur, j||{}, cfg);
         const out=ap.produto;
         out.iaEntendimento={texto:(j&&j.analise)||"",geradoEm:new Date().toISOString(),arquivos:mats.map(function(m){return m.name;})};
         if(typeof pixelsToast!=="undefined"){ const pcs=[]; if(ap.campos) pcs.push(ap.campos+" campo"+(ap.campos>1?"s":"")+" da Ideia"); if(ap.fases) pcs.push(ap.fases+" fases"); if(ap.entregaveis) pcs.push(ap.entregaveis+" entregáveis");
+          if(ap.fases) pcs.push("horas estimadas por função (revise no CSP)");
+          if(ap.precoSugerido) pcs.push("preço sugerido "+_prodFmt(ap.precoSugerido)+" (margem desejada — revise na Precificação)");
           pixelsToast.success(pcs.length?("Produto criado pela IA — preenchi "+pcs.join(", ")+". O que você já tinha digitado ficou como estava."):"Produto destrinchado pela IA."); }
         return out;
       });
@@ -147114,6 +147125,42 @@ function _eaLimparEntulhoClone(cv, caixas){
   });
   return n;
 }
+/* (09/10, Gustavo: "continua tudo remendado") ENTULHO/SOMBRA GRANDE via IA em RECORTE LOCAL: um quadrado
+   ao redor da mancha (2,2× o tamanho dela, preso à área da foto) vai pro gpt-image com máscara só no buraco.
+   Quadrado ~1:1 → tamanho 1024×1024 sem letterbox gigante → sem o zoom que espalhava resíduo. O resultado é
+   realinhado e tem a cor casada com o recorte original, e SÓ o miolo (a mancha, com pluma) volta pra arte. */
+async function _eaLimparEntulhoIA(cv, cx, o){
+  const w = cv.width, h = cv.height;
+  const topo = Math.max(0, Math.floor(o.topo || 0)), fimF = Math.min(h, Math.ceil(o.fimF || h));
+  let bx = Math.max(0, Math.round(cx.x)), by = Math.max(topo, Math.round(cx.y));
+  let bw = Math.min(w - bx, Math.round(cx.w)), bh = Math.min(fimF - by, Math.round(cx.h));
+  if(bw < 4 || bh < 4) return null;
+  let L = Math.round(Math.min(Math.max(bw, bh) * 2.2, Math.min(w, fimF - topo)));
+  const x0 = Math.max(0, Math.min(w - L, Math.round(bx + bw / 2 - L / 2)));
+  const y0 = Math.max(topo, Math.min(fimF - L, Math.round(by + bh / 2 - L / 2)));
+  const Rec = document.createElement("canvas"); Rec.width = L; Rec.height = L;
+  Rec.getContext("2d").drawImage(cv, x0, y0, L, L, 0, 0, L, L);
+  const MR = document.createElement("canvas"); MR.width = L; MR.height = L; const mx = MR.getContext("2d");
+  mx.fillStyle = "#000"; mx.fillRect(0, 0, L, L);
+  mx.globalCompositeOperation = "destination-out"; mx.fillRect(bx - x0, by - y0, bw, bh);
+  const prompt = "Fotografia real de obra rural" + (o.obraTipo ? " (" + o.obraTipo + ")" : "") + ". Na área marcada, APAGUE o que estiver ali (sombra de pessoa/fotógrafo, entulho, sujeira, materiais soltos) e preencha com o MESMO fundo que existe ao redor (grama/terra/vegetação), nítido, com textura fotográfica real, mesma luz e perspectiva. Proibido deixar mancha lisa, borrada ou nebulosa. Todo o resto permanece idêntico. Não acrescente objetos, pessoas ou texto. Resultado: fotografia real contínua, mesma câmera.";
+  const r = await _eaFotoIA(Rec, MR, prompt, o.client, o.projeto);
+  if(!r) return null;
+  const rA = _eaAlinharIA(Rec, r);
+  _eaCasarCor(Rec, rA);
+  // só o miolo volta: máscara branca na caixa, com pluma (blur barato por encolhe/estica)
+  const f = Math.max(10, Math.min(26, Math.round(Math.min(bw, bh) / 5)));
+  const msk = document.createElement("canvas"); msk.width = L; msk.height = L; const kx = msk.getContext("2d");
+  kx.fillStyle = "#fff"; kx.fillRect(bx - x0, by - y0, bw, bh);
+  const t2 = document.createElement("canvas"); t2.width = Math.max(2, Math.round(L / f)); t2.height = Math.max(2, Math.round(L / f));
+  t2.getContext("2d").drawImage(msk, 0, 0, t2.width, t2.height);
+  kx.clearRect(0, 0, L, L); kx.drawImage(t2, 0, 0, L, L);
+  const K = document.createElement("canvas"); K.width = L; K.height = L; const k2 = K.getContext("2d");
+  k2.drawImage(rA, 0, 0);
+  k2.globalCompositeOperation = "destination-in"; k2.drawImage(msk, 0, 0);
+  cv.getContext("2d").drawImage(K, x0, y0);
+  return r.__custo || null;
+}
 /* (09/10, Gustavo: "ainda não corrigiu a sombra no mapa") no template do Paraguai a "sombra" é a extrusão
    CINZA do render 3D branco que fica POR BAIXO da camada verde (blend darken): o verde cobre só a face de
    cima e a lateral cinza sobra como mancha suja seguindo o contorno. Não é camada separada, então a sombra
@@ -147255,18 +147302,47 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   }catch(_){ }
   const vazioBaixo = Math.max(0, h - (m.oy + m.dh)) * w;
   const precisaCompletar = vazioBaixo > w * h * 0.005, temEntulho = (an.entulho || []).length > 0;
-  // ENTULHO: limpeza determinística por clone da própria foto (sem IA) — ver _eaLimparEntulhoClone
+  /* ENTULHO (09/10, Gustavo: "continua tudo remendado"): mancha PEQUENA some bem com clone da própria foto
+     (sem IA, sem custo), mas em área GRANDE — a sombra do fotógrafo — o espelho fica visível, parece remendo.
+     Área grande (> 1,2% da foto) vai pra IA num RECORTE LOCAL quadrado (sem o letterbox que causava o zoom):
+     ela apaga o objeto e pinta grama nova de verdade, e só o miolo volta pra arte, com pluma. */
   if(temEntulho){
-    try{
-      if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho e sombras (sem IA)…"); }catch(_){ } }
-      // folga proporcional: a visão costuma marcar a mancha um pouco menor que ela é (braços da sombra, bordas)
-      const cxs = an.entulho.map(function(c){
-        const fx = Math.max(w * 0.012, (c.x1 - c.x0) * m.dw * 0.25), fy = Math.max(w * 0.012, (c.y1 - c.y0) * m.dh * 0.25);
-        return { x:m.ox + c.x0 * m.dw - fx, y:m.oy + c.y0 * m.dh - fy, w:(c.x1 - c.x0) * m.dw + 2 * fx, h:(c.y1 - c.y0) * m.dh + 2 * fy };
-      });
-      const nL = _eaLimparEntulhoClone(cv, cxs);
-      if(nL) avisos.push("entulho/bagunça/sombras limpos clonando a própria foto em " + nL + " área(s) (sem IA)");
-    }catch(e){ avisos.push("limpeza de entulho não rodou (" + _eaErro(e) + ")"); }
+    // folga proporcional: a visão costuma marcar a mancha um pouco menor que ela é (braços da sombra, bordas)
+    const cxs = an.entulho.map(function(c){
+      const fx = Math.max(w * 0.012, (c.x1 - c.x0) * m.dw * 0.25), fy = Math.max(w * 0.012, (c.y1 - c.y0) * m.dh * 0.25);
+      return { x:m.ox + c.x0 * m.dw - fx, y:m.oy + c.y0 * m.dh - fy, w:(c.x1 - c.x0) * m.dw + 2 * fx, h:(c.y1 - c.y0) * m.dh + 2 * fy };
+    });
+    const areaFoto = Math.max(1, m.dw * m.dh);
+    // mancha grande COLADA NA OBRA não vai pra IA: repintar a margem da lagoa criava um degradê falso —
+    // alterar a obra é o pecado maior, então ali fica como está (entulho de canteiro faz parte da cena)
+    const obraPx = an.obra ? { x0:m.ox + an.obra.x0 * m.dw, y0:m.oy + an.obra.y0 * m.dh, x1:m.ox + an.obra.x1 * m.dw, y1:m.oy + an.obra.y1 * m.dh } : null;
+    const invadeObra = function(c){ if(!obraPx) return 0;
+      const ix = Math.max(0, Math.min(c.x + c.w, obraPx.x1) - Math.max(c.x, obraPx.x0));
+      const iy = Math.max(0, Math.min(c.y + c.h, obraPx.y1) - Math.max(c.y, obraPx.y0));
+      return (ix * iy) / Math.max(1, c.w * c.h); };
+    const pequenos = [], grandes = []; let naObra = 0;
+    cxs.forEach(function(c){
+      const grande = c.w * c.h > areaFoto * 0.012;
+      if(grande && podeIA){ if(invadeObra(c) > 0.2) naObra++; else grandes.push(c); }
+      else pequenos.push(c);
+    });
+    if(naObra) avisos.push(naObra + " mancha(s) grande(s) encostada(s) na obra ficaram como estão — mexer ali arriscava alterar a própria obra");
+    if(pequenos.length){
+      try{
+        if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho e sombras (sem IA)…"); }catch(_){ } }
+        const nL = _eaLimparEntulhoClone(cv, pequenos);
+        if(nL) avisos.push("entulho/sombras pequenos limpos clonando a própria foto em " + nL + " área(s) (sem IA)");
+      }catch(e){ avisos.push("limpeza de entulho não rodou (" + _eaErro(e) + ")"); }
+    }
+    for(const cg of grandes){
+      try{
+        if(typeof ctx.passo === "function"){ try{ ctx.passo("apagando a sombra/entulho grande com IA (recorte local)…"); }catch(_){ } }
+        const cIA = await _eaLimparEntulhoIA(cv, cg, { topo:m.oy, fimF:m.oy + m.dh, obraTipo:an.obraTipo, client:ctx.client, projeto:ctx.projeto });
+        avisos.push("sombra/entulho grande apagado com IA em recorte local" + (cIA ? " · R$ " + Number(cIA).toFixed(2) : ""));
+      }catch(e){
+        try{ _eaLimparEntulhoClone(cv, [cg]); avisos.push("IA do entulho grande falhou (" + _eaErro(e) + ") — entrou o clone da própria foto"); }catch(_){ }
+      }
+    }
   }
   if(podeIA && precisaCompletar){
     try{
