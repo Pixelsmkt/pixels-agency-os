@@ -86506,7 +86506,33 @@ function _prodAplicarIA(cur, j, cfg){
   }catch(_){ }
   return { produto:out, campos:campos, fases:fases, entregaveis:entrs, precoSugerido:precoSugerido };
 }
-async function _prodGerarContratoIA(p, cfg, modelo){
+/* (09/10, Gustavo: "já tem as infos dos clientes do briefing, do playbook — não precisamos preencher
+   Dados da contratante manualmente") puxa o cadastro do cliente do app e entrega pro GPT preencher o
+   contratante no contrato; o que não existir no cadastro fica como [CAMPO] pra completar na mão. */
+async function _prodDadosCliente(cid){
+  if(!cid) return "";
+  const L=[];
+  try{
+    const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===cid;});
+    if(c){ L.push("Nome/razão usada no app: "+(c.name||cid));
+      (c.contacts||[]).forEach(function(ct){ L.push("Contato: "+[ct.name,ct.role,ct.phone,ct.email].filter(Boolean).join(" · ")); }); }
+  }catch(_){ }
+  try{
+    const r=await window._sb.from("clients").select("briefing,contatos,notas").eq("client_id",cid).maybeSingle();
+    if(r&&r.data){
+      if(r.data.briefing) L.push("BRIEFING DO CLIENTE: "+String(typeof r.data.briefing==="string"?r.data.briefing:JSON.stringify(r.data.briefing)).slice(0,2500));
+      if(r.data.contatos) L.push("CONTATOS (cadastro): "+String(typeof r.data.contatos==="string"?r.data.contatos:JSON.stringify(r.data.contatos)).slice(0,1200));
+    }
+  }catch(_){ }
+  try{
+    const pb=await window._sb.from("playbooks").select("data").eq("client_id",cid).maybeSingle();
+    const d=(pb&&pb.data&&pb.data.data)||{};
+    const emp=d.empresa||d.negocio||null;
+    if(emp) L.push("EMPRESA (Playbook): "+String(typeof emp==="string"?emp:JSON.stringify(emp)).slice(0,1500));
+  }catch(_){ }
+  return L.join("\n").slice(0,5000);
+}
+async function _prodGerarContratoIA(p, cfg, modelo, dadosCliente){
   if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
   if(!modelo||!modelo.texto) throw new Error("o modelo escolhido está sem texto — cole o texto do contrato nele");
   const extra=p.iaEntendimento&&p.iaEntendimento.texto?("\n\nCOMO O PRODUTO FUNCIONA (análise da IA sobre os materiais):\n"+String(p.iaEntendimento.texto).slice(0,3000)):"";
@@ -86515,6 +86541,7 @@ async function _prodGerarContratoIA(p, cfg, modelo){
     messages:[{role:"user",content:[
       {type:"text",text:"CONTRATO MODELO DA AGÊNCIA:\n\n"+String(modelo.texto).slice(0,20000)},
       {type:"text",text:"DADOS DO PRODUTO:\n"+_prodResumoPraIA(p,cfg)+extra},
+      {type:"text",text:dadosCliente?("DADOS DO CONTRATANTE (cadastro do cliente no app — use pra preencher as qualificações do contratante; o que faltar aqui, deixe como campo entre colchetes):\n"+dadosCliente):"Nenhum cliente foi escolhido: deixe TODOS os dados do contratante como campos entre colchetes, ex.: [CONTRATANTE], [CNPJ DO CONTRATANTE], [ENDEREÇO]."},
     ]}] });
   const texto=((r&&r.content&&r.content[0])||{}).text||"";
   if(!texto) throw new Error("o GPT respondeu vazio");
@@ -86652,6 +86679,7 @@ function _ProdEtapaContratos({p,c,cfg,set,canEdit,isMob}){
   const [modeloSel,setModeloSel]=useState((((ct.modelos||[])[0])||{}).id||null);
   const [aberto,setAberto]=useState(null);
   const [colando,setColando]=useState(null);         // id do modelo recebendo texto colado
+  const [clienteSel,setClienteSel]=useState("");
   const [textoCola,setTextoCola]=useState("");
   const setCt=function(fn){ set(function(cur){ const atual=cur.contratos||{modelos:[],gerados:[]}; return Object.assign({},cur,{contratos:typeof fn==="function"?fn(atual):Object.assign({},atual,fn)}); }); };
   const subir=function(fs){
@@ -86675,8 +86703,11 @@ function _ProdEtapaContratos({p,c,cfg,set,canEdit,isMob}){
     const modelo=(ct.modelos||[]).find(function(m){return m.id===modeloSel;})||(ct.modelos||[])[0];
     if(!modelo){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Suba (ou cole) o modelo de contrato primeiro."); return; }
     setGerando(true);
-    _prodGerarContratoIA(p, cfg, modelo).then(function(texto){
-      const g={ id:_prodUid("ctr-"), titulo:"Contrato — "+(p.ideia.nome||"produto")+" (modelo: "+modelo.name+")", texto:texto, modeloNome:modelo.name, geradoEm:new Date().toISOString(), geradoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"" };
+    (clienteSel?_prodDadosCliente(clienteSel):Promise.resolve("")).then(function(dados){
+      return _prodGerarContratoIA(p, cfg, modelo, dados);
+    }).then(function(texto){
+      const cliNome=clienteSel?(((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===clienteSel;})||{}).name||clienteSel):"";
+      const g={ id:_prodUid("ctr-"), titulo:"Contrato — "+(p.ideia.nome||"produto")+(cliNome?(" · "+cliNome):"")+" (modelo: "+modelo.name+")", texto:texto, modeloNome:modelo.name, cliente:clienteSel||"", geradoEm:new Date().toISOString(), geradoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"" };
       setCt(function(a){ return Object.assign({},a,{gerados:[g].concat(a.gerados||[]).slice(0,12)}); });
       setAberto(g.id);
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Contrato gerado pelo GPT seguindo o modelo.");
@@ -86716,8 +86747,9 @@ function _ProdEtapaContratos({p,c,cfg,set,canEdit,isMob}){
       })}
     </div>}
     {canEdit&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      <div style={{minWidth:220}}><_PrdSelect value={clienteSel} onChange={setClienteSel} options={[{id:"",label:"Sem cliente — campos [em branco]"}].concat((typeof CLIENTS!=="undefined"?CLIENTS:[]).map(function(c){return {id:c.id,label:c.name};}))} placeholder="Contratante (opcional)"/></div>
       <_PrdBtn tone="primary" ico="sparkles" onClick={gerar} disabled={gerando}>{gerando?"O GPT está escrevendo o contrato…":"Gerar contrato deste produto"}</_PrdBtn>
-      {c&&c.preco>0&&<span style={{color:_PRD.SOFT,fontSize:11}}>vai usar o preço {_prodFmt(c.preco)} e a duração {c.duracaoDias||"—"} dias</span>}
+      {c&&c.preco>0&&<span style={{color:_PRD.SOFT,fontSize:11}}>vai usar o preço {_prodFmt(c.preco)}, a duração {c.duracaoDias||"—"} dias{clienteSel?" e os dados do contratante do cadastro/briefing/Playbook":""}</span>}
     </div>}
     {(ct.gerados||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
       <_PrdRotulo>Contratos gerados</_PrdRotulo>
@@ -147394,6 +147426,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
+  // carimbo de versão do motor (09/10): aparece no histórico do card — é como a gente confere se o
+  // navegador rodou o código NOVO ou um bundle velho em cache (stale bundle já enganou o teste 4+ vezes)
+  avisos.push("motor da foto v4 (entulho grande via IA local · mapa sem sombra chapada)");
   return { cv:cv, avisos:avisos, analise:an, encaixe:m };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
