@@ -70927,7 +70927,8 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
 }
 
 // ======= 17e_trafego_seguranca.jsx =======
-/* IA DE TRÁFEGO — ETAPA 0 e 1 (09/10/2026): portão do PIN da Gestão de mídia, alarmes e painel de segurança.
+/* IA DE TRÁFEGO — ETAPA 0, 1 e 2 (09/10/2026): portão do PIN da Gestão de mídia, alarmes, painel de segurança e CENTRAL DE DECISÕES.
+   v73: PIN ÚNICO DA AGÊNCIA e toda mudança pede o PIN 2 vezes (1º abre a revisão com valor/cidades/público da Meta, 2º envia).
    QUEM VÊ: só os aprovadores (Vinícius e Gustavo). Chave no banco: auto.config ads_ia_visivel_para = 'aprovadores'.
    Para qualquer outra pessoa (ex.: Erick) o banco responde {pode:false} e esta tela devolve a Gestão de mídia
    EXATAMENTE como sempre foi — sem PIN, sem barra, sem botão, sem texto novo.
@@ -71027,11 +71028,13 @@ function TSegCriarPin({ st, trocando, onPronto, onCancelar }) {
 
   return (
     <div>
-      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando && st && st.tem_pin ? "Trocar meu PIN" : "Crie seu PIN de aprovação"}</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{st && st.modo === "agencia" ? (st.tem_pin ? "Trocar o PIN da agência" : "Criar o PIN da agência") : (trocando && st && st.tem_pin ? "Trocar meu PIN" : "Crie seu PIN de aprovação")}</div>
       <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16, lineHeight: 1.5 }}>
         {etapa === "senha"
           ? "Primeiro digite a senha da sua conta. Assim ninguém cria ou troca o PIN só porque achou seu computador logado."
-          : "6 números, que só você sabe — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o seu PIN: nem a equipe, nem o Claude."}
+          : st && st.modo === "agencia"
+            ? "6 números que só você e o Gustavo sabem — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o PIN: nem a equipe, nem o Claude."
+            : "6 números, que só você sabe — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o seu PIN: nem a equipe, nem o Claude."}
       </div>
       {etapa === "senha" ? (
         <div>
@@ -71216,11 +71219,11 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
                     PIN de {_tsegQuando(p.trocado_em)}{p.erros ? " · " + p.erros + " erro(s)" : ""}{p.bloqueado ? " · 🔒 bloqueado" : ""}
                   </div>
                 </div>
-                <TSegBotao tipo="secundario" onClick={function () {
+                {p.nome !== "PIN da agência" && <TSegBotao tipo="secundario" onClick={function () {
                   setMsg(""); setPin("");
                   setPedePin({ titulo: "Zerar o PIN de " + p.nome + "? A pessoa vai ter que criar outro (com a senha da conta).",
                     acao: function (meuPin) { return _tsegRpc("ads_pin_resetar_pessoa", { p_uid: p.uid, p_pin: meuPin }); } });
-                }}>Zerar PIN</TSegBotao>
+                }}>Zerar PIN</TSegBotao>}
               </div>
             );
           })}
@@ -71256,9 +71259,9 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
             }}>{st && st.obrigatorio ? "Desligar" : "Ligar"}</TSegBotao>
           </div>
           <div style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ fontWeight: 800, fontSize: 14 }}>Meu PIN</div>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>{st && st.modo === "agencia" ? "PIN da agência" : "Meu PIN"}</div>
             <div style={{ fontSize: 12, color: "#64748b", margin: "4px 0 10px" }}>Para trocar, o sistema pede a senha da sua conta antes.</div>
-            <TSegBotao tipo="secundario" onClick={function () { setTrocar(true); }}>Trocar meu PIN</TSegBotao>
+            <TSegBotao tipo="secundario" onClick={function () { setTrocar(true); }}>{st && st.modo === "agencia" ? "Trocar o PIN da agência" : "Trocar meu PIN"}</TSegBotao>
           </div>
         </div>
       )}
@@ -71278,6 +71281,343 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
   );
 }
 
+/* ---------- CENTRAL DE DECISÕES (só aprovadores) ----------
+   Um cartão por problema: onde está (conta › campanha › conjunto › anúncio), por quê, os números reais e o que muda (antes → depois).
+   Aprovar pede PIN; verba ≥ R$ 50/dia ou ativar campanha precisa dos 2 sócios (24 h). O app confere a Meta antes de mexer. */
+const _TCEN_NUM = {
+  gasto_7d: ["Gasto 7 dias", "R$"], gasto_14d: ["Gasto 14 dias", "R$"], gasto_30d: ["Gasto 30 dias", "R$"],
+  resultados_7d: ["Resultados 7 dias", ""], resultados_14d: ["Resultados 14 dias", ""], resultados_30d: ["Resultados 30 dias", ""],
+  custo_7d: ["Custo/resultado 7 dias", "R$"], custo_14d: ["Custo/resultado 14 dias", "R$"], custo_normal: ["Custo normal da conta", "R$"],
+  ritmo_mes: ["Ritmo do mês", "R$"], verba_mes: ["Verba do mês", "R$"], gasto_hoje: ["Gasto hoje", "R$"], media_7d: ["Média 7 dias", "R$"],
+  saldo: ["Saldo", "R$"], limite: ["Limite", "R$"],
+};
+const _tcenBrl = function (v) {
+  const n = Number(v);
+  if (!isFinite(n)) return String(v);
+  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+const _tcenNivelUrl = { campanha: ["campaigns", "selected_campaign_ids"], conjunto: ["adsets", "selected_adset_ids"], anuncio: ["ads", "selected_ad_ids"] };
+const _tcenLink = function (conta, c) {
+  if (!conta) return null;
+  const m = _tcenNivelUrl[c.nivel];
+  if (!m) return "https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=" + conta;
+  return "https://adsmanager.facebook.com/adsmanager/manage/" + m[0] + "?act=" + conta + "&" + m[1] + "=" + c.id;
+};
+const _tcenAntesDepois = function (a) {
+  if (!a || !a.tipo) return null;
+  if (a.tipo === "pausar") return ["Ativo", "Pausado"];
+  if (a.tipo === "ativar") return ["Pausado", "Ativo"];
+  if (a.tipo === "verba") return [_tcenBrl(a.antes) + "/dia", _tcenBrl(a.depois) + "/dia"];
+  return null;
+};
+const _tcenExecutavel = function (a) { return a && (a.tipo === "pausar" || a.tipo === "ativar" || a.tipo === "verba"); };
+const _TCEN_ORIGEM = { regra: "Regra (dado real)", alarme: "Alarme", desfazer: "Desfazer", ia: "IA", analise: "Análise", usuario: "Pedido de vocês" };
+const _TCEN_HIST = {
+  criado: "Criado", atualizado: "Números atualizados", aprovado: "Aprovou com PIN", aprovado_1: "1ª aprovação com PIN", aprovado_2: "2ª aprovação com PIN",
+  aplicado: "Aplicado na Meta", erro_ao_aplicar: "Erro ao aplicar", barrado: "Barrado pela segurança", ja_estava: "Já estava assim na Meta",
+  recusado: "Recusou", monitorar: "Pôs em monitorar", concluido: "Concluiu", desfazer_pedido: "Pediu para desfazer", aprovacao_vencida: "1ª aprovação venceu (24 h)",
+};
+
+function TCenChip({ cor, children }) {
+  const c = { verde: ["#dcfce7", "#166534"], amarelo: ["#fef3c7", "#92400e"], vermelho: ["#fee2e2", "#b91c1c"], azul: ["#dbeafe", "#1e40af"], cinza: ["#f1f5f9", "#475569"], roxo: ["#ede9fe", "#5b21b6"] }[cor] || ["#f1f5f9", "#475569"];
+  return <span style={{ background: c[0], color: c[1], borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>{children}</span>;
+}
+
+function TCenRevisao({ rev, ad }) {
+  const linha = function (rot, val, forte) {
+    return <div style={{ display: "flex", gap: 8, fontSize: 12.5, padding: "3px 0", lineHeight: 1.45 }}>
+      <span style={{ color: "#64748b", width: 92, flexShrink: 0 }}>{rot}</span><span style={{ color: "#0f172a", fontWeight: forte ? 900 : 600 }}>{val}</span></div>;
+  };
+  const lista = function (arr, max) {
+    if (!arr || !arr.length) return null;
+    const m = max || 6;
+    return arr.slice(0, m).join(" · ") + (arr.length > m ? " · +" + (arr.length - m) + " outras" : "");
+  };
+  const NIV = { anuncio: "Anúncio", conjunto: "Conjunto", campanha: "Campanha" };
+  return (
+    <div>
+      {ad && linha("O que muda", ad[0] + "  →  " + ad[1], true)}
+      {rev.verba_dia_atual != null && linha("Valor", _tcenBrl(rev.verba_dia_atual) + "/dia" + (rev.verba_dia_nova != null ? "  →  " + _tcenBrl(rev.verba_dia_nova) + "/dia" : " (não muda)"), true)}
+      {rev.verba_confere === false && <div style={{ color: "#b91c1c", fontSize: 12, fontWeight: 800, margin: "2px 0 4px" }}>⚠️ A verba na Meta não é a do pedido. Não envie; amanhã a IA recalcula.</div>}
+      {linha(NIV[rev.nivel] || "Item", rev.item || "—")}
+      {rev.campanha && rev.nivel !== "campanha" && linha("Campanha", rev.campanha)}
+      {(rev.conjuntos || []).map(function (c, i) {
+        const pub = c.publico || {};
+        return (
+          <div key={i} style={{ marginTop: 6, background: "#fff", border: "1px solid #ede9fe", borderRadius: 9, padding: "6px 9px" }}>
+            {(rev.conjuntos || []).length > 1 && <div style={{ fontSize: 11.5, fontWeight: 800, color: "#5b21b6", marginBottom: 2 }}>{c.nome}</div>}
+            {linha("Cidades", lista(pub.cidades) || "—", true)}
+            {pub.fora && pub.fora.length > 0 && linha("Fora", lista(pub.fora))}
+            {linha("Público", (pub.generos || "Todos") + ", " + (pub.idade || "") + (pub.advantage ? " · Advantage+ (Meta pode ampliar)" : ""))}
+            {pub.interesses && pub.interesses.length > 0 && linha("Interesses", lista(pub.interesses, 5))}
+            {pub.publicos && pub.publicos.length > 0 && linha("Listas", lista(pub.publicos, 4))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TCenCartao({ p, eu, onMudou }) {
+  const [modo, setModo] = useState(null); // aprovar | recusar | monitorar | hist
+  const [pin, setPin] = useState("");
+  const [texto, setTexto] = useState("");
+  const [msg, setMsg] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [hist, setHist] = useState(null);
+  const [rev, setRev] = useState(null);   // revisão lida da Meta entre o 1º e o 2º PIN
+  const a = p.acao || {};
+  const ad = _tcenAntesDepois(a);
+  const exec = _tcenExecutavel(a);
+  const souPrimeiro = p.aprov1_uid && eu && p.aprov1_uid === eu;
+  const caminho = Array.isArray(p.caminho) ? p.caminho : [];
+  const conta = p.ad_account_id;
+  const toast = function (t, tipo) { if (typeof pixelsToast !== "undefined") (tipo === "erro" ? pixelsToast.error : pixelsToast.success)(t, 3500); };
+
+  const fazer = async function (fn) {
+    setOcupado(true); setMsg("");
+    try { await fn(); } catch (e) { setMsg(e.message || String(e)); } finally { setOcupado(false); }
+  };
+  const aprovar = function () {   // 1º PIN: abre a revisão
+    if (pin.length !== 6) return;
+    fazer(async function () {
+      const r = await _tsegRpc("ads_pedido_aprovar", { p_id: p.id, p_pin: pin, p_etapa: 1 });
+      setPin("");
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não aprovou.");
+      setRev(null); setModo("revisar");
+      const inv = await window._sb.functions.invoke("ads-aplicar", { body: { pedido_id: p.id, revisar: true } });
+      const d = inv && inv.data;
+      if (!d || !d.ok) { setRev({ erro: (d && d.erro) || "Não consegui ler a Meta agora. Confira no Gerenciador antes de enviar." }); return; }
+      setRev(d.revisao || {});
+    });
+  };
+  const enviar = function () {    // 2º PIN: depois de revisar, envia para a Meta
+    if (pin.length !== 6) return;
+    fazer(async function () {
+      const r = await _tsegRpc("ads_pedido_aprovar", { p_id: p.id, p_pin: pin, p_etapa: 2 });
+      setPin("");
+      if (!r || !r.ok) { if (r && r.recomecar) { setModo("aprovar"); setRev(null); } throw new Error((r && r.erro) || "Não aprovou."); }
+      setMsg("Enviando para a Meta…");
+      const inv = await window._sb.functions.invoke("ads-aplicar", { body: { pedido_id: p.id } });
+      const d = inv && inv.data;
+      if (inv.error && !d) throw new Error("Não consegui falar com o servidor. O pedido volta sozinho em 5 min; tente de novo.");
+      if (!d || !d.ok) throw new Error((d && d.erro) || "A Meta não aplicou.");
+      toast(d.sem_mudanca ? (d.msg || "Já estava assim.") : "Feito na Meta. Vou acompanhar por 7 dias.");
+      setModo(null); setRev(null); setMsg(""); onMudou();
+    });
+  };
+  const recusar = function () {
+    fazer(async function () {
+      const r = await _tsegRpc("ads_pedido_recusar", { p_id: p.id, p_motivo: texto });
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi.");
+      setTexto(""); setModo(null); onMudou();
+    });
+  };
+  const monitorar = function (dias) {
+    fazer(async function () {
+      const r = await _tsegRpc("ads_pedido_monitorar", { p_id: p.id, p_dias: dias, p_obs: texto || null });
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi.");
+      setTexto(""); setModo(null); onMudou();
+    });
+  };
+  const concluir = function () {
+    fazer(async function () {
+      const r = await _tsegRpc("ads_pedido_concluir", { p_id: p.id, p_obs: null });
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi.");
+      onMudou();
+    });
+  };
+  const desfazer = function () {
+    fazer(async function () {
+      const r = await _tsegRpc("ads_pedido_desfazer", { p_id: p.id });
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi.");
+      toast("Criei o pedido de desfazer em \"Para decidir\". Aprove com PIN para aplicar.");
+      onMudou();
+    });
+  };
+  const verHist = function () {
+    if (modo === "hist") { setModo(null); return; }
+    setModo("hist");
+    _tsegRpc("ads_pedido_hist", { p_id: p.id }).then(function (h) { setHist(h || []); }).catch(function () { setHist([]); });
+  };
+
+  const corConf = p.confianca === "alta" ? "verde" : p.confianca === "media" ? "amarelo" : "cinza";
+  const borda = p.estado === "aguardando" ? "#7c3aed" : p.estado === "monitorando" ? "#2563eb" : p.prioridade <= 15 ? "#dc2626" : p.prioridade <= 35 ? "#d97706" : "#94a3b8";
+  const btn = function (txt, fn, tipo, desl) {
+    const s = tipo === "pri" ? { bg: "#0f172a", fg: "#fff", bd: "#0f172a" } : tipo === "roxo" ? { bg: "#7c3aed", fg: "#fff", bd: "#7c3aed" } : { bg: "#fff", fg: "#334155", bd: "#cbd5e1" };
+    return <button onClick={desl ? undefined : fn} disabled={!!desl} style={{ background: s.bg, color: s.fg, border: "1.5px solid " + s.bd, borderRadius: 9, padding: "6px 11px",
+      fontWeight: 800, fontSize: 12, cursor: desl ? "default" : "pointer", opacity: desl ? 0.5 : 1, fontFamily: "inherit" }}>{txt}</button>;
+  };
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e5e9f0", borderLeft: "4px solid " + borda, borderRadius: 12, padding: "11px 12px", marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
+        {p.confianca && <TCenChip cor={corConf}>Confiança {p.confianca === "media" ? "média" : p.confianca}</TCenChip>}
+        <TCenChip cor="cinza">{_TCEN_ORIGEM[p.origem] || p.origem}</TCenChip>
+        {(p.selos || []).map(function (s) { return <TCenChip key={s} cor="azul">{s === "dado" ? "📊 dado real" : s === "mercado" ? "📈 mercado" : s === "oficial" ? "📘 Meta oficial" : s === "calendario" ? "📅 calendário" : s}</TCenChip>; })}
+        {p.precisa_dois && <TCenChip cor="roxo">2 sócios</TCenChip>}
+      </div>
+      <div style={{ fontWeight: 900, fontSize: 13.5, color: "#0f172a", lineHeight: 1.35 }}>{p.titulo}</div>
+      {caminho.length > 0 && (
+        <div style={{ fontSize: 11, color: "#64748b", marginTop: 4, lineHeight: 1.5 }}>
+          {caminho.map(function (c, i) {
+            const url = _tcenLink(conta, c);
+            return <Fragment key={i}>{i > 0 && " › "}<a href={url} target="_blank" rel="noopener noreferrer" title={"Abrir no Gerenciador (" + c.nivel + ")"} style={{ color: "#2563eb", textDecoration: "none" }}>{c.nome}</a></Fragment>;
+          })}
+        </div>
+      )}
+      {p.porque && <div style={{ fontSize: 12.5, color: "#334155", marginTop: 6, lineHeight: 1.45 }}>{p.porque}</div>}
+      {p.numeros && Object.keys(p.numeros).length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+          {Object.keys(p.numeros).map(function (k) {
+            const m = _TCEN_NUM[k]; const v = p.numeros[k];
+            if (v === null || typeof v === "object") return null;
+            return <div key={k} style={{ background: "#f8fafc", border: "1px solid #eef2f7", borderRadius: 8, padding: "3px 7px", fontSize: 11 }}>
+              <span style={{ color: "#64748b" }}>{m ? m[0] : k}: </span><b style={{ color: "#0f172a" }}>{m && m[1] === "R$" ? _tcenBrl(v) : String(v)}</b></div>;
+          })}
+        </div>
+      )}
+      <div style={{ marginTop: 8, background: exec ? "#f5f3ff" : "#f8fafc", borderRadius: 9, padding: "7px 9px", fontSize: 12 }}>
+        {ad ? <span><b>O que muda:</b> {ad[0]} <span style={{ color: "#7c3aed", fontWeight: 900 }}>→</span> <b>{ad[1]}</b></span>
+            : <span style={{ color: "#475569" }}><b>Só aviso.</b> Resolva na Meta e clique em "Já resolvi".</span>}
+      </div>
+      {p.erro && <div style={{ marginTop: 6, color: "#b91c1c", fontSize: 12, fontWeight: 700 }}>⚠️ Última tentativa: {p.erro}</div>}
+      {p.estado === "aguardando" && <div style={{ marginTop: 6, color: "#5b21b6", fontSize: 12, fontWeight: 700 }}>
+        ✋ {p.aprov1_nome || "Um sócio"} aprovou {_tsegQuando(p.aprov1_em)}. {souPrimeiro ? "Falta o outro sócio." : "Falta a sua aprovação."} Vale 24 h.</div>}
+      {p.estado === "aplicando" && <div style={{ marginTop: 6, color: "#92400e", fontSize: 12, fontWeight: 700 }}>⏳ Aprovado, aplicando na Meta. Se travar, em 5 min dá para aprovar de novo.</div>}
+      {p.estado === "monitorando" && <div style={{ marginTop: 6, color: "#1e40af", fontSize: 12 }}>
+        {p.resultado && p.resultado.aplicado_em ? "✅ Aplicado por " + (p.resultado.aplicado_por || "") + " em " + _tsegQuando(p.resultado.aplicado_em) + ". " : "👀 Sem mexer. "}
+        Acompanhando até {p.monitorar_ate ? p.monitorar_ate.split("-").reverse().slice(0, 2).join("/") : "—"}.{p.motivo ? " Obs.: " + p.motivo : ""}</div>}
+      {(p.estado === "concluido" || p.estado === "recusado" || p.estado === "expirado") && <div style={{ marginTop: 6, color: "#475569", fontSize: 12 }}>
+        {p.estado === "recusado" ? "✕ Recusado" : p.estado === "expirado" ? "⌛ Expirou" : "✓ Concluído"}{p.decidido_por_nome ? " por " + p.decidido_por_nome : ""} {_tsegQuando(p.decidido_em || p.atualizado_em)}{p.motivo ? " — " + p.motivo : ""}</div>}
+
+      {/* botões */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>
+        {(p.estado === "novo" || p.estado === "aplicando" || (p.estado === "aguardando" && !souPrimeiro)) && exec &&
+          btn(p.estado === "aguardando" ? "✋ Dar 2ª aprovação" : "✓ Aprovar com PIN", function () { setModo(modo === "aprovar" ? null : "aprovar"); setMsg(""); }, p.estado === "aguardando" ? "roxo" : "pri", ocupado)}
+        {(p.estado === "novo" || p.estado === "aguardando") && !exec && btn("✓ Já resolvi", concluir, "pri", ocupado)}
+        {(p.estado === "novo" || p.estado === "aguardando") && btn("👀 Monitorar", function () { setModo(modo === "monitorar" ? null : "monitorar"); }, null, ocupado)}
+        {(p.estado === "novo" || p.estado === "aguardando") && btn("✕ Recusar", function () { setModo(modo === "recusar" ? null : "recusar"); }, null, ocupado)}
+        {p.estado === "monitorando" && p.resultado && p.resultado.aplicado_em && exec && btn("↩ Desfazer", desfazer, null, ocupado)}
+        {p.estado === "monitorando" && btn("✓ Concluir", concluir, null, ocupado)}
+        <button onClick={verHist} style={{ background: "none", border: "none", color: "#2563eb", fontWeight: 700, fontSize: 11.5, cursor: "pointer", marginLeft: "auto" }}>Histórico</button>
+      </div>
+
+      {modo === "aprovar" && (
+        <div style={{ marginTop: 10, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
+          <div style={{ fontSize: 12, color: "#475569", marginBottom: 6 }}>
+            <b>1º PIN</b> — abre a revisão (valor, cidades e público direto da Meta). Nada muda ainda.
+          </div>
+          <TSegCampoPin valor={pin} onChange={setPin} onEnter={aprovar} autoFocus />
+          <div style={{ display: "flex", gap: 6 }}>{btn(ocupado ? "Aguarde…" : "Revisar", aprovar, "pri", ocupado || pin.length !== 6)}{btn("Cancelar", function () { setModo(null); setPin(""); }, null, ocupado)}</div>
+        </div>
+      )}
+      {modo === "revisar" && (
+        <div style={{ marginTop: 10, border: "2px solid #7c3aed", borderRadius: 12, padding: "12px 12px 10px", background: "#faf8ff" }}>
+          <div style={{ fontWeight: 900, fontSize: 13.5, color: "#5b21b6", marginBottom: 8 }}>🔎 Revise antes de enviar</div>
+          {!rev ? <div style={{ fontSize: 12, color: "#64748b" }}>Lendo a Meta agora…</div> : rev.erro ? <div style={{ fontSize: 12, color: "#b91c1c", fontWeight: 700 }}>{rev.erro}</div> : (
+            <TCenRevisao rev={rev} ad={ad} />
+          )}
+          <div style={{ fontSize: 12, color: "#475569", margin: "10px 0 6px" }}><b>2º PIN</b> — envia para a Meta. Vale 10 min.</div>
+          <TSegCampoPin valor={pin} onChange={setPin} onEnter={enviar} autoFocus />
+          <div style={{ display: "flex", gap: 6 }}>{btn(ocupado ? "Enviando…" : "✓ Está certo, enviar", enviar, "roxo", ocupado || pin.length !== 6 || !rev)}{btn("Cancelar", function () { setModo(null); setPin(""); setRev(null); }, null, ocupado)}</div>
+        </div>
+      )}
+      {modo === "recusar" && (
+        <div style={{ marginTop: 10, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
+          <input value={texto} onChange={function (e) { setTexto(e.target.value); }} autoFocus placeholder="Por quê? (1 linha — a IA aprende com isso)"
+            onKeyDown={function (e) { if (e.key === "Enter" && texto.trim().length >= 3) recusar(); }}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: "8px 10px", border: "1.5px solid #cbd5e1", borderRadius: 9, marginBottom: 8 }} />
+          <div style={{ display: "flex", gap: 6 }}>{btn("Recusar", recusar, "pri", ocupado || texto.trim().length < 3)}{btn("Cancelar", function () { setModo(null); }, null, ocupado)}</div>
+        </div>
+      )}
+      {modo === "monitorar" && (
+        <div style={{ marginTop: 10, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
+          <input value={texto} onChange={function (e) { setTexto(e.target.value); }} placeholder="Observação (opcional)"
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: "8px 10px", border: "1.5px solid #cbd5e1", borderRadius: 9, marginBottom: 8 }} />
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "#475569" }}>Acompanhar sem mexer por</span>
+            {btn("3 dias", function () { monitorar(3); }, null, ocupado)}{btn("7 dias", function () { monitorar(7); }, "pri", ocupado)}{btn("14 dias", function () { monitorar(14); }, null, ocupado)}
+          </div>
+        </div>
+      )}
+      {modo === "hist" && (
+        <div style={{ marginTop: 10, borderTop: "1px dashed #e2e8f0", paddingTop: 8 }}>
+          {hist === null ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Carregando…</div> : !hist.length ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Sem histórico.</div> :
+            hist.map(function (h) {
+              return <div key={h.id} style={{ display: "flex", gap: 8, fontSize: 11.5, padding: "3px 0" }}>
+                <span style={{ color: "#94a3b8", width: 78, flexShrink: 0 }}>{_tsegQuando(h.em)}</span>
+                <span style={{ fontWeight: 700, width: 70, flexShrink: 0 }}>{h.nome || "Sistema"}</span>
+                <span style={{ color: h.evento === "erro_ao_aplicar" || h.evento === "barrado" ? "#b91c1c" : "#334155" }}>{_TCEN_HIST[h.evento] || h.evento}{h.detalhe && (h.detalhe.motivo || h.detalhe.erro) ? " — " + (h.detalhe.motivo || h.detalhe.erro) : ""}</span>
+              </div>;
+            })}
+        </div>
+      )}
+      {msg && <div style={{ marginTop: 8, color: msg.indexOf("Aplicando") === 0 ? "#92400e" : "#dc2626", fontSize: 12, fontWeight: 700 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function TSegCentral({ onFechar, onMudou }) {
+  const [abertos, setAbertos] = useState(null);
+  const [fechados, setFechados] = useState(null);
+  const [eu, setEu] = useState(null);
+  const [aba, setAba] = useState("decidir");
+  const [conta, setConta] = useState("");
+  const [erro, setErro] = useState("");
+
+  const carregar = useCallback(async function () {
+    try {
+      const r = await _tsegRpc("ads_pedidos_ler", { p_aberto: true });
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não carregou.");
+      setAbertos(r.itens || []); setEu(r.eu || null); setErro("");
+    } catch (e) { setErro(e.message); setAbertos([]); }
+    try { const f = await _tsegRpc("ads_pedidos_ler", { p_aberto: false }); setFechados(f && f.ok ? (f.itens || []) : []); } catch (_) { setFechados([]); }
+  }, []);
+  useEffect(function () { carregar(); }, [carregar]);
+  const mudou = function () { carregar(); onMudou && onMudou(); };
+
+  const todos = (abertos || []).concat(fechados || []);
+  const contas = {};
+  todos.forEach(function (p) { const c = Array.isArray(p.caminho) && p.caminho[0] && p.caminho[0].nivel === "conta" ? p.caminho[0].nome : null; if (p.ad_account_id) contas[p.ad_account_id] = c || p.ad_account_id; });
+  const filtro = function (l) { return conta ? l.filter(function (p) { return p.ad_account_id === conta; }) : l; };
+  const ab = filtro(abertos || []);
+  const grupos = {
+    decidir: ab.filter(function (p) { return p.estado === "novo" || p.estado === "aplicando" || (p.estado === "aguardando" && p.aprov1_uid !== eu); }),
+    esperando: ab.filter(function (p) { return p.estado === "aguardando" && p.aprov1_uid === eu; }),
+    monitorando: ab.filter(function (p) { return p.estado === "monitorando" || p.estado === "aplicado"; }),
+    concluidos: filtro(fechados || []),
+  };
+  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"]];
+  const lista = grupos[aba] || [];
+
+  return (
+    <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>
+      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
+        A IA só <b>sugere</b>. Toda mudança pede o <b>PIN da agência duas vezes</b>: 1º abre a revisão, 2º envia. Fica registrado quem digitou. Mudança de verba: no máx. 20% e uma vez a cada 72 h.
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
+        {ABAS.map(function (x) {
+          const n = (grupos[x[0]] || []).length; const on = aba === x[0];
+          if (x[0] === "esperando" && !n && !on) return null;  // regra dos 2 sócios desligada: aba só aparece se tiver algo
+          return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
+            padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
+        })}
+        <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={{ marginLeft: "auto", fontSize: 12, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", maxWidth: 220 }}>
+          <option value="">Todas as contas</option>
+          {Object.keys(contas).map(function (k) { return <option key={k} value={k}>{contas[k]}</option>; })}
+        </select>
+      </div>
+      {erro && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
+      {abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
+        !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às 11h30." : "Nada aqui."}</div> :
+        <div style={{ maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
+          {lista.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={mudou} />; })}
+        </div>}
+    </TSegJanela>
+  );
+}
+
 /* ---------- O PORTÃO: vai em volta da PageGestaoMidia ---------- */
 function TSegPortao({ currentUser, viewUser, children }) {
   const [st, setSt] = useState(null);            // resposta de ads_pin_status
@@ -71285,6 +71625,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
   const [painel, setPainel] = useState(null);    // "alarmes" | "seguranca"
   const [alarmes, setAlarmes] = useState(null);
   const [carregandoAl, setCarregandoAl] = useState(false);
+  const [pend, setPend] = useState(0);             // pedidos esperando decisão minha
   const ultimaRenov = useRef(0);
 
   const carregar = useCallback(async function () {
@@ -71300,6 +71641,13 @@ function TSegPortao({ currentUser, viewUser, children }) {
     setCarregandoAl(true);
     try { const r = await _tsegRpc("ads_alarmes_ler", { p_dias: 14 }); setAlarmes(r && r.ok ? (r.itens || []) : []); }
     catch (_) { setAlarmes([]); } finally { setCarregandoAl(false); }
+  }, []);
+  const lerPend = useCallback(async function () {
+    try {
+      const r = await _tsegRpc("ads_pedidos_ler", { p_aberto: true });
+      const it = r && r.ok ? (r.itens || []) : [];
+      setPend(it.filter(function (p) { return p.estado === "novo" || (p.estado === "aguardando" && p.aprov1_uid !== r.eu); }).length);
+    } catch (_) {}
   }, []);
 
   // aberto: renova com uso (no máximo a cada 2 min), confere a hora de fechar a cada 20 s, lê alarmes a cada 5 min
@@ -71324,10 +71672,10 @@ function TSegPortao({ currentUser, viewUser, children }) {
 
   useEffect(function () {
     if (!aberto) return;
-    lerAlarmes();
-    const t = setInterval(lerAlarmes, 300000);
+    lerAlarmes(); lerPend();
+    const t = setInterval(function () { lerAlarmes(); lerPend(); }, 300000);
     return function () { clearInterval(t); };
-  }, [aberto, lerAlarmes]);
+  }, [aberto, lerAlarmes, lerPend]);
 
   // quem não aprova (ex.: Erick) — e qualquer falha de consulta — vê a Gestão de mídia exatamente como sempre
   if (st === null) return <div style={{ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Carregando…</div>;
@@ -71352,13 +71700,18 @@ function TSegPortao({ currentUser, viewUser, children }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, margin: "0 0 10px", flexWrap: "wrap",
           fontFamily: "'Inter',system-ui,sans-serif" }}>
           {st.obrigatorio && <div style={{ fontSize: 11, color: "#94a3b8", marginRight: "auto" }}>🔓 Aberta — fecha sozinha após {st.minutos || 30} min sem uso</div>}
+          <button onClick={function () { setPainel("central"); }}
+            style={{ background: pend ? "#ede9fe" : "#f1f5f9", color: pend ? "#5b21b6" : "#334155",
+              border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+            🧠 Decisões{pend ? " (" + pend + ")" : ""}
+          </button>
           <button onClick={function () { setPainel("alarmes"); lerAlarmes(); }}
             style={{ background: naoVistos.length ? (temCritico ? "#fee2e2" : "#fef3c7") : "#f1f5f9", color: naoVistos.length ? (temCritico ? "#b91c1c" : "#92400e") : "#334155",
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
             🔔 Alarmes{naoVistos.length ? " (" + naoVistos.length + ")" : ""}
           </button>
           {!st.tem_pin && <button onClick={function () { setPainel("criar"); }}
-            style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔑 Criar meu PIN</button>}
+            style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔑 {st.modo === "agencia" ? "Criar o PIN da agência" : "Criar meu PIN"}</button>}
           <button onClick={function () { setPainel("seguranca"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🛡️ Segurança</button>
           {st.obrigatorio && <button onClick={trancar}
@@ -71367,6 +71720,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
       )}
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
+      {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); }} onMudou={lerPend} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
       {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
     </Fragment>
@@ -148267,7 +148621,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
     return cv;
   };
   let cv = desenhar(m);
-  const precisaCompletar = m.vazio > w * h * 0.005, temEntulho = (an.entulho || []).length > 0;
+  // (20:28, Gustavo: "ali onde tá preto tem que completar também") giro relevante SEMPRE liga a IA de
+  // completar — os triângulos vazios que a rotação deixa não entram no cálculo de área, então a trava
+  // garante que nenhum canto fica preto, em qualquer foto, sem precisar pedir.
+  const precisaCompletar = m.vazio > w * h * 0.005 || Math.abs(giro) >= 0.8, temEntulho = (an.entulho || []).length > 0;
   if(podeIA && (precisaCompletar || temEntulho)){
     try{
       // máscara: transparente onde a IA pode mexer (o que falta da foto + caixas de entulho); o resto (a obra) fica intacto
