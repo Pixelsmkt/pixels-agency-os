@@ -21773,6 +21773,11 @@ async function pxCascataVarrer(protegerId,opts){
     const L0=_pxApLinha(hoje);
     const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
     let total=0;
+    /* (09/10, Gustavo: "joguei o card da Clem pra 21 e a cascata não rodou") uma semana EMPACADA não pode
+       matar a varredura inteira: antes, plano vazio dava `break` e as semanas SEGUINTES ficavam sem olhar
+       (a semana 11/10 da Bioter, com dois collabs sem vaga pra mover, engolia a da Clem). Agora a semana/alvo
+       que empacou é PULADA (fica registrada no console) e a varredura segue. */
+    const puladas={};
     // uma semana por volta: depois de aplicar, relê o banco (a cascata mexeu nas semanas seguintes)
     for(let volta=0; volta<40; volta++){
       /* (22/09/2026, Rodrigo) LÊ A SEMANA INTEIRA, NÃO DE HOJE PRA FRENTE.
@@ -21807,7 +21812,7 @@ async function pxCascataVarrer(protegerId,opts){
            pra semana seguinte, pela fila das quartas. */
         const _cols=daSemana.filter(function(x){ return String(x.client)==="bioter"&&_pxCasTrilha(x)==="collab"&&_pxCasMovivel(x,hoje,null); });
         const _colsTodos=daSemana.filter(function(x){ return String(x.client)==="bioter"&&_pxCasTrilha(x)==="collab"; });
-        if(_colsTodos.length>1&&_cols.length>=1){
+        if(_colsTodos.length>1&&_cols.length>=1&&!puladas[k+"|collab"]){
           // sai o de data mais tarde; empate de data → o menos recentemente mexido (o outro é o que chegou)
           // (24/09) quem sai: sem marca manual primeiro (o de data mais tarde); marcado à mão só cede pro mais novo
           const sairC=_cols.slice().sort(function(p,q){ return _pxCasCmpSaida(p,q); })[0];
@@ -21815,6 +21820,7 @@ async function pxCascataVarrer(protegerId,opts){
           if(sairC&&ancoraC){ achou={ancora:ancoraC,sair:sairC,semana:k,alvo:"collab",forcarCollab:true}; break; }
         }
         for(const alvo of alvos){
+          if(puladas[k+"|"+alvo]) continue;   // esta semana/alvo já empacou nesta varredura
           const doAlvo=_pxCasConta(daSemana,alvo);
           if(doAlvo.length<=PX_CASCATA_CAP[alvo]) continue;
           const porTrilha={};
@@ -21883,10 +21889,14 @@ async function pxCascataVarrer(protegerId,opts){
         _vaga="";   // não serviu: segue a fila normal (e não tenta de novo)
       }
       const plano=await pxCascataPlanejar(achou.ancora,null,{sair:achou.sair.id,forcarCollab:!!achou.forcarCollab});
-      if(!plano.moves.length&&!(plano.lixeira||[]).length) break;
+      const _chavePul=achou.semana+"|"+(achou.forcarCollab?"collab":achou.alvo);
+      if(!plano.moves.length&&!(plano.lixeira||[]).length){
+        console.warn("[cascata] semana empacou (plano vazio), pulando e seguindo:",_chavePul,"— sairia:",achou.sair&&achou.sair.title);
+        puladas[_chavePul]=1; continue;
+      }
       const n=await pxCascataAplicar(plano,null,achou.forcarCollab?"dois collabs na semana":"varredura de cadência",
         achou.forcarCollab?"a semana ficou com dois collabs e collab é um por semana — este andou pela fila das quartas":"a semana estava acima da cadência do cliente");
-      if(!n) break;
+      if(!n){ puladas[_chavePul]=1; continue; }
       total+=n;
     }
     /* 2ª passada (22/09/2026): semana ABAIXO da cadência. Antes só existia a conta de quem
@@ -35966,12 +35976,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   }
   const _coverFixed=_fixUrl(current?.cover);
   const _coverValid=_isValidUrl(_coverFixed);
-  const _coverInFiles=_coverValid&&_filesDesc.includes(_coverFixed);
-  const _allImgsRaw=current?(
-    _filesDesc.length>0
-      ? [..._filesDesc, ...(_coverValid&&!_coverInFiles?[_coverFixed]:[])]
-      : (_coverValid?[_coverFixed]:[])
-  ):[];
+  // (09/10, Gustavo) a capa NÃO vira lâmina extra quando o card já tem arquivos finais: no card duplicado
+  // pra Paraguai a capa aponta pro arquivo do card ORIGINAL (que aqui é referência) e aparecia como 5ª lâmina.
+  // Capa só entra quando não há nenhum arquivo final (card sem entrega ainda).
+  const _allImgsRaw=current?(_filesDesc.length>0?_filesDesc:(_coverValid?[_coverFixed]:[])):[];
   // Remove URLs que já sabemos que estão quebradas (descobertas via onError anterior).
   // Se TODAS forem quebradas, mantém raw pra mostrar o fallback de erro (não some tudo).
   const allImgs=(()=>{
