@@ -147715,6 +147715,25 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   };
   const podeIA = typeof _eaFn === "function" && !(ctx.semIA);
   let m = procurar(podeIA);
+  /* (09/10, Gustavo: "o produto deve ser posicionado SEMPRE entre a frase CTA/ícone e o mapa/cidade — no
+     espaço útil; aqui ele tá consumindo o espaço do mapa e ainda sobrando espaço embaixo") trava
+     DETERMINÍSTICA: com o zoom já escolhido, a posição vertical deixa de ser disputa de pesos — a OBRA é
+     CENTRALIZADA na faixa útil (da base do bloco mapa/cidade até o topo do ícone/frase). A IA completa o
+     céu/terreno que faltar em cima ou embaixo. */
+  if(podeIA && an.obra && (teto != null || piso != null)){
+    const obH = (an.obra.y1 - an.obra.y0) * m.dh;
+    const fT = (teto != null ? teto : 0) + h * 0.015, fB = (piso != null ? piso : h) - h * 0.015;
+    if(fB - fT > h * 0.08){
+      let alvoY0 = fT + Math.max(0, (fB - fT - obH) / 2);          // obra maior que a faixa → encosta no teto (mapa ganha)
+      if(alvoY0 + obH > h) alvoY0 = Math.max(0, h - obH);          // mas nunca corta a obra no rodapé
+      const oyN = alvoY0 - an.obra.y0 * m.dh;
+      if(Math.abs(oyN - m.oy) > 4){
+        m = Object.assign({}, m, { oy:oyN });
+        m.vazio = (Math.max(0, m.oy) + Math.max(0, h - (m.oy + m.dh))) * w + Math.max(0, w - m.dw) * h;
+        avisos.push("obra centralizada na faixa útil (entre o mapa/cidade e o ícone/frase)");
+      }
+    }
+  }
   const desenhar = function(pl){
     const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
     x.save(); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2); x.drawImage(nova, pl.ox, pl.oy, pl.dw, pl.dh); x.restore();
