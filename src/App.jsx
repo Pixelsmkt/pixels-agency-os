@@ -146360,7 +146360,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra", card:card || undefined,
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora), a SOMBRA DO FOTÓGRAFO projetada no chão (marque a mancha da sombra) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora), a SOMBRA DO FOTÓGRAFO projetada no chão (marque a mancha da sombra) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, pessoas trabalhando, nem CONSTRUÇÕES e estruturas permanentes da paisagem (galpões, barracões, lagoas, cercas, postes, estradas ao fundo); [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -146531,13 +146531,15 @@ function _eaEstenderCeu(cv, topo, w){
   const x = cv.getContext("2d");
   const idb = x.getImageData(0, Math.min(cv.height - 15, topo + 2), w, 14).data;
   const base = new Array(w);
-  for(let xx = 0; xx < w; xx++){ let r = 0, g = 0, b = 0, n = 0;
-    for(let yy = 0; yy < 14; yy++){ const i = (yy * w + xx) * 4; if(idb[i + 3] === 0) continue; r += idb[i]; g += idb[i + 1]; b += idb[i + 2]; n++; }
-    base[xx] = n ? [r / n, g / n, b / n] : null; }
+  for(let xx = 0; xx < w; xx++){ const rs = [], gs = [], bs = [];
+    for(let yy = 0; yy < 14; yy++){ const i = (yy * w + xx) * 4; if(idb[i + 3] === 0) continue; rs.push(idb[i]); gs.push(idb[i + 1]); bs.push(idb[i + 2]); }
+    if(rs.length){ rs.sort(function(a, b){ return a - b; }); gs.sort(function(a, b){ return a - b; }); bs.sort(function(a, b){ return a - b; });
+      const md = Math.floor(rs.length / 2); base[xx] = [rs[md], gs[md], bs[md]]; }          // MEDIANA: nuvem na borda não vira listra
+    else base[xx] = null; }
   for(let xx = 0; xx < w; xx++) if(!base[xx]) base[xx] = base[xx - 1] || [120, 160, 210];
   const suave = new Array(w);
   for(let xx = 0; xx < w; xx++){ let r = 0, g = 0, b = 0, n = 0;
-    for(let k = -30; k <= 30; k++){ const p = base[Math.max(0, Math.min(w - 1, xx + k))]; r += p[0]; g += p[1]; b += p[2]; n++; }
+    for(let k = -120; k <= 120; k++){ const p = base[Math.max(0, Math.min(w - 1, xx + k))]; r += p[0]; g += p[1]; b += p[2]; n++; }
     suave[xx] = [r / n, g / n, b / n]; }
   const alt = Math.min(cv.height, topo + 6);
   const ic = x.getImageData(0, 0, w, alt), dc2 = ic.data;
@@ -146710,6 +146712,19 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      3) o resultado é REALINHADO (o gpt desloca/zoom 1–10%), tem a COR casada por canal com a original,
         e a FOTO ORIGINAL é colada por cima de tudo que era pra manter, com pluma larga — produto intocado. */
   if(m.oy > 0){ try{ _eaEstenderCeu(cv, Math.ceil(m.oy), w); avisos.push("céu estendido a partir da própria foto (sem IA — gradiente contínuo)"); }catch(_){ } }
+  // laterais que o giro deixou vazias: repete a última coluna da própria foto (determinístico, sem IA)
+  try{
+    const xc0 = cv.getContext("2d"); const ic0 = xc0.getImageData(0, 0, w, h), d0 = ic0.data;
+    let mexeuLat = false;
+    for(let yy = 0; yy < h; yy++){
+      let first = -1, last = -1;
+      for(let xx = 0; xx < w; xx++){ if(d0[(yy * w + xx) * 4 + 3] > 0){ if(first < 0) first = xx; last = xx; } }
+      if(first < 0) continue;
+      for(let xx = 0; xx < first; xx++){ const i = (yy * w + xx) * 4, j = (yy * w + first) * 4; d0[i] = d0[j]; d0[i + 1] = d0[j + 1]; d0[i + 2] = d0[j + 2]; d0[i + 3] = 255; mexeuLat = true; }
+      for(let xx = last + 1; xx < w; xx++){ const i = (yy * w + xx) * 4, j = (yy * w + last) * 4; d0[i] = d0[j]; d0[i + 1] = d0[j + 1]; d0[i + 2] = d0[j + 2]; d0[i + 3] = 255; mexeuLat = true; }
+    }
+    if(mexeuLat) xc0.putImageData(ic0, 0, 0);
+  }catch(_){ }
   const vazioBaixo = Math.max(0, h - (m.oy + m.dh)) * w;
   const precisaCompletar = vazioBaixo > w * h * 0.005, temEntulho = (an.entulho || []).length > 0;
   if(podeIA && (precisaCompletar || temEntulho)){
@@ -146743,9 +146758,15 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         xmf.fillStyle = "#000"; xmf.fillRect(0, 0, w, h);
         xmf.globalCompositeOperation = "destination-in"; xmf.drawImage(cv, 0, 0);              // manter = foto + céu (SEM os buracos de entulho)
         const Mf = document.createElement("canvas"); Mf.width = w; Mf.height = h; const fx2 = Mf.getContext("2d");
-        try{ fx2.filter = "blur(55px)"; }catch(_){ }
+        try{ fx2.filter = "blur(8px)"; }catch(_){ }                               // laterais/topo: pluma CURTA (pluma larga ali misturava a IA deslocada com a foto → fantasma)
         fx2.drawImage(Mfoto, 0, 0);
         try{ fx2.filter = "blur(0px)"; }catch(_){ }
+        { const fimF2 = m.oy + m.dh;                                              // só na borda de BAIXO (grama da IA): pluma LARGA
+          if(fimF2 < h - 4){ fx2.globalCompositeOperation = "destination-in";
+            const gv = fx2.createLinearGradient(0, fimF2 - 80, 0, fimF2 + 6);
+            gv.addColorStop(0, "rgba(255,255,255,1)"); gv.addColorStop(1, "rgba(255,255,255,0)");
+            fx2.fillStyle = gv; fx2.fillRect(0, 0, w, h);
+            fx2.globalCompositeOperation = "source-over"; } }
         // reabre os buracos de entulho (com borda curta) por cima da pluma larga
         const Ent = document.createElement("canvas"); Ent.width = w; Ent.height = h; const xe = Ent.getContext("2d");
         xe.fillStyle = "#fff";
