@@ -148114,6 +148114,54 @@ async function _eaTirarSombraBakedMapa(fc){
   }
   return mexidas;
 }
+/* (09/10, Gustavo: "a parte de saturação, iluminação e céu bonito é pra manter") ACABAMENTO de cor
+   aplicado DEPOIS do motor de Juti, sem tocar no encaixe nem na IA (validado no harness, p40):
+   1) balanço de branco medido SÓ nas nuvens/claros neutros acima do horizonte, e SÓ pro frio (nunca amarela);
+   2) níveis suaves (0,3%, preto no máx. 25, sem gamma); 3) textura+clareza estilo Camera Raw, dose leve. */
+function _eaAcabamentoFotoObra(cv, horizY){
+  try{
+    const w = cv.width, h = cv.height, x = cv.getContext("2d");
+    const ic = x.getImageData(0, 0, w, h), d = ic.data;
+    let sr = 0, sg = 0, sb = 0, n = 0;
+    const yMax = (horizY != null && horizY > 40) ? Math.min(h, Math.floor(horizY)) : Math.floor(h * 0.35);
+    for(let yy = 0; yy < yMax; yy += 2) for(let xx = 0; xx < w; xx += 8){
+      const i = (yy * w + xx) * 4; if(d[i + 3] === 0) continue;
+      const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if(mx > 150 && mx - mn < 35){ sr += r; sg += g; sb += b; n++; }
+    }
+    if(n > 400){
+      const md = (sr + sg + sb) / (3 * n);
+      const gr = Math.max(.92, Math.min(1.02, md / (sr / n))), gg = Math.max(.96, Math.min(1.04, md / (sg / n))), gb = Math.max(.98, Math.min(1.1, md / (sb / n)));
+      if(Math.abs(gr - 1) > .015 || Math.abs(gb - 1) > .015)
+        for(let i = 0; i < d.length; i += 4){ d[i] = Math.min(255, d[i] * gr); d[i + 1] = Math.min(255, d[i + 1] * gg); d[i + 2] = Math.min(255, d[i + 2] * gb); }
+    }
+    const hist = new Array(256).fill(0); let tot = 0;
+    for(let i = 0; i < d.length; i += 16){ if(d[i + 3] === 0) continue; hist[Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++; tot++; }
+    let lo = 0, acc = 0; while(lo < 255 && acc < tot * 0.003) acc += hist[lo++]; lo = Math.min(lo, 25);
+    let hi = 255; acc = 0; while(hi > 0 && acc < tot * 0.003) acc += hist[hi--]; hi = Math.max(hi, 235);
+    if(hi - lo > 40 && (lo > 6 || hi < 246)){
+      const lut = new Array(256);
+      for(let v = 0; v < 256; v++){ let t = Math.max(0, Math.min(1, (v - lo) / Math.max(1, hi - lo))); lut[v] = Math.round(t * 255); }
+      for(let i = 0; i < d.length; i += 4){ d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
+    }
+    x.putImageData(ic, 0, 0);
+    const passo = function(raio, qt){
+      const B = document.createElement("canvas"); B.width = w; B.height = h; const bx = B.getContext("2d");
+      bx.filter = "blur(" + raio + "px)"; bx.drawImage(cv, 0, 0);
+      const db = bx.getImageData(0, 0, w, h).data;
+      const i2 = x.getImageData(0, 0, w, h), d2 = i2.data;
+      for(let i = 0; i < d2.length; i += 4){
+        d2[i] = Math.max(0, Math.min(255, d2[i] + (d2[i] - db[i]) * qt));
+        d2[i + 1] = Math.max(0, Math.min(255, d2[i + 1] + (d2[i + 1] - db[i + 1]) * qt));
+        d2[i + 2] = Math.max(0, Math.min(255, d2[i + 2] + (d2[i + 2] - db[i + 2]) * qt));
+      }
+      x.putImageData(i2, 0, 0);
+    };
+    passo(Math.max(8, Math.round(w / 90)), 0.12);
+    passo(2.2, 0.22);
+    return true;
+  }catch(_){ return false; }
+}
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
@@ -148252,15 +148300,16 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
   const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
   if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
+  if(ctx.calibrarCor !== false){ try{ if(_eaAcabamentoFotoObra(cv, horizY)) avisos.push("acabamento: saturação, iluminação e céu (balanço de branco pelo céu, níveis e textura)"); }catch(_){ } }
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto: o MESMO da última arte de Juti (a IA devolve a foto inteira, sem emendas) + mapa num tom só");
+  avisos.push("motor da foto: Juti das 18:19 restaurado + só o acabamento de cor (saturação/iluminação/céu) por cima");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
   let cvBase = null;
-  try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false) _eaVibrarFotoObra(cvBase, horizY); }catch(_){ }
+  try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false){ _eaVibrarFotoObra(cvBase, horizY); _eaAcabamentoFotoObra(cvBase, horizY); } }catch(_){ }
   return { cv:cv, avisos:avisos, analise:an, encaixe:m, base:cvBase };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
