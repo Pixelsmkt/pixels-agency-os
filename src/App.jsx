@@ -34666,6 +34666,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [filtroAvTipo,setFiltroAvTipo]=useState("");
   const [ajusteFino,setAjusteFino]=useState(false);   // modal Ajuste fino (Foto de obra): IA em área marcada / puxar da original
   const [gerarArteAval,setGerarArteAval]=useState(false); // modal Gerar arte (o mesmo do card) direto na Avaliação
+  const [matZoom,setMatZoom]=useState(null);          // lightbox da FOTO ORIGINAL do material (lado a lado)
   const [filtroAvCli,setFiltroAvCli]=useState("");
   const [imgIdx,setImgIdx]=useState(0);
   const [imgZoom,setImgZoom]=useState(false); // Lightbox: clique na imagem → zoom fullscreen
@@ -36637,12 +36638,18 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             return <div onClick={()=>{if(allImgs.length>0&&!_curIsVideo)setImgZoom(true);}}
               title={allImgs.length>0&&!_curIsVideo?"Clique pra ampliar":""}
               style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",cursor:(allImgs.length>0&&!_curIsVideo)?"zoom-in":"default"}}>
-            {_ladoALado&&(<div onClick={e=>e.stopPropagation()} title="Foto original do material (como veio do cliente)"
-              style={{alignSelf:"stretch",flex:"0 0 41%",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",background:"#0b1220",borderRadius:12,margin:"12px 16px 12px 12px",cursor:"default"}}>
+            {_ladoALado&&(<div onClick={e=>{e.stopPropagation();setMatZoom(_matFoto.url);}} title="Foto original do material — clique pra ampliar"
+              style={{alignSelf:"stretch",flex:"0 0 41%",minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",background:"#0b1220",borderRadius:12,margin:"12px 12px 12px 16px",cursor:"zoom-in",order:2}}>
               <img src={_matFoto.url} alt="foto original" referrerPolicy="no-referrer" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
               <span style={{position:"absolute",top:10,left:10,background:"rgba(15,23,42,.82)",color:"#e2e8f0",fontSize:10,fontWeight:800,letterSpacing:.5,padding:"4px 10px",borderRadius:7,textTransform:"uppercase",pointerEvents:"none"}}>Foto original · material</span>
             </div>)}
-            {_ladoALado&&(<span style={{position:"absolute",top:10,right:10,background:"rgba(124,58,237,.88)",color:"#fff",fontSize:10,fontWeight:800,letterSpacing:.5,padding:"4px 10px",borderRadius:7,textTransform:"uppercase",pointerEvents:"none",zIndex:2}}>Arte gerada</span>)}
+            {_ladoALado&&(<span style={{position:"absolute",top:10,left:10,background:"rgba(124,58,237,.88)",color:"#fff",fontSize:10,fontWeight:800,letterSpacing:.5,padding:"4px 10px",borderRadius:7,textTransform:"uppercase",pointerEvents:"none",zIndex:2}}>Arte gerada</span>)}
+            {matZoom&&(<div onClick={e=>{e.stopPropagation();setMatZoom(null);}}
+              style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,cursor:"zoom-out"}}>
+              <span style={{position:"absolute",top:18,left:24,background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",color:"#fff",fontSize:12,fontWeight:700,padding:"6px 12px",borderRadius:20}}>Foto original · material</span>
+              <img src={matZoom} alt="foto original" referrerPolicy="no-referrer"
+                style={{maxWidth:"92vw",maxHeight:"92vh",objectFit:"contain",borderRadius:8,boxShadow:"0 20px 60px rgba(0,0,0,0.6)"}}/>
+            </div>)}
             {allImgs.length===0&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:32,textAlign:"center"}}>
               <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
                 <Ico n="play" size={28} color="#cbd5e1"/>
@@ -148104,6 +148111,57 @@ async function _eaTirarSombraBakedMapa(fc){
   }
   return mexidas;
 }
+/* (09/10, Gustavo: "mais vívida e com cores naturais, aquele efeito de textura do filtro Camera Raw do
+   Photoshop... tá meio apagada, amarelada, escura") ACABAMENTO em 3 passos, estilo Camera Raw:
+   1) balanço de branco medido nos pixels CLAROS e pouco saturados (nuvens/céu) — tira o amarelado;
+   2) níveis automáticos (estica 1%–99%) + leve gamma — tira o apagado/escuro;
+   3) textura + clareza: máscara de nitidez em 2 raios (local contrast), sem halo. */
+function _eaAcabamentoFotoObra(cv){
+  try{
+    const w = cv.width, h = cv.height, x = cv.getContext("2d");
+    const ic = x.getImageData(0, 0, w, h), d = ic.data;
+    // 1) balanço de branco pelos realces neutros
+    let sr = 0, sg = 0, sb = 0, n = 0;
+    for(let i = 0; i < d.length; i += 32){
+      if(d[i + 3] === 0) continue;
+      const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if(mx > 150 && mx - mn < 60){ sr += r; sg += g; sb += b; n++; }
+    }
+    if(n > 200){
+      const md = (sr + sg + sb) / (3 * n);
+      const gr = Math.max(.9, Math.min(1.12, md / (sr / n))), gg = Math.max(.9, Math.min(1.12, md / (sg / n))), gb = Math.max(.9, Math.min(1.12, md / (sb / n)));
+      if(Math.abs(gr - 1) > .015 || Math.abs(gb - 1) > .015)
+        for(let i = 0; i < d.length; i += 4){ d[i] = Math.min(255, d[i] * gr); d[i + 1] = Math.min(255, d[i + 1] * gg); d[i + 2] = Math.min(255, d[i + 2] * gb); }
+    }
+    // 2) níveis (1%–99%) + gamma 0.94
+    const hist = new Array(256).fill(0); let tot = 0;
+    for(let i = 0; i < d.length; i += 16){ if(d[i + 3] === 0) continue; hist[Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++; tot++; }
+    let lo = 0, acc = 0; while(lo < 255 && acc < tot * 0.01) acc += hist[lo++];
+    let hi = 255; acc = 0; while(hi > 0 && acc < tot * 0.01) acc += hist[hi--];
+    if(hi - lo > 40 && (lo > 6 || hi < 246)){
+      const lut = new Array(256);
+      for(let v = 0; v < 256; v++){ let t = Math.max(0, Math.min(1, (v - lo) / Math.max(1, hi - lo))); lut[v] = Math.round(Math.pow(t, 0.94) * 255); }
+      for(let i = 0; i < d.length; i += 4){ d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
+    }
+    x.putImageData(ic, 0, 0);
+    // 3) textura + clareza (unsharp em 2 raios)
+    const passo = function(raio, qt){
+      const B = document.createElement("canvas"); B.width = w; B.height = h; const bx = B.getContext("2d");
+      bx.filter = "blur(" + raio + "px)"; bx.drawImage(cv, 0, 0);
+      const db = bx.getImageData(0, 0, w, h).data;
+      const i2 = x.getImageData(0, 0, w, h), d2 = i2.data;
+      for(let i = 0; i < d2.length; i += 4){
+        d2[i] = Math.max(0, Math.min(255, d2[i] + (d2[i] - db[i]) * qt));
+        d2[i + 1] = Math.max(0, Math.min(255, d2[i + 1] + (d2[i + 1] - db[i + 1]) * qt));
+        d2[i + 2] = Math.max(0, Math.min(255, d2[i + 2] + (d2[i + 2] - db[i + 2]) * qt));
+      }
+      x.putImageData(i2, 0, 0);
+    };
+    passo(Math.max(8, Math.round(w / 90)), 0.16);   // clareza: raio grande, dose leve
+    passo(2.2, 0.28);                                // textura: raio pequeno
+    return true;
+  }catch(_){ return false; }
+}
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
@@ -148230,6 +148288,31 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
            zoom, entrada opaca (menos distorção), luz casada com a original e prompt mandando preservar a obra. */
         const gLuz = _eaCasarLuz(cv, r);
         cv = r;
+        /* (09/10, Gustavo: "a inteligência modificou a realidade dos produtos — tem como não alterar?")
+           PRODUTO DE VOLTA: o resultado da IA é realinhado com o desenho original e a REGIÃO DA OBRA volta a
+           ser a foto REAL, com fusão bem larga — céu/terreno novos da IA ficam, o produto fica 100% original.
+           (não é a colagem antiga: é só o miolo da obra, alinhado, com pluma grande — emenda invisível) */
+        try{
+          const cvO = desenhar(m);
+          try{ const rAl = _eaAlinharIA(cvO, cv); if(rAl) cv = rAl; }catch(_){ }
+          if(an.obra){
+            const fxO = m.dw * 0.03, fyO = m.dh * 0.03;
+            const ox0 = Math.max(0, m.ox + an.obra.x0 * m.dw - fxO), oy0 = Math.max(0, m.oy + an.obra.y0 * m.dh - fyO);
+            const ox1 = Math.min(w, m.ox + an.obra.x1 * m.dw + fxO), oy1 = Math.min(h, m.oy + an.obra.y1 * m.dh + fyO);
+            const pw = Math.round(ox1 - ox0), ph = Math.round(oy1 - oy0);
+            if(pw > 40 && ph > 40){
+              const P = document.createElement("canvas"); P.width = pw; P.height = ph; const p2 = P.getContext("2d");
+              p2.drawImage(cvO, ox0, oy0, pw, ph, 0, 0, pw, ph);
+              const fP = Math.max(24, Math.min(60, Math.round(Math.min(pw, ph) / 6)));
+              const MkP = document.createElement("canvas"); MkP.width = pw; MkP.height = ph; const mkP = MkP.getContext("2d");
+              mkP.filter = "blur(" + fP + "px)"; mkP.fillStyle = "#fff";
+              mkP.fillRect(fP, fP, Math.max(2, pw - 2 * fP), Math.max(2, ph - 2 * fP));
+              p2.globalCompositeOperation = "destination-in"; p2.drawImage(MkP, 0, 0);
+              cv.getContext("2d").drawImage(P, Math.round(ox0), Math.round(oy0));
+              avisos.push("produto 100% real: a região da obra voltou a ser a da foto original (alinhada, fusão suave)");
+            }
+          }
+        }catch(_){ }
         if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA");
         if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)");
         if(gLuz > 1.03) avisos.push("a edição da IA escureceu a foto — luz original recuperada (+" + Math.round((gLuz - 1) * 100) + "%)");
@@ -148242,15 +148325,16 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
   const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
   if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
+  if(ctx.calibrarCor !== false){ try{ if(_eaAcabamentoFotoObra(cv)) avisos.push("acabamento estilo Camera Raw: balanço de branco, níveis e textura/clareza"); }catch(_){ } }
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto: o MESMO da última arte de Juti (a IA devolve a foto inteira, sem emendas) + mapa num tom só");
+  avisos.push("motor da foto v9: base Juti + produto colado da foto real + acabamento vívido estilo Camera Raw");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
   let cvBase = null;
-  try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false) _eaVibrarFotoObra(cvBase, horizY); }catch(_){ }
+  try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false){ _eaVibrarFotoObra(cvBase, horizY); _eaAcabamentoFotoObra(cvBase); } }catch(_){ }
   return { cv:cv, avisos:avisos, analise:an, encaixe:m, base:cvBase };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
