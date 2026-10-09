@@ -5110,11 +5110,11 @@ function pxCtxRegrasTxt(regras){
       const _e=String(m.tipo||"").split(":")[1]||"contexto";
       // (09/10) com RESUMO revisado pela equipe, é ELE que entra — é o entendimento conferido na mão
       if(m.resumo){
-        u+="- ["+_e.toUpperCase()+"] "+String(m.resumo).trim().replace(/\n/g,"\n  ")+
+        u+="- "+String(m.resumo).trim().replace(/\n/g,"\n  ")+
            (m.origem?(" — "+m.origem):"")+"\n";
         continue;
       }
-      u+="- ["+_e.toUpperCase()+"] "+m.regra+
+      u+="- "+m.regra+
          (m.porque?(" (por quê: "+m.porque+")"):"")+
          (m.origem?(" — "+m.origem):"")+
          (m.fala?("\n  O que foi dito no áudio anexado (transcrição): "+String(m.fala).replace(/\s+/g," ").slice(0,1500)):"")+"\n";
@@ -107838,7 +107838,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
     setResGerando(id);
     try{
       const r=await askGPTBlocos({ max_tokens:1200, origem:"playbook_feedback_resumo",
-        system:"Você organiza feedbacks de clientes de uma assessoria de marketing (Pixels). Recebe o texto do feedback e transcrições de áudios de WhatsApp. Devolva SÓ o resumo fiel do que foi pedido/decidido: itens curtos, um por linha começando com '- ', em português, sem inventar nada, sem opinião, mantendo nomes de produtos/máquinas como foram ditos. Máximo 10 itens.",
+        system:"Você organiza feedbacks de clientes de uma assessoria de marketing (Pixels, agro B2B). Recebe o texto do feedback e transcrições de áudios de WhatsApp. Devolva SÓ o resumo fiel do que foi pedido/decidido: itens curtos, um por linha começando com '- ', em português, sem inventar nada, sem opinião. CORRIJA grafias óbvias de nomes de equipamentos e marcas que a transcrição de áudio errou (ex.: 'Boby cat'/'bobicate' → 'Bobcat'; 'escavadeira 320' é Caterpillar 320; 'plasom' → 'Plasson'); nome que você não reconhecer, mantenha como foi dito. Máximo 10 itens.",
         messages:[{role:"user",content:String(conteudo||"").slice(0,12000)}] });
       const texto=String(((r&&r.content&&r.content[0])||{}).text||"").trim().slice(0,2500);
       if(texto){ const up=await window._sb.from("claude_copy_regras").update({resumo:texto}).eq("id",id); if(up.error) throw up.error; await carregar(); }
@@ -107961,13 +107961,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
           </div>; })}
         </div>}
       </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        {PB_MEM_ETIQUETAS.map(function(e){
-          const on=etq===e.id;
-          return <button key={e.id} type="button" onClick={function(){setEtq(e.id);}} title={e.dica}
-            style={{background:on?e.cor:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?e.cor:PB_BORDER),borderRadius:99,padding:"5px 13px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{e.label}</button>;
-        })}
-      </div>
+      {/* (09/10, Gustavo) etiquetas Produto/Abordagem/Linguagem saíram: "não quer dizer nada e não ajuda" — o tipo continua no banco como memoria:produto, sem UI */}
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
         <div style={{flex:"1 1 320px",minWidth:0}}>
           <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Origem</div>
@@ -108055,7 +108049,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
                 <button type="button" onClick={function(){ gerarResumo(it.id, _conteudoDe(it.regra, it.anexos.map(function(a){return String(a.transcricao||"").trim();}).filter(Boolean))); }}
                   style={{marginTop:7,background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:8,padding:"5px 11px",color:"#6d28d9",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>✦ Gerar o entendimento da IA</button>}
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:7}}>
-                <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
+                
                 {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
                 {it.disse_quem && <span title="Quem deu o feedback" style={{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="users" size={10} color="#1d4ed8"/>{it.disse_quem}</span>}
                 {it.origem && (/^Portal do cliente/.test(String(it.origem))
@@ -147001,7 +146995,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra", card:card || undefined,
     system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora), a SOMBRA DO FOTÓGRAFO projetada no chão (marque a mancha INTEIRA com folga — braços e cabeça incluídos, sobrando margem de todos os lados) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, pessoas trabalhando, nem CONSTRUÇÕES e estruturas permanentes da paisagem (galpões, barracões, lagoas, cercas, postes, estradas ao fundo); [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 8) de caixas {"x0","y0","x1","y1","na_estrutura":true|false} com coisas que um cliente não deveria ver numa foto de entrega (na_estrutura = true SÓ quando a sujeira está EM CIMA da estrutura/lona da obra; blocos, placas e restos de concreto no chão, na terra ou na grama ao redor são na_estrutura:false): entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora), a SOMBRA DO FOTÓGRAFO projetada no chão (marque a mancha INTEIRA com folga — braços e cabeça incluídos, sobrando margem de todos os lados) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, pessoas trabalhando, nem CONSTRUÇÕES e estruturas permanentes da paisagem (galpões, barracões, lagoas, cercas, postes, estradas ao fundo); [] só se a cena está realmente impecável}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -147167,6 +147161,46 @@ function _eaVibrarFotoObra(cv, horizonteY){
    original existe) e DESFAZ no resultado da IA antes da colagem. Devolve o canvas alinhado (ou o próprio cv). */
 /* (09/10) estende o CÉU por cima da foto deterministicamente: cor da borda de cima, coluna a coluna
    (média móvel horizontal), escurecendo suave até o topo — gradiente contínuo, emenda impossível. */
+/* (09/10, Gustavo: "o céu era pra ser um céu mais limpo, com nuvens bonitinho") CÉU BONITO:
+   o azul vem da PRÓPRIA foto (gradiente da cor real do céu na emenda, mais profundo no topo) e as
+   NUVENS vêm de um asset fixo (3 céus gerados uma única vez, guardados no storage — as nuvens têm
+   fundo transparente). Zero custo por arte, emenda invisível (validado no harness, p7-ceu).
+   Se o asset não carregar, cai no gradiente antigo (_eaEstenderCeu). */
+const PX_CEUS_NUVENS = [
+  "https://jffvoojcskwumnphsedq.supabase.co/storage/v1/object/public/agency-files/arte/assets/ceu-nuvens-1.png",
+  "https://jffvoojcskwumnphsedq.supabase.co/storage/v1/object/public/agency-files/arte/assets/ceu-nuvens-2.png",
+  "https://jffvoojcskwumnphsedq.supabase.co/storage/v1/object/public/agency-files/arte/assets/ceu-nuvens-3.png",
+];
+async function _eaCeuBonito(cv, topo, w){
+  if(!(topo > 0)) return false;
+  const h = cv.height, x = cv.getContext("2d");
+  // cor média do céu REAL logo abaixo da emenda
+  const idr = x.getImageData(0, Math.min(h - 42, topo + 2), w, 40).data;
+  let rr = 0, gg = 0, bb = 0, n = 0;
+  for(let i = 0; i < idr.length; i += 16){ if(idr[i + 3] === 0) continue; rr += idr[i]; gg += idr[i + 1]; bb += idr[i + 2]; n++; }
+  if(!n) return false;
+  rr /= n; gg /= n; bb /= n;
+  const asset = await _eaCarregarImg(PX_CEUS_NUVENS[Math.floor(Math.random() * PX_CEUS_NUVENS.length)]);
+  const altC = Math.min(h, topo + 160);
+  const tmp = document.createElement("canvas"); tmp.width = w; tmp.height = altC; const tx = tmp.getContext("2d");
+  const g = tx.createLinearGradient(0, 0, 0, altC);
+  g.addColorStop(0, "rgb(" + Math.round(rr * 0.62) + "," + Math.round(gg * 0.76) + "," + Math.round(Math.min(255, bb * 1.02)) + ")");
+  g.addColorStop(1, "rgb(" + Math.round(rr) + "," + Math.round(gg) + "," + Math.round(bb) + ")");
+  tx.fillStyle = g; tx.fillRect(0, 0, w, altC);
+  const sc = Math.max(w / asset.width, altC / asset.height), aw = asset.width * sc, ah = asset.height * sc;
+  tx.drawImage(asset, (w - aw) / 2, altC - ah, aw, ah);              // nuvens (fundo do asset é transparente)
+  const idf = x.getImageData(0, 0, w, altC), df = idf.data, da = tx.getImageData(0, 0, w, altC).data;
+  for(let yy = 0; yy < altC; yy++){
+    const mes = yy >= topo ? Math.max(0, (topo + 160 - yy) / 160) : 1;   // rampa longa na emenda com o céu real
+    for(let xx = 0; xx < w; xx++){
+      const i = (yy * w + xx) * 4;
+      if(df[i + 3] === 0 || mes === 1){ df[i] = da[i]; df[i + 1] = da[i + 1]; df[i + 2] = da[i + 2]; df[i + 3] = 255; }
+      else if(mes > 0){ df[i] = df[i] * (1 - mes) + da[i] * mes; df[i + 1] = df[i + 1] * (1 - mes) + da[i + 1] * mes; df[i + 2] = df[i + 2] * (1 - mes) + da[i + 2] * mes; df[i + 3] = 255; }
+    }
+  }
+  x.putImageData(idf, 0, 0);
+  return true;
+}
 function _eaEstenderCeu(cv, topo, w){
   if(!(topo > 0)) return;
   const x = cv.getContext("2d");
@@ -147376,7 +147410,7 @@ async function _eaLimparEntulhoIA(cv, cx, o){
   const MR = document.createElement("canvas"); MR.width = L; MR.height = L; const mx = MR.getContext("2d");
   mx.fillStyle = "#000"; mx.fillRect(0, 0, L, L);
   mx.globalCompositeOperation = "destination-out"; mx.fillRect(bx - x0, by - y0, bw, bh);
-  const prompt = "Fotografia real de obra rural" + (o.obraTipo ? " (" + o.obraTipo + ")" : "") + ". Na área marcada, APAGUE o que estiver ali (sombra de pessoa/fotógrafo, entulho, sujeira, materiais soltos) e preencha com o MESMO fundo que existe ao redor (grama/terra/vegetação), nítido, com textura fotográfica real, mesma luz e perspectiva. Proibido deixar mancha lisa, borrada ou nebulosa. Todo o resto permanece idêntico. Não acrescente objetos, pessoas ou texto. Resultado: fotografia real contínua, mesma câmera.";
+  const prompt = "Fotografia real de obra rural" + (o.obraTipo ? " (" + o.obraTipo + ")" : "") + ". Na área marcada, APAGUE SÓ OS OBJETOS soltos (blocos e placas de concreto, entulho, sujeira, sombra de pessoa) e preencha com o MESMO fundo que existe ao redor, SEM trocar o tipo de solo: terra vermelha continua terra vermelha, cascalho continua cascalho, grama continua grama. Nítido, textura fotográfica real, mesma luz e perspectiva. Proibido mancha lisa, borrada ou nebulosa. Todo o resto permanece idêntico. Não acrescente objetos, pessoas ou texto. Fotografia real contínua, mesma câmera.";
   const r = await _eaFotoIA(Rec, MR, prompt, o.client, o.projeto);
   if(!r) return null;
   const rA = _eaAlinharIA(Rec, r);
@@ -147430,7 +147464,13 @@ async function _eaTirarSombraBakedMapa(fc){
         for(let i = 0; i < d.length; i += 4){
           const a = d[i + 3], r = d[i], g = d[i + 1], b = d[i + 2];
           const sat = Math.max(r, g, b) - Math.min(r, g, b);
-          if(a > 80 && sat > 30){ d[i + 3] = 255; mant++; } else d[i + 3] = 0;
+          if(a > 80 && sat > 30){
+            d[i + 3] = a > 200 ? 255 : a;                                       // borda mantém anti-serrilhado
+            // trava: nenhum tom escuro sobrevive na camada do mapa (a "sombra" que o Gustavo vê)
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            if(lum < 110){ const f = 118 / Math.max(1, lum); d[i] = Math.min(255, r * f); d[i + 1] = Math.min(255, g * f); d[i + 2] = Math.min(255, b * f); }
+            mant++;
+          } else d[i + 3] = 0;
         }
         if(mant < 500) continue;
         x2.putImageData(ic, 0, 0);
@@ -147543,7 +147583,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      2) a IA (gpt-image, high) fica só com o que faz bem: completar o CHÃO de baixo e apagar entulho/sombra;
      3) o resultado é REALINHADO (o gpt desloca/zoom 1–10%), tem a COR casada por canal com a original,
         e a FOTO ORIGINAL é colada por cima de tudo que era pra manter, com pluma larga — produto intocado. */
-  if(m.oy > 0){ try{ _eaEstenderCeu(cv, Math.ceil(m.oy), w); avisos.push("céu estendido a partir da própria foto (sem IA — gradiente contínuo)"); }catch(_){ } }
+  if(m.oy > 0){
+    let _ceuOk = false;
+    try{ _ceuOk = await _eaCeuBonito(cv, Math.ceil(m.oy), w); if(_ceuOk) avisos.push("céu novo: azul da própria foto + nuvens bonitas (asset fixo, sem custo)"); }catch(_){ }
+    if(!_ceuOk){ try{ _eaEstenderCeu(cv, Math.ceil(m.oy), w); avisos.push("céu estendido a partir da própria foto (sem IA — gradiente contínuo)"); }catch(_){ } }
+  }
   // laterais que o giro deixou vazias: repete a última coluna da própria foto (determinístico, sem IA)
   try{
     const xc0 = cv.getContext("2d"); const ic0 = xc0.getImageData(0, 0, w, h), d0 = ic0.data;
@@ -147586,18 +147630,17 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
     const areaFoto = Math.max(1, m.dw * m.dh);
     // mancha grande COLADA NA OBRA não vai pra IA: repintar a margem da lagoa criava um degradê falso —
     // alterar a obra é o pecado maior, então ali fica como está (entulho de canteiro faz parte da cena)
-    const obraPx = an.obra ? { x0:m.ox + an.obra.x0 * m.dw, y0:m.oy + an.obra.y0 * m.dh, x1:m.ox + an.obra.x1 * m.dw, y1:m.oy + an.obra.y1 * m.dh } : null;
-    const invadeObra = function(c){ if(!obraPx) return 0;
-      const ix = Math.max(0, Math.min(c.x + c.w, obraPx.x1) - Math.max(c.x, obraPx.x0));
-      const iy = Math.max(0, Math.min(c.y + c.h, obraPx.y1) - Math.max(c.y, obraPx.y0));
-      return (ix * iy) / Math.max(1, c.w * c.h); };
+    /* (09/10, Gustavo: "você não removeu as coisas de concreto jogadas na cena") a trava antiga protegia
+       pelo RETÂNGULO da obra — que cobre a faixa inteira, margens incluídas, então blocos de concreto na
+       terra ficavam. Agora é a própria VISÃO que diz o que está EM CIMA da estrutura (na_estrutura): só
+       isso fica intocado; o resto (concreto, placas, entulho no chão ao redor) é limpo. */
     const pequenos = [], grandes = []; let naObra = 0;
-    cxs.forEach(function(c){
-      if(invadeObra(c) > 0.2){ naObra++; return; }                              // NINGUÉM mexe em cima da obra
+    cxs.forEach(function(c, k){
+      if((an.entulho[k] || {}).na_estrutura === true){ naObra++; return; }      // em cima da lona/estrutura: não mexe
       const grande = c.w * c.h > areaFoto * 0.012;
       if(grande && podeIA) grandes.push(c); else pequenos.push(c);
     });
-    if(naObra) avisos.push(naObra + " mancha(s) encostada(s) na obra ficaram como estão — mexer ali arriscava alterar ou borrar a própria obra");
+    if(naObra) avisos.push(naObra + " mancha(s) em cima da própria estrutura ficaram como estão (mexer ali alteraria a obra)");
     if(pequenos.length){
       try{
         if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho e sombras (sem IA)…"); }catch(_){ } }
@@ -147667,7 +147710,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — é como a gente confere se o
   // navegador rodou o código NOVO ou um bundle velho em cache (stale bundle já enganou o teste 4+ vezes)
-  avisos.push("motor da foto v5 (mapa chapado sem blend · céu claro · nada mexe em cima da obra)");
+  avisos.push("motor da foto v6 (céu com nuvens · mapa sem nenhum tom escuro · concreto no chão é limpo, só o que está EM CIMA da estrutura fica)");
   return { cv:cv, avisos:avisos, analise:an, encaixe:m };
 }
 async function _eaEncaixarFotoObra(fc, o, url, ctx){
