@@ -71488,6 +71488,12 @@ function TCenCartao({ p, eu, onMudou }) {
       {p.estado === "monitorando" && <div style={{ marginTop: 6, color: "#1e40af", fontSize: 12 }}>
         {p.resultado && p.resultado.aplicado_em ? "✅ Aplicado por " + (p.resultado.aplicado_por || "") + " em " + _tsegQuando(p.resultado.aplicado_em) + ". " : "👀 Sem mexer. "}
         Acompanhando até {p.monitorar_ate ? p.monitorar_ate.split("-").reverse().slice(0, 2).join("/") : "—"}.{p.motivo ? " Obs.: " + p.motivo : ""}</div>}
+      {p.resultado && p.resultado.monitor && ["d3", "d7", "final"].map(function (k) {
+        const m = p.resultado.monitor[k]; if (!m) return null;
+        const c = m.veredito === "melhorou" ? ["#dcfce7", "#166534", "📈 Melhorou"] : m.veredito === "piorou" ? ["#fee2e2", "#b91c1c", "📉 Piorou"] : m.veredito === "igual" ? ["#f1f5f9", "#334155", "➖ Igual"] : ["#fef9c3", "#854d0e", "⏳ Pouco dado"];
+        return <div key={k} style={{ marginTop: 6, background: c[0], color: c[1], borderRadius: 9, padding: "6px 9px", fontSize: 12, lineHeight: 1.45 }}>
+          <b>{k === "d3" ? "3º dia" : k === "d7" ? "7º dia" : "Fim"} · {c[2]}.</b> {m.texto}</div>;
+      })}
       {(p.estado === "concluido" || p.estado === "recusado" || p.estado === "expirado") && <div style={{ marginTop: 6, color: "#475569", fontSize: 12 }}>
         {p.estado === "recusado" ? "✕ Recusado" : p.estado === "expirado" ? "⌛ Expirou" : "✓ Concluído"}{p.decidido_por_nome ? " por " + p.decidido_por_nome : ""} {_tsegQuando(p.decidido_em || p.atualizado_em)}{p.motivo ? " — " + p.motivo : ""}</div>}
 
@@ -71558,6 +71564,59 @@ function TCenCartao({ p, eu, onMudou }) {
   );
 }
 
+function TCenMemoria({ itens, conta }) {
+  if (itens === null) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div>;
+  const l = (itens || []).filter(function (m) { return !conta || m.ad_account_id === conta; });
+  if (!l.length) return <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0", lineHeight: 1.5 }}>
+    Ainda vazio. Cada recusa (com o motivo) e cada resultado de 7 dias vira uma lição aqui — é o que a IA usa para sugerir melhor.</div>;
+  const ic = { melhorou: "📈", piorou: "📉", igual: "➖", pouco_dado: "⏳", recusado: "✕" };
+  return <div style={{ maxHeight: "62vh", overflowY: "auto" }}>
+    {l.map(function (m) {
+      return <div key={m.id} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid #f1f5f9", fontSize: 12.5, lineHeight: 1.45 }}>
+        <span style={{ fontSize: 16 }}>{ic[m.veredito] || "•"}</span>
+        <div style={{ minWidth: 0 }}><div style={{ color: "#0f172a" }}>{m.licao}</div>
+          <div style={{ color: "#94a3b8", fontSize: 11 }}>{_tsegQuando(m.criado_em)} · {m.origem === "recusa" ? "recusa de vocês" : "resultado medido"}{m.regra ? " · " + m.regra : ""}</div></div>
+      </div>;
+    })}
+  </div>;
+}
+
+/* Faixa DENTRO da campanha (QG Ads › campanha): mostra as decisões abertas daquela campanha, dos conjuntos e dos anúncios dela.
+   Só aparece para quem aprova; para o resto (ex.: Erick) o banco responde "sem permissão" e a faixa não existe. */
+function TCenFaixa({ conta, campId }) {
+  const [itens, setItens] = useState(null);
+  const [eu, setEu] = useState(null);
+  const [aberto, setAberto] = useState(false);
+  const carregar = useCallback(async function () {
+    try {
+      const r = await _tsegRpc("ads_pedidos_ler", { p_aberto: true });
+      if (!r || !r.ok) { setItens([]); return; }
+      setEu(r.eu || null);
+      setItens((r.itens || []).filter(function (p) {
+        if (conta && p.ad_account_id !== conta) return false;
+        if (p.entidade_id === campId) return true;
+        return (Array.isArray(p.caminho) ? p.caminho : []).some(function (c) { return c.nivel === "campanha" && c.id === campId; });
+      }));
+    } catch (_) { setItens([]); }
+  }, [conta, campId]);
+  useEffect(function () { carregar(); }, [carregar]);
+  if (!itens || !itens.length) return null;
+  const novos = itens.filter(function (p) { return p.estado === "novo"; }).length;
+  const mon = itens.filter(function (p) { return p.estado === "monitorando"; }).length;
+  return (
+    <div style={{ margin: "0 0 16px", border: "1.5px solid #c4b5fd", background: "#faf8ff", borderRadius: 14, padding: "10px 14px", fontFamily: "'Inter',system-ui,sans-serif" }}>
+      <div onClick={function () { setAberto(!aberto); }} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 900, fontSize: 13.5, color: "#5b21b6" }}>🧠 Decisões da IA nesta campanha</span>
+        {novos > 0 && <TCenChip cor="roxo">{novos} para decidir</TCenChip>}
+        {mon > 0 && <TCenChip cor="azul">{mon} monitorando</TCenChip>}
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 800, color: "#5b21b6" }}>{aberto ? "Fechar ▲" : "Ver ▼"}</span>
+      </div>
+      {!aberto && <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>{itens.slice(0, 2).map(function (p) { return p.titulo; }).join(" · ")}{itens.length > 2 ? " · +" + (itens.length - 2) : ""}</div>}
+      {aberto && <div style={{ marginTop: 10 }}>{itens.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={carregar} />; })}</div>}
+    </div>
+  );
+}
+
 function TSegCentral({ onFechar, onMudou }) {
   const [abertos, setAbertos] = useState(null);
   const [fechados, setFechados] = useState(null);
@@ -71565,6 +71624,7 @@ function TSegCentral({ onFechar, onMudou }) {
   const [aba, setAba] = useState("decidir");
   const [conta, setConta] = useState("");
   const [erro, setErro] = useState("");
+  const [memoria, setMemoria] = useState(null);
 
   const carregar = useCallback(async function () {
     try {
@@ -71588,8 +71648,12 @@ function TSegCentral({ onFechar, onMudou }) {
     monitorando: ab.filter(function (p) { return p.estado === "monitorando" || p.estado === "aplicado"; }),
     concluidos: filtro(fechados || []),
   };
-  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"]];
+  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"]];
   const lista = grupos[aba] || [];
+  useEffect(function () {
+    if (aba !== "memoria" || memoria !== null) return;
+    _tsegRpc("ads_memoria_ler", { p_conta: null, p_limite: 100 }).then(function (m) { setMemoria(m || []); }).catch(function () { setMemoria([]); });
+  }, [aba]);
 
   return (
     <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>
@@ -71598,7 +71662,7 @@ function TSegCentral({ onFechar, onMudou }) {
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
         {ABAS.map(function (x) {
-          const n = (grupos[x[0]] || []).length; const on = aba === x[0];
+          const n = x[0] === "memoria" ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
           if (x[0] === "esperando" && !n && !on) return null;  // regra dos 2 sócios desligada: aba só aparece se tiver algo
           return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
             padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
@@ -71609,7 +71673,8 @@ function TSegCentral({ onFechar, onMudou }) {
         </select>
       </div>
       {erro && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
-      {abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
+      {aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
+        abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
         !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às 11h30." : "Nada aqui."}</div> :
         <div style={{ maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
           {lista.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={mudou} />; })}
