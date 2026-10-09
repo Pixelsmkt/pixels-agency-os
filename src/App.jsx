@@ -65758,6 +65758,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
       <div style={{display:"flex",gap:2,marginTop:16,background:"rgba(255,255,255,.14)",borderRadius:12,padding:3,width:"fit-content",maxWidth:"100%",overflowX:"auto"}} className="scroll-x">{SUBS.map(function(t){ const on=sub===t[0]; return <button key={t[0]} onClick={function(){setSub(t[0]);}} style={{border:0,background:on?"#fff":"transparent",color:on?ADS.accent:"#e9e0fb",padding:"7px 13px",borderRadius:9,fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:ADS_FONT,whiteSpace:"nowrap",boxShadow:on?"0 1px 3px rgba(15,13,26,.08)":"none",minHeight:0}}>{t[1]}</button>; })}</div>
     </AdsCard>
 
+    {typeof TCenFaixa==="function"&&<TCenFaixa conta={conta&&conta.ad_account_id} campId={campId}/>}
     {sub==="visao"&&<>
       <div style={{background:_adsBgCor(veredito.n),border:"1px solid "+(veredito.n==="n"?ADS.line:_adsCor(veredito.n)+"66"),borderRadius:14,padding:"14px 18px",marginBottom:16,fontSize:13.5,lineHeight:1.5}}><b style={{color:_adsCor(veredito.n)}}>Veredito.</b> {veredito.t}{alertas.length>0&&<div style={{marginTop:6,fontSize:12.5,color:ADS.ink2}}>{alertas.map(function(a,i){ return <div key={i}><b style={{color:a.nivel==="critico"?ADS.crit:ADS.warn}}>{a.nivel==="critico"?"● crítico":"● atenção"}</b> {a.detalhe} <span style={{color:ADS.muted}}>→ {a.acao}</span></div>; })}<div style={{fontSize:11,color:ADS.muted,marginTop:3}}>alertas da leitura da IA · últimos 7 dias</div></div>}</div>
       <AdsSec t="Números" s={_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)+" contra o período anterior"}>
@@ -71488,6 +71489,12 @@ function TCenCartao({ p, eu, onMudou }) {
       {p.estado === "monitorando" && <div style={{ marginTop: 6, color: "#1e40af", fontSize: 12 }}>
         {p.resultado && p.resultado.aplicado_em ? "✅ Aplicado por " + (p.resultado.aplicado_por || "") + " em " + _tsegQuando(p.resultado.aplicado_em) + ". " : "👀 Sem mexer. "}
         Acompanhando até {p.monitorar_ate ? p.monitorar_ate.split("-").reverse().slice(0, 2).join("/") : "—"}.{p.motivo ? " Obs.: " + p.motivo : ""}</div>}
+      {p.resultado && p.resultado.monitor && ["d3", "d7", "final"].map(function (k) {
+        const m = p.resultado.monitor[k]; if (!m) return null;
+        const c = m.veredito === "melhorou" ? ["#dcfce7", "#166534", "📈 Melhorou"] : m.veredito === "piorou" ? ["#fee2e2", "#b91c1c", "📉 Piorou"] : m.veredito === "igual" ? ["#f1f5f9", "#334155", "➖ Igual"] : ["#fef9c3", "#854d0e", "⏳ Pouco dado"];
+        return <div key={k} style={{ marginTop: 6, background: c[0], color: c[1], borderRadius: 9, padding: "6px 9px", fontSize: 12, lineHeight: 1.45 }}>
+          <b>{k === "d3" ? "3º dia" : k === "d7" ? "7º dia" : "Fim"} · {c[2]}.</b> {m.texto}</div>;
+      })}
       {(p.estado === "concluido" || p.estado === "recusado" || p.estado === "expirado") && <div style={{ marginTop: 6, color: "#475569", fontSize: 12 }}>
         {p.estado === "recusado" ? "✕ Recusado" : p.estado === "expirado" ? "⌛ Expirou" : "✓ Concluído"}{p.decidido_por_nome ? " por " + p.decidido_por_nome : ""} {_tsegQuando(p.decidido_em || p.atualizado_em)}{p.motivo ? " — " + p.motivo : ""}</div>}
 
@@ -71558,6 +71565,59 @@ function TCenCartao({ p, eu, onMudou }) {
   );
 }
 
+function TCenMemoria({ itens, conta }) {
+  if (itens === null) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div>;
+  const l = (itens || []).filter(function (m) { return !conta || m.ad_account_id === conta; });
+  if (!l.length) return <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0", lineHeight: 1.5 }}>
+    Ainda vazio. Cada recusa (com o motivo) e cada resultado de 7 dias vira uma lição aqui — é o que a IA usa para sugerir melhor.</div>;
+  const ic = { melhorou: "📈", piorou: "📉", igual: "➖", pouco_dado: "⏳", recusado: "✕" };
+  return <div style={{ maxHeight: "62vh", overflowY: "auto" }}>
+    {l.map(function (m) {
+      return <div key={m.id} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid #f1f5f9", fontSize: 12.5, lineHeight: 1.45 }}>
+        <span style={{ fontSize: 16 }}>{ic[m.veredito] || "•"}</span>
+        <div style={{ minWidth: 0 }}><div style={{ color: "#0f172a" }}>{m.licao}</div>
+          <div style={{ color: "#94a3b8", fontSize: 11 }}>{_tsegQuando(m.criado_em)} · {m.origem === "recusa" ? "recusa de vocês" : "resultado medido"}{m.regra ? " · " + m.regra : ""}</div></div>
+      </div>;
+    })}
+  </div>;
+}
+
+/* Faixa DENTRO da campanha (QG Ads › campanha): mostra as decisões abertas daquela campanha, dos conjuntos e dos anúncios dela.
+   Só aparece para quem aprova; para o resto (ex.: Erick) o banco responde "sem permissão" e a faixa não existe. */
+function TCenFaixa({ conta, campId }) {
+  const [itens, setItens] = useState(null);
+  const [eu, setEu] = useState(null);
+  const [aberto, setAberto] = useState(false);
+  const carregar = useCallback(async function () {
+    try {
+      const r = await _tsegRpc("ads_pedidos_ler", { p_aberto: true });
+      if (!r || !r.ok) { setItens([]); return; }
+      setEu(r.eu || null);
+      setItens((r.itens || []).filter(function (p) {
+        if (conta && p.ad_account_id !== conta) return false;
+        if (p.entidade_id === campId) return true;
+        return (Array.isArray(p.caminho) ? p.caminho : []).some(function (c) { return c.nivel === "campanha" && c.id === campId; });
+      }));
+    } catch (_) { setItens([]); }
+  }, [conta, campId]);
+  useEffect(function () { carregar(); }, [carregar]);
+  if (!itens || !itens.length) return null;
+  const novos = itens.filter(function (p) { return p.estado === "novo"; }).length;
+  const mon = itens.filter(function (p) { return p.estado === "monitorando"; }).length;
+  return (
+    <div style={{ margin: "0 0 16px", border: "1.5px solid #c4b5fd", background: "#faf8ff", borderRadius: 14, padding: "10px 14px", fontFamily: "'Inter',system-ui,sans-serif" }}>
+      <div onClick={function () { setAberto(!aberto); }} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 900, fontSize: 13.5, color: "#5b21b6" }}>🧠 Decisões da IA nesta campanha</span>
+        {novos > 0 && <TCenChip cor="roxo">{novos} para decidir</TCenChip>}
+        {mon > 0 && <TCenChip cor="azul">{mon} monitorando</TCenChip>}
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 800, color: "#5b21b6" }}>{aberto ? "Fechar ▲" : "Ver ▼"}</span>
+      </div>
+      {!aberto && <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>{itens.slice(0, 2).map(function (p) { return p.titulo; }).join(" · ")}{itens.length > 2 ? " · +" + (itens.length - 2) : ""}</div>}
+      {aberto && <div style={{ marginTop: 10 }}>{itens.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={carregar} />; })}</div>}
+    </div>
+  );
+}
+
 function TSegCentral({ onFechar, onMudou }) {
   const [abertos, setAbertos] = useState(null);
   const [fechados, setFechados] = useState(null);
@@ -71565,6 +71625,7 @@ function TSegCentral({ onFechar, onMudou }) {
   const [aba, setAba] = useState("decidir");
   const [conta, setConta] = useState("");
   const [erro, setErro] = useState("");
+  const [memoria, setMemoria] = useState(null);
 
   const carregar = useCallback(async function () {
     try {
@@ -71588,8 +71649,12 @@ function TSegCentral({ onFechar, onMudou }) {
     monitorando: ab.filter(function (p) { return p.estado === "monitorando" || p.estado === "aplicado"; }),
     concluidos: filtro(fechados || []),
   };
-  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"]];
+  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"]];
   const lista = grupos[aba] || [];
+  useEffect(function () {
+    if (aba !== "memoria" || memoria !== null) return;
+    _tsegRpc("ads_memoria_ler", { p_conta: null, p_limite: 100 }).then(function (m) { setMemoria(m || []); }).catch(function () { setMemoria([]); });
+  }, [aba]);
 
   return (
     <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>
@@ -71598,7 +71663,7 @@ function TSegCentral({ onFechar, onMudou }) {
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
         {ABAS.map(function (x) {
-          const n = (grupos[x[0]] || []).length; const on = aba === x[0];
+          const n = x[0] === "memoria" ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
           if (x[0] === "esperando" && !n && !on) return null;  // regra dos 2 sócios desligada: aba só aparece se tiver algo
           return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
             padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
@@ -71609,7 +71674,8 @@ function TSegCentral({ onFechar, onMudou }) {
         </select>
       </div>
       {erro && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
-      {abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
+      {aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
+        abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
         !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às 11h30." : "Nada aqui."}</div> :
         <div style={{ maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
           {lista.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={mudou} />; })}
@@ -148516,6 +148582,46 @@ function _eaAcabamentoFotoObra(cv, horizY){
     return true;
   }catch(_){ return false; }
 }
+/* (09/10 20:43, Gustavo: "não alinhou a linha do horizonte como já tínhamos alinhado") a VISÃO é instável
+   (na mesma foto devolveu -8° e -28,5°). Agora o horizonte é MEDIDO por pixel: fronteira céu→terra coluna a
+   coluna, mediana de inclinações, e 2 rodadas descartando colunas de árvore (fronteira bem acima da reta).
+   Validado no harness: Obligado = 0,0° (reta), cisterna de Campos Novos = -32,3° (árvores tortas confirmam). */
+function _eaMedirInclinacaoCeu(img){
+  try{
+    const W2 = 256, H2 = Math.max(32, Math.round(W2 * img.height / img.width));
+    const c = document.createElement("canvas"); c.width = W2; c.height = H2;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0, W2, H2);
+    const d = x.getImageData(0, 0, W2, H2).data;
+    let ys = [];
+    for(let xx = 4; xx < W2 - 4; xx += 2){
+      let y0 = -1;
+      for(let yy = 0; yy < H2; yy++){
+        const i = (yy * W2 + xx) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+        const ceu = (b > 120 && b >= r && b >= g - 6) || (r > 180 && g > 180 && b > 180);
+        if(!ceu){ y0 = yy; break; }
+      }
+      if(y0 > 2 && y0 < H2 - 2) ys.push([xx, y0]);
+    }
+    if(ys.length < W2 * 0.2) return null;
+    const fit = function(pts){
+      const sl = [];
+      for(let k = 0; k < pts.length - 15; k += 2){ const a = pts[k], b2 = pts[k + 15]; if(b2[0] - a[0] > 10) sl.push((b2[1] - a[1]) / (b2[0] - a[0])); }
+      if(!sl.length) return null;
+      sl.sort(function(p, q){ return p - q; });
+      const sm = sl[Math.floor(sl.length / 2)];
+      const bs = pts.map(function(p){ return p[1] - sm * p[0]; }); bs.sort(function(p, q){ return p - q; });
+      return { s:sm, b:bs[Math.floor(bs.length / 2)] };
+    };
+    let L = fit(ys); if(!L) return null;
+    for(let r2 = 0; r2 < 2; r2++){
+      const keep = ys.filter(function(p){ return (L.s * p[0] + L.b) - p[1] < 4; });
+      if(keep.length < ys.length * 0.4) break;
+      const L2 = fit(keep); if(!L2) break; L = L2; ys = keep;
+    }
+    const graus = Math.atan(L.s) * 180 / Math.PI;
+    return isFinite(graus) ? graus : null;
+  }catch(_){ return null; }
+}
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
@@ -148543,8 +148649,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      manda quando está MAIS torta que o horizonte (lagoa de borda reta); numa cúpula/cisterna a borda é curva
      e devolvia ~0, deixando o horizonte inclinado — agora vale o maior desvio dos dois. */
   const _bOk = (an.borda != null && isFinite(an.borda)) ? an.borda : null;
-  const _iOk = (an.inclinacao != null && isFinite(an.inclinacao)) ? an.inclinacao : 0;
+  const _iVis = (an.inclinacao != null && isFinite(an.inclinacao)) ? an.inclinacao : 0;
+  let _iMed = null; try{ _iMed = _eaMedirInclinacaoCeu(nova); }catch(_){ }
+  const _iOk = (_iMed != null) ? _iMed : _iVis;                       // horizonte MEDIDO manda; visão é reserva
   const giro = Math.max(-30, Math.min(30, (_bOk != null && Math.abs(_bOk) >= Math.abs(_iOk)) ? _bOk : _iOk));
+  if(_iMed != null && Math.abs(_iMed) >= 2) avisos.push("horizonte medido na própria foto: " + _iMed.toFixed(1) + "° — endireitado");
   const ang = -giro * Math.PI / 180;
   const podeIA = typeof _eaFn === "function" && !(ctx.semIA);
   /* (20:23, Gustavo — cisterna de Campos Novos, CAUSA REAL do zoom, provada no harness p41: horizonte -28,5°
@@ -148658,6 +148767,29 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
            zoom, entrada opaca (menos distorção), luz casada com a original e prompt mandando preservar a obra. */
         const gLuz = _eaCasarLuz(cv, r);
         cv = r;
+        /* (09/10 20:43, Gustavo: "cadê a merda do comando que não é pra alterar o produto") a REGIÃO DA OBRA
+           volta a ser a foto REAL por cima do resultado da IA — só o miolo, fusão larga, sem realinhamento
+           global (receita validada no harness, p40: emenda invisível, produto 100% original). */
+        try{
+          if(an.obra){
+            const cvO = desenhar(m);
+            const fxO = m.dw * 0.03, fyO = m.dh * 0.03;
+            const px0 = Math.max(0, m.ox + an.obra.x0 * m.dw - fxO), py0 = Math.max(0, m.oy + an.obra.y0 * m.dh - fyO);
+            const px1 = Math.min(w, m.ox + an.obra.x1 * m.dw + fxO), py1 = Math.min(h, m.oy + an.obra.y1 * m.dh + fyO);
+            const pw = Math.round(px1 - px0), ph = Math.round(py1 - py0);
+            if(pw > 40 && ph > 40){
+              const P = document.createElement("canvas"); P.width = pw; P.height = ph; const p2 = P.getContext("2d");
+              p2.drawImage(cvO, px0, py0, pw, ph, 0, 0, pw, ph);
+              const fP = Math.max(24, Math.min(60, Math.round(Math.min(pw, ph) / 6)));
+              const MkP = document.createElement("canvas"); MkP.width = pw; MkP.height = ph; const mkP = MkP.getContext("2d");
+              mkP.filter = "blur(" + fP + "px)"; mkP.fillStyle = "#fff";
+              mkP.fillRect(fP, fP, Math.max(2, pw - 2 * fP), Math.max(2, ph - 2 * fP));
+              p2.globalCompositeOperation = "destination-in"; p2.drawImage(MkP, 0, 0);
+              cv.getContext("2d").drawImage(P, Math.round(px0), Math.round(py0));
+              avisos.push("produto 100% real: a região da obra é a da foto original, colada por cima da IA com fusão suave");
+            }
+          }
+        }catch(_){ }
         if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA");
         if(temEntulho) avisos.push("entulho/bagunça removidos com IA em " + an.entulho.length + " área(s)");
         if(gLuz > 1.03) avisos.push("a edição da IA escureceu a foto — luz original recuperada (+" + Math.round((gLuz - 1) * 100) + "%)");
@@ -148677,7 +148809,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto: Juti aprovado + cor (verdes e luz reforçados) · sem zoom lateral · horizonte reto");
+  avisos.push("motor da foto: Juti aprovado + produto colado da foto real + horizonte MEDIDO por pixel + largura cheia");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
