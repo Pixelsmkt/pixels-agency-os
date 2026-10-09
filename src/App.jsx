@@ -34662,6 +34662,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [cardIdx,setCardIdx]=useState(0);
   const [filtroTipo,setFiltroTipo]=useState("");   // (23/09/2026) "" = fila inteira
   const [filtroCli,setFiltroCli]=useState("");     // (01/10/2026, Gustavo) filtro por cliente (logo) — "" = todos
+  // (09/10/2026, Gustavo) mesmos filtros nas filas de DESIGN e VÍDEO ("coloca aquelas tags tal qual no copys")
+  const [filtroAvTipo,setFiltroAvTipo]=useState("");
+  const [filtroAvCli,setFiltroAvCli]=useState("");
   const [imgIdx,setImgIdx]=useState(0);
   const [imgZoom,setImgZoom]=useState(false); // Lightbox: clique na imagem → zoom fullscreen
   // ESC fecha o zoom
@@ -34841,6 +34844,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     if(initTab){
       setTab(initTab);
       setCardIdx(0);setImgIdx(0);
+      setFiltroAvTipo("");setFiltroAvCli("");
       setLastApproved(null);
       setOpenCard(null);setEditAnnot(null);setEditCopy(null);
     }
@@ -34954,6 +34958,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       if(typeof pixelsToast!=="undefined") pixelsToast.info(filtroCli&&!filtroTipo?"Acabaram as copys desse cliente — mostrando a fila inteira.":"Acabaram as copys desse filtro — mostrando a fila inteira.",3500);
     }
   },[filtroTipo,filtroCli,copyQueue.length,copyQueueTudo.length]);
+  useEffect(function(){
+    const tudo=tab==="video"?pubVideoQueueTudo.length:tab==="publicacao"?pubQueueTudo.length:0;
+    const fila=tab==="video"?pubVideoQueue.length:tab==="publicacao"?pubQueue.length:0;
+    if((filtroAvTipo||filtroAvCli)&&tudo>0&&fila===0){
+      setFiltroAvTipo(""); setFiltroAvCli("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.info("Acabaram os cards desse filtro — mostrando a fila inteira.",3500);
+    }
+  },[tab,filtroAvTipo,filtroAvCli,pubQueue.length,pubVideoQueue.length,pubQueueTudo.length,pubVideoQueueTudo.length]);
   // Ajuste queue: cards marcados para ajuste
   // (06/10/2026 · A-3) a marca "ajustar" fica no card como histórico (retrabalho); a fila só mostra o que ainda não foi entregue.
   // Antes: 167 cards (135 já publicados); agora só os que ainda estão em produção/avaliação.
@@ -34964,8 +34976,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   // Fonte única: pxIsVideoTask (00b_preview_util.jsx) — mesma regra na tela e no badge do menu.
   const _isVideoTask=(t)=>pxIsVideoTask(t);
   const _pubAll=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao"));
-  const pubQueue=_pubAll.filter(t=>!_isVideoTask(t)); // mantém o nome legado; agora = só design
-  const pubVideoQueue=_pubAll.filter(t=>_isVideoTask(t));
+  const pubQueueTudo=_pubAll.filter(t=>!_isVideoTask(t)); // mantém o nome legado; agora = só design
+  const pubVideoQueueTudo=_pubAll.filter(t=>_isVideoTask(t));
+  const _fAv=function(t){ if(filtroAvTipo&&_pxTipoDaFila(t)!==filtroAvTipo) return false; if(filtroAvCli&&String(t.client||"")!==filtroAvCli) return false; return true; };
+  const pubQueue=pubQueueTudo.filter(_fAv);
+  const pubVideoQueue=pubVideoQueueTudo.filter(_fAv);
   // Demandas Internas queue
   const internasQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="interno_avaliacao"));
 
@@ -36079,8 +36094,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const isSocio=effectiveUser.level===1; // "ver como" fiel (18/09/2026)
   const TABS=[
     {id:"copys",      label:"Avaliação de copys", count:copyQueueTudo.length, color:C.a},
-    {id:"publicacao", label:"Avaliação de design",count:pubQueue.length,      color:C.gr},
-    {id:"video",      label:"Avaliação de vídeo", count:pubVideoQueue.length, color:"#0ea5e9"},
+    {id:"publicacao", label:"Avaliação de design",count:pubQueueTudo.length,  color:C.gr},
+    {id:"video",      label:"Avaliação de vídeo", count:pubVideoQueueTudo.length, color:"#0ea5e9"},
     ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
     ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes solicitados", count:ajusteQueue.length, color:C.or}]:[]),
   ].filter(function(t){return (t.id==="copys"||t.id==="publicacao"||t.id==="video")?_bl("aba."+t.id):true;});
@@ -36238,6 +36253,52 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         </div>
         <div style={{minHeight:16,textAlign:"center",color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4,lineHeight:"16px"}}>
           {(filtroTipo||filtroCli)?("mostrando só "+[_nomeCli,_rotulo].filter(Boolean).join(" · ")+" · "+copyQueue.length+" de "+copyQueueTudo.length):""}
+        </div>
+        </div>;
+      })()}
+
+      {(tab==="publicacao"||tab==="video")&&(function(){
+        const _tudo=tab==="video"?pubVideoQueueTudo:pubQueueTudo;
+        const _fila=tab==="video"?pubVideoQueue:pubQueue;
+        if(!_tudo.length) return null;
+        const _cont={}; _tudo.forEach(function(x){ if(filtroAvCli&&String(x.client||"")!==filtroAvCli) return; const k=_pxTipoDaFila(x); _cont[k]=(_cont[k]||0)+1; });
+        const _contCli={}; _tudo.forEach(function(x){ if(filtroAvTipo&&_pxTipoDaFila(x)!==filtroAvTipo) return; const k=String(x.client||""); if(k) _contCli[k]=(_contCli[k]||0)+1; });
+        const _clisFila=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){ return _tudo.some(function(x){ return String(x.client||"")===c.id; }); });
+        const _nomeCli=filtroAvCli?(((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===filtroAvCli;})||{}).name||filtroAvCli):"";
+        const _rotulo=filtroAvTipo?((PX_TIPOS_FILA.find(function(o){return o.id===filtroAvTipo;})||{}).label||""):"";
+        const _tiposComCard=PX_TIPOS_FILA.filter(function(o){ return _tudo.some(function(x){ return _pxTipoDaFila(x)===o.id; }); });
+        return <div style={{padding:"2px 0 4px",paddingRight:(isMob?0:398)}}>
+        {_clisFila.length>1&&<div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
+          {_clisFila.map(function(c){
+            const on=filtroAvCli===c.id, n=_contCli[c.id]||0;
+            const logo=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS)?CLIENT_LOGOS[c.id]:"";
+            return <button key={c.id} type="button" disabled={!n&&!on}
+              onClick={function(){ setFiltroAvCli(on?"":c.id); setCardIdx(0); setImgIdx(0); }}
+              title={on?"Desligar o filtro — volta todos os clientes":("Mostrar só "+c.name+" na fila")}
+              style={{background:on?"#f5f0ff":"#fff",border:(on?"2px solid #9F43F6":"1px solid #e2e8f0"),borderRadius:10,padding:on?"3px 9px":"4px 10px",cursor:(n||on)?"pointer":"default",opacity:(n||on)?1:.45,display:"inline-flex",alignItems:"center",gap:7,height:34,boxSizing:"border-box",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:on?"0 0 0 3px rgba(159,67,246,.12)":"none"}}
+              onMouseEnter={function(e){ if(!on&&n) e.currentTarget.style.borderColor="#c9a5ff"; }}
+              onMouseLeave={function(e){ if(!on&&n) e.currentTarget.style.borderColor="#e2e8f0"; }}>
+              {logo?<img src={logo} alt={c.name} style={{maxHeight:18,maxWidth:64,objectFit:"contain",display:"block"}}/>
+                :<span style={{fontSize:11.5,fontWeight:700,color:"#475569"}}>{c.abbr||c.name}</span>}
+              <span style={{background:on?"#9F43F6":"#f1f5f9",color:on?"#fff":"#94a3b8",borderRadius:99,padding:"0 6px",fontSize:10,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{n}</span>
+            </button>;
+          })}
+        </div>}
+        {_tiposComCard.length>1&&<div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          {_tiposComCard.map(function(o){
+            const on=filtroAvTipo===o.id, n=_cont[o.id]||0;
+            return <button key={o.id} type="button" disabled={!n&&!on}
+              onClick={function(){ setFiltroAvTipo(on?"":o.id); setCardIdx(0); setImgIdx(0); }}
+              title={on?"Desligar o filtro — volta a fila inteira":("Mostrar só "+o.label.toLowerCase()+" na fila")}
+              style={{background:on?"#9F43F6":"#fff",border:"1px solid "+(on?"#9F43F6":"#e2e8f0"),color:on?"#fff":(n?"#475569":"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:on?800:600,cursor:(n||on)?"pointer":"default",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}
+              onMouseEnter={function(e){ if(!on&&n){e.currentTarget.style.borderColor="#c9a5ff";e.currentTarget.style.color="#7c3aed";} }}
+              onMouseLeave={function(e){ if(!on&&n){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";} }}>
+              {o.label}<span style={{background:on?"rgba(255,255,255,.22)":"#f1f5f9",color:on?"#fff":"#94a3b8",borderRadius:99,padding:"0 6px",fontSize:10,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{n}</span>
+            </button>;
+          })}
+        </div>}
+        <div style={{minHeight:16,textAlign:"center",color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4,lineHeight:"16px"}}>
+          {(filtroAvTipo||filtroAvCli)?("mostrando só "+[_nomeCli,_rotulo].filter(Boolean).join(" · ")+" · "+_fila.length+" de "+_tudo.length):""}
         </div>
         </div>;
       })()}
