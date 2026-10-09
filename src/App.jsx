@@ -71027,11 +71027,11 @@ function TSegCriarPin({ st, trocando, onPronto, onCancelar }) {
 
   return (
     <div>
-      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando ? "Trocar meu PIN" : "Crie seu PIN da Gestão de mídia"}</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{trocando && st && st.tem_pin ? "Trocar meu PIN" : "Crie seu PIN de aprovação"}</div>
       <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16, lineHeight: 1.5 }}>
         {etapa === "senha"
           ? "Primeiro digite a senha da sua conta. Assim ninguém cria ou troca o PIN só porque achou seu computador logado."
-          : "6 números, que só você sabe. Não use data de nascimento, 123456 nem número repetido. O PIN não fica salvo em lugar nenhum da tela."}
+          : "6 números, que só você sabe — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o seu PIN: nem a equipe, nem o Claude."}
       </div>
       {etapa === "senha" ? (
         <div>
@@ -71160,14 +71160,14 @@ function TSegAlarmes({ itens, onVisto, onFechar, carregando }) {
 }
 
 /* ---------- segurança (só aprovadores) ---------- */
-function TSegSeguranca({ st, onFechar, onMudou }) {
+function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
   const [aba, setAba] = useState("pessoas");
   const [pessoas, setPessoas] = useState([]);
   const [log, setLog] = useState([]);
   const [pedePin, setPedePin] = useState(null); // {titulo, acao: async(pin)}
   const [pin, setPin] = useState("");
   const [msg, setMsg] = useState("");
-  const [trocar, setTrocar] = useState(false);
+  const [trocar, setTrocar] = useState(!!abrirCriar);
 
   const carregar = async function () {
     try { setPessoas((await _tsegRpc("ads_pin_pessoas")) || []); } catch (e) { setMsg(e.message); }
@@ -71357,6 +71357,8 @@ function TSegPortao({ currentUser, viewUser, children }) {
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
             🔔 Alarmes{naoVistos.length ? " (" + naoVistos.length + ")" : ""}
           </button>
+          {!st.tem_pin && <button onClick={function () { setPainel("criar"); }}
+            style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔑 Criar meu PIN</button>}
           <button onClick={function () { setPainel("seguranca"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🛡️ Segurança</button>
           {st.obrigatorio && <button onClick={trancar}
@@ -71366,6 +71368,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
+      {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
     </Fragment>
   );
 }
