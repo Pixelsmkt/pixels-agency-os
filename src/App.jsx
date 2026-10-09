@@ -34665,6 +34665,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // (09/10/2026, Gustavo) mesmos filtros nas filas de DESIGN e VÍDEO ("coloca aquelas tags tal qual no copys")
   const [filtroAvTipo,setFiltroAvTipo]=useState("");
   const [ajusteFino,setAjusteFino]=useState(false);   // modal Ajuste fino (Foto de obra): IA em área marcada / puxar da original
+  const [gerarArteAval,setGerarArteAval]=useState(false); // modal Gerar arte (o mesmo do card) direto na Avaliação
   const [filtroAvCli,setFiltroAvCli]=useState("");
   const [imgIdx,setImgIdx]=useState(0);
   const [imgZoom,setImgZoom]=useState(false); // Lightbox: clique na imagem → zoom fullscreen
@@ -36686,6 +36687,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           </div>;
           })()}
 
+          {/* Gerar arte direto na Avaliação (09/10, Gustavo): o mesmo modal do card */}
+          {gerarArteAval&&current&&(typeof PxGerarArteModal!=="undefined")&&(
+            <PxGerarArteModal task={current} setTasks={setTasks} onClose={()=>{setGerarArteAval(false);setImgIdx(0);}}/>
+          )}
           {/* Ajuste fino (Foto de obra): IA em área marcada / puxar da foto original (09/10, Gustavo) */}
           {ajusteFino&&current&&allImgs.length>0&&(typeof PxFotoObraAjusteModal!=="undefined")&&(
             <PxFotoObraAjusteModal task={current} arteUrl={allImgs[Math.min(imgIdx,allImgs.length-1)]}
@@ -37634,10 +37639,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   {chave:"pub.aprovar", label:"Aprovar publicação", color:"#16a34a", colorDark:"#15803d", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, onClick:()=>approvePub(current), kbd:"Enter"},
                   {chave:"pub.reprovar", label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ const _m=await _pedirMotivoReprovacao("este material (a produção foi feita, então ainda conta no pagamento do mês)","Reprovar"); if(_m===null) return; rejectPub(current,_m); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
                   {chave:"pub.ajuste", label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
+                  /* (09/10, Gustavo) Gerar arte direto na Avaliação — o mesmo botão que existe dentro do card */
+                  ...((tab==="publicacao"&&current&&["arte","foto",""].indexOf(String(current.contentType||current.tipo||""))>=0&&(typeof PxGerarArteModal!=="undefined"))?[
+                    {chave:"pub.ajuste", label:"Gerar arte", color:"#9333ea", colorDark:"#7e22ce", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>, onClick:()=>setGerarArteAval(true), title:"Usa o template padrão do cliente pro tipo deste card: entra a copy e as fotos do material, e a arte nova vira a 1ª lâmina"}
+                  ]:[]),
                   /* (09/10, Gustavo) Foto de obra: ajuste fino direto na Avaliação — marca uma área da arte e
                      corrige SÓ ela (IA ~R$1) ou devolve a área à foto original do material (sem custo). */
                   ...((tab==="publicacao"&&current&&(typeof _eaTipoCardDoTask==="function")&&(function(){try{return _eaTipoCardDoTask(current)==="foto_obra";}catch(_){return false;}})())?[
-                    {chave:"pub.ajuste", label:"Ajuste fino na foto (IA / original)", color:"#7c3aed", colorDark:"#6d28d9", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 4l5 5-11 11H4v-5z"/><path d="M13 6l5 5"/></svg>, onClick:()=>setAjusteFino(true), title:"Marque uma área da arte e corrija só ali: com IA (~R$1) ou puxando da foto original do material (sem custo). O resto da arte não é tocado."}
+                    {chave:"pub.ajuste", label:"Ajuste fino de IA", color:"#7c3aed", colorDark:"#6d28d9", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 4l5 5-11 11H4v-5z"/><path d="M13 6l5 5"/></svg>, onClick:()=>setAjusteFino(true), title:"Marque uma área da arte e corrija só ali: com IA (~R$1) ou puxando da foto original do material (sem custo). O resto da arte não é tocado."}
                   ]:[]),
                   {chave:"pub.ajuste_copy", label:"Enviar para ajuste de copy", color:"#eab308", colorDark:"#ca8a04", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>, onClick:()=>sendBackToCopy(current), title:"Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."},
                   {chave:"geral.detalhes", label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
