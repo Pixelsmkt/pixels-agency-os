@@ -63309,7 +63309,7 @@ function QGTabelaClientes({calcs,metas,data,isMob,onOpenClient,stOpt,semanaFech,
           <td style={Object.assign({},QG_TDR,{color:"#c3c8d4",fontSize:14,width:30})}>›</td>
         </tr>; };
       const linhaMae=<tr key={c.mc.client_id} onClick={function(){ window._pxAdsUnidade=null; onOpenClient(c.mc.client_id); }} style={{cursor:"pointer"}} onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-        <td style={Object.assign({},QG_TD,{fontWeight:700})}><div style={{display:"flex",alignItems:"center",gap:9}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(c.mc)} size="sm"/>}<span>{c.mc.name}</span>{unids.length>0&&<span style={{fontSize:10,fontWeight:700,color:QG.txt3,background:QG.cinzaBg,borderRadius:99,padding:"2px 7px"}}>{unids.length} unidades</span>}</div></td>
+        <td style={Object.assign({},QG_TD,{fontWeight:700})}><div style={{display:"flex",alignItems:"center",gap:9}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(c.mc)} size="sm"/>}<span>{c.mc.name}</span>{typeof TCliSelo==="function"&&<TCliSelo mc={c.mc}/>}{unids.length>0&&<span style={{fontSize:10,fontWeight:700,color:QG.txt3,background:QG.cinzaBg,borderRadius:99,padding:"2px 7px"}}>{unids.length} unidades</span>}</div></td>
         <td style={Object.assign({},QG_TDR,{color:c.porPlat.meta.ativa?QG.txt:QG.txt3})}>{c.porPlat.meta.ativa?_qgBRL(c.porPlat.meta.gasto):"—"}</td>
         <td style={Object.assign({},QG_TDR,{color:c.porPlat.google.ativa?QG.txt:QG.txt3})}>{c.porPlat.google.ativa?_qgBRL(c.porPlat.google.gasto):"—"}</td>
         <td style={Object.assign({},QG_TDR,{fontWeight:800})}>{_qgBRL(c.gasto)}<span style={{color:QG.txt3,fontWeight:500,fontSize:11}}> de {_qgBRLk(c.orcamento)}</span></td>
@@ -63364,6 +63364,7 @@ function QGClientesPage({clients,data,store,year,month,setPeriodo,isMob,canEdit,
     <QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>
   </div>;
   return <QGCard title={"Clientes de mídia"+(todos?" · "+clients.length:"")} sub={QG_MESES[month-1]+" "+year+" · Meta pela API · Google pelo fechamento"} pad="16px 20px 8px" right={direita}>
+    {typeof TCliPrecisa==="function"&&<TCliPrecisa clients={clients} onOpenClient={onOpenClient}/>}
     {visiveis.length===0?<div style={{padding:"34px 12px 30px",textAlign:"center",color:QG.txt3,fontSize:13.5,lineHeight:1.6}}><span>Digite o nome do cliente e escolha na lista pra ver os números dele —<br/>ou marque <b>mostrar todos</b> à direita pra abrir a carteira inteira.</span></div>
     :<div className={todos?"px-sens":""}><QGTabelaClientes calcs={calcs} metas={metas} data={data} isMob={isMob} onOpenClient={onOpenClient} stOpt={(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[])} semanaFech={fech} clients={clients} year={year} month={month}/></div>}
   </QGCard>;
@@ -63565,10 +63566,14 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   const [verOcultas,setVerOcultas]=useState(false);
   const SUBS_TODAS=(temMeta?[["visao","Visão geral"],["estrategia","Alertas"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["diagnostico","Diagnóstico"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]])
     .filter(function(t){ return _bl("midia.qg."+t[0]); });   // 20/09: desligável em Acessos › Time
+  const _tcliOk=(typeof useTCliPode==="function")?useTCliPode():false;   /* 10/10: IA de tráfego dentro do cliente (só aprovadores) */
+  if(_tcliOk&&temMeta&&!SUBS_TODAS.some(function(t){return t[0]==="ia";})) SUBS_TODAS.splice(Math.min(2,SUBS_TODAS.length),0,["ia","🧠 Decisões"]);
+  if(_tcliOk&&temMeta){ const _ixAl=SUBS_TODAS.findIndex(function(t){return t[0]==="estrategia";}); if(_ixAl>=0) SUBS_TODAS.splice(_ixAl,1); }   /* v80 Fase B: aprovadores veem os Alertas dentro de 🧠 Decisões */
   const SUBS=SUBS_TODAS.filter(function(t){ return verOcultas||!SUBS_OCULTAS.some(function(o){return o[0]===t[0];}); });
   const [sub,setSub]=useState(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; return d||"visao"; });
   const subAtiva=temMeta?sub:"gestao";
-  useEffect(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; setSub(d||"visao"); },[mc.client_id]);
+  const _pxSubPrim=useRef(true);   /* v80 M06: na 1ª vez o useState acima já leu a aba pedida — o efeito não pode jogar de volta para Visão geral */
+  useEffect(function(){ if(_pxSubPrim.current){ _pxSubPrim.current=false; return; } const d=window._pxSubDesejada; window._pxSubDesejada=null; setSub(d||"visao"); },[mc.client_id]);
   /* 20/09: aba desligada em Acessos › Time — cai na primeira liberada em vez de abrir vazio */
   useEffect(function(){
     if(!temMeta) return;
@@ -63641,6 +63646,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
         </div>;
       })()}
     </QGCard>
+    {temMeta&&adsConta&&typeof TCliCartao==="function"&&<TCliCartao mc={mc} conta={adsConta.conta} isMob={isMob} onAbrir={function(v){ window._pxTCliVista=v||"decidir"; setSub("ia"); }}/>}
 
     {/* ── Sub-abas + período ── */}
     <div style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:18,fontFamily:QG_FONT,overflow:"hidden"}}>
@@ -63651,6 +63657,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
       </div>
       {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<div style={{borderTop:"1px solid "+QG.borda,background:"#fbfaff",padding:isMob?"8px 10px":"8px 14px",display:"flex",alignItems:"center",justifyContent:isMob?"flex-start":"flex-end",gap:10,overflowX:"auto"}} className="scroll-x"><span style={{fontSize:11,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3,marginRight:"auto",whiteSpace:"nowrap"}}>Período</span><QGAdsBarraPeriodo compact/></div>}
     </div>
+    {subAtiva==="ia"&&temMeta&&typeof TCliDecisoes==="function"&&<TCliDecisoes key={mc.client_id} mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="visao"&&temMeta&&typeof QGAdsVisaoGeral==="function"&&<QGAdsVisaoGeral mc={mc} conta={adsConta.conta} compartilhada={adsConta.compartilhada} isMob={isMob} canEdit={canEdit} verbaMensal={Number(mc.investimento_meta)||0}/>}
     {subAtiva==="estrategia"&&temMeta&&typeof QGAdsEstrategia==="function"&&<QGAdsEstrategia mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="campanhas"&&temMeta&&typeof QGAdsCampanhasTab==="function"&&<QGAdsCampanhasTab mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
