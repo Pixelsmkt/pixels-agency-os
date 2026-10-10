@@ -70929,6 +70929,7 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
 
 // ======= 17e_trafego_seguranca.jsx =======
 /* IA DE TRÁFEGO — ETAPA 0, 1 e 2 (09/10/2026): portão do PIN da Gestão de mídia, alarmes, painel de segurança e CENTRAL DE DECISÕES.
+   v75: 🧱 MONTADOR DE CAMPANHA (copia de um modelo que funciona, valida na Meta sem criar, publica PAUSADO com PIN 2x).
    v73: PIN ÚNICO DA AGÊNCIA e toda mudança pede o PIN 2 vezes (1º abre a revisão com valor/cidades/público da Meta, 2º envia).
    QUEM VÊ: só os aprovadores (Vinícius e Gustavo). Chave no banco: auto.config ads_ia_visivel_para = 'aprovadores'.
    Para qualquer outra pessoa (ex.: Erick) o banco responde {pode:false} e esta tela devolve a Gestão de mídia
@@ -71312,7 +71313,7 @@ const _tcenAntesDepois = function (a) {
   return null;
 };
 const _tcenExecutavel = function (a) { return a && (a.tipo === "pausar" || a.tipo === "ativar" || a.tipo === "verba"); };
-const _TCEN_ORIGEM = { regra: "Regra (dado real)", alarme: "Alarme", desfazer: "Desfazer", ia: "IA", analise: "Análise", usuario: "Pedido de vocês" };
+const _TCEN_ORIGEM = { montador: "Montador", regra: "Regra (dado real)", alarme: "Alarme", desfazer: "Desfazer", ia: "IA", analise: "Análise", usuario: "Pedido de vocês" };
 const _TCEN_HIST = {
   criado: "Criado", atualizado: "Números atualizados", aprovado: "Aprovou com PIN", aprovado_1: "1ª aprovação com PIN", aprovado_2: "2ª aprovação com PIN",
   aplicado: "Aplicado na Meta", erro_ao_aplicar: "Erro ao aplicar", barrado: "Barrado pela segurança", ja_estava: "Já estava assim na Meta",
@@ -71684,6 +71685,357 @@ function TSegCentral({ onFechar, onMudou }) {
   );
 }
 
+/* ---------- 🧱 MONTADOR DE CAMPANHA (só aprovadores) ----------
+   Campanha nova nasce de um MODELO que já funciona na mesma conta. Vocês mudam nome, cidades, público, verba e anúncios.
+   Validar = checklist + ensaio na Meta sem criar nada. Publicar = PIN da agência 2x (1º abre a revisão, 2º publica) e tudo sobe PAUSADO.
+   Ativar depois aparece em Decisões (PIN 2x de novo). */
+const _tmonFn = async function (corpo) {
+  const inv = await window._sb.functions.invoke("ads-montar", { body: corpo });
+  const d = inv && inv.data;
+  if (!d) throw new Error("Não consegui falar com o servidor.");
+  if (!d.ok) throw new Error(d.erro || "Erro.");
+  return d;
+};
+const _TMON_EST = { rascunho: ["Rascunho", "cinza"], validado: ["Validado", "verde"], publicando: ["Publicando…", "amarelo"], publicado: ["Publicado (pausado)", "azul"], erro: ["Erro", "vermelho"], arquivado: ["Arquivado", "cinza"] };
+const _tmonHoje = function () { const d = new Date(); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getFullYear()).slice(2); };
+const _tmonVazio = function () { return { modelo: {}, campanha: { nome: "" }, conjunto: { nome: "", verba_dia: 15, cidades: [], regioes: [], idade_min: 25, idade_max: 65, genero: "todos", interesses: "modelo" }, anuncios: [] }; };
+const _tmonInp = { width: "100%", boxSizing: "border-box", fontSize: 13, padding: "8px 10px", border: "1.5px solid #cbd5e1", borderRadius: 9, fontFamily: "inherit" };
+
+function TMonSec({ n, titulo, children, dica }) {
+  return <div style={{ border: "1px solid #e5e9f0", borderRadius: 14, padding: "12px 14px", marginBottom: 12, background: "#fff" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+      <span style={{ background: "#ede9fe", color: "#5b21b6", borderRadius: 999, width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900 }}>{n}</span>
+      <span style={{ fontWeight: 900, fontSize: 14, color: "#0f172a" }}>{titulo}</span>
+      {dica && <span style={{ fontSize: 11.5, color: "#94a3b8" }}>{dica}</span>}
+    </div>{children}</div>;
+}
+function TMonRot({ t, children }) { return <label style={{ display: "block", marginBottom: 8 }}><div style={{ fontSize: 11.5, fontWeight: 800, color: "#475569", marginBottom: 4 }}>{t}</div>{children}</label>; }
+
+function TMonCidades({ cj, setCj }) {
+  const [q, setQ] = useState(""); const [res, setRes] = useState(null); const [busca, setBusca] = useState(false); const [msg, setMsg] = useState("");
+  const buscar = async function () {
+    if (q.trim().length < 2) return; setBusca(true); setMsg("");
+    try { const r = await _tmonFn({ modo: "cidades", q: q.trim() }); setRes(r.itens || []); if (!(r.itens || []).length) setMsg("Nada encontrado. Tente com o estado: \"Toledo Paraná\"."); }
+    catch (e) { setMsg(e.message); } finally { setBusca(false); }
+  };
+  const add = function (it) {
+    if (it.tipo === "region") { if ((cj.regioes || []).some(function (r) { return r.key === it.key; })) return; setCj(Object.assign({}, cj, { regioes: (cj.regioes || []).concat([{ key: it.key, nome: it.nome }]) })); }
+    else { if ((cj.cidades || []).some(function (c) { return c.key === it.key; })) return; setCj(Object.assign({}, cj, { cidades: (cj.cidades || []).concat([{ key: it.key, nome: String(it.nome).split(",")[0].replace(/\s*\(.*\)\s*$/, "") + (it.estado ? " - " + it.estado : ""), raio: 40 }]) })); }
+  };
+  return <div>
+    <div style={{ display: "flex", gap: 6 }}>
+      <input value={q} onChange={function (e) { setQ(e.target.value); }} onKeyDown={function (e) { if (e.key === "Enter") buscar(); }} placeholder="Cidade ou estado (ex.: Rio Verde Goiás)" style={_tmonInp} />
+      <TSegBotao onClick={buscar} desligado={busca}>{busca ? "…" : "Buscar"}</TSegBotao>
+    </div>
+    {msg && <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{msg}</div>}
+    {res && res.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
+      {res.slice(0, 12).map(function (it) {
+        return <button key={it.key} onClick={function () { add(it); }} style={{ border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: 999, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+          + {it.tipo === "region" ? "Estado: " : ""}{it.nome}{it.estado && it.tipo !== "region" ? " - " + it.estado : ""}{it.pais !== "BR" ? " (" + it.pais + ")" : ""}</button>;
+      })}
+    </div>}
+    <div style={{ marginTop: 8 }}>
+      {(cj.cidades || []).map(function (c, i) {
+        return <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13 }}>
+          <span style={{ flex: 1 }}>📍 {c.nome}</span>
+          <select value={c.raio || 0} onChange={function (e) { const l = cj.cidades.slice(); l[i] = Object.assign({}, c, { raio: Number(e.target.value) }); setCj(Object.assign({}, cj, { cidades: l })); }} style={{ fontSize: 12, padding: "4px 6px", borderRadius: 7, border: "1px solid #cbd5e1" }}>
+            {[0, 17, 25, 40, 60, 80].map(function (r) { return <option key={r} value={r}>{r ? "+" + r + " km" : "só a cidade"}</option>; })}
+          </select>
+          <button onClick={function () { setCj(Object.assign({}, cj, { cidades: cj.cidades.filter(function (x) { return x.key !== c.key; }) })); }} style={{ border: "none", background: "none", color: "#b91c1c", cursor: "pointer", fontSize: 14 }}>✕</button>
+        </div>;
+      })}
+      {(cj.regioes || []).map(function (r) {
+        return <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13 }}>
+          <span style={{ flex: 1 }}>🗺️ Estado: {r.nome}</span>
+          <button onClick={function () { setCj(Object.assign({}, cj, { regioes: cj.regioes.filter(function (x) { return x.key !== r.key; }) })); }} style={{ border: "none", background: "none", color: "#b91c1c", cursor: "pointer", fontSize: 14 }}>✕</button>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+function TMonAnuncioNovo({ an, onChange, onTirar, conta }) {
+  const [sub, setSub] = useState(false); const [msg, setMsg] = useState("");
+  const enviar = async function (f) {
+    if (!f) return; setSub(true); setMsg("");
+    try {
+      const video = /^video\//.test(f.type); const ext = (f.name.split(".").pop() || (video ? "mp4" : "jpg")).toLowerCase();
+      if (f.size > (video ? 200 : 25) * 1024 * 1024) throw new Error(video ? "Vídeo acima de 200 MB." : "Imagem acima de 25 MB.");
+      const path = "trafego/montador/" + conta + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
+      const up = await window._sb.storage.from("agency-files").upload(path, f, { upsert: false, contentType: f.type });
+      if (up.error) throw new Error(up.error.message);
+      const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+      onChange(Object.assign({}, an, { midia_url: url, midia_tipo: video ? "video" : "imagem", midia_nome: f.name }));
+    } catch (e) { setMsg(e.message); } finally { setSub(false); }
+  };
+  return <div style={{ border: "1.5px dashed #c4b5fd", borderRadius: 12, padding: "10px 12px", marginTop: 8, background: "#faf8ff" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+      <b style={{ fontSize: 13, color: "#5b21b6" }}>✨ Anúncio novo</b>
+      <button onClick={onTirar} style={{ border: "none", background: "none", color: "#b91c1c", cursor: "pointer", fontSize: 12, fontWeight: 800 }}>Tirar</button>
+    </div>
+    <TMonRot t="Nome do anúncio"><input value={an.nome || ""} onChange={function (e) { onChange(Object.assign({}, an, { nome: e.target.value })); }} style={_tmonInp} placeholder="Ex.: Biodigestor — depoimento Hudson" /></TMonRot>
+    <TMonRot t="Imagem ou vídeo">
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input type="file" accept="image/*,video/*" onChange={function (e) { enviar(e.target.files && e.target.files[0]); }} disabled={sub} />
+        {sub && <span style={{ fontSize: 12, color: "#92400e" }}>Enviando…</span>}
+        {an.midia_url && !sub && <span style={{ fontSize: 12, color: "#166534", fontWeight: 700 }}>✓ {an.midia_tipo === "video" ? "Vídeo" : "Imagem"}: {an.midia_nome || "ok"}</span>}
+      </div>
+      {msg && <div style={{ fontSize: 12, color: "#b91c1c" }}>{msg}</div>}
+    </TMonRot>
+    <TMonRot t={"Texto principal (" + (an.texto || "").length + "/2200) — vazio = usa o texto do anúncio modelo"}>
+      <textarea value={an.texto || ""} onChange={function (e) { onChange(Object.assign({}, an, { texto: e.target.value })); }} rows={4} style={Object.assign({}, _tmonInp, { resize: "vertical" })} /></TMonRot>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+      <TMonRot t={"Título (" + (an.titulo || "").length + "/40)"}><input value={an.titulo || ""} onChange={function (e) { onChange(Object.assign({}, an, { titulo: e.target.value })); }} style={_tmonInp} placeholder="Ex.: CHAME NO WHATSAPP" /></TMonRot>
+      <TMonRot t="Mensagem que a pessoa manda no WhatsApp"><input value={an.msg_whats || ""} onChange={function (e) { onChange(Object.assign({}, an, { msg_whats: e.target.value })); }} style={_tmonInp} placeholder="Olá! Tenho interesse em…" /></TMonRot>
+    </div>
+  </div>;
+}
+
+function TMonRevisao({ d, conta, modeloNome, modelo }) {
+  const cj = d.conjunto || {}; const ans = d.anuncios || [];
+  const l = function (r, v, f) { return <div style={{ display: "flex", gap: 8, fontSize: 12.5, padding: "3px 0", lineHeight: 1.45 }}><span style={{ color: "#64748b", width: 96, flexShrink: 0 }}>{r}</span><span style={{ fontWeight: f ? 900 : 600, color: "#0f172a" }}>{v}</span></div>; };
+  const mods = (modelo && modelo.anuncios) || [];
+  return <div>
+    {l("Conta", conta || "—")}
+    {l("Campanha", d.campanha && d.campanha.nome, true)}
+    {l("Copiada de", modeloNome || "—")}
+    {l("Valor", _tcenBrl(cj.verba_dia) + "/dia  ·  ~" + _tcenBrl(Number(cj.verba_dia || 0) * 30) + "/mês", true)}
+    {l("Cidades", [].concat((cj.cidades || []).map(function (c) { return c.nome + (c.raio ? " (+" + c.raio + " km)" : ""); }), (cj.regioes || []).map(function (r) { return "Estado: " + r.nome; })).join(" · ") || "—", true)}
+    {l("Público", (cj.genero === "homens" ? "Homens" : cj.genero === "mulheres" ? "Mulheres" : "Todos") + ", " + cj.idade_min + "–" + cj.idade_max + (Number(cj.idade_max) >= 65 ? "+" : "") + (cj.interesses === "nenhum" ? " · sem interesses" : " · interesses do modelo"), true)}
+    {l("Anúncios", ans.map(function (a) { return (a.tipo === "novo" ? "✨ " : "♻️ ") + (a.nome || "sem nome"); }).join(" · "))}
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+      {ans.map(function (a, i) {
+        const m = a.tipo === "modelo" ? mods.find(function (x) { return x.id === a.ad_id; }) : null;
+        const thumb = m ? m.thumb : (a.midia_tipo === "imagem" ? a.midia_url : null);
+        return <div key={i} style={{ width: 110, fontSize: 10.5, color: "#475569" }}>
+          {thumb ? <img src={thumb} alt="" style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e9f0" }} /> : <div style={{ width: 110, height: 110, borderRadius: 8, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>🎬</div>}
+          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nome}</div></div>;
+      })}
+    </div>
+    <div style={{ marginTop: 8, fontSize: 12, color: "#5b21b6", fontWeight: 800 }}>Tudo sobe PAUSADO. Ativar fica em Decisões (PIN 2 vezes).</div>
+  </div>;
+}
+
+function TMonEditor({ rasc, contas, onVoltar }) {
+  const [id, setId] = useState(rasc ? rasc.id : null);
+  const [conta, setConta] = useState(rasc ? rasc.ad_account_id : "");
+  const [d, setD] = useState(rasc ? rasc.dados : _tmonVazio());
+  const [estado, setEstado] = useState(rasc ? rasc.estado : "rascunho");
+  const [checklist, setChecklist] = useState(rasc ? rasc.checklist : null);
+  const [camps, setCamps] = useState(null);
+  const [modelo, setModelo] = useState(null);
+  const [ocupado, setOcupado] = useState(""); const [msg, setMsg] = useState("");
+  const [pinModo, setPinModo] = useState(null); const [pin, setPin] = useState("");
+  const [resultado, setResultado] = useState(rasc && rasc.estado === "publicado" ? { ok: true, meta: rasc.meta } : (rasc && rasc.estado === "erro" ? { ok: false, erro: rasc.erro, meta: rasc.meta } : null));
+  const travado = estado === "publicado" || estado === "publicando";
+  const contaNome = (contas.find(function (c) { return c.id === conta; }) || {}).nome || conta;
+
+  useEffect(function () {
+    if (!conta) { setCamps(null); return; }
+    setCamps(null); _tmonFn({ modo: "campanhas", conta: conta }).then(function (r) { setCamps(r.campanhas || []); }).catch(function (e) { setMsg(e.message); setCamps([]); });
+  }, [conta]);
+  useEffect(function () {
+    const cid = d.modelo && d.modelo.campanha_id; if (!cid) { setModelo(null); return; }
+    setModelo(null); _tmonFn({ modo: "modelo", campanha_id: cid }).then(setModelo).catch(function (e) { setMsg(e.message); });
+  }, [d.modelo && d.modelo.campanha_id]);
+
+  const mudar = function (novo) { if (travado) return; setD(novo); if (estado === "validado") setEstado("rascunho"); setChecklist(null); };
+  const setCj = function (cj) {
+    // 1ª cidade escolhida preenche o [Cidade] do nome da campanha e do conjunto
+    const c0 = (cj.cidades || [])[0] || (cj.regioes || [])[0];
+    const curto = c0 ? String(c0.nome).split(" - ")[0] : "";
+    const camp = Object.assign({}, d.campanha);
+    if (curto && /\[Cidade\]/.test(camp.nome || "")) camp.nome = camp.nome.replace("[Cidade]", "[" + curto + "]");
+    const cj2 = Object.assign({}, cj); if (curto && /\[Cidade\]/.test(cj2.nome || "")) cj2.nome = cj2.nome.replace("[Cidade]", "[" + curto + "]");
+    mudar(Object.assign({}, d, { campanha: camp, conjunto: cj2 }));
+  };
+  const escolherCampanha = function (cid) {
+    const c = (camps || []).find(function (x) { return x.id === cid; });
+    const nomeSug = c ? String(c.nome).replace(/\[\d{2}\/\d{2}\/\d{2}\]\s*\d*\s*$/, "").trim().replace(/^(\{?\[?Pixels\]\s*)\[[^\]]*\]/i, "$1[Cidade]") + " [" + _tmonHoje() + "]" : "";
+    mudar(Object.assign({}, d, { modelo: { campanha_id: cid, conjunto_id: "" }, campanha: { nome: d.campanha.nome || nomeSug }, anuncios: [] }));
+  };
+  const escolherConjunto = function (sid) {
+    const s = ((modelo && modelo.conjuntos) || []).find(function (x) { return x.id === sid; }) || {};
+    mudar(Object.assign({}, d, { modelo: Object.assign({}, d.modelo, { conjunto_id: sid }),
+      conjunto: Object.assign({}, d.conjunto, { nome: d.conjunto.nome || String(s.nome || "").replace(/^\[[^\]]*\]/, "[Cidade]"), idade_min: s.idade_min || d.conjunto.idade_min, idade_max: s.idade_max || d.conjunto.idade_max, genero: s.genero || d.conjunto.genero, verba_dia: s.verba_dia || d.conjunto.verba_dia }) }));
+  };
+  const usaAd = function (a) { return (d.anuncios || []).some(function (x) { return x.tipo === "modelo" && x.ad_id === a.id; }); };
+  const toggleAd = function (a) {
+    const l = usaAd(a) ? d.anuncios.filter(function (x) { return !(x.tipo === "modelo" && x.ad_id === a.id); }) : (d.anuncios || []).concat([{ tipo: "modelo", ad_id: a.id, nome: a.nome }]);
+    mudar(Object.assign({}, d, { anuncios: l }));
+  };
+  const salvar = async function () {
+    const r = await _tsegRpc("ads_rascunho_salvar", { p_id: id, p_conta: conta, p_dados: d });
+    if (!r || !r.ok) throw new Error((r && r.erro) || "Não salvou.");
+    setId(r.id); return r.id;
+  };
+  const validar = async function () {
+    setOcupado("validar"); setMsg(""); setChecklist(null);
+    try {
+      const rid = await salvar();
+      const r = await _tmonFn({ modo: "validar", rascunho_id: rid });
+      setChecklist(r.checklist || []); setEstado(r.valido ? "validado" : "rascunho");
+    } catch (e) { setMsg(e.message); } finally { setOcupado(""); }
+  };
+  const pin1 = async function () {
+    if (pin.length !== 6) return; setOcupado("pin"); setMsg("");
+    try { const r = await _tsegRpc("ads_rascunho_aprovar", { p_id: id, p_pin: pin, p_etapa: 1 }); setPin(""); if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi."); setPinModo("revisar"); }
+    catch (e) { setMsg(e.message); } finally { setOcupado(""); }
+  };
+  const pin2 = async function () {
+    if (pin.length !== 6) return; setOcupado("publicar"); setMsg("");
+    try {
+      const r = await _tsegRpc("ads_rascunho_aprovar", { p_id: id, p_pin: pin, p_etapa: 2 }); setPin("");
+      if (!r || !r.ok) { if (r && r.recomecar) setPinModo("pin1"); throw new Error((r && r.erro) || "Não foi."); }
+      setEstado("publicando"); setPinModo(null);
+      const p = await window._sb.functions.invoke("ads-montar", { body: { modo: "publicar", rascunho_id: id } });
+      const x = (p && p.data) || { ok: false, erro: "Sem resposta do servidor. Confira em 2 min na lista." };
+      setResultado(x); setEstado(x.ok ? "publicado" : "erro");
+    } catch (e) { setMsg(e.message); } finally { setOcupado(""); }
+  };
+  const est = _TMON_EST[estado] || ["", "cinza"];
+  const cj = d.conjunto || {};
+  const linkGer = function (nivel, idm) { const m = { campanha: ["campaigns", "selected_campaign_ids"], conjunto: ["adsets", "selected_adset_ids"] }[nivel]; return "https://adsmanager.facebook.com/adsmanager/manage/" + m[0] + "?act=" + conta + "&" + m[1] + "=" + idm; };
+
+  return <div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+      <button onClick={onVoltar} style={{ border: "none", background: "none", color: "#2563eb", fontWeight: 800, cursor: "pointer", fontSize: 13 }}>‹ Rascunhos</button>
+      <TCenChip cor={est[1]}>{est[0]}</TCenChip>
+      {id && <span style={{ fontSize: 11, color: "#94a3b8" }}>#{id}</span>}
+    </div>
+    {resultado && <div style={{ border: "2px solid " + (resultado.ok ? "#16a34a" : "#dc2626"), background: resultado.ok ? "#f0fdf4" : "#fef2f2", borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, lineHeight: 1.5 }}>
+      {resultado.ok ? <div><b>✅ Publicada PAUSADA.</b> Para ativar: Decisões › "Ativar a campanha nova" (PIN 2 vezes).</div> : <div><b>⚠️ Não publicou.</b> {resultado.erro}</div>}
+      {resultado.meta && resultado.meta.campaign_id && <div style={{ marginTop: 4 }}><a href={linkGer("campanha", resultado.meta.campaign_id)} target="_blank" rel="noopener noreferrer">Abrir no Gerenciador ↗</a></div>}
+    </div>}
+    <fieldset disabled={travado} style={{ border: "none", padding: 0, margin: 0 }}>
+      <TMonSec n="1" titulo="Conta e modelo" dica="a campanha nova copia as configurações de uma que já funciona">
+        <TMonRot t="Conta de anúncio">
+          <select value={conta} onChange={function (e) { setConta(e.target.value); mudar(_tmonVazio()); }} style={_tmonInp}>
+            <option value="">Escolha…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}
+          </select></TMonRot>
+        {conta && <TMonRot t="Campanha modelo (ordenada por resultados em 30 dias)">
+          {camps === null ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Lendo campanhas…</div> :
+            <select value={(d.modelo && d.modelo.campanha_id) || ""} onChange={function (e) { escolherCampanha(e.target.value); }} style={_tmonInp}>
+              <option value="">Escolha…</option>
+              {camps.map(function (c) { return <option key={c.id} value={c.id}>{(c.status === "ACTIVE" ? "🟢 " : "⏸ ") + c.nome + (c.res30 ? " — " + c.res30 + " resultados" + (c.custo30 ? " a " + _tcenBrl(c.custo30) : "") : "")}</option>; })}
+            </select>}
+        </TMonRot>}
+        {d.modelo && d.modelo.campanha_id && <TMonRot t="Conjunto modelo (destino, otimização e página vêm dele)">
+          {!modelo ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Lendo conjuntos…</div> :
+            <select value={d.modelo.conjunto_id || ""} onChange={function (e) { escolherConjunto(e.target.value); }} style={_tmonInp}>
+              <option value="">Escolha…</option>
+              {(modelo.conjuntos || []).map(function (s) { return <option key={s.id} value={s.id}>{(s.status === "ACTIVE" ? "🟢 " : "⏸ ") + s.nome + " · " + (s.destino === "WHATSAPP" ? "WhatsApp" : s.destino === "ON_AD" ? "Formulário" : s.destino || "") + (s.verba_dia ? " · " + _tcenBrl(s.verba_dia) + "/dia" : "")}</option>; })}
+            </select>}
+        </TMonRot>}
+      </TMonSec>
+
+      {d.modelo && d.modelo.conjunto_id && <Fragment>
+        <TMonSec n="2" titulo="Campanha">
+          <TMonRot t="Nome (padrão: [Pixels] [Cidade] [Objetivo] [data])"><input value={(d.campanha && d.campanha.nome) || ""} onChange={function (e) { mudar(Object.assign({}, d, { campanha: { nome: e.target.value } })); }} style={_tmonInp} /></TMonRot>
+        </TMonSec>
+        <TMonSec n="3" titulo="Conjunto: onde, quem e quanto">
+          <TMonRot t="Nome do conjunto"><input value={cj.nome || ""} onChange={function (e) { setCj(Object.assign({}, cj, { nome: e.target.value })); }} style={_tmonInp} placeholder="[Cidade] [Público] [H30+]" /></TMonRot>
+          <TMonRot t="Cidades / estados"><TMonCidades cj={cj} setCj={setCj} /></TMonRot>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 8 }}>
+            <TMonRot t="Verba por dia (R$)"><input type="number" min="5" step="1" value={cj.verba_dia || ""} onChange={function (e) { setCj(Object.assign({}, cj, { verba_dia: Number(e.target.value) })); }} style={_tmonInp} /></TMonRot>
+            <TMonRot t="Idade mín."><input type="number" min="18" max="65" value={cj.idade_min || ""} onChange={function (e) { setCj(Object.assign({}, cj, { idade_min: Number(e.target.value) })); }} style={_tmonInp} /></TMonRot>
+            <TMonRot t="Idade máx."><input type="number" min="18" max="65" value={cj.idade_max || ""} onChange={function (e) { setCj(Object.assign({}, cj, { idade_max: Number(e.target.value) })); }} style={_tmonInp} /></TMonRot>
+            <TMonRot t="Gênero"><select value={cj.genero || "todos"} onChange={function (e) { setCj(Object.assign({}, cj, { genero: e.target.value })); }} style={_tmonInp}><option value="todos">Todos</option><option value="homens">Homens</option><option value="mulheres">Mulheres</option></select></TMonRot>
+            <TMonRot t="Interesses"><select value={cj.interesses || "modelo"} onChange={function (e) { setCj(Object.assign({}, cj, { interesses: e.target.value })); }} style={_tmonInp}><option value="modelo">Os do modelo</option><option value="nenhum">Nenhum (aberto)</option></select></TMonRot>
+          </div>
+          {modelo && (function () { const s = (modelo.conjuntos || []).find(function (x) { return x.id === d.modelo.conjunto_id; }); return s && s.interesses && s.interesses.length && cj.interesses !== "nenhum" ? <div style={{ fontSize: 11.5, color: "#64748b" }}>Interesses do modelo: {s.interesses.join(" · ")}{s.advantage ? " · Advantage+ ligado (a idade vira sugestão)" : ""}</div> : null; })()}
+        </TMonSec>
+        <TMonSec n="4" titulo="Anúncios" dica="reaproveite os que já rodam (♻️) ou crie um novo (✨)">
+          {!modelo ? null : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 8 }}>
+            {(modelo.anuncios || []).filter(function (a, i, arr) { return arr.findIndex(function (b) { return b.id === a.id; }) === i; }).map(function (a) {
+              const on = usaAd(a);
+              return <div key={a.id} onClick={function () { toggleAd(a); }} style={{ border: "2px solid " + (on ? "#7c3aed" : "#e5e9f0"), borderRadius: 10, padding: 6, cursor: "pointer", background: on ? "#faf8ff" : "#fff" }}>
+                {a.thumb ? <img src={a.thumb} alt="" style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 7 }} /> : <div style={{ height: 110, background: "#f1f5f9", borderRadius: 7 }} />}
+                <div style={{ fontSize: 11.5, fontWeight: 800, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{on ? "✓ " : ""}{a.nome}</div>
+                <div style={{ fontSize: 10.5, color: "#94a3b8" }}>{a.status === "ACTIVE" ? "🟢 rodando" : "⏸ pausado"}</div>
+              </div>;
+            })}
+          </div>}
+          {(d.anuncios || []).map(function (an, i) {
+            if (an.tipo !== "novo") return null;
+            return <TMonAnuncioNovo key={"n" + i} an={an} conta={conta}
+              onChange={function (x) { const l = d.anuncios.slice(); l[i] = x; mudar(Object.assign({}, d, { anuncios: l })); }}
+              onTirar={function () { mudar(Object.assign({}, d, { anuncios: d.anuncios.filter(function (_, j) { return j !== i; }) })); }} />;
+          })}
+          <div style={{ marginTop: 8 }}><TSegBotao tipo="secundario" onClick={function () { mudar(Object.assign({}, d, { anuncios: (d.anuncios || []).concat([{ tipo: "novo", nome: "", texto: "", titulo: "", msg_whats: "" }]) })); }}>+ Anúncio novo</TSegBotao></div>
+        </TMonSec>
+      </Fragment>}
+    </fieldset>
+
+    {checklist && <div style={{ border: "1px solid #e5e9f0", borderRadius: 14, padding: "10px 14px", marginBottom: 12, background: "#fff" }}>
+      <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 6 }}>🚦 Checklist {estado === "validado" ? <span style={{ color: "#166534" }}>— pode publicar</span> : <span style={{ color: "#b91c1c" }}>— corrija os itens em vermelho</span>}</div>
+      {checklist.map(function (c, i) {
+        const cor = c.nivel === "erro" ? "#b91c1c" : c.nivel === "aviso" ? "#92400e" : "#166534";
+        return <div key={i} style={{ display: "flex", gap: 8, fontSize: 12.5, padding: "3px 0", lineHeight: 1.45 }}>
+          <span>{c.nivel === "erro" ? "🔴" : c.nivel === "aviso" ? "🟡" : "🟢"}</span>
+          <span style={{ fontWeight: 800, color: cor, minWidth: 120 }}>{c.item}</span><span style={{ color: "#334155" }}>{c.texto}</span></div>;
+      })}
+    </div>}
+
+    {pinModo === "revisar" && <div style={{ border: "2px solid #7c3aed", borderRadius: 12, padding: "12px", background: "#faf8ff", marginBottom: 12 }}>
+      <div style={{ fontWeight: 900, fontSize: 14, color: "#5b21b6", marginBottom: 8 }}>🔎 Revise antes de publicar</div>
+      <TMonRevisao d={d} conta={contaNome} modeloNome={modelo && modelo.campanha ? modelo.campanha.nome : ""} modelo={modelo} />
+      <div style={{ fontSize: 12, color: "#475569", margin: "10px 0 6px" }}><b>2º PIN</b> — publica (pausada). Vale 10 min.</div>
+      <TSegCampoPin valor={pin} onChange={setPin} onEnter={pin2} autoFocus />
+      <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={pin2} desligado={!!ocupado || pin.length !== 6}>{ocupado === "publicar" ? "Publicando… (até 2 min com vídeo)" : "✓ Está certo, publicar"}</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setPinModo(null); setPin(""); }}>Cancelar</TSegBotao></div>
+    </div>}
+    {pinModo === "pin1" && <div style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "12px", marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: "#475569", marginBottom: 6 }}><b>1º PIN</b> — abre a revisão. Nada é criado ainda.</div>
+      <TSegCampoPin valor={pin} onChange={setPin} onEnter={pin1} autoFocus />
+      <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={pin1} desligado={!!ocupado || pin.length !== 6}>Revisar</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setPinModo(null); setPin(""); }}>Cancelar</TSegBotao></div>
+    </div>}
+
+    {msg && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{msg}</div>}
+    {!travado && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "sticky", bottom: 0, background: "#fff", padding: "8px 0" }}>
+      <TSegBotao tipo="secundario" onClick={function () { setOcupado("salvar"); setMsg(""); salvar().then(function () { if (typeof pixelsToast !== "undefined") pixelsToast.success("Rascunho salvo.", 2000); }).catch(function (e) { setMsg(e.message); }).finally(function () { setOcupado(""); }); }} desligado={!!ocupado || !conta}>💾 Salvar rascunho</TSegBotao>
+      <TSegBotao onClick={validar} desligado={!!ocupado || !conta || !(d.modelo && d.modelo.conjunto_id)}>{ocupado === "validar" ? "Validando na Meta…" : "🚦 Validar"}</TSegBotao>
+      {estado === "validado" && !pinModo && <TSegBotao onClick={function () { setPinModo("pin1"); setMsg(""); }}>🧱 Publicar (PIN 2 vezes)</TSegBotao>}
+    </div>}
+  </div>;
+}
+
+function TSegMontador({ onFechar, onMudou }) {
+  const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(null); const [msg, setMsg] = useState("");
+  const carregar = useCallback(async function () {
+    try { const r = await _tsegRpc("ads_rascunhos_ler", { p_id: null }); setLista(r && r.ok ? (r.itens || []).filter(function (x) { return x.estado !== "arquivado"; }) : []); } catch (e) { setMsg(e.message); setLista([]); }
+    try { setContas((await _tsegRpc("ads_montar_contas")) || []); } catch (_) {}
+  }, []);
+  useEffect(function () { carregar(); }, [carregar]);
+  const arquivar = async function (r) { try { await _tsegRpc("ads_rascunho_arquivar", { p_id: r.id }); carregar(); } catch (e) { setMsg(e.message); } };
+  return (
+    <TSegJanela titulo="🧱 Montar campanha" onFechar={function () { onFechar(); onMudou && onMudou(); }} largura={900}>
+      {aberto ? <TMonEditor rasc={aberto === "novo" ? null : aberto} contas={contas} onVoltar={function () { setAberto(null); carregar(); }} /> :
+        <div>
+          <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
+            A campanha nova copia as configurações de uma que já funciona na conta. Você muda nome, cidades, público, verba e anúncios;
+            o app valida na Meta sem criar nada; publica com o <b>PIN da agência 2 vezes</b> e tudo sobe <b>PAUSADO</b>.
+          </div>
+          <TSegBotao onClick={function () { setAberto("novo"); }}>+ Nova campanha</TSegBotao>
+          <div style={{ marginTop: 14 }}>
+            {lista === null ? <div style={{ fontSize: 13, color: "#94a3b8" }}>Carregando…</div> : !lista.length ? <div style={{ fontSize: 13, color: "#64748b" }}>Nenhum rascunho ainda.</div> :
+              lista.map(function (r) {
+                const est = _TMON_EST[r.estado] || ["", "cinza"];
+                return <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #f1f5f9", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 200, cursor: "pointer" }} onClick={function () { setAberto(r); }}>
+                    <div style={{ fontWeight: 800, fontSize: 13.5 }}>{r.nome || "(sem nome)"}</div>
+                    <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{r.conta_nome} · {r.criado_por_nome} · {_tsegQuando(r.atualizado_em)}</div>
+                  </div>
+                  <TCenChip cor={est[1]}>{est[0]}</TCenChip>
+                  {["rascunho", "validado", "erro"].indexOf(r.estado) >= 0 && <button onClick={function () { arquivar(r); }} style={{ border: "none", background: "none", color: "#94a3b8", cursor: "pointer", fontSize: 12 }}>Arquivar</button>}
+                </div>;
+              })}
+          </div>
+          {msg && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginTop: 8 }}>{msg}</div>}
+        </div>}
+    </TSegJanela>
+  );
+}
+
 /* ---------- O PORTÃO: vai em volta da PageGestaoMidia ---------- */
 function TSegPortao({ currentUser, viewUser, children }) {
   const [st, setSt] = useState(null);            // resposta de ads_pin_status
@@ -71771,6 +72123,8 @@ function TSegPortao({ currentUser, viewUser, children }) {
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
             🧠 Decisões{pend ? " (" + pend + ")" : ""}
           </button>
+          <button onClick={function () { setPainel("montador"); }}
+            style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🧱 Montar campanha</button>
           <button onClick={function () { setPainel("alarmes"); lerAlarmes(); }}
             style={{ background: naoVistos.length ? (temCritico ? "#fee2e2" : "#fef3c7") : "#f1f5f9", color: naoVistos.length ? (temCritico ? "#b91c1c" : "#92400e") : "#334155",
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
@@ -71786,6 +72140,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
       )}
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
+      {painel === "montador" && <TSegMontador onFechar={function () { setPainel(null); }} onMudou={lerPend} />}
       {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); }} onMudou={lerPend} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
       {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
@@ -148754,7 +149109,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       const fimF = m.oy + m.dh; if(fimF < h){ const alt = Math.ceil(h - fimF); ex2.save(); ex2.translate(0, fimF); ex2.scale(1, -1); ex2.drawImage(cv, 0, fimF - alt, w, alt, 0, -alt, w, alt); ex2.restore(); }
       ex2.drawImage(cv, 0, 0);
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
-      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade — mais céu com nuvens em cima, mais terreno (areia/grama/vegetação) embaixo — nítidas, com textura fotográfica real, na mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
+      /* (09/10 20:59, Gustavo: "não precisa forçar pra botar nuvem no céu, faz o simples" + névoa perto das
+         montanhas) prompt validado no harness (p45): céu LISO igual ao da foto, proibido nuvem nova/neblina. */
+      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade. CÉU: continue EXATAMENTE o céu que já existe na foto — mesmo azul, mesmo degradê, LISO; NÃO adicione nuvens novas e NÃO invente neblina, fumaça nem montanhas (mantenha só o que a foto já tem). TERRENO embaixo: continue grama/terra/vegetação reais, nítidas, mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
       if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
       partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
