@@ -71640,7 +71640,10 @@ function TCenCasca({ embutido, onFechar, children }) {
   return <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>{children}</TSegJanela>;
 }
 
-function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unidade }) {
+function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unidade, extra }) {
+  const modoCli = !!(embutido && contaFixa);   // v81: dentro do cliente = página enxuta
+  const [mais, setMais] = useState(false);
+  const [alarmes, setAlarmes] = useState(null);
   const [abertos, setAbertos] = useState(null);
   const [fechados, setFechados] = useState(null);
   const [eu, setEu] = useState(null);
@@ -71659,6 +71662,13 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
     try { const f = await _tsegRpc("ads_pedidos_ler", { p_aberto: false }); setFechados(f && f.ok ? (f.itens || []) : []); } catch (_) { setFechados([]); }
   }, []);
   useEffect(function () { carregar(); }, [carregar]);
+  const lerAlarmesConta = useCallback(async function () {
+    if (!modoCli) return;
+    try { const r = await _tsegRpc("ads_alarmes_ler", { p_dias: 14 }); setAlarmes(r && r.ok ? (r.itens || []).filter(function (a) { return a.ad_account_id === contaFixa && !a.visto_em; }) : []); }
+    catch (_) { setAlarmes([]); }
+  }, [modoCli, contaFixa]);
+  useEffect(function () { lerAlarmesConta(); }, [lerAlarmesConta]);
+  const alarmeVisto = async function (id) { try { await _tsegRpc("ads_alarme_visto", { p_id: id }); } catch (_) {} lerAlarmesConta(); _tcliCarregar(true); };
   const mudou = function () { carregar(); _tcliCarregar(true); onMudou && onMudou(); };
   useEffect(function () { if (abaInicial) setAba(abaInicial); }, [abaInicial]);
 
@@ -71674,7 +71684,10 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
     monitorando: ab.filter(function (p) { return p.estado === "monitorando" || p.estado === "aplicado"; }),
     concluidos: filtro(fechados || []),
   };
-  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", contaFixa ? "🌎 Mercado do nicho" : "🌎 Mercado"]].concat(contaFixa ? [["estrategias", "🎙️ Estratégias feitas"]] : []);
+  if (modoCli) { grupos.decidir = grupos.decidir.concat(grupos.esperando); grupos.esperando = []; }
+  const ABAS_MAIS = [["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", "🌎 Mercado do nicho"], ["estrategias", "🎙️ Estratégias feitas"]];
+  const ABAS = modoCli ? [["decidir", "Precisa de vocês"], ["monitorando", "Acompanhando"]].concat(mais || ABAS_MAIS.some(function (x) { return x[0] === aba; }) ? ABAS_MAIS : []) :
+    [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", contaFixa ? "🌎 Mercado do nicho" : "🌎 Mercado"]].concat(contaFixa ? [["estrategias", "🎙️ Estratégias feitas"]] : []);
   const lista = grupos[aba] || [];
   useEffect(function () {
     if (aba !== "memoria" || memoria !== null) return;
@@ -71688,9 +71701,9 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
 
   return (
     <TCenCasca embutido={embutido} onFechar={onFechar}>
-      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
+      {!modoCli && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
         A IA só <b>sugere</b>. Toda mudança pede o <b>PIN da agência duas vezes</b>: 1º abre a revisão, 2º envia. Fica registrado quem digitou. Mudança de verba: no máx. 20% e uma vez a cada 72 h.
-      </div>
+      </div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
         {ABAS.map(function (x) {
           const n = (x[0] === "memoria" || x[0] === "mercado") ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
@@ -71698,6 +71711,8 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
           return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
             padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
         })}
+        {modoCli && !ABAS_MAIS.some(function (x) { return x[0] === aba; }) && <button onClick={function () { setMais(!mais); }} style={{ background: "none", border: "1px dashed #cbd5e1", color: "#64748b",
+          borderRadius: 999, padding: "6px 11px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{mais ? "Menos ▲" : "Mais ▾"}</button>}
         {!contaFixa && <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={{ marginLeft: "auto", fontSize: 12, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", maxWidth: 220 }}>
           <option value="">Todas as contas</option>
           {Object.keys(contas).map(function (k) { return <option key={k} value={k}>{contas[k]}</option>; })}
@@ -71711,6 +71726,21 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
         <div style={embutido ? {} : { maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
           {lista.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={mudou} />; })}
         </div>}
+      {modoCli && aba === "decidir" && alarmes && alarmes.length > 0 && <div style={{ marginTop: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 13, color: "#334155", marginBottom: 6 }}>🔔 Alarmes desta conta ({alarmes.length} sem ver)</div>
+        {alarmes.map(function (a) {
+          return <div key={a.id} style={{ border: "1px solid #e5e9f0", borderLeft: "4px solid " + (_TSEG_COR[a.nivel] || "#64748b"), borderRadius: 12, padding: "10px 12px", marginBottom: 8, background: "#fff" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: "#0f172a" }}>{a.titulo}</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{_tsegQuando(a.criado_em)}</div>
+            </div>
+            <div style={{ fontSize: 12.5, color: "#334155", marginTop: 3, lineHeight: 1.5 }}>{a.texto}</div>
+            <div style={{ textAlign: "right", marginTop: 6 }}><button onClick={function () { alarmeVisto(a.id); }} style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8,
+              padding: "5px 11px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>Entendi ✓</button></div>
+          </div>;
+        })}
+      </div>}
+      {modoCli && aba === "decidir" && extra}
     </TCenCasca>
   );
 }
@@ -72406,7 +72436,7 @@ function TCliCartao({ mc, conta, onAbrir, isMob }) {
   const chave = "px_tcli_fechado_" + contaId;
   const [fechado, setFechado] = useState(function () { try { return localStorage.getItem(chave) || ""; } catch (_) { return ""; } });
   useEffect(function () { try { setFechado(localStorage.getItem(chave) || ""); } catch (_) { setFechado(""); } }, [chave]);
-  if (!r || !s) return null;
+  if (!r || !s || s.cor === "verde") return null;   // v81: tudo no ritmo = sem cartão (o selo da lista já diz)
   if (fechado && fechado === assinatura) return null;
   const c = _TCLI_COR[s.cor] || _TCLI_COR.cinza;
   const fechar = function () { try { localStorage.setItem(chave, assinatura); } catch (_) {} setFechado(assinatura); };
@@ -72421,44 +72451,43 @@ function TCliCartao({ mc, conta, onAbrir, isMob }) {
       {T.ontem && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 2 }}>números até {String(T.ontem).split("-").reverse().slice(0, 2).join("/")} · só vocês dois veem este cartão</div>}
     </div>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-      {btn("🧠 Ver decisões" + (r.decidir ? " (" + r.decidir + ")" : ""), function () { onAbrir && onAbrir("decidir"); }, true)}
-      {btn("🎙️ Nova estratégia", function () { _tcliAbrir({ painel: "sala", conta: contaId }); })}
-      {btn("🧱 Nova campanha", function () { _tcliAbrir({ painel: "montador", conta: contaId, novo: true }); })}
-      {r.alarmes > 0 && btn("🔔 Alarmes (" + r.alarmes + ")", function () { _tcliAbrir({ painel: "alarmes" }); })}
+      {btn("Ver em 🧠 Alertas" + ((r.decidir || 0) + (r.alarmes || 0) ? " (" + ((r.decidir || 0) + (r.alarmes || 0)) + ")" : ""), function () { onAbrir && onAbrir("decidir"); }, true)}
     </div>
     <button onClick={fechar} title="Esconder até mudar alguma coisa" style={{ border: "none", background: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer", padding: 4 }}>×</button>
   </div>;
 }
 
-// 3) aba "🧠 Decisões" do cliente — a Central só desta conta, embutida (sem janela)
+// 3) aba "🧠 Alertas" do cliente (v81: a aba "Alertas" antiga VIROU esta — nenhuma aba nova). Uma página só:
+//    precisa de vocês (sugestões com conserto pronto) → alarmes desta conta → regras automáticas (os alertas antigos, fechados).
 function TCliDecisoes({ mc, conta, isMob, canEdit }) {
   const T = useTCli();
   const contaId = conta && conta.ad_account_id;
-  const [aba] = useState(function () { const v = window._pxTCliVista; window._pxTCliVista = null; return v || "decidir"; });
-  const [vista, setVista] = useState(aba === "alertas" ? "alertas" : "ia");   // v80 Fase B: "Alertas" antigos moram aqui dentro (só aprovadores)
+  const [aba] = useState(function () { const v = window._pxTCliVista; window._pxTCliVista = null; return (v && v !== "alertas") ? v : "decidir"; });
   const rr = T.resumo && contaId ? T.resumo[contaId] : null;
   const uni = rr && Array.isArray(rr.unidades) && mc && mc.bioter_unit ? mc.bioter_unit : null;   // v80 M05
-  if (!T.ok) return <div style={{ padding: 20, color: "#94a3b8", fontSize: 13 }}>Abra a Gestão de mídia com o PIN para ver as decisões.</div>;
+  if (!T.ok) return typeof QGAdsEstrategia === "function"   // sem PIN aberto: mostra os alertas de antes, como sempre foi
+    ? <QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false} />
+    : <div style={{ padding: 20, color: "#94a3b8", fontSize: 13 }}>Abra a Gestão de mídia com o PIN.</div>;
   return <div style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "18px 20px", fontFamily: "'Inter',system-ui,sans-serif" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-      <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🧠 Decisões · {uni ? (mc.name || _tcliUniLbl(uni)) : ((conta && conta.nome) || mc.name)}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+      <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🧠 Alertas · {uni ? (mc.name || _tcliUniLbl(uni)) : ((conta && conta.nome) || mc.name)}</div>
       <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "sala", conta: contaId }); }}>🎙️ Nova estratégia</TSegBotao>
       <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "montador", conta: contaId, novo: true }); }}>🧱 Nova campanha</TSegBotao>
     </div>
     {uni && <div style={{ fontSize: 12, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "7px 10px", marginBottom: 10 }}>
       Esta unidade roda na conta de Toledo junto com outras. Aqui aparecem só as decisões das campanhas de <b>{_tcliUniLbl(uni)}</b> e o ritmo pela verba de {_tcliUniLbl(uni)}.</div>}
-    <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-      {[["ia", "🧠 Decisões da IA"], ["alertas", "📋 Alertas das regras (antigos)"]].map(function (x) {
-        const on = vista === x[0];
-        return <button key={x[0]} onClick={function () { setVista(x[0]); }} style={{ background: on ? "#7c3aed" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 10,
-          padding: "7px 12px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>{x[1]}</button>;
-      })}
-    </div>
-    {vista === "alertas" ? (typeof QGAdsEstrategia === "function"
-        ? <div><div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 8 }}>São os alertas que ficavam na aba "Alertas" (calculados na tela). Continuam valendo enquanto comparamos com as decisões da IA.</div>
-            <QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false} /></div>
-        : <div style={{ fontSize: 13, color: "#94a3b8" }}>Alertas antigos indisponíveis nesta versão.</div>)
-      : <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} unidade={uni} embutido abaInicial={aba === "alertas" ? "decidir" : aba} onMudou={function () { _tcliCarregar(true); }} />}
+    <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} unidade={uni} embutido abaInicial={aba} onMudou={function () { _tcliCarregar(true); }}
+      extra={typeof QGAdsEstrategia === "function" ? <TCliRegras mc={mc} conta={conta} isMob={isMob} canEdit={canEdit} /> : null} />
+  </div>;
+}
+// os alertas antigos (calculados na tela) — fechados no fim da página, 1 clique abre
+function TCliRegras({ mc, conta, isMob, canEdit }) {
+  const [aberto, setAberto] = useState(false);
+  return <div style={{ marginTop: 16, borderTop: "1px solid #eef2f7", paddingTop: 12 }}>
+    <button onClick={function () { setAberto(!aberto); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 800, fontSize: 13, color: "#334155" }}>
+      📋 Regras automáticas (os alertas de antes) {aberto ? "▲" : "▼"}</button>
+    {!aberto && <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>Continuam valendo enquanto comparamos com a IA. Clique para ver.</div>}
+    {aberto && <div style={{ marginTop: 10 }}><QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false} /></div>}
   </div>;
 }
 
