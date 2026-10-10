@@ -149115,7 +149115,23 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
       partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
+      /* (09/10 21h — visto no harness: com entrada IDÊNTICA o gpt-image às vezes devolve o topo PRETO)
+         detector + 1 retry automático; 2 falhas seguidas = erro claro, nunca arte preta no card. */
+      const _geracaoPreta = function(cvR){ try{
+        const t = document.createElement("canvas"); t.width = 64; t.height = 96;
+        t.getContext("2d").drawImage(cvR, 0, 0, 64, 96);
+        const dt = t.getContext("2d").getImageData(0, 0, 64, 28).data;
+        let esc = 0, n = 0;
+        for(let i = 0; i < dt.length; i += 4){ if(0.299 * dt[i] + 0.587 * dt[i + 1] + 0.114 * dt[i + 2] < 22) esc++; n++; }
+        return esc / n > 0.25;
+      }catch(_){ return false; } };
       let r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
+      if(r && _geracaoPreta(r)){
+        avisos.push("a IA devolveu uma imagem com o topo preto (falha aleatória do gpt-image) — regenerada automaticamente");
+        if(typeof ctx.passo === "function"){ try{ ctx.passo("a IA falhou (imagem preta) — tentando de novo…"); }catch(_){ } }
+        r = await _eaFotoIA(E, M, partes.join(" "), ctx.client, ctx.projeto);
+        if(r && _geracaoPreta(r)) throw new Error("o gpt-image devolveu imagem preta 2 vezes seguidas — tenta gerar de novo em alguns minutos");
+      }
       if(r){
         /* (08/10, Gustavo: "continua super bugado, melhor voltar pra edição com IA como estava antes?") SIM:
            a colagem parcial (original por cima do resultado) sempre mostrava remendos, porque o gpt-image
@@ -149124,6 +149140,62 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
            zoom, entrada opaca (menos distorção), luz casada com a original e prompt mandando preservar a obra. */
         const gLuz = _eaCasarLuz(cv, r);
         cv = r;
+        /* (09/10 21h, Gustavo: "não precisa forçar nuvem" + "bugou perto das montanhas") LIMPEZA DETERMINÍSTICA
+           do que o gpt estraga nas emendas — validado no harness (p45):
+           A) LIMPA-NÉVOA DO CÉU: fora da foto real e acima do horizonte, pixel esbranquiçado (névoa/nuvem
+              inventada) vira o azul-degradê da própria foto. Só liga quando o céu da FOTO é liso — foto com
+              nuvem de verdade mantém as nuvens que a IA continuar.
+           B) LIMPA-GLAZE DE BORDA: até 36px fora da borda da foto, o véu esbranquiçado da fronteira vira a cor
+              do pixel REAL mais próximo (árvore continua árvore). */
+        try{
+          const cvO0 = desenhar(m);
+          const dAl = cvO0.getContext("2d").getImageData(0, 0, w, h).data;
+          const nc = document.createElement("canvas"); nc.width = 96; nc.height = 96;
+          nc.getContext("2d").drawImage(nova, 0, 0, 96, 96);
+          const ndp = nc.getContext("2d").getImageData(0, 0, 96, 96).data;
+          const hzP = Math.max(6, Math.round((an.horizonte != null ? an.horizonte : 0.5) * 96));
+          let rT = 0, gT = 0, bT = 0, nT = 0, rB = 0, gB = 0, bB = 0, nB = 0, nuv = 0, tot = 0;
+          for(let yy = 0; yy < hzP; yy++) for(let xx = 0; xx < 96; xx++){
+            const i = (yy * 96 + xx) * 4, rr = ndp[i], gg = ndp[i + 1], bb = ndp[i + 2];
+            const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb);
+            tot++; if(mx > 170 && (mx - mn) / Math.max(1, mx) < 0.2) nuv++;
+            if(bb > rr && bb >= gg){ if(yy < hzP * 0.35){ rT += rr; gT += gg; bT += bb; nT++; } else if(yy > hzP * 0.7){ rB += rr; gB += gg; bB += bb; nB++; } }
+          }
+          const ceuLiso = (nuv / Math.max(1, tot)) < 0.04 && nT > 30 && nB > 30;
+          const horizPre = m.oy + (an.horizonte != null ? an.horizonte : 0.5) * m.dh;
+          const cosA = Math.cos(-ang), sinA = Math.sin(-ang);
+          const xcL = cv.getContext("2d"), icL = xcL.getImageData(0, 0, w, h), dL = icL.data;
+          if(ceuLiso){ rT /= nT; gT /= nT; bT /= nT; rB /= nB; gB /= nB; bB /= nB; }
+          let limpouCeu = 0, limpouBorda = 0;
+          for(let yy = 0; yy < h; yy++) for(let xx = 0; xx < w; xx++){
+            const i = (yy * w + xx) * 4;
+            if(dAl[i + 3] > 10) continue;                                      // foto real: intocada
+            const xr = (xx - w / 2) * cosA - (yy - h / 2) * sinA + w / 2;
+            const yr = (xx - w / 2) * sinA + (yy - h / 2) * cosA + h / 2;
+            const rr = dL[i], gg = dL[i + 1], bb = dL[i + 2];
+            const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb), sat = mx ? (mx - mn) / mx : 0;
+            if(ceuLiso && yr < horizPre + m.dh * 0.06 && sat < 0.34 && mx > 130){   // A) céu
+              const t = Math.max(0, Math.min(1, yr / Math.max(1, horizPre)));
+              dL[i] = Math.round(rT + (rB - rT) * t); dL[i + 1] = Math.round(gT + (gB - gT) * t); dL[i + 2] = Math.round(bT + (bB - bT) * t);
+              limpouCeu++; continue;
+            }
+            const dxO = xr < m.ox ? m.ox - xr : (xr > m.ox + m.dw ? xr - (m.ox + m.dw) : 0);   // B) borda
+            const dyO = yr < m.oy ? m.oy - yr : (yr > m.oy + m.dh ? yr - (m.oy + m.dh) : 0);
+            const dist = Math.max(dxO, dyO);
+            if(dist > 36 || dist === 0 || !(sat < 0.4 && mx > 120)) continue;
+            const xr2 = Math.max(m.ox + 2, Math.min(m.ox + m.dw - 2, xr)), yr2 = Math.max(m.oy + 2, Math.min(m.oy + m.dh - 2, yr));
+            const xb = Math.round((xr2 - w / 2) * Math.cos(ang) - (yr2 - h / 2) * Math.sin(ang) + w / 2);
+            const yb = Math.round((xr2 - w / 2) * Math.sin(ang) + (yr2 - h / 2) * Math.cos(ang) + h / 2);
+            if(xb < 0 || yb < 0 || xb >= w || yb >= h) continue;
+            const j = (yb * w + xb) * 4; if(dAl[j + 3] <= 10) continue;
+            const f = 1 - dist / 36;
+            dL[i] = Math.round(dAl[j] * f + rr * (1 - f)); dL[i + 1] = Math.round(dAl[j + 1] * f + gg * (1 - f)); dL[i + 2] = Math.round(dAl[j + 2] * f + bb * (1 - f));
+            limpouBorda++;
+          }
+          if(limpouCeu || limpouBorda){ xcL.putImageData(icL, 0, 0);
+            if(limpouCeu) avisos.push("céu alisado: névoa/nuvem inventada substituída pelo azul da própria foto");
+            if(limpouBorda) avisos.push("véu da emenda limpo na borda da foto (continuado com a cor real vizinha)"); }
+        }catch(_){ }
         /* (09/10 20:43, Gustavo: "cadê a merda do comando que não é pra alterar o produto") a REGIÃO DA OBRA
            volta a ser a foto REAL por cima do resultado da IA — só o miolo, fusão larga, sem realinhamento
            global (receita validada no harness, p40: emenda invisível, produto 100% original). */
@@ -149170,7 +149242,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto: Juti aprovado + produto colado da foto real + horizonte MEDIDO por pixel + largura cheia");
+  avisos.push("motor da foto v12: produto real + horizonte medido + céu liso sem nuvem inventada + anti-tela-preta");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
