@@ -71593,7 +71593,7 @@ function TCenMemoria({ itens, conta }) {
       return <div key={m.id} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid #f1f5f9", fontSize: 12.5, lineHeight: 1.45 }}>
         <span style={{ fontSize: 16 }}>{ic[m.veredito] || "•"}</span>
         <div style={{ minWidth: 0 }}><div style={{ color: "#0f172a" }}>{m.licao}</div>
-          <div style={{ color: "#94a3b8", fontSize: 11 }}>{_tsegQuando(m.criado_em)} · {m.origem === "recusa" ? "recusa de vocês" : "resultado medido"}{m.regra ? " · " + m.regra : ""}</div></div>
+          <div style={{ color: "#94a3b8", fontSize: 11 }}>{_tsegQuando(m.criado_em)} · {m.origem === "recusa" ? "recusa de vocês" : m.origem === "meta_recusa" ? "a Meta recusou" : "resultado medido"}{m.regra ? " · " + m.regra : ""}</div></div>
       </div>;
     })}
   </div>;
@@ -71890,6 +71890,13 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial }) {
   const travado = estado === "publicado" || estado === "publicando";
   const contaNome = (contas.find(function (c) { return c.id === conta; }) || {}).nome || conta;
 
+  const [licoesMeta, setLicoesMeta] = useState([]);   // v81 item 2: o que a Meta já recusou nesta conta (vira lição sozinho)
+  useEffect(function () {
+    if (!conta) { setLicoesMeta([]); return; }
+    _tsegRpc("ads_memoria_ler", { p_conta: conta, p_limite: 50 }).then(function (m) {
+      setLicoesMeta((m || []).filter(function (x) { return x.origem === "meta_recusa" && (!x.ad_account_id || x.ad_account_id === conta); }).slice(0, 5));
+    }).catch(function () { setLicoesMeta([]); });
+  }, [conta]);
   useEffect(function () {
     if (!conta) { setCamps(null); return; }
     setCamps(null); _tmonFn({ modo: "campanhas", conta: conta }).then(function (r) { setCamps(r.campanhas || []); }).catch(function (e) { setMsg(e.message); setCamps([]); });
@@ -72050,6 +72057,10 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial }) {
       <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={pin1} desligado={!!ocupado || pin.length !== 6}>Revisar</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setPinModo(null); setPin(""); }}>Cancelar</TSegBotao></div>
     </div>}
 
+    {!travado && licoesMeta.length > 0 && <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 12, padding: "9px 12px", marginBottom: 10, fontSize: 12.5, lineHeight: 1.45 }}>
+      <div style={{ fontWeight: 900, color: "#92400e", marginBottom: 3 }}>⚠️ A Meta já recusou nesta conta — confira antes de validar</div>
+      {licoesMeta.map(function (m) { return <div key={m.id} style={{ color: "#334155" }}>• {m.licao}</div>; })}
+    </div>}
     {msg && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{msg}</div>}
     {!travado && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "sticky", bottom: 0, background: "#fff", padding: "8px 0" }}>
       <TSegBotao tipo="secundario" onClick={function () { setOcupado("salvar"); setMsg(""); salvar().then(function () { if (typeof pixelsToast !== "undefined") pixelsToast.success("Rascunho salvo.", 2000); }).catch(function (e) { setMsg(e.message); }).finally(function () { setOcupado(""); }); }} desligado={!!ocupado || !conta}>💾 Salvar rascunho</TSegBotao>
