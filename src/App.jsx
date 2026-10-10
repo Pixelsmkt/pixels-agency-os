@@ -70929,6 +70929,7 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
 
 // ======= 17e_trafego_seguranca.jsx =======
 /* IA DE TRÁFEGO — ETAPA 0, 1 e 2 (09/10/2026): portão do PIN da Gestão de mídia, alarmes, painel de segurança e CENTRAL DE DECISÕES.
+   v76/77: 🧠 CÉREBRO (mercado com fonte + análise com número real) e 🎙️ SALA DE ESTRATÉGIA (áudio → estratégia → montador).
    v75: 🧱 MONTADOR DE CAMPANHA (copia de um modelo que funciona, valida na Meta sem criar, publica PAUSADO com PIN 2x).
    v73: PIN ÚNICO DA AGÊNCIA e toda mudança pede o PIN 2 vezes (1º abre a revisão com valor/cidades/público da Meta, 2º envia).
    QUEM VÊ: só os aprovadores (Vinícius e Gustavo). Chave no banco: auto.config ads_ia_visivel_para = 'aprovadores'.
@@ -71313,7 +71314,7 @@ const _tcenAntesDepois = function (a) {
   return null;
 };
 const _tcenExecutavel = function (a) { return a && (a.tipo === "pausar" || a.tipo === "ativar" || a.tipo === "verba"); };
-const _TCEN_ORIGEM = { montador: "Montador", regra: "Regra (dado real)", alarme: "Alarme", desfazer: "Desfazer", ia: "IA", analise: "Análise", usuario: "Pedido de vocês" };
+const _TCEN_ORIGEM = { montador: "Montador", ia: "IA (análise)", regra: "Regra (dado real)", alarme: "Alarme", desfazer: "Desfazer", analise: "Análise", usuario: "Pedido de vocês" };
 const _TCEN_HIST = {
   criado: "Criado", atualizado: "Números atualizados", aprovado: "Aprovou com PIN", aprovado_1: "1ª aprovação com PIN", aprovado_2: "2ª aprovação com PIN",
   aplicado: "Aplicado na Meta", erro_ao_aplicar: "Erro ao aplicar", barrado: "Barrado pela segurança", ja_estava: "Já estava assim na Meta",
@@ -71483,6 +71484,12 @@ function TCenCartao({ p, eu, onMudou }) {
         {ad ? <span><b>O que muda:</b> {ad[0]} <span style={{ color: "#7c3aed", fontWeight: 900 }}>→</span> <b>{ad[1]}</b></span>
             : <span style={{ color: "#475569" }}><b>Só aviso.</b> Resolva na Meta e clique em "Já resolvi".</span>}
       </div>
+      {a.ideia && (a.ideia.proximo_passo || a.ideia.copy || a.ideia.roteiro) && <div style={{ marginTop: 6, background: "#f0f9ff", borderRadius: 9, padding: "7px 9px", fontSize: 12, lineHeight: 1.5 }}>
+        {a.ideia.proximo_passo && <div><b>Próximo passo:</b> {a.ideia.proximo_passo}</div>}
+        {a.ideia.copy && <details style={{ marginTop: 3 }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>✍️ Texto sugerido</summary><div style={{ whiteSpace: "pre-wrap" }}>{a.ideia.copy}</div></details>}
+        {a.ideia.roteiro && <details style={{ marginTop: 3 }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>🎬 Roteiro sugerido</summary><div style={{ whiteSpace: "pre-wrap" }}>{a.ideia.roteiro}</div></details>}
+        {(a.ideia.fontes || []).length > 0 && <div style={{ marginTop: 3 }}>{a.ideia.fontes.map(function (u, i) { return <a key={i} href={u} target="_blank" rel="noopener noreferrer" style={{ marginRight: 8, fontSize: 11 }}>fonte {i + 1} ↗</a>; })}</div>}
+      </div>}
       {p.erro && <div style={{ marginTop: 6, color: "#b91c1c", fontSize: 12, fontWeight: 700 }}>⚠️ Última tentativa: {p.erro}</div>}
       {p.estado === "aguardando" && <div style={{ marginTop: 6, color: "#5b21b6", fontSize: 12, fontWeight: 700 }}>
         ✋ {p.aprov1_nome || "Um sócio"} aprovou {_tsegQuando(p.aprov1_em)}. {souPrimeiro ? "Falta o outro sócio." : "Falta a sua aprovação."} Vale 24 h.</div>}
@@ -71650,7 +71657,7 @@ function TSegCentral({ onFechar, onMudou }) {
     monitorando: ab.filter(function (p) { return p.estado === "monitorando" || p.estado === "aplicado"; }),
     concluidos: filtro(fechados || []),
   };
-  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"]];
+  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", "🌎 Mercado"]];
   const lista = grupos[aba] || [];
   useEffect(function () {
     if (aba !== "memoria" || memoria !== null) return;
@@ -71664,7 +71671,7 @@ function TSegCentral({ onFechar, onMudou }) {
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
         {ABAS.map(function (x) {
-          const n = x[0] === "memoria" ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
+          const n = (x[0] === "memoria" || x[0] === "mercado") ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
           if (x[0] === "esperando" && !n && !on) return null;  // regra dos 2 sócios desligada: aba só aparece se tiver algo
           return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
             padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
@@ -71675,7 +71682,7 @@ function TSegCentral({ onFechar, onMudou }) {
         </select>
       </div>
       {erro && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
-      {aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
+      {aba === "mercado" ? <TCenMercado /> : aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
         abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
         !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às 11h30." : "Nada aqui."}</div> :
         <div style={{ maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
@@ -71999,8 +72006,12 @@ function TMonEditor({ rasc, contas, onVoltar }) {
   </div>;
 }
 
-function TSegMontador({ onFechar, onMudou }) {
+function TSegMontador({ onFechar, onMudou, abrirId }) {
   const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(null); const [msg, setMsg] = useState("");
+  useEffect(function () {
+    if (!abrirId) return;
+    _tsegRpc("ads_rascunhos_ler", { p_id: abrirId }).then(function (r) { const it = r && r.ok && (r.itens || []).find(function (x) { return x.id === abrirId; }); if (it) setAberto(it); }).catch(function () {});
+  }, [abrirId]);
   const carregar = useCallback(async function () {
     try { const r = await _tsegRpc("ads_rascunhos_ler", { p_id: null }); setLista(r && r.ok ? (r.itens || []).filter(function (x) { return x.estado !== "arquivado"; }) : []); } catch (e) { setMsg(e.message); setLista([]); }
     try { setContas((await _tsegRpc("ads_montar_contas")) || []); } catch (_) {}
@@ -72036,6 +72047,205 @@ function TSegMontador({ onFechar, onMudou }) {
   );
 }
 
+/* ---------- 🎙️ SALA DE ESTRATÉGIA + 🌎 MERCADO (só aprovadores) ----------
+   Fale (ou escreva) o que quer. A IA junta os números reais da conta, o nicho (pesquisa na web com fonte), o calendário e o que já
+   aprendemos, e devolve: diagnóstico com números, estratégia (cidades, público, verba), copies, roteiros de vídeo e ideias de card.
+   "Montar esta campanha" abre o montador já preenchido (cidades conferidas na Meta). Nada sobe sem o PIN 2x. */
+const _tcerFn = async function (corpo) {
+  const inv = await window._sb.functions.invoke("ads-cerebro", { body: corpo });
+  const d = inv && inv.data;
+  if (!d) throw new Error("Não consegui falar com o servidor (pode levar até 2 min). Tente de novo.");
+  if (!d.ok) throw new Error(d.erro || "Erro.");
+  return d;
+};
+
+function TSalaGravador({ onTexto, desligado }) {
+  const [grav, setGrav] = useState(false); const [seg, setSeg] = useState(0); const [msg, setMsg] = useState(""); const [trans, setTrans] = useState(false);
+  const rec = useRef(null); const partes = useRef([]); const timer = useRef(null);
+  const parar = function () { try { rec.current && rec.current.state !== "inactive" && rec.current.stop(); } catch (_) {} clearInterval(timer.current); setGrav(false); };
+  const iniciar = async function () {
+    setMsg("");
+    try {
+      const st = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(st); partes.current = []; rec.current = mr;
+      mr.ondataavailable = function (e) { if (e.data && e.data.size) partes.current.push(e.data); };
+      mr.onstop = async function () {
+        st.getTracks().forEach(function (t) { t.stop(); });
+        const blob = new Blob(partes.current, { type: mr.mimeType || "audio/webm" });
+        if (blob.size > 23 * 1024 * 1024) { setMsg("Áudio grande demais (máx. ~20 min)."); return; }
+        setTrans(true);
+        try {
+          const fd = new FormData(); fd.append("file", new File([blob], "estrategia." + ((mr.mimeType || "").indexOf("mp4") >= 0 ? "mp4" : "webm"), { type: blob.type })); fd.append("idioma", "pt");
+          const inv = await window._sb.functions.invoke("transcrever", { body: fd });
+          const j = (inv && inv.data) || {};
+          if (!j.text) throw new Error((j.error && j.error.message) || "Não consegui transcrever (fale mais perto do microfone).");
+          onTexto(j.text);
+        } catch (e) { setMsg(e.message); } finally { setTrans(false); }
+      };
+      mr.start(1000); setGrav(true); setSeg(0);
+      timer.current = setInterval(function () { setSeg(function (s) { if (s >= 1200) { parar(); } return s + 1; }); }, 1000);
+    } catch (e) { setMsg("Microfone bloqueado ou indisponível: " + e.message); }
+  };
+  useEffect(function () { return function () { parar(); }; }, []);
+  return <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+    {!grav ? <TSegBotao onClick={iniciar} desligado={desligado || trans}>🎙️ Gravar áudio</TSegBotao>
+      : <TSegBotao tipo="perigo" onClick={parar}>⏹ Parar ({Math.floor(seg / 60)}:{String(seg % 60).padStart(2, "0")})</TSegBotao>}
+    {grav && <span style={{ fontSize: 12, color: "#b91c1c", fontWeight: 800 }}>● gravando…</span>}
+    {trans && <span style={{ fontSize: 12, color: "#92400e" }}>Transcrevendo…</span>}
+    {msg && <span style={{ fontSize: 12, color: "#b91c1c" }}>{msg}</span>}
+  </div>;
+}
+
+function TSalaResultado({ r, onMontar, montando }) {
+  const [aba, setAba] = useState("estrategia");
+  const e = r.estrategia || {};
+  const caixa = { border: "1px solid #e5e9f0", borderRadius: 12, padding: "10px 12px", marginBottom: 8, background: "#fff", fontSize: 13, lineHeight: 1.5 };
+  const copiar = function (t) { try { navigator.clipboard.writeText(t); if (typeof pixelsToast !== "undefined") pixelsToast.success("Copiado.", 1500); } catch (_) {} };
+  const abaBtn = function (id, t) { const on = aba === id; return <button key={id} onClick={function () { setAba(id); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{t}</button>; };
+  return <div>
+    <div style={caixa}><b>O que entendi:</b> {r.resumo}</div>
+    {r.diagnostico && <div style={caixa}><b>Diagnóstico:</b> {r.diagnostico}
+      {r.numeros && Object.keys(r.numeros).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+        {Object.keys(r.numeros).map(function (k) { return <span key={k} style={{ background: "#f8fafc", border: "1px solid #eef2f7", borderRadius: 8, padding: "2px 7px", fontSize: 11 }}><span style={{ color: "#64748b" }}>{k}: </span><b>{r.numeros[k]}</b></span>; })}
+      </div>}</div>}
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "6px 0 8px" }}>
+      {abaBtn("estrategia", "🎯 Estratégia")}{abaBtn("copies", "✍️ Textos (" + (r.copies || []).length + ")")}{abaBtn("roteiros", "🎬 Roteiros (" + (r.roteiros || []).length + ")")}{abaBtn("cards", "🖼️ Cards (" + (r.cards || []).length + ")")}
+    </div>
+    {aba === "estrategia" && <div style={caixa}>
+      <div><b>Objetivo:</b> {e.objetivo === "formulario" ? "Formulário" : "WhatsApp"} · <b>Verba:</b> {_tcenBrl(e.verba_dia || 0)}/dia por {e.duracao_dias || 30} dias</div>
+      <div><b>Cidades:</b> {(e.cidades || []).join(" · ")}{e.raio_km ? " (+" + e.raio_km + " km)" : ""}</div>
+      {r.cidades_nao_achadas && r.cidades_nao_achadas.length > 0 && <div style={{ color: "#b91c1c", fontSize: 12 }}>Não achei na Meta: {r.cidades_nao_achadas.join(", ")} — ajuste no montador.</div>}
+      <div><b>Público:</b> {e.publico} · {e.genero === "homens" ? "Homens" : e.genero === "mulheres" ? "Mulheres" : "Todos"}, {e.idade_min}–{e.idade_max}</div>
+      <div><b>Por quê:</b> {e.por_que}</div>
+      {r.modelo_nome && <div style={{ color: "#64748b", fontSize: 12 }}>Copia as configurações de: {r.modelo_nome}</div>}
+      {(r.cuidados || []).length > 0 && <div style={{ marginTop: 6, color: "#92400e" }}><b>Cuidados:</b> {r.cuidados.join(" · ")}</div>}
+      {(r.perguntas || []).length > 0 && <div style={{ marginTop: 6, color: "#1e40af" }}><b>Ficou faltando:</b> {r.perguntas.join(" · ")}</div>}
+      <div style={{ marginTop: 10 }}>{r.rascunho ? <TSegBotao onClick={onMontar} desligado={montando}>{montando ? "Abrindo…" : "🧱 Montar esta campanha (abre o montador preenchido)"}</TSegBotao> : <span style={{ fontSize: 12, color: "#94a3b8" }}>Sem campanha modelo nesta conta para montar.</span>}</div>
+    </div>}
+    {aba === "copies" && (r.copies || []).map(function (c, i) {
+      return <div key={i} style={caixa}><div style={{ display: "flex", justifyContent: "space-between" }}><b>{c.titulo}</b><button onClick={function () { copiar(c.texto); }} style={{ border: "none", background: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 800 }}>Copiar</button></div>
+        <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{c.texto}</div>{c.msg_whats && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>💬 Mensagem no WhatsApp: {c.msg_whats}</div>}</div>;
+    })}
+    {aba === "roteiros" && (r.roteiros || []).map(function (ro, i) {
+      const txt = (ro.cenas || []).map(function (c) { return "[" + c.tempo + "] " + (c.imagem ? "Imagem: " + c.imagem + " | " : "") + (c.fala ? "Fala: " + c.fala : "") + (c.texto_tela ? " | Tela: " + c.texto_tela : ""); }).join("\n");
+      return <div key={i} style={caixa}><div style={{ display: "flex", justifyContent: "space-between" }}><b>🎬 {ro.titulo} ({ro.duracao_s || "?"}s)</b><button onClick={function () { copiar(ro.titulo + "\n" + txt); }} style={{ border: "none", background: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 800 }}>Copiar</button></div>
+        {(ro.cenas || []).map(function (c, j) { return <div key={j} style={{ display: "flex", gap: 8, padding: "4px 0", borderBottom: "1px dashed #f1f5f9", fontSize: 12.5 }}>
+          <span style={{ color: "#7c3aed", fontWeight: 900, width: 56, flexShrink: 0 }}>{c.tempo}</span>
+          <div><div><b>Imagem:</b> {c.imagem}</div>{c.fala && <div><b>Fala:</b> {c.fala}</div>}{c.texto_tela && <div><b>Na tela:</b> {c.texto_tela}</div>}</div></div>; })}</div>;
+    })}
+    {aba === "cards" && (r.cards || []).map(function (c, i) {
+      return <div key={i} style={caixa}><b>🖼️ {c.titulo}</b><div style={{ marginTop: 4 }}>{c.texto}</div><div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Visual: {c.visual}</div></div>;
+    })}
+  </div>;
+}
+
+function TSegSala({ onFechar, onAbrirMontador }) {
+  const [contas, setContas] = useState([]); const [conta, setConta] = useState(""); const [texto, setTexto] = useState(""); const [origem, setOrigem] = useState("texto");
+  const [ocupado, setOcupado] = useState(false); const [msg, setMsg] = useState(""); const [res, setRes] = useState(null); const [hist, setHist] = useState([]); const [montando, setMontando] = useState(false);
+  useEffect(function () {
+    _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function () {});
+    _tsegRpc("ads_estrategias_ler", { p_conta: null }).then(function (h) { setHist(h || []); }).catch(function () {});
+  }, []);
+  const gerar = async function () {
+    setOcupado(true); setMsg(""); setRes(null);
+    try { const r = await _tcerFn({ modo: "estrategia", conta: conta, pedido: texto, origem: origem }); setRes({ id: r.id, r: r.resultado }); }
+    catch (e) { setMsg(e.message); } finally { setOcupado(false); }
+  };
+  const montar = async function () {
+    if (!res || !res.r.rascunho) return; setMontando(true); setMsg("");
+    try {
+      const s = await _tsegRpc("ads_rascunho_salvar", { p_id: null, p_conta: conta || res.conta, p_dados: res.r.rascunho });
+      if (!s || !s.ok) throw new Error((s && s.erro) || "Não salvou o rascunho.");
+      try { await _tsegRpc("ads_estrategia_ligar_rascunho", { p_id: res.id, p_rascunho: s.id }); } catch (_) {}
+      onAbrirMontador(s.id);
+    } catch (e) { setMsg(e.message); } finally { setMontando(false); }
+  };
+  return <TSegJanela titulo="🎙️ Sala de estratégia" onFechar={onFechar} largura={900}>
+    <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 10, lineHeight: 1.5 }}>
+      Fale ou escreva o que você quer (cliente, produto, cidade, objetivo, prazo). A IA usa os números reais da conta, a pesquisa de mercado,
+      o calendário e o que já aprendemos. Sai a estratégia, textos, roteiros e cards — e o montador já preenchido.
+    </div>
+    <TMonRot t="Conta"><select value={conta} onChange={function (e) { setConta(e.target.value); }} style={_tmonInp}><option value="">Escolha…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}</select></TMonRot>
+    <TMonRot t="O que você quer">
+      <textarea value={texto} onChange={function (e) { setTexto(e.target.value); setOrigem("texto"); }} rows={5} style={Object.assign({}, _tmonInp, { resize: "vertical" })}
+        placeholder="Ex.: Quero vender biodigestor para suinocultor em Rio Verde e Jataí, verba de uns 30 por dia, foco em WhatsApp, usar o depoimento do Hudson…" />
+    </TMonRot>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+      <TSalaGravador desligado={ocupado} onTexto={function (t) { setTexto(function (x) { return (x ? x + "\n" : "") + t; }); setOrigem("audio"); }} />
+      <TSegBotao onClick={gerar} desligado={ocupado || !conta || texto.trim().length < 10}>{ocupado ? "Pensando… (até 1 min)" : "✨ Montar estratégia"}</TSegBotao>
+    </div>
+    {msg && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{msg}</div>}
+    {res && <TSalaResultado r={res.r} onMontar={montar} montando={montando} />}
+    {!res && hist.length > 0 && <div style={{ marginTop: 10 }}>
+      <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>Estratégias anteriores</div>
+      {hist.slice(0, 10).map(function (h) {
+        return <div key={h.id} onClick={function () { setConta(h.ad_account_id); setTexto(h.pedido); setRes({ id: h.id, r: h.resultado || {}, conta: h.ad_account_id }); }}
+          style={{ padding: "6px 0", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: 12.5 }}>
+          <b>{h.conta_nome}</b> · {String(h.pedido).slice(0, 90)}{String(h.pedido).length > 90 ? "…" : ""} <span style={{ color: "#94a3b8" }}>· {h.criado_por_nome} {_tsegQuando(h.criado_em)}{h.rascunho_id ? " · 🧱 montada" : ""}</span></div>;
+      })}
+    </div>}
+  </TSegJanela>;
+}
+
+function TCenGoogle() {
+  const [st, setSt] = useState(null); const [lin, setLin] = useState(null); const [ocupado, setOcupado] = useState(false); const [msg, setMsg] = useState("");
+  useEffect(function () {
+    window._sb.functions.invoke("ads-google", { body: { modo: "status" } }).then(function (r) { setSt((r && r.data) || { ok: false, erro: "Sem resposta." }); }).catch(function () { setSt({ ok: false, erro: "Sem resposta." }); });
+    _tsegRpc("gads_resumo", { p_dias: 30 }).then(function (l) { setLin(l || []); }).catch(function () { setLin([]); });
+  }, []);
+  const coletar = async function () {
+    setOcupado(true); setMsg("");
+    try { const r = await window._sb.functions.invoke("ads-google", { body: { modo: "coletar", dias: 30 } }); const d = r && r.data; if (!d) throw new Error("Sem resposta."); setMsg(d.ok ? d.linhas + " linhas de " + d.contas + " conta(s)." : (d.erro || (d.erros || []).join(" · "))); _tsegRpc("gads_resumo", { p_dias: 30 }).then(function (l) { setLin(l || []); }); }
+    catch (e) { setMsg(e.message); } finally { setOcupado(false); }
+  };
+  return <div style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "10px 12px", marginTop: 12, fontSize: 12.5 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <b style={{ fontSize: 13.5 }}>🔎 Google Ads (leitura)</b>
+      {st && st.pronto && <TSegBotao tipo="secundario" onClick={coletar} desligado={ocupado}>{ocupado ? "Lendo o Google…" : "Atualizar 30 dias"}</TSegBotao>}
+    </div>
+    {st === null ? <div style={{ color: "#94a3b8" }}>Conferindo acessos…</div> : !st.pronto ? <div style={{ color: "#92400e", marginTop: 4 }}>Ainda não ligado. {st.faltam && st.faltam.length ? "Faltam no Supabase › Secrets: " + st.faltam.join(", ") + "." : (st.erro || "")}</div> : null}
+    {msg && <div style={{ marginTop: 4, color: "#334155" }}>{msg}</div>}
+    {lin && lin.length > 0 && <div style={{ marginTop: 6 }}>{lin.slice(0, 15).map(function (x, i) {
+      return <div key={i} style={{ display: "flex", gap: 8, padding: "3px 0", borderBottom: "1px solid #f8fafc" }}>
+        <span style={{ flex: 1 }}><b>{x.conta}</b> · {x.campanha} <span style={{ color: "#94a3b8" }}>({x.canal})</span></span>
+        <span>{_tcenBrl(x.gasto)}</span><span>{x.conversoes} conv.</span><span>{x.cpa ? _tcenBrl(x.cpa) + "/conv." : "—"}</span></div>;
+    })}</div>}
+  </div>;
+}
+
+function TCenMercado() {
+  const [itens, setItens] = useState(null); const [contas, setContas] = useState([]); const [conta, setConta] = useState(""); const [ocupado, setOcupado] = useState(""); const [msg, setMsg] = useState("");
+  const carregar = function () { _tsegRpc("ads_nicho_ler").then(function (l) { setItens(l || []); }).catch(function () { setItens([]); }); };
+  useEffect(function () { carregar(); _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function () {}); }, []);
+  const rodar = async function (modo) {
+    if (!conta) return; setOcupado(modo); setMsg("");
+    try { const r = await _tcerFn({ modo: modo, conta: conta }); setMsg(modo === "nicho" ? "Pesquisa feita." : (r.sugestoes + " sugestão(ões) nova(s) em Para decidir" + (r.descartadas ? " · " + r.descartadas + " descartada(s) por falta de número real" : "") + ".")); carregar(); }
+    catch (e) { setMsg(e.message); } finally { setOcupado(""); }
+  };
+  return <div>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+      <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={Object.assign({}, _tmonInp, { width: "auto", minWidth: 220 })}><option value="">Conta…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}</select>
+      <TSegBotao tipo="secundario" onClick={function () { rodar("nicho"); }} desligado={!conta || !!ocupado}>{ocupado === "nicho" ? "Pesquisando na web… (até 2 min)" : "🌎 Pesquisar mercado agora"}</TSegBotao>
+      <TSegBotao onClick={function () { rodar("analisar"); }} desligado={!conta || !!ocupado}>{ocupado === "analisar" ? "Analisando…" : "🧠 Analisar conta agora"}</TSegBotao>
+    </div>
+    <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 8 }}>Sozinho: pesquisa de mercado toda segunda; análise segunda e quinta. Sugestão sem número real é descartada.</div>
+    {msg && <div style={{ fontSize: 13, fontWeight: 700, color: /erro|não|falh/i.test(msg) ? "#dc2626" : "#166534", marginBottom: 8 }}>{msg}</div>}
+    {itens === null ? <div style={{ fontSize: 13, color: "#94a3b8" }}>Carregando…</div> : !itens.length ? <div style={{ fontSize: 13, color: "#64748b" }}>Nenhuma pesquisa ainda.</div> :
+      <div style={{ maxHeight: "55vh", overflowY: "auto" }}>{itens.filter(function (n) { return !conta || n.conta === conta; }).map(function (n) {
+        const r = n.resumo || {};
+        return <div key={n.conta} style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "10px 12px", marginBottom: 10, fontSize: 12.5, lineHeight: 1.5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b style={{ fontSize: 13.5 }}>{n.conta_nome}</b><span style={{ color: "#94a3b8", fontSize: 11 }}>{_tsegQuando(n.atualizado_em)}</span></div>
+          {r.nicho && <div><b>Nicho:</b> {r.nicho}{r.publico ? " · " + r.publico : ""}</div>}
+          {r.tom && <div><b>Como falar:</b> {r.tom}</div>}
+          {(r.momento || []).length > 0 && <div style={{ marginTop: 4 }}><b>Momento:</b>{r.momento.map(function (m, i) { return <div key={i}>• {m.fato} <span style={{ color: "#5b21b6" }}>→ {m.impacto_no_anuncio}</span> <a href={m.fonte_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>fonte ↗</a></div>; })}</div>}
+          {(r.oportunidades || []).length > 0 && <div style={{ marginTop: 4 }}><b>Oportunidades:</b>{r.oportunidades.map(function (m, i) { return <div key={i}>💡 {m.ideia} — <span style={{ color: "#475569" }}>{m.por_que}</span> <a href={m.fonte_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>fonte ↗</a></div>; })}</div>}
+          {(r.concorrentes || []).length > 0 && <div style={{ marginTop: 4, color: "#64748b" }}><b>Concorrentes:</b> {r.concorrentes.join(" · ")}</div>}
+        </div>;
+      })}</div>}
+    <TCenGoogle />
+  </div>;
+}
+
 /* ---------- O PORTÃO: vai em volta da PageGestaoMidia ---------- */
 function TSegPortao({ currentUser, viewUser, children }) {
   const [st, setSt] = useState(null);            // resposta de ads_pin_status
@@ -72044,6 +72254,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
   const [alarmes, setAlarmes] = useState(null);
   const [carregandoAl, setCarregandoAl] = useState(false);
   const [pend, setPend] = useState(0);             // pedidos esperando decisão minha
+  const [abrirRasc, setAbrirRasc] = useState(null); // rascunho que a Sala de estratégia mandou abrir no montador
   const ultimaRenov = useRef(0);
 
   const carregar = useCallback(async function () {
@@ -72123,7 +72334,9 @@ function TSegPortao({ currentUser, viewUser, children }) {
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
             🧠 Decisões{pend ? " (" + pend + ")" : ""}
           </button>
-          <button onClick={function () { setPainel("montador"); }}
+          <button onClick={function () { setPainel("sala"); }}
+            style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🎙️ Sala de estratégia</button>
+          <button onClick={function () { setAbrirRasc(null); setPainel("montador"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🧱 Montar campanha</button>
           <button onClick={function () { setPainel("alarmes"); lerAlarmes(); }}
             style={{ background: naoVistos.length ? (temCritico ? "#fee2e2" : "#fef3c7") : "#f1f5f9", color: naoVistos.length ? (temCritico ? "#b91c1c" : "#92400e") : "#334155",
@@ -72140,7 +72353,8 @@ function TSegPortao({ currentUser, viewUser, children }) {
       )}
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
-      {painel === "montador" && <TSegMontador onFechar={function () { setPainel(null); }} onMudou={lerPend} />}
+      {painel === "montador" && <TSegMontador abrirId={abrirRasc} onFechar={function () { setPainel(null); setAbrirRasc(null); }} onMudou={lerPend} />}
+      {painel === "sala" && <TSegSala onFechar={function () { setPainel(null); }} onAbrirMontador={function (id) { setAbrirRasc(id); setPainel("montador"); }} />}
       {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); }} onMudou={lerPend} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
       {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
