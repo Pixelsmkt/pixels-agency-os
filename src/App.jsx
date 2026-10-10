@@ -70930,6 +70930,7 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
 // ======= 17e_trafego_seguranca.jsx =======
 /* IA DE TRÁFEGO — ETAPA 0, 1 e 2 (09/10/2026): portão do PIN da Gestão de mídia, alarmes, painel de segurança e CENTRAL DE DECISÕES.
    v76/77: 🧠 CÉREBRO (mercado com fonte + análise com número real) e 🎙️ SALA DE ESTRATÉGIA (áudio → estratégia → montador).
+   v79: 🧠 IA DENTRO DO CLIENTE — selo na lista, cartão no topo do cliente e aba "🧠 Decisões" (a Central só daquele cliente).
    v75: 🧱 MONTADOR DE CAMPANHA (copia de um modelo que funciona, valida na Meta sem criar, publica PAUSADO com PIN 2x).
    v73: PIN ÚNICO DA AGÊNCIA e toda mudança pede o PIN 2 vezes (1º abre a revisão com valor/cidades/público da Meta, 2º envia).
    QUEM VÊ: só os aprovadores (Vinícius e Gustavo). Chave no banco: auto.config ads_ia_visivel_para = 'aprovadores'.
@@ -71286,7 +71287,7 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
 
 /* ---------- CENTRAL DE DECISÕES (só aprovadores) ----------
    Um cartão por problema: onde está (conta › campanha › conjunto › anúncio), por quê, os números reais e o que muda (antes → depois).
-   Aprovar pede PIN; verba ≥ R$ 50/dia ou ativar campanha precisa dos 2 sócios (24 h). O app confere a Meta antes de mexer. */
+   Aprovar pede o PIN da agência 2 vezes (1º abre a revisão, 2º envia). O app confere a Meta antes de mexer. */
 const _TCEN_NUM = {
   gasto_7d: ["Gasto 7 dias", "R$"], gasto_14d: ["Gasto 14 dias", "R$"], gasto_30d: ["Gasto 30 dias", "R$"],
   resultados_7d: ["Resultados 7 dias", ""], resultados_14d: ["Resultados 14 dias", ""], resultados_30d: ["Resultados 30 dias", ""],
@@ -71403,7 +71404,8 @@ function TCenCartao({ p, eu, onMudou }) {
       setMsg("Enviando para a Meta…");
       const inv = await window._sb.functions.invoke("ads-aplicar", { body: { pedido_id: p.id } });
       const d = inv && inv.data;
-      if (inv.error && !d) throw new Error("Não consegui falar com o servidor. O pedido volta sozinho em 5 min; tente de novo.");
+      if (inv.error && !d) { const st = inv.error && inv.error.context && inv.error.context.status;   // v80 M12: 401 = sessão vencida (texto certo)
+        throw new Error(st === 401 ? "Sua sessão venceu. Entre de novo no app e aprove outra vez (nada foi enviado à Meta)." : "Não consegui falar com o servidor. O pedido volta sozinho em até 15 min; tente de novo."); }
       if (!d || !d.ok) throw new Error((d && d.erro) || "A Meta não aplicou.");
       toast(d.sem_mudanca ? (d.msg || "Já estava assim.") : "Feito na Meta. Vou acompanhar por 7 dias.");
       setModo(null); setRev(null); setMsg(""); onMudou();
@@ -71568,7 +71570,7 @@ function TCenCartao({ p, eu, onMudou }) {
             })}
         </div>
       )}
-      {msg && <div style={{ marginTop: 8, color: msg.indexOf("Aplicando") === 0 ? "#92400e" : "#dc2626", fontSize: 12, fontWeight: 700 }}>{msg}</div>}
+      {msg && <div style={{ marginTop: 8, color: (msg.indexOf("Aplicando") === 0 || msg.indexOf("Enviando") === 0) ? "#92400e" : "#dc2626", fontSize: 12, fontWeight: 700 }}>{msg}</div>}
     </div>
   );
 }
@@ -71626,12 +71628,18 @@ function TCenFaixa({ conta, campId }) {
   );
 }
 
-function TSegCentral({ onFechar, onMudou }) {
+function TCenCasca({ embutido, onFechar, children }) {
+  if (embutido) return <div style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>{children}</div>;
+  return <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>{children}</TSegJanela>;
+}
+
+function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unidade }) {
   const [abertos, setAbertos] = useState(null);
   const [fechados, setFechados] = useState(null);
   const [eu, setEu] = useState(null);
-  const [aba, setAba] = useState("decidir");
-  const [conta, setConta] = useState("");
+  const [aba, setAba] = useState(abaInicial || "decidir");
+  const [conta, setConta] = useState(contaFixa || "");
+  const [estrats, setEstrats] = useState(null);
   const [erro, setErro] = useState("");
   const [memoria, setMemoria] = useState(null);
 
@@ -71644,12 +71652,14 @@ function TSegCentral({ onFechar, onMudou }) {
     try { const f = await _tsegRpc("ads_pedidos_ler", { p_aberto: false }); setFechados(f && f.ok ? (f.itens || []) : []); } catch (_) { setFechados([]); }
   }, []);
   useEffect(function () { carregar(); }, [carregar]);
-  const mudou = function () { carregar(); onMudou && onMudou(); };
+  const mudou = function () { carregar(); _tcliCarregar(true); onMudou && onMudou(); };
+  useEffect(function () { if (abaInicial) setAba(abaInicial); }, [abaInicial]);
 
   const todos = (abertos || []).concat(fechados || []);
   const contas = {};
   todos.forEach(function (p) { const c = Array.isArray(p.caminho) && p.caminho[0] && p.caminho[0].nivel === "conta" ? p.caminho[0].nome : null; if (p.ad_account_id) contas[p.ad_account_id] = c || p.ad_account_id; });
-  const filtro = function (l) { return conta ? l.filter(function (p) { return p.ad_account_id === conta; }) : l; };
+  const filtro = function (l) { return (conta ? l.filter(function (p) { return p.ad_account_id === conta; }) : l)
+    .filter(function (p) { return !unidade || _tcliUniDoPedido(p) === unidade; }); };   // v80 M05: na conta de Toledo, só as decisões da unidade do cliente
   const ab = filtro(abertos || []);
   const grupos = {
     decidir: ab.filter(function (p) { return p.estado === "novo" || p.estado === "aplicando" || (p.estado === "aguardando" && p.aprov1_uid !== eu); }),
@@ -71657,15 +71667,20 @@ function TSegCentral({ onFechar, onMudou }) {
     monitorando: ab.filter(function (p) { return p.estado === "monitorando" || p.estado === "aplicado"; }),
     concluidos: filtro(fechados || []),
   };
-  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", "🌎 Mercado"]];
+  const ABAS = [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", contaFixa ? "🌎 Mercado do nicho" : "🌎 Mercado"]].concat(contaFixa ? [["estrategias", "🎙️ Estratégias feitas"]] : []);
   const lista = grupos[aba] || [];
   useEffect(function () {
     if (aba !== "memoria" || memoria !== null) return;
     _tsegRpc("ads_memoria_ler", { p_conta: null, p_limite: 100 }).then(function (m) { setMemoria(m || []); }).catch(function () { setMemoria([]); });
   }, [aba]);
+  useEffect(function () {
+    if (aba !== "estrategias" || !contaFixa) return;
+    _tsegRpc("ads_estrategias_ler", { p_conta: contaFixa }).then(function (h) { setEstrats(h || []); }).catch(function () { setEstrats([]); });
+  }, [aba, contaFixa]);
+
 
   return (
-    <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>
+    <TCenCasca embutido={embutido} onFechar={onFechar}>
       <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
         A IA só <b>sugere</b>. Toda mudança pede o <b>PIN da agência duas vezes</b>: 1º abre a revisão, 2º envia. Fica registrado quem digitou. Mudança de verba: no máx. 20% e uma vez a cada 72 h.
       </div>
@@ -71676,19 +71691,20 @@ function TSegCentral({ onFechar, onMudou }) {
           return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
             padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
         })}
-        <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={{ marginLeft: "auto", fontSize: 12, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", maxWidth: 220 }}>
+        {!contaFixa && <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={{ marginLeft: "auto", fontSize: 12, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", maxWidth: 220 }}>
           <option value="">Todas as contas</option>
           {Object.keys(contas).map(function (k) { return <option key={k} value={k}>{contas[k]}</option>; })}
-        </select>
+        </select>}
       </div>
       {erro && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
-      {aba === "mercado" ? <TCenMercado /> : aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
+      {aba === "mercado" ? <TCenMercado contaFixa={contaFixa} /> : aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
+        aba === "estrategias" ? <TCliEstrategias itens={estrats} conta={contaFixa} /> :
         abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
         !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às 11h30." : "Nada aqui."}</div> :
-        <div style={{ maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
+        <div style={embutido ? {} : { maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
           {lista.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={mudou} />; })}
         </div>}
-    </TSegJanela>
+    </TCenCasca>
   );
 }
 
@@ -71823,9 +71839,9 @@ function TMonRevisao({ d, conta, modeloNome, modelo }) {
   </div>;
 }
 
-function TMonEditor({ rasc, contas, onVoltar }) {
+function TMonEditor({ rasc, contas, onVoltar, contaInicial }) {
   const [id, setId] = useState(rasc ? rasc.id : null);
-  const [conta, setConta] = useState(rasc ? rasc.ad_account_id : "");
+  const [conta, setConta] = useState(rasc ? rasc.ad_account_id : (contaInicial || ""));
   const [d, setD] = useState(rasc ? rasc.dados : _tmonVazio());
   const [estado, setEstado] = useState(rasc ? rasc.estado : "rascunho");
   const [checklist, setChecklist] = useState(rasc ? rasc.checklist : null);
@@ -72006,21 +72022,21 @@ function TMonEditor({ rasc, contas, onVoltar }) {
   </div>;
 }
 
-function TSegMontador({ onFechar, onMudou, abrirId }) {
-  const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(null); const [msg, setMsg] = useState("");
+function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo }) {
+  const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(novo && !abrirId ? "novo" : null); const [msg, setMsg] = useState("");
   useEffect(function () {
     if (!abrirId) return;
     _tsegRpc("ads_rascunhos_ler", { p_id: abrirId }).then(function (r) { const it = r && r.ok && (r.itens || []).find(function (x) { return x.id === abrirId; }); if (it) setAberto(it); }).catch(function () {});
   }, [abrirId]);
   const carregar = useCallback(async function () {
-    try { const r = await _tsegRpc("ads_rascunhos_ler", { p_id: null }); setLista(r && r.ok ? (r.itens || []).filter(function (x) { return x.estado !== "arquivado"; }) : []); } catch (e) { setMsg(e.message); setLista([]); }
+    try { const r = await _tsegRpc("ads_rascunhos_ler", { p_id: null }); setLista(r && r.ok ? (r.itens || []).filter(function (x) { return x.estado !== "arquivado" && (!contaFixa || x.ad_account_id === contaFixa); }) : []); } catch (e) { setMsg(e.message); setLista([]); }
     try { setContas((await _tsegRpc("ads_montar_contas")) || []); } catch (_) {}
-  }, []);
+  }, [contaFixa]);
   useEffect(function () { carregar(); }, [carregar]);
   const arquivar = async function (r) { try { await _tsegRpc("ads_rascunho_arquivar", { p_id: r.id }); carregar(); } catch (e) { setMsg(e.message); } };
   return (
-    <TSegJanela titulo="🧱 Montar campanha" onFechar={function () { onFechar(); onMudou && onMudou(); }} largura={900}>
-      {aberto ? <TMonEditor rasc={aberto === "novo" ? null : aberto} contas={contas} onVoltar={function () { setAberto(null); carregar(); }} /> :
+    <TSegJanela titulo={"🧱 Montar campanha" + (contaFixa ? " · " + ((contas.find(function (c) { return c.id === contaFixa; }) || {}).nome || "") : "")} onFechar={function () { onFechar(); onMudou && onMudou(); }} largura={900}>
+      {aberto ? <TMonEditor rasc={aberto === "novo" ? null : aberto} contas={contas} contaInicial={contaFixa} onVoltar={function () { setAberto(null); carregar(); }} /> :
         <div>
           <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
             A campanha nova copia as configurações de uma que já funciona na conta. Você muda nome, cidades, público, verba e anúncios;
@@ -72139,12 +72155,16 @@ function TSalaResultado({ r, onMontar, montando }) {
   </div>;
 }
 
-function TSegSala({ onFechar, onAbrirMontador }) {
-  const [contas, setContas] = useState([]); const [conta, setConta] = useState(""); const [texto, setTexto] = useState(""); const [origem, setOrigem] = useState("texto");
+function TSegSala({ onFechar, onAbrirMontador, contaFixa, abrirEstrategia }) {
+  const [contas, setContas] = useState([]); const [conta, setConta] = useState(contaFixa || ""); const [texto, setTexto] = useState(""); const [origem, setOrigem] = useState("texto");
   const [ocupado, setOcupado] = useState(false); const [msg, setMsg] = useState(""); const [res, setRes] = useState(null); const [hist, setHist] = useState([]); const [montando, setMontando] = useState(false);
   useEffect(function () {
     _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function () {});
-    _tsegRpc("ads_estrategias_ler", { p_conta: null }).then(function (h) { setHist(h || []); }).catch(function () {});
+    _tsegRpc("ads_estrategias_ler", { p_conta: contaFixa || null }).then(function (h) {
+      setHist(h || []);
+      const e = abrirEstrategia && (h || []).find(function (x) { return x.id === abrirEstrategia; });
+      if (e) { setConta(e.ad_account_id); setTexto(e.pedido); setRes({ id: e.id, r: e.resultado || {}, conta: e.ad_account_id }); }
+    }).catch(function () {});
   }, []);
   const gerar = async function () {
     setOcupado(true); setMsg(""); setRes(null);
@@ -72160,12 +72180,14 @@ function TSegSala({ onFechar, onAbrirMontador }) {
       onAbrirMontador(s.id);
     } catch (e) { setMsg(e.message); } finally { setMontando(false); }
   };
-  return <TSegJanela titulo="🎙️ Sala de estratégia" onFechar={onFechar} largura={900}>
+  const contaNomeFixa = contaFixa ? ((contas.find(function (c) { return c.id === contaFixa; }) || {}).nome || "") : "";
+  return <TSegJanela titulo={"🎙️ Sala de estratégia" + (contaNomeFixa ? " · " + contaNomeFixa : "")} onFechar={onFechar} largura={900}>
     <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 10, lineHeight: 1.5 }}>
       Fale ou escreva o que você quer (cliente, produto, cidade, objetivo, prazo). A IA usa os números reais da conta, a pesquisa de mercado,
       o calendário e o que já aprendemos. Sai a estratégia, textos, roteiros e cards — e o montador já preenchido.
     </div>
-    <TMonRot t="Conta"><select value={conta} onChange={function (e) { setConta(e.target.value); }} style={_tmonInp}><option value="">Escolha…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}</select></TMonRot>
+    {!contaFixa && <TMonRot t="Conta"><select value={conta} onChange={function (e) { setConta(e.target.value); }} style={_tmonInp}><option value="">Escolha…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}</select></TMonRot>}
+    {contaFixa && <div style={{ fontSize: 12.5, color: "#334155", marginBottom: 8 }}>Conta: <b>{contaNomeFixa || "…"}</b></div>}
     <TMonRot t="O que você quer">
       <textarea value={texto} onChange={function (e) { setTexto(e.target.value); setOrigem("texto"); }} rows={5} style={Object.assign({}, _tmonInp, { resize: "vertical" })}
         placeholder="Ex.: Quero vender biodigestor para suinocultor em Rio Verde e Jataí, verba de uns 30 por dia, foco em WhatsApp, usar o depoimento do Hudson…" />
@@ -72213,18 +72235,18 @@ function TCenGoogle() {
   </div>;
 }
 
-function TCenMercado() {
-  const [itens, setItens] = useState(null); const [contas, setContas] = useState([]); const [conta, setConta] = useState(""); const [ocupado, setOcupado] = useState(""); const [msg, setMsg] = useState("");
+function TCenMercado({ contaFixa }) {
+  const [itens, setItens] = useState(null); const [contas, setContas] = useState([]); const [conta, setConta] = useState(contaFixa || ""); const [ocupado, setOcupado] = useState(""); const [msg, setMsg] = useState("");
   const carregar = function () { _tsegRpc("ads_nicho_ler").then(function (l) { setItens(l || []); }).catch(function () { setItens([]); }); };
   useEffect(function () { carregar(); _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function () {}); }, []);
   const rodar = async function (modo) {
     if (!conta) return; setOcupado(modo); setMsg("");
-    try { const r = await _tcerFn({ modo: modo, conta: conta }); setMsg(modo === "nicho" ? "Pesquisa feita." : (r.sugestoes + " sugestão(ões) nova(s) em Para decidir" + (r.descartadas ? " · " + r.descartadas + " descartada(s) por falta de número real" : "") + ".")); carregar(); }
+    try { const r = await _tcerFn({ modo: modo, conta: conta }); setMsg(modo === "nicho" ? "Pesquisa feita." : (r.sugestoes + " sugestão(ões) nova(s) em Para decidir" + (r.descartadas ? " · " + r.descartadas + " descartada(s) por falta de número real" : "") + ".")); carregar(); _tcliCarregar(true); }
     catch (e) { setMsg(e.message); } finally { setOcupado(""); }
   };
   return <div>
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-      <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={Object.assign({}, _tmonInp, { width: "auto", minWidth: 220 })}><option value="">Conta…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}</select>
+      {!contaFixa && <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={Object.assign({}, _tmonInp, { width: "auto", minWidth: 220 })}><option value="">Conta…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}</select>}
       <TSegBotao tipo="secundario" onClick={function () { rodar("nicho"); }} desligado={!conta || !!ocupado}>{ocupado === "nicho" ? "Pesquisando na web… (até 2 min)" : "🌎 Pesquisar mercado agora"}</TSegBotao>
       <TSegBotao onClick={function () { rodar("analisar"); }} desligado={!conta || !!ocupado}>{ocupado === "analisar" ? "Analisando…" : "🧠 Analisar conta agora"}</TSegBotao>
     </div>
@@ -72242,8 +72264,207 @@ function TCenMercado() {
           {(r.concorrentes || []).length > 0 && <div style={{ marginTop: 4, color: "#64748b" }}><b>Concorrentes:</b> {r.concorrentes.join(" · ")}</div>}
         </div>;
       })}</div>}
-    <TCenGoogle />
+    {!contaFixa && <TCenGoogle />}
   </div>;
+}
+
+/* ---------- 🧠 IA DENTRO DO CLIENTE (v79, 10/10/2026) ----------
+   1) selo na lista de clientes (🧠 decisões · 🔔 alarmes) + "⚡ precisam de vocês"; 2) cartão no topo do cliente (sinal + 1 frase + botões);
+   3) aba "🧠 Decisões" no cliente (a Central só daquele cliente). Só aparece com a porta do PIN aberta, para aprovador e fora do
+   "Visualizar como" (quem liga é o TSegPortao). Para qualquer outra pessoa nada disso existe — a tela fica igual a hoje. */
+window._tcli = window._tcli || { ok: false, resumo: null, t: 0, carregando: false, ouvintes: [] };
+const _tcliAvisar = function () { (window._tcli.ouvintes || []).slice().forEach(function (f) { try { f(); } catch (_) {} }); };
+const _tcliCarregar = async function (forcar) {
+  const T = window._tcli;
+  if (!T.ok || T.carregando) return;
+  if (!forcar && T.resumo && Date.now() - T.t < 60000) return;
+  T.carregando = true;
+  try { const r = await _tsegRpc("ads_ia_resumo_contas"); T.resumo = r && r.ok ? (r.contas || {}) : {}; T.ontem = r && r.ontem; T.t = Date.now(); }
+  catch (_) { T.resumo = T.resumo || {}; }
+  finally { T.carregando = false; _tcliAvisar(); }
+};
+const _tcliSetOk = function (ok) {
+  const T = window._tcli; ok = !!ok;
+  if (T.ok === ok) return;
+  T.ok = ok; if (!ok) { T.resumo = null; T.t = 0; }
+  if (T.timer) { clearInterval(T.timer); T.timer = null; }
+  if (ok) T.timer = setInterval(function () { _tcliCarregar(true); }, 300000);
+  _tcliAvisar(); if (ok) _tcliCarregar(true);
+};
+function useTCli() {
+  const [, setN] = useState(0);
+  useEffect(function () {
+    const f = function () { setN(function (n) { return n + 1; }); };
+    window._tcli.ouvintes.push(f); _tcliCarregar(false);
+    return function () { window._tcli.ouvintes = window._tcli.ouvintes.filter(function (x) { return x !== f; }); };
+  }, []);
+  return window._tcli;
+}
+function useTCliPode() { return !!useTCli().ok; }
+const _tcliAbrir = function (detalhe) { try { window.dispatchEvent(new CustomEvent("pixels:tseg-abrir", { detail: detalhe })); } catch (_) {} };
+// mc (cliente de mídia) → linha do resumo; conta compartilhada (ex.: Uberlândia usa a conta de Toledo) não ganha selo próprio
+const _tcliDoCliente = function (mc, accs, resumo) {
+  if (!mc || !resumo || typeof adsContaDoCliente !== "function") return null;
+  const ac = adsContaDoCliente(mc, accs);
+  if (!ac) return null;
+  const r = resumo[ac.conta.ad_account_id] || null;
+  if (r && Array.isArray(r.unidades) && mc.bioter_unit) return _tcliNaUnidade(r, mc.bioter_unit);   // v80 M05: cada unidade com o seu número
+  if (ac.compartilhada) return null;
+  return r;
+};
+const _tcliSinal = function (r) {
+  if (!r) return null;
+  const n = (r.decidir || 0), a = (r.alarmes || 0);
+  const resto = [n ? n + (n > 1 ? " decisões esperando" : " decisão esperando") : null, a ? a + (a > 1 ? " alarmes" : " alarme") : null].filter(Boolean).join(" · ");
+  if (r.critico) return { cor: "vermelho", ic: "🔴", titulo: "Alarme grave", frase: String(r.critico).replace(/^[^:]*:\s*/, ""), resto: resto };
+  if (r.ritmo !== null && r.ritmo !== undefined && r.ritmo > 1.15)
+    return { cor: "amarelo", ic: "🟡", titulo: "Gastando acima da verba", frase: _tcenBrl(r.media_dia) + "/dia contra " + _tcenBrl(r.cabe_dia || 0) + "/dia que cabem até o fim do mês", resto: resto };
+  if (r.ritmo !== null && r.ritmo !== undefined && r.ritmo < 0.8 && r.dia >= 5)
+    return { cor: "amarelo", ic: "🟡", titulo: "Gastando abaixo da verba", frase: _tcenBrl(r.media_dia) + "/dia — dá para usar até " + _tcenBrl(r.cabe_dia || 0) + "/dia até o fim do mês", resto: resto };
+  if (!r.verba_mes && !Number(r.gasto_mes) && !n && !a) return null;   // v80 M12: conta parada e sem verba (ex.: Climaves) não mostra cartão
+  if (!r.verba_mes) return { cor: "cinza", ic: "⚪", titulo: "Sem verba do mês cadastrada", frase: "Cadastre o orçamento Meta na aba Gestão para a IA saber o ritmo certo", resto: resto };
+  if (n || a) return { cor: "amarelo", ic: "🟡", titulo: n ? "Tem decisão esperando" : "Tem alarme para ver", frase: "Verba no ritmo: " + _tcenBrl(r.media_dia) + "/dia", resto: resto };
+  return { cor: "verde", ic: "🟢", titulo: "Tudo no ritmo", frase: _tcenBrl(r.media_dia) + "/dia · verba de " + _tcenBrl(r.verba_mes) + " no mês", resto: "" };
+};
+// v80 (10/10/2026) M02/M05: a conta de Toledo roda 4 unidades — cada cliente (unidade) vê só a sua parte
+const _TCLI_UNI = [["uberlandia", /uberl[âa]ndia/i, "Uberlândia"], ["paraguay", /paraguay|paraguai|obligado/i, "Paraguai"], ["gloria", /gl[óo]ria/i, "Glória de Dourados"],
+  ["toledo", /toledo/i, "Toledo"], ["chapeco", /chapec[óo]/i, "Chapecó"], ["castro", /castro/i, "Castro"]];
+const _tcliUniDoNome = function (nome, padrao) {
+  const bl = String(nome || "").match(/\[([^\]]+)\]/g) || [];
+  for (let i = 0; i < bl.length; i++) { const t = bl[i].slice(1, -1); for (let j = 0; j < _TCLI_UNI.length; j++) if (_TCLI_UNI[j][1].test(t)) return _TCLI_UNI[j][0]; }
+  return padrao || null;
+};
+const _tcliUniDoPedido = function (p) {
+  const c = (Array.isArray(p && p.caminho) ? p.caminho : []).find(function (x) { return x && x.nivel === "campanha"; });
+  return _tcliUniDoNome((c && c.nome) || (p && p.entidade_nome) || (p && p.titulo), "toledo");
+};
+const _tcliUniLbl = function (u) { const x = _TCLI_UNI.find(function (y) { return y[0] === u; }); return x ? x[2] : u; };
+// linha do resumo já na visão da unidade do cliente (quando a conta tem "unidades")
+const _tcliNaUnidade = function (r, uni) {
+  if (!r || !uni || !Array.isArray(r.unidades)) return r;
+  const u = r.unidades.find(function (x) { return x.uni === uni; }); if (!u) return r;
+  return Object.assign({}, r, { ritmo: u.ritmo, media_dia: u.media_dia, cabe_dia: u.cabe_dia, verba_mes: u.verba, gasto_mes: u.gasto_mes, decidir: u.decidir, _uni: uni });
+};
+const _TCLI_COR = { vermelho: ["#fef2f2", "#fecaca", "#b91c1c"], amarelo: ["#fffbeb", "#fde68a", "#92400e"], verde: ["#f0fdf4", "#bbf7d0", "#166534"], cinza: ["#f8fafc", "#e2e8f0", "#475569"] };
+
+// 1) selo na linha do cliente (lista da Gestão de mídia). Clicar no selo abre o cliente direto na aba Decisões.
+function TCliSelo({ mc }) {
+  const T = useTCli();
+  const accs = (typeof useAdsAccounts === "function") ? useAdsAccounts() : null;
+  if (!T.ok || !T.resumo) return null;
+  const r = _tcliDoCliente(mc, accs, T.resumo);
+  if (!r || (!r.decidir && !r.alarmes)) return null;
+  const pill = function (bg, cor, txt, tit) { return <span title={tit} style={{ background: bg, color: cor, borderRadius: 99, padding: "2px 8px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{txt}</span>; };
+  return <span onClick={function () { window._pxSubDesejada = "ia"; }} style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
+    {r.decidir > 0 && pill("#f3e8ff", "#6d28d9", "🧠 " + r.decidir, r.decidir + " decisão(ões) da IA esperando")}
+    {r.alarmes > 0 && (r.critico ? pill("#fee2e2", "#b91c1c", "🔔 " + r.alarmes + " grave", r.critico) : pill("#fef3c7", "#92400e", "🔔 " + r.alarmes, r.alarmes + " alarme(s) não visto(s)"))}
+  </span>;
+}
+
+// 1b) "⚡ N clientes precisam de vocês" acima da lista. Começa fechado (a lista é privada em apresentação): só mostra nomes ao clicar.
+function TCliPrecisa({ clients, onOpenClient }) {
+  const T = useTCli();
+  const accs = (typeof useAdsAccounts === "function") ? useAdsAccounts() : null;
+  const [aberto, setAberto] = useState(false);
+  if (!T.ok || !T.resumo || !Array.isArray(clients)) return null;
+  const vistos = {};
+  const l = clients.map(function (mc) { return { mc: mc, r: _tcliDoCliente(mc, accs, T.resumo) }; })
+    .filter(function (x) { if (!x.r || (!x.r.decidir && !x.r.alarmes)) return false; const k = x.r.conta + ":" + (x.r._uni || ""); if (vistos[k]) return false; vistos[k] = 1; return true; })
+    .sort(function (a, b) { return ((b.r.critico ? 100 : 0) + b.r.alarmes + b.r.decidir) - ((a.r.critico ? 100 : 0) + a.r.alarmes + a.r.decidir); });
+  if (!l.length) return null;
+  const graves = l.filter(function (x) { return x.r.critico; }).length;
+  return <div style={{ margin: "0 0 12px", fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <button onClick={function () { setAberto(!aberto); }} style={{ border: "1.5px solid " + (graves ? "#fecaca" : "#ddd6fe"), background: graves ? "#fef2f2" : "#faf5ff",
+      color: graves ? "#b91c1c" : "#5b21b6", borderRadius: 12, padding: "8px 12px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>
+      ⚡ {l.length} {l.length > 1 ? "clientes precisam" : "cliente precisa"} de vocês{graves ? " · " + graves + " grave" + (graves > 1 ? "s" : "") : ""} {aberto ? "▲" : "▼"}
+    </button>
+    {aberto && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>{l.map(function (x) {
+      return <button key={x.mc.client_id} onClick={function () { window._pxSubDesejada = "ia"; window._pxAdsUnidade = null; onOpenClient && onOpenClient(x.mc.client_id); }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid #e2e8f0", background: "#fff", borderRadius: 10, padding: "6px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "#0f172a" }}>
+        {x.mc.name}
+        {x.r.decidir > 0 && <span style={{ background: "#f3e8ff", color: "#6d28d9", borderRadius: 99, padding: "1px 7px", fontSize: 11 }}>🧠 {x.r.decidir}</span>}
+        {x.r.alarmes > 0 && <span style={{ background: x.r.critico ? "#fee2e2" : "#fef3c7", color: x.r.critico ? "#b91c1c" : "#92400e", borderRadius: 99, padding: "1px 7px", fontSize: 11 }}>🔔 {x.r.alarmes}</span>}
+      </button>;
+    })}</div>}
+  </div>;
+}
+
+// 2) cartão no topo do cliente — sinal + 1 frase + botões que já sabem qual é a conta. Fecha e só volta se algo mudar.
+function TCliCartao({ mc, conta, onAbrir, isMob }) {
+  const T = useTCli();
+  const contaId = conta && conta.ad_account_id;
+  const r = _tcliNaUnidade(T.ok && T.resumo && contaId ? T.resumo[contaId] : null, mc && mc.bioter_unit);   // v80 M02/M05: unidade do cliente
+  const s = _tcliSinal(r);
+  const assinatura = r ? [r.decidir, r.alarmes, r.critico || "", s && s.titulo].join("|") : "";
+  const chave = "px_tcli_fechado_" + contaId;
+  const [fechado, setFechado] = useState(function () { try { return localStorage.getItem(chave) || ""; } catch (_) { return ""; } });
+  useEffect(function () { try { setFechado(localStorage.getItem(chave) || ""); } catch (_) { setFechado(""); } }, [chave]);
+  if (!r || !s) return null;
+  if (fechado && fechado === assinatura) return null;
+  const c = _TCLI_COR[s.cor] || _TCLI_COR.cinza;
+  const fechar = function () { try { localStorage.setItem(chave, assinatura); } catch (_) {} setFechado(assinatura); };
+  const btn = function (txt, fn, pri) { return <button onClick={fn} style={{ background: pri ? "#7c3aed" : "#fff", color: pri ? "#fff" : "#0f172a", border: "1px solid " + (pri ? "#7c3aed" : "#e2e8f0"),
+    borderRadius: 10, padding: "8px 12px", fontWeight: 800, fontSize: 12.5, cursor: "pointer", whiteSpace: "nowrap" }}>{txt}</button>; };
+  return <div style={{ border: "1.5px solid " + c[1], background: c[0], borderRadius: 16, padding: isMob ? "12px" : "12px 16px", display: "flex", alignItems: "center", gap: 14,
+    flexWrap: "wrap", fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <div style={{ fontSize: 24, lineHeight: 1 }}>{s.ic}</div>
+    <div style={{ flex: 1, minWidth: 240 }}>
+      <div style={{ fontWeight: 900, fontSize: 14.5, color: c[2] }}>{s.titulo}{r._uni ? <span style={{ fontWeight: 700, color: "#64748b" }}> · {_tcliUniLbl(r._uni)}</span> : null}</div>
+      <div style={{ fontSize: 12.5, color: "#334155", marginTop: 2, lineHeight: 1.45 }}>{s.frase}{s.resto ? <span> · <b>{s.resto}</b></span> : null}</div>
+      {T.ontem && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 2 }}>números até {String(T.ontem).split("-").reverse().slice(0, 2).join("/")} · só vocês dois veem este cartão</div>}
+    </div>
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {btn("🧠 Ver decisões" + (r.decidir ? " (" + r.decidir + ")" : ""), function () { onAbrir && onAbrir("decidir"); }, true)}
+      {btn("🎙️ Nova estratégia", function () { _tcliAbrir({ painel: "sala", conta: contaId }); })}
+      {btn("🧱 Nova campanha", function () { _tcliAbrir({ painel: "montador", conta: contaId, novo: true }); })}
+      {r.alarmes > 0 && btn("🔔 Alarmes (" + r.alarmes + ")", function () { _tcliAbrir({ painel: "alarmes" }); })}
+    </div>
+    <button onClick={fechar} title="Esconder até mudar alguma coisa" style={{ border: "none", background: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer", padding: 4 }}>×</button>
+  </div>;
+}
+
+// 3) aba "🧠 Decisões" do cliente — a Central só desta conta, embutida (sem janela)
+function TCliDecisoes({ mc, conta, isMob, canEdit }) {
+  const T = useTCli();
+  const contaId = conta && conta.ad_account_id;
+  const [aba] = useState(function () { const v = window._pxTCliVista; window._pxTCliVista = null; return v || "decidir"; });
+  const [vista, setVista] = useState(aba === "alertas" ? "alertas" : "ia");   // v80 Fase B: "Alertas" antigos moram aqui dentro (só aprovadores)
+  const rr = T.resumo && contaId ? T.resumo[contaId] : null;
+  const uni = rr && Array.isArray(rr.unidades) && mc && mc.bioter_unit ? mc.bioter_unit : null;   // v80 M05
+  if (!T.ok) return <div style={{ padding: 20, color: "#94a3b8", fontSize: 13 }}>Abra a Gestão de mídia com o PIN para ver as decisões.</div>;
+  return <div style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "18px 20px", fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🧠 Decisões · {uni ? (mc.name || _tcliUniLbl(uni)) : ((conta && conta.nome) || mc.name)}</div>
+      <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "sala", conta: contaId }); }}>🎙️ Nova estratégia</TSegBotao>
+      <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "montador", conta: contaId, novo: true }); }}>🧱 Nova campanha</TSegBotao>
+    </div>
+    {uni && <div style={{ fontSize: 12, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "7px 10px", marginBottom: 10 }}>
+      Esta unidade roda na conta de Toledo junto com outras. Aqui aparecem só as decisões das campanhas de <b>{_tcliUniLbl(uni)}</b> e o ritmo pela verba de {_tcliUniLbl(uni)}.</div>}
+    <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+      {[["ia", "🧠 Decisões da IA"], ["alertas", "📋 Alertas das regras (antigos)"]].map(function (x) {
+        const on = vista === x[0];
+        return <button key={x[0]} onClick={function () { setVista(x[0]); }} style={{ background: on ? "#7c3aed" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 10,
+          padding: "7px 12px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>{x[1]}</button>;
+      })}
+    </div>
+    {vista === "alertas" ? (typeof QGAdsEstrategia === "function"
+        ? <div><div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 8 }}>São os alertas que ficavam na aba "Alertas" (calculados na tela). Continuam valendo enquanto comparamos com as decisões da IA.</div>
+            <QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false} /></div>
+        : <div style={{ fontSize: 13, color: "#94a3b8" }}>Alertas antigos indisponíveis nesta versão.</div>)
+      : <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} unidade={uni} embutido abaInicial={aba === "alertas" ? "decidir" : aba} onMudou={function () { _tcliCarregar(true); }} />}
+  </div>;
+}
+
+function TCliEstrategias({ itens, conta }) {
+  if (itens === null) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div>;
+  if (!itens.length) return <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>Nenhuma estratégia feita para este cliente ainda. Use 🎙️ Nova estratégia.</div>;
+  return <div>{itens.map(function (h) {
+    return <div key={h.id} onClick={function () { _tcliAbrir({ painel: "sala", conta: conta, estrategia: h.id }); }}
+      style={{ padding: "9px 0", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: 12.5, lineHeight: 1.45 }}>
+      <div style={{ color: "#0f172a", fontWeight: 700 }}>{String(h.pedido).slice(0, 140)}{String(h.pedido).length > 140 ? "…" : ""}</div>
+      <div style={{ color: "#94a3b8", fontSize: 11 }}>{h.criado_por_nome || "—"} · {_tsegQuando(h.criado_em)} · {h.origem === "audio" ? "🎙️ áudio" : "texto"}{h.rascunho_id ? " · 🧱 virou campanha" : ""} · abrir ›</div>
+    </div>;
+  })}</div>;
 }
 
 /* ---------- O PORTÃO: vai em volta da PageGestaoMidia ---------- */
@@ -72255,6 +72476,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
   const [carregandoAl, setCarregandoAl] = useState(false);
   const [pend, setPend] = useState(0);             // pedidos esperando decisão minha
   const [abrirRasc, setAbrirRasc] = useState(null); // rascunho que a Sala de estratégia mandou abrir no montador
+  const [ctx, setCtx] = useState({});              // aberto de dentro do cliente: { conta, novo, estrategia }
   const ultimaRenov = useRef(0);
 
   const carregar = useCallback(async function () {
@@ -72265,6 +72487,21 @@ function TSegPortao({ currentUser, viewUser, children }) {
 
   const pode = !!(st && st.pode);
   const aberto = pode && (!st.obrigatorio || (st.desbloqueado_ate && new Date(st.desbloqueado_ate) > new Date()));
+  const vendoOutro = !!(viewUser && currentUser && viewUser.id && currentUser.id && viewUser.id !== currentUser.id);  // "Visualizar como"
+  // IA dentro do cliente (selo, cartão, aba): só liga com a porta aberta, para aprovador, e nunca no "Visualizar como"
+  useEffect(function () { _tcliSetOk(!!(aberto && !vendoOutro && !falhou)); }, [aberto, vendoOutro, falhou]);
+  useEffect(function () { return function () { _tcliSetOk(false); }; }, []);
+  useEffect(function () {
+    const h = function (e) {
+      const d = (e && e.detail) || {};
+      setCtx({ conta: d.conta || null, novo: !!d.novo, estrategia: d.estrategia || null });
+      if (d.painel === "montador") setAbrirRasc(d.abrirId || null);
+      if (d.painel === "alarmes") lerAlarmes();
+      setPainel(d.painel || null);
+    };
+    window.addEventListener("pixels:tseg-abrir", h);
+    return function () { window.removeEventListener("pixels:tseg-abrir", h); };
+  }, []);
 
   const lerAlarmes = useCallback(async function () {
     setCarregandoAl(true);
@@ -72311,7 +72548,6 @@ function TSegPortao({ currentUser, viewUser, children }) {
   if (!pode || falhou) return children;
   if (!aberto) return <TSegEntrada st={st} onPronto={carregar} />;
 
-  const vendoOutro = viewUser && currentUser && viewUser.id && currentUser.id && viewUser.id !== currentUser.id;  // "Visualizar como"
   const naoVistos = (alarmes || []).filter(function (a) { return !a.visto_em; });
   const temCritico = naoVistos.some(function (a) { return a.nivel === "critico"; });
   const trancar = async function () {
@@ -72353,9 +72589,9 @@ function TSegPortao({ currentUser, viewUser, children }) {
       )}
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
-      {painel === "montador" && <TSegMontador abrirId={abrirRasc} onFechar={function () { setPainel(null); setAbrirRasc(null); }} onMudou={lerPend} />}
-      {painel === "sala" && <TSegSala onFechar={function () { setPainel(null); }} onAbrirMontador={function (id) { setAbrirRasc(id); setPainel("montador"); }} />}
-      {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); }} onMudou={lerPend} />}
+      {painel === "montador" && <TSegMontador abrirId={abrirRasc} contaFixa={ctx.conta} novo={ctx.novo} onFechar={function () { setPainel(null); setAbrirRasc(null); setCtx({}); _tcliCarregar(true); }} onMudou={lerPend} />}
+      {painel === "sala" && <TSegSala contaFixa={ctx.conta} abrirEstrategia={ctx.estrategia} onFechar={function () { setPainel(null); setCtx({}); }} onAbrirMontador={function (id) { setAbrirRasc(id); setCtx(function (c) { return Object.assign({}, c, { novo: false }); }); setPainel("montador"); }} />}
+      {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); _tcliCarregar(true); }} onMudou={lerPend} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
       {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
     </Fragment>
@@ -119706,6 +119942,14 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
 
 /* ══════════════════════════════════════════════════════════════════
    CRIAÇÃO › EDIÇÃO DE VÍDEO
+   v94 (10/10/2026): consertos aprovados + 3 travas do áudio —
+     C01 "Editar com IA" travado enquanto o card já está com o PC ou com a IA (e `ja_em_andamento` do servidor abre a que já existe, sem cobrar);
+     o "montar" não repete sozinho · C08 vídeo sem cópia leve: o app pede ao PC (.MOV/HEVC de qualquer tamanho vai para o PC) ·
+     C44 todo <video> do Estúdio e da montagem pelo mesmo cache, máscara só quando a edição usa recorte, gravar no navegador nunca puxa o
+     original direto · C48 a narração do card só é lida por quem pode (sem o erro 403) · P1 "Ensinar a IA" (um botão em Versões, abre as
+     2 opções) · P2 confirmação antes do "Refazer do zero com a IA" (o que perde e o custo) · P3 sem a caixinha da licença do Envato ·
+     T1 VOZ POR PALAVRA automática (sobe só o trecho baixo, nunca baixa) · T2 CONFERÊNCIA DO ÁUDIO na gravação do PC, com 1 correção
+     (window.__pxConferenciaAudio) · T3 limpeza que apaga sílaba é refeita mais suave (e, se precisar, volta o som original no trecho).
    v89 (08/10/2026) aprender: botão "APRENDER COM MINHAS MUDANÇAS" (IA › Aprender com minhas mudanças, e em Versões) — o servidor compara a
      receita da IA com a sua versão à mão (cortes, música, legenda, títulos, motion, apoio, efeitos, sons, cor, zoom, velocidade, transições,
      voz…), uma IA barata explica cada mudança (o que mudou, motivo provável, regra) com o custo mostrado antes, e você decide em cada uma:
@@ -120080,6 +120324,8 @@ let _evVozesCache = null, _evVozesProm = null;
 function _evVozesCarregar(forcar){
   if(!window._sb) return Promise.resolve([]);
   if(_evVozesProm && !forcar) return _evVozesProm;
+  // v94 (10/10/2026) C48: quem não tem a chave "Edição de vídeo" (a mesma trava do banco) não pede a lista de vozes (o banco devolvia 403)
+  try{ if(typeof pxPode === "function" && !pxPode("criacao.edicao_video", false)) return Promise.resolve(_evVozesCache = []); }catch(_){}
   _evVozesProm = window._sb.rpc("criacao_vozes", { p_arquivadas:false }).then(function(r){ _evVozesCache = r.error ? [] : (Array.isArray(r.data) ? r.data : []); return _evVozesCache; }).catch(function(){ return []; });
   return _evVozesProm;
 }
@@ -120958,7 +121204,7 @@ function _EvgEditor({ ed, cliente, unidade, kit, base, onFechar, onSalvo }){
   const [vidPrev, setVidPrev] = useState(null);
   useEffect(function(){
     if(!(tipo === "tela_final" && d.midia === "video" && d.url)){ setVidPrev(null); return; }
-    const v = document.createElement("video"); v.muted = true; v.crossOrigin = "anonymous"; v.preload = "auto"; v.src = d.url; v.playsInline = true;
+    const v = document.createElement("video"); v.muted = true; v.crossOrigin = "anonymous"; v.preload = "auto"; v._src = d.url; _evSrcGuardado(v, d.url); v.playsInline = true;   // v94 (10/10/2026) C44: pelo cache
     v.onloadeddata = function(){ try{ v.currentTime = Math.min(1, (v.duration || 1) / 2); }catch(_){} }; v.onseeked = function(){ setVidPrev(v); setN(function(n){ return n + 1; }); };
     return function(){ try{ v.removeAttribute("src"); v.load(); }catch(_){} };
   }, [d.url, d.midia]);
@@ -121248,7 +121494,10 @@ async function _evInvocar(nome, opcoes, extra){
       if(j && typeof j === "object"){ temJson = true; if(j.erro) msg = String(j.erro); if(j.codigo) codigo = String(j.codigo); } } }catch(_){}
     const rede = !!er._rede || er.name === "FunctionsFetchError" || (!status && /Failed to send|Failed to fetch|NetworkError|Load failed/i.test(msg));
     const caiu = !temJson && (status === 500 || status === 502 || status === 503);
-    if(tent === 0 && !er._prazo && codigo !== "SEM_CREDITO" && (rede || caiu)){ await new Promise(function(r){ setTimeout(r, 2500); }); continue; }
+    // v94 (10/10/2026) C01 (porta do v89): o "montar" NÃO repete sozinho — se o 1º pedido chegou ao servidor e a resposta se perdeu, repetir criava
+    //   outra edição paga (o servidor também recusa edição em dobro: devolve { ja_em_andamento:true, edicao_id }). Quem chama pode pedir o mesmo com extra.semRepetir.
+    const naoRepete = !!extra.semRepetir || !!(opcoes && opcoes.body && opcoes.body.acao === "montar");
+    if(tent === 0 && !naoRepete && !er._prazo && codigo !== "SEM_CREDITO" && (rede || caiu)){ await new Promise(function(r){ setTimeout(r, 2500); }); continue; }
     const cod = er._prazo ? "PRAZO" : codigo;
     return { data:res.data || null, error:{ message:_evErroTraduzir(er._prazo ? "tempo esgotado" : msg, cod, status), codigo:cod, status:status, _traduzido:true } };
   }
@@ -121330,7 +121579,7 @@ function _evMotor(canvas, o){
     if(o.audio){ try{ o.audio.ctx.createMediaElementSource(v).connect(o.audio.dest); }catch(_){} }
     v._alvo = segs[i].ini;
     v.addEventListener("loadedmetadata", function(){ try{ v.currentTime = v._alvo; }catch(_){} });
-    if(o.original) v.src = urlDe[segs[i].clipe]; else { v._srcOrig = urlDe[segs[i].clipe]; _evSrcGuardado(v, v._srcOrig); }   // v41
+    v._srcOrig = urlDe[segs[i].clipe]; _evSrcGuardado(v, v._srcOrig);   // v41 · v94 (10/10/2026) C44: gravando também pelo cache (no PC, _evSrcGuardado põe direto)
     els[i] = v; return v;
   }
   function alvo(i, tc){ const v = criar(i); if(!v) return; v._alvo = tc; if(v.readyState >= 1){ try{ v.currentTime = tc; }catch(_){} } }
@@ -121555,7 +121804,15 @@ function _evEsperar(el, evento, ms){
     el.addEventListener(evento, ok); el.addEventListener("error", er);
   });
 }
+/* v94 (10/10/2026) C44 (porta do v89): no navegador a duração sai da cópia guardada (Cache Storage, o MESMO do Estúdio) — o vídeo é baixado 1 vez
+   por computador e serve para medir, tirar os quadros e depois tocar no Estúdio. Antes: o <video> de medir pedia pedaços e o _evBaixar baixava de novo. */
 function _evDuracao(url){
+  const local = (typeof window !== "undefined" && window.__CFG) || !/^https?:/.test(String(url || ""));
+  if(!local && typeof _evObjUrls !== "undefined" && !_evObjUrls[url] && typeof caches !== "undefined")
+    return _evUrlLocal(url).then(function(u){ return _evDuracao0(u); }, function(){ return _evDuracao0(url); });
+  return _evDuracao0(url);
+}
+function _evDuracao0(url){
   return new Promise(function(res){
     const v = document.createElement("video"); v.preload = "metadata"; v.crossOrigin = "anonymous";
     const fim = function(d){ try{ v.removeAttribute("src"); v.load(); }catch(_){} res(d); };
@@ -121564,6 +121821,17 @@ function _evDuracao(url){
   });
 }
 async function _evBaixar(url, prog){
+  /* v94 (10/10/2026) C44 (porta do v89): no navegador a montagem baixa pelo MESMO cache do Estúdio (_evBuscar) — 1 vez por computador; no PC continua direto */
+  if(!(typeof window !== "undefined" && window.__CFG) && /^https?:/.test(String(url || "")) && typeof caches !== "undefined"){
+    let iv = null;
+    try{
+      if(prog) iv = setInterval(function(){ const pg = _evProg[url]; if(pg && pg.tot) prog(Math.min(99, Math.round(pg.rec * 100 / pg.tot))); }, 300);
+      return await _evBuscar(url);
+    }catch(e){
+      if(/pesado/.test(String((e && e.message) || e))) throw new Error("vídeo pesado: o navegador só abre a cópia leve — clique em Editar com IA de novo, vai para o PC do escritório");
+      throw e;
+    }finally{ if(iv) clearInterval(iv); }
+  }
   const r = await fetch(url); if(!r.ok) throw new Error("não consegui baixar o vídeo (HTTP " + r.status + ")");
   const tot = Number(r.headers.get("content-length")) || 0;
   if(tot > _EV_NAV_MAX && !(typeof window !== "undefined" && window.__CFG)){ try{ if(r.body) r.body.cancel(); }catch(_){}           // v32: trava de vídeo
@@ -121631,7 +121899,7 @@ async function _evPrepararMontar(t, setPasso, extra){
   if(foraLim) _evToast("warning", "O card tem " + todosB.length + " vídeos: a edição usa os " + _EV_LIMITE_VIDEOS + " primeiros e " + foraLim + " ficam de fora.");
   if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
   setPasso("Medindo os vídeos…");
-  const durs = []; for(let i=0;i<brutos.length;i++) durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url));
+  const durs = []; for(let i=0;i<brutos.length;i++){ setPasso("Medindo os vídeos… " + (i + 1) + " de " + brutos.length + " (cada vídeo baixa 1 vez por computador)"); durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url)); }   // v94 (10/10/2026) C44
   const total = durs.reduce(function(s,x){ return s+x; }, 0);
   const maxMin = narrado ? 60 : 20;                     // v29: vídeo narrado não lê a fala dos brutos — aceita até 60 min
   if(total > maxMin*60) throw new Error("Os brutos somam mais de " + maxMin + " minutos. Deixe no card só o material deste vídeo.");
@@ -121668,8 +121936,14 @@ async function _evPrepararMontar(t, setPasso, extra){
   const modM = _evpModeloLer();                                   // v20: modelo escolhido no Estúdio (sem = padrão da agência)
   const res = await _evInvocar("video-editar", { body:{ acao:"montar" } }, { chamar:function(o2){      // v48: E2-14 (prazo de 420 s, nova tentativa, erro traduzido)
     return window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(foraLim ? { fora_limite:foraLim } : {}), ...(modM ? { modelo:modM } : {}), ...(extra || {}) }, signal:o2.signal }); } });
-  if(res.error) throw new Error(await _evErroFn(res));
-  return res.data || {};
+  if(res.error){
+    // v94 (10/10/2026) C01: sem a nova tentativa, uma queda de rede no montar pode ter deixado a edição nascendo no servidor — diz para conferir
+    if(/falar com o servidor/i.test(String(res.error.message || ""))) throw new Error("A conexão caiu enquanto a IA recebia o pedido. Ele pode ter entrado: espere 1 minuto e abra o card de novo antes de pedir outra vez.");
+    throw new Error(await _evErroFn(res));
+  }
+  const dOk = res.data || {};
+  if(dOk.ja_em_andamento && !dOk.id && dOk.edicao_id) dOk.id = dOk.edicao_id;      // v94 (10/10/2026) C01: o servidor devolveu a edição que já está sendo feita
+  return dOk;
 }
 
 /* ══ v29 (02/10/2026) — NARRAÇÃO NO CARD + VÍDEO PESADO VAI PARA O PC (pedido do Vini: "a voz primeiro, a edição em cima dela";
@@ -121680,6 +121954,44 @@ async function _evPrepararMontar(t, setPasso, extra){
    • _evPesados: vídeos que o navegador não abre bem (150 MB ou mais, sem cópia leve) → o "Editar com IA" manda para o PC. */
 
 function _evPesados(t){ return _evBrutos(t).filter(function(f){ return !f.previewUrl && !(f.driveOriginal && typeof f.driveOriginal === "object") && Number(f.size || 0) >= 150 * 1048576; }); }
+/* v94 (10/10/2026) C08 (porta do v89): regra do Vini — TODO vídeo precisa de cópia leve. Vídeo SEM cópia leve num formato que o navegador não
+   converte direito (.MOV do iPhone = HEVC/HDR/10 bits, MKV, AVI, MTS, ProRes…) vai para o PC de QUALQUER tamanho (antes só ≥ 150 MB): o preparar
+   do PC faz a cópia leve. MP4/WebM sem cópia leve continua editando no navegador (e o app pede a cópia leve ao PC: pxPedirCopiaLevePC, 00b). */
+function _evSemLeveFormato(f){
+  if(!f || f.previewUrl || f.preview_url || (f.driveOriginal && typeof f.driveOriginal === "object")) return false;
+  const u = String(f.url || "").split("#")[0].split("?")[0].toLowerCase(), nm = String(f.name || "").toLowerCase(), ty = String(f.type || "").toLowerCase();
+  const ext = (u.match(/\.([a-z0-9]{2,5})$/) || nm.match(/\.([a-z0-9]{2,5})$/) || [])[1] || "";
+  if(ext === "mp4" || ext === "m4v" || ext === "webm") return /hevc|h\.?265|hdr|10.?bit|prores/i.test(String(f.codec || ""));
+  return /^(mov|qt|hevc|mkv|avi|mts|m2ts|3gp|mxf|wmv|flv)$/.test(ext) || /quicktime|matroska|x-msvideo|mp2t|3gpp|x-ms-wmv|hevc/.test(ty);
+}
+function _evPrecisaPc(t){ const ps = _evPesados(t); return ps.concat(_evBrutos(t).filter(function(f){ return ps.indexOf(f) < 0 && _evSemLeveFormato(f); })); }
+/* v94 (10/10/2026) C01 (porta do v89): o card já está com o PC (preparar/drive na fila ou processando) ou com a IA (edição "processando" há menos
+   de 10 min)? Devolve null (livre) ou { tipo:"pc"|"ia", msg, edicao_id }. Lê na hora (não confia no estado da tela, que pode ter 15 s). */
+/* v94 (10/10/2026) C01: trabalho do PC "andando" = fila/processando com sinal há menos de 30 min (a MESMA regra do servidor, consertos_v94.ts
+   emAndamento). PC desligado com o pedido parado na fila não prende o botão para sempre: depois de 30 min libera (o servidor também libera). */
+function _evPcAndando(w){
+  if(!w || (w.status !== "fila" && w.status !== "processando")) return false;
+  const ms = function(x){ const n = x ? new Date(x).getTime() : NaN; return isNaN(n) ? 0 : n; };
+  const pr = w.progresso && typeof w.progresso === "object" ? w.progresso : {};
+  const ult = Math.max(ms(w.ultimo && w.ultimo.em), ms(w.pego_em), ms(w.criado_em), ms(pr.em), ms(pr.atualizado_em), ms(pr.batimento_em));
+  return !ult || Date.now() - ult < 30 * 60000;
+}
+async function _evCardOcupado(t){
+  if(!window._sb || !t) return null;
+  try{
+    const r = await window._sb.rpc("criacao_pc_trabalho_do_card", { p_task:t.id });
+    const w = r && !r.error ? r.data : null;
+    if(_evPcAndando(w))                                                  // v94 (10/10/2026) C01: (antes de 10/10 à tarde: só fila/processando, sem os 30 min)
+      return { tipo:"pc", msg:w.status === "fila" ? "Este vídeo já está na fila do PC do escritório. O andamento aparece aqui." : "O PC do escritório já está preparando este vídeo. O andamento aparece aqui." };
+  }catch(_){}
+  try{
+    const r = await window._sb.rpc("criacao_edicao", { p_task:t.id });
+    const e = r && !r.error ? r.data : null;
+    if(e && e.existe && e.status === "processando" && e.criado_em && Date.now() - new Date(e.criado_em).getTime() < 10 * 60000)
+      return { tipo:"ia", edicao_id:e.id, msg:"A IA já está editando este vídeo (começou com " + (e.criado_por || "alguém") + "). Abri a edição que está sendo feita." };
+  }catch(_){}
+  return null;
+}
 
 function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = dentro do cartão do kanban (some para quem não tem acesso à Criação)
   const vozesTodas = _evUsarVozes();
@@ -121692,10 +122004,16 @@ function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = d
   const [amostras, setAmostras] = useState({});
   const [semAcesso, setSemAcesso] = useState(false);
   const textoBriefing = _evRoteiroNarracao(t);
+  /* v94 (10/10/2026) C48: no CARTÃO (noCard), quem não tem a chave "Edição de vídeo" (criacao.edicao_video — a mesma trava do banco, _criacao_pode)
+     nem pede a narração: antes o banco respondia 403 ("Sem permissão") ~76 vezes por dia. O painel continua escondido para essa pessoa, como já era.
+     No Estúdio (sem noCard) nada muda. Se o banco passar a devolver null para quem não pode, a tela continua igual (o painel some do mesmo jeito). */
+  const semChave = !!noCard && typeof pxPode === "function" && (function(){ try{ return !pxPode("criacao.edicao_video", false); }catch(_){ return false; } })();
   const carregar = function(){
     if(!window._sb || !t) return;
+    if(semChave){ setSemAcesso(true); setNc(null); return; }          // v94 (10/10/2026) C48
     window._sb.rpc("criacao_narracao_card", { p_task:t.id }).then(function(r){
       if(r.error){ if(/permiss/i.test(String(r.error.message || ""))) setSemAcesso(true); setNc(null); return; }
+      if(r.data && r.data.sem_acesso === true){ setSemAcesso(true); setNc(null); return; }   // v94 (10/10/2026) C48: o banco (v94i) devolve {sem_acesso:true} em vez do 403 — igual ao erro antigo (painel some)
       const d = r.data || null; setNc(d);
       setTexto(d && d.texto ? d.texto : textoBriefing);
       setVozId(d && d.voz_id ? d.voz_id : "");
@@ -121830,13 +122148,14 @@ function _EvNarracaoCard({ t, isMob, onLigado, noCard }){   // v29.1: noCard = d
   );
 }
 
-function _EvPcTrabalho({ t, isMob, rec, onPronto }){
+function _EvPcTrabalho({ t, isMob, rec, onPronto, onEstado }){
   const [w, setW] = useState(null);
   const ult = useRef(null);
   useEffect(function(){
     if(!window._sb || !t) return; let vivo = true, iv = null;
     const ler = function(){ window._sb.rpc("criacao_pc_trabalho_do_card", { p_task:t.id }).then(function(r){
       if(!vivo || r.error) return; const d = r.data || null; setW(d);
+      if(typeof onEstado === "function") try{ onEstado(d); }catch(_){}          // v94 (10/10/2026) C01: o botão "Editar com IA" trava enquanto o PC tem trabalho do card
       if(ult.current && ult.current.id === (d && d.id) && ult.current.status !== "pronto" && d && d.status === "pronto" && typeof onPronto === "function") onPronto();
       ult.current = d; }).catch(function(){}); };
     ler(); iv = setInterval(ler, 15000);
@@ -121886,24 +122205,27 @@ function _EvPasso({ n, titulo, estado, cor, isMob }){
   </div>;
 }
 
-function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, narrLigado, setNarrLigado, pcRec, onPcPronto }){
+function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, narrLigado, setNarrLigado, pcRec, onPcPronto, checando }){
+  const [pcW, setPcW] = useState(null);                  // v94 (10/10/2026) C01: trabalho do PC deste card (fila/processando trava o botão)
   const [abrirLista, setAbrirLista] = useState(false);
   const [nc, setNc] = useState(null);                     // só para o passo 1 (o painel tem o estado completo)
   const [pc, setPc] = useState(null);
   useEffect(function(){ if(!window._sb || !t) return; let vivo = true;
     const ler = function(){ window._sb.rpc("criacao_narracoes_status", { p_tasks:[t.id] }).then(function(r){ if(vivo && !r.error && r.data) setNc(r.data[t.id] || null); }).catch(function(){}); };
     ler(); const iv = setInterval(ler, 20000); return function(){ vivo = false; clearInterval(iv); }; }, [t && t.id, narrLigado]);
-  const brutos = _evBrutos(t), pesados = _evPesados(t);
+  const brutos = _evBrutos(t), pesados = _evPrecisaPc(t);     // v94 (10/10/2026) C08: pesados + .MOV/HEVC sem cópia leve (o PC faz a cópia)
+  const pcOcupado = _evPcAndando(pcW);                                                                         // v94 (10/10/2026) C01 (30 min = a regra do servidor)
+  const iaOcupada = !!(ed && ed.existe && ed.status === "processando" && ed.criado_em && Date.now() - new Date(ed.criado_em).getTime() < 10 * 60000);   // v94 (10/10/2026) C01
   const leves = brutos.filter(function(f){ return !!f.previewUrl; }).length;
   const grandes = brutos.filter(function(f){ return Number(f.size || 0) >= 150 * 1048576; }).length;
   const total = brutos.reduce(function(a, f){ return a + Number(f.size || 0); }, 0);
   const narrTem = nc ? !!nc.ligado : (narrLigado === true || (narrLigado === null && !!_evRoteiroNarracao(t)));
   const p1 = !narrTem ? ["Sem narração (usa a fala dos vídeos)", "neutro"] : nc && nc.pronta ? ["Voz pronta" + (Number(nc.dur) > 0 ? " · " + _evTempo(Number(nc.dur)).replace(/\.\d$/, "") : ""), "ok"] : ["Falta gerar a voz", "vez"];
-  const p2 = !brutos.length ? ["Nenhum vídeo no card ainda", "neutro"] : brutos.length > _EV_LIMITE_VIDEOS ? [brutos.length + " vídeos: só os " + _EV_LIMITE_VIDEOS + " primeiros entram (limite) — tire os que não servem", "vez"] : pesados.length ? [pesados.length + " pesado" + (pesados.length > 1 ? "s" : "") + " → o PC faz a cópia leve", "pc"] : [brutos.length > 1 ? brutos.length + " vídeos prontos para editar" : "1 vídeo pronto para editar", "ok"];
+  const p2 = !brutos.length ? ["Nenhum vídeo no card ainda", "neutro"] : brutos.length > _EV_LIMITE_VIDEOS ? [brutos.length + " vídeos: só os " + _EV_LIMITE_VIDEOS + " primeiros entram (limite) — tire os que não servem", "vez"] : pesados.length ? [pesados.length + (pesados.length > 1 ? " vídeos" : " vídeo") + " sem cópia leve → o PC faz", "pc"] : [brutos.length > 1 ? brutos.length + " vídeos prontos para editar" : "1 vídeo pronto para editar", "ok"];
   const p3 = ed && ed.existe && ed.status === "erro" ? ["A última tentativa falhou — tente de novo", "vez"] : brutos.length ? ["Pronto para começar", "vez"] : ["Espera os vídeos", "neutro"];
   const card = { background:_EVT.painel, border:"1px solid " + _EVT.linha, borderRadius:14, padding:isMob ? 12 : 16 };
   const rot = { fontSize:_evF(11, isMob), fontWeight:800, color:_EVT.sub, textTransform:"uppercase", letterSpacing:".05em" };
-  const selo = function(f){ if(f.previewUrl) return ["✓ leve", _EVT.verdeClaro, _EVT.verde]; if(Number(f.size || 0) >= 150 * 1048576) return ["PC faz a cópia", _EVT.roxoClaro, _EVT.roxo]; return ["ok", _EVT.fundo, _EVT.sub]; };
+  const selo = function(f){ if(f.previewUrl) return ["✓ leve", _EVT.verdeClaro, _EVT.verde]; if(Number(f.size || 0) >= 150 * 1048576 || _evSemLeveFormato(f)) return ["PC faz a cópia", _EVT.roxoClaro, _EVT.roxo];   /* v94 (10/10/2026) C08 */ return ["ok", _EVT.fundo, _EVT.sub]; };
   const podeEditar = !soVer && brutos.length > 0;
   return (
     <div style={{marginTop:14}}>
@@ -121950,7 +122272,7 @@ function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, nar
                 </div>; })}
             </div>}
           </>}
-          <_EvPcTrabalho t={t} isMob={isMob} rec={pcRec} onPronto={onPcPronto}/>
+          <_EvPcTrabalho t={t} isMob={isMob} rec={pcRec} onPronto={onPcPronto} onEstado={setPcW}/>
         </div>
       </div>
 
@@ -121962,10 +122284,12 @@ function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, nar
           {narrTem && nc && !nc.pronta ? <span style={{display:"block",color:_EVT.amarelo,fontWeight:700}}>A voz ainda não foi gerada: a IA gera na hora (uns R$ 0,12/min).</span> : null}
         </div>
         {soVer ? <span style={{fontSize:_evF(13, isMob),color:_EVT.sub}}>Para editar, use o computador.</span>
-          : <button onClick={montar} disabled={!podeEditar || mandandoPc} title={!brutos.length ? "Anexe os vídeos no card primeiro" : ""}
-              style={{font:"inherit",padding:isMob ? "11px 16px" : "12px 22px",borderRadius:12,border:0,background:podeEditar ? _EVT.roxo : _EVT.fraco,color:"#fff",fontWeight:800,
-                      fontSize:_evF(14, isMob),cursor:podeEditar ? "pointer" : "not-allowed",boxShadow:podeEditar ? "0 8px 20px -10px rgba(124,58,237,.7)" : "none"}}>
-              {mandandoPc ? "Mandando para o PC…" : pesados.length ? "✨ Editar com IA · pelo PC do escritório" : "✨ Editar com IA"}</button>}
+          : <button onClick={montar} data-editar-ia disabled={!podeEditar || mandandoPc || pcOcupado || iaOcupada}   /* v94 (10/10/2026) C01: travado enquanto o PC ou a IA já estão com o card */
+              title={!brutos.length ? "Anexe os vídeos no card primeiro" : pcOcupado ? "O PC do escritório já está com este vídeo: espere ele terminar" : iaOcupada ? "A IA já está editando este vídeo" : ""}
+              style={{font:"inherit",padding:isMob ? "11px 16px" : "12px 22px",borderRadius:12,border:0,background:podeEditar && !pcOcupado && !iaOcupada ? _EVT.roxo : _EVT.fraco,color:"#fff",fontWeight:800,
+                      fontSize:_evF(14, isMob),cursor:podeEditar && !pcOcupado && !iaOcupada ? "pointer" : "not-allowed",boxShadow:podeEditar && !pcOcupado && !iaOcupada ? "0 8px 20px -10px rgba(124,58,237,.7)" : "none"}}>
+              {checando ? "Conferindo…" : mandandoPc ? "Mandando para o PC…" : pcOcupado ? (pcW.status === "fila" ? "⏳ Na fila do PC do escritório" : "🖥️ O PC está preparando…") : iaOcupada ? "A IA está editando…"
+                : pesados.length ? "✨ Editar com IA · pelo PC do escritório" : "✨ Editar com IA"}</button>}
       </div>
     </div>
   );
@@ -122048,13 +122372,28 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     }catch(e){ setErro("Não consegui mandar para o PC: " + String((e && e.message) || e)); }
     setMandandoPc(false);
   };
+  const [checando, setChecando] = useState(false);                     // v94 (10/10/2026) C01: clique duplo não manda 2 vezes
+  const montando = useRef(false);                                       // v94 (10/10/2026) C01: trava na hora (o estado só vale no próximo desenho da tela)
   const montar = async function(){
-    if(!t || passo) return;
+    if(!t || passo || mandandoPc || checando || montando.current) return;   // v94 (10/10/2026) C01: (antes: só passo)
+    montando.current = true;
+    try{ await montar1(); }finally{ montando.current = false; }
+  };
+  const montar1 = async function(){                                     // v94 (10/10/2026) C01: o montar de antes (só passou para dentro da trava)
     setErro(null);
     if(!_evBrutos(t).length){ setErro("O card ainda não tem vídeo bruto. Anexe os vídeos no card como Material (ou pelo Link do Drive) e clique em Editar com IA."); return; }
-    if(_evPesados(t).length){ await mandarPc(); return; }
+    /* v94 (10/10/2026) C01: o card já está com o PC ou com a IA → não cria outra edição (paga) — mostra a que está andando */
+    setChecando(true);
+    let oc = null;
+    try{ oc = await _evCardOcupado(t); }finally{ setChecando(false); }
+    if(oc){ _evToast("info", oc.msg); setPcRec(function(n){ return n+1; }); setRec(function(n){ return n+1; }); return; }
+    if(_evPrecisaPc(t).length){ await mandarPc(); return; }                // v94 (10/10/2026) C08: pesado OU .MOV/HEVC sem cópia leve → o PC faz a cópia leve
+    /* v94 (10/10/2026) C08: vai editar no navegador com vídeo ainda sem cópia leve (ex.: MP4 pequeno) → pede ao PC a cópia leve (1 vez por arquivo, 00b) */
+    try{ if(typeof pxPedirCopiaLevePC === "function") _evBrutos(t).forEach(function(f){ if(!f.previewUrl) pxPedirCopiaLevePC(t.id, f, "estudio"); }); }catch(_){}
     try{
       const dM = await _evPrepararMontar(t, setPasso, narrLigado === false ? { narrar:false } : (narrLigado ? { narrado:true } : undefined));
+      if(dM && dM.ja_em_andamento){                                         // v94 (10/10/2026) C01: o servidor já tinha uma edição deste card andando → abre ela, sem erro
+        setPasso(null); _evToast("info", String(dM.aviso || "Já tinha uma edição deste vídeo sendo feita: abri ela (não foi cobrado de novo).")); setPcRec(function(n){ return n+1; }); setRec(function(n){ return n+1; }); return; }
       setPasso(null); _evToast("success", "Vídeo editado pela IA. Dê o play!"); setRec(function(n){ return n+1; });
       if(dM && dM.motion_pendente && dM.id) _evmPendente(dM.id, function(){ setRec(function(n){ return n+1; }); });   // v35: motion numa segunda etapa (video-editar v43b)
     }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(n){ return n+1; }); }
@@ -122127,7 +122466,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
       )}
 
       {t && ed && !passo && (!ed.existe || ed.status==="erro" || (ed.status==="processando" && ed.criado_em && Date.now() - new Date(ed.criado_em).getTime() > 12*60000)) && (
-        <_EvPreparo t={t} ed={ed} isMob={isMob} kit={kit} musicas={musicas} soVer={soVer} montar={montar} mandandoPc={mandandoPc}
+        <_EvPreparo t={t} ed={ed} isMob={isMob} kit={kit} musicas={musicas} soVer={soVer} montar={montar} mandandoPc={mandandoPc || checando} checando={checando}
           narrLigado={narrLigado} setNarrLigado={setNarrLigado} pcRec={pcRec} onPcPronto={function(){ setRec(function(n){ return n+1; }); }}/>      // v29.2: tela nova
       )}
 
@@ -122231,7 +122570,7 @@ function _EvExportarV2({ t, ed, linha, kit, base, musica, logoUrl, exp, setExp, 
     let motor = null, ac = null;
     try{
       const AC = window.AudioContext || window.webkitAudioContext; ac = new AC(); const dest = ac.createMediaStreamDestination();
-      motor = _evMotor(cv, { linha:linha, kit:kit, base:base, clipes:ed.clipes||[], musica:musica, logoUrl:logoUrl, original:true, audio:{ ctx:ac, dest:dest },
+      motor = _evMotor(cv, { linha:linha, kit:kit, base:base, clipes:await _evClipesGravarNav(ed.clipes || []), musica:musica, logoUrl:logoUrl, original:true,   /* v94 (10/10/2026) C44 */ audio:{ ctx:ac, dest:dest },
         onTempo:function(tt){ const p = Math.round(tt/Math.max(0.1,linha.total)*100); setExp(function(x){ return (x && x.fase==="gravando" && x.pct!==p) ? Object.assign({}, x, { pct:p }) : x; }); } });
       await motor.pronto; await _evpLutsEsperar(); await _evpSfxEsperar();          // v21: LUT carregada antes do 1º quadro · v24: sons importados
       await ac.resume();
@@ -125906,6 +126245,54 @@ function _evpThumbEm(clipe, tt){
   return best.url;
 }
 
+/* v94 (10/10/2026) C44 (porta do v89): GRAVAR NO NAVEGADOR nunca puxa o ORIGINAL do Supabase direto (antes: original:true → c.url, fora do porteiro
+   e da cota). · tem cópia leve → grava com ela (a mesma que o Estúdio já guardou no computador: 0 de internet); · só tem o original no Supabase →
+   pede ao PORTEIRO (pxPorteiroLink, modo "exportar": conta na cota do dia; original pesado é recusado); · no PC do escritório (__CFG) não muda nada. */
+async function _evClipesGravarNav(clipes){
+  if(typeof window === "undefined" || window.__CFG) return clipes;
+  const ehSupa = function(u){ return typeof pxEhVideoSupabase === "function" ? pxEhVideoSupabase(u) : /\/storage\/v1\/object\/(?:public\/)?(?:agency-files|videos)\//.test(String(u || "")); };
+  const out = [];
+  for(let i = 0; i < (clipes || []).length; i++){
+    const c = clipes[i];
+    if(!c || !c.url){ out.push(c); continue; }
+    if(c.preview_url){ out.push(Object.assign({}, c, { url:c.preview_url, url_original:c.url })); continue; }
+    if(!ehSupa(c.url) || /^(blob:|data:)/.test(c.url)){ out.push(c); continue; }
+    if(typeof pxPorteiroLink !== "function") throw new Error("o porteiro de vídeo não está disponível: grave no PC do escritório");
+    let d = null;
+    try{ d = await pxPorteiroLink(c.url, "exportar", c.nome || undefined); }
+    catch(e){ throw new Error("o porteiro de vídeo não liberou \"" + (c.nome || "um vídeo") + "\": " + String((e && e.message) || e)); }
+    out.push(Object.assign({}, c, { url:(d && d.url) || c.url, url_original:c.url }));
+  }
+  return out;
+}
+/* v94 (10/10/2026) C44 (porta do v89): <video> do Estúdio (React) pelo MESMO cache (_evBuscar / _evUrlLocal, Cache Storage "pixels-video-v1").
+   · já guardado neste computador → toca daqui (0 de internet), até a miniatura; · ainda não → mostra como antes e, no 1º play, baixa UMA vez para o
+   cache e passa a tocar daqui (sem perder o ponto). data-pxvg="nao": a guarda global do app (00b) não mexe neste (este já usa o cache). */
+function _evJaGuardado(url){
+  if(!url || (typeof window !== "undefined" && window.__CFG) || !/^https?:/.test(url) || typeof caches === "undefined") return Promise.resolve(null);
+  if(_evObjUrls[url]) return Promise.resolve(_evObjUrls[url]);
+  return caches.open(_EV_CACHE).then(function(c){ return c.match(url); }).then(function(h){ return h ? h.blob() : null; })
+    .then(function(b){ return b && b.size ? (_evObjUrls[url] || (_evObjUrls[url] = URL.createObjectURL(b))) : null; }).catch(function(){ return null; });
+}
+function _EvVideo(props){
+  const src = String(props.src || ""), base = src.split("#")[0], frag = src.indexOf("#") >= 0 ? src.slice(src.indexOf("#")) : "";
+  const [loc, setLoc] = useState(function(){ return (typeof _evObjUrls !== "undefined" && _evObjUrls[base]) || null; });
+  const volta = useRef(null), ref = useRef(null);
+  useEffect(function(){ let vivo = true; setLoc(_evObjUrls[base] || null); _evJaGuardado(base).then(function(u){ if(vivo && u) setLoc(u); }); return function(){ vivo = false; }; }, [base]);
+  const resto = Object.assign({}, props); delete resto.src; delete resto.onPlay; delete resto.onLoadedMetadata;
+  const onPlay = function(e){
+    if(typeof props.onPlay === "function") props.onPlay(e);
+    if(loc || !/^https?:/.test(base) || (typeof window !== "undefined" && window.__CFG)) return;
+    const v = e.currentTarget;
+    _evUrlLocal(base).then(function(u){ if(!u || u === base || !ref.current) return; volta.current = { t:v.currentTime || 0, tocar:!v.paused }; setLoc(u); }, function(){});
+  };
+  const onMeta = function(e){
+    if(typeof props.onLoadedMetadata === "function") props.onLoadedMetadata(e);
+    const vt = volta.current; if(!vt) return; volta.current = null; const v = e.currentTarget;
+    try{ if(vt.t > 0.05) v.currentTime = vt.t; }catch(_){} if(vt.tocar){ try{ const pp = v.play(); if(pp && pp.catch) pp.catch(function(){}); }catch(_){} }
+  };
+  return React.createElement("video", Object.assign(resto, { ref:ref, src:(loc || base) + frag, "data-pxvg":"nao", onPlay:onPlay, onLoadedMetadata:onMeta }));
+}
 /* áudio do bruto (mono, 48 kHz) + forma de onda (pico a cada 20 ms) */
 /* v76 (07/10/2026): no PC do escritório o SOM vem da cópia leve (mesmo som, mesmo tempo), não da versão FullHD/4K de gravação.
    Antes o Estúdio do PC baixava o arquivo inteiro de cada vídeo de gravação (centenas de MB) só para tirar o som — com 6 a 20 vídeos a
@@ -126131,6 +126518,262 @@ function _evpProtegerFala(orig, x, F, vads){
   }
   return { quadros:prot, total:n };
 }
+/* ═══ v94 (10/10/2026) T1 — VOZ POR PALAVRA AUTOMÁTICA (trava 1, aprovada pelo Vini) ═══
+   Regra: "um volume só por vídeo, do começo ao fim; trecho de voz baixa → sobe só aquele trecho; nunca baixa um pedaço da fala".
+   Mede o nível de cada palavra (pela fala transcrita) no som que vai para o vídeo (já limpo e com os trechos de áudio), faz a média das palavras
+   a até ±0,6 s NO VÍDEO (3–4 palavras; o mesmo jeito que a conferência T2 mede) e compara com o NORMAL (a mediana dessas médias). Onde a média
+   ficou mais de 1,5 dB abaixo do normal (folga de 0,5 dB para o limite de 2 dB), SOBE só aquele pedaço o que falta (no máximo +10 dB), com
+   entrada e saída suaves (150 ms), e repete a conta até a variação ficar dentro (até 4 vezes). Nunca abaixa nada.
+   É o mesmo cálculo que fez os 10 trechos "trauto" da BeeSwarm v9 (audio_v8/scr/voz_por_palavra.py), agora sozinho, ao abrir e ao gravar,
+   no navegador e no PC (o mesmo motor). O ganho fica no som de cada bruto (no tempo do bruto) e é refeito quando os cortes mudam.
+   Onde a equipe já pôs um trecho de áudio com volume / igualar / silenciar, vale o da equipe (o automático não mexe ali).
+   Desligar: p.audio.vozPalavra = false (Limpeza da fala › Voz por palavra). Sem o campo = automático (ligado). */
+const _EVP_T1 = { janela:0.6, limiar:1.5, teto:10, suave:0.15, antes:0.06, depois:0.10, minDb:-60 };   // limiar 1,5 dB: folga de 0,5 dB para a conferência (T2), que avisa acima de 2 dB
+function _evpVozPalavraLigada(au){ return !(au && au.vozPalavra === false); }
+/* v94 (10/10/2026) T1: a MARCA que vai junto do vídeo gravado: automática (o que subiu) ou desligada pela equipe. No projeto, sem o campo = automática. */
+function _evpT1Marca(projeto, info){
+  if(!_evpVozPalavraLigada(projeto && projeto.audio)) return { auto:false, desligada_pela_equipe:true };
+  return { auto:true, trechos:(info && info.trechos) || 0, max_db:(info && info.max_db) || 0, subidos:((info && info.subidos) || []).slice(0, 12) };
+}
+function _evpDb(a, i0, i1){ i0 = Math.max(0, i0); i1 = Math.min(a.length, i1); if(i1 - i0 < 8) return -120; let s = 0; for(let i = i0; i < i1; i++) s += a[i] * a[i]; return 10 * Math.log10(s / (i1 - i0) + 1e-12); }
+function _evpPalSpan(w){ const i = Number(w.i), f = Number(w.f); return [i, Math.max(isFinite(f) ? f : i, i + 0.12)]; }
+/* palavras do vídeo: por bruto, as palavras que aparecem nos cortes (com o tempo no vídeo) */
+function _evpPalavrasUsadas(calc, fala){
+  const por = {}; const vistas = {};
+  ((calc && calc.clips) || []).forEach(function(c){
+    if(!c || c.off || c.mudo || !_evpClipeFalaNormal(c)) return; const vel = _evpNum(c.vel, 1) || 1;
+    ((fala && fala[c.clipe]) || []).forEach(function(w, k){ const i = Number(w.i); if(!isFinite(i) || i < c.ini - 0.05 || i >= c.fim - 0.05) return;
+      const ch = c.clipe + "@" + k; if(vistas[ch]) return; vistas[ch] = 1;
+      const sp = _evpPalSpan(w); (por[c.clipe] = por[c.clipe] || []).push({ k:k, w:w, t:c.t0 + Math.max(0, i - c.ini) / vel, t1:Math.min(c.t1, c.t0 + Math.max(0, sp[1] - c.ini) / vel), vel:vel, cid:c.id, cvol:c.vol == null ? 1 : _evpNum(c.vol, 1), cpts:!!(c.volPts && c.volPts.length) }); });
+  });
+  return por;
+}
+/* ganhos por palavra (só sobe): itens = [{ c:centro no vídeo, niv:dB }] → ganho em dB de cada um. A média de ±0,6 s é no VÍDEO (o que se ouve).
+   Repete até 4 vezes (subir uma palavra muda a média das vizinhas): na 1ª sobe quem está > limiar abaixo do normal; nas outras, acerta o resto (> 0,5 dB). */
+function _evpGanhosPorPalavra(itens, opc){
+  opc = Object.assign({}, _EVP_T1, opc || {});
+  const n = itens.length, g = new Float32Array(n); if(n < 4) return { g:g, normal:null };
+  const ordC = itens.map(function(x, i){ return i; });
+  const jan = function(){ const out = new Float32Array(n); for(let k = 0; k < n; k++){ let e = 0, m = 0; for(let j = 0; j < n; j++){ if(Math.abs(itens[j].c - itens[k].c) <= opc.janela){ e += Math.pow(10, (itens[j].niv + g[j]) / 10); m++; } } out[k] = m ? 10 * Math.log10(e / m) : -120; } return out; };
+  const j0 = jan(), normal = _evpPctl(Array.from(j0), 0.5);
+  for(let it = 0; it < 4; it++){
+    const jj = it ? jan() : j0; let mexeu = false;
+    ordC.forEach(function(k){ const falta = normal - jj[k], gat = it ? 0.5 : opc.limiar;
+      if(falta > gat && g[k] < opc.teto){ g[k] = Math.min(opc.teto, g[k] + falta); mexeu = true; } });
+    if(!mexeu) break;
+  }
+  return { g:g, normal:normal };
+}
+/* aplica em `vozes` ({bruto: AudioBuffer}) e devolve { vozes novos, info }. Não muda os buffers de entrada. */
+function _evpVozPorPalavra(vozes, calc, fala, trechos, opc){
+  opc = Object.assign({}, _EVP_T1, opc || {});
+  const usadas = _evpPalavrasUsadas(calc, fala), itens = [];
+  Object.keys(usadas).forEach(function(cid){
+    const b = vozes && vozes[cid]; if(!b) return; const a = b.getChannelData(0), sr = b.sampleRate;
+    const manuais = _evpTrechosDoClipe(calc, cid, (trechos || []).filter(function(r){ return r && !r.off && (_evpNum(r.vol, 0) || r.igualar || r.mudo); }), null);
+    usadas[cid].forEach(function(u){ const sp = _evpPalSpan(u.w), niv = _evpDb(a, Math.floor(sp[0] * sr), Math.ceil(sp[1] * sr)); if(!(niv > opc.minDb)) return;
+      const a0 = Math.max(0, sp[0] - opc.antes), b0 = sp[1] + opc.depois;
+      itens.push({ cid:cid, u:u, sp:sp, a0:a0, b0:b0, niv:niv, c:(u.t + Math.max(u.t + 0.05, u.t1)) / 2,
+        equipe:manuais.some(function(iv){ return Math.min(iv.b, b0) - Math.max(iv.a, a0) > 0.02; }) }); });   // a equipe já decidiu o volume ali
+  });
+  const info = { normal_db:null, trechos:0, max_db:0, subidos:[] };
+  if(itens.length < 4) return { vozes:vozes, info:info };
+  itens.sort(function(x, y){ return x.c - y.c; });
+  const G = _evpGanhosPorPalavra(itens, opc); info.normal_db = G.normal != null ? Math.round(G.normal * 10) / 10 : null;
+  const porCid = {};
+  itens.forEach(function(x, k){ const gn = x.equipe ? 0 : G.g[k]; if(gn > 0.05) (porCid[x.cid] = porCid[x.cid] || []).push({ x:x, gn:gn }); });
+  let grupo = null; const fecha = function(){ if(grupo){ info.subidos.push(grupo); grupo = null; } };
+  itens.forEach(function(x, k){ const gn = x.equipe ? 0 : G.g[k]; if(!(gn > 0.05)){ fecha(); return; }
+    if(grupo && x.u.t - grupo.t1 < 0.35 && Math.abs(gn - grupo.db) <= 2){ grupo.t1 = x.u.t1; grupo.texto += " " + String(x.u.w.p || ""); grupo.db = Math.max(grupo.db, gn); }
+    else { fecha(); grupo = { t:Math.round(x.u.t * 100) / 100, t1:x.u.t1, db:gn, texto:String(x.u.w.p || "") }; }
+    info.max_db = Math.max(info.max_db, gn); });
+  fecha();
+  const novos = Object.assign({}, vozes);
+  Object.keys(porCid).forEach(function(cid){
+    const b = vozes[cid], sr = b.sampleRate, a = b.getChannelData(0);
+    const Q = Math.round(sr * 0.01), nq = Math.ceil(a.length / Q), g = new Float32Array(nq);
+    porCid[cid].forEach(function(z){ const q0 = Math.max(0, Math.floor(z.x.a0 / 0.01)), q1 = Math.min(nq, Math.ceil(z.x.b0 / 0.01)); for(let q = q0; q < q1; q++) if(g[q] < z.gn) g[q] = z.gn; });
+    const K = Math.max(1, Math.round(opc.suave / 0.01)), gs = new Float32Array(nq); let soma = 0;     // média móvel de 150 ms (entra e sai suave)
+    for(let q = 0; q < nq + K; q++){ if(q < nq) soma += g[q]; if(q - K >= 0) soma -= g[q - K]; const c = q - Math.floor(K / 2); if(c >= 0 && c < nq) gs[c] = soma / K; }
+    for(let q = 0; q < nq; q++) if(gs[q] < g[q] * 0.5 && g[q] > 0) gs[q] = Math.max(gs[q], g[q] * 0.5);  // a palavra em si nunca fica com menos da metade do ganho por causa da suavização
+    const y = new Float32Array(a.length);
+    for(let i = 0; i < a.length; i++){ const qf = i / Q - 0.5, q = Math.max(0, Math.min(nq - 1, Math.floor(qf))), q2 = Math.min(nq - 1, q + 1), fr = Math.max(0, Math.min(1, qf - q));
+      const db = gs[q] + (gs[q2] - gs[q]) * fr; y[i] = db > 0.01 ? a[i] * Math.pow(10, db / 20) : a[i]; }
+    const out = new AudioBuffer({ length:a.length, numberOfChannels:1, sampleRate:sr }); out.copyToChannel(y, 0);
+    ["_metodoRuido", "_protecaoFala", "_limpezaConferida", "_eco"].forEach(function(k){ if(b[k]) out[k] = b[k]; });
+    out._vozPalavra = true; novos[cid] = out;
+  });
+  info.trechos = info.subidos.length; info.max_db = Math.round(info.max_db * 10) / 10;
+  info.subidos = info.subidos.map(function(x){ return { t:x.t, t1:Math.round(x.t1 * 100) / 100, db:Math.round(x.db * 10) / 10, texto:x.texto.slice(0, 60) }; });
+  return { vozes:novos, info:info };
+}
+/* ═══ v94 (10/10/2026) T2 — CONFERIR O ÁUDIO ANTES DE ENTREGAR (trava 2, aprovada pelo Vini) ═══
+   Na gravação do PC (quadro a quadro), depois da passada do som e ANTES de mandar o som para o PC juntar com a imagem, o Estúdio ouve o
+   som FINAL (o mesmo arquivo que vai para o PC) e, separadas só para medir, a voz pronta e a música. Procura, palavra por palavra:
+     · palavra_baixa — palavra que tem voz no bruto e saiu > 9 dB abaixo do normal no final (sílaba apagada/limpeza demais);
+     · voz_variando — voz da palavra (média de ±0,6 s) > 2 dB abaixo do normal da voz;
+     · musica_alta — música mais alta que a voz durante a palavra;
+     · silencio_na_frase — som some (> 35 dB abaixo do normal, ≥ 80 ms) no meio da palavra/frase onde o bruto tinha voz.
+   Achou? Corrige 1 vez sozinho (volta o som do bruto naquele pedaço = suaviza a limpeza; sobe o pedaço baixo; abaixa a música),
+   grava o som de novo e confere de novo. O resultado vai para o PC: window.__pxConferenciaAudio = { v, ok, corrigido, medido, problemas:[{t, tipo, texto}], … }. */
+const _EVP_T2 = { baixaDb:9, variaDb:2, janela:0.6, silDb:35, silMin:0.08, vozBrutoDb:10, max:20 };
+async function _evpDecodificarMono(blob){
+  const ab = await blob.arrayBuffer(); const dec = new OfflineAudioContext(1, 48000, 48000); const b = await dec.decodeAudioData(ab);
+  const n = b.length, x = new Float32Array(n); for(let ch = 0; ch < b.numberOfChannels; ch++){ const d = b.getChannelData(ch); for(let i = 0; i < n; i++) x[i] += d[i] / b.numberOfChannels; }
+  return { x:x, sr:b.sampleRate };
+}
+/* o "clique" de sincronia (0,5 por 20 ms) que a passada do som põe antes do vídeo: o 1º ponto acima de 0,25 nos 4 primeiros segundos */
+function _evpAcharClique(x, sr){ const n = Math.min(x.length, Math.round(sr * 4)); for(let i = 0; i < n; i++) if(Math.abs(x[i]) > 0.25) return i; return -1; }
+function _evpPctl(a, p){ if(!a.length) return null; const o = a.slice().sort(function(x, y){ return x - y; }); return o[Math.min(o.length - 1, Math.max(0, Math.floor(o.length * p)))]; }
+/* o.fin / o.voz / o.mus = { x, sr, i0 } (i0 = amostra do segundo 0 do vídeo) · o.brutos = { bruto: AudioBuffer do som ORIGINAL } */
+function _evpConferirAudio(o){
+  const calc = o.calc, fala = o.fala || {}, T = _EVP_T2, usadas = _evpPalavrasUsadas(calc, fala);
+  const db = function(S, ta, tb){ if(!S) return -120; return _evpDb(S.x, S.i0 + Math.round(ta * S.sr), S.i0 + Math.round(tb * S.sr)); };
+  const P = [];
+  Object.keys(usadas).forEach(function(cid){
+    const raw = o.brutos && o.brutos[cid]; const ra = raw ? raw.getChannelData(0) : null, rsr = raw ? raw.sampleRate : 48000;
+    let chao = -120;
+    if(ra){ const Q = Math.round(rsr * 0.01), es = []; for(let q = 0; q + Q <= ra.length; q += Q * 3) es.push(_evpDb(ra, q, q + Q)); chao = _evpPctl(es, 0.1); }
+    usadas[cid].forEach(function(u){ const sp = _evpPalSpan(u.w), t1 = Math.max(u.t + 0.05, u.t1);
+      if(u.cvol < 0.7 || u.cpts || (o.trechos || []).some(function(r){ return r && !r.off && (r.mudo || _evpNum(r.vol, 0) < 0) && Math.min(_evpNum(r.t1, 0), t1) - Math.max(_evpNum(r.t0, 0), u.t) > 0.02; })) return;   // a equipe baixou/silenciou de propósito: não confere
+      const lr = ra ? _evpDb(ra, Math.floor(sp[0] * rsr), Math.ceil(sp[1] * rsr)) : 0;
+      P.push({ cid:cid, k:u.k, w:u.w, p:String(u.w.p || ""), t:u.t, t1:t1, vel:u.vel, a:sp[0], b:sp[1], lr:lr, chao:chao, vozBruto:!ra || lr > chao + T.vozBrutoDb,
+        lf:db(o.fin, u.t, t1), lv:db(o.voz, u.t, t1), lm:o.mus ? db(o.mus, u.t, t1) : -120 }); });
+  });
+  P.sort(function(x, y){ return x.t - y.t; });
+  const comVoz = P.filter(function(x){ return x.vozBruto && x.lf > -90; });
+  const res = { problemas:[], alvos:[], medidas:{ palavras:P.length, com_voz:comVoz.length } };
+  if(comVoz.length < 5){ res.medidas.pouca_fala = true; return res; }
+  const normalF = _evpPctl(comVoz.map(function(x){ return x.lf; }), 0.5); res.medidas.normal_final_db = Math.round(normalF * 10) / 10;
+  // voz: média de ±0,6 s (no vídeo) e o normal
+  const vv = P.filter(function(x){ return x.lv > -60; });
+  vv.forEach(function(x){ let e = 0, n = 0; vv.forEach(function(y){ if(Math.abs((y.t + y.t1) / 2 - (x.t + x.t1) / 2) <= T.janela){ e += Math.pow(10, y.lv / 10); n++; } }); x.jv = n ? 10 * Math.log10(e / n) : -120; });
+  const normalV = vv.length ? _evpPctl(vv.map(function(x){ return x.jv; }), 0.5) : null; res.medidas.normal_voz_db = normalV != null ? Math.round(normalV * 10) / 10 : null;
+  const add = function(x, tipo, texto, extra){ res.alvos.push(Object.assign({ tipo:tipo, cid:x.cid, a:x.a, b:x.b, t:x.t, lr:x.lr }, extra || {})); res.problemas.push({ t:Math.round(x.t * 100) / 100, tipo:tipo, texto:texto }); };
+  const ja = {};
+  P.forEach(function(x){
+    if(x.vozBruto && x.lf < normalF - T.baixaDb){ ja[x.cid + "@" + x.k] = 1; add(x, "palavra_baixa", "“" + x.p + "” quase sumiu (" + Math.round(x.lf - normalF) + " dB)", { db:normalF - x.lf }); return; }
+    // silêncio no meio da palavra onde o bruto tinha voz
+    const raw = o.brutos && o.brutos[x.cid]; if(!raw || !x.vozBruto || !o.fin) return;
+    const ra = raw.getChannelData(0), rsr = raw.sampleRate, dq = 0.01; let run = 0, maior = 0;
+    for(let tt = x.t; tt + dq <= x.t1; tt += dq){ const st = x.a + (tt - x.t) * x.vel, lr = _evpDb(ra, Math.floor(st * rsr), Math.ceil((st + dq * x.vel) * rsr));
+      const voz = lr > Math.max(x.chao + 15, x.lr - 20); const lf = db(o.fin, tt, tt + dq);
+      if(voz && lf < normalF - T.silDb){ run += dq; if(run > maior) maior = run; } else run = 0; }
+    if(maior >= T.silMin){ ja[x.cid + "@" + x.k] = 1; add(x, "silencio_na_frase", "o som some no meio de “" + x.p + "” (" + Math.round(maior * 1000) + " ms)"); }
+  });
+  if(normalV != null) vv.forEach(function(x){ if(ja[x.cid + "@" + x.k]) return; const falta = normalV - x.jv; if(falta > T.variaDb){ add(x, "voz_variando", "voz " + (Math.round(falta * 10) / 10).toString().replace(".", ",") + " dB mais baixa em “" + x.p + "”", { db:falta }); } });
+  /* para a correção da voz: os ganhos por palavra pela MESMA conta da voz por palavra (T1), medidos na voz que saiu (média de ±0,6 s no vídeo) */
+  if(normalV != null && res.alvos.some(function(a){ return a.tipo === "voz_variando"; })){
+    const it = vv.map(function(x){ return { c:(x.t + x.t1) / 2, niv:x.lv, x:x }; }), G = _evpGanhosPorPalavra(it, { limiar:1.5 });
+    res.ganhosVoz = []; it.forEach(function(q, k){ if(G.g[k] > 0.05 && !ja[q.x.cid + "@" + q.x.k]) res.ganhosVoz.push({ cid:q.x.cid, a:q.x.a, b:q.x.b, t:q.x.t, db:G.g[k] }); });
+  }
+  if(o.mus) P.forEach(function(x){ if(x.lv > -60 && x.lm > x.lv){ add(x, "musica_alta", "música mais alta que a voz em “" + x.p + "” (+" + Math.round(x.lm - x.lv) + " dB)", { db:x.lm - x.lv }); } });
+  // junta pedaços seguidos do mesmo tipo (até 1 s) num aviso só
+  const junt = []; res.problemas.slice().sort(function(a, b){ return a.t - b.t; }).forEach(function(pr){ const u = junt.filter(function(j){ return j.tipo === pr.tipo; }).pop();
+    if(u && pr.t - u._t1 <= 1){ u._t1 = pr.t; u._n++; return; } junt.push(Object.assign({ _t1:pr.t, _n:1 }, pr)); });
+  res.problemas = junt.map(function(j){ return { t:j.t, tipo:j.tipo, texto:j.texto + (j._n > 1 ? " (+" + (j._n - 1) + " palavra" + (j._n > 2 ? "s" : "") + " perto)" : "") }; }).slice(0, T.max);
+  return res;
+}
+/* liga/desliga: no PC, o trabalho pode mandar opcoes.conferir_audio:false (sem o campo = ligada) */
+function _evpT2Ligada(pcAuto){ try{ const op = (pcAuto && pcAuto.opcoes) || {}; return op.conferir_audio !== false && typeof OfflineAudioContext !== "undefined" && typeof MediaRecorder !== "undefined"; }catch(_){ return false; } }
+/* o som ORIGINAL de cada bruto que tem palavra no vídeo (o mesmo que o Estúdio já abriu; se não abriu, abre agora) */
+async function _evpBrutosConferir(calc, fala, clipes){
+  const out = {}, usadas = _evpPalavrasUsadas(calc, fala);
+  for(const cid of Object.keys(usadas)){ let b = _evpM(cid).audio;
+    if(!b){ const inf = (clipes || []).find(function(c){ return c && c.id === cid; }); if(inf){ try{ b = await _evpAudio(cid, _evAudioDe(inf)); }catch(_){ b = null; } } }
+    if(b) out[cid] = b; }
+  return out;
+}
+/* decodifica a passada do som (final + voz + música), acha o clique em cada uma e confere */
+async function _evpAnalisarSom(som, calc, fala, brutos){
+  if(!som || !som.blob || som.marca == null || !isFinite(som.marca)) throw new Error("sem a marca de sincronia do som");
+  const abre = async function(blob){ if(!blob) return null; const d = await _evpDecodificarMono(blob); const c = _evpAcharClique(d.x, d.sr);
+    if(c < 0) throw new Error("não achei o clique de sincronia"); return { x:d.x, sr:d.sr, i0:c + Math.round(som.marca * d.sr) }; };
+  const fin = await abre(som.blob), voz = await abre(som.voz), mus = await abre(som.mus);
+  return _evpConferirAudio({ fin:fin, voz:voz || fin, mus:mus, calc:calc, fala:fala, brutos:brutos, trechos:(som.trechos || []) });
+}
+/* a correção (1 vez): volta o som do bruto onde a palavra sumiu (suaviza a limpeza ali), sobe o pedaço baixo e abaixa a música */
+function _evpCorrigirAudio(vozes, achado, brutos){
+  const out = Object.assign({}, vozes), cor = [], porCid = {}; let musDb = null;
+  (achado.alvos || []).forEach(function(a){ if(a.tipo === "musica_alta"){ musDb = Math.max(musDb == null ? -99 : musDb, a.db || 0); return; } if(a.tipo === "voz_variando" && achado.ganhosVoz) return; (porCid[a.cid] = porCid[a.cid] || []).push(a); });
+  (achado.ganhosVoz || []).forEach(function(a){ (porCid[a.cid] = porCid[a.cid] || []).push(Object.assign({ tipo:"voz_variando" }, a)); });   // a voz: os ganhos da conta da T1 (não só a palavra que avisou)
+  Object.keys(porCid).forEach(function(cid){
+    const b = vozes[cid]; if(!b) return; const sr = b.sampleRate, y = new Float32Array(b.getChannelData(0)), raw = brutos && brutos[cid], ra = raw && raw.sampleRate === sr ? raw.getChannelData(0) : null;
+    const ramp = function(i0, i1, fn){ const R = Math.round(sr * 0.03); for(let i = Math.max(0, i0); i < Math.min(y.length, i1); i++){ const w = Math.min(1, (i - i0) / R, (i1 - 1 - i) / R); fn(i, Math.max(0, w)); } };
+    porCid[cid].forEach(function(a){
+      const i0 = Math.floor(Math.max(0, a.a - 0.08) * sr), i1 = Math.ceil((a.b + 0.12) * sr);
+      if((a.tipo === "palavra_baixa" || a.tipo === "silencio_na_frase") && ra){
+        const lt = _evpDb(b.getChannelData(0), Math.floor((a.a - 0.6) * sr), Math.ceil((a.b + 0.6) * sr)), lr = _evpDb(ra, i0, i1);
+        const k = Math.pow(10, Math.max(-12, Math.min(16, lt - lr)) / 20);
+        ramp(i0, i1, function(i, w){ y[i] = y[i] * (1 - w) + ra[i] * k * w; });
+        cor.push({ tipo:"suavizou_limpeza", t:Math.round(a.t * 100) / 100, db:Math.round((lt - lr) * 10) / 10 });
+      } else if(a.tipo === "voz_variando" || a.tipo === "palavra_baixa"){
+        const g = Math.pow(10, Math.min(10, Math.max(0, a.db || 0)) / 20);
+        ramp(i0, i1, function(i, w){ y[i] = y[i] * (1 + (g - 1) * w); });
+        cor.push({ tipo:"subiu", t:Math.round(a.t * 100) / 100, db:Math.round(Math.min(10, a.db || 0) * 10) / 10 });
+      }
+    });
+    const nb = new AudioBuffer({ length:y.length, numberOfChannels:1, sampleRate:sr }); nb.copyToChannel(y, 0); nb._conferido = true; out[cid] = nb;
+  });
+  let musicaGanho = 1;
+  if(musDb != null){ const d = Math.min(12, Math.max(3, musDb + 4)); musicaGanho = Math.pow(10, -d / 20); cor.push({ tipo:"abaixou_musica", db:-Math.round(d * 10) / 10 }); }
+  cor.sort(function(x, y){ return (x.t == null ? -1 : x.t) - (y.t == null ? -1 : y.t); });
+  return { vozes:out, musicaGanho:musicaGanho, correcoes:cor.length > 40 ? cor.slice(0, 40).concat([{ tipo:"mais", n:cor.length - 40 }]) : cor };
+}
+/* v94 (10/10/2026) T3 — "MELHORIA QUE PIORA NÃO FICA" (regra do Vini: "é melhor entrar um pouco de ruído do que não dar para entender").
+   Vale para TODA a limpeza do navegador (tirar ruído com IA ou a porta de ruído, eco, cliques) — a proteção do v93 só cobria o RNNoise.
+   Compara o envelope de 10 ms do som LIMPO com o do ORIGINAL: quadro com voz no original (≥ 10 dB acima do chão de ruído) que ficou > 9 dB
+   abaixo do normal (o normal = quanto a limpeza tirou, na mediana, dos quadros de voz). Se isso passa de 3 % dos quadros de voz:
+     1) refaz com METADE da força (metade do som limpo + metade do original); 2) se ainda falhar, metade de novo (25 %);
+     3) se ainda falhar, nos quadros que continuam apagados volta o SOM ORIGINAL (com entrada e saída suaves de 20 ms).
+   No silêncio entre frases a limpeza continua (o passo 3 só mexe nos quadros com voz apagada). Mexe em x (no lugar) e devolve o relatório. */
+const _EVP_T3 = { quadroS:0.01, vozDb:10, apagadoDb:9, limitePct:3 };
+/* v94 (10/10/2026) T3: atraso do RNNoise (0, 1, 2 ou 3 quadros) — o que mais se parece com o original num trecho de até 8 s com som. Sem som: 2 quadros. */
+function _evpAtrasoRnn(orig, x, F){
+  const n = Math.min(orig.length, x.length), J = Math.min(n - 4 * F, 48000 * 8); if(J < 48000) return 2 * F;
+  let melhorI = 0, melhorE = -1; const passo = 48000;                          // começo do trecho com mais som (de 1 em 1 s)
+  for(let i0 = 0; i0 + J + 3 * F < n; i0 += passo){ let e = 0; for(let i = i0; i < i0 + J; i += 64) e += orig[i] * orig[i]; if(e > melhorE){ melhorE = e; melhorI = i0; } }
+  let best = 2 * F, bestC = 0.3;
+  for(let L = 0; L <= 3 * F; L += F){ let s = 0, a = 0, c = 0; for(let i = melhorI; i < melhorI + J; i += 2){ const o = orig[i], y = x[i + L]; s += o * y; a += o * o; c += y * y; }
+    const cc = a > 0 && c > 0 ? s / Math.sqrt(a * c) : 0; if(cc > bestC){ bestC = cc; best = L; } }
+  return best;
+}
+function _evpLimpezaApagados(orig, x, F){
+  const n = Math.floor(Math.min(orig.length, x.length) / F); if(n < 10) return null;
+  const eo = new Float32Array(n), er = new Float32Array(n);
+  for(let q = 0; q < n; q++){ let a = 0, b = 0; const i0 = q * F; for(let k = 0; k < F; k++){ const o = orig[i0 + k], r = x[i0 + k]; a += o * o; b += r * r; } eo[q] = a / F; er[q] = b / F; }
+  const ord = Array.from(eo).filter(function(v){ return v > 1e-12; }).sort(function(a, b){ return a - b; });
+  if(!ord.length) return null;
+  const chao = Math.max(ord[Math.floor(ord.length * 0.1)], 1e-9), limVoz = chao * Math.pow(10, _EVP_T3.vozDb / 10);
+  const voz = [], d = new Float32Array(n);
+  for(let q = 0; q < n; q++){ d[q] = 10 * Math.log10((er[q] + 1e-12) / (eo[q] + 1e-12)); if(eo[q] >= limVoz && eo[q] > 1e-7) voz.push(q); }
+  if(voz.length < 20) return { n:n, voz:voz.length, ruins:[], pct:0, normal:0 };
+  const dv = voz.map(function(q){ return d[q]; }).sort(function(a, b){ return a - b; }), normal = dv[Math.floor(dv.length / 2)];
+  const ruins = voz.filter(function(q){ return d[q] < normal - _EVP_T3.apagadoDb; });
+  return { n:n, voz:voz.length, ruins:ruins, pct:Math.round(ruins.length / voz.length * 1000) / 10, normal:Math.round(normal * 10) / 10 };
+}
+function _evpConferirLimpeza(orig, x, sr){
+  const F = Math.max(1, Math.round(sr * _EVP_T3.quadroS));
+  let m = _evpLimpezaApagados(orig, x, F); if(!m) return null;
+  const info = { antes:m.pct, voz:m.voz, passos:[], final:m.pct, original_quadros:0 };
+  if(m.pct <= _EVP_T3.limitePct) return info;
+  const limpo = new Float32Array(x);
+  for(const k of [0.5, 0.25]){                                         // 1) e 2): metade da força, depois metade de novo
+    for(let i = 0; i < x.length; i++) x[i] = limpo[i] * k + orig[i] * (1 - k);
+    m = _evpLimpezaApagados(orig, x, F); info.passos.push({ forca:k, pct:m ? m.pct : 0 }); info.final = m ? m.pct : 0;
+    if(!m || m.pct <= _EVP_T3.limitePct) return info;
+  }
+  /* 3) o som original nos quadros que continuam apagados (± 2 quadros), com rampa de 20 ms nas pontas */
+  const n = Math.floor(x.length / F), w = new Float32Array(n);
+  m.ruins.forEach(function(q){ for(let j = Math.max(0, q - 2); j <= Math.min(n - 1, q + 2); j++) w[j] = 1; });
+  const rampa = Math.max(1, Math.round(0.02 * sr)); let nq = 0;
+  const g = new Float32Array(x.length); for(let q = 0; q < n; q++){ if(w[q]){ nq++; g.fill(1, q * F, (q + 1) * F); } }
+  for(let i = 1; i < g.length; i++) if(g[i] < g[i - 1] - 1 / rampa) g[i] = g[i - 1] - 1 / rampa;             // saída suave
+  for(let i = g.length - 2; i >= 0; i--) if(g[i] < g[i + 1] - 1 / rampa) g[i] = g[i + 1] - 1 / rampa;       // entrada suave
+  for(let i = 0; i < x.length; i++){ const a = g[i] > 0 ? g[i] : 0; if(a) x[i] = x[i] * (1 - a) + orig[i] * a; }
+  m = _evpLimpezaApagados(orig, x, F); info.original_quadros = nq; info.final = m ? m.pct : 0; info.passos.push({ original:true, quadros:nq, pct:info.final });
+  return info;
+}
 async function _evpTratar(clipe, opcoes){
   const m = _evpM(clipe); if(!m.audio) return null;
   const chave = (opcoes.ruido?"r":"") + (opcoes.eco?"e":"") + (opcoes.voz?"v":"") + (opcoes.nivelar?"n":"") + _evpChaveExtra(opcoes);   // v24
@@ -126138,11 +126781,13 @@ async function _evpTratar(clipe, opcoes){
   if(m.tratado[chave]) return m.tratado[chave];
   const sr = m.audio.sampleRate, x = new Float32Array(m.audio.getChannelData(0));
   let metodoRuido = null, protecao = null;
+  const limpa = !!(opcoes.ruido || opcoes.eco || opcoes.cliques) && opcoes.conferirLimpeza !== false;   // v94 (10/10/2026) T3
+  const orig0 = limpa || opcoes.ruido ? new Float32Array(x) : null;    // v94 (10/10/2026) T3: o som de antes de TODA a limpeza
   if(opcoes.ruido){
     try{
       if(sr !== 48000) throw new Error("taxa");
       const rn = await _evpRnnoise(); const st = rn.createDenoiseState(); const F = rn.frameSize || 480; const fr = new Float32Array(F);
-      const orig = opcoes.protegerFala === false ? null : new Float32Array(x), vads = [];   // v93: guarda o som de antes da limpeza (proteção da fala)
+      const orig = opcoes.protegerFala === false ? null : (orig0 || new Float32Array(x)), vads = [];   // v93: guarda o som de antes da limpeza (proteção da fala) · v94: a mesma cópia do T3
       let desde = performance.now();
       for(let i=0; i + F <= x.length; i += F){
         for(let k=0;k<F;k++) fr[k] = x[i+k] * 32768;
@@ -126151,12 +126796,17 @@ async function _evpTratar(clipe, opcoes){
         if(performance.now() - desde > 30){ await new Promise(function(r){ setTimeout(r, 0); }); desde = performance.now(); }   // não trava a tela
       }
       st.destroy(); metodoRuido = "rnnoise";
+      /* v94 (10/10/2026) T3: o RNNoise devolve o som ATRASADO (medido no w359: 960 amostras = 20 ms). Sem acertar, a proteção da fala do v93
+         somava o original fora do tempo (filtro pente) e a fala limpa tocava 20 ms depois da boca. Acerta o atraso antes de proteger/conferir. */
+      if(orig0){ try{ const atr = _evpAtrasoRnn(orig0, x, F); if(atr > 0){ x.copyWithin(0, atr); x.fill(0, x.length - atr); vads.splice(0, Math.round(atr / F)); } if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpAtrasoRnn = atr; }catch(_){} }
       if(orig){ try{ protecao = _evpProtegerFala(orig, x, F, vads); }catch(_){ } }
     }catch(_){ _evpPortaRuido(x, sr); metodoRuido = "porta"; }
   }
   let ecoInfo = null;
   if(opcoes.eco){ await new Promise(function(r){ setTimeout(r, 0); }); ecoInfo = _evpReduzirEco(x, sr, _evpEcoF(opcoes)); }   // v88: força + não robotiza
   if(opcoes.cliques){ await new Promise(function(r){ setTimeout(r, 0); }); _evpTirarCliques(x, sr); }     // v24
+  let limpezaConf = null;                                                                         // v94 (10/10/2026) T3: limpeza que apaga sílaba é suavizada
+  if(limpa && orig0){ try{ await new Promise(function(r){ setTimeout(r, 0); }); limpezaConf = _evpConferirLimpeza(orig0, x, sr); }catch(_){ limpezaConf = null; } }
   const eqTem = Array.isArray(opcoes.eq) && opcoes.eq.some(function(g){ return Math.abs(_evpNum(g, 0)) > 0.1; });
   let y = x;
   if(opcoes.voz || opcoes.nivelar || opcoes.hum || opcoes.pops || eqTem){
@@ -126193,6 +126843,7 @@ async function _evpTratar(clipe, opcoes){
   }
   const out = new AudioBuffer({ length:y.length, numberOfChannels:1, sampleRate:sr }); out.copyToChannel(y instanceof Float32Array ? y : new Float32Array(y), 0);
   out._metodoRuido = metodoRuido; if(protecao) out._protecaoFala = protecao;   // v93
+  if(limpezaConf){ out._limpezaConferida = limpezaConf; if(typeof window !== "undefined" && window.__EVP_TESTE){ window.__evpT3 = window.__evpT3 || {}; window.__evpT3[clipe] = limpezaConf; } }   // v94 (10/10/2026) T3
   if(ecoInfo){ out._eco = ecoInfo; if(!/^narr:/.test(String(clipe))) _evpEcoUltimo[clipe] = ecoInfo; if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpEco = Object.assign({}, _evpEcoUltimo); }   // v88
   m.tratado[chave] = out; _evpAvisar();
   return out;
@@ -126312,7 +126963,7 @@ function _evpVaGrafo(ac, master, lim, saida, cfg){
     }catch(_){}
   };
   const desligar = function(){ [vozIn, seca, molhada, fin, posLim, seg, cad.saida, cad.comp, cad.entrada].forEach(function(nd){ try{ nd.disconnect(); }catch(_){} }); };
-  return { vozIn:vozIn, aplicar:aplicar, desligar:desligar, cadeia:cad };
+  return { vozIn:vozIn, aplicar:aplicar, desligar:desligar, cadeia:cad, seca:seca, molhada:molhada };   // v94 (10/10/2026) T2: seca/molhada = a voz pronta (para a conferência ouvir só a voz)
 }
 /* makeup automático que o DynamicsCompressorNode aplica (Web Audio 1.0: (1 / ganho da curva em 0 dBFS)^0,6), em dB, com knee 0 */
 function _evpVaMakeupInterno(thr, ratio){ return -0.6 * thr * (1 - 1 / ratio); }
@@ -127289,6 +127940,19 @@ function _evpMotionAtras(calc, t){
   const m = calc && calc.motion; if(!m || m.atras === false || !Array.isArray(m.itens)) return false;
   if(!m.itens.some(function(x){ return x && _EVP_MOT_ATRAS.indexOf(x.modelo) >= 0 && t >= x.t0 && t <= x.t1; })) return false;
   return !(calc.imagens || []).some(function(x){ return x && x.cheia && t >= x.t0 && t < x.t1; });
+}
+/* v94 (10/10/2026) C44 (porta do v89): a edição usa recorte da pessoa? (texto atrás, troca de fundo, máscara "pessoa", desfoque/ajuste na pessoa,
+   chroma, motion atrás da pessoa) — a máscara do PC só é baixada quando usa. Na dúvida, carrega (o comportamento antigo). */
+function _evpUsaRecorte(calc){
+  try{
+    if(!calc) return false;
+    const cl = calc.clips || [];
+    if(cl.some(function(c){ return c && ((c.fundo && c.fundo.modo && c.fundo.modo !== "nenhum") || (Array.isArray(c.masc) && c.masc.some(function(m){ return m && m.tipo === "pessoa"; })) || (c.chroma && c.chroma.on)); })) return true;
+    if((calc.textos || []).some(function(x){ return x && x.atras; })) return true;
+    if((calc.imagens || []).some(function(x){ return x && ((x.camada === "ajuste" && x.forma === "pessoa") || (x.chroma && x.chroma.on)); })) return true;
+    const m = calc.motion; if(m && m.atras !== false && Array.isArray(m.itens) && m.itens.some(function(x){ return x && _EVP_MOT_ATRAS.indexOf(x.modelo) >= 0; })) return true;
+    return false;
+  }catch(_){ return true; }
 }
 function _evpRealceAlfa(m, t){
   if(!m || m.realce === false || !Array.isArray(m.itens)) return 0;
@@ -129271,6 +129935,11 @@ function _evpMotor(canvas, o){
      Desligado, o caminho é o mesmo de antes (ganho final 1, limiter −1,5 dB / 2 ms, sem curva). */
   let va = _evpVaCfg(o.projeto && o.projeto.vocal_attacker), vaBypass = false, vaMed = null, vaChave = "", vaSeq = 0, vaProm = null;
   const vaG = _evpVaGrafo(ac, master, lim, saida, va), vozIn = vaG.vozIn;
+  /* v94 (10/10/2026) T2: CONFERÊNCIA DO ÁUDIO — na passada do som do PC, a voz (depois do Vocal Attacker) e a música (depois do "abaixa na fala")
+     também saem separadas (o.tapVoz / o.tapMus), só para medir. o.musicaGanho = a correção "abaixa a música" (1 = como sempre). Sem as opções: igual a antes. */
+  if(o.tapVoz){ try{ vaG.seca.connect(o.tapVoz); vaG.molhada.connect(o.tapVoz); }catch(_){} }
+  const kMus = o.musicaGanho != null && isFinite(Number(o.musicaGanho)) ? Math.max(0, Number(o.musicaGanho)) : 1;
+  const saiMus = function(gN){ let no = gN; if(kMus !== 1){ const gm = ac.createGain(); gm.gain.value = kMus; gN.connect(gm); no = gm; } no.connect(master); if(o.tapMus){ try{ no.connect(o.tapMus); }catch(_){} } };
   function vaLigado(){ return va.ativo && !vaBypass && !audioAntes; }
   function aplicarVa(imediato){ vaG.aplicar(vaLigado(), va, vaMed, imediato); }
   /* a voz que vai para o vídeo (trechos usados de cada bruto/narração) — é o que a medição de loudness ouve */
@@ -129320,12 +129989,17 @@ function _evpMotor(canvas, o){
     const cl = (o.clipes || []).find(function(x){ return x.id === c.clipe; }) || {};
     return String((cl.mascara && cl.mascara.url) || _evpMascarasPC[c.clipe] || "");
   }
+  /* v94 (10/10/2026) C44 (porta do v89): a máscara (recorte do PC) só é baixada quando a edição USA recorte: texto atrás da pessoa, troca de fundo,
+     máscara "pessoa" ou chroma. Antes o "mirar" carregava a máscara de todo clipe que tinha uma (62 máscaras, ninguém usava). E vem pelo cache. */
+  let _urCalc = null, _urVal = false;
+  function usaRecorte(){ if(_urCalc !== calc){ _urCalc = calc; _urVal = _evpUsaRecorte(calc); } return _urVal; }
   function elM(c){
+    if(!usaRecorte()) return null;                                       // v94 (10/10/2026) C44
     const u = urlMascara(c); if(!u) return null;
     if(elsM[c.id] && elsM[c.id]._src === u) return elsM[c.id];
     if(elsM[c.id]){ try{ elsM[c.id].pause(); elsM[c.id].removeAttribute("src"); elsM[c.id].load(); }catch(_){} }
     const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true;
-    v._src = u; v.src = u; v._alvo = c.ini;
+    v._src = u; _evSrcGuardado(v, u); v._alvo = c.ini;                 // v94 (10/10/2026) C44: pelo cache (antes v.src = u, direto do Supabase)
     v.addEventListener("loadedmetadata", function(){ try{ v.currentTime = v._alvo; }catch(_){} marcar(); });
     v.addEventListener("seeked", function(){ marcar(6); }); v.addEventListener("loadeddata", function(){ marcar(6); });
     v.addEventListener("error", function(){ v._falhou = true; });
@@ -129502,7 +130176,7 @@ function _evpMotor(canvas, o){
       if((n.volPts && n.volPts.length) || fiN > 0 || foN > 0) _evpAgendarGanho(g, quando, ini, fim, function(x){
         const kI = fiN > 0 ? Math.min(1, Math.max(0, (x - n.t0) / fiN)) : 1, kO = foN > 0 ? Math.min(1, Math.max(0, (fim - x) / foN)) : 1;
         return _evpVolEm(n.volPts, x - n.t0, _evpNum(n.vol, 1)) * kCanal * kI * kO; });                                  // v24: volume com pontos ◆
-      s.connect(g); g.connect(n.musica ? master : vozIn); s.start(quando, off, Math.max(0.01, (fim - ini) * (bt ? 1 : vN))); fontes.push(s);   // v48: narração de voz → Vocal Attacker
+      s.connect(g); if(n.musica) saiMus(g); else g.connect(vozIn); s.start(quando, off, Math.max(0.01, (fim - ini) * (bt ? 1 : vN))); fontes.push(s);   // v48: narração de voz → Vocal Attacker · v94 T2: trilha de música pelo saiMus
       if(n.musica){ if(n.duck) trilhas.push({ g:g, ini:ini, fim:fim, quando:quando, vol:vBase }); }
       else envVoz.push([n.t0, fim, n.fonte === "clipe" ? n.clipe : "narr:" + n.id, base, vN]);
     });
@@ -129523,7 +130197,7 @@ function _evpMotor(canvas, o){
       const bufM = (vM !== 1 && mu.tom !== false) ? (_evpTomTrecho(musBuf, iniM, Math.min(musBuf.duration, iniM + Math.max(0.5, fim - t0M) * vM), vM) || musBuf) : musBuf;   // v41: manter o tom
       const esticado = bufM !== musBuf;
       const s = ac.createBufferSource(); s.buffer = bufM; s.loop = true; if(!esticado) s.playbackRate.value = vM;
-      const g = ac.createGain(); s.connect(g); g.connect(master);
+      const g = ac.createGain(); s.connect(g); saiMus(g);                 // v94 (10/10/2026) T2: (antes g.connect(master)) — igual quando não há conferência
       const vol = _evpNum(mu.vol, 0.15) * ganhoCanal("A2"), ini = Math.max(t, t0M);
       const quando = agora + (ini - t);
       if(ini < fim){
@@ -130221,7 +130895,7 @@ function _evpMotor(canvas, o){
     const d = (it && it.dados) || {}; if(d.midia !== "video" || !d.url) return null;
     if(vFinal && vFinal._src === d.url) return vFinal;
     if(vFinal){ try{ vFinal.pause(); vFinal.removeAttribute("src"); vFinal.load(); }catch(_){} }
-    const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true; v._src = d.url; v.src = d.url; vFinal = v; return v;
+    const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true; v._src = d.url; _evSrcGuardado(v, d.url); vFinal = v; return v;   // v94 (10/10/2026) C44: pelo cache
   }
   function sincronizarFinal(){     // devolve true se a gravação precisa esperar o vídeo da tela final carregar
     const it = calc.total > calc.fimCortes ? _evgDaTela(kit, calc.tela_final) : null;
@@ -131234,6 +131908,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + _evpChaveExtra(p.audio) + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().map(function(k){ return k + "=" + vozesPC[k]; }).join(",") : "");
   const [tratandoAudio, setTratandoAudio] = useState(true);   // v10b (30/09): começa "tratando" — o PC não pode gravar antes de carregar a fala (saía sem som)
   const [metodoRuido, setMetodoRuido] = useState(null);
+  const [vozPalavra, setVozPalavra] = useState(null);       // v94 (10/10/2026) T1: o que a voz por palavra subiu ({ normal_db, trechos, max_db, subidos })
+  const [vozesBase, setVozesBase] = useState({});            // v94 (10/10/2026) T1: o som de cada bruto já limpo (antes da voz por palavra)
+  const [t1Ok, setT1Ok] = useState({ base:null, chave:"" });  // v94 (10/10/2026) T1: o que já foi aplicado (o PC só grava depois)
   /* v64 (07/10/2026): ABRE MAIS RÁPIDO — o som só é baixado e tratado dos vídeos que TOCAM som (na faixa principal e vídeo por cima sem mudo),
      3 de cada vez. Antes eram TODOS os brutos do card, um por um (Sid: 25 vídeos, 77 MB — só 7 tinham a fala usada, 19 MB). Vídeo que entra
      na linha do tempo depois é preparado na hora (o que já foi tratado fica guardado). O PC continua só gravando depois que a fala carregou. */
@@ -131273,10 +131950,24 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           }catch(_){ }
         }
       }
-      if(vivo){ if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpVozes = out; setVozes(out); setMetodoRuido(met); setTratandoAudio(false); }
+      if(vivo){ setVozesBase(out); setMetodoRuido(met); setTratandoAudio(false); }   // v94 (10/10/2026) T1: o som limpo vai para vozesBase; a voz por palavra (abaixo) faz o "vozes" final
     })().catch(function(){ if(vivo) setTratandoAudio(false); });
     return function(){ vivo = false; };
   }, [ed.id, audioKey, usadosAudio, trKey]);
+  /* v94 (10/10/2026) T1: VOZ POR PALAVRA em cima do som limpo — refaz quando muda o som, os cortes, os trechos da equipe ou a chave.
+     No navegador espera 250 ms (vários cortes seguidos = 1 conta); no PC é na hora. O PC só começa a gravar depois (pcFalta "voz por palavra"). */
+  const chaveT1 = !_evpVozPalavraLigada(p.audio) ? "off" : (calc.clips || []).map(function(c){ return c.clipe + "@" + c.ini + ":" + c.fim + ":" + (c.vel || 1) + (c.mudo ? "m" : "") + (c.off ? "o" : "") + (_evpClipeFalaNormal(c) ? "" : "x"); }).join(",")
+    + "|" + trechosAu.filter(function(r){ return _evpNum(r.vol, 0) || r.igualar || r.mudo; }).map(function(r){ return r.t0 + "-" + r.t1; }).join(",");
+  useEffect(function(){
+    let vivo = true; const base = vozesBase, chave = chaveT1;
+    const faz = function(){ if(!vivo) return; let outF = base, info = null;
+      if(chave !== "off"){ try{ const r = _evpVozPorPalavra(base, calc, ed.fala || {}, trechosAu); outF = r.vozes; info = r.info; }catch(_){ outF = base; info = null; } }
+      if(typeof window !== "undefined" && window.__EVP_TESTE && typeof window.__EVP_SABOTAR === "function"){ try{ outF = window.__EVP_SABOTAR(outF) || outF; }catch(_){} }   // só nos testes (estraga o som de propósito)
+      if(typeof window !== "undefined" && window.__EVP_TESTE){ window.__evpVozes = outF; window.__evpVozesBase = base; window.__evpVozPalavra = info; }
+      setVozes(outF); setVozPalavra(info); setT1Ok({ base:base, chave:chave }); };
+    const tm = setTimeout(faz, pcAuto ? 0 : 250);
+    return function(){ vivo = false; clearTimeout(tm); };
+  }, [vozesBase, chaveT1]);
 
   /* narrações (gravadas ou da IA): mesmo tratamento de áudio da fala */
   const [narr, setNarr] = useState({});
@@ -132428,6 +133119,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [verExp, setVerExp] = useState(false);
   useEffect(function(){ const f = function(){ setVerExp(true); }; window.addEventListener("evp-anuncio-exportar", f); return function(){ window.removeEventListener("evp-anuncio-exportar", f); }; }, []);   // v35: modo anúncio
   const [verVersoes, setVerVersoes] = useState(false);
+  const [ensinarAberto, setEnsinarAberto] = useState(false);       // v94 (10/10/2026) P1: o botão único "Ensinar a IA" abre as 2 opções
+  const [confRefazer, setConfRefazer] = useState(false);           // v94 (10/10/2026) P2: confirmação antes do "Refazer do zero com a IA"
+  useEffect(function(){ if(!verVersoes){ setEnsinarAberto(false); setConfRefazer(false); } }, [verVersoes]);
   const iaRef = useRef(null);
   /* v8: a IA lê o histórico deste vídeo e propõe regras (pendentes até um sócio aprovar) */
   const [ensinando, setEnsinando] = useState(false);
@@ -132721,7 +133415,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     addNome, coresCli, nomesKit, clipesTodos:clipes, addTrilha, gerarCapa, capaUrl, t, edId:ed.id, onRecarregar, tratandoTudo:Object.keys(medindoAcao).length, trat, addSobre, addDesfoque,
     addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt, vaMed, tocando, tocar:tocar, edUnidade:ed.unidade || "",
     alterado, salvarVersao:salvar,
-    conf, ouvirTrecho, focoDuv, setFocoDuv };   // v92 (08/10/2026) dúvidas da fala: painel IA › Conferir   // v89 (08/10/2026) aprender: o "Aprender com minhas mudanças" salva a versão antes de comparar   // v77: edUnidade (estilos de legenda do cliente) · v48: Vocal Attacker · v75: tocar (Ouvir o trecho melhorado)
+    conf, ouvirTrecho, focoDuv, setFocoDuv, vozPalavra };   // v94 (10/10/2026) T1: vozPalavra (o que a voz por palavra subiu)   // v92 (08/10/2026) dúvidas da fala: painel IA › Conferir   // v89 (08/10/2026) aprender: o "Aprender com minhas mudanças" salva a versão antes de comparar   // v77: edUnidade (estilos de legenda do cliente) · v48: Vocal Attacker · v75: tocar (Ouvir o trecho melhorado)
   const reeditarNovos = async function(){
     if(alterado){ const ok = await salvar(); if(!ok) return; }
     try{
@@ -132867,7 +133561,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
      começa (com aviso). O que é essencial (som da fala e narração) segura até 5 min e então falha COM O MOTIVO — antes ficava 10 min mudo
      e o PC desistia com "parou de responder", sem dizer por quê. */
   const pcFalta = (function(){ const e = [], r = [];
-    if(tratandoAudio) e.push("som da fala"); if(narrCarregando || narrChaveOk.current !== chaveNarr) e.push("narração");
+    if(tratandoAudio) e.push("som da fala"); else if(!(t1Ok.base === vozesBase && t1Ok.chave === chaveT1)) e.push("voz por palavra");   // v94 (10/10/2026) T1 if(narrCarregando || narrChaveOk.current !== chaveNarr) e.push("narração");
     if(micSinc || micPendente) e.push("sincronizar o microfone");   // v88 F3: nada de gravar com a câmera e trocar para o microfone no meio
     if(cam3d || (p.imagens || []).some(function(x){ return x && x.camada === "texto3d" && x.cam && x.cam.pendente && !x.off; })) e.push("rastrear a câmera (texto 3D)");   // v88 F4
     if(!dicPronto) r.push("dicionário do cliente"); const nA = Object.keys(analisando).length; if(nA) r.push("medir tremido (" + nA + ")");
@@ -132921,7 +133615,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
           <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
-            vozesTratadas={vozes} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
+            vozesTratadas={vozes} vozPalavra={vozPalavra} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
             onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
             narrFalha={narrFalha} onExportou={function(){ /* v92 (08/10/2026) lembrete de ensinar: avisa ao exportar */ lembrarEnsinar("exportar"); }}
             prontoPC={!!pcAuto && !pcFalta.essencial.length && (!pcFalta.resto.length || pcForcar)}/>
@@ -133042,12 +133736,31 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
                 <span style={{flex:1,minWidth:0,color:_EVP_COR.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={v.pedido||""}>{v.pedido || "Primeira edição da IA"} · {v.por || ""}</span>
                 <button onClick={function(){ onVoltarVersao(v.n); setVerVersoes(false); }} style={Object.assign(_evpBtn(), {padding:"4px 9px",fontSize:11.5})}>Usar esta</button>
               </div>; })}
-            <button onClick={function(){ setVerVersoes(false); onRefazer(); }} style={Object.assign(_evpBtn(), {marginTop:10,width:"100%",justifyContent:"center"})}>Refazer do zero com a IA</button>
-            <button onClick={ensinarIA} disabled={ensinando} title="A IA lê os pedidos e as mudanças deste vídeo e propõe regras. As regras só valem depois que um sócio aprova (Edição de vídeo › Aprendizado)."
-              style={Object.assign(_evpBtn("suave", !ensinando), {marginTop:8,width:"100%",justifyContent:"center"})}><_EvpIco n="ia" s={15}/>{ensinando ? "A IA está estudando este vídeo…" : "Ensinar a IA com este vídeo"}</button>
-            {_evpPodeAprenderMud() && <button data-abrir-aprender-mud="1" onClick={function(){ setVerVersoes(false); setSel(null); setFerrGlobal({ ferramenta:"ia", sub:"aprender_mud" }); }}   /* v89 (08/10/2026) aprender */
-              title="Compara a versão da IA com o que você mudou à mão; você decide o que vira regra (vale sempre, só este cliente ou só desta vez)."
-              style={Object.assign(_evpBtn("suave"), {marginTop:8,width:"100%",justifyContent:"center"})}><_EvpIco n="aprender" s={15}/>Aprender com minhas mudanças</button>}
+            {/* v94 (10/10/2026) P2 (pedido do Vini): "Refazer do zero com a IA" pede confirmação — diz o que perde e o custo */}
+            {!confRefazer ? <button data-refazer-zero="1" onClick={function(){ setConfRefazer(true); setEnsinarAberto(false); }} style={Object.assign(_evpBtn(), {marginTop:10,width:"100%",justifyContent:"center"})}>Refazer do zero com a IA</button>
+              : <div data-confirmar-refazer="1" role="alertdialog" aria-label="Confirmar refazer do zero" style={{marginTop:10,padding:"10px 12px",borderRadius:12,border:"1px solid rgba(234,179,8,.55)",background:_EVP_COR.aviso,fontSize:12.5,lineHeight:1.5,color:_EVP_COR.ink}}>
+                <div style={{fontWeight:800,marginBottom:4}}>Refazer do zero com a IA?</div>
+                <div>{_evpRefazerTexto(ed, alterado)}</div>
+                <div style={{display:"flex",gap:8,marginTop:9,flexWrap:"wrap"}}>
+                  <button data-refazer-sim="1" onClick={function(){ setConfRefazer(false); setVerVersoes(false); onRefazer(); }} style={Object.assign(_evpBtn("primario"), {flex:"1 1 150px",justifyContent:"center"})}>Sim, refazer do zero</button>
+                  <button data-refazer-nao="1" onClick={function(){ setConfRefazer(false); }} style={Object.assign(_evpBtn(), {flex:"1 1 120px",justifyContent:"center"})}>Não, manter esta</button>
+                </div></div>}
+            {/* v94 (10/10/2026) P1 (pedido do Vini): "Ensinar a IA com este vídeo" + "Aprender com minhas mudanças" viraram UM botão, "Ensinar a IA", que abre as 2 opções */}
+            <button data-ensinar-ia="1" aria-expanded={ensinarAberto} onClick={function(){ setEnsinarAberto(!ensinarAberto); setConfRefazer(false); }}
+              style={Object.assign(_evpBtn("suave", !ensinando), {marginTop:8,width:"100%",justifyContent:"center"})}><_EvpIco n="ia" s={15}/>{ensinando ? "A IA está estudando este vídeo…" : "Ensinar a IA"}
+              <_EvpIco n="seta_baixo" s={14} style={{transform:ensinarAberto ? "rotate(180deg)" : "none",transition:"transform .15s"}}/></button>
+            {ensinarAberto && <div data-ensinar-opcoes="1" style={{marginTop:6,display:"flex",flexDirection:"column",gap:6,padding:8,borderRadius:12,border:"1px solid " + _EVP_COR.linha2,background:_EVP_COR.faixa}}>
+              <button data-ensinar-video="1" onClick={function(){ setEnsinarAberto(false); ensinarIA(); }} disabled={ensinando}
+                title="A IA lê os pedidos e as mudanças deste vídeo e propõe regras. As regras só valem depois que um sócio aprova (Edição de vídeo › Aprendizado)."
+                style={Object.assign(_evpBtn(null, !ensinando), {width:"100%",justifyContent:"flex-start",textAlign:"left",flexDirection:"column",alignItems:"flex-start",gap:2,whiteSpace:"normal",lineHeight:1.35})}>
+                <b style={{display:"flex",alignItems:"center",gap:6}}><_EvpIco n="ia" s={14}/>Com este vídeo inteiro</b>
+                <span style={{fontSize:11.5,fontWeight:500,color:_EVP_COR.sub}}>A IA estuda os pedidos e as mudanças e propõe regras. Um sócio aprova antes de valer.</span></button>
+              {_evpPodeAprenderMud() && <button data-abrir-aprender-mud="1" onClick={function(){ setVerVersoes(false); setSel(null); setFerrGlobal({ ferramenta:"ia", sub:"aprender_mud" }); }}   /* v89 (08/10/2026) aprender */
+                title="Compara a versão da IA com o que você mudou à mão; você decide o que vira regra (vale sempre, só este cliente ou só desta vez)."
+                style={Object.assign(_evpBtn(), {width:"100%",justifyContent:"flex-start",textAlign:"left",flexDirection:"column",alignItems:"flex-start",gap:2,whiteSpace:"normal",lineHeight:1.35})}>
+                <b style={{display:"flex",alignItems:"center",gap:6}}><_EvpIco n="aprender" s={14}/>Com as minhas mudanças</b>
+                <span style={{fontSize:11.5,fontWeight:500,color:_EVP_COR.sub}}>Compara a versão da IA com o que você mudou à mão. Você decide, uma por uma, o que vira regra.</span></button>}
+            </div>}
           </div>
         )}
       </div>
@@ -134851,7 +135564,7 @@ function _EvpBancoItem({ x, salvar, medir, analisar, rpc, taskId, onUsarImagem, 
   const fazer = async function(rot, fn){ setOcupado(rot); try{ await fn(); }catch(e){ _evToast("error", rot + ": " + ((e && e.message) || e)); } setOcupado(""); };
   const lista = function(t, v){ return v && v.length ? <div style={{marginBottom:4}}><b>{t}:</b> {v.join(", ")}</div> : null; };
   return (<div>
-    {x.tipo === "imagem" ? <img src={x.url} alt="" style={{width:"100%",borderRadius:10,background:"#000"}}/> : <video src={x.copia || x.url} controls preload="metadata" poster={x.thumb || undefined} style={{width:"100%",maxHeight:260,borderRadius:10,background:"#000"}}/>}
+    {x.tipo === "imagem" ? <img src={x.url} alt="" style={{width:"100%",borderRadius:10,background:"#000"}}/> : <_EvVideo src={x.copia || x.url} controls preload="metadata" poster={x.thumb || undefined} style={{width:"100%",maxHeight:260,borderRadius:10,background:"#000"}}/>}
     <div style={{display:"flex",gap:6,marginTop:8}}>
       <input value={nome} onChange={function(e){ setNome(e.target.value); }} onKeyDown={function(e){ e.stopPropagation(); }} aria-label="Nome no banco" style={_EVP_CAMPO_K}/>
       <button onClick={function(){ salvar(x, { renomeado:nome.trim() === x.nome ? "" : nome.trim() }, "Renomeado"); }} disabled={nome === (x.renomeado || x.nome)} style={_evpBtn(null, nome !== (x.renomeado || x.nome))}>Renomear</button>
@@ -136183,6 +136896,15 @@ function _EvpPainelMenu(q){
         render:function(){ return <_EvpInterruptor on={!!au.voz} onChange={function(v){ A({ voz:v }); }} label="Melhorar a voz" dica="Voz mais clara e presente"/>; } },
       { id:"nivelar", label:"Volume igual", icone:"volume", ligado:!!au.nivelar, dica:"Deixa todos os vídeos no mesmo volume, no padrão das redes.",
         render:function(){ return <_EvpInterruptor on={!!au.nivelar} onChange={function(v){ A({ nivelar:v }); }} label="Nivelar o volume" dica="Aumenta e iguala no padrão das redes"/>; } },
+      /* v94 (10/10/2026) T1: VOZ POR PALAVRA — automática (sem o campo = ligada); a equipe pode desligar (p.audio.vozPalavra = false) */
+      { id:"porPalavra", label:"Voz por palavra", icone:"volume", ligado:_evpVozPalavraLigada(au), dica:"Automático: mede a voz palavra por palavra e sobe só o pedaço que ficou baixo (até +10 dB), para a fala ter um volume só do começo ao fim. Nunca abaixa a fala.",
+        render:function(){ const vp = q.vozPalavra; return (<div data-voz-palavra="1">
+          <_EvpInterruptor on={_evpVozPalavraLigada(au)} onChange={function(v){ A({ vozPalavra:v ? undefined : false }); }} label="Voz por palavra (automática)" dica="Ligada em toda edição. Desligue só se quiser o volume da fala como veio."/>
+          {_evpVozPalavraLigada(au) && <div data-voz-palavra-info="1" style={{fontSize:11.5,color:_EVP_COR.sub,margin:"-2px 0 8px 4px",lineHeight:1.45}}>
+            {q.tratandoAudio || !vp ? "Medindo a voz…" : !vp.trechos ? "A voz já está por igual: nada para subir." :
+              "Subiu " + vp.trechos + " pedaço" + (vp.trechos > 1 ? "s" : "") + " (até +" + String(vp.max_db).replace(".", ",") + " dB): " +
+              vp.subidos.slice(0, 4).map(function(x){ return _evTempo(x.t).replace(/\.\d$/, "") + " “" + x.texto + "”"; }).join(" · ") + (vp.subidos.length > 4 ? " …" : "")}</div>}
+        </div>); } },
       { id:"eco", label:"Eco da sala", icone:"audio", ligado:!!au.eco, dica:"Para gravação em galpão, sala vazia ou banheiro. Se a voz ficar robótica, use a força Leve.",
         render:function(){ return S.limpEco(); } },
       { id:"estalos", label:"Estalos e 'P'", icone:"sfx", ligado:!!(au.cliques || au.pops), dica:"Tira estalo de boca, chiado de cabo e o sopro do P e do B no microfone.",
@@ -141317,6 +142039,16 @@ const _EVP_CORR_ST = { aberto:["A fazer", "#c2410c", "#fff7ed"], aplicado:["A IA
       o motivo provável e a regra — e guarda (a mesma comparação não paga de novo). Para cor/enquadramento o Estúdio manda 1 quadro
       "antes | depois" feito da miniatura do bruto. 3) Em cada item: ✓ vale sempre · ✓ só este cliente · ✗ só desta vez. O aprovado vira
       regra da IA (video_edicao_regras) e já vale na próxima edição. Chave criacao.aprender_mudancas. */
+/* v94 (10/10/2026) P2: o texto da confirmação do "Refazer do zero com a IA" — o que perde e o custo (a última edição como referência) */
+function _evpRefazerTexto(ed, alterado){
+  const brl = function(v){ return "R$ " + Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 }); };
+  const nv = ((ed && ed.versoes) || []).length, custo = Number(ed && ed.custo_brl) || 0;
+  let t = "A IA monta uma edição NOVA a partir dos vídeos do card. Você perde " + (nv > 1 || alterado ? "as mudanças desta edição (" + Math.max(1, nv) + (nv > 1 ? " versões" : " versão") + (alterado ? " e o que ainda não foi salvo" : "") + ")" : "o que você mexeu nesta edição")
+    + ": nada disso passa para a nova.";   // v94 (10/10/2026) P2: texto (antes ": elas não passam" — errado no singular)
+  t += custo > 0 ? " Custa uma edição nova da IA (esta custou " + brl(custo) + ")." : " Custa uma edição nova da IA.";
+  if(ed && Number(ed.limite_brl) > 0) t += " No mês: " + brl(ed.gasto_mes_brl) + " de " + brl(ed.limite_brl) + ".";
+  return t;
+}
 function _evpPodeAprenderMud(){ try{ return typeof pxPode !== "function" || !!pxPode("criacao.aprender_mudancas", false); }catch(_){ return false; } }
 /* ══════ v92 (08/10/2026) lembrete de ensinar: ao EXPORTAR ou FECHAR o Estúdio, se a pessoa mudou à mão a edição da IA e ainda não ensinou,
    aparece "Você fez N mudanças na edição da IA. Ensinar a IA para ela não repetir?" [Ensinar agora] [Agora não].
@@ -141332,7 +142064,7 @@ const _EVP_LEMB_AREA = { clips:"cortes", imagens:"apoio", musica:"música", moti
   narracoes:"narração", audio:"voz", transicoes:"transições", tela_final:"tela final", logo:"logo", formato:"formato" };
 function _evpLembVazio(v){ return v == null || v === "" || v === false || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length); }
 function _evpLembFora(k, v){         // v92 (08/10/2026) lembrete de ensinar: o que o Estúdio regrava sozinho não conta (dado REAL: 6ba2528a e ee406be9 v1→v2 só ganharam vel:1 nos apoios e licenca_ok)
-  return k === "id" || k === "_rt" || k === "licenca_ok" || k === "beat" || (k === "vel" && Number(v) === 1) || _evpLembVazio(v);
+  return k === "id" || k === "_rt" || k === "licenca_ok" || k === "beat" || (k === "vel" && Number(v) === 1) || k === "vozPalavra" || _evpLembVazio(v);   // v94 (10/10/2026) T1: ligar/desligar a voz por palavra não é lição para a IA
 }
 function _evpLembCanon(x){           // JSON sem o que não conta, com números arredondados (0,05)
   return JSON.stringify(x === undefined ? null : x, function(k, v){
@@ -141703,7 +142435,7 @@ function _EvgMini({ it, kit, base, vals, w, h, fundo }){
     return function(){ vivo = false; clearTimeout(tm); };
   }, [it && it.id, it && JSON.stringify(it.dados), kit && kit.cor_principal, kit && kit.cor_secundaria, kit && kit.cor_texto, kit && kit.fonte, JSON.stringify(vals || null)]);
   if(it && it.tipo === "tela_final" && d.midia === "video")
-    return <video src={d.url + "#t=0.5"} muted playsInline preload="metadata" style={{width:W0,height:H0,objectFit:"cover",borderRadius:8,background:"#0f172a",display:"block"}}/>;
+    return <_EvVideo src={d.url + "#t=0.5"} muted playsInline preload="metadata" style={{width:W0,height:H0,objectFit:"cover",borderRadius:8,background:"#0f172a",display:"block"}}/>;   /* v94 (10/10/2026) C44 */
   return <canvas ref={ref} width={W0 * 2} height={H0 * 2} style={{width:W0,height:H0,borderRadius:8,display:"block"}}/>;
 }
 function _evgLimiteTxt(it, vals){
@@ -143125,7 +143857,7 @@ function _EvpLegendaPost({ ed, t, calc, pcAuto, auto, isMob }){
 }
 
 function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, vozes, narr, tratados, logoUrl, exp, setExp, alterado, salvar, trat, precisaEstab, mudar, onFeito, isMob,
-                       vozesTratadas, tirarTrechos, fala, setSel, irPara, pcAuto, prontoPC, narrFalha, onExportou }){   // v92 (08/10/2026) lembrete de ensinar: onExportou (opcional)
+                       vozesTratadas, tirarTrechos, fala, setSel, irPara, pcAuto, prontoPC, narrFalha, onExportou, vozPalavra }){   // v94 (10/10/2026) T1/T2: vozPalavra (opcional)   // v92 (08/10/2026) lembrete de ensinar: onExportou (opcional)
   const [qualidade, setQualidade] = useState(function(){ try{ return localStorage.getItem("pxev-qualidade") || "alta"; }catch(_){ return "alta"; } });
   const BPS = { alta:12000000, padrao:8000000, leve:4000000 };
   const [comLegenda, setComLegenda] = useState(true);
@@ -143221,32 +143953,83 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
         mq.destruir(); mq = null; try{ acq.close(); }catch(_){} acq = null;
         const r1 = await window.__pcQuadros.fim(); if(!r1 || !r1.ok) throw new Error((r1 && r1.erro) || "o PC não fechou o vídeo");
         // o SOM: passada em tempo real só de áudio (não desenha nada — não tem o que travar na imagem)
-        setExp({ fase:"gravando", pct:0, msg:"Imagem pronta (" + N + " quadros). Gravando o som (" + _evTempo(totq) + ")…" });
-        const mimeA = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(function(x){ try{ return window.MediaRecorder && MediaRecorder.isTypeSupported(x); }catch(_){ return false; } });
-        const ACa = window.AudioContext || window.webkitAudioContext; aca = new ACa({ sampleRate:48000 }); const desta = aca.createMediaStreamDestination();
-        let reca = null;
-        ma = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:ed.clipes||[], original:true, logoUrl:logoUrl, musicaUrl:musicaUrl,
-          vozes:vozes, narr:narr, tratados:tratados, ctx:aca, saida:desta, pausarAoEsperar:true, semDesenho:true, semLegenda:!leg,
-          onEspera:function(esp){ try{ if(reca){ if(esp && reca.state === "recording") reca.pause(); else if(!esp && reca.state === "paused") reca.resume(); } }catch(_){} },
-          onTempo:function(tt){ const pc = Math.round(tt / totq * 100); setExp(function(x){ return (x && x.fase === "gravando" && x.pct !== pc) ? Object.assign({}, x, { pct:pc }) : x; }); } });
-        await ma.pronto; await _evpSfxEsperar(); await aca.resume();
-        reca = new MediaRecorder(desta.stream, { mimeType:mimeA, audioBitsPerSecond:256000 });
-        const partesA = []; reca.ondataavailable = function(e){ if(e.data && e.data.size) partesA.push(e.data); };
-        const acabouA = new Promise(function(res){ reca.onstop = res; });
-        const fimA = new Promise(function(res){ const iv = setInterval(function(){ if(!ma.tocando && ma.tempo >= totq - 0.01){ clearInterval(iv); res(); } }, 100); });
-        // SINCRONIA: um "clique" curto ANTES do vídeo começar; o PC acha o clique no som gravado e corta no ponto exato (erro < 1 ms)
-        ma.seek(0);
-        const comecouA = new Promise(function(res){ reca.onstart = res; });
-        reca.start(1000); await comecouA;
-        const mk = aca.createConstantSource(), M = aca.currentTime + 0.12; mk.offset.value = 0.5; mk.connect(desta); mk.start(M); mk.stop(M + 0.02);
-        while(aca.currentTime < M + 0.1) await new Promise(function(r){ setTimeout(r, 10); });
-        try{ mk.disconnect(); }catch(_){}
-        ma.play();
-        const marcaA = typeof ma.relIniAudio === "function" ? ma.relIniAudio() - M : null;
-        await fimA; await new Promise(function(r){ setTimeout(r, 300); });
-        if(reca.state !== "inactive") reca.stop(); await acabouA;
-        ma.destruir(); ma = null; try{ aca.close(); }catch(_){} aca = null;
-        const blobA = new Blob(partesA, { type:String(mimeA).split(";")[0] });
+        /* v94 (10/10/2026) T2: a passada do som virou a função gravarSom (roda 1 vez; roda a 2ª só para a correção da conferência do áudio).
+           Com a conferência ligada, a voz pronta e a música também são gravadas separadas (só para medir; não vão para o PC). Sem ela: igual a antes. */
+        const tSom0 = performance.now(), conferirA = _evpT2Ligada(pcAuto);
+        const gravarSom = async function(vz, kMus, rotulo){
+          setExp({ fase:"gravando", pct:0, msg:rotulo });
+          const mimeA = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(function(x){ try{ return window.MediaRecorder && MediaRecorder.isTypeSupported(x); }catch(_){ return false; } });
+          const ACa = window.AudioContext || window.webkitAudioContext; aca = new ACa({ sampleRate:48000 }); const desta = aca.createMediaStreamDestination();
+          let tapV = null, tapM = null, destV = null, destM = null;
+          if(conferirA){ tapV = aca.createGain(); destV = aca.createMediaStreamDestination(); tapV.connect(destV); tapM = aca.createGain(); destM = aca.createMediaStreamDestination(); tapM.connect(destM); }
+          const recs = [];
+          ma = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:ed.clipes||[], original:true, logoUrl:logoUrl, musicaUrl:musicaUrl,
+            vozes:vz, narr:narr, tratados:tratados, ctx:aca, saida:desta, pausarAoEsperar:true, semDesenho:true, semLegenda:!leg, tapVoz:tapV, tapMus:tapM, musicaGanho:kMus,
+            onEspera:function(esp){ recs.forEach(function(reca){ try{ if(esp && reca.state === "recording") reca.pause(); else if(!esp && reca.state === "paused") reca.resume(); }catch(_){} }); },
+            onTempo:function(tt){ const pc = Math.round(tt / totq * 100); setExp(function(x){ return (x && x.fase === "gravando" && x.pct !== pc) ? Object.assign({}, x, { pct:pc }) : x; }); } });
+          await ma.pronto; await _evpSfxEsperar(); await aca.resume();
+          const novoRec = function(dest){ const reca = new MediaRecorder(dest.stream, { mimeType:mimeA, audioBitsPerSecond:256000 }); const partes = [];
+            reca.ondataavailable = function(e){ if(e.data && e.data.size) partes.push(e.data); };
+            const acabou = new Promise(function(res){ reca.onstop = res; }), comecou = new Promise(function(res){ reca.onstart = res; }); recs.push(reca);
+            return { reca:reca, partes:partes, acabou:acabou, comecou:comecou }; };
+          const RA = novoRec(desta), RV = destV ? novoRec(destV) : null, RM = destM ? novoRec(destM) : null;
+          const fimA = new Promise(function(res){ const iv = setInterval(function(){ if(!ma.tocando && ma.tempo >= totq - 0.01){ clearInterval(iv); res(); } }, 100); });
+          // SINCRONIA: um "clique" curto ANTES do vídeo começar; o PC acha o clique no som gravado e corta no ponto exato (erro < 1 ms)
+          ma.seek(0);
+          [RA, RV, RM].forEach(function(R){ if(R) R.reca.start(1000); });
+          await RA.comecou; if(RV) await RV.comecou; if(RM) await RM.comecou;
+          const mk = aca.createConstantSource(), M = aca.currentTime + 0.12; mk.offset.value = 0.5; mk.connect(desta); if(destV) mk.connect(destV); if(destM) mk.connect(destM); mk.start(M); mk.stop(M + 0.02);
+          while(aca.currentTime < M + 0.1) await new Promise(function(r){ setTimeout(r, 10); });
+          try{ mk.disconnect(); }catch(_){}
+          ma.play();
+          const marcaA = typeof ma.relIniAudio === "function" ? ma.relIniAudio() - M : null;
+          await fimA; await new Promise(function(r){ setTimeout(r, 300); });
+          for(const R of [RA, RV, RM]){ if(R){ if(R.reca.state !== "inactive") R.reca.stop(); await R.acabou; } }
+          ma.destruir(); ma = null; try{ aca.close(); }catch(_){} aca = null;
+          const tipoA = String(mimeA).split(";")[0];
+          return { blob:new Blob(RA.partes, { type:tipoA }), marca:marcaA, voz:RV ? new Blob(RV.partes, { type:tipoA }) : null, mus:RM ? new Blob(RM.partes, { type:tipoA }) : null,
+            trechos:(projeto.audio && Array.isArray(projeto.audio.trechos)) ? projeto.audio.trechos : [] };
+        };
+        let somA = await gravarSom(vozes, 1, "Imagem pronta (" + N + " quadros). Gravando o som (" + _evTempo(totq) + ")…");
+        /* v94 (10/10/2026) T2: CONFERÊNCIA DO ÁUDIO antes de entregar — 1 correção sozinha; o resultado vai para o PC (window.__pxConferenciaAudio) */
+        let confA = null;
+        if(conferirA){
+          const tC0 = performance.now();
+          try{
+            setExp({ fase:"gravando", pct:100, msg:"Conferindo o som, palavra por palavra…" });
+            const brutosA = await _evpBrutosConferir(calc, fala, ed.clipes || []);
+            const an1 = await _evpAnalisarSom(somA, calc, fala, brutosA);
+            if(!an1.problemas.length) confA = { v:1, ok:true, corrigido:false, medido:true, problemas:[], medidas:an1.medidas };
+            else {
+              const dt = (performance.now() - tSom0) / 1000, cabe = dt + totq + 20 < 2 * totq + 30;     // o vigia do PC derruba em 2× a duração + 60 s (folga de 30 s)
+              if(!cabe) confA = { v:1, ok:false, corrigido:false, medido:true, problemas:an1.problemas, motivo:"sem tempo para corrigir sozinho", medidas:an1.medidas };
+              else {
+                const cr = _evpCorrigirAudio(vozes, an1, brutosA);
+                if(pcAuto.onEstado) pcAuto.onEstado({ fase:"aviso", msg:"Conferência do áudio: " + an1.problemas.length + " ponto(s) — corrigindo sozinho e gravando o som de novo" });
+                let som2 = null; try{ som2 = await gravarSom(cr.vozes, cr.musicaGanho, "Corrigindo o som (" + an1.problemas.length + " ponto(s)) e gravando de novo…"); }
+                catch(e2){ try{ if(ma) ma.destruir(); }catch(_){} try{ if(aca) aca.close(); }catch(_){} ma = null; aca = null; som2 = null; }
+                const an2 = som2 ? await _evpAnalisarSom(som2, calc, fala, brutosA) : null;
+                /* v94 (10/10/2026) T2: a 2ª gravação só fica se MELHOROU de verdade: menos problemas no total E nenhum tipo aumentou (antes: só "não
+                   tem mais avisos" — numa máquina carregada a 2ª passada saiu com palavras novas sumidas e mesmo assim ficou). Contagem crua (alvos). */
+                const conta = function(an){ const c = { _t:0 }; (an.alvos || []).forEach(function(x){ c[x.tipo] = (c[x.tipo] || 0) + 1; c._t++; }); return c; };
+                const c1 = an2 ? conta(an1) : null, c2 = an2 ? conta(an2) : null;
+                const piorou = !!an2 && Object.keys(c2).some(function(k){ return k !== "_t" && c2[k] > (c1[k] || 0); });
+                const melhor = !!an2 && !piorou && c2._t < c1._t;
+                if(melhor) somA = som2;
+                confA = { v:1, ok:melhor ? !an2.problemas.length : false, corrigido:melhor, medido:true, problemas:melhor ? an2.problemas : an1.problemas,
+                  antes:an1.problemas, correcoes:melhor ? cr.correcoes : [], medidas:(melhor ? an2 : an1).medidas };
+                if(!som2) confA.motivo = "a 2ª gravação do som falhou: ficou a 1ª";
+                else if(!melhor) confA.motivo = piorou ? "a 2ª gravação saiu com problema novo: ficou a 1ª" : "a correção não melhorou: ficou a 1ª gravação";   // v94 (10/10/2026) T2
+              }
+            }
+          }catch(eC){ confA = { v:1, ok:null, corrigido:false, medido:false, problemas:[], erro:String((eC && eC.message) || eC).slice(0, 160) }; }
+          confA.tempo_s = Math.round((performance.now() - tC0) / 100) / 10;
+          if(vozPalavra) confA.voz_por_palavra = { trechos:vozPalavra.trechos || 0, max_db:vozPalavra.max_db || 0 };
+          try{ window.__pxConferenciaAudio = confA; }catch(_){}          // UMA vez, completo (o vigia do PC manda para POST /conferencia_audio)
+          if(confA.ok === false && pcAuto.onEstado) pcAuto.onEstado({ fase:"aviso", msg:("Conferência do áudio: " + confA.problemas.length + " problema(s)" + (confA.corrigido ? " mesmo depois de corrigir" : "") + " — "
+            + confA.problemas.slice(0, 3).map(function(x){ return _evTempo(x.t).replace(/\.\d$/, "") + " " + x.texto; }).join("; ")).slice(0, 300) });
+        }
+        const blobA = somA.blob, marcaA = somA.marca;
         setExp({ fase:"enviando", pct:100, msg:"Juntando imagem e som no PC…" });
         const r2 = await window.__pcQuadros.audio(blobA, marcaA);
         if(!r2 || !r2.ok) throw new Error((r2 && r2.erro) || "o PC não juntou imagem e som");
@@ -143254,7 +144037,10 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
         const pathQ = "tasks/" + t.id + "/" + Date.now() + "-estudio-" + Math.random().toString(36).slice(2, 10) + ".mp4";
         const pubQ = window._sb.storage.from("agency-files").getPublicUrl(pathQ).data.publicUrl;
         const confEst = semRecorte ? { ok:false, motivo:"recorte não carregou", quadros:semRecorte } : { ok:true };     // v48: N-16 (o PC guarda junto da conferência dele)
-        const rq = await window._sb.rpc("criacao_edicao_final", { p_id:ed.id, p_file:{ url:pubQ, storagePath:pathQ, name:nomeQ, type:"video/mp4", size:r2.size || 0, fps:fps, w:W, h:H, duracao:Math.round(totq * 100) / 100, conferencia_estudio:confEst } });
+        if(confA) confEst.audio = confA;                                   // v94 (10/10/2026) T2: a conferência do áudio também vai junto (cópia)
+        confEst.voz_por_palavra = _evpT1Marca(projeto, vozPalavra);        // v94 (10/10/2026) T1: marca no vídeo gravado que a voz por palavra foi automática (ou desligada pela equipe)
+        const rq = await window._sb.rpc("criacao_edicao_final", { p_id:ed.id, p_file:Object.assign({ url:pubQ, storagePath:pathQ, name:nomeQ, type:"video/mp4", size:r2.size || 0, fps:fps, w:W, h:H, duracao:Math.round(totq * 100) / 100, conferencia_estudio:confEst },
+          confA ? { conferencia_audio:confA } : {}) });   // v94 (10/10/2026) T2: p_file.conferencia_audio (o PC lê aqui se o vigia não mandou)
         if(rq.error) throw new Error("o vídeo ficou pronto, mas não gravou: " + (rq.error.message || ""));
         setExp({ fase:"feito", msg:"Pronto! Gravado quadro a quadro em " + fps + " fps (" + N + " quadros), sem travadas." + (semRecorte ? " Atenção: o recorte da pessoa não carregou em " + semRecorte + " quadro(s)." : ""), feitoEm:Date.now(), conferencia:confEst });
         if(onFeito) onFeito();
@@ -143269,7 +144055,8 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
     try{
       const AC = window.AudioContext || window.webkitAudioContext; ac = new AC({ sampleRate:48000 }); const dest = ac.createMediaStreamDestination();
       const tot = Math.max(0.1, calc.total);
-      motor = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:ed.clipes||[], original:true, logoUrl:logoUrl, musicaUrl:musicaUrl,
+      const clipesExp = await _evClipesGravarNav(ed.clipes || []);        // v94 (10/10/2026) C44: no navegador, nunca o original direto do Supabase
+      motor = _evpMotor(cv, { calc:calc, projeto:projeto, kit:kit, base:base, clipes:clipesExp, original:true, logoUrl:logoUrl, musicaUrl:musicaUrl,
         vozes:vozes, narr:narr, tratados:tratados, ctx:ac, saida:dest, pausarAoEsperar:true, semLegenda:!leg,
         onEspera:function(esp){
           try{ if(rec){ if(esp && rec.state === "recording") rec.pause(); else if(!esp && rec.state === "paused") rec.resume(); } }catch(_){}
@@ -143311,7 +144098,11 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
       await pxUploadResumable(file, path, function(pc){ setExp(function(x){ return Object.assign({}, x, { pct:pc }); }); });
       const pub = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
       // v42: EXPORTAR SÓ GRAVA. O vídeo vai para o card (Arquivo final) no botão "Enviar para o cartão" — lá a IA escreve a legenda do post.
-      const fileInfo = { url:pub, storagePath:path, name:nome, type:tipo, size:blob.size, fps:30, w:cv.width, h:cv.height, duracao:Math.round(tot * 100) / 100 };
+      const fileInfo = { url:pub, storagePath:path, name:nome, type:tipo, size:blob.size, fps:30, w:cv.width, h:cv.height, duracao:Math.round(tot * 100) / 100,
+        conferencia:{ voz_por_palavra:_evpT1Marca(projeto, vozPalavra) } };   // v94 (10/10/2026) T1: marca (exportado.conferencia — a SQL guarda esse campo)
+      if(pcAuto && _evpT2Ligada(pcAuto)){                                   // v94 (10/10/2026) T2: em tempo real (reserva do PC) a conferência do áudio não roda — avisa o PC disso
+        const confRT = { v:1, ok:null, corrigido:false, medido:false, problemas:[], motivo:"gravação em tempo real: a conferência do áudio só roda no quadro a quadro" };
+        try{ window.__pxConferenciaAudio = confRT; }catch(_){} fileInfo.conferencia_audio = confRT; }
       let r = await window._sb.rpc(pcAuto ? "criacao_edicao_final" : "criacao_edicao_exportado", { p_id:ed.id, p_file:fileInfo });     // no PC: o PC grava a versão
       if(r.error && !pcAuto && /criacao_edicao_exportado|function|schema cache/i.test(String(r.error.message || ""))) r = await window._sb.rpc("criacao_edicao_final", { p_id:ed.id, p_file:fileInfo });   // banco ainda sem a v39
       if(r.error) throw new Error("o vídeo subiu, mas não gravou: " + (r.error.message || ""));
@@ -143537,18 +144328,14 @@ function _EvExportar({ t, ed, projeto, calc, kit, base, musicaUrl, musInfo, voze
             <span style={{marginLeft:"auto",color:_EVP_COR.sub,display:"flex",alignItems:"center",gap:4,fontSize:11.5,fontWeight:700}}>{confAberta ? "fechar" : "ver"}<_EvpIco n="seta_baixo" s={15} style={{transform:confAberta ? "rotate(180deg)" : "none",transition:"transform .15s"}}/></span>
           </button>
           {confAberta && <div style={{padding:"0 12px 10px"}}>
-            {envato && <label style={{display:"flex",gap:9,alignItems:"flex-start",padding:"9px 10px",borderRadius:10,margin:"2px 0 6px",cursor:"pointer",
-              background:projeto.musica.licenca_ok ? _EVP_COR.ok : _EVP_COR.aviso,color:projeto.musica.licenca_ok ? _EVX.verde : _EVX.amarelo,fontSize:12,fontWeight:700,lineHeight:1.45}}>
-              <input type="checkbox" checked={!!projeto.musica.licenca_ok} onChange={function(e){ const v = e.target.checked; mudar(function(np){ if(np.musica) np.musica.licenca_ok = v; }); }} style={{accentColor:"#16a34a",marginTop:2,width:15,height:15,flexShrink:0}}/>
-              <span>Registrei a música "{musInfo.nome}" no Envato para este vídeo ({_evNomeCliente(t.client)} · {t.title}).</span>
-            </label>}
+            {/* v94 (10/10/2026) P3 (pedido do Vini): saiu a caixinha "Registrei a música no Envato" — a licença fica sempre marcada e não trava nada */}
             {confItens.map(function(x, k){ const cor = x.nivel === "erro" ? _EVX.verm : x.nivel === "aviso" ? _EVX.amarelo : _EVX.verde;
-              return <div key={k} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"8px 0",borderTop:k || envato ? "1px solid " + _EVP_COR.linha2 : 0}}>
+              return <div key={k} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"8px 0",borderTop:k ? "1px solid " + _EVP_COR.linha2 : 0}}>
                 <span style={{width:7,height:7,borderRadius:99,background:cor,marginTop:6,flexShrink:0,boxShadow:"0 0 0 3px " + (x.nivel === "erro" ? "rgba(239,68,68,.16)" : x.nivel === "aviso" ? "rgba(234,179,8,.16)" : "rgba(34,197,94,.16)")}}/>
                 <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:_EVP_COR.ink}}>{x.titulo}</div>{x.detalhe && <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:1,lineHeight:1.4}}>{x.detalhe}</div>}</div>
                 {x.acao && <button onClick={function(){ agir(x.acao); }} style={Object.assign(_evpBtn("suave"), {padding:"5px 10px",fontSize:11.5,flexShrink:0})}>{x.acao.label}</button>}
               </div>; })}
-            {confOk.length > 0 && <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:confItens.length || envato ? "1px solid " + _EVP_COR.linha2 : 0}}>
+            {confOk.length > 0 && <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:confItens.length ? "1px solid " + _EVP_COR.linha2 : 0}}>
               {confOk.map(function(x, k){ return <span key={k} title={x.detalhe || ""} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:_EVP_COR.sub,padding:"3px 8px",borderRadius:99,background:_EVP_COR.ok}}>
                 <span style={{color:_EVX.verde}}><_EvpIco n="check" s={11}/></span>{x.titulo}</span>; })}
             </div>}
@@ -143801,7 +144588,7 @@ function _EvpGravadoEnviar({ ed, x, dim, whatsUrl, desatualizado, alterado, isMo
     <div style={{marginTop:14,padding:12,borderRadius:16,border:"1px solid " + (desatualizado ? "rgba(234,179,8,.5)" : "rgba(34,197,94,.45)"),background:desatualizado ? _EVP_COR.aviso : "linear-gradient(160deg, rgba(34,197,94,.13), rgba(15,118,110,.04) 60%), " + _EVP_COR.campo}} aria-label="Vídeo gravado">
       <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
         <a href={x.url} target="_blank" rel="noreferrer" title="Assistir" style={{position:"relative",width:mw,height:Math.min(mh, 100),borderRadius:10,overflow:"hidden",background:"#05070d",flexShrink:0,display:"block",border:"1px solid " + _EVP_COR.linha}}>
-          {!semMini && <video src={x.url + "#t=0.8"} preload="metadata" muted playsInline onError={function(){ setSemMini(true); }} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+          {!semMini && <_EvVideo src={x.url + "#t=0.8"} preload="metadata" muted playsInline onError={function(){ setSemMini(true); }} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}{/* v94 (10/10/2026) C44 */}
           <span style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#fff"}}><span style={{width:30,height:30,borderRadius:99,background:"rgba(0,0,0,.55)",display:"grid",placeItems:"center"}}><_EvpIco n="play" s={15}/></span></span>
         </a>
         <div style={{flex:1,minWidth:0}}>
@@ -144233,7 +145020,9 @@ function _EvMontarNoPC({ trabalho, onEstado }){
     const passoPC = function(m){ if(!vivo) return; setPasso(m); avisar({ fase:"preparando", msg:String(m || "") }); };
     const op = trabalho.opcoes || {};
     _evPrepararMontar(trabalho.task || {}, passoPC, op.instrucoes ? { instrucoes:String(op.instrucoes).slice(0, 1500) } : null)
-      .then(function(d){ if(!d || !d.id) throw new Error("a IA não devolveu a edição"); avisar({ fase:"montado", edicao_id:d.id, custo_brl:d.custo_brl, msg:"A IA montou o vídeo" }); })
+      .then(function(d){ if(!d || !d.id) throw new Error(d && d.ja_em_andamento && d.aviso ? String(d.aviso) : "a IA não devolveu a edição");
+        avisar(Object.assign({ fase:"montado", edicao_id:d.id, custo_brl:d.custo_brl, msg:d.ja_em_andamento ? "A edição deste card já estava sendo feita (não cobrou de novo)" : "A IA montou o vídeo" },
+          d.ja_em_andamento ? { ja_em_andamento:true, motivo:d.motivo || null } : {})); })   // v94 (10/10/2026) C01: o servidor devolveu a edição que já estava andando
       .catch(function(e){ avisar({ fase:"erro", msg:String((e && e.message) || e) }); });
     return function(){ vivo = false; };
   }, []);
