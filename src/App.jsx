@@ -150573,80 +150573,74 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
            zoom, entrada opaca (menos distorção), luz casada com a original e prompt mandando preservar a obra. */
         const gLuz = _eaCasarLuz(cv, r);
         cv = r;
-        /* (09/10 21h, Gustavo: "não precisa forçar nuvem" + "bugou perto das montanhas") LIMPEZA DETERMINÍSTICA
-           do que o gpt estraga nas emendas — validado no harness (p45):
-           A) LIMPA-NÉVOA DO CÉU: fora da foto real e acima do horizonte, pixel esbranquiçado (névoa/nuvem
-              inventada) vira o azul-degradê da própria foto. Só liga quando o céu da FOTO é liso — foto com
-              nuvem de verdade mantém as nuvens que a IA continuar.
-           B) LIMPA-GLAZE DE BORDA: até 36px fora da borda da foto, o véu esbranquiçado da fronteira vira a cor
-              do pixel REAL mais próximo (árvore continua árvore). */
+        /* ═══ (10/10, Gustavo: "névoa bugada entre a montanha e o céu" + "produto sem bordas definidas, com
+           opacidade errada") — validado no harness (p45-V14) com a foto real da cisterna. Causa dos dois: o
+           gpt-image re-renderiza de leve TUDO, até o que a máscara protege. Solução "o simples":
+           1) CÉU ÚNICO E CONTÍNUO, pintado por nós, dentro E fora da foto: acima da linha de crista (morro/árvores)
+              um só degradê 2D medido nas colunas da foto que têm céu de verdade; colunas com árvore até o topo
+              herdam as vizinhas; onde a copa encosta na borda da foto, a IA continua a copa (céu só 60px acima).
+              Sem fronteira foto/IA no céu = sem névoa, sem degrau, sem nuvem inventada.
+           2) FOTO REAL INTEIRA DE VOLTA (alpha erodido + pluma 40px): produto nítido, crista real; a IA fica só
+              com terra, vegetação e cantos. Depois o céu único é reaplicado por cima de tudo.
+           Caminhos testados e descartados (não reintroduzir): limpa-névoa por pixel, casar cor por anel/linha/
+           blocos 2D (manchas), colar só a obra (bordas duplas). ═══ */
         try{
-          const cvO0 = desenhar(m);
+          const cvO = desenhar(m);
           const AE0 = document.createElement("canvas"); AE0.width = w; AE0.height = h;
           { const t0 = AE0.getContext("2d"); const z0 = 0.985;
-            t0.translate(w / 2, h / 2); t0.scale(z0, z0); t0.translate(-w / 2, -h / 2); t0.drawImage(cvO0, 0, 0); }
-          const dAl = AE0.getContext("2d").getImageData(0, 0, w, h).data;   // alpha ERODIDO: o anel da IA também é limpável
-          const nc = document.createElement("canvas"); nc.width = 96; nc.height = 96;
-          nc.getContext("2d").drawImage(nova, 0, 0, 96, 96);
-          const ndp = nc.getContext("2d").getImageData(0, 0, 96, 96).data;
-          const hzP = Math.max(6, Math.round((an.horizonte != null ? an.horizonte : 0.5) * 96));
-          let rT = 0, gT = 0, bT = 0, nT = 0, rB = 0, gB = 0, bB = 0, nB = 0, nuv = 0, tot = 0;
-          for(let yy = 0; yy < hzP; yy++) for(let xx = 0; xx < 96; xx++){
-            const i = (yy * 96 + xx) * 4, rr = ndp[i], gg = ndp[i + 1], bb = ndp[i + 2];
-            const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb);
-            tot++; if(mx > 170 && (mx - mn) / Math.max(1, mx) < 0.2) nuv++;
-            if(bb > rr && bb >= gg){ if(yy < hzP * 0.35){ rT += rr; gT += gg; bT += bb; nT++; } else if(yy > hzP * 0.7){ rB += rr; gB += gg; bB += bb; nB++; } }
-          }
-          const ceuLiso = (nuv / Math.max(1, tot)) < 0.04 && nT > 30 && nB > 30;
-          const horizPre = m.oy + (an.horizonte != null ? an.horizonte : 0.5) * m.dh;
+            t0.translate(w / 2, h / 2); t0.scale(z0, z0); t0.translate(-w / 2, -h / 2); t0.drawImage(cvO, 0, 0); }
           const cosA = Math.cos(-ang), sinA = Math.sin(-ang);
-          const xcL = cv.getContext("2d"), icL = xcL.getImageData(0, 0, w, h), dL = icL.data;
-          if(ceuLiso){ rT /= nT; gT /= nT; bT /= nT; rB /= nB; gB /= nB; bB /= nB; }
-          let limpouCeu = 0, limpouBorda = 0;
-          for(let yy = 0; yy < h; yy++) for(let xx = 0; xx < w; xx++){
-            const i = (yy * w + xx) * 4;
-            if(dAl[i + 3] > 10) continue;                                      // foto real: intocada
-            const xr = (xx - w / 2) * cosA - (yy - h / 2) * sinA + w / 2;
-            const yr = (xx - w / 2) * sinA + (yy - h / 2) * cosA + h / 2;
-            const rr = dL[i], gg = dL[i + 1], bb = dL[i + 2];
-            const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb), sat = mx ? (mx - mn) / mx : 0;
-            if(ceuLiso && yr < horizPre + m.dh * 0.06 && sat < 0.34 && mx > 130 && bb >= rr){   // A) céu (só tom FRIO: terra clara é quente, fica)
-              const t = Math.max(0, Math.min(1, yr / Math.max(1, horizPre)));
-              dL[i] = Math.round(rT + (rB - rT) * t); dL[i + 1] = Math.round(gT + (gB - gT) * t); dL[i + 2] = Math.round(bT + (bB - bT) * t);
-              limpouCeu++; continue;
+          // ── 1) céu único ──
+          const CEU = document.createElement("canvas"); CEU.width = w; CEU.height = h;
+          {
+            const NW = Math.min(1600, nova.width), NH = Math.round(nova.height * NW / nova.width);
+            const nc = document.createElement("canvas"); nc.width = NW; nc.height = NH;
+            nc.getContext("2d").drawImage(nova, 0, 0, NW, NH);
+            const nd = nc.getContext("2d").getImageData(0, 0, NW, NH).data;
+            const ehCeu = function(r, g, b){ const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return b >= r && b >= g - 4 && mx > 90 && (mx - mn) / Math.max(1, mx) < 0.6; };
+            const crista = new Array(NW), amostra = new Array(NW);
+            for(let x = 0; x < NW; x++){
+              let y0 = NH; for(let y = 0; y < NH; y++){ const i = (y * NW + x) * 4; if(!ehCeu(nd[i], nd[i + 1], nd[i + 2])){ y0 = y; break; } }
+              crista[x] = y0;
+              if(y0 >= NH * 0.08){ const pts = [];
+                for(const f of [0.03, 0.5, 0.9]){ const y = Math.max(0, Math.min(y0 - 1, Math.round(y0 * f))); const i = (y * NW + x) * 4; pts.push([nd[i], nd[i + 1], nd[i + 2]]); }
+                amostra[x] = { c:pts }; } else amostra[x] = null;
             }
-            // (21:17 — a "limpa-borda" criava listras verdes na terra; removida. O halo de borda será
-            //  resolvido pela EROSÃO DA MÁSCARA, que está validando no harness.)
-          }
-          if(limpouCeu || limpouBorda){ xcL.putImageData(icL, 0, 0);
-            if(limpouCeu) avisos.push("céu alisado: névoa/nuvem inventada substituída pelo azul da própria foto");
-            if(limpouBorda) avisos.push("véu da emenda limpo na borda da foto (continuado com a cor real vizinha)"); }
-        }catch(_){ }
-        /* (09/10 20:43, Gustavo: "cadê a merda do comando que não é pra alterar o produto") a REGIÃO DA OBRA
-           volta a ser a foto REAL por cima do resultado da IA — só o miolo, fusão larga, sem realinhamento
-           global (receita validada no harness, p40: emenda invisível, produto 100% original). */
-        try{
-          if(an.obra){
-            /* (09/10 20:52, Gustavo: "acertou a angulação e deixou a imagem bugada") a colagem era em
-               coordenadas SEM rotação — com giro grande caía deslocada (fantasmas). Agora a MÁSCARA da obra
-               é desenhada no MESMO transform do giro: gira junto com a foto, encaixe exato (validado p44). */
-            const cvO = desenhar(m);
-            const fxO = m.dw * 0.03, fyO = m.dh * 0.03;
-            const rx0 = m.ox + an.obra.x0 * m.dw - fxO, ry0 = m.oy + an.obra.y0 * m.dh - fyO;
-            const rw = (an.obra.x1 - an.obra.x0) * m.dw + 2 * fxO, rh = (an.obra.y1 - an.obra.y0) * m.dh + 2 * fyO;
-            if(rw > 40 && rh > 40){
-              const fP = Math.max(24, Math.min(60, Math.round(Math.min(rw, rh) / 6)));
-              const Mk = document.createElement("canvas"); Mk.width = w; Mk.height = h; const mk = Mk.getContext("2d");
-              mk.save(); mk.translate(w / 2, h / 2); mk.rotate(ang); mk.translate(-w / 2, -h / 2);
-              mk.fillStyle = "#fff"; mk.fillRect(rx0 + fP, ry0 + fP, Math.max(2, rw - 2 * fP), Math.max(2, rh - 2 * fP)); mk.restore();
-              const Mb = document.createElement("canvas"); Mb.width = w; Mb.height = h; const mb = Mb.getContext("2d");
-              mb.filter = "blur(" + Math.round(fP / 2) + "px)"; mb.drawImage(Mk, 0, 0);
-              const P = document.createElement("canvas"); P.width = w; P.height = h; const p2 = P.getContext("2d");
-              p2.drawImage(cvO, 0, 0);
-              p2.globalCompositeOperation = "destination-in"; p2.drawImage(Mb, 0, 0);
-              cv.getContext("2d").drawImage(P, 0, 0);
-              avisos.push("produto 100% real: obra colada da foto original, com a máscara girando junto com a foto");
+            const cristaS = crista.map(function(_, x){ const v = []; for(let k = -12; k <= 12; k++) v.push(crista[Math.max(0, Math.min(NW - 1, x + k))]); v.sort(function(p, q){ return p - q; }); return v[12]; });
+            { let u = null; for(let x = 0; x < NW; x++){ if(amostra[x]) u = amostra[x]; else if(u) amostra[x] = u; }
+              u = null; for(let x = NW - 1; x >= 0; x--){ if(amostra[x]) u = amostra[x]; else if(u) amostra[x] = u; } }
+            const temCeu = amostra.some(Boolean);
+            const cor = function(x, f){ const acc = [0, 0, 0]; let n = 0;
+              for(let k = -20; k <= 20; k++){ const a0 = amostra[Math.max(0, Math.min(NW - 1, x + k))]; if(!a0) continue;
+                const c = f < 0.5 ? [0, 1, 2].map(function(q){ return a0.c[0][q] + (a0.c[1][q] - a0.c[0][q]) * (f / 0.5); }) : [0, 1, 2].map(function(q){ return a0.c[1][q] + (a0.c[2][q] - a0.c[1][q]) * ((f - 0.5) / 0.5); });
+                acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; n++; }
+              return n ? [acc[0] / n, acc[1] / n, acc[2] / n] : [120, 160, 210]; };
+            if(temCeu){
+              const icC = CEU.getContext("2d").createImageData(w, h); const dC = icC.data;
+              for(let yy = 0; yy < h; yy++) for(let xx = 0; xx < w; xx++){
+                const i = (yy * w + xx) * 4;
+                const xr = (xx - w / 2) * cosA - (yy - h / 2) * sinA + w / 2, yr = (xx - w / 2) * sinA + (yy - h / 2) * cosA + h / 2;
+                const xN = Math.max(0, Math.min(NW - 1, Math.round((xr - m.ox) / m.dw * NW)));
+                const yN = (yr - m.oy) / m.dh * NH, cr = cristaS[xN];
+                if(yN >= cr - 2) continue;
+                const f = yN >= 0 ? Math.min(1, yN / Math.max(1, cr)) : 0;
+                let c = cor(xN, f);
+                if(yN < 0){ const u = Math.min(1, -yN / NH); c = [c[0] * (1 - 0.10 * u), c[1] * (1 - 0.06 * u), c[2] * (1 - 0.02 * u)]; }
+                dC[i] = Math.round(c[0]); dC[i + 1] = Math.round(c[1]); dC[i + 2] = Math.round(c[2]);
+                const dist = (cr - yN) * (m.dh / NH), bordaTopo = cr <= NH * 0.02;
+                dC[i + 3] = bordaTopo ? Math.max(0, Math.min(255, Math.round((dist - 60) / 80 * 255))) : Math.max(0, Math.min(255, Math.round(dist / 14 * 255)));
+              }
+              CEU.getContext("2d").putImageData(icC, 0, 0);
             }
+            // ── 2) foto real inteira de volta (alpha erodido + pluma 40px) ──
+            const MF = document.createElement("canvas"); MF.width = w; MF.height = h; const mf = MF.getContext("2d");
+            mf.filter = "blur(40px)"; mf.drawImage(AE0, 0, 0);
+            const P = document.createElement("canvas"); P.width = w; P.height = h; const p2 = P.getContext("2d");
+            p2.drawImage(cvO, 0, 0);
+            p2.globalCompositeOperation = "destination-in"; p2.drawImage(MF, 0, 0);
+            cv.getContext("2d").drawImage(P, 0, 0);
+            if(temCeu){ cv.getContext("2d").drawImage(CEU, 0, 0); avisos.push("céu único e contínuo pintado a partir do céu da própria foto (dentro e fora) — sem névoa, sem nuvem inventada"); }
+            avisos.push("foto real inteira de volta por cima da IA (pluma no anel erodido) — produto e paisagem nítidos; IA só em terra/vegetação/cantos");
           }
         }catch(_){ }
         if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA");
@@ -150668,7 +150662,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v13: emenda erodida (sem halo) + produto real + horizonte medido + anti-tela-preta");
+  avisos.push("motor da foto v14: céu único (sem névoa) + foto real inteira de volta (bordas nítidas) + horizonte medido + anti-tela-preta");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
