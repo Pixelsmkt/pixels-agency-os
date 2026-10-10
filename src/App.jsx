@@ -71466,7 +71466,7 @@ function TCenCartao({ p, eu, onMudou }) {
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
         {p.confianca && <TCenChip cor={corConf}>Confiança {p.confianca === "media" ? "média" : p.confianca}</TCenChip>}
         <TCenChip cor="cinza">{_TCEN_ORIGEM[p.origem] || p.origem}</TCenChip>
-        {(p.selos || []).map(function (s) { return <TCenChip key={s} cor="azul">{s === "dado" ? "📊 dado real" : s === "mercado" ? "📈 mercado" : s === "oficial" ? "📘 Meta oficial" : s === "calendario" ? "📅 calendário" : s}</TCenChip>; })}
+        {(p.selos || []).map(function (s) { return <TCenChip key={s} cor="azul">{s === "dado" ? "📊 dado real" : s === "mercado" ? "📈 mercado" : s === "oficial" ? "📘 Meta oficial" : s === "calendario" ? "📅 calendário" : s === "leitura" ? "🌅 da leitura da manhã" : s === "memoria" ? "🧠 aprendizado" : s}</TCenChip>; })}
         {p.precisa_dois && <TCenChip cor="roxo">2 sócios</TCenChip>}
       </div>
       <div style={{ fontWeight: 900, fontSize: 13.5, color: "#0f172a", lineHeight: 1.35 }}>{p.titulo}</div>
@@ -71491,7 +71491,7 @@ function TCenCartao({ p, eu, onMudou }) {
       )}
       <div style={{ marginTop: 8, background: exec ? "#f5f3ff" : "#f8fafc", borderRadius: 9, padding: "7px 9px", fontSize: 12 }}>
         {ad ? <span><b>O que muda:</b> {ad[0]} <span style={{ color: "#7c3aed", fontWeight: 900 }}>→</span> <b>{ad[1]}</b></span>
-            : <span style={{ color: "#475569" }}><b>Só aviso.</b> Resolva na Meta e clique em "Já resolvi".</span>}
+            : <span style={{ color: "#475569" }}><b>Não aplica com um clique.</b> {p.ad_account_id ? "Use 💬 Montar com a IA (vira estratégia e campanha) ou resolva na Meta e clique em \"Já resolvi\"." : "Resolva na Meta e clique em \"Já resolvi\"."}</span>}
       </div>
       {a.ideia && (a.ideia.proximo_passo || a.ideia.copy || a.ideia.roteiro) && <div style={{ marginTop: 6, background: "#f0f9ff", borderRadius: 9, padding: "7px 9px", fontSize: 12, lineHeight: 1.5 }}>
         {a.ideia.proximo_passo && <div><b>Próximo passo:</b> {a.ideia.proximo_passo}</div>}
@@ -71519,7 +71519,11 @@ function TCenCartao({ p, eu, onMudou }) {
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>
         {(p.estado === "novo" || p.estado === "aplicando" || (p.estado === "aguardando" && !souPrimeiro)) && exec &&
           btn(p.estado === "aguardando" ? "✋ Dar 2ª aprovação" : "✓ Aprovar com PIN", function () { setModo(modo === "aprovar" ? null : "aprovar"); setMsg(""); }, p.estado === "aguardando" ? "roxo" : "pri", ocupado)}
-        {(p.estado === "novo" || p.estado === "aguardando") && !exec && btn("✓ Já resolvi", concluir, "pri", ocupado)}
+        {(p.estado === "novo" || p.estado === "aguardando") && !exec && p.ad_account_id && btn("💬 Montar com a IA", function () {   // v82: decisão que não aplica sozinha vira conversa na Sala já preenchida
+          const id = a.ideia || {}; const nums = Object.keys(p.numeros || {}).slice(0, 6).map(function (k) { return k + ": " + p.numeros[k]; }).join("; ");
+          _tcliAbrir({ painel: "sala", conta: p.ad_account_id, texto: (id.pergunta || ("Quero resolver: " + p.titulo)) + "\n\nPor quê: " + (p.porque || "") + (nums ? "\nNúmeros: " + nums : "") + (id.proximo_passo ? "\nPróximo passo sugerido: " + id.proximo_passo : "") });
+        }, "pri", ocupado)}
+        {(p.estado === "novo" || p.estado === "aguardando") && !exec && btn("✓ Já resolvi", concluir, null, ocupado)}
         {(p.estado === "novo" || p.estado === "aguardando") && btn("👀 Monitorar", function () { setModo(modo === "monitorar" ? null : "monitorar"); }, null, ocupado)}
         {(p.estado === "novo" || p.estado === "aguardando") && btn("✕ Recusar", function () { setModo(modo === "recusar" ? null : "recusar"); }, null, ocupado)}
         {p.estado === "monitorando" && p.resultado && p.resultado.aplicado_em && exec && btn("↩ Desfazer", desfazer, null, ocupado)}
@@ -72203,8 +72207,8 @@ function TSalaResultado({ r, onMontar, montando }) {
   </div>;
 }
 
-function TSegSala({ onFechar, onAbrirMontador, contaFixa, abrirEstrategia }) {
-  const [contas, setContas] = useState([]); const [conta, setConta] = useState(contaFixa || ""); const [texto, setTexto] = useState(""); const [origem, setOrigem] = useState("texto");
+function TSegSala({ onFechar, onAbrirMontador, contaFixa, abrirEstrategia, textoInicial }) {
+  const [contas, setContas] = useState([]); const [conta, setConta] = useState(contaFixa || ""); const [texto, setTexto] = useState(textoInicial || ""); const [origem, setOrigem] = useState("texto");
   const [ocupado, setOcupado] = useState(false); const [msg, setMsg] = useState(""); const [res, setRes] = useState(null); const [hist, setHist] = useState([]); const [montando, setMontando] = useState(false);
   useEffect(function () {
     _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function () {});
@@ -72479,7 +72483,7 @@ function TCliDecisoes({ mc, conta, isMob, canEdit }) {
   if (!T.ok) return typeof QGAdsEstrategia === "function"   // sem PIN aberto: mostra os alertas de antes, como sempre foi
     ? <QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false} />
     : <div style={{ padding: 20, color: "#94a3b8", fontSize: 13 }}>Abra a Gestão de mídia com o PIN.</div>;
-  return <div style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "18px 20px", fontFamily: "'Inter',system-ui,sans-serif" }}>
+  return <div data-tcli-alertas="1" style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "18px 20px", fontFamily: "'Inter',system-ui,sans-serif" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
       <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🧠 Alertas · {uni ? (mc.name || _tcliUniLbl(uni)) : ((conta && conta.nome) || mc.name)}</div>
       <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "sala", conta: contaId }); }}>🎙️ Nova estratégia</TSegBotao>
@@ -72492,6 +72496,16 @@ function TCliDecisoes({ mc, conta, isMob, canEdit }) {
   </div>;
 }
 // os alertas antigos (calculados na tela) — fechados no fim da página, 1 clique abre
+// v82: botão "🧠 Resolver" em cada item da "Leitura da IA" (Visão geral) — leva para a 🧠 Alertas do cliente, onde o item já virou decisão com botão.
+// Só aparece para quem vê a IA (aprovadores com o PIN aberto). Para o resto da equipe a leitura fica igual.
+function TCliResolver() {
+  const ok = (typeof useTCliPode === "function") ? useTCliPode() : false;
+  if (!ok) return null;
+  return <button onClick={function () { window._pxTCliVista = "decidir"; try { window.dispatchEvent(new CustomEvent("pixels:qg-sub", { detail: { sub: "ia" } })); } catch (_) {}
+      setTimeout(function () { try { const el = document.querySelector("[data-tcli-alertas]"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) {} }, 120); }}
+    title="Abrir a decisão na 🧠 Alertas (aprovar com PIN ou montar com a IA)"
+    style={{ background: "#a78bfa", color: "#1e1b4b", border: "none", borderRadius: 9, padding: "6px 11px", fontWeight: 900, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>🧠 Resolver</button>;
+}
 function TCliRegras({ mc, conta, isMob, canEdit }) {
   const [aberto, setAberto] = useState(false);
   return <div style={{ marginTop: 16, borderTop: "1px solid #eef2f7", paddingTop: 12 }}>
@@ -72541,7 +72555,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
   useEffect(function () {
     const h = function (e) {
       const d = (e && e.detail) || {};
-      setCtx({ conta: d.conta || null, novo: !!d.novo, estrategia: d.estrategia || null });
+      setCtx({ conta: d.conta || null, novo: !!d.novo, estrategia: d.estrategia || null, texto: d.texto || null });
       if (d.painel === "montador") setAbrirRasc(d.abrirId || null);
       if (d.painel === "alarmes") lerAlarmes();
       setPainel(d.painel || null);
@@ -72637,7 +72651,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
       {painel === "montador" && <TSegMontador abrirId={abrirRasc} contaFixa={ctx.conta} novo={ctx.novo} onFechar={function () { setPainel(null); setAbrirRasc(null); setCtx({}); _tcliCarregar(true); }} onMudou={lerPend} />}
-      {painel === "sala" && <TSegSala contaFixa={ctx.conta} abrirEstrategia={ctx.estrategia} onFechar={function () { setPainel(null); setCtx({}); }} onAbrirMontador={function (id) { setAbrirRasc(id); setCtx(function (c) { return Object.assign({}, c, { novo: false }); }); setPainel("montador"); }} />}
+      {painel === "sala" && <TSegSala contaFixa={ctx.conta} abrirEstrategia={ctx.estrategia} textoInicial={ctx.texto} onFechar={function () { setPainel(null); setCtx({}); }} onAbrirMontador={function (id) { setAbrirRasc(id); setCtx(function (c) { return Object.assign({}, c, { novo: false }); }); setPainel("montador"); }} />}
       {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); _tcliCarregar(true); }} onMudou={lerPend} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
       {painel === "criar" && <TSegSeguranca st={st} abrirCriar onFechar={function () { setPainel(null); }} onMudou={function () { setPainel(null); carregar(); }} />}
