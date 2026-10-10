@@ -71883,10 +71883,10 @@ function TMonRevisao({ d, conta, modeloNome, modelo }) {
   </div>;
 }
 
-function TMonEditor({ rasc, contas, onVoltar, contaInicial }) {
+function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
   const [id, setId] = useState(rasc ? rasc.id : null);
   const [conta, setConta] = useState(rasc ? rasc.ad_account_id : (contaInicial || ""));
-  const [d, setD] = useState(rasc ? rasc.dados : _tmonVazio());
+  const [d, setD] = useState(function () { if (rasc) return rasc.dados; const v = _tmonVazio(); if (preset) v.conjunto = Object.assign({}, v.conjunto, preset); return v; });   // v84: público vindo do Diagnóstico
   const [estado, setEstado] = useState(rasc ? rasc.estado : "rascunho");
   const [checklist, setChecklist] = useState(rasc ? rasc.checklist : null);
   const [camps, setCamps] = useState(null);
@@ -71931,7 +71931,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial }) {
   const escolherConjunto = function (sid) {
     const s = ((modelo && modelo.conjuntos) || []).find(function (x) { return x.id === sid; }) || {};
     mudar(Object.assign({}, d, { modelo: Object.assign({}, d.modelo, { conjunto_id: sid }),
-      conjunto: Object.assign({}, d.conjunto, { nome: d.conjunto.nome || String(s.nome || "").replace(/^\[[^\]]*\]/, "[Cidade]"), idade_min: s.idade_min || d.conjunto.idade_min, idade_max: s.idade_max || d.conjunto.idade_max, genero: s.genero || d.conjunto.genero, verba_dia: s.verba_dia || d.conjunto.verba_dia }) }));
+      conjunto: Object.assign({}, d.conjunto, { nome: d.conjunto.nome || String(s.nome || "").replace(/^\[[^\]]*\]/, "[Cidade]"), idade_min: (preset && preset.idade_min) || s.idade_min || d.conjunto.idade_min, idade_max: (preset && preset.idade_max) || s.idade_max || d.conjunto.idade_max, genero: (preset && preset.genero) || s.genero || d.conjunto.genero, verba_dia: s.verba_dia || d.conjunto.verba_dia }) }));
   };
   const usaAd = function (a) { return (d.anuncios || []).some(function (x) { return x.tipo === "modelo" && x.ad_id === a.id; }); };
   const toggleAd = function (a) {
@@ -71981,6 +71981,8 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial }) {
       {resultado.ok ? <div><b>✅ Publicada PAUSADA.</b> Para ativar: Decisões › "Ativar a campanha nova" (PIN 2 vezes).</div> : <div><b>⚠️ Não publicou.</b> {resultado.erro}</div>}
       {resultado.meta && resultado.meta.campaign_id && <div style={{ marginTop: 4 }}><a href={linkGer("campanha", resultado.meta.campaign_id)} target="_blank" rel="noopener noreferrer">Abrir no Gerenciador ↗</a></div>}
     </div>}
+    {preset && !rasc && <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "#14532d" }}>
+      🔬 Público vindo do Diagnóstico: <b>{preset.genero === "mulheres" ? "Mulheres" : preset.genero === "homens" ? "Homens" : "Todos"}, {preset.idade_min}–{preset.idade_max}{Number(preset.idade_max) >= 65 ? "+" : ""}</b>. Escolha o modelo e confira o resto; dá para mudar tudo. Sobe pausada, com PIN 2x.</div>}
     <fieldset disabled={travado} style={{ border: "none", padding: 0, margin: 0 }}>
       <TMonSec n="1" titulo="Conta e modelo" dica="a campanha nova copia as configurações de uma que já funciona">
         <TMonRot t="Conta de anúncio">
@@ -72077,7 +72079,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial }) {
   </div>;
 }
 
-function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo }) {
+function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo, preset }) {
   const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(novo && !abrirId ? "novo" : null); const [msg, setMsg] = useState("");
   useEffect(function () {
     if (!abrirId) return;
@@ -72091,7 +72093,7 @@ function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo }) {
   const arquivar = async function (r) { try { await _tsegRpc("ads_rascunho_arquivar", { p_id: r.id }); carregar(); } catch (e) { setMsg(e.message); } };
   return (
     <TSegJanela titulo={"🧱 Montar campanha" + (contaFixa ? " · " + ((contas.find(function (c) { return c.id === contaFixa; }) || {}).nome || "") : "")} onFechar={function () { onFechar(); onMudou && onMudou(); }} largura={900}>
-      {aberto ? <TMonEditor rasc={aberto === "novo" ? null : aberto} contas={contas} contaInicial={contaFixa} onVoltar={function () { setAberto(null); carregar(); }} /> :
+      {aberto ? <TMonEditor rasc={aberto === "novo" ? null : aberto} contas={contas} contaInicial={contaFixa} preset={aberto === "novo" ? preset : null} onVoltar={function () { setAberto(null); carregar(); }} /> :
         <div>
           <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
             A campanha nova copia as configurações de uma que já funciona na conta. Você muda nome, cidades, público, verba e anúncios;
@@ -72496,7 +72498,7 @@ function TCliDecisoes({ mc, conta, isMob, canEdit }) {
       Esta unidade roda na conta de Toledo junto com outras. Aqui aparecem só as decisões das campanhas de <b>{_tcliUniLbl(uni)}</b> e o ritmo pela verba de {_tcliUniLbl(uni)}.</div>}
     <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} unidade={uni} embutido abaInicial={aba} onMudou={function () { _tcliCarregar(true); }}
       topo={<TMetasNorte clientId={mc && mc.client_id} />}
-      diagnostico={<TCliColinha mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}
+      diagnostico={<TCliDiag mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}
         detalhe={typeof QGAdsDiagnostico === "function" ? <QGAdsDiagnostico mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false && (typeof _bl !== "function" || _bl("midia.cerebro"))} /> : null} />}
       extra={typeof QGAdsEstrategia === "function" ? <TCliRegras mc={mc} conta={conta} isMob={isMob} canEdit={canEdit} /> : null} />
   </div>;
@@ -72810,6 +72812,523 @@ function TCliColinha({ mc, conta, isMob, canEdit, detalhe }) {
   </div>;
 }
 
+/* ---------- 🔬 DIAGNÓSTICO DO CLIENTE (v84, 10/10/2026) ----------
+   Dentro de 🧠 Decisões › 🔬 Diagnóstico. Substitui os 8 quadros da colinha por um painel que leva a ação:
+   resumo em um parágrafo · novidades desde a última visita · números do mês · leads por dia com o que mudou na conta ·
+   onde o dinheiro rende pouco × onde rende bem (com botão que faz a ação certa) · raio-x em abas (idade × gênero em quadrados) ·
+   saúde e calendário · conversa com a IA. Tudo calculado na hora pelo servidor (ads_diag_cliente), no período escolhido.
+   Celular: as partes recolhem (como o "Ver mais / Recolher" do app). Nada aqui mexe na Meta:
+   "Pausar (PIN)" só cria o pedido em "Precisa de vocês"; quem aplica é o PIN 2x de sempre. */
+const _TDG_CSS = `
+.tdg{font-family:'Inter',system-ui,sans-serif;color:#0f172a}
+.tdg *{box-sizing:border-box}
+.tdg-top{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.tdg-pill{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:#f1f5f9;color:#475569}
+.tdg-seg{display:inline-flex;background:#f1f5f9;border-radius:9px;padding:3px;gap:2px;margin-left:auto}
+.tdg-seg button{font-size:12px;font-weight:800;padding:5px 10px;border-radius:7px;color:#475569;background:none;border:none;cursor:pointer;font-family:inherit}
+.tdg-seg button.on{background:#fff;color:#0f172a;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tdg-b{font-size:12px;font-weight:800;border-radius:9px;padding:7px 10px;border:1px solid #ddd6fe;background:#fff;color:#5b21b6;white-space:nowrap;display:inline-flex;gap:5px;align-items:center;cursor:pointer;font-family:inherit;line-height:1.2}
+.tdg-b:disabled{opacity:.55;cursor:default}
+.tdg-b.pri{background:#6d28d9;color:#fff;border-color:#6d28d9}
+.tdg-b.red{border-color:#fecaca;color:#b91c1c}.tdg-b.grn{border-color:#bbf7d0;color:#15803d}.tdg-b.conf{background:#b91c1c;color:#fff;border-color:#b91c1c}
+.tdg-ver{background:linear-gradient(90deg,#faf5ff,#fff);border:1px solid #e9d5ff;border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;gap:14px;align-items:flex-start}
+.tdg-vt{font-size:15px;font-weight:800;line-height:1.5}
+.tdg-vt .bad{color:#b91c1c}.tdg-vt .good{color:#15803d}
+.tdg-ia{font-size:12.5px;color:#4c1d95;background:#f5f3ff;border-radius:9px;padding:7px 10px;margin-top:8px;line-height:1.45}
+.tdg-new{background:#fef9c3;border:1px solid #fde68a;border-radius:10px;padding:7px 11px;font-size:12px;font-weight:700;color:#713f12;margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap}
+.tdg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:12px}
+.tdg-kpi{border:1px solid #e5e7eb;border-radius:12px;padding:11px 13px;min-width:0}
+.tdg-kpi.q{border-color:#c4b5fd;background:#faf5ff}
+.tdg-kpi .l{font-size:11.5px;color:#64748b;font-weight:700}
+.tdg-kpi .v{font-size:22px;font-weight:900;margin:3px 0 2px}
+.tdg-kpi .v small{font-size:13px;color:#94a3b8;font-weight:700}
+.tdg-kpi .s{font-size:11.5px;font-weight:700}
+.tdg .ok{color:#15803d}.tdg .bad{color:#b91c1c}.tdg .warn{color:#b45309}.tdg .mut{color:#64748b}
+.tdg-bar{height:6px;background:#f1f5f9;border-radius:9px;margin-top:6px;position:relative}
+.tdg-bar>span{display:block;height:100%;border-radius:9px;max-width:100%}
+.tdg-bar>i{position:absolute;top:-3px;width:2px;height:12px;background:#0f172a}
+.tdg-sec{border:1px solid #e5e7eb;border-radius:14px;padding:12px 14px;margin-bottom:14px;min-width:0}
+.tdg-mh{display:none}
+.tdg-h3{font-size:13.5px;font-weight:900;margin:0 0 6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tdg-cols{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:14px}
+.tdg-cols>.tdg-sec{margin-bottom:0}
+.tdg-row{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid #f1f5f9;position:relative}
+.tdg-row:first-of-type{border-top:0}
+.tdg-amt{min-width:80px;text-align:right;flex:0 0 auto}
+.tdg-amt .n{font-size:16px;font-weight:900}
+.tdg-amt .c{font-size:10.5px;color:#94a3b8;font-weight:700}
+.tdg-lose .tdg-amt .n{color:#b91c1c}.tdg-win .tdg-amt .n{color:#15803d}
+.tdg-tx{flex:1;font-size:12.8px;line-height:1.42;min-width:0}
+.tdg-acts{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+.tdg-gain{display:inline-block;font-size:11px;font-weight:800;color:#15803d;background:#f0fdf4;border:1px dashed #86efac;border-radius:6px;padding:2px 7px;margin-top:5px}
+.tdg-cmp{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#64748b;flex-wrap:wrap}
+.tdg-track{flex:0 0 140px;height:6px;background:#f1f5f9;border-radius:9px;position:relative}
+.tdg-track span{position:absolute;left:0;top:0;height:100%;border-radius:9px;background:#ef4444}
+.tdg-track i{position:absolute;top:-3px;width:2px;height:12px;background:#334155}
+.tdg-cz{font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 6px;margin-left:4px;white-space:nowrap;display:inline-block}
+.tdg-cz.alta{background:#dcfce7;color:#166534}.tdg-cz.indicio{background:#e0e7ff;color:#3730a3}.tdg-cz.pouco{background:#f1f5f9;color:#64748b}
+.tdg-novo{font-size:10px;font-weight:900;border-radius:6px;padding:1px 6px;background:#fde047;color:#422006;margin-left:4px}
+.tdg-pat{font-size:11px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:4px 8px;margin-top:6px}
+.tdg-feito{font-size:11.5px;color:#334155;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:6px 9px;margin-top:7px}
+.tdg-flag{position:absolute;right:0;top:8px;background:none;border:none;color:#cbd5e1;font-size:11px;cursor:pointer;opacity:0;font-family:inherit}
+.tdg-row:hover .tdg-flag{opacity:1}
+.tdg-vermais{display:none}
+.tdg-tabs{display:flex;gap:6px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.tdg-tab{font-size:12px;font-weight:800;padding:6px 11px;border-radius:999px;background:#f1f5f9;color:#475569;border:none;cursor:pointer;font-family:inherit;flex:0 0 auto}
+.tdg-tab.on{background:#0f172a;color:#fff}
+.tdg-hm{display:grid;grid-template-columns:70px 1fr 1fr;gap:6px;max-width:700px}
+.tdg-hm .h{font-size:11.5px;font-weight:800;color:#64748b;text-align:center}
+.tdg-hm .a{font-size:12.5px;font-weight:800;display:flex;align-items:center}
+.tdg-cell{width:100%;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;font-size:12px;gap:6px;cursor:pointer;min-height:44px;border:none;font-family:inherit;text-align:left}
+.tdg-cell b{font-size:15px;font-weight:900}
+.tdg-cell .m{font-size:11px;font-weight:700;opacity:.85;text-align:right}
+.c-gg{background:#22c55e;color:#fff}.c-g{background:#dcfce7;color:#14532d}.c-n{background:#f1f5f9;color:#334155}.c-r{background:#fee2e2;color:#7f1d1d}.c-rr{background:#ef4444;color:#fff}
+.c-p{background:repeating-linear-gradient(135deg,#f8fafc 0 6px,#eef2f7 6px 12px);color:#94a3b8}.c-0{background:#fafafa;color:#cbd5e1}
+.tdg-leg{display:flex;gap:12px;font-size:11px;color:#64748b;margin-top:10px;flex-wrap:wrap;align-items:center}
+.tdg-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.tdg-xg{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+.tdg-side{font-size:12.5px;line-height:1.5;border-left:3px solid #e9d5ff;padding-left:12px}
+.tdg-tb{width:100%;border-collapse:collapse;font-size:12.5px}
+.tdg-tb th{font-size:11px;color:#64748b;text-align:left;font-weight:800;padding:6px 8px;border-bottom:1px solid #e5e7eb}
+.tdg-tb td{padding:8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.tdg-tb .r{text-align:right}
+.tdg-vb{display:inline-block;width:110px;height:8px;background:#f1f5f9;border-radius:9px;vertical-align:middle;margin-right:6px;overflow:hidden}
+.tdg-vb span{display:block;height:100%;background:#a78bfa;border-radius:9px}
+.tdg-dot{display:inline-block;width:8px;height:8px;border-radius:9px;margin-right:6px}
+.tdg-cards{display:none}
+.tdg-card{border:1px solid #e5e7eb;border-radius:10px;padding:9px 11px;margin-bottom:8px}
+.tdg-card .big{font-size:17px;font-weight:900;margin:3px 0}.tdg-card .big small{font-size:11px;font-weight:700;color:#94a3b8}
+.tdg-hrs{display:grid;grid-template-columns:repeat(24,1fr);gap:3px}
+.tdg-hr{border-radius:6px;padding:6px 0;text-align:center;font-size:10.5px;font-weight:800;cursor:pointer;border:none;font-family:inherit}
+.tdg-chips{display:flex;flex-wrap:wrap;gap:8px}
+.tdg-chip{font-size:12px;font-weight:700;border:1px solid #e5e7eb;border-radius:999px;padding:6px 11px;background:#fff;max-width:100%}
+.tdg-chat{display:flex;gap:8px;border:1px solid #ddd6fe;background:#faf5ff;border-radius:12px;padding:8px}
+.tdg-chat input{flex:1;min-width:0;background:#fff;border:1px solid #e5e7eb;border-radius:9px;padding:9px 12px;font-size:12.5px;font-family:inherit}
+.tdg-note{font-size:11px;color:#94a3b8;margin-top:8px;line-height:1.45}
+.tdg-m .tdg-mh{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:900;cursor:pointer}
+.tdg-m .tdg-mh .cnt,.tdg-m .tdg-h3 .cnt{font-size:11px;font-weight:800;color:#64748b;background:#f1f5f9;border-radius:999px;padding:2px 8px}
+.tdg-car{margin-left:auto;color:#94a3b8;font-size:13px;transition:transform .15s}
+.tdg-m .fech .tdg-car{transform:rotate(-90deg)}
+.tdg-m .tdg-sec.fech>*:not(.tdg-mh):not(.tdg-h3){display:none!important}
+.tdg-m .tdg-sec:not(.fech)>.tdg-mh{margin-bottom:10px}
+.tdg-m .tdg-h3{cursor:pointer;margin-bottom:0}
+.tdg-m .tdg-sec.lst:not(.fech)>.tdg-h3{margin-bottom:6px}
+.tdg-m .lst .tdg-row.extra{display:none}.tdg-m .lst.tudo .tdg-row.extra{display:flex}
+.tdg-m .lst .tdg-vermais{display:block;text-align:center;font-size:12px;font-weight:800;color:#5b21b6;padding:8px;border:1px dashed #ddd6fe;border-radius:9px;margin-top:6px;cursor:pointer;background:#fff;width:100%;font-family:inherit}
+.tdg-m .tdg-cols,.tdg-m .tdg-xg{grid-template-columns:1fr;gap:12px}
+.tdg-m .tdg-ver{flex-direction:column;padding:12px 13px}.tdg-m .tdg-vt{font-size:14px}
+.tdg-m .tdg-vt.corta{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.tdg-m .tdg-kpis{grid-template-columns:1fr 1fr}
+.tdg-m .tdg-kpi{padding:9px 10px}.tdg-m .tdg-kpi .v{font-size:19px}
+.tdg-m .tdg-amt{min-width:66px}.tdg-m .tdg-amt .n{font-size:14px}
+.tdg-m .tdg-track{flex-basis:90px}
+.tdg-m .tdg-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.tdg-m .tdg-hm{grid-template-columns:44px 1fr 1fr;gap:5px}
+.tdg-m .tdg-cell{flex-direction:column;align-items:flex-start;padding:7px 8px;gap:2px}
+.tdg-m .tdg-cell b{font-size:14px}.tdg-m .tdg-cell .m{text-align:left;font-size:10.5px}
+.tdg-m .tdg-side{border-left:0;border-top:1px solid #f1f5f9;padding:10px 0 0;font-size:12px}
+.tdg-m .tdg-desk{display:none}.tdg-m .tdg-cards{display:block}
+.tdg-m .tdg-hrs{grid-template-columns:repeat(12,1fr)}
+.tdg-m .tdg-flag{display:none}
+.tdg-m .tdg-b{white-space:normal;text-align:left}
+.tdg-m .tdg-new{flex-direction:column;gap:2px}
+.tdg-m .tdg-top h2{font-size:15px}
+`;
+const _tdgBRL = function (v, c) { if (v === null || v === undefined || v === "" || isNaN(Number(v))) return "—"; return "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: c === 0 ? 0 : 2, maximumFractionDigits: c === 0 ? 0 : 2 }); };
+const _tdgNum = function (v, c) { if (v === null || v === undefined || isNaN(Number(v))) return "—"; return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: c || 0 }); };
+const _tdgDM = function (d) { return d ? String(d).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : ""; };
+const _tdgCz = { alta: ["● certeza alta", "muito dado e a diferença passou no teste estatístico"], indicio: ["◐ indício", "aponta numa direção, mas ainda não dá para ter certeza"], pouco: ["○ pouco dado", "menos que o mínimo de leads para concluir"] };
+const _tdgNomeSeg = function (s) { const t = String(s || ""); if (/^whatsapp › status$/i.test(t)) return "Status do WhatsApp"; return t.replace(/^(\w)/, function (m) { return m.toUpperCase(); }); };
+// cor de uma fatia: forte só com certeza; clara se é só indício; listrada se tem pouco dado
+const _tdgCor = function (s) {
+  if (!s) return "c-0";
+  if (s.veredito === "amostra_pequena" || Number(s.res || 0) === 0) return "c-p";
+  const r = Number(s.custo) / Number(s.media || 0);
+  if (s.veredito === "barato_confiavel") return r <= 0.6 ? "c-gg" : "c-g";
+  if (s.veredito === "caro_confiavel") return r >= 1.5 ? "c-rr" : "c-r";
+  if (r && r <= 0.8) return "c-g"; if (r && r >= 1.25) return "c-r"; return "c-n";
+};
+const _tdgLs = { ler: function (k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (_) { return null; } }, gravar: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
+
+function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
+  const cli = mc && mc.client_id;
+  const contaId = conta && conta.ad_account_id;
+  const nomeCli = (mc && mc.name) || (conta && conta.nome) || "";
+  const [dias, setDias] = useState(function () { const v = _tdgLs.ler("px_diag_dias"); return v === 7 || v === 0 ? v : 30; });
+  const [d, setD] = useState(null); const [erro, setErro] = useState(""); const [carregando, setCarregando] = useState(false);
+  const [col, setCol] = useState(null);
+  const [aba, setAba] = useState("ig");
+  const [fech, setFech] = useState({ graf: true, raio: true, saude: true });
+  const [tudo, setTudo] = useState({});
+  const [lerTudo, setLerTudo] = useState(false);
+  const [conf, setConf] = useState(null); const [pedindo, setPedindo] = useState(null); const [pedidosOk, setPedidosOk] = useState({});
+  const [pergunta, setPergunta] = useState("");
+  const [contestando, setContestando] = useState(null); const [motivo, setMotivo] = useState("");
+  const [verDet, setVerDet] = useState(false);
+  const [novas, setNovas] = useState(null);
+  const refGraf = useRef(null); const refRaio = useRef(null);
+  const chaveSnap = "px_diag_snap_" + cli;
+
+  const carregar = useCallback(async function (dd) {
+    if (!cli || !window._sb) return;
+    setCarregando(true);
+    try {
+      const r = await _tsegRpc("ads_diag_cliente", { p_client: cli, p_dias: dd });
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não carregou.");
+      setD(r); setErro("");
+      // novidades desde a última visita (só no período de 30 dias, que é o que fica guardado)
+      if (dd === 30 && r.kpis) {
+        const ant = _tdgLs.ler(chaveSnap); const ate = r.periodo && r.periodo.ate;
+        const camps = {}; (r.campanhas || []).forEach(function (c) { if (c.lead) camps[c.id] = { n: c.nome, r: Number(c.res || 0), cpl: c.cpl, p: c.primeiro }; });
+        const perd = (r.perdendo || []).map(function (i) { return i.id; });
+        if (ant && ant.ate && ant.ate < ate) {
+          const lst = [];
+          Object.keys(camps).forEach(function (id) { const a = ant.camps && ant.camps[id]; const c = camps[id];
+            if (a && c.r > a.r) lst.push({ p: c.r - a.r, t: "a campanha " + c.n + " foi de " + _tdgNum(a.r) + " para " + _tdgNum(c.r) + " leads" + (a.cpl && c.cpl && Math.abs(c.cpl - a.cpl) / a.cpl >= 0.1 ? ", e o custo dela foi de " + _tdgBRL(a.cpl) + " para " + _tdgBRL(c.cpl) : "") });
+            if (!a && c.r > 0 && c.p && c.p > ant.ate) lst.push({ p: c.r, t: "entrou a campanha " + c.n + " (" + _tdgNum(c.r) + " leads até agora)" }); });
+          lst.sort(function (x, y) { return y.p - x.p; });
+          const out = lst.slice(0, 2).map(function (x) { return x.t; });
+          (r.perdendo || []).forEach(function (i) { if ((ant.perd || []).indexOf(i.id) < 0) out.push("novo ponto de atenção: " + i.titulo); });
+          (ant.perd || []).forEach(function (id) { if (perd.indexOf(id) < 0) out.push("saiu da lista de problemas: " + String(id).replace(/^[a-z_+]+:/, "")); });
+          if (ant.cpl && r.kpis.cpl && Math.abs(r.kpis.cpl - ant.cpl) >= 0.5) out.push("custo por lead (30 dias) " + (r.kpis.cpl < ant.cpl ? "caiu" : "subiu") + " de " + _tdgBRL(ant.cpl) + " para " + _tdgBRL(r.kpis.cpl));
+          const nv = { desde: ant.ate, itens: out.slice(0, 4) };
+          setNovas(nv); _tdgLs.gravar(chaveSnap, { ate: ate, cpl: r.kpis.cpl, camps: camps, perd: perd, novas: nv });
+        } else if (ant && ant.ate && ant.ate >= ate) setNovas(ant.novas || null);   // já viu hoje: continua mostrando o que mudou
+        else _tdgLs.gravar(chaveSnap, { ate: ate, cpl: r.kpis.cpl, camps: camps, perd: perd, novas: null });   // 1ª visita: só guarda
+      }
+    } catch (e) { setErro(e.message); } finally { setCarregando(false); }
+  }, [cli]);
+  useEffect(function () { carregar(dias); }, [carregar, dias]);
+  useEffect(function () {
+    if (!cli || !window._sb) return;
+    window._sb.rpc("ads_colinha_ler", { p_client: cli, p_desde: null }).then(function (r) { if (r && r.data && r.data.ok) setCol(r.data); }).catch(function () {});
+  }, [cli]);
+
+  const mudarDias = function (v) { setDias(v); _tdgLs.gravar("px_diag_dias", v); };
+  const abrirSala = function (texto) { _tcliAbrir({ painel: "sala", conta: contaId, texto: texto }); };
+  const resumoTxt = function () {
+    if (!d) return "";
+    const v = (d.veredito || []).map(function (p) { return p.t; }).join("");
+    const pl = (d.perdendo || []).map(function (i) { return "- " + i.titulo + ": " + i.texto + (i.estimativa ? " (" + i.estimativa + ")" : "") + " [" + (_tdgCz[i.certeza] || ["", ""])[0] + "]"; }).join("\n");
+    const gl = (d.ganhando || []).map(function (i) { return "- " + i.titulo + " (" + i.valor + " " + i.sub + "): " + i.texto; }).join("\n");
+    return "Diagnóstico de " + nomeCli + " (" + (d.periodo && d.periodo.rotulo) + "):\n" + v + "\n\nOnde rende pouco:\n" + (pl || "- nada") + "\n\nOnde rende bem:\n" + (gl || "- nada");
+  };
+  const discutir = function (i) { abrirSala("Quero resolver isto em " + nomeCli + ": " + i.titulo + ". " + i.texto + (i.extra ? " " + i.extra + "." : "") + (i.estimativa ? " (" + i.estimativa + ")" : "") +
+    " [" + (_tdgCz[i.certeza] || ["", ""])[0] + ", " + (d.periodo && d.periodo.rotulo) + "]\nO que você sugere? Se for mexer em campanha, monte o pedido para aprovarmos com o PIN.\n\n" + resumoTxt()); };
+  const irAba = function (a) { setAba(a); setFech(function (f) { return Object.assign({}, f, { raio: false }); }); setTimeout(function () { try { refRaio.current && refRaio.current.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) {} }, 60); };
+  const irGraf = function () { setFech(function (f) { return Object.assign({}, f, { graf: false }); }); setTimeout(function () { try { refGraf.current && refGraf.current.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {} }, 60); };
+  const pausar = async function (i, a) {
+    if (conf !== i.id) { setConf(i.id); return; }
+    setConf(null); setPedindo(i.id);
+    try {
+      const r = await _tsegRpc("ads_diag_pedir_pausa", { p_client: cli, p_nivel: a.nivel, p_ids: a.ids || [], p_porque: i.titulo + ": " + i.texto + (i.estimativa ? " (" + i.estimativa + ")" : "") });
+      if (!r || !r.ok) throw new Error((r && r.erro) || "Não criou o pedido.");
+      setPedidosOk(function (p) { const n = Object.assign({}, p); n[i.id] = r.pedidos || []; return n; });
+      if (typeof pixelsToast !== "undefined") pixelsToast.success("Pedido em \"Precisa de vocês\". Aprove com o PIN para pausar na Meta.", 4000);
+      try { _tcliCarregar(true); } catch (_) {}
+    } catch (e) { if (typeof pixelsToast !== "undefined") pixelsToast.error(e.message); else setErro(e.message); }
+    finally { setPedindo(null); }
+  };
+  const montador = function (a) { _tcliAbrir({ painel: "montador", conta: contaId, novo: true, preset: a.preset || null }); };
+  const contestar = async function () {
+    if (!contestando) return;
+    try {
+      const r = await window._sb.rpc("ads_colinha_contestar", { p_client: cli, p_frente: "diagnostico", p_fato: contestando, p_motivo: motivo });
+      if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || "Não salvou.");
+      setContestando(null); setMotivo("");
+      if (typeof pixelsToast !== "undefined") pixelsToast.success("Anotado. A IA não usa esse número e o Claude confere a causa.", 3500);
+    } catch (e) { setErro(e.message); }
+  };
+  const conversar = function () { const q = String(pergunta || "").trim(); if (!q) return; abrirSala(q + "\n\n" + resumoTxt()); setPergunta(""); };
+  const tog = function (k) { setFech(function (f) { const n = Object.assign({}, f); n[k] = !f[k]; return n; }); };
+
+  if (erro && !d) return <div style={{ color: "#b91c1c", fontSize: 13, fontWeight: 700 }}>{erro} <button className="tdg-b" onClick={function () { carregar(dias); }}>Tentar de novo</button></div>;
+  if (!d) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Montando o diagnóstico…</div>;
+  if (d.sem_conta) return <div style={{ fontSize: 13, color: "#64748b" }}>Este cliente não tem conta de anúncio ligada.</div>;
+
+  const k = d.kpis || {};
+  const temDado = Number(k.gasto || 0) > 0;
+  const ehCel = !!isMob;
+  const perd = d.perdendo || []; const ganh = d.ganhando || [];
+  const segs = d.segs || {};
+
+  // ---------- pedaços ----------
+  const botoes = function (i) {
+    const feitos = (i.feito || []).filter(function (p) { return ["novo", "aguardando", "aplicando"].indexOf(p.estado) >= 0 && p.acao === "pausar"; });
+    const criados = pedidosOk[i.id];
+    return <div className="tdg-acts">
+      {(i.acoes || []).map(function (a, ix) {
+        if (a.tipo === "pausar") {
+          if (criados || feitos.length) return <button key={ix} className="tdg-b" onClick={_tcolIrDecisoes} title="Já existe o pedido. Aprove com o PIN em Precisa de vocês.">✅ Já pedido · aprovar em "Precisa de vocês"</button>;
+          if (canEdit === false) return null;
+          return <button key={ix} className={"tdg-b " + (conf === i.id ? "conf" : "red")} disabled={pedindo === i.id} onClick={function () { pausar(i, a); }}
+            title="Cria o pedido em Precisa de vocês. Só pausa na Meta depois do PIN 2x.">{pedindo === i.id ? "Criando…" : conf === i.id ? "Confirmar: criar pedido para aprovar" : a.rotulo}</button>;
+        }
+        if (a.tipo === "montador") return canEdit === false ? null : <button key={ix} className="tdg-b grn" onClick={function () { montador(a); }} title="Abre o Montador já preenchido. A campanha sobe pausada, com PIN 2x.">{a.rotulo}</button>;
+        if (a.tipo === "aba") return <button key={ix} className="tdg-b" onClick={function () { irAba(a.aba); }}>{a.rotulo}</button>;
+        if (a.tipo === "grafico") return <button key={ix} className="tdg-b" onClick={irGraf}>{a.rotulo}</button>;
+        return <button key={ix} className="tdg-b" onClick={function () { discutir(i); }}>{a.rotulo || "💬 Discutir"}</button>;
+      })}
+    </div>;
+  };
+  const feitoLinha = function (i) {
+    const f = (i.feito || []).filter(function (p) { return ["aplicado", "monitorando", "concluido"].indexOf(p.estado) >= 0; })[0];
+    if (!f) return null;
+    const vd = function (m) { return m ? (m.veredito === "melhorou" ? "📈 melhorou" : m.veredito === "piorou" ? "📉 piorou" : m.veredito === "igual" ? "➖ igual" : "⏳ pouco dado") : "?"; };
+    return <div className="tdg-feito">📌 <b>{f.titulo}</b> em {_tdgDM(f.em)}{f.por ? " por " + f.por : ""} · <b>dia 3:</b> {vd(f.d3)} · <b>dia 7:</b> {vd(f.d7)}
+      {(f.d7 || f.d3) && <div className="mut" style={{ marginTop: 3 }}>{(f.d7 || f.d3).texto}</div>}</div>;
+  };
+  const linha = function (i, ix, lado, n) {
+    const cz = _tdgCz[i.certeza];
+    return <div key={i.id} className={"tdg-row" + (ix >= n ? " extra" : "")}>
+      <div className="tdg-amt"><div className="n">{i.valor}</div><div className="c">{i.sub}</div></div>
+      <div className="tdg-tx"><b>{i.titulo}</b>{i.novo && <span className="tdg-novo">NOVO</span>}{cz && <span className={"tdg-cz " + i.certeza} title={cz[1]}>{cz[0]}{i.dias ? " · " + i.dias + " dias" : ""}</span>}: {i.texto}
+        {i.barra && i.barra.media > 0 && <div className="tdg-cmp"><span className="tdg-track"><span style={{ width: Math.min(100, 100 * i.barra.valor / (i.barra.media * 2)) + "%" }} /><i style={{ left: "50%" }} /></span> média {_tdgBRL(i.barra.media)}</div>}
+        {i.extra && <div className="tdg-cmp">{i.extra}</div>}
+        {i.estimativa && <div className="tdg-gain">↗ {i.estimativa}</div>}
+        {i.padrao && <div className="tdg-pat">{i.padrao}</div>}
+        {botoes(i)}
+        {feitoLinha(i)}
+        {contestando === i.titulo + ": " + i.texto && <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <input value={motivo} onChange={function (e) { setMotivo(e.target.value); }} autoFocus placeholder="O que está errado? (ex.: no Gerenciador aparece 40 leads)"
+            style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1.5px solid #cbd5e1", borderRadius: 8, minWidth: 0, fontFamily: "inherit" }} />
+          <button className="tdg-b pri" onClick={contestar}>Enviar</button><button className="tdg-b" onClick={function () { setContestando(null); }}>Cancelar</button></div>}
+      </div>
+      {canEdit !== false && <button className="tdg-flag" title="Este número está errado? Avise: a IA deixa de usar e o Claude confere" onClick={function () { setContestando(i.titulo + ": " + i.texto); setMotivo(""); }}>⚑</button>}
+    </div>;
+  };
+  const caixa = function (chave, lado, titulo, sub, itens, n, vazio) {
+    const f = !!fech[chave]; const t = !!tudo[chave];
+    return <div className={"tdg-sec lst " + (lado === "lose" ? "tdg-lose" : "tdg-win") + (f ? " fech" : "") + (t ? " tudo" : "")}>
+      <h3 className="tdg-h3" onClick={function () { if (ehCel) tog(chave); }}>{titulo} {sub && !ehCel && <span className="mut" style={{ fontSize: 11.5, fontWeight: 700 }}>{sub}</span>}
+        {ehCel && <span className="cnt">{itens.length}</span>}{ehCel && <span className="tdg-car">▾</span>}</h3>
+      {!itens.length && <div className="mut" style={{ fontSize: 12.5, padding: "6px 0" }}>{vazio}</div>}
+      {itens.map(function (i, ix) { return linha(i, ix, lado, ehCel ? n : 99); })}
+      {ehCel && itens.length > n && <button className="tdg-vermais" onClick={function () { setTudo(function (x) { const y = Object.assign({}, x); y[chave] = !x[chave]; return y; }); }}>{t ? "Recolher ▴" : "Ver mais " + (itens.length - n) + " ▾"}</button>}
+    </div>;
+  };
+
+  // gráfico de leads por dia com as mudanças na conta
+  const grafico = function () {
+    const S0 = d.serie || []; const S = ehCel ? S0.slice(-14) : S0;
+    if (!S.length) return null;
+    const W = ehCel ? 420 : 1000, H = ehCel ? 170 : 150, TOPO = 30, BASE = 20;
+    const mx = Math.max(4, Math.max.apply(null, S.map(function (x) { return Number(x.leads || 0); })));
+    const bw = W / S.length; const yy = function (v) { return H - BASE - (v / mx) * (H - TOPO - BASE); };
+    const idx = {}; S.forEach(function (x, i) { idx[String(x.d).slice(0, 10)] = i; });
+    const evs = {}; (d.eventos || []).forEach(function (e) { const i = idx[String(e.d).slice(0, 10)]; if (i === undefined) return; (evs[i] = evs[i] || []).push(e); });
+    const passo = ehCel ? 3 : 3;
+    return <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", height: H }} role="img" aria-label="Leads por dia">
+      {[0, Math.round(mx / 2), mx].map(function (v, i) { return <g key={"g" + i}><line x1="0" x2={W} y1={yy(v)} y2={yy(v)} stroke="#eef2f7" /><text x="2" y={yy(v) - 3} fontSize="10" fill="#94a3b8">{v}</text></g>; })}
+      {S.map(function (x, i) {
+        const h = (Number(x.leads || 0) / mx) * (H - TOPO - BASE); const xx = i * bw + 18;
+        return <g key={i}><rect x={xx} y={H - BASE - Math.max(h, 1.5)} width={Math.max(3, bw - 10)} height={Math.max(h, 1.5)} rx="3" fill={i >= S.length - 7 ? "#7c3aed" : "#c4b5fd"}>
+          <title>{_tdgDM(x.d) + ": " + _tdgNum(x.leads) + " leads · " + _tdgBRL(x.gasto)}</title></rect>
+          {i % passo === 0 && <text x={xx + (bw - 10) / 2} y={H - 5} fontSize="10" fill="#94a3b8" textAnchor="middle">{_tdgDM(x.d)}</text>}</g>;
+      })}
+      {Object.keys(evs).map(function (i) {
+        const lst = evs[i]; const xx = Number(i) * bw + 18 + (bw - 10) / 2; const fim = Number(i) > S.length * 0.5;
+        const cor = lst.some(function (e) { return e.tipo === "entrou"; }) ? "#b91c1c" : "#64748b";
+        const txt = lst.map(function (e) { return (e.tipo === "entrou" ? "▶ entrou " : "⏸ parou ") + (ehCel ? String(e.nome).slice(0, 18) : e.nome); }).join(" · ");
+        return <g key={"e" + i}><line x1={xx} x2={xx} y1="14" y2={H - BASE} stroke={cor} strokeDasharray="3 3" /><circle cx={xx} cy="14" r="4" fill={cor} />
+          <text x={xx + (fim ? -8 : 8)} y="18" fontSize="11" fontWeight="700" fill={cor} textAnchor={fim ? "end" : "start"}>{txt.length > (ehCel ? 40 : 90) ? txt.slice(0, ehCel ? 40 : 90) + "…" : txt}</text>
+          <title>{lst.map(function (e) { return _tdgDM(e.d) + " " + (e.tipo === "entrou" ? "entrou: " : "parou de gastar: ") + e.nome; }).join("\n")}</title></g>;
+      })}
+    </svg>;
+  };
+
+  // raio-x
+  const igCell = function (v, rotulo) {
+    const s = (segs.idade_genero || []).find(function (x) { return x.valor === v; });
+    const cls = _tdgCor(s);
+    if (!s) return <div className={"tdg-cell " + cls}><span>—</span></div>;
+    const pouco = cls === "c-p";
+    return <button className={"tdg-cell " + cls} title={rotulo + ": " + _tdgNum(s.res) + " leads, " + _tdgBRL(s.gasto) + " gastos" + (s.custo ? ", " + _tdgBRL(s.custo) + " por lead" : "")}
+      onClick={function () { abrirSala("Olhando o público " + rotulo + " de " + nomeCli + " (" + d.periodo.rotulo + "): " + _tdgNum(s.res) + " leads, " + _tdgBRL(s.gasto) + " gastos, " + (s.custo ? _tdgBRL(s.custo) + " por lead" : "sem lead") + " (média " + _tdgBRL(s.media) + "). O que fazer com esse público?\n\n" + resumoTxt()); }}>
+      {pouco ? <span>{_tdgNum(s.res)} {Number(s.res) === 1 ? "lead" : "leads"}</span> : <b>{_tdgBRL(s.custo)}</b>}
+      <span className="m">{pouco ? "⏳ pouco dado" : _tdgNum(s.res) + " leads"}<br />{_tdgBRL(s.gasto, 0)}</span></button>;
+  };
+  const listaSeg = function (arr, quebra) {
+    const a = (arr || []).filter(function (s) { return Number(s.pct || 0) >= 0.5; });
+    if (!a.length) return <div className="mut" style={{ fontSize: 12.5 }}>Sem dado neste período.</div>;
+    return <div>{a.slice(0, 12).map(function (s) {
+      const cls = _tdgCor(s);
+      return <div key={s.valor} className="tdg-row" style={{ alignItems: "center", padding: "7px 0" }}>
+        <div style={{ flex: "0 0 " + (ehCel ? "38%" : "220px"), fontWeight: 800, fontSize: 12.5, minWidth: 0 }}>{_tdgNomeSeg(s.nome)}</div>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 11.5 }} className="mut"><span className="tdg-vb" style={{ width: ehCel ? 60 : 110 }}><span style={{ width: Math.min(100, Number(s.pct)) + "%" }} /></span>{_tdgNum(s.pct)}%</div>
+        {quebra !== "gasto" && <div style={{ flex: "0 0 auto", textAlign: "right", fontSize: 12.5 }}>
+          <span className={"tdg-cz " + (cls === "c-p" ? "pouco" : (s.veredito || "").indexOf("confiavel") >= 0 ? "alta" : "indicio")} style={{ marginRight: 6 }}>{cls === "c-p" ? "○" : (s.veredito || "").indexOf("confiavel") >= 0 ? "●" : "◐"}</span>
+          <b className={cls === "c-gg" || cls === "c-g" ? "ok" : cls === "c-rr" || cls === "c-r" ? "bad" : ""}>{Number(s.res) > 0 ? _tdgBRL(s.custo) : "sem lead"}</b>
+          <div className="mut" style={{ fontSize: 10.5 }}>{_tdgNum(s.res)} leads · {_tdgBRL(s.gasto, 0)}</div></div>}
+        {quebra === "gasto" && <div style={{ flex: "0 0 auto", textAlign: "right", fontSize: 12.5, fontWeight: 800 }}>{_tdgBRL(s.gasto, 0)}</div>}
+      </div>;
+    })}</div>;
+  };
+  const raio = function () {
+    if (aba === "ig") return <div className="tdg-xg">
+      <div>
+        <div className="tdg-hm">
+          <div /><div className="h">👩 Mulheres</div><div className="h">👨 Homens</div>
+          {["18-24", "25-34", "35-44", "45-54", "55-64", "65+"].map(function (a) {
+            return [<div key={a} className="a">{a.replace("-", "–")}</div>, <div key={a + "f"}>{igCell(a + "|female", "Mulheres " + a.replace("-", "–"))}</div>, <div key={a + "m"}>{igCell(a + "|male", "Homens " + a.replace("-", "–"))}</div>];
+          })}
+        </div>
+        <div className="tdg-leg"><span><i className="c-gg" />bem mais barato (certeza)</span><span><i className="c-g" />mais barato</span><span><i className="c-n" />na média ({_tdgBRL(((segs.idade_genero || [])[0] || {}).media)})</span><span><i className="c-r" />mais caro</span><span><i className="c-rr" />bem mais caro (certeza)</span><span><i className="c-p" style={{ border: "1px solid #e2e8f0" }} />menos de {_tdgNum(d.amostra_min)} leads</span></div>
+      </div>
+      <div className="tdg-side"><b>Como ler:</b> cada quadrado é um público. O número grande é quanto custa cada lead; embaixo, quantos leads vieram e quanto foi gasto. Toque num quadrado para perguntar à IA.<br /><br />
+        <b>Cor forte</b> só aparece quando a diferença passou no teste estatístico. Cor clara é indício. Listrado é pouco dado: não dá para concluir nada.</div>
+    </div>;
+    if (aba === "camp") return <div style={{ overflowX: "auto" }}><table className="tdg-tb"><thead><tr><th>Campanha</th>{!ehCel && <th>Quanto da verba</th>}<th className="r">Leads</th><th className="r">Custo por lead</th>{!ehCel && <th className="r">Conversas 5+</th>}<th>Situação</th></tr></thead>
+      <tbody>{(d.campanhas || []).map(function (c) {
+        const ruim = c.cpl && k.cpl && c.cpl > k.cpl * 1.15; const bom = c.cpl && k.cpl && c.cpl < k.cpl;
+        return <tr key={c.id}><td><b>{c.nome}</b>{ehCel && <div className="mut" style={{ fontSize: 10.5 }}>{_tdgNum(c.pct)}% da verba</div>}</td>
+          {!ehCel && <td><span className="tdg-vb"><span style={{ width: Math.min(100, Number(c.pct)) + "%" }} /></span>{_tdgNum(c.pct)}%</td>}
+          <td className="r">{c.lead ? _tdgNum(c.res) : "—"}</td>
+          <td className="r">{!c.lead ? <span className="mut">não é de lead</span> : c.pouco_dado ? <span className="mut">⏳ pouco dado</span> : <span><span className="tdg-dot" style={{ background: ruim ? "#ef4444" : bom ? "#22c55e" : "#f59e0b" }} /><b>{_tdgBRL(c.cpl)}</b></span>}</td>
+          {!ehCel && <td className="r">{Number(c.ini) > 0 ? _tdgNum(c.d5) + " de " + _tdgNum(c.ini) : "—"}</td>}
+          <td className="mut" style={{ fontSize: 11.5 }}>{c.status === "ACTIVE" ? "● ligada" : "⏸ " + (c.ultimo ? "parou em " + _tdgDM(c.ultimo) : "pausada")}</td></tr>;
+      })}</tbody></table>
+      <div className="tdg-note">Ponto verde = abaixo da média da conta ({_tdgBRL(k.cpl)}) · amarelo = até 15% acima · vermelho = bem acima. Abaixo de {_tdgNum(d.amostra_min)} leads não ganha cor.</div></div>;
+    if (aba === "cr") {
+      const cr = (d.criativos || []).slice(0, 15);
+      const corQ = function (c) { return Number(c.ini) >= 10 ? (Number(c.d5) >= 0.35 * Number(c.ini) ? "#22c55e" : Number(c.d5) < 0.15 * Number(c.ini) ? "#ef4444" : "#f59e0b") : "#94a3b8"; };
+      return <div>
+        <div className="tdg-desk" style={{ overflowX: "auto" }}><table className="tdg-tb"><thead><tr><th>Criativo</th><th>Quanto da verba</th><th className="r">Leads</th><th className="r">Custo por lead</th><th className="r" style={{ background: "#faf5ff" }}>Conversas 5+</th><th className="r" style={{ background: "#faf5ff" }}>Custo por conversa de verdade</th><th className="r">Frequência 7d</th></tr></thead>
+          <tbody>{cr.map(function (c) { return <tr key={c.nome}><td><b>{c.nome}</b>{c.pouco_dado && <span className="tdg-cz pouco">○ pouco dado</span>}</td>
+            <td><span className="tdg-vb"><span style={{ width: Math.min(100, Number(c.pct)) + "%" }} /></span>{_tdgNum(c.pct)}%</td>
+            <td className="r">{_tdgNum(c.res)}</td><td className="r">{_tdgBRL(c.cpl)}</td>
+            <td className="r" style={{ background: "#fdfcff" }}>{Number(c.ini) > 0 ? <span><span className="tdg-dot" style={{ background: corQ(c) }} />{_tdgNum(c.d5)}</span> : "—"}</td>
+            <td className="r" style={{ background: "#fdfcff" }}><b style={{ color: corQ(c) === "#ef4444" ? "#b91c1c" : corQ(c) === "#22c55e" ? "#15803d" : "inherit" }}>{Number(c.ini) > 0 ? (c.custo_d5 ? _tdgBRL(c.custo_d5) : "nenhuma") : "—"}</b></td>
+            <td className="r">{c.freq7 ? _tdgNum(c.freq7, 1) : "—"}</td></tr>; })}</tbody></table></div>
+        <div className="tdg-cards">{cr.slice(0, 8).map(function (c) { return <div key={c.nome} className="tdg-card" style={{ borderLeft: "4px solid " + corQ(c) }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}><b>{c.nome}</b>{c.pouco_dado && <span className="tdg-cz pouco">○ pouco dado</span>}</div>
+          {Number(c.ini) > 0 ? <div className="big" style={{ color: corQ(c) === "#ef4444" ? "#b91c1c" : corQ(c) === "#22c55e" ? "#15803d" : "#0f172a" }}>{c.custo_d5 ? _tdgBRL(c.custo_d5) : "nenhuma"} <small>por conversa de verdade</small></div>
+            : <div className="big">{Number(c.res) > 0 ? _tdgBRL(c.cpl) : "sem lead"} <small>{Number(c.res) > 0 ? "por lead" : _tdgBRL(c.gasto, 0) + " gastos"}</small></div>}
+          <div className="mut" style={{ fontSize: 11.5 }}>{Number(c.res) > 0 ? _tdgNum(c.res) + " leads a " + _tdgBRL(c.cpl) : "0 leads"} · {Number(c.ini) > 0 ? _tdgNum(c.d5) + " conversas 5+ · " : ""}{_tdgNum(c.pct)}% da verba</div></div>; })}</div>
+        <div className="tdg-note">Conversa de verdade = a pessoa mandou 5 mensagens ou mais no WhatsApp. A Meta conta mensagens de conversas que começaram antes do período, então o número pode passar dos leads: use como indício.</div>
+      </div>;
+    }
+    if (aba === "posicionamento") return listaSeg(segs.posicionamento);
+    if (aba === "regiao") return <div>{listaSeg(segs.regiao, "gasto")}<div className="tdg-note">A Meta não informa direito quantos leads vieram de cada estado. Aqui só dá para ver para onde foi a verba.</div></div>;
+    if (aba === "hora") {
+      const hs = []; for (let h = 0; h < 24; h++) hs.push((segs.hora || []).find(function (x) { return Number(x.valor) === h; }));
+      return <div><div className="tdg-hrs">{hs.map(function (s, h) { const cls = _tdgCor(s);
+        return <button key={h} className={"tdg-hr " + cls} title={h + "h: " + (s ? _tdgNum(s.res) + " leads, " + _tdgBRL(s.gasto) + (s.custo ? ", " + _tdgBRL(s.custo) + " por lead" : "") : "sem gasto")}
+          onClick={function () { if (s) abrirSala("Horário " + h + "h de " + nomeCli + ": " + _tdgNum(s.res) + " leads, " + _tdgBRL(s.gasto) + ", " + (s.custo ? _tdgBRL(s.custo) + " por lead" : "sem lead") + ". Vale programar horário?\n\n" + resumoTxt()); }}>{h}h</button>; })}</div>
+        <div className="tdg-leg"><span><i className="c-gg" />bem mais barato (certeza)</span><span><i className="c-g" />mais barato</span><span><i className="c-n" />na média</span><span><i className="c-r" />mais caro</span><span><i className="c-rr" />bem mais caro (certeza)</span><span><i className="c-p" style={{ border: "1px solid #e2e8f0" }} />pouco dado</span></div>
+        <div style={{ marginTop: 10 }}>{listaSeg((segs.hora || []).slice().sort(function (a, b) { return Number(b.res) - Number(a.res); }).slice(0, ehCel ? 6 : 8).map(function (s) { return Object.assign({}, s, { nome: "Das " + Number(s.valor) + "h às " + (Number(s.valor) + 1) + "h" }); }))}</div></div>;
+    }
+    return null;
+  };
+
+  // saúde e calendário (da colinha do dia) + cansaço dos criativos
+  const chips = [];
+  const fr = (col && col.frentes) || [];
+  ["saude", "funil", "mercado"].forEach(function (id) {
+    const f = fr.find(function (x) { return x.id === id; }); if (!f) return;
+    (f.fatos || []).forEach(function (x) {
+      const t = String(x.t || ""); if (!t) return;
+      if (id === "funil" && /CTR|^WhatsApp/i.test(t)) return;
+      const ic = id === "mercado" ? "📅" : x.sinal === "verde" ? "✅" : (x.sinal === "vermelho" || x.sinal === "amarelo") ? "⚠️" : "ℹ️";
+      chips.push({ ic: ic, t: t.replace(/^Calendário:\s*/i, ""), cor: ic === "⚠️" ? "warn" : "", fonte: x.fonte });
+    });
+  });
+  const cans = (d.criativos || []).filter(function (c) { return Number(c.freq7) >= 3 && Number(c.ctr7) < Number(c.ctr_ant || 0); });
+  const fmax = Math.max.apply(null, [0].concat((d.criativos || []).map(function (c) { return Number(c.freq7 || 0); })));
+  if ((d.criativos || []).length) chips.unshift(cans.length ? { ic: "⚠️", cor: "warn", t: "Criativo cansando: " + cans[0].nome + " (frequência " + _tdgNum(cans[0].freq7, 1) + " e CTR caindo)" } : { ic: "✅", t: "Criativos sem cansaço (frequência até " + _tdgNum(fmax, 1) + ")" });
+  const placar = ((col && col.placar && col.placar.tipos) || []);
+  const medidos = placar.reduce(function (a, t) { return a + Number(t.melhorou || 0) + Number(t.piorou || 0) + Number(t.igual || 0); }, 0);
+  if (medidos) chips.push({ ic: "🎯", t: "Placar da IA: " + placar.reduce(function (a, t) { return a + Number(t.melhorou || 0); }, 0) + " de " + medidos + " decisões medidas melhoraram" });
+  const nOk = chips.filter(function (c) { return c.ic === "✅"; }).length, nW = chips.filter(function (c) { return c.ic === "⚠️"; }).length, nC = chips.filter(function (c) { return c.ic === "📅"; }).length;
+  const res = col && col.resumo_ia;
+
+  const mp = k.meta_leads ? Math.min(100, 100 * Number(k.leads_mes || 0) / Number(k.meta_leads)) : 0;
+  const mpe = k.meta_leads ? 100 * Number(k.dia) / Number(k.dias_mes) : 0;
+  const ritmo = k.meta_leads ? (Number(k.leads_mes) >= 0.95 * Number(k.esperado_leads) ? ["ok", "no ritmo"] : Number(k.leads_mes) >= 0.75 * Number(k.esperado_leads) ? ["warn", "um pouco atrás"] : ["bad", "atrás do ritmo"]) : null;
+  const vrit = k.verba_meta ? (Number(k.verba_mes) > Number(k.verba_esperada) * 1.15 ? ["bad", "acima do ritmo · vai passar ~" + _tdgBRL(Number(k.verba_projecao) - Number(k.verba_meta), 0)] : Number(k.verba_mes) < Number(k.verba_esperada) * 0.8 ? ["warn", "abaixo do ritmo · sobra ~" + _tdgBRL(Number(k.verba_meta) - Number(k.verba_projecao), 0)] : ["ok", "no ritmo"]) : null;
+  const cplCart = k.cpl && k.cpl_carteira ? Number(k.cpl) / Number(k.cpl_carteira) : null;
+
+  return <div className={"tdg" + (ehCel ? " tdg-m" : "")}>
+    <style>{_TDG_CSS}</style>
+    <div className="tdg-top">
+      <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0 }}>🔬 Diagnóstico</h2>
+      {!ehCel && <span className="tdg-pill">dados até {_tdgDM(d.periodo && d.periodo.ate)} · o último dia ainda pode subir</span>}
+      <span className="tdg-seg">{[[7, "7 dias"], [30, "30 dias"], [0, "Mês"]].map(function (o) { return <button key={o[0]} className={dias === o[0] ? "on" : ""} onClick={function () { mudarDias(o[0]); }}>{o[1]}</button>; })}</span>
+      <button className="tdg-b" onClick={function () { carregar(dias); }} disabled={carregando} title="Recalcular agora">{carregando ? "…" : "🔄"}</button>
+    </div>
+    {d.compartilhada && <div className="tdg-note" style={{ marginTop: -6, marginBottom: 10 }}>Esta unidade divide a conta de Toledo: aqui entram só as campanhas desta unidade.</div>}
+    {erro && <div style={{ color: "#b91c1c", fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
+    {!temDado && <div className="tdg-sec mut" style={{ fontSize: 13 }}>Sem gasto em anúncios neste período. Troque o período acima ou confira se as campanhas estão ligadas.</div>}
+
+    {temDado && <div className="tdg-ver">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className={"tdg-vt" + (lerTudo ? "" : " corta")}>🩺 {(d.veredito || []).length ? d.veredito.map(function (p, i) { return <span key={i} className={p.tom || ""}>{p.t}</span>; }) : "Nada fora do normal neste período."}</div>
+        {ehCel && !lerTudo && <button onClick={function () { setLerTudo(true); }} style={{ background: "none", border: "none", padding: 0, color: "#5b21b6", fontWeight: 800, fontSize: 12, cursor: "pointer", marginTop: 4, fontFamily: "inherit" }}>ler tudo ▾</button>}
+        {res && (res.frases || []).length > 0 && <div className="tdg-ia">🧠 <b>A IA diz:</b> {res.frases.join(" ")}</div>}
+        <div className="tdg-note" style={{ marginTop: 6 }}>Escrito pelo sistema com os números abaixo ({d.periodo && d.periodo.rotulo}). Funciona sem crédito de IA.</div>
+      </div>
+      <button className="tdg-b pri" onClick={function () { abrirSala("Monte um plano para " + nomeCli + " a partir deste diagnóstico. Comece pelo que mais pesa no dinheiro e diga o que dá para fazer hoje.\n\n" + resumoTxt()); }}>💬 Montar plano com a IA</button>
+    </div>}
+
+    {novas && novas.itens && novas.itens.length > 0 && <div className="tdg-new">🆕 Desde a sua última visita ({_tdgDM(novas.desde)}): {novas.itens.map(function (t, i) { return <span key={i}>• {t}</span>; })}</div>}
+
+    {temDado && <div className="tdg-kpis">
+      {k.meta_leads ? <div className="tdg-kpi"><div className="l">Leads no mês</div><div className="v">{_tdgNum(k.leads_mes)} <small>/ {_tdgNum(k.meta_leads)}</small></div>
+        <div className="tdg-bar"><span style={{ width: mp + "%", background: ritmo[0] === "ok" ? "#22c55e" : ritmo[0] === "warn" ? "#f59e0b" : "#ef4444" }} /><i style={{ left: mpe + "%" }} /></div>
+        <div className={"s " + ritmo[0]} style={{ marginTop: 5 }}>● {ritmo[1]} · projeção {_tdgNum(k.projecao_leads)}</div></div>
+        : <div className="tdg-kpi"><div className="l">Leads ({d.periodo && d.periodo.rotulo})</div><div className="v">{_tdgNum(k.leads)}</div><div className="s mut">sem meta de leads · defina em Gestão › Metas</div></div>}
+      <div className="tdg-kpi"><div className="l">Custo por lead ({dias === 0 ? "mês" : dias + " dias"})</div><div className="v">{_tdgBRL(k.cpl)}</div>
+        {cplCart && <div className={"s " + (cplCart > 1.25 ? "bad" : cplCart < 0.8 ? "ok" : "mut")}>● {_tdgNum(cplCart, 1)}× a carteira ({_tdgBRL(k.cpl_carteira)})</div>}
+        {k.cpl_sem && <div className="mut" style={{ fontSize: 11.5, marginTop: 3 }}>semana {_tdgBRL(k.cpl_sem)}{k.cpl_sem_ant ? " · anterior " + _tdgBRL(k.cpl_sem_ant) : ""} {k.cpl_sem_ant && <span className={Number(k.cpl_sem) < Number(k.cpl_sem_ant) ? "ok" : "bad"}>{Number(k.cpl_sem) < Number(k.cpl_sem_ant) ? "↓" : "↑"}</span>}</div>}</div>
+      {k.verba_meta ? <div className="tdg-kpi"><div className="l">Verba do mês</div><div className="v">{_tdgBRL(k.verba_mes, 0)} <small>/ {_tdgNum(k.verba_meta)}</small></div>
+        <div className="tdg-bar"><span style={{ width: Math.min(100, 100 * Number(k.verba_mes) / Number(k.verba_meta)) + "%", background: vrit[0] === "ok" ? "#22c55e" : vrit[0] === "warn" ? "#f59e0b" : "#ef4444" }} /><i style={{ left: mpe + "%" }} /></div>
+        <div className={"s " + vrit[0]} style={{ marginTop: 5 }}>● {vrit[1]}</div></div>
+        : <div className="tdg-kpi"><div className="l">Gasto ({d.periodo && d.periodo.rotulo})</div><div className="v">{_tdgBRL(k.gasto, 0)}</div><div className="s mut">sem verba do mês cadastrada</div></div>}
+      {Number(k.conv_ini) > 0 && <div className="tdg-kpi q"><div className="l">💬 Conversa de verdade (5+ mensagens)</div><div className="v">{k.custo_d5 ? _tdgBRL(k.custo_d5) : "nenhuma"}</div>
+        <div className={"s " + (Number(k.conv_d5) >= 0.35 * Number(k.conv_ini) ? "ok" : "warn")}>● {_tdgNum(k.conv_d5)} de {_tdgNum(k.conv_ini)} conversas ({_tdgNum(100 * Number(k.conv_d5) / Number(k.conv_ini))}%)</div>
+        <div className="mut" style={{ fontSize: 11.5, marginTop: 3 }}>lead barato que não conversa não vale</div></div>}
+    </div>}
+
+    {temDado && <div ref={refGraf} className={"tdg-sec" + (ehCel && fech.graf ? " fech" : "")}>
+      <div className="tdg-mh" onClick={function () { tog("graf"); }}>📈 Leads por dia <span className="cnt">{(d.eventos || []).length ? (d.eventos.length + (d.eventos.length === 1 ? " mudança" : " mudanças") + " na conta") : "30 dias"}</span><span className="tdg-car">▾</span></div>
+      {!ehCel && <div style={{ fontSize: 12.5, fontWeight: 900, display: "flex", gap: 10, alignItems: "center" }}>📈 Leads por dia e o que mudou na conta <span className="mut" style={{ fontWeight: 700, fontSize: 11.5 }}>· últimos 30 dias · passe o mouse nas bandeiras</span></div>}
+      {grafico()}
+    </div>}
+
+    {temDado && <div className="tdg-cols">
+      {caixa("perd", "lose", "🔴 Onde o dinheiro está rendendo pouco", null, perd, 2, "Nada fora do normal neste período. 👏")}
+      {caixa("ganh", "win", "🟢 Onde está rendendo bem", "· dá para pôr mais", ganh, 1, "Ainda sem um público, horário ou criativo que se destaque com certeza.")}
+    </div>}
+
+    {temDado && <div ref={refRaio} className={"tdg-sec" + (ehCel && fech.raio ? " fech" : "")}>
+      <div className="tdg-mh" onClick={function () { tog("raio"); }}>📊 Raio-x <span className="cnt">idade × gênero, criativos…</span><span className="tdg-car">▾</span></div>
+      <div className="tdg-tabs">{!ehCel && <b style={{ fontSize: 13.5, marginRight: 6 }}>📊 Raio-x</b>}
+        {[["camp", "Campanhas"], ["ig", "Idade × Gênero"], ["cr", "Criativos"], ["posicionamento", "Onde aparece"], ["hora", "Horário"], ["regiao", "Estados"]].map(function (t) {
+          return <button key={t[0]} className={"tdg-tab" + (aba === t[0] ? " on" : "")} onClick={function () { setAba(t[0]); }}>{t[1]}</button>; })}
+        {!ehCel && <span className="mut" style={{ marginLeft: "auto", fontSize: 11.5 }}>● certeza alta · ◐ indício · ○ pouco dado</span>}</div>
+      {raio()}
+    </div>}
+
+    {chips.length > 0 && <div className={"tdg-sec" + (ehCel && fech.saude ? " fech" : "")} style={ehCel ? null : { border: "none", padding: 0 }}>
+      <div className="tdg-mh" onClick={function () { tog("saude"); }}>🩺 Saúde e calendário <span className="cnt">{[nOk ? "✅ " + nOk : "", nW ? "⚠️ " + nW : "", nC ? "📅 " + nC : ""].filter(Boolean).join(" · ")}</span><span className="tdg-car">▾</span></div>
+      <div className="tdg-chips">{chips.map(function (c, i) { return <span key={i} className={"tdg-chip " + (c.cor || "")} title={c.t}>{c.ic} {c.t.length > 90 ? c.t.slice(0, 90) + "…" : c.t}{c.fonte && <a href={c.fonte} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 5, color: "#2563eb" }}>↗</a>}</span>; })}</div>
+    </div>}
+
+    <div className="tdg-chat">
+      <input value={pergunta} onChange={function (e) { setPergunta(e.target.value); }} onKeyDown={function (e) { if (e.key === "Enter") conversar(); }}
+        placeholder={ehCel ? "💬 Pergunte sobre este cliente" : "💬 Pergunte qualquer coisa sobre este cliente. A IA já abre com este diagnóstico inteiro."} />
+      <button className="tdg-b pri" onClick={conversar} disabled={!String(pergunta).trim()}>Conversar</button>
+    </div>
+    <div className="tdg-note">A conversa abre na Sala de estratégia e fica salva: a IA lembra dela nas próximas decisões. Se virar campanha, segue para o Montador.</div>
+
+    {detalhe && <div style={{ marginTop: 14, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
+      <button onClick={function () { setVerDet(!verDet); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 800, fontSize: 13, color: "#334155", fontFamily: "inherit" }}>
+        {verDet ? "▲" : "▾"} Detalhe completo <span style={{ fontWeight: 500, color: "#64748b" }}>(o Diagnóstico antigo, com aparelho e as notas do cliente)</span></button>
+      {verDet && <div style={{ marginTop: 10 }}>{detalhe}</div>}
+    </div>}
+  </div>;
+}
+
 /* ---------- 💳 SALDO DA IA (v83) — chip na barra; só aprovadores ---------- */
 function TIaSaldo() {
   const [st, setSt] = useState(null); const [aberto, setAberto] = useState(false); const [val, setVal] = useState(""); const [msg, setMsg] = useState(""); const [ocupado, setOcupado] = useState(false);
@@ -72916,7 +73435,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
   useEffect(function () {
     const h = function (e) {
       const d = (e && e.detail) || {};
-      setCtx({ conta: d.conta || null, novo: !!d.novo, estrategia: d.estrategia || null, texto: d.texto || null });
+      setCtx({ conta: d.conta || null, novo: !!d.novo, estrategia: d.estrategia || null, texto: d.texto || null, preset: d.preset || null });
       if (d.painel === "montador") setAbrirRasc(d.abrirId || null);
       if (d.painel === "alarmes") lerAlarmes();
       setPainel(d.painel || null);
@@ -73012,7 +73531,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
       )}
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
-      {painel === "montador" && <TSegMontador abrirId={abrirRasc} contaFixa={ctx.conta} novo={ctx.novo} onFechar={function () { setPainel(null); setAbrirRasc(null); setCtx({}); _tcliCarregar(true); }} onMudou={lerPend} />}
+      {painel === "montador" && <TSegMontador abrirId={abrirRasc} contaFixa={ctx.conta} novo={ctx.novo} preset={ctx.preset} onFechar={function () { setPainel(null); setAbrirRasc(null); setCtx({}); _tcliCarregar(true); }} onMudou={lerPend} />}
       {painel === "sala" && <TSegSala contaFixa={ctx.conta} abrirEstrategia={ctx.estrategia} textoInicial={ctx.texto} onFechar={function () { setPainel(null); setCtx({}); }} onAbrirMontador={function (id) { setAbrirRasc(id); setCtx(function (c) { return Object.assign({}, c, { novo: false }); }); setPainel("montador"); }} />}
       {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); _tcliCarregar(true); }} onMudou={lerPend} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
