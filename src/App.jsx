@@ -63566,9 +63566,9 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   const [verOcultas,setVerOcultas]=useState(false);
   const SUBS_TODAS=(temMeta?[["visao","Visão geral"],["estrategia","Alertas"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["diagnostico","Diagnóstico"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]])
     .filter(function(t){ return _bl("midia.qg."+t[0]); });   // 20/09: desligável em Acessos › Time
-  const _tcliOk=(typeof useTCliPode==="function")?useTCliPode():false;   /* 10/10: IA de tráfego dentro do cliente (só aprovadores) */
-  if(_tcliOk&&temMeta&&!SUBS_TODAS.some(function(t){return t[0]==="ia";})) SUBS_TODAS.splice(Math.min(2,SUBS_TODAS.length),0,["ia","🧠 Decisões"]);
-  if(_tcliOk&&temMeta){ const _ixAl=SUBS_TODAS.findIndex(function(t){return t[0]==="estrategia";}); if(_ixAl>=0) SUBS_TODAS.splice(_ixAl,1); }   /* v80 Fase B: aprovadores veem os Alertas dentro de 🧠 Decisões */
+  const _tcliOk=(typeof useTCliPode==="function")?useTCliPode():false;   /* v81 Alertas IA: só aprovadores com o PIN aberto */
+  if(_tcliOk&&temMeta&&!SUBS_TODAS.some(function(t){return t[0]==="ia";})){ const _ixAl=SUBS_TODAS.findIndex(function(t){return t[0]==="estrategia";}); if(_ixAl>=0) SUBS_TODAS.splice(_ixAl,1,["ia","🧠 Alertas"]); else SUBS_TODAS.splice(Math.min(1,SUBS_TODAS.length),0,["ia","🧠 Alertas"]); }
+  if(_tcliOk&&temMeta&&SUBS_TODAS.some(function(t){return t[0]==="ia";})){ const _ixDg=SUBS_TODAS.findIndex(function(t){return t[0]==="diagnostico";}); if(_ixDg>=0) SUBS_TODAS.splice(_ixDg,1); SUBS_TODAS.forEach(function(t){ if(t[0]==="ia") t[1]="🧠 Decisões"; }); }   /* v82 Decisoes: Alertas + Diagnóstico numa aba só (só aprovadores) */
   const SUBS=SUBS_TODAS.filter(function(t){ return verOcultas||!SUBS_OCULTAS.some(function(o){return o[0]===t[0];}); });
   const [sub,setSub]=useState(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; return d||"visao"; });
   const subAtiva=temMeta?sub:"gestao";
@@ -63577,7 +63577,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   /* 20/09: aba desligada em Acessos › Time — cai na primeira liberada em vez de abrir vazio */
   useEffect(function(){
     if(!temMeta) return;
-    if(SUBS.length&&!SUBS.some(function(t){return t[0]===sub;})) setSub(SUBS[0][0]);
+    if(SUBS.length&&!SUBS.some(function(t){return t[0]===sub;})) setSub(((sub==="estrategia"||sub==="diagnostico")&&SUBS.some(function(t){return t[0]==="ia";}))?"ia":SUBS[0][0]);   /* v81 link Alertas · v82 link Diag */
   },[SUBS.length,sub,temMeta]);
   useEffect(function(){ const h=function(e){ const d=e&&e.detail||{}; if(d.sub) setSub(d.sub); }; window.addEventListener("pixels:qg-sub",h); return function(){ window.removeEventListener("pixels:qg-sub",h); }; },[]);
   /* barra de contexto: aparece quando o topo sai da tela */
@@ -63667,6 +63667,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
     {subAtiva==="diagnostico"&&temMeta&&typeof QGAdsDiagnostico==="function"&&<QGAdsDiagnostico mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit&&_bl("midia.cerebro")} currentUser={currentUser}/>}
     {subAtiva==="leads"&&temMeta&&typeof QGAdsLeads==="function"&&<QGAdsLeads mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit} currentUser={currentUser}/>}
     {subAtiva==="historico"&&temMeta&&typeof QGAdsHistorico==="function"&&<QGAdsHistorico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
+    {subAtiva==="gestao"&&typeof TMetasMes==="function"&&<TMetasMes key={mc.client_id+":"+year+"-"+month} mc={mc} year={year} month={month} isMob={isMob}/>}
     {subAtiva==="gestao"&&(function(){
       /* ── Gestão do mês: verba · resultado · semana (sólidos) + plataformas + ações/demandas + portal ── */
       const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month;
@@ -65892,7 +65893,7 @@ function AdsLeituraIA({A,conta,camps,media,isMob,canEdit,atualizar,atualizando,m
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{width:6,height:6,borderRadius:"50%",background:cor,flexShrink:0}}/><span style={{fontSize:14,fontWeight:700,lineHeight:1.35}}>{d.titulo}</span></div>
               <div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:3,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>{fatos.map(function(f,j){ return <span key={j}>{j?"· ":""}{f.indexOf("a mais")>0?<b style={{color:"#ffc98a"}}>{f}</b>:f}</span>; })}{d.acao&&<span style={{color:"#fff",fontWeight:700}}>→ {d.acao}</span>}{!d.acao&&!fatos.length&&d.detalhe&&d.detalhe!==d.titulo&&<span>{d.detalhe}</span>}</div>
             </div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{c&&Btn("Abrir",function(){ _adsAbrirCampanha(c.id); },true)}{canEdit&&Btn("Feito",function(){ S.marcar(d.chave,"feito",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}{canEdit&&Btn("Ignorar",function(){ S.marcar(d.chave,"ignorado",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{typeof TCliResolver==="function"&&<TCliResolver/>/* v82 Resolver */}{c&&Btn("Abrir",function(){ _adsAbrirCampanha(c.id); },true)}{canEdit&&Btn("Feito",function(){ S.marcar(d.chave,"feito",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}{canEdit&&Btn("Ignorar",function(){ S.marcar(d.chave,"ignorado",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}</div>
           </div>; })}
         {pendentes.length>3&&<div style={{marginTop:6}}>{Btn(verTudo?"Mostrar só 3":"Ver mais "+(pendentes.length-3),function(){ setVerTudo(!verTudo); })}</div>}
       </div>
