@@ -149174,23 +149174,13 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
             const yr = (xx - w / 2) * sinA + (yy - h / 2) * cosA + h / 2;
             const rr = dL[i], gg = dL[i + 1], bb = dL[i + 2];
             const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb), sat = mx ? (mx - mn) / mx : 0;
-            if(ceuLiso && yr < horizPre + m.dh * 0.06 && sat < 0.34 && mx > 130){   // A) céu
+            if(ceuLiso && yr < horizPre + m.dh * 0.06 && sat < 0.34 && mx > 130 && bb >= rr){   // A) céu (só tom FRIO: terra clara é quente, fica)
               const t = Math.max(0, Math.min(1, yr / Math.max(1, horizPre)));
               dL[i] = Math.round(rT + (rB - rT) * t); dL[i + 1] = Math.round(gT + (gB - gT) * t); dL[i + 2] = Math.round(bT + (bB - bT) * t);
               limpouCeu++; continue;
             }
-            const dxO = xr < m.ox ? m.ox - xr : (xr > m.ox + m.dw ? xr - (m.ox + m.dw) : 0);   // B) borda
-            const dyO = yr < m.oy ? m.oy - yr : (yr > m.oy + m.dh ? yr - (m.oy + m.dh) : 0);
-            const dist = Math.max(dxO, dyO);
-            if(dist > 36 || dist === 0 || !(sat < 0.4 && mx > 120)) continue;
-            const xr2 = Math.max(m.ox + 2, Math.min(m.ox + m.dw - 2, xr)), yr2 = Math.max(m.oy + 2, Math.min(m.oy + m.dh - 2, yr));
-            const xb = Math.round((xr2 - w / 2) * Math.cos(ang) - (yr2 - h / 2) * Math.sin(ang) + w / 2);
-            const yb = Math.round((xr2 - w / 2) * Math.sin(ang) + (yr2 - h / 2) * Math.cos(ang) + h / 2);
-            if(xb < 0 || yb < 0 || xb >= w || yb >= h) continue;
-            const j = (yb * w + xb) * 4; if(dAl[j + 3] <= 10) continue;
-            const f = 1 - dist / 36;
-            dL[i] = Math.round(dAl[j] * f + rr * (1 - f)); dL[i + 1] = Math.round(dAl[j + 1] * f + gg * (1 - f)); dL[i + 2] = Math.round(dAl[j + 2] * f + bb * (1 - f));
-            limpouBorda++;
+            // (21:17 — a "limpa-borda" criava listras verdes na terra; removida. O halo de borda será
+            //  resolvido pela EROSÃO DA MÁSCARA, que está validando no harness.)
           }
           if(limpouCeu || limpouBorda){ xcL.putImageData(icL, 0, 0);
             if(limpouCeu) avisos.push("céu alisado: névoa/nuvem inventada substituída pelo azul da própria foto");
