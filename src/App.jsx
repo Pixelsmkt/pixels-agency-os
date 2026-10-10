@@ -149306,9 +149306,16 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(podeIA && (precisaCompletar || temEntulho)){
     try{
       // máscara: transparente onde a IA pode mexer (o que falta da foto + caixas de entulho); o resto (a obra) fica intacto
+      /* (10/10, validado no harness p45: o HALO branco nas bordas era a IA emendando na linha dura da
+         máscara) EROSÃO SUAVE: a proteção é o recorte da foto encolhido 1,5% (~12-18px) — a IA repinta esse
+         anel ancorada em conteúdo real e a emenda some. Atenção: erosão por THRESHOLD de alpha borrado fazia
+         o gpt-image devolver imagem preta (4/4 testes); a por ESCALA não. */
+      const AE = document.createElement("canvas"); AE.width = w; AE.height = h;
+      { const t = AE.getContext("2d"); const z = 0.985;
+        t.translate(w / 2, h / 2); t.scale(z, z); t.translate(-w / 2, -h / 2); t.drawImage(cv, 0, 0); }
       const M = document.createElement("canvas"); M.width = w; M.height = h; const mx = M.getContext("2d");
       mx.fillStyle = "#000"; mx.fillRect(0, 0, w, h);
-      mx.globalCompositeOperation = "destination-in"; mx.drawImage(cv, 0, 0);                   // onde não tem foto → transparente
+      mx.globalCompositeOperation = "destination-in"; mx.drawImage(AE, 0, 0);                   // onde não tem foto (erodida) → IA pode pintar
       mx.globalCompositeOperation = "destination-out";
       (an.entulho || []).forEach(function(c){ const f = w * 0.012; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
       /* (09/10, testado de verdade pelo Claude com a foto de Juti — ver pipe.cjs) RECEITA QUE FUNCIONA:
@@ -149363,7 +149370,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
               do pixel REAL mais próximo (árvore continua árvore). */
         try{
           const cvO0 = desenhar(m);
-          const dAl = cvO0.getContext("2d").getImageData(0, 0, w, h).data;
+          const AE0 = document.createElement("canvas"); AE0.width = w; AE0.height = h;
+          { const t0 = AE0.getContext("2d"); const z0 = 0.985;
+            t0.translate(w / 2, h / 2); t0.scale(z0, z0); t0.translate(-w / 2, -h / 2); t0.drawImage(cvO0, 0, 0); }
+          const dAl = AE0.getContext("2d").getImageData(0, 0, w, h).data;   // alpha ERODIDO: o anel da IA também é limpável
           const nc = document.createElement("canvas"); nc.width = 96; nc.height = 96;
           nc.getContext("2d").drawImage(nova, 0, 0, 96, 96);
           const ndp = nc.getContext("2d").getImageData(0, 0, 96, 96).data;
@@ -149446,7 +149456,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v12: produto real + horizonte medido + céu liso sem nuvem inventada + anti-tela-preta");
+  avisos.push("motor da foto v13: emenda erodida (sem halo) + produto real + horizonte medido + anti-tela-preta");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
