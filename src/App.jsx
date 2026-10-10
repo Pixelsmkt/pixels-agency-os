@@ -71466,7 +71466,7 @@ function TCenCartao({ p, eu, onMudou }) {
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
         {p.confianca && <TCenChip cor={corConf}>Confiança {p.confianca === "media" ? "média" : p.confianca}</TCenChip>}
         <TCenChip cor="cinza">{_TCEN_ORIGEM[p.origem] || p.origem}</TCenChip>
-        {(p.selos || []).map(function (s) { return <TCenChip key={s} cor="azul">{s === "dado" ? "📊 dado real" : s === "mercado" ? "📈 mercado" : s === "oficial" ? "📘 Meta oficial" : s === "calendario" ? "📅 calendário" : s === "leitura" ? "🌅 da leitura da manhã" : s === "memoria" ? "🧠 aprendizado" : s}</TCenChip>; })}
+        {(p.selos || []).map(function (s) { return <TCenChip key={s} cor="azul">{s === "dado" ? "📊 dado real" : s === "mercado" ? "📈 mercado" : s === "oficial" ? "📘 Meta oficial" : s === "calendario" ? "📅 calendário" : s === "leitura" ? "🌅 da leitura da manhã" : s === "memoria" ? "🧠 aprendizado" : String(s).indexOf("meta_") === 0 ? "🎯 ajuda na meta: " + ({ leads: "leads", custo_por_lead: "custo por lead", ctr: "CTR", faturamento: "faturamento", vendas: "vendas" }[String(s).slice(5)] || String(s).slice(5)) : s}</TCenChip>; })}
         {p.precisa_dois && <TCenChip cor="roxo">2 sócios</TCenChip>}
       </div>
       <div style={{ fontWeight: 900, fontSize: 13.5, color: "#0f172a", lineHeight: 1.35 }}>{p.titulo}</div>
@@ -71644,7 +71644,7 @@ function TCenCasca({ embutido, onFechar, children }) {
   return <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>{children}</TSegJanela>;
 }
 
-function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unidade, extra }) {
+function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unidade, extra, diagnostico, topo }) {
   const modoCli = !!(embutido && contaFixa);   // v81: dentro do cliente = página enxuta
   const [mais, setMais] = useState(false);
   const [alarmes, setAlarmes] = useState(null);
@@ -71675,6 +71675,7 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
   const alarmeVisto = async function (id) { try { await _tsegRpc("ads_alarme_visto", { p_id: id }); } catch (_) {} lerAlarmesConta(); _tcliCarregar(true); };
   const mudou = function () { carregar(); _tcliCarregar(true); onMudou && onMudou(); };
   useEffect(function () { if (abaInicial) setAba(abaInicial); }, [abaInicial]);
+  useEffect(function () { if (!modoCli) return; const h = function (e) { const a = e && e.detail && e.detail.aba; if (a) { setAba(a); setMais(false); } }; window.addEventListener("pixels:tcen-aba", h); return function () { window.removeEventListener("pixels:tcen-aba", h); }; }, [modoCli]);
 
   const todos = (abertos || []).concat(fechados || []);
   const contas = {};
@@ -71690,7 +71691,7 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
   };
   if (modoCli) { grupos.decidir = grupos.decidir.concat(grupos.esperando); grupos.esperando = []; }
   const ABAS_MAIS = [["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", "🌎 Mercado do nicho"], ["estrategias", "🎙️ Estratégias feitas"]];
-  const ABAS = modoCli ? [["decidir", "Precisa de vocês"], ["monitorando", "Acompanhando"]].concat(mais || ABAS_MAIS.some(function (x) { return x[0] === aba; }) ? ABAS_MAIS : []) :
+  const ABAS = modoCli ? [["decidir", "Precisa de vocês"], ["monitorando", "Acompanhando"]].concat(diagnostico ? [["diagnostico", "🔬 Diagnóstico"]] : []).concat(mais || ABAS_MAIS.some(function (x) { return x[0] === aba; }) ? ABAS_MAIS : []) :
     [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", contaFixa ? "🌎 Mercado do nicho" : "🌎 Mercado"]].concat(contaFixa ? [["estrategias", "🎙️ Estratégias feitas"]] : []);
   const lista = grupos[aba] || [];
   useEffect(function () {
@@ -71708,9 +71709,10 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
       {!modoCli && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
         A IA só <b>sugere</b>. Toda mudança pede o <b>PIN da agência duas vezes</b>: 1º abre a revisão, 2º envia. Fica registrado quem digitou. Mudança de verba: no máx. 20% e uma vez a cada 72 h.
       </div>}
+      {modoCli && topo}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
         {ABAS.map(function (x) {
-          const n = (x[0] === "memoria" || x[0] === "mercado") ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
+          const n = (x[0] === "memoria" || x[0] === "mercado" || x[0] === "diagnostico") ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
           if (x[0] === "esperando" && !n && !on) return null;  // regra dos 2 sócios desligada: aba só aparece se tiver algo
           return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
             padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
@@ -71723,7 +71725,7 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
         </select>}
       </div>
       {erro && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
-      {aba === "mercado" ? <TCenMercado contaFixa={contaFixa} /> : aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
+      {aba === "diagnostico" && diagnostico ? diagnostico : aba === "mercado" ? <TCenMercado contaFixa={contaFixa} /> : aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
         aba === "estrategias" ? <TCliEstrategias itens={estrats} conta={contaFixa} /> :
         abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
         !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às 11h30." : "Nada aqui."}</div> :
@@ -72466,7 +72468,7 @@ function TCliCartao({ mc, conta, onAbrir, isMob }) {
       {T.ontem && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 2 }}>números até {String(T.ontem).split("-").reverse().slice(0, 2).join("/")} · só vocês dois veem este cartão</div>}
     </div>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-      {btn("Ver em 🧠 Alertas" + ((r.decidir || 0) + (r.alarmes || 0) ? " (" + ((r.decidir || 0) + (r.alarmes || 0)) + ")" : ""), function () { onAbrir && onAbrir("decidir"); }, true)}
+      {btn("Ver em 🧠 Decisões" + ((r.decidir || 0) + (r.alarmes || 0) ? " (" + ((r.decidir || 0) + (r.alarmes || 0)) + ")" : ""), function () { onAbrir && onAbrir("decidir"); }, true)}
     </div>
     <button onClick={fechar} title="Esconder até mudar alguma coisa" style={{ border: "none", background: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer", padding: 4 }}>×</button>
   </div>;
@@ -72485,17 +72487,375 @@ function TCliDecisoes({ mc, conta, isMob, canEdit }) {
     : <div style={{ padding: 20, color: "#94a3b8", fontSize: 13 }}>Abra a Gestão de mídia com o PIN.</div>;
   return <div data-tcli-alertas="1" style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "18px 20px", fontFamily: "'Inter',system-ui,sans-serif" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-      <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🧠 Alertas · {uni ? (mc.name || _tcliUniLbl(uni)) : ((conta && conta.nome) || mc.name)}</div>
+      <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🧠 Decisões · {uni ? (mc.name || _tcliUniLbl(uni)) : ((conta && conta.nome) || mc.name)}</div>
       <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "sala", conta: contaId }); }}>🎙️ Nova estratégia</TSegBotao>
       <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "montador", conta: contaId, novo: true }); }}>🧱 Nova campanha</TSegBotao>
     </div>
     {uni && <div style={{ fontSize: 12, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "7px 10px", marginBottom: 10 }}>
       Esta unidade roda na conta de Toledo junto com outras. Aqui aparecem só as decisões das campanhas de <b>{_tcliUniLbl(uni)}</b> e o ritmo pela verba de {_tcliUniLbl(uni)}.</div>}
     <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} unidade={uni} embutido abaInicial={aba} onMudou={function () { _tcliCarregar(true); }}
+      topo={<TMetasNorte clientId={mc && mc.client_id} />}
+      diagnostico={<TCliColinha mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}
+        detalhe={typeof QGAdsDiagnostico === "function" ? <QGAdsDiagnostico mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false && (typeof _bl !== "function" || _bl("midia.cerebro"))} /> : null} />}
       extra={typeof QGAdsEstrategia === "function" ? <TCliRegras mc={mc} conta={conta} isMob={isMob} canEdit={canEdit} /> : null} />
   </div>;
 }
 // os alertas antigos (calculados na tela) — fechados no fim da página, 1 clique abre
+/* ---------- 🎯 METAS DO MÊS (v82, 10/10/2026) ----------
+   Gestão › Metas: faturamento pelo digital e vendas (vocês lançam), leads, custo por lead e CTR (automático da Meta), retorno (calculado).
+   Toda a agência vê (o Erick também); só Vinícius e Gustavo mudam. A meta do mês novo já vem com a do mês anterior. A IA lê as metas. */
+const _tmetaBrl = function (v, casas) { if (v === null || v === undefined || v === "" || !isFinite(Number(v))) return "—"; return "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: casas === 0 ? 0 : 2, maximumFractionDigits: casas === 0 ? 0 : 2 }); };
+const _tmetaNum = function (v, casas) { if (v === null || v === undefined || v === "" || !isFinite(Number(v))) return "—"; return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: casas || 0 }); };
+const _tmetaLer = function (s) {   // "90.000" = noventa mil; "12,50" = doze e cinquenta; "1.234,5" ok
+  const t = String(s === null || s === undefined ? "" : s).replace(/[^0-9,.-]/g, ""); if (!t) return "";
+  const n = t.indexOf(",") >= 0 ? Number(t.replace(/\./g, "").replace(",", ".")) : /^-?\d{1,3}(\.\d{3})+$/.test(t) ? Number(t.replace(/\./g, "")) : Number(t);
+  return isFinite(n) ? n : ""; };
+// semáforo pelo ritmo do mês. "soma" (leads, faturamento, vendas, gasto): compara com o esperado até hoje; "max" (custo por lead); "min" (CTR, retorno)
+const _tmetaSinal = function (tipo, real, meta, dia, dias) {
+  if (meta === null || meta === undefined || meta === "" || !(Number(meta) > 0) || real === null || real === undefined || real === "") return null;
+  real = Number(real); meta = Number(meta);
+  if (tipo === "soma") {
+    const esp = dia > 0 ? meta * dia / dias : 0; if (!(esp > 0)) return null;
+    const r = real / esp; const pct = Math.round(real / meta * 100);
+    return r >= 0.95 ? ["no ritmo · " + pct + "%", "verde"] : r >= 0.75 ? ["perto · " + pct + "%", "amarelo"] : ["abaixo · " + pct + "%", "vermelho"];
+  }
+  if (tipo === "max") return real <= meta ? ["dentro", "verde"] : real <= meta * 1.15 ? ["perto", "amarelo"] : ["acima", "vermelho"];
+  return real >= meta ? ["dentro", "verde"] : real >= meta * 0.85 ? ["perto", "amarelo"] : ["abaixo", "vermelho"];
+};
+const _TMETA_COR = { verde: ["#dcfce7", "#166534"], amarelo: ["#fef3c7", "#92400e"], vermelho: ["#fee2e2", "#b91c1c"] };
+function TMetaChip({ s }) {
+  if (!s) return <span style={{ fontSize: 11.5, color: "#94a3b8" }}>sem meta</span>;
+  const c = _TMETA_COR[s[1]];
+  return <span style={{ background: c[0], color: c[1], borderRadius: 999, padding: "3px 9px", fontSize: 11.5, fontWeight: 800, whiteSpace: "nowrap" }}>{s[0]}</span>;
+}
+const _tmetaCache = {};
+function useTMetas(clientId, mes) {
+  const [d, setD] = useState(function () { return _tmetaCache[(clientId || "") + ":" + (mes || "")] || null; });
+  const [n, setN] = useState(0);
+  useEffect(function () {
+    if (!clientId || !window._sb) { setD(null); return; }
+    const k = clientId + ":" + (mes || "");
+    if (_tmetaCache[k]) setD(_tmetaCache[k]);
+    let vivo = true;
+    window._sb.rpc("ads_metas_ler", { p_client: clientId, p_mes: mes || null }).then(function (r) { if (vivo && r && r.data) { _tmetaCache[k] = r.data; setD(r.data); } }).catch(function () {});
+    return function () { vivo = false; };
+  }, [clientId, mes, n]);
+  return [d, function () { Object.keys(_tmetaCache).forEach(function (k) { if (k.indexOf(clientId + ":") === 0) delete _tmetaCache[k]; }); setN(function (x) { return x + 1; }); }];
+}
+const _tmetaLinhas = function (d) {
+  const m = (d && d.meta) || {}; const r = (d && d.realizado) || {}; const dia = (d && d.dia) || 0, dias = (d && d.dias_mes) || 30;
+  const fat = m.fat_real, gasto = Number(r.gasto || 0); const roas = fat && gasto > 0 ? Math.round(fat / gasto * 10) / 10 : null;
+  return [
+    { k: "fat_meta", rk: "fat_real", nome: "Faturamento pelo digital", curto: "Faturamento", meta: m.fat_meta, real: fat, fmt: function (v) { return _tmetaBrl(v, 0); }, sinal: _tmetaSinal("soma", fat, m.fat_meta, dia, dias), origem: "vocês lançam (o que o cliente informou)", lanca: true },
+    { k: "vendas_meta", rk: "vendas_real", nome: "Vendas fechadas", curto: "Vendas", meta: m.vendas_meta, real: m.vendas_real, fmt: function (v) { return _tmetaNum(v); }, sinal: _tmetaSinal("soma", m.vendas_real, m.vendas_meta, dia, dias), origem: "vocês lançam", lanca: true },
+    { k: "leads_meta", nome: "Leads", curto: "Leads", meta: m.leads_meta, real: r.leads, fmt: function (v) { return _tmetaNum(v); }, sinal: _tmetaSinal("soma", r.leads, m.leads_meta, dia, dias), origem: "automático (formulário + conversas no WhatsApp)" },
+    { k: "cpl_max", nome: "Custo por lead (máximo)", curto: "Custo/lead", meta: m.cpl_max, real: r.cpl, fmt: function (v) { return _tmetaBrl(v); }, sinal: _tmetaSinal("max", r.cpl, m.cpl_max), origem: "automático" },
+    { k: "ctr_min", nome: "CTR das campanhas de lead (mínimo)", curto: "CTR", meta: m.ctr_min, real: r.ctr, fmt: function (v) { return v === null || v === undefined || v === "" ? "—" : _tmetaNum(v, 2) + "%"; }, sinal: _tmetaSinal("min", r.ctr, m.ctr_min), origem: "automático" },
+    { k: "roas_meta", nome: "Retorno (faturamento ÷ investido)", curto: "Retorno", meta: m.roas_meta, real: roas, fmt: function (v) { return v === null || v === undefined || v === "" ? "—" : _tmetaNum(v, 1) + "×"; }, sinal: _tmetaSinal("min", roas, m.roas_meta), origem: "calculado (faturamento ÷ gasto de " + _tmetaBrl(gasto, 0) + ")" },
+  ];
+};
+// Gestão › 🎯 Metas do mês (toda a agência vê; só aprovadores editam)
+function TMetasMes({ mc, year, month, isMob }) {
+  const mes = year && month ? year + "-" + String(month).padStart(2, "0") + "-01" : null;
+  const [d, recarregar] = useTMetas(mc && mc.client_id, mes);
+  const [ed, setEd] = useState(null); const [salvando, setSalvando] = useState(false); const [msg, setMsg] = useState("");
+  if (!d || !d.ok) return null;
+  const linhas = _tmetaLinhas(d); const m = d.meta || {};
+  const nomeMes = new Date(d.mes + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const CAMPOS = ["fat_meta", "fat_real", "vendas_meta", "vendas_real", "leads_meta", "cpl_max", "ctr_min", "roas_meta"];
+  const abrir = function () { const o = {}; CAMPOS.forEach(function (k) { o[k] = m[k] === null || m[k] === undefined ? "" : String(m[k]).replace(".", ","); }); o.obs = m.obs || ""; setEd(o); setMsg(""); };
+  const mudar = function (k) { return function (e) { const v = e.target.value; setEd(function (o) { const n = Object.assign({}, o); n[k] = v; return n; }); }; };
+  const salvar = async function () {
+    setSalvando(true); setMsg("");
+    try {
+      const p = {}; CAMPOS.forEach(function (k) { p[k] = _tmetaLer(ed[k]); }); p.obs = ed.obs || "";
+      const r = await window._sb.rpc("ads_metas_salvar", { p_client: mc.client_id, p_mes: d.mes, p: p });
+      if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || (r.error && r.error.message) || "Não salvou.");
+      setEd(null); recarregar(); if (typeof pixelsToast !== "undefined") pixelsToast.success("Metas salvas.", 2000);
+    } catch (e) { setMsg(e.message); } finally { setSalvando(false); }
+  };
+  const inp = { width: isMob ? "100%" : 120, boxSizing: "border-box", fontSize: 13, padding: "6px 8px", border: "1.5px solid #cbd5e1", borderRadius: 8, fontFamily: "inherit" };
+  const td = { padding: "8px", borderBottom: "1px solid #f1f5f9", verticalAlign: "middle" };
+  return <div style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "16px 20px", marginBottom: 16, fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+      <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🎯 Metas de {nomeMes}</div>
+      {d.meta && m.herdada && <span style={{ fontSize: 11.5, color: "#92400e", background: "#fef3c7", borderRadius: 999, padding: "3px 9px", fontWeight: 800 }}>copiadas do mês anterior — confira</span>}
+      {d.pode_editar && !ed && <TSegBotao tipo="secundario" onClick={abrir}>{d.meta ? "✏️ Editar metas" : "＋ Definir metas"}</TSegBotao>}
+    </div>
+    {!d.meta && !ed && <div style={{ fontSize: 13, color: "#64748b", padding: "6px 0 2px" }}>Ainda sem metas para este cliente. {d.pode_editar ? "Defina faturamento, leads, custo por lead e CTR — a IA passa a usar como norte." : "Os sócios definem."}</div>}
+    {(d.meta || ed) && <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: isMob ? 560 : 0 }}>
+      <thead><tr>{["Meta", "Meta do mês", "Realizado", "Ritmo", "De onde vem"].map(function (h) { return <th key={h} style={{ textAlign: "left", fontSize: 10.5, color: "#64748b", textTransform: "uppercase", letterSpacing: ".06em", padding: "6px 8px", borderBottom: "1px solid #eef2f7" }}>{h}</th>; })}</tr></thead>
+      <tbody>
+        {linhas.map(function (l) {
+          return <tr key={l.k}>
+            <td style={Object.assign({}, td, { fontWeight: 800 })}>{l.nome}</td>
+            <td style={td}>{ed ? <input value={ed[l.k]} onChange={mudar(l.k)} style={inp} inputMode="decimal" /> : l.fmt(l.meta)}</td>
+            <td style={td}>{ed && l.lanca ? <input value={ed[l.rk]} onChange={mudar(l.rk)} style={inp} inputMode="decimal" placeholder="lançar" /> : l.fmt(l.real)}</td>
+            <td style={td}><TMetaChip s={l.sinal} /></td>
+            <td style={Object.assign({}, td, { fontSize: 12, color: "#64748b" })}>{l.origem}</td>
+          </tr>;
+        })}
+        <tr>
+          <td style={Object.assign({}, td, { fontWeight: 800 })}>Verba Meta / Google</td>
+          <td style={td}>{_tmetaBrl(d.verba_meta, 0)} / {_tmetaBrl(d.verba_google, 0)}</td>
+          <td style={td}>{_tmetaBrl((d.realizado || {}).gasto, 0)}</td>
+          <td style={td}><TMetaChip s={_tmetaSinal("soma", (d.realizado || {}).gasto, d.verba_meta, d.dia, d.dias_mes)} /></td>
+          <td style={Object.assign({}, td, { fontSize: 12, color: "#64748b" })}>verba: no quadro de baixo · gasto da Meta: automático</td>
+        </tr>
+      </tbody></table></div>}
+    {ed && <div style={{ marginTop: 10 }}>
+      <input value={ed.obs} onChange={mudar("obs")} placeholder="Observação (opcional — ex.: meta combinada com o cliente em 01/10)" style={Object.assign({}, inp, { width: "100%", marginBottom: 8 })} />
+      <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={salvar} desligado={salvando}>{salvando ? "Salvando…" : "✓ Salvar metas"}</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setEd(null); }}>Cancelar</TSegBotao></div>
+      {msg && <div style={{ color: "#b91c1c", fontSize: 12.5, fontWeight: 700, marginTop: 6 }}>{msg}</div>}
+    </div>}
+    <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 8 }}>Números até {d.ate ? String(d.ate).split("-").reverse().slice(0, 2).join("/") : "—"} · ritmo = quanto já devia ter até hoje{m.atualizado_por ? " · atualizado por " + m.atualizado_por : ""}{m.obs ? " · " + m.obs : ""}</div>
+    {(d.historico || []).length > 0 && <details style={{ marginTop: 6 }}><summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 800, color: "#475569" }}>Meses anteriores ({d.historico.length})</summary>
+      <div style={{ fontSize: 12, color: "#334155", marginTop: 6 }}>{d.historico.map(function (h) {
+        return <div key={h.mes} style={{ padding: "3px 0" }}><b>{String(h.mes).slice(5, 7)}/{String(h.mes).slice(0, 4)}</b> · faturamento {_tmetaBrl(h.fat_real, 0)} de {_tmetaBrl(h.fat_meta, 0)} · vendas {_tmetaNum(h.vendas_real)} de {_tmetaNum(h.vendas_meta)} · meta de leads {_tmetaNum(h.leads_meta)}</div>;
+      })}</div></details>}
+  </div>;
+}
+// faixa "🎯 Norte do mês" no topo da 🧠 Decisões (só leitura)
+function TMetasNorte({ clientId }) {
+  const [d] = useTMetas(clientId, null);
+  if (!d || !d.ok) return null;
+  if (!d.meta) return <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: 12, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, color: "#64748b" }}>
+    🎯 Sem metas para este mês. Defina em <b>Gestão › Metas</b> — a IA passa a priorizar o que fecha a meta.</div>;
+  const ls = _tmetaLinhas(d).filter(function (l) { return l.meta !== null && l.meta !== undefined && l.meta !== ""; });
+  return <div style={{ background: "#faf8ff", border: "1.5px solid #c4b5fd", borderRadius: 14, padding: "9px 13px", marginBottom: 12, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
+    <b style={{ color: "#5b21b6" }}>🎯 Norte do mês</b>
+    {ls.map(function (l) { return <span key={l.k} style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>{l.curto} <b>{l.fmt(l.real)}</b> <span style={{ color: "#64748b" }}>/ {l.fmt(l.meta)}</span> <TMetaChip s={l.sinal} /></span>; })}
+  </div>;
+}
+
+/* ---------- 🔬 COLINHA DO CLIENTE (v83, 10/10/2026) ----------
+   Dentro de 🧠 Decisões › 🔬 Diagnóstico. 8 frentes calculadas pelo servidor 1x por dia (ads_colinha) — abre na hora, sem pesar o celular.
+   Confiança: cada fato mostra período e origem; "pouco dado" fica cinza; conferência diária com a Meta; placar de acerto da IA;
+   botão "⚑ fato errado" (vira aviso para a IA não usar). O resumo da IA só usa números que já estão nos fatos (o servidor confere).
+   O detalhe completo (o Diagnóstico de antes) só carrega quando vocês clicam. */
+const _TCOL_COR = { verde: ["#16a34a", "#dcfce7", "#166534", "ok"], amarelo: ["#f59e0b", "#fef3c7", "#92400e", "atenção"], vermelho: ["#dc2626", "#fee2e2", "#b91c1c", "problema"], cinza: ["#cbd5e1", "#f1f5f9", "#475569", "informativo"] };
+const _TCOL_TEND = { subiu: ["▲", "#475569", "subiu"], caiu: ["▼", "#475569", "caiu"], melhorou: ["▲", "#16a34a", "melhorou"], piorou: ["▼", "#dc2626", "piorou"], igual: ["=", "#94a3b8", "igual à semana anterior"] };
+const _tcolData = function (d) { return d ? String(d).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : ""; };
+const _tcolHora = function (iso) { try { return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch (_) { return ""; } };
+const _tcolLs = { ler: function (k) { try { return localStorage.getItem(k) || ""; } catch (_) { return ""; } }, gravar: function (k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+const _tcolIrDecisoes = function () { try { window.dispatchEvent(new CustomEvent("pixels:tcen-aba", { detail: { aba: "decidir" } })); } catch (_) {} };
+
+function TCliColinha({ mc, conta, isMob, canEdit, detalhe }) {
+  const cli = mc && mc.client_id;
+  const contaId = conta && conta.ad_account_id;
+  const chaveVisto = "px_colinha_visto_" + cli;
+  const [desde] = useState(function () { return _tcolLs.ler(chaveVisto); });
+  const [d, setD] = useState(null); const [erro, setErro] = useState("");
+  const [pedidos, setPedidos] = useState([]);
+  const [verDet, setVerDet] = useState(false);
+  const [refazendo, setRefazendo] = useState(false);
+  const [contestando, setContestando] = useState(null); const [motivo, setMotivo] = useState("");
+  const [pergunta, setPergunta] = useState("");
+  const carregar = useCallback(async function () {
+    if (!cli || !window._sb) return;
+    try {
+      const r = await window._sb.rpc("ads_colinha_ler", { p_client: cli, p_desde: desde || null });
+      if (r.error) throw new Error(r.error.message);
+      if (!r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || "Não carregou.");
+      setD(r.data); setErro("");
+      if (r.data.data) _tcolLs.gravar(chaveVisto, r.data.data);
+    } catch (e) { setErro(e.message); }
+    try { const p = await _tsegRpc("ads_pedidos_ler", { p_aberto: true }); setPedidos((p && p.itens) || []); } catch (_) {}
+  }, [cli, desde]);
+  useEffect(function () { carregar(); }, [carregar]);
+
+  // fato → decisão aberta (pelo id da campanha/anúncio que o fato cita)
+  const decisaoDe = function (f) {
+    const ids = (f && f.ids) || []; if (!ids.length) return null;
+    return pedidos.find(function (p) {
+      if (p.ad_account_id !== contaId) return false;
+      if (ids.indexOf(String(p.entidade_id)) >= 0) return true;
+      return (Array.isArray(p.caminho) ? p.caminho : []).some(function (c) { return ids.indexOf(String(c.id)) >= 0; });
+    }) || null;
+  };
+  const textoFatos = function (fr) { return (fr.fatos || []).map(function (f) { return "- " + f.t + " (" + (f.periodo || "") + (f.pouco_dado ? ", pouco dado" : "") + ")"; }).join("\n"); };
+  const abrirSala = function (texto) { _tcliAbrir({ painel: "sala", conta: contaId, texto: texto }); };
+  const perguntarFrente = function (fr) { abrirSala(fr.pergunta + "\n\nColinha (" + fr.titulo + ", " + _tcolData(d.data) + "):\n" + textoFatos(fr)); };
+  const conversar = function () {
+    const q = String(pergunta || "").trim(); if (!q) return;
+    const tudo = (d.frentes || []).map(function (fr) { return fr.icone + " " + fr.titulo + ":\n" + textoFatos(fr); }).join("\n\n");
+    abrirSala(q + "\n\nColinha do cliente (" + _tcolData(d.data) + "):\n" + tudo);
+    setPergunta("");
+  };
+  const refazer = async function () {
+    setRefazendo(true);
+    try {
+      const r = await window._sb.rpc("ads_colinha_gerar", { p_client: cli });
+      if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || (r.error && r.error.message) || "Não refez.");
+      try { window._sb.functions.invoke("ads-cerebro", { body: { modo: "colinha", cliente: cli, conta: contaId } }).then(function () { carregar(); }); } catch (_) {}
+      await carregar();
+    } catch (e) { setErro(e.message); } finally { setRefazendo(false); }
+  };
+  const contestar = async function () {
+    if (!contestando) return;
+    try {
+      const r = await window._sb.rpc("ads_colinha_contestar", { p_client: cli, p_frente: contestando.frente, p_fato: contestando.fato, p_motivo: motivo });
+      if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || "Não salvou.");
+      setContestando(null); setMotivo(""); carregar();
+      if (typeof pixelsToast !== "undefined") pixelsToast.success("Anotado. A IA não vai usar esse fato e o Claude confere a causa.", 3500);
+    } catch (e) { setErro(e.message); }
+  };
+
+  if (erro && !d) return <div style={{ color: "#b91c1c", fontSize: 13, fontWeight: 700 }}>{erro}</div>;
+  if (!d) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando a colinha…</div>;
+  if (d.vazia) return <div style={{ fontSize: 13, color: "#64748b" }}>A colinha deste cliente ainda não foi gerada. {canEdit !== false && <TSegBotao tipo="secundario" onClick={refazer} desligado={refazendo}>{refazendo ? "Gerando…" : "Gerar agora"}</TSegBotao>}
+    {detalhe && <div style={{ marginTop: 14 }}>{detalhe}</div>}</div>;
+
+  const contestados = d.contestados || [];
+  const contestado = function (t) { return contestados.find(function (k) { return k.fato === t; }); };
+  // o que mudou desde a última vez que vocês abriram
+  const mudancas = [];
+  if (d.anterior && d.anterior.frentes) {
+    (d.frentes || []).forEach(function (fr) {
+      const ant = (d.anterior.frentes || []).find(function (x) { return x.id === fr.id; }); if (!ant) return;
+      if (ant.sinal !== fr.sinal && fr.sinal !== "cinza" && ant.sinal !== "cinza") mudancas.push(fr.icone + " " + fr.titulo + ": " + _TCOL_COR[ant.sinal][3] + " → " + _TCOL_COR[fr.sinal][3]);
+      const velhos = (ant.fatos || []).map(function (f) { return String(f.t).replace(/[\d.,]+/g, "#"); });
+      (fr.fatos || []).forEach(function (f) { if (f.sinal === "vermelho" && velhos.indexOf(String(f.t).replace(/[\d.,]+/g, "#")) < 0) mudancas.push("Novo: " + f.t); });
+    });
+  }
+  const placar = ((d.placar && d.placar.tipos) || []);
+  const medidos = placar.reduce(function (a, t) { return a + Number(t.melhorou || 0) + Number(t.piorou || 0) + Number(t.igual || 0); }, 0);
+  const melhorou = placar.reduce(function (a, t) { return a + Number(t.melhorou || 0); }, 0);
+  const res = d.resumo_ia; const cab = d.cabecalho || {};
+  const pill = function (txt, fn, cor) { return <button onClick={fn} style={{ background: cor === "roxo" ? "#7c3aed" : "#fff", color: cor === "roxo" ? "#fff" : "#5b21b6", border: "1px solid " + (cor === "roxo" ? "#7c3aed" : "#ddd6fe"),
+    borderRadius: 8, padding: "4px 9px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>{txt}</button>; };
+
+  return <div style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8, fontSize: 11.5, color: "#64748b" }}>
+      <span>🔬 Colinha de {_tcolData(d.data)} ({_tcolHora(d.gerada_em)}) · números até {_tcolData(cab.ate)} — o último dia ainda pode subir um pouco · mínimo de {cab.amostra_min || 5} leads para concluir</span>
+      {canEdit !== false && <button onClick={refazer} disabled={refazendo} style={{ marginLeft: "auto", background: "none", border: "none", color: "#2563eb", fontWeight: 800, fontSize: 11.5, cursor: "pointer" }}>{refazendo ? "Refazendo…" : "🔄 refazer agora"}</button>}
+    </div>
+    {erro && <div style={{ color: "#b91c1c", fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{erro}</div>}
+
+    {/* resumo da IA (3 frases + 3 alavancas, números conferidos pelo servidor) */}
+    <div style={{ background: "#0f0d1a", color: "#fff", borderRadius: 16, padding: isMob ? "13px 13px" : "15px 18px", marginBottom: 12 }}>
+      <div style={{ fontWeight: 900, fontSize: 14.5, marginBottom: 5 }}>Em 3 frases</div>
+      {res && (res.frases || []).length ? <div style={{ fontSize: 13, lineHeight: 1.55, color: "rgba(255,255,255,.85)" }}>{res.frases.join(" ")}</div>
+        : <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.5 }}>O resumo da IA aparece aqui depois da próxima rodada (precisa de crédito na Anthropic). Os fatos abaixo são do sistema e não dependem da IA.</div>}
+      {res && (res.alavancas || []).length > 0 && <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 10 }}>
+        {res.alavancas.map(function (a, i) {
+          return <button key={i} onClick={function () { abrirSala("Quero executar esta alavanca: " + a.texto + "\n\nPor quê (fatos da colinha):\n" + (a.fatos || []).map(function (f) { return "- " + f.t; }).join("\n")); }}
+            title={"Base: " + (a.fatos || []).map(function (f) { return f.t; }).join(" | ")}
+            style={{ background: "rgba(167,139,250,.18)", color: "#ddd6fe", border: "none", borderRadius: 9, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>{(i + 1) + ". " + a.texto} ›</button>;
+        })}
+      </div>}
+      {res && res.gerado_em && <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.45)", marginTop: 7 }}>escrito pela IA {_tcolData(res.gerado_em)} · só com números dos fatos abaixo{(res.descartadas || []).length ? " · " + res.descartadas.length + " frase(s) descartada(s) por número sem fonte" : ""}</div>}
+    </div>
+
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: "#334155", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "6px 10px" }}>
+        🎯 Placar da IA (60 dias): {medidos ? <b>{melhorou} de {medidos} decisões medidas melhoraram</b> : "ainda sem decisão aplicada e medida nesta conta"}</div>
+      {mudancas.length > 0 && <div style={{ fontSize: 12, color: "#5b21b6", background: "#faf8ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "6px 10px", flex: 1, minWidth: 240 }}>
+        <b>O que mudou desde {_tcolData(d.anterior.data)}:</b> {mudancas.slice(0, 5).join(" · ")}{mudancas.length > 5 ? " · +" + (mudancas.length - 5) : ""}</div>}
+    </div>
+
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 10 }}>
+      {(d.frentes || []).map(function (fr) {
+        const c = _TCOL_COR[fr.sinal] || _TCOL_COR.cinza;
+        return <div key={fr.id} style={{ border: "1px solid #e5e9f0", borderLeft: "5px solid " + c[0], borderRadius: 14, padding: "11px 13px", background: "#fff", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+            <div style={{ fontWeight: 900, fontSize: 14, color: "#0f172a", marginRight: "auto" }}>{fr.icone} {fr.titulo}</div>
+            <span style={{ background: c[1], color: c[2], borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 800 }}>{fr.sinal_txt || c[3]}</span>
+          </div>
+          {fr.vazio && !(fr.fatos || []).length && <div style={{ fontSize: 12.5, color: "#64748b" }}>{fr.vazio}</div>}
+          <div>{(fr.fatos || []).map(function (f, i) {
+            const dec = decisaoDe(f); const k = contestado(f.t); const tend = f.tend && _TCOL_TEND[f.tend];
+            return <div key={i} style={{ padding: "4px 0", borderTop: i ? "1px solid #f1f5f9" : "none", fontSize: 12.5, lineHeight: 1.45, color: f.pouco_dado ? "#94a3b8" : "#1e293b" }}>
+              <div>{f.sinal && f.sinal !== "cinza" && <span style={{ color: (_TCOL_COR[f.sinal] || _TCOL_COR.cinza)[0], marginRight: 4 }}>●</span>}{f.t}
+                {tend && <span title={tend[2]} style={{ color: tend[1], fontWeight: 900, marginLeft: 5 }}>{tend[0]}</span>}
+                {f.pouco_dado && <span style={{ marginLeft: 5, fontSize: 10.5, fontWeight: 800, color: "#92400e", background: "#fef3c7", borderRadius: 6, padding: "1px 5px" }}>⏳ pouco dado</span>}</div>
+              <div style={{ fontSize: 10.5, color: "#94a3b8", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span>{f.periodo} · {f.origem}</span>
+                {f.fonte && <a href={f.fonte} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>fonte ↗</a>}
+                {dec ? <button onClick={_tcolIrDecisoes} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 800, fontSize: 10.5, cursor: "pointer", padding: 0 }}>→ virou decisão: {String(dec.titulo).slice(0, 40)}</button>
+                  : (f.sinal === "vermelho" && <button onClick={function () { abrirSala("Quero resolver isto: " + f.t + " (" + f.periodo + ")\n\n" + fr.pergunta); }} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 800, fontSize: 10.5, cursor: "pointer", padding: 0 }}>→ resolver com a IA</button>)}
+                {k ? <span style={{ color: "#b91c1c", fontWeight: 800 }}>⚑ contestado por {k.por || "—"}</span>
+                  : canEdit !== false && <button onClick={function () { setContestando({ frente: fr.id, fato: f.t }); setMotivo(""); }} title="Este número está errado? Avise — a IA deixa de usar e o Claude confere a causa"
+                    style={{ background: "none", border: "none", color: "#cbd5e1", fontSize: 10.5, cursor: "pointer", padding: 0 }}>⚑ errado?</button>}
+              </div>
+              {contestando && contestando.fato === f.t && <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
+                <input value={motivo} onChange={function (e) { setMotivo(e.target.value); }} autoFocus placeholder="O que está errado? (ex.: no Gerenciador aparece 40 leads)"
+                  style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1.5px solid #cbd5e1", borderRadius: 8, minWidth: 0 }} />
+                {pill("Enviar", contestar, "roxo")}{pill("Cancelar", function () { setContestando(null); })}
+              </div>}
+            </div>;
+          })}</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
+            {pill("💬 Perguntar à IA", function () { perguntarFrente(fr); })}
+            {fr.detalhe && detalhe && pill(verDet ? "Fechar detalhe" : "Ver detalhe", function () { setVerDet(!verDet); })}
+          </div>
+        </div>;
+      })}
+    </div>
+
+    <div style={{ marginTop: 12, border: "1.5px solid #c4b5fd", borderRadius: 14, padding: "10px 12px", background: "#faf8ff", display: "flex", gap: 8, alignItems: "center", flexWrap: isMob ? "wrap" : "nowrap" }}>
+      <input value={pergunta} onChange={function (e) { setPergunta(e.target.value); }} onKeyDown={function (e) { if (e.key === "Enter") conversar(); }}
+        placeholder="💬 Pergunte qualquer coisa sobre este cliente — a IA abre com a colinha inteira"
+        style={{ flex: 1, minWidth: 0, width: isMob ? "100%" : "auto", fontSize: 13, padding: "9px 11px", border: "1.5px solid #cbd5e1", borderRadius: 10, background: "#fff" }} />
+      <TSegBotao onClick={conversar} desligado={!String(pergunta).trim()}>Conversar</TSegBotao>
+    </div>
+    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>A conversa abre na Sala de estratégia e fica salva — a IA lembra dela nas próximas decisões. Se virar campanha, segue para o Montador.</div>
+
+    {detalhe && <div style={{ marginTop: 14, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
+      <button onClick={function () { setVerDet(!verDet); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 800, fontSize: 13, color: "#334155" }}>
+        {verDet ? "▲" : "▾"} Detalhe completo <span style={{ fontWeight: 500, color: "#64748b" }}>(idade e gênero, onde aparece, aparelho, hora e as notas do cliente)</span></button>
+      {verDet && <div style={{ marginTop: 10 }}>{detalhe}</div>}
+    </div>}
+  </div>;
+}
+
+/* ---------- 💳 SALDO DA IA (v83) — chip na barra; só aprovadores ---------- */
+function TIaSaldo() {
+  const [st, setSt] = useState(null); const [aberto, setAberto] = useState(false); const [val, setVal] = useState(""); const [msg, setMsg] = useState(""); const [ocupado, setOcupado] = useState(false);
+  const ler = useCallback(async function () { try { const r = await _tsegRpc("ia_saldo_status"); if (r && r.ok) setSt(r); } catch (_) {} }, []);
+  useEffect(function () { ler(); const t = setInterval(ler, 300000); return function () { clearInterval(t); }; }, [ler]);
+  if (!st) return null;
+  const saldo = st.sem_saldo_informado ? null : Number(st.saldo_usd);
+  const zerou = !!st.zerou_em;
+  const cor = zerou || (saldo !== null && saldo < 1) ? ["#fee2e2", "#b91c1c"] : saldo !== null && saldo < Number(st.aviso_usd || 5) ? ["#fef3c7", "#92400e"] : ["#f1f5f9", "#334155"];
+  const txt = zerou ? "💳 IA sem crédito" : saldo === null ? "💳 Saldo da IA?" : "💳 IA US$ " + saldo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const informar = async function () {
+    const n = Number(String(val).replace(/[^0-9,.]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+    if (!isFinite(n) || n < 0) { setMsg("Valor inválido."); return; }
+    setOcupado(true); setMsg("");
+    try { const r = await _tsegRpc("ia_saldo_informar", { p_saldo: n, p_obs: null }); if (!r || r.ok === false) throw new Error((r && r.erro) || "Não salvou."); setSt(r); setVal(""); }
+    catch (e) { setMsg(e.message); } finally { setOcupado(false); }
+  };
+  const atualizar = async function () {
+    setOcupado(true); setMsg("");
+    try { const inv = await window._sb.functions.invoke("ia-saldo", { body: {} }); const dd = inv && inv.data; if (dd && dd.sem_chave) setMsg(dd.aviso); else if (dd && !dd.ok) setMsg(dd.erro || "Erro."); await ler(); }
+    catch (e) { setMsg(e.message); } finally { setOcupado(false); }
+  };
+  return <span style={{ position: "relative" }}>
+    <button onClick={function () { setAberto(!aberto); }} title="Saldo de crédito da IA (Anthropic)"
+      style={{ background: cor[0], color: cor[1], border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{txt}</button>
+    {aberto && <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 50, width: 300, maxWidth: "86vw", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14,
+      boxShadow: "0 12px 32px rgba(15,23,42,.18)", padding: "12px 13px", fontSize: 12.5, color: "#334155", lineHeight: 1.5, textAlign: "left" }}>
+      <div style={{ fontWeight: 900, fontSize: 13.5, color: "#0f172a", marginBottom: 4 }}>💳 Crédito da IA (Anthropic)</div>
+      {zerou && <div style={{ color: "#b91c1c", fontWeight: 800, marginBottom: 4 }}>A Anthropic recusou por falta de crédito em {_tcolData(st.zerou_em)} {_tcolHora(st.zerou_em)}. Coloque crédito no console (Plans & Billing) e informe o saldo novo aqui.</div>}
+      {saldo !== null ? <div>Saldo estimado: <b>US$ {saldo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b><br />
+          <span style={{ fontSize: 11.5, color: "#64748b" }}>US$ {Number(st.informado_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} informado em {_tcolData(st.informado_em)} − US$ {Number(st.gasto_desde_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} gastos desde então
+          {st.fonte === "anthropic" ? " (gasto oficial da Anthropic)" : " (conta parcial — falta a chave de administrador ANTHROPIC_ADMIN_KEY nos Secrets do Supabase)"}. Aviso abaixo de US$ {st.aviso_usd}.</span></div>
+        : <div style={{ color: "#64748b" }}>Informe o saldo que aparece no console da Anthropic. A partir daí o app desconta o gasto e avisa abaixo de US$ {st.aviso_usd}.</div>}
+      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+        <input value={val} onChange={function (e) { setVal(e.target.value); }} placeholder="saldo no console (US$)" inputMode="decimal"
+          style={{ flex: 1, minWidth: 0, fontSize: 12.5, padding: "6px 8px", border: "1.5px solid #cbd5e1", borderRadius: 8 }} />
+        <TSegBotao onClick={informar} desligado={ocupado || !String(val).trim()}>Salvar</TSegBotao>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+        <button onClick={atualizar} disabled={ocupado} style={{ background: "none", border: "none", color: "#2563eb", fontWeight: 800, fontSize: 12, cursor: "pointer", padding: 0 }}>{ocupado ? "…" : "🔄 atualizar agora"}</button>
+        <button onClick={function () { setAberto(false); }} style={{ background: "none", border: "none", color: "#64748b", fontSize: 12, cursor: "pointer", padding: 0 }}>fechar</button>
+      </div>
+      {msg && <div style={{ color: "#92400e", fontSize: 11.5, marginTop: 6 }}>{msg}</div>}
+    </div>}
+  </span>;
+}
+
 // v82: botão "🧠 Resolver" em cada item da "Leitura da IA" (Visão geral) — leva para a 🧠 Alertas do cliente, onde o item já virou decisão com botão.
 // Só aparece para quem vê a IA (aprovadores com o PIN aberto). Para o resto da equipe a leitura fica igual.
 function TCliResolver() {
@@ -72503,7 +72863,7 @@ function TCliResolver() {
   if (!ok) return null;
   return <button onClick={function () { window._pxTCliVista = "decidir"; try { window.dispatchEvent(new CustomEvent("pixels:qg-sub", { detail: { sub: "ia" } })); } catch (_) {}
       setTimeout(function () { try { const el = document.querySelector("[data-tcli-alertas]"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) {} }, 120); }}
-    title="Abrir a decisão na 🧠 Alertas (aprovar com PIN ou montar com a IA)"
+    title="Abrir a decisão na 🧠 Decisões (aprovar com PIN ou montar com a IA)"
     style={{ background: "#a78bfa", color: "#1e1b4b", border: "none", borderRadius: 9, padding: "6px 11px", fontWeight: 900, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>🧠 Resolver</button>;
 }
 function TCliRegras({ mc, conta, isMob, canEdit }) {
@@ -72642,6 +73002,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
           </button>
           {!st.tem_pin && <button onClick={function () { setPainel("criar"); }}
             style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔑 {st.modo === "agencia" ? "Criar o PIN da agência" : "Criar meu PIN"}</button>}
+          <TIaSaldo />
           <button onClick={function () { setPainel("seguranca"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🛡️ Segurança</button>
           {st.obrigatorio && <button onClick={trancar}
