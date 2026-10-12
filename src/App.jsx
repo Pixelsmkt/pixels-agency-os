@@ -4764,8 +4764,14 @@ async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messa
   for(let _t=0;_t<3;_t++){
     const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:PX_IA_MODELO_GPT,max_tokens:_mt,reasoning_effort:_re,messages:msgs,origem:origem||undefined,card:card?String(card):undefined}});
     if(error||(data&&data.error)){
-      _err=error?new Error("Pixels IA (GPT) indisponível: "+(error.message||"erro")):new Error(String(data.error.message||data.error));
-      if(_re){ _re=undefined; continue; }   // pode ser o modelo recusando o reasoning_effort — tenta sem
+      // (12/10/2026) mesmo motivo real do askGPT: lê o corpo do erro (429 sem crédito, teto do dia…) em vez de
+      // "Edge Function returned a non-2xx status code" — a Foto de obra mostra isso na tela quando aborta.
+      let _j=null,_st=0; try{ if(error&&error.context){ _st=error.context.status||0; if(typeof error.context.json==="function") _j=await error.context.json(); } }catch(_){}
+      const _e=(_j&&_j.error)||(data&&data.error)||null;
+      let _msg=(_e&&(_e.message||_e))||(error&&error.message)||"erro";
+      if(/credit_balance_exhausted|no credits remaining|insufficient_quota/i.test(String(_msg)+" "+String((_e&&_e.code)||""))) _msg="a OpenAI está sem crédito (adicione em platform.openai.com › Billing)";
+      _err=new Error("Pixels IA (GPT) indisponível: "+_msg); _err.status=_st; _err.codigo=(_e&&_e.code)||"";
+      if(_re&&!/sem crédito/.test(_msg)){ _re=undefined; continue; }   // pode ser o modelo recusando o reasoning_effort — tenta sem
       throw _err;
     }
     const ch=(((data||{}).choices||[])[0])||{};
@@ -36604,11 +36610,16 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             </div>);
           })()}
           {/* Carrossel de miniaturas — fixo no topo, scroll horizontal se for muito longo */}
-          {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
+          {/* 12/10 (Gustavo: "quando arrasto a barra tá travadinho"): cada miniatura é o PNG inteiro da arte
+              (1080×1920, 3-4 MB) e eram 20 numa fila — a cada pixel de scroll o navegador redesenhava
+              20 imagens gigantes reduzidas. Agora a faixa vira camada própria do compositor
+              (translateZ + willChange + contain) e as imagens usam o preview comprimido quando existe,
+              decodificam assíncrono e sem transition — o scroll passa a ser só deslocar a camada. */}
+          {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch",overscrollBehaviorX:"contain",transform:"translateZ(0)",willChange:"scroll-position",contain:"content"}}>
             {allImgs.map((src,i)=>{
               const sel=i===imgIdx;
               return(<div key={src+"_"+i} onClick={()=>setImgIdx(i)}
-                style={{position:"relative",width:84,height:84,borderRadius:11,cursor:"pointer",border:sel?"3px solid "+C.a:"2px solid #e2e8f0",transition:"all .15s",boxShadow:sel?"0 4px 12px rgba(159,67,246,0.28)":"none",flexShrink:0,overflow:"hidden",background:"#f8fafc"}}>
+                style={{position:"relative",width:84,height:84,borderRadius:11,cursor:"pointer",border:sel?"3px solid "+C.a:"2px solid #e2e8f0",boxShadow:sel?"0 4px 12px rgba(159,67,246,0.28)":"none",flexShrink:0,overflow:"hidden",background:"#f8fafc",contain:"strict",transform:"translateZ(0)"}}>
                 {_isVideoUrl(src)
                   ? <><PxVideoThumb src={src}
                       style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s",background:"#0f172a"}}/>
@@ -36617,14 +36628,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
                       </span>
                     </div></>
-                  : <img src={src} alt="" referrerPolicy="no-referrer"
+                  : <img src={_playSrc(src)} alt="" referrerPolicy="no-referrer" decoding="async" loading="lazy" draggable={false}
                       onError={e=>{
                         // Marca essa URL como quebrada — react re-renderiza e a thumb some
                         markBroken(src);
                         // No frame atual, esconde direto pra evitar flash do placeholder
                         e.currentTarget.style.display="none";
                       }}
-                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s"}}/>}
+                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7}}/>}
                 {_storyUrls[src]&&<span style={{position:"absolute",top:4,right:4,background:"#ffedd5",color:"#9a3412",fontSize:8.5,fontWeight:800,letterSpacing:.5,padding:"2px 6px",borderRadius:6,pointerEvents:"none"}}>STORY</span>}
               </div>);
             })}
@@ -151105,8 +151116,15 @@ function _eaProvisorioFotoObra(cv, m, ang, an, w, h){
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
-  let an = null; try{ an = await _eaAnalisarFotoObra(url, ctx.task); }catch(e){ avisos.push("não consegui analisar a foto (" + _eaErro(e) + ") — entrou centralizada"); }
-  if(!an){ return { cv:null, avisos:avisos }; }
+  let an = null, erroAn = null; try{ an = await _eaAnalisarFotoObra(url, ctx.task); }catch(e){ erroAn = e; }
+  if(!an){
+    /* (12/10 16:47, Gustavo: "acabei de solicitar a geração e isso que tu me entrega?") o GPT que mede a foto tinha caído
+       (crédito da OpenAI zerado) e o motor entregava a foto só centralizada — zoom na lona, sem endireitar, sem céu/terra —
+       como se fosse a arte, ainda apagando a versão anterior. Sem a análise NÃO é Foto de obra: para aqui com o motivo. */
+    const motivo = erroAn ? _eaErro(erroAn) : "a análise da foto não respondeu";
+    const e2 = new Error("não consegui analisar a foto (" + motivo + ") — sem isso a foto entraria só centralizada, então NÃO gerei" + (/credit|quota|no credits|sem_credito|insufficient/i.test(motivo) ? " · a OpenAI está sem crédito: adicione em platform.openai.com › Billing e gere de novo" : ""));
+    e2.__fotoObra = true; throw e2;
+  }
   const w = cfg.w, h = cfg.h, pular = cfg.pular || [];
   const B = cfg.B, kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);   // página → pixels do canvas da foto
   const paraCanvas = function(c){ return { x0:(c.left - B.left) * kx, y0:(c.top - B.top) * ky, x1:(c.left + c.width - B.left) * kx, y1:(c.top + c.height - B.top) * ky }; };
@@ -151934,7 +151952,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     try{
       if(fotoObra){ passo("olhando a foto da obra (horizonte, obra, entulho)…"); const r = await _eaEncaixarFotoObra(fc, o, f.url, { client:task.client, task:task.id, projeto:p.id, passo:passo }); (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       else await _eaTrocarFotoMantendoForma(o, f.url);
-    }catch(e){ avisos.push("foto: " + _eaErro(e)); try{ await _eaTrocarFotoMantendoForma(o, f.url); }catch(_){ } }
+    }catch(e){ if(fotoObra) throw new Error("Foto de obra não gerada — " + _eaErro(e)); avisos.push("foto: " + _eaErro(e)); try{ await _eaTrocarFotoMantendoForma(o, f.url); }catch(_){ } }
   }
   /* (08/10, Gustavo: "não precisava tanta shadow — o fundo ali já não era claro") SOMBRA ADAPTATIVA: mede o brilho
      da foto atrás da frase e dosa as camadas de sombra do template (SHADOW/gradiente) — fundo escuro, sombra fraca. */
