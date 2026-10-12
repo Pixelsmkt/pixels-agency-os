@@ -150676,10 +150676,26 @@ function _eaAlinharIA(ref, cv){
     const k = ref.width / N, cx = cv.width / 2, cy = cv.height / 2;
     const out = document.createElement("canvas"); out.width = cv.width; out.height = cv.height; const ox = out.getContext("2d");
     ox.drawImage(cv, 0, 0);                                                     // fundo: evita faixa vazia na borda após o ajuste
-    ox.save();
-    ox.translate(cx, cy); ox.scale(1 / melhor.s, 1 / melhor.s); ox.translate(-cx - melhor.dx * k, -cy - melhor.dy * k);
-    ox.drawImage(cv, 0, 0);
-    ox.restore();
+    /* (12/10 17:40, v20 — juiz: "linha horizontal evidente atravessando a grama") quando a imagem alinhada encolhe
+       (escala < 1), a faixa que sobra na borda mostrava a imagem SEM alinhar por baixo — emenda reta de textura
+       (espelhar a borda também não serviu: padrão simétrico repetido). O alinhamento só importa PERTO da foto real
+       (a referência): a versão alinhada entra com peso 1 em cima/em volta da referência e some em degradê (~150px)
+       pra versão sem alinhar longe dela — a textura muda de escala aos poucos, sem linha. */
+    const al = document.createElement("canvas"); al.width = cv.width; al.height = cv.height; const ax = al.getContext("2d");
+    ax.drawImage(cv, 0, 0);
+    ax.save();
+    ax.translate(cx, cy); ax.scale(1 / melhor.s, 1 / melhor.s); ax.translate(-cx - melhor.dx * k, -cy - melhor.dy * k);
+    ax.drawImage(cv, 0, 0);
+    ax.restore();
+    try{
+      const pw = document.createElement("canvas"); pw.width = cv.width; pw.height = cv.height; const px = pw.getContext("2d");
+      px.filter = "blur(" + Math.round(cv.width * 0.07) + "px)"; px.drawImage(ref, 0, 0, cv.width, cv.height);
+      const dp = px.getImageData(0, 0, cv.width, cv.height), da2 = dp.data;
+      for(let i = 3; i < da2.length; i += 4) da2[i] = Math.min(255, da2[i] * 3);
+      px.filter = "none"; px.putImageData(dp, 0, 0);
+      ax.globalCompositeOperation = "destination-in"; ax.drawImage(pw, 0, 0);
+    }catch(_){ }
+    ox.drawImage(al, 0, 0);
     out.__ajuste = { s:melhor.s, dx:Math.round(melhor.dx * k), dy:Math.round(melhor.dy * k), corr:Math.round(melhor.c * 100) / 100 };
     return out;
   }catch(_){ return cv; }
@@ -151306,7 +151322,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         // crista por coluna na foto real (1º pixel que não é céu); colunas sem foto herdam a vizinha mais perto
         const crista = new Int32Array(W2).fill(-1);
         for(let x = 0; x < W2; x++){ let topo = -1, y0 = -1; for(let y = 0; y < h; y++){ const i = (y * W2 + x) * 4; if(dcv[i + 3] < 200) continue; if(topo < 0) topo = y; if(!ehCeuPx(dcv, i)){ y0 = y; break; } }
-          if(topo >= 0) crista[x] = y0 >= 0 ? y0 : h; }
+          /* (12/10 v20) coluna em que a borda da foto girada já corta ÁRVORE/morro (nenhum céu real em cima) não sabe
+             onde a crista está — antes usava a própria borda e o céu pintado descia em triângulo por cima das copas
+             (juiz: "faixa triangular lisa sobre a copa"). Essas colunas herdam a crista das vizinhas com céu de verdade. */
+          if(topo >= 0 && (y0 < 0 || y0 > topo + 4)) crista[x] = y0 >= 0 ? y0 : h; }
         let ultimo = -1; for(let x = 0; x < W2; x++){ if(crista[x] >= 0) ultimo = crista[x]; else if(ultimo >= 0) crista[x] = ultimo; }
         ultimo = -1; for(let x = W2 - 1; x >= 0; x--){ if(crista[x] >= 0) ultimo = crista[x]; else if(ultimo >= 0) crista[x] = ultimo; }
         // mediana móvel ±10 (árvore isolada não vira pico de serra)
@@ -151336,8 +151355,23 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           if(dcv[i + 3] >= 200 || y >= cS[x] - 6) continue;
           const t = Math.max(0, Math.min(1, (x - xMeio) / (W2 * 0.5) * 0.5 + 0.5));
           dd[i] = corE[y * 3] * (1 - t) + corD[y * 3] * t; dd[i + 1] = corE[y * 3 + 1] * (1 - t) + corD[y * 3 + 1] * t; dd[i + 2] = corE[y * 3 + 2] * (1 - t) + corD[y * 3 + 2] * t; dd[i + 3] = 255;
-          if(y < cS[x] - 60){ dmm[i] = 0; dmm[i + 1] = 0; dmm[i + 2] = 0; dmm[i + 3] = 255; } nC++; }   // o céu pintado vai até 6px da crista; protegido só até 60px (copas irregulares ficam pra IA, já com céu certo embaixo)
-        if(nC > 1000){ ex2.putImageData(dw2, 0, 0); mx.putImageData(dm2, 0, 0); avisos.push("céu em volta da foto feito do próprio céu da foto (degradê liso, sem IA) — a IA só completa o terreno"); }
+          if(y < cS[x] - 24){ dmm[i] = 0; dmm[i + 1] = 0; dmm[i + 2] = 0; dmm[i + 3] = 255; } nC++; }   // o céu pintado vai até 6px da crista; protegido até 24px (v20: com 60px a IA pintava um halo azulado/névoa acima das copas — juiz "segunda crista")
+        /* (12/10 17:30, v20) a borda da foto girada ficava visível DENTRO DO CÉU como uma linha diagonal translúcida
+           (juiz: "faixa diagonal translúcida no céu"): o céu real tem grão e degradê, o pintado é liso. Agora o céu
+           real, nos ~80px junto à borda da foto, cruza em degradê pro céu pintado — só pixels de céu, só acima da
+           crista; morro, árvores e obra não entram. */
+        let nX = 0;
+        try{
+          const MB = document.createElement("canvas"); MB.width = W2; MB.height = h; { const b = MB.getContext("2d"); b.filter = "blur(40px)"; b.drawImage(MW, 0, 0); }
+          const dMB = MB.getContext("2d").getImageData(0, 0, W2, h).data;
+          for(let y = 0; y < h; y++) for(let x = 0; x < W2; x++){ const i = (y * W2 + x) * 4;
+            if(dcv[i + 3] < 200 || y >= cS[x] - 30 || !ehCeuPx(dcv, i)) continue;
+            const wr = Math.max(0, Math.min(1, (dMB[i + 3] / 255 - 0.5) / 0.45)); if(wr >= 1) continue;
+            const t = Math.max(0, Math.min(1, (x - xMeio) / (W2 * 0.5) * 0.5 + 0.5));
+            const sr = corE[y * 3] * (1 - t) + corD[y * 3] * t, sg = corE[y * 3 + 1] * (1 - t) + corD[y * 3 + 1] * t, sb = corE[y * 3 + 2] * (1 - t) + corD[y * 3 + 2] * t;
+            dd[i] = dd[i] * wr + sr * (1 - wr); dd[i + 1] = dd[i + 1] * wr + sg * (1 - wr); dd[i + 2] = dd[i + 2] * wr + sb * (1 - wr); nX++; }
+        }catch(_){ }
+        if(nC > 1000){ ex2.putImageData(dw2, 0, 0); mx.putImageData(dm2, 0, 0); avisos.push("céu em volta da foto feito do próprio céu da foto (degradê liso, sem IA) — a IA só completa o terreno" + (nX > 500 ? "; borda da foto no céu cruzada em degradê de 80px (sem linha diagonal)" : "")); }
       }catch(_){ }
       // versões no quadro 9:16 (pra alinhamento e colagem)
       const recorta = function(c){ if(pad <= 0) return c; const o = document.createElement("canvas"); o.width = w; o.height = h; o.getContext("2d").drawImage(c, pad, 0, w, h, 0, 0, w, h); return o; };
@@ -151401,7 +151435,46 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           iv.fillStyle = "#fff"; iv.fillRect(0, 0, lado, lado); iv.globalCompositeOperation = "destination-out"; iv.drawImage(Mk, 0, 0);   // branco onde faltava
           const InvB = document.createElement("canvas"); InvB.width = lado; InvB.height = lado; { const b = InvB.getContext("2d"); b.filter = "blur(6px)"; b.drawImage(Inv, 0, 0); }
           const InvF = document.createElement("canvas"); InvF.width = lado; InvF.height = lado; { const f2 = InvF.getContext("2d"); f2.drawImage(InvB, 0, 0); f2.globalCompositeOperation = "destination-in"; f2.drawImage(Inv, 0, 0); }   // pluma só pra dentro da área pintada
-          px2.globalCompositeOperation = "destination-in"; px2.drawImage(InvF, 0, 0);
+          let colado = false;
+          /* ═══ (12/10 17:12, Gustavo, v19 no ar: "ainda tem um risco ali embaixo, tipo uma linha errada, no canto direito")
+             a linha é a BORDA DE BAIXO da foto girada: grama real de um lado, grama da IA do outro, cortadas a fio.
+             Só na janela de baixo e só no TERRENO (abaixo do horizonte, fora da obra): a grama/terra da IA entra com
+             pluma de ~60px PRA DENTRO da foto (textura casa com textura — a lona e a parte de cima da foto não
+             entram) e a cor da IA é casada com a da foto real na faixa da emenda (um ganho só por canal, pra janela
+             toda — nada local, que vira mancha). ═══ */
+          if(J.nome === "baixo"){ try{
+            const yHj = ((provisorioW.__bordaLona && provisorioW.__bordaLona.yH != null) ? provisorioW.__bordaLona.yH : Math.round(h * 0.5)) - J.y;
+            const Ob = document.createElement("canvas"); Ob.width = lado; Ob.height = lado;
+            if(an && an.obra){ const oc = Ob.getContext("2d"); const cxW = Wj / 2, cyW = h / 2, cs2 = Math.cos(ang), sn2 = Math.sin(ang);
+              const gq = function(x, y){ return { x:cxW + (x - cxW) * cs2 - (y - cyW) * sn2, y:cyW + (x - cxW) * sn2 + (y - cyW) * cs2 - J.y }; };
+              const o = { x0:an.obra.x0 - 0.08, x1:an.obra.x1 + 0.08, y0:an.obra.y0 - 0.05, y1:an.obra.y1 + 0.05 };
+              const q = [[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]].map(function(p){ return gq(mW.ox + p[0] * mW.dw, mW.oy + p[1] * mW.dh); });
+              oc.fillStyle = "#fff"; oc.strokeStyle = "#fff"; oc.lineWidth = 40; oc.lineJoin = "round"; oc.beginPath(); oc.moveTo(q[0].x, q[0].y); for(let k = 1; k < 4; k++) oc.lineTo(q[k].x, q[k].y); oc.closePath(); oc.fill(); oc.stroke(); }
+            const InvP = document.createElement("canvas"); InvP.width = lado; InvP.height = lado; { const b = InvP.getContext("2d"); b.filter = "blur(30px)"; b.drawImage(Inv, 0, 0); }   // proximidade da área pintada
+            const dI = Inv.getContext("2d").getImageData(0, 0, lado, lado).data, dB = InvP.getContext("2d").getImageData(0, 0, lado, lado).data;
+            const dF = InvF.getContext("2d").getImageData(0, 0, lado, lado).data, dO = Ob.getContext("2d").getImageData(0, 0, lado, lado).data;
+            const dR = Rec.getContext("2d").getImageData(0, 0, lado, lado).data;
+            const imP = px2.getImageData(0, 0, lado, lado), dP = imP.data;
+            const sR = [0, 0, 0], sI = [0, 0, 0]; let nR = 0, nI = 0;
+            const terW = function(y){ return Math.max(0, Math.min(1, (y - yHj - 20) / 60)); };
+            for(let y = 0; y < lado; y++){ const tw = terW(y); if(tw <= 0) continue;
+              for(let x = 0; x < lado; x++){ const i = (y * lado + x) * 4; if(dO[i + 3] > 128) continue;
+                const miss = dI[i + 3] > 128, prox = dB[i + 3] / 255;
+                if(!miss && prox > 0.04){ sR[0] += dR[i]; sR[1] += dR[i + 1]; sR[2] += dR[i + 2]; nR++; }
+                else if(miss && prox < 0.96){ sI[0] += dP[i]; sI[1] += dP[i + 1]; sI[2] += dP[i + 2]; nI++; } } }
+            const g = [1, 1, 1]; let dif = 0; if(nR > 500 && nI > 500) for(let c = 0; c < 3; c++){ g[c] = Math.max(0.8, Math.min(1.25, (sR[c] / nR) / Math.max(1, sI[c] / nI))); dif = Math.max(dif, Math.abs(sR[c] / nR - sI[c] / nI)); }
+            /* (real38) se a IA pintou OUTRA coisa na emenda (estrada de terra ao lado de grama real: diferença de cor
+               grande), a pluma só vira borrão — nesse caso fica o corte seco de antes e o histórico avisa. */
+            if(dif > 28) throw new Error("conteúdo diferente na emenda (" + Math.round(dif) + ")");
+            for(let y = 0; y < lado; y++){ const tw = terW(y);
+              for(let x = 0; x < lado; x++){ const i = (y * lado + x) * 4;
+                const miss = dI[i + 3] > 128, ob = dO[i + 3] > 128, prox = dB[i + 3] / 255;
+                if(tw > 0) for(let c = 0; c < 3; c++) dP[i + c] = Math.max(0, Math.min(255, Math.round(dP[i + c] * (1 + (g[c] - 1) * tw))));
+                dP[i + 3] = miss ? dF[i + 3] : ((!ob && tw > 0) ? Math.min(255, Math.round(prox * 1.6 * 255 * tw)) : 0); } }
+            px2.putImageData(imP, 0, 0); colado = true;
+            avisos.push("emenda de baixo: grama/terra da IA com pluma de 60px pra dentro da foto (fora da obra) e cor casada com a foto (ganho " + g.map(function(v){ return v.toFixed(2); }).join("/") + ")");
+          }catch(e){ colado = false; if(/conteúdo diferente/.test(String(e && e.message))) avisos.push("emenda de baixo: a IA pintou um terreno de cor diferente da grama/terra real na borda — sem pluma (ficaria borrado); se incomodar, gere de novo ou use o Ajuste fino"); } }
+          if(!colado){ px2.globalCompositeOperation = "destination-in"; px2.drawImage(InvF, 0, 0); }
           EJ.getContext("2d").drawImage(P, 0, J.y);
           // o que foi pintado vira "conteúdo" pra próxima janela
           { const mj = MJ.getContext("2d"); mj.globalCompositeOperation = "source-over"; mj.fillStyle = "#000"; mj.save(); mj.beginPath(); mj.rect(0, J.y, Wj, lado); mj.clip(); mj.fillRect(0, J.y, Wj, lado); mj.restore(); }
@@ -151551,7 +151624,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v19: IA por janelas só onde não tem foto (foto real nunca substituída) + céu determinístico + juiz GPT (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push("motor da foto v20: IA por janelas só onde não tem foto + céu determinístico + emenda de baixo com pluma na grama e cor casada + juiz GPT (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
