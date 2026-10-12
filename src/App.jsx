@@ -36307,10 +36307,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       })()}
 
       {/* Main content: image + sidebar — grid responsivo */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":"1fr 380px"),gap:18,alignItems:"flex-start",paddingBottom:(isMob&&isApprover)?((tab==="publicacao"||tab==="video")?170:230):0}}>
+      {/* (12/10, Gustavo: "o avaliação de design ficou todo esticado — é pra caber em uma tela só") a coluna da arte era
+          "1fr", cujo mínimo é o conteúdo: com muitas miniaturas (20 versões no card) a faixa de thumbs esticava a coluna
+          pra fora da tela e empurrava a arte e a foto original. minmax(0,1fr) trava a coluna na largura da tela. */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":(tab==="copys"?"minmax(0,1fr) 360px":"minmax(0,1fr) 380px"),gap:18,alignItems:"flex-start",paddingBottom:(isMob&&isApprover)?((tab==="publicacao"||tab==="video")?170:230):0}}>
 
         {/* Image panel — só para Aprovação de conteúdo (publicacao). */}
-        {(tab==="publicacao"||tab==="video")&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {(tab==="publicacao"||tab==="video")&&<div style={{display:"flex",flexDirection:"column",gap:12,minWidth:0}}>
           {/* ── Header de chips: cliente, unidade, responsáveis, tipo, publicação, entrega, pagamento ── */}
           {(()=>{
             const ct=(current.contentType||current.tipo||"").toLowerCase();
