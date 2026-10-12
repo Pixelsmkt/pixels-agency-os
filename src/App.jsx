@@ -150922,6 +150922,88 @@ function _eaMedirInclinacaoCeu(img){
     return isFinite(graus) ? graus : null;
   }catch(_){ return null; }
 }
+/* (12/10) PREENCHIMENTO PROVISÓRIO da Foto de obra — o que a IA vê embaixo da máscara.
+   Tudo acontece na foto JÁ ENDIREITADA (horizonte reto), linha por linha:
+     1) a região da obra (retângulo da visão, girado junto) é coberta pela faixa lateral da MESMA linha
+        (céu na linha do céu, morro na do morro, grama na da grama) — some a lona, fica o terreno;
+     2) os cantos vazios que o giro deixa são completados estendendo cada linha pros lados (ladrilho espelhado
+        da ponta da linha) — textura nítida e na altura certa, sem ampliar nada;
+     3) em cima: pingue-pongue das linhas de céu; embaixo: pingue-pongue das linhas de terreno.
+   Resultado: UMA obra só (a real, que entra por cima), céu em cima, terreno embaixo, nada torto, nada borrado. */
+function _eaProvisorioFotoObra(cv, m, ang, an, w, h){
+  const out = document.createElement("canvas"); out.width = w; out.height = h; const ox2 = out.getContext("2d");
+  const src = cv.getContext("2d").getImageData(0, 0, w, h); const d = src.data;
+  const cx = w / 2, cy = h / 2, cs = Math.cos(ang), sn = Math.sin(ang);
+  const gira = function(x, y){ return { x:cx + (x - cx) * cs - (y - cy) * sn, y:cy + (x - cx) * sn + (y - cy) * cs }; };
+  // retângulo da obra girado (4 cantos) → intervalo em x por linha
+  let quad = null;
+  if(an && an.obra){ // a caixa da visão é apertada/imprecisa: folga de 6% nos lados e 3% em cima/embaixo pra não sobrar ponta de lona
+    const o = { x0:an.obra.x0 - 0.06, x1:an.obra.x1 + 0.06, y0:an.obra.y0 - 0.03, y1:an.obra.y1 + 0.03 };
+    quad = [[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]].map(function(p){ return gira(m.ox + p[0] * m.dw, m.oy + p[1] * m.dh); }); }
+  const faixaQuad = function(y){ if(!quad) return null; let a = Infinity, b = -Infinity;
+    for(let i = 0; i < 4; i++){ const p = quad[i], q = quad[(i + 1) % 4]; if((y < p.y) === (y < q.y)) continue; const t = (y - p.y) / (q.y - p.y); const x = p.x + (q.x - p.x) * t; if(x < a) a = x; if(x > b) b = x; }
+    return a < b ? [Math.max(0, Math.round(a)), Math.min(w, Math.round(b))] : null; };
+  const opaco = function(x, y){ return d[(y * w + x) * 4 + 3] > 200; };
+  // horizonte (linha reta, já girada)
+  const hzA = (an && an.horizonte != null && isFinite(an.horizonte)) ? Math.max(0.05, Math.min(0.95, an.horizonte)) : 0.5;
+  const yH = Math.round(cy + ((m.oy + hzA * m.dh) - cy) * cs);
+  const LF = Math.max(16, Math.round(w * 0.06));                      // largura da faixa de ladrilho
+  const copiaLinha = function(y, xA, xB, fx0, fx1){                   // preenche [xA,xB) da linha y ladrilhando (espelho alternado) a faixa [fx0,fx1) da mesma linha
+    const L = fx1 - fx0; if(L < 2) return false; const base = y * w * 4;
+    for(let x = xA, k = y > yH ? (y * 7919) % (2 * L) : 0; x < xB; x++, k++){ /* abaixo do horizonte a fase muda a cada linha (textura de grama/terra, não listra); acima, espelho coerente (crista do morro, árvores) */ const per = k % (2 * L); const sx = fx0 + (per < L ? per : 2 * L - 1 - per); const si = base + sx * 4, di = base + x * 4;
+      d[di] = d[si]; d[di + 1] = d[si + 1]; d[di + 2] = d[si + 2]; d[di + 3] = 255; }
+    return true; };
+  const escura = function(y, xa, xb){ const base = y * w * 4; let l = 0, n = 0; for(let x = xa; x < xb; x += 2){ const i = base + x * 4; l += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; n++; } return n > 0 && l / n < 60; };
+  let yT = -1, yB = -1; const px0 = new Int32Array(h), px1 = new Int32Array(h);
+  for(let y = 0; y < h; y++){ let a = -1, b = -1; for(let x = 0; x < w; x++){ if(opaco(x, y)){ if(a < 0) a = x; b = x; } }
+    px0[y] = a; px1[y] = b; if(a >= 0){ if(yT < 0) yT = y; yB = y; } }
+  if(yT < 0){ ox2.drawImage(cv, 0, 0); return out; }
+  // 1) obra coberta pela faixa lateral da mesma linha (a mais larga das duas; se a linha não tem, usa a última que teve)
+  let ultima = null;
+  for(let y = yT; y <= yB; y++){ const q = faixaQuad(y); if(!q || px0[y] < 0) continue;
+    const xA = Math.max(q[0], px0[y]), xB = Math.min(q[1], px1[y] + 1); if(xB - xA < 1) continue;
+    const esq = [px0[y], xA], dir = [xB, px1[y] + 1]; const lE = esq[1] - esq[0], lD = dir[1] - dir[0];
+    let f = lE >= 12 || lD >= 12 ? (lE >= lD ? esq : dir) : null;
+    if(f && f[1] - f[0] > LF) f = (f === esq) ? [f[0], f[0] + LF] : [f[1] - LF, f[1]];          // a ponta mais LONGE da obra
+    if(f && escura(y, f[0], f[1])) f = null;                                                        // faixa preta = ainda é lona → não serve
+    if(f){ ultima = { y:y, f:f }; copiaLinha(y, xA, xB, f[0], f[1]); }
+    else if(ultima){ // copia da última linha boa (mesma faixa, linha vizinha) — mantém a altura certa
+      const sb = ultima.y * w * 4, L = ultima.f[1] - ultima.f[0], base = y * w * 4;
+      for(let x = xA, k = y > yH ? (y * 7919) % (2 * L) : 0; x < xB; x++, k++){ const per = k % (2 * L); const sx = ultima.f[0] + (per < L ? per : 2 * L - 1 - per); const si = sb + sx * 4, di = base + x * 4; d[di] = d[si]; d[di + 1] = d[si + 1]; d[di + 2] = d[si + 2]; d[di + 3] = 255; } }
+  }
+  // 2) cantos vazios do giro: cada linha estendida pros lados com a própria ponta
+  const estreita = new Uint8Array(h);                                  // linhas da PONTA do giro (quase sem foto): viram cópia da vizinha larga
+  const ladoE = new Uint8Array(h), ladoD = new Uint8Array(h);          // 0 = não precisou · 1 = ponta era lona (preta) · 2 = estendida com terreno
+  for(let y = yT; y <= yB; y++){ if(px0[y] < 0){ estreita[y] = 1; continue; } const a = px0[y], b = px1[y] + 1; const L = Math.min(LF, b - a);
+    if(b - a < Math.max(LF * 2, w * 0.35)){ estreita[y] = 1; continue; }
+    if(a > 0){ if(escura(y, a, a + L)) ladoE[y] = 1; else { ladoE[y] = 2; copiaLinha(y, 0, a, a, a + L); } }   // ponta preta (lona encostada na borda) → resolve depois
+    if(b < w){ if(escura(y, b - L, b)) ladoD[y] = 1; else { ladoD[y] = 2; copiaLinha(y, b, w, b - L, b); } } }
+  // linhas cuja ponta era lona: o lado de fora vem da linha vizinha mais perto que tinha terreno na ponta
+  const copiaSeg = function(yd, ys, xa, xb){ const sb = ys * w * 4, db = yd * w * 4; for(let x = xa; x < xb; x++){ const i = x * 4; d[db + i] = d[sb + i]; d[db + i + 1] = d[sb + i + 1]; d[db + i + 2] = d[sb + i + 2]; d[db + i + 3] = 255; } };
+  const vizinha = function(lado, y){ for(let k = 1; k < 600; k++){ if(y - k >= 0 && lado[y - k] === 2) return y - k; if(y + k < h && lado[y + k] === 2) return y + k; } return -1; };
+  for(let y = yT; y <= yB; y++){
+    if(ladoE[y] === 1){ const r = vizinha(ladoE, y); if(r >= 0) copiaSeg(y, r, 0, px0[y]); }
+    if(ladoD[y] === 1){ const r = vizinha(ladoD, y); if(r >= 0) copiaSeg(y, r, px1[y] + 1, w); } }
+  const copiaLinhaInteira = function(yd, ys){ const sb = ys * w * 4, db = yd * w * 4; for(let i = 0; i < w * 4; i++) d[db + i] = d[sb + i]; };
+  { // ponta de baixo: pingue-pongue das últimas ~60 linhas largas (textura, não listra); ponta de cima: idem com as primeiras
+    let ref = -1, n1 = 0; for(let y = yT; y <= yB; y++){ if(!estreita[y]){ ref = y; n1++; } else if(ref >= 0 && y > yH){ const N = Math.max(1, Math.min(60, n1)); const t = (y - ref) % (2 * N); copiaLinhaInteira(y, ref - (t < N ? t : 2 * N - t)); } }
+    ref = -1; let n2 = 0; for(let y = yB; y >= yT; y--){ if(!estreita[y]){ ref = y; n2++; } else if(ref >= 0 && y <= yH){ const N = Math.max(1, Math.min(60, n2)); const t = (ref - y) % (2 * N); copiaLinhaInteira(y, ref + (t < N ? t : 2 * N - t)); } } }
+  // 3) em cima (céu) e embaixo (terreno): pingue-pongue das linhas certas
+  /* em cima só entram linhas que são CÉU em (quase) toda a largura — árvore alta que encosta no topo da foto
+     não pode ser espelhada pra cima (a IA via "árvore em cima de árvore" e inventava um morro/neblina na crista) */
+  const linhaEhCeu = function(y){ const base = y * w * 4; let ceu = 0, n = 0;
+    for(let x = 0; x < w; x += 3){ const i = base + x * 4; const r = d[i], g = d[i + 1], b = d[i + 2]; n++;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b); if(b >= r && b >= g - 4 && mx > 90 && (mx - mn) / Math.max(1, mx) < 0.6) ceu++; }
+    return ceu / Math.max(1, n) > 0.97; };
+  let capT = 0; for(let y = yT; y < yH && linhaEhCeu(y); y++) capT++;
+  capT = Math.max(1, Math.min(capT, Math.round((yH - yT) * 0.9)));
+  const capB = Math.max(6, Math.round((yB - yH) * 0.9));
+  for(let y = yT - 1; y >= 0; y--){ const t = (yT - y) % (2 * capT); copiaLinhaInteira(y, yT + (t < capT ? t : 2 * capT - t)); }
+  for(let y = yB + 1; y < h; y++){ const t = (y - yB) % (2 * capB); copiaLinhaInteira(y, yB - (t < capB ? t : 2 * capB - t)); }
+  ox2.putImageData(src, 0, 0);
+  return out;
+}
+
 async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // cfg = { B:{left,top,width,height} na página, w,h: pixels do canvas composto, pular:[objetos a ignorar] }
   const avisos = []; ctx = ctx || {};
@@ -151024,9 +151106,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       }
     }
   }
-  const desenhar = function(pl){
+  const desenhar = function(pl, img){
     const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
-    x.save(); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2); x.drawImage(nova, pl.ox, pl.oy, pl.dw, pl.dh); x.restore();
+    x.save(); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2); x.drawImage(img || nova, pl.ox, pl.oy, pl.dw, pl.dh); x.restore();
     return cv;
   };
   let cv = desenhar(m);
@@ -151041,24 +151123,42 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       mx.fillStyle = "#000"; mx.fillRect(0, 0, w, h);
       mx.globalCompositeOperation = "destination-in"; mx.drawImage(cv, 0, 0);                   // onde não tem foto → transparente
       mx.globalCompositeOperation = "destination-out";
-      (an.entulho || []).forEach(function(c){ const f = w * 0.012; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
+      /* (12/10, visto no pedido REAL que o app manda pra IA — app-seco-EM.jpg) as caixas de entulho eram
+         desenhadas SEM o giro da foto: com o horizonte endireitado (-28°) elas caíam em cima da lona/areia e
+         o trator/tripé ficava fora do buraco → a IA repintava a obra e o entulho continuava. Agora as caixas
+         giram junto com a foto (mesma transformação do desenhar), e caem onde o entulho realmente está. */
+      let entulhoNaObra = 0;
+      mx.save(); mx.translate(w / 2, h / 2); mx.rotate(ang); mx.translate(-w / 2, -h / 2);
+      (an.entulho || []).forEach(function(c){
+        /* (12/10) a visão às vezes marca "entulho" EM CIMA da lona (coordenadas imprecisas) — e a regra do Gustavo é
+           "o produto NUNCA é alterado": caixa que fica em grande parte dentro da obra não vira buraco na máscara */
+        if(an.obra){ const ix = Math.max(0, Math.min(c.x1, an.obra.x1) - Math.max(c.x0, an.obra.x0)), iy = Math.max(0, Math.min(c.y1, an.obra.y1) - Math.max(c.y0, an.obra.y0));
+          const area = Math.max(1e-6, (c.x1 - c.x0) * (c.y1 - c.y0)); if(ix * iy / area > 0.6){ entulhoNaObra++; return; } }
+        const f = w * 0.012; mx.fillRect(m.ox + c.x0 * m.dw - f, m.oy + c.y0 * m.dh - f, (c.x1 - c.x0) * m.dw + 2 * f, (c.y1 - c.y0) * m.dh + 2 * f); });
+      mx.restore();
+      if(entulhoNaObra) avisos.push(entulhoNaObra + " marca(s) de entulho caíam em cima da obra e foram ignoradas (o produto não é alterado)");
       /* (09/10, testado de verdade pelo Claude com a foto de Juti — ver pipe.cjs) RECEITA QUE FUNCIONA:
          1) a imagem vai SEM transparência (o gpt-image reenquadra quando vê área vazia);
          2) o preenchimento provisório das faixas é ESPELHAMENTO NÍTIDO da própria foto — o fundo borrado de
             antes fazia a IA devolver neblina/borrão (era a "mancha" que o Gustavo via);
          3) prompt proíbe borrão e manda textura fotográfica real;  4) qualidade high no _eaFotoIA. */
       const E = document.createElement("canvas"); E.width = w; E.height = h; const ex2 = E.getContext("2d");
-      const sFundo = Math.max(w / nova.width, h / nova.height) * 1.04;
-      ex2.drawImage(nova, (w - nova.width * sFundo) / 2, (h - nova.height * sFundo) / 2, nova.width * sFundo, nova.height * sFundo);   // cobre cantos (giro)
-      if(m.oy > 0){ const alt = Math.ceil(m.oy); ex2.save(); ex2.translate(0, m.oy); ex2.scale(1, -1); ex2.drawImage(cv, 0, m.oy, w, alt, 0, 0, w, alt); ex2.restore(); }
-      const fimF = m.oy + m.dh; if(fimF < h){ const alt = Math.ceil(h - fimF); ex2.save(); ex2.translate(0, fimF); ex2.scale(1, -1); ex2.drawImage(cv, 0, fimF - alt, w, alt, 0, -alt, w, alt); ex2.restore(); }
-      ex2.drawImage(cv, 0, 0);
+      /* ═══ (12/10, Gustavo: "aqui na preview aparece certo mas na hora da arte sempre faz cagado") ═══
+         Salvei o pedido REAL que o app manda pra IA (app-seco-EM.jpg) e a causa ficou visível: o preenchimento
+         provisório era a foto ORIGINAL (torta, -28°) ampliada por baixo + espelho vertical da foto já com a lona —
+         a IA via a lona DEITADA nos cantos, outra lona de cabeça pra baixo no topo e o tripé espelhado embaixo,
+         e "continuava" tudo isso: 2ª cisterna à esquerda, mancha escura à direita, bordas erradas.
+         Agora o provisório é feito por _eaProvisorioFotoObra (acima): SEM A OBRA, na foto já endireitada, linha a
+         linha — a IA vê UMA obra só, céu em cima, terreno embaixo, nada torto e nada borrado. */
+      const provisorio = _eaProvisorioFotoObra(cv, m, ang, an, w, h);
+      ex2.drawImage(provisorio, 0, 0);                                        // tudo em volta: sem obra, linha a linha
+      ex2.drawImage(cv, 0, 0);                                                // a foto real (com a obra) por cima
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
       /* (09/10 20:59, Gustavo: "não precisa forçar pra botar nuvem no céu, faz o simples" + névoa perto das
          montanhas) prompt validado no harness (p45): céu LISO igual ao da foto, proibido nuvem nova/neblina. */
       if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade. CÉU: continue EXATAMENTE o céu que já existe na foto — mesmo azul, mesmo degradê, LISO; NÃO adicione nuvens novas e NÃO invente neblina, fumaça nem montanhas (mantenha só o que a foto já tem). TERRENO embaixo: continue grama/terra/vegetação reais, nítidas, mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
       if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
-      partes.push("Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
+      partes.push("A OBRA (lona/estrutura) é UMA SÓ e é a que já aparece nítida na foto: NÃO desenhe uma segunda lona, tanque, cúpula ou reflexo dela nas áreas provisórias — fora da obra só existe terreno, vegetação e céu. Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
       /* rede de segurança: o gpt-image às vezes devolve o topo PRETO (falha aleatória comprovada) —
          detecta, tenta 1x de novo, e na 2ª falha para com erro claro. Não altera nada quando vem certo. */
@@ -151105,21 +151205,34 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           for(let x = 0; x < NW; x++){ let y0 = NH; for(let y = 0; y < NH; y++){ const i = (y * NW + x) * 4; if(!ehCeu(nd[i], nd[i + 1], nd[i + 2])){ y0 = y; break; } } crista[x] = y0; }
           const cristaS = crista.map(function(_, x){ const v = []; for(let k = -12; k <= 12; k++) v.push(crista[Math.max(0, Math.min(NW - 1, x + k))]); v.sort(function(p, q){ return p - q; }); return v[12]; });
           // 2) miolo da foto: alpha borrado 42px (σ) e só onde ficou ~1 → erosão de ~70px (LOCAL, nada disso vai pro gpt)
-          const ER = document.createElement("canvas"); ER.width = w; ER.height = h;
-          { const e = ER.getContext("2d"); e.filter = "blur(42px)"; e.drawImage(cvO, 0, 0); }
-          const de = ER.getContext("2d").getImageData(0, 0, w, h).data;
+          /* (12/10, medido na arte real v19: a IA DESLOCA a lona/morro 30–70px mesmo na área protegida — não é
+             alinhável) abaixo da crista a foto real volta até a PRÓPRIA BORDA (pluma fina de ~8px): a lona que a IA
+             deslocou não aparece mais por baixo da emenda. Acima da crista (céu) continua a emenda larga. */
+          const EF = document.createElement("canvas"); EF.width = w; EF.height = h;
+          { const e = EF.getContext("2d"); e.filter = "blur(4px)"; e.drawImage(cvO, 0, 0); }
+          const df = EF.getContext("2d").getImageData(0, 0, w, h).data;
           const Mk = document.createElement("canvas"); Mk.width = w; Mk.height = h;
           const im = Mk.getContext("2d").createImageData(w, h); const dm = im.data;
           let nM = 0;
           for(let yy = 0; yy < h; yy++) for(let xx = 0; xx < w; xx++){
             const i = (yy * w + xx) * 4;
-            if(de[i + 3] < 250) continue;
             const xr = (xx - w / 2) * cosA - (yy - h / 2) * sinA + w / 2, yr = (xx - w / 2) * sinA + (yy - h / 2) * cosA + h / 2;
+            /* (12/10) distância até a borda da FOTO calculada pela geometria (não por blur): o blur erodia também
+               nas bordas do QUADRO, e numa faixa de 70px junto ao lado do quadro a foto real não voltava — ali
+               aparecia a lona deslocada da IA ("2ª cisterna" no canto). */
+            const dist = Math.min(xr - m.ox, m.ox + m.dw - xr, yr - m.oy, m.oy + m.dh - yr);
+            if(dist < 40) continue;
             const xN = Math.max(0, Math.min(NW - 1, Math.round((xr - m.ox) / m.dw * NW)));
             const yN = (yr - m.oy) / m.dh * NH;
             const abaixo = (yN - cristaS[xN]) * (m.dh / NH);
-            if(abaixo <= 0) continue;
-            dm[i] = 255; dm[i + 1] = 255; dm[i + 2] = 255; dm[i + 3] = Math.min(255, Math.round(abaixo / 10 * 255)); nM++;
+            /* (12/10, medido na arte real: a IA "levanta" o morro 15–70px acima da crista verdadeira dentro da
+               área protegida → sobrava uma 2ª crista com neblina) acima da crista volta o CÉU REAL da foto
+               também, numa faixa de 160px que vai sumindo pra cima (lá em cima céu é céu, a emenda some). */
+            let a;
+            if(abaixo > 0){ if(dist < 70) continue; a = Math.min(255, Math.round(abaixo / 10 * 255)); }           // terreno/obra: emenda 70px pra dentro (v15)
+            else { const acima = -abaixo; if(acima >= 160) continue; a = Math.round(255 * (1 - acima / 160) * Math.min(1, (dist - 40) / 30)); }   // céu: emenda larga
+            a = Math.round(a); if(a <= 0) continue;
+            dm[i] = 255; dm[i + 1] = 255; dm[i + 2] = 255; dm[i + 3] = a; nM++;
           }
           if(nM > 2000){
             Mk.getContext("2d").putImageData(im, 0, 0);
@@ -151127,8 +151240,47 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
             { const b2 = MkB.getContext("2d"); b2.filter = "blur(18px)"; b2.drawImage(Mk, 0, 0); }
             const P = document.createElement("canvas"); P.width = w; P.height = h; const p2 = P.getContext("2d");
             p2.drawImage(cvO, 0, 0); p2.globalCompositeOperation = "destination-in"; p2.drawImage(MkB, 0, 0);
+            const dIa = cv.getContext("2d").getImageData(0, 0, w, h).data;   // a IA PURA, antes da colagem (a 2ª passada compara com ela, não com a mistura)
             cv.getContext("2d").drawImage(P, 0, 0);
-            avisos.push("paisagem real de volta por cima da IA (lona, morro, terra — emenda 70px pra dentro da foto, sem depender da visão); céu fica o da IA");
+            /* 2ª passada (12/10, medido na arte real: a IA DESLOCA a lona 30–70px mesmo na área protegida, e na faixa
+               da emenda sobrava a lona da IA por baixo): dentro da foto, abaixo da crista, onde a IA pôs pixel ESCURO
+               (lona) e a foto real tem pixel CLARO (terreno), a foto real volta por cima também — sem depender da visão. */
+            try{
+              /* comparação por REGIÃO (reduzida 6×), não por pixel: a lona da IA tem brilhos claros no meio, e o teste
+                 pixel a pixel virava um xadrez → colagem a 50% = "lona transparente" por cima da areia. */
+              const S = 6, ws = Math.ceil(w / S), hs = Math.ceil(h / S);
+              const IAcv = document.createElement("canvas"); IAcv.width = w; IAcv.height = h;
+              { const id0 = IAcv.getContext("2d").createImageData(w, h); id0.data.set(dIa); IAcv.getContext("2d").putImageData(id0, 0, 0); }
+              const sO = document.createElement("canvas"); sO.width = ws; sO.height = hs; sO.getContext("2d").drawImage(cvO, 0, 0, ws, hs);
+              const sI = document.createElement("canvas"); sI.width = ws; sI.height = hs; sI.getContext("2d").drawImage(IAcv, 0, 0, ws, hs);
+              const dOs = sO.getContext("2d").getImageData(0, 0, ws, hs).data, dIs = sI.getContext("2d").getImageData(0, 0, ws, hs).data;
+              const Mb = document.createElement("canvas"); Mb.width = ws; Mb.height = hs; const imb = Mb.getContext("2d").createImageData(ws, hs); const db = imb.data;
+              let nB = 0;
+              for(let ys = 0; ys < hs; ys++) for(let xs = 0; xs < ws; xs++){ const i = (ys * ws + xs) * 4;
+                if(dOs[i + 3] < 230) continue;
+                const xx = xs * S + S / 2, yy = ys * S + S / 2;
+                const xr = (xx - w / 2) * cosA - (yy - h / 2) * sinA + w / 2, yr = (xx - w / 2) * sinA + (yy - h / 2) * cosA + h / 2;
+                if(Math.min(xr - m.ox, m.ox + m.dw - xr, yr - m.oy, m.oy + m.dh - yr) < 6) continue;
+                const xN = Math.max(0, Math.min(NW - 1, Math.round((xr - m.ox) / m.dw * NW))); const yN = (yr - m.oy) / m.dh * NH;
+                if(yN <= cristaS[xN]) continue;
+                const lI = 0.299 * dIs[i] + 0.587 * dIs[i + 1] + 0.114 * dIs[i + 2], lO = 0.299 * dOs[i] + 0.587 * dOs[i + 1] + 0.114 * dOs[i + 2];
+                if(lO >= 90 && lI < lO - 40){ db[i] = 255; db[i + 1] = 255; db[i + 2] = 255; db[i + 3] = 255; nB++; } }
+              if(nB > 8){
+                Mb.getContext("2d").putImageData(imb, 0, 0);
+                // dilata 1 célula (vizinhos) pra cobrir a borda da lona deslocada, depois amplia com suavização
+                const Md = document.createElement("canvas"); Md.width = ws; Md.height = hs; const mdx = Md.getContext("2d");
+                [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function(o){ mdx.drawImage(Mb, o[0], o[1]); });
+                const MbB = document.createElement("canvas"); MbB.width = w; MbB.height = h;
+                { const b3 = MbB.getContext("2d"); b3.imageSmoothingEnabled = true; b3.filter = "blur(3px)"; b3.drawImage(Md, 0, 0, w, h); }
+                const P2 = document.createElement("canvas"); P2.width = w; P2.height = h; const p3 = P2.getContext("2d");
+                p3.drawImage(cvO, 0, 0); p3.globalCompositeOperation = "destination-in"; p3.drawImage(MbB, 0, 0);
+                cv.getContext("2d").drawImage(P2, 0, 0);
+                avisos.push("a IA tinha deslocado a obra por cima do terreno na emenda — foto real de volta ali (" + (nB * S * S) + " px)");
+              }
+            }catch(_){ }
+            if(window.__eaDbg){ try{ window.__eaDbgCv = cv.toDataURL("image/png"); window.__eaDbgCvO = cvO.toDataURL("image/png"); window.__eaDbgMk = MkB.toDataURL("image/png"); }catch(_){ } }
+            /* (12/10) limpeza "pra fora da foto" testada e descartada: trocava a continuação da IA por listras do provisório. */
+            avisos.push("paisagem real de volta por cima da IA (lona, morro, terra até a borda da foto, e o céu logo acima da crista com emenda larga — sem depender da visão); o resto do céu fica o da IA");
           }
         }catch(_){ }
         if(precisaCompletar) avisos.push("faltava " + (m.vazio / (w * h) * 100).toFixed(0) + "% da área (céu/chão) — completado com IA");
@@ -151150,10 +151302,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v15: Juti + paisagem real colada por geometria (sem visão) + horizonte medido + largura cheia");
+  avisos.push("motor da foto v16: Juti + provisório sem a obra (igual ao que a IA vê) + entulho girando junto + paisagem real colada por geometria + horizonte medido + largura cheia (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
+  if(window.__eaDbg){ try{ window.__eaDbgCvFim = cv.toDataURL("image/png"); }catch(_){ } }
   let cvBase = null;
   try{ cvBase = desenhar(m); if(ctx.calibrarCor !== false){ _eaVibrarFotoObra(cvBase, horizY); _eaAcabamentoFotoObra(cvBase, horizY); } }catch(_){ }
   return { cv:cv, avisos:avisos, analise:an, encaixe:m, base:cvBase };
@@ -151457,7 +151610,12 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     else{
       passo("olhando a foto da obra (horizonte, obra, entulho)…");
       try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id, passo:passo }); rFO = r; (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
-      catch(e){ avisos.push("foto: " + _eaErro(e)); }
+      catch(e){
+        /* (12/10, Gustavo: "terceira vez que gero e fica sempre a mesma merda") antes o erro da foto virava só um
+           aviso no histórico e a arte saía ASSIM MESMO — com zoom, sem céu/terra — e ainda apagava a versão anterior.
+           Foto de obra sem a foto certa não é arte: PARA aqui, mostra o erro na janela e não salva nada. */
+        throw new Error("Foto de obra não gerada — " + _eaErro(e));
+      }
       if(fotos.length > 1) avisos.push("o material tem " + fotos.length + " fotos — na Foto de obra entra a 1ª (" + (f0.name || "") + ")");
     }
     espacosFoto.length = 0;
