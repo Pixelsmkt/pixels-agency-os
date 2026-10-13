@@ -26518,8 +26518,13 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                             {(function(){
                               const isReprovada = t.status==="reprovado";
                               const isPausada = t.status==="pausado";
-                              const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : pubColor.bg);
-                              const _title = isReprovada ? "Reprovada" : (isPausada ? "Pausada" : (isShortFromDrive ? "Vídeo short (do Drive)" : (pubColor.label||t.status)));
+                              /* (13/10/2026, Gustavo) "Aprovado internamente" (a Pixels aprovou, o cliente ainda não) ganha selo PRÓPRIO,
+                                 pra Hellen bater o olho e ir aprovar com o cliente. Antes saía ciano com triângulo — igual "Em produção".
+                                 GRAFITE (#1f2937): não é cor de nenhum cliente (verdes, vermelho, azul, laranja, cinza-claro, roxo) nem de
+                                 nenhum status (ciano, rosa, roxo, vermelho, amarelo). Ícone: pessoa + visto = "falta o OK do cliente". */
+                              const isAprovInterno = t.status==="aprovado";
+                              const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : (isAprovInterno ? "#1f2937" : pubColor.bg));
+                              const _title = isReprovada ? "Reprovada" : (isPausada ? "Pausada" : (isShortFromDrive ? "Vídeo short (do Drive)" : (isAprovInterno ? "Aprovado internamente — falta aprovar com o cliente" : (pubColor.label||t.status))));
                               return <span title={_title} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:_bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
                                 {isReprovada
                                   ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
@@ -26529,6 +26534,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                                     ? <svg width="12" height="12" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#fff"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#fff"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#fff"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#fff"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#fff"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#fff"/></svg>
                                     : stIsPub
                                       ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+                                      : isAprovInterno
+                                        ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                                       : stIsDone
                                         ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                                         : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
@@ -38400,6 +38407,32 @@ function pxAlertasLigar(){
   try{ sb.channel("px-alertas-"+_pxAlMe()).on("postgres_changes",{event:"*",schema:"public",table:"px_alertas"},function(){ pxAlertasSync(); }).subscribe(); }catch(_){}
   document.addEventListener("visibilitychange",function(){ if(!document.hidden) pxAlertasSync(); });
 }
+/* (13/10/2026) AVISO GLOBAL: liga uma vez por sessão (chamado na raiz do app). Alerta novo pra mim que chega
+   enquanto estou em qualquer tela → som + toast. Quando o Dashboard está montado ele mesmo avisa (modal + som),
+   então aqui fica calado pra não tocar duas vezes. Alerta que eu mesmo criei não avisa. */
+function pxAlertasGlobalLigar(){
+  if(typeof window==="undefined"||window.__pxAlGlobalLigado) return;
+  const me=_pxAlMe(); if(!me) return;
+  window.__pxAlGlobalLigado=true;
+  const vistos=new Set(loadActiveAlertsFor(me).map(function(a){ return a.id; }));
+  window.addEventListener("pixels-alerts-changed",function(){
+    try{
+      const lista=loadActiveAlertsFor(me);
+      const novos=lista.filter(function(a){ return !vistos.has(a.id); });
+      lista.forEach(function(a){ vistos.add(a.id); });
+      const avisar=novos.filter(function(a){ return a.fromUid!==me; });
+      if(!avisar.length||window.__pxDashAlertsMontado) return;
+      playBellSound();
+      if(typeof pixelsToast!=="undefined"){
+        avisar.slice(0,3).forEach(function(a){
+          const lv=ALERT_LEVELS[a.level]||ALERT_LEVELS.atencao;
+          pixelsToast[a.level==="urgente"?"error":a.level==="lembrete"?"info":"warning"](lv.icon+" "+String(a.message||"").slice(0,180),9000);
+        });
+      }
+    }catch(_){}
+  });
+  pxAlertasLigar();
+}
 function createAlert({forUid,fromUid,message,level}){
   const alerts=loadAllAlerts();
   const novo={
@@ -38467,28 +38500,33 @@ function markAlertsAsSeen(uid){
   try{localStorage.setItem(alertSeenKey(uid),new Date().toISOString());}catch{}
 }
 
-// Som de sino (2 tons, Web Audio API — funciona em qualquer navegador)
+// Som de notificação (Web Audio API — funciona em qualquer navegador, sem arquivo)
+// (13/10/2026, Gustavo: "faz um barulho moderno de notificação, pra todos que usam o app") Antes era um sino
+// de 2 tons longos (0,8 s cada). Agora é um "pling" curto e limpo no estilo dos apps de mensagem: duas notas
+// subindo (Sol6 → Dó7) com um harmônico suave, ataque instantâneo e cauda curta — toca em ~0,45 s e não cansa.
 function playBellSound(){
   try{
     const Ctx=window.AudioContext||window.webkitAudioContext;
     if(!Ctx)return;
     const ctx=new Ctx();
-    const notes=[880,659]; // A5 + E5 (acorde de sino)
-    notes.forEach((freq,i)=>{
-      const osc=ctx.createOscillator();
-      const gain=ctx.createGain();
-      osc.type="sine";
-      osc.frequency.value=freq;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      const start=ctx.currentTime+i*0.18;
-      gain.gain.setValueAtTime(0.35,start);
-      gain.gain.exponentialRampToValueAtTime(0.01,start+0.8);
-      osc.start(start);
-      osc.stop(start+0.8);
-    });
-    // Fecha contexto depois pra liberar memória
-    setTimeout(()=>{try{ctx.close();}catch{}},2000);
+    const t0=ctx.currentTime+0.01;
+    const master=ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
+    // filtro leve tira o "agudo de computador" do seno puro
+    const lp=ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=5200; lp.Q.value=0.6; lp.connect(master);
+    const nota=function(freq,start,dur,vol){
+      [[1,1],[2,0.22],[3,0.07]].forEach(function(h){           // fundamental + 2 harmônicos fracos = timbre de "sininho de vidro"
+        const osc=ctx.createOscillator(), g=ctx.createGain();
+        osc.type="sine"; osc.frequency.value=freq*h[0];
+        osc.connect(g); g.connect(lp);
+        g.gain.setValueAtTime(0.0001,start);
+        g.gain.exponentialRampToValueAtTime(vol*h[1],start+0.012);   // ataque quase instantâneo
+        g.gain.exponentialRampToValueAtTime(0.0001,start+dur);      // cauda curta
+        osc.start(start); osc.stop(start+dur+0.02);
+      });
+    };
+    nota(1567.98,t0,0.22,0.28);        // Sol6
+    nota(2093.00,t0+0.11,0.34,0.30);   // Dó7 (um pouco mais longa: é a que "fica")
+    setTimeout(()=>{try{ctx.close();}catch{}},1200);
   }catch(e){/* silently fail */}
 }
 
@@ -38500,6 +38538,8 @@ function DashboardAlerts({userId,isMob}){
 
   // (06/10/2026) liga a busca dos alertas no banco
   useEffect(()=>{ try{ pxAlertasLigar(); pxAlertasSync(); }catch(_){} },[]);
+  // (13/10/2026) enquanto o Dashboard está na tela, o aviso global (som + toast) fica calado — aqui já avisa
+  useEffect(()=>{ try{ window.__pxDashAlertsMontado=true; }catch(_){} return function(){ try{ window.__pxDashAlertsMontado=false; }catch(_){} }; },[]);
   // Recarrega alertas quando mudam (via evento)
   useEffect(()=>{
     const refresh=()=>{
@@ -60714,6 +60754,10 @@ export default function AgencyOS(){
   // ═══ PRESENCE HEARTBEAT + REALTIME ═══
   // Envia "tô vivo" a cada 60s pra Supabase, escuta presença dos outros via realtime,
   // e re-renderiza a cada minuto pra recalcular status (online/ausente/offline).
+  // (13/10/2026, Gustavo: "alerta no app da Hellen, com barulho, pra todos que usam o app") os alertas só avisavam
+  // (som + destaque) com o Dashboard aberto. Agora o aviso é global: em QUALQUER tela, alerta novo pra mim toca o
+  // som e mostra um toast. O Dashboard continua fazendo o destaque dele; o aviso global se cala quando ele está na tela.
+  useEffect(()=>{ try{ if(typeof pxAlertasGlobalLigar==="function") pxAlertasGlobalLigar(); }catch(_){} },[]);
   useEffect(()=>{
     const sb=window._sb;
     if(!sb||!CURRENT_USER?.id)return;
