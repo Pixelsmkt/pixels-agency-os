@@ -3993,6 +3993,7 @@ function NavIcon({id,size=18,color}){
   if(id==="aprovacoes_copys")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
   if(id==="aprovacoes_publicacao") return <svg {...p}><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 13l-4.5-4.5L9 16"/><path d="M16 20l2 2 4-4"/></svg>;
   if(id==="aprovacoes_video")      return <svg {...p}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="M7 4l2 5M12 4l2 5M17 4l2 5"/><polygon points="10 12 15 14.5 10 17" fill="currentColor" stroke="none"/></svg>;
+  if(id==="aprovacoes_cliente")    return <svg {...p}><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>;
   if(id==="aprovacoes_internas")   return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
   if(id==="gestaomidia")           return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 010 18"/><path d="M12 3a14 14 0 000 18"/></svg>;
   if(id==="gestaoredes")           return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>;
@@ -4062,6 +4063,7 @@ const NAV=[
     {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Avaliação de design"},
     {id:"aprovacoes_video",      icon:"▶", label:"Avaliação de vídeo"},
+    {id:"aprovacoes_cliente",    icon:"◎", label:"Aprovar com o cliente"},   // (13/10/2026, Gustavo) aprovado internamente, falta o cliente
   ]},
   {id:"comercial",  icon:"◈", label:"Comercial"},
   // Chat interno DESLIGADO por enquanto (26/08) — religa descomentando esta linha
@@ -38329,6 +38331,143 @@ function _EditCopyModal({task,onClose,onSave,stripHtml}){
     </div>
   </div>;
 }
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   APROVAR COM O CLIENTE (13/10/2026, Gustavo: "uma nova aba no Avaliações onde aparece tudo que tem aprovado
+   internamente — exceto fotos de obra — e com um botão baixa tudo, pra aprovar tudo de uma vez")
+   Lista todos os cards em "Aprovado internamente" (a Pixels aprovou, o cliente ainda não), agrupados por cliente.
+   - "Baixar tudo" → um ZIP com as artes finais, uma pasta por cliente, nome = título + data de publicação.
+   - "Cliente aprovou" (por card ou por cliente) → status "aprovacao_final" (Aprovado pelo cliente), com histórico.
+   Foto de obra não entra: aprovado internamente já é aprovado (regra do mesmo dia).
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
+  const [openCard,setOpenCard]=useState(null);
+  const [baixando,setBaixando]=useState("");
+  const [sel,setSel]=useState({});                 // id → true (seleção manual)
+  const _ehFO=(t)=>(typeof pxEhFotoDeObra==="function")&&pxEhFotoDeObra(t);
+  const _dataPub=(t)=>String(t.publishDate||t.publish_date||"").slice(0,10);
+  const _fmtData=(d)=>d?d.split("-").reverse().slice(0,2).join("/"):"sem data";
+  const _finais=(t)=>(Array.isArray(t.files)?t.files:[]).filter(function(f){ return f&&f.url&&!f.uploading&&!f.isAnnotation&&!f.isRef&&f.tipo!=="material"&&f.tipo!=="referencia"&&(f.tipo==="final"||!f.tipo); });
+  const _ehImg=(f)=>/^image\//.test(String(f.type||""))||/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(String(f.name||f.url||""));
+  const _unidade=(t)=>{ const u=String(t.bioterUnit||t.bioter_unit||"").split(",")[0].trim(); if(!u) return ""; const m={chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay",grupo:"Grupo",brasil:"Brasil"}; return m[u]||u; };
+  const _nomeArq=(t,f,i,n)=>{ const base=String(t.title||"arte").replace(/[\\/:*?"<>|]+/g," ").trim().slice(0,60); const ext=(String(f.name||"").match(/\.[a-z0-9]{2,5}$/i)||[".png"])[0]; const u=_unidade(t); return (u?u+" - ":"")+base+" - "+_fmtData(_dataPub(t)).replace("/","-")+(n>1?" ("+(i+1)+")":"")+ext; };
+  const lista=(tasks||[]).filter(function(t){ return t&&!t.deletedAt&&t.status==="aprovado"&&!_ehFO(t); })
+    .sort(function(a,b){ return (String(a.client||"")+_dataPub(a)).localeCompare(String(b.client||"")+_dataPub(b)); });
+  const porCliente={}; lista.forEach(function(t){ const k=String(t.client||"outros"); (porCliente[k]=porCliente[k]||[]).push(t); });
+  const clientes=Object.keys(porCliente).sort(function(a,b){ const ca=CLIENTS.find(function(c){return c.id===a;}), cb=CLIENTS.find(function(c){return c.id===b;}); return String((ca&&ca.name)||a).localeCompare(String((cb&&cb.name)||b)); });
+  const nSel=Object.keys(sel).filter(function(k){ return sel[k]&&lista.some(function(t){return String(t.id)===k;}); }).length;
+  const _podeMarcar=!!(perms&&(perms.aprovar||perms.colAprovado))||(effectiveUser&&(effectiveUser.level===1||effectiveUser.id==="ellen"));
+  const _hoje=()=>{ const d=new Date(); return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); };
+
+  async function baixar(ts,rotulo){
+    if(!ts.length||baixando) return;
+    const itens=[]; ts.forEach(function(t){ const fs=_finais(t); fs.forEach(function(f,i){ itens.push({t:t,f:f,nome:_nomeArq(t,f,i,fs.length)}); }); });
+    if(!itens.length){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhum arquivo final nesses cards.",4000); return; }
+    setBaixando("preparando "+itens.length+" arquivo(s)…");
+    try{
+      const JSZip=await _pbJsZip();
+      const zip=new JSZip(); let ok=0, pulados=[];
+      for(let i=0;i<itens.length;i++){
+        const it=itens[i]; setBaixando("baixando "+(i+1)+" de "+itens.length+"…");
+        try{
+          const r=await fetch(it.f.url); if(!r.ok) throw new Error("HTTP "+r.status);
+          const b=await r.blob();
+          if(b.size>150*1024*1024){ pulados.push(it.nome+" (muito grande — baixe pelo card)"); continue; }
+          const cl=CLIENTS.find(function(c){return c.id===it.t.client;}); const pasta=String((cl&&cl.name)||it.t.client||"Cliente").replace(/[\\/:*?"<>|]+/g," ");
+          zip.folder(pasta).file(it.nome,b); ok++;
+        }catch(e){ pulados.push(it.nome+" ("+((e&&e.message)||"falhou")+")"); }
+      }
+      if(!ok) throw new Error("nenhum arquivo pôde ser baixado");
+      setBaixando("compactando…");
+      const out=await zip.generateAsync({type:"blob"});
+      const u=URL.createObjectURL(out); const a=document.createElement("a");
+      a.href=u; a.download="Aprovar com o cliente - "+(rotulo||"tudo")+" - "+new Date().toLocaleDateString("pt-BR").replace(/\//g,"-")+".zip"; a.style.display="none";
+      document.body.appendChild(a); a.click(); setTimeout(function(){ try{ a.remove(); URL.revokeObjectURL(u); }catch(_){} },500);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(ok+" arquivo(s) no ZIP"+(pulados.length?" · "+pulados.length+" pulado(s)":"")+".",5000);
+      if(pulados.length&&typeof pixelsToast!=="undefined") pixelsToast.warning("Não entraram: "+pulados.slice(0,3).join("; ")+(pulados.length>3?"…":""),9000);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Baixar: "+((e&&e.message)||e),6000); }
+    setBaixando("");
+  }
+  function clienteAprovou(ts){
+    if(!_podeMarcar||!setTasks||!ts.length) return;
+    const ok=window.confirm(ts.length===1?"Marcar \""+(ts[0].title||"este card")+"\" como APROVADO PELO CLIENTE?":"Marcar "+ts.length+" cards como APROVADOS PELO CLIENTE?\n\nEles vão pra \"Aprovado pelo cliente\" e ficam prontos pra agendar.");
+    if(!ok) return;
+    const actor=(typeof pxAutorNome==="function")?pxAutorNome(effectiveUser):((effectiveUser&&effectiveUser.name)||"");
+    const ids=new Set(ts.map(function(t){return t.id;}));
+    const agora=new Date().toISOString();
+    setTasks(function(p){ return p.map(function(t){
+      if(!ids.has(t.id)) return t;
+      const tl=[].concat(t.timeline||[],[{type:"status",fromLabel:"Aprovado internamente",toLabel:"Aprovado pelo cliente",from:"aprovado",to:"aprovacao_final",at:agora,atFmt:_hoje(),user:actor,note:"Aprovação do cliente registrada pela equipe (Aprovar com o cliente)"}]);
+      return Object.assign({},t,{status:"aprovacao_final",timeline:tl});
+    }); });
+    setSel({});
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(ts.length+" card(s) marcado(s) como aprovado(s) pelo cliente — prontos pra agendar.",5000);
+  }
+  const btn=(cor,cheio)=>({font:"inherit",height:34,boxSizing:"border-box",padding:"0 13px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:12.5,border:cheio?"none":"1px solid "+cor+"55",background:cheio?cor:"#fff",color:cheio?"#fff":cor,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",opacity:baixando?.6:1,boxShadow:cheio?"0 1px 3px "+cor+"55":"0 1px 2px rgba(15,23,42,0.04)"});
+  const icoDown=<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+  const icoOk=<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>;
+  const selecionados=lista.filter(function(t){ return sel[String(t.id)]; });
+
+  return (<div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(function(){})} onClose={function(){ setOpenCard(null); }} currentUser={effectiveUser} canDelete={false} cardPerms={perms}/>)}
+    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1}}>Aprovar com o cliente</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {clientes.length} cliente{clientes.length===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).</div>
+      </div>
+      {lista.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {baixando&&<span style={{color:"#7c3aed",fontSize:12,fontWeight:700}}>{baixando}</span>}
+        {nSel>0&&_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou(selecionados); }} style={btn("#ec4899",true)}>{icoOk} Cliente aprovou os {nSel} selecionados</button>}
+        {nSel>0&&<button disabled={!!baixando} onClick={function(){ baixar(selecionados,"selecionados"); }} style={btn("#7c3aed",false)}>{icoDown} Baixar {nSel} selecionado{nSel>1?"s":""}</button>}
+        <button disabled={!!baixando} onClick={function(){ baixar(lista,"tudo"); }} title="Um ZIP com as artes finais de todos os cards, uma pasta por cliente" style={btn("#7c3aed",true)}>{icoDown} Baixar tudo</button>
+      </div>}
+    </div>
+
+    {lista.length===0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"56px 24px",gap:14,textAlign:"center",background:"#fff",borderRadius:16,border:"1px solid #e2e8f0"}}>
+      <div style={{width:64,height:64,borderRadius:16,background:"#ec489914",display:"flex",alignItems:"center",justifyContent:"center",color:"#ec4899"}}>{icoOk}</div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:17}}>Nada esperando o cliente</div>
+      <div style={{color:"#64748b",fontSize:12.5}}>Quando um card for aprovado internamente ele aparece aqui.</div>
+    </div>}
+
+    {clientes.map(function(cid){
+      const cl=CLIENTS.find(function(c){return c.id===cid;}); const cor=(cl&&cl.color)||"#475569"; const ts=porCliente[cid];
+      const todosSel=ts.every(function(t){ return sel[String(t.id)]; });
+      return <div key={cid} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc",flexWrap:"wrap"}}>
+          <input type="checkbox" checked={todosSel} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); ts.forEach(function(t){ n[String(t.id)]=v; }); return n; }); }} title="Selecionar todos deste cliente" style={{width:16,height:16,cursor:"pointer",accentColor:"#7c3aed"}}/>
+          <span style={{width:10,height:10,borderRadius:3,background:cor,flexShrink:0}}/>
+          <div style={{fontWeight:800,color:"#0f172a",fontSize:14,letterSpacing:-.2}}>{(cl&&cl.name)||cid}</div>
+          <span style={{background:cor+"18",color:cor,borderRadius:99,padding:"2px 9px",fontSize:11,fontWeight:800}}>{ts.length}</span>
+          <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button disabled={!!baixando} onClick={function(){ baixar(ts,(cl&&cl.name)||cid); }} style={btn("#64748b",false)}>{icoDown} Baixar do cliente</button>
+            {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou(ts); }} style={btn("#ec4899",false)}>{icoOk} Cliente aprovou todos</button>}
+          </div>
+        </div>
+        {ts.map(function(t){
+          const fs=_finais(t); const capa=fs.find(_ehImg); const u=_unidade(t);
+          const resps=((Array.isArray(t.assignees)&&t.assignees.length)?t.assignees:(t.assignee?[t.assignee]:[])).map(function(id){ return TEAM.find(function(x){return x.id===id;}); }).filter(Boolean);
+          return <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:"1px solid #f1f5f9"}}>
+            <input type="checkbox" checked={!!sel[String(t.id)]} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); n[String(t.id)]=v; return n; }); }} style={{width:16,height:16,cursor:"pointer",accentColor:"#7c3aed",flexShrink:0}}/>
+            <div onClick={function(){ setOpenCard(t); }} title="Abrir o card" style={{width:isMob?44:56,height:isMob?44:56,borderRadius:10,background:"#f1f5f9",overflow:"hidden",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:10,fontWeight:700}}>
+              {capa?<img src={capa.url} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>:(fs.length?"vídeo":"sem arte")}
+            </div>
+            <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={function(){ setOpenCard(t); }}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title||"(sem título)"}</div>
+              <div style={{color:"#64748b",fontSize:11.5,marginTop:3,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                {u&&<span style={{background:cor+"18",color:cor,borderRadius:6,padding:"1px 7px",fontWeight:700}}>{u}</span>}
+                <span>publica {_fmtData(_dataPub(t))}</span>
+                <span>· {fs.length} arquivo{fs.length===1?"":"s"} final{fs.length===1?"":"is"}</span>
+                {resps.length>0&&<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{resps.slice(0,3).map(function(r){ return <UserAvatar key={r.id} user={r} size={18}/>; })}</span>}
+              </div>
+            </div>
+            {!isMob&&<button disabled={!!baixando||!fs.length} onClick={function(){ baixar([t],String(t.title||"card").slice(0,30)); }} style={Object.assign(btn("#64748b",false),{opacity:(!fs.length||baixando)?.45:1})}>{icoDown} Baixar</button>}
+            {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou([t]); }} style={btn("#ec4899",true)}>{icoOk}{isMob?"":" Cliente aprovou"}</button>}
+          </div>;
+        })}
+      </div>;
+    })}
+  </div>);
+}
+if(typeof window!=="undefined"){ window.PageAprovarComCliente=PageAprovarComCliente; }
 
 /* ═══════════════════════════════════════════════════════════════
    SISTEMA DE ALERTAS URGENTES (sócios + social media criam, todos recebem)
@@ -61595,6 +61734,7 @@ export default function AgencyOS(){
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":
       case "aprovacoes_video":     return p.verAprovacoes||effectiveUser.id==="ellen";
+      case "aprovacoes_cliente":   return p.verAprovacoes||p.colAprovado||effectiveUser.id==="ellen";   // (13/10/2026) quem aprova com o cliente
       case "gestaomidia":          return _menuBloco("midia.menu",p);   // era sócio||dash gestor
       case "gestaoredes":          return _menuBloco("social.menu",p);  // orgânico — 20/09/2026
       case "comercial":            return p.verComercial||isSocio;
@@ -61663,6 +61803,7 @@ export default function AgencyOS(){
     aprovacoes_copys:pendingCopys,
     aprovacoes_publicacao:pendingDesign,
     aprovacoes_video:pendingVideo,
+    aprovacoes_cliente:tasks.filter(t=>!t.deletedAt&&t.status==="aprovado"&&!(typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(t))).length,   // (13/10/2026)
   };
 
   const NAV_VISIBLE=NAV.filter((n,i,arr)=>{
@@ -61708,6 +61849,7 @@ export default function AgencyOS(){
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
+      case "aprovacoes_cliente":    return (effectivePerms.verAprovacoes||effectivePerms.colAprovado||effectiveUser.id==="ellen")&&(typeof PageAprovarComCliente!=="undefined")?<PageAprovarComCliente {...p} tasks={tasks} setTasks={setTasks} perms={effectivePerms} effectiveUser={effectiveUser}/>:<NoPerm/>;
       // 09/10/2026 IA de tráfego: portão do PIN + alarmes (só aprovadores veem; os outros veem igual a antes). Sem o 17e no juntar.py, segue normal.
       case "gestaomidia":          return _menuBloco("midia.menu",effectivePerms)?(typeof TSegPortao==="function"
         ? <TSegPortao currentUser={CURRENT_USER} viewUser={effectiveUser}><PageGestaoMidia {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks} onNavTo={nav}/></TSegPortao>
