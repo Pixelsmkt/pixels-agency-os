@@ -151227,7 +151227,14 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(podeIA && an.obra && (teto != null || piso != null)){
     const obH = (an.obra.y1 - an.obra.y0) * m.dh;
     const fT = (teto != null ? teto : 0) + h * 0.015, fB = (piso != null ? piso : h) - h * 0.015;
-    if(fB - fT > h * 0.08){
+    /* (13/10, Gustavo, Paula Freitas: "olha a original, não precisava mudar nada… aí ele me gasta 2 reais") se a obra
+       JÁ está dentro da faixa útil (folga de 2,5% da altura) e a foto já preenche o quadro, NÃO move: mover abria
+       faixa vazia embaixo e ligava a IA (R$ 1–2 + juiz) numa foto que estava pronta. Só centraliza quando a obra
+       invade o mapa/cidade ou o ícone/frase. */
+    const obY0 = m.oy + an.obra.y0 * m.dh, obY1 = obY0 + obH, tolF = h * 0.025;
+    const jaCabe = obY0 >= fT - tolF && obY1 <= fB + tolF && m.vazio <= w * h * 0.005;
+    if(jaCabe) avisos.push("obra já estava entre o mapa/cidade e o ícone/frase — foto não foi movida");
+    if(!jaCabe && fB - fT > h * 0.08){
       let alvoY0 = fT + Math.max(0, (fB - fT - obH) / 2);          // obra maior que a faixa → encosta no teto (mapa ganha)
       if(alvoY0 + obH > h) alvoY0 = Math.max(0, h - obH);          // mas nunca corta a obra no rodapé
       const oyN = alvoY0 - an.obra.y0 * m.dh;
@@ -151300,15 +151307,21 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
          encosta na borda da foto girada, a IA via a lona CORTADA e continuava ela pra fora (os pedaços soltos).
          Agora, nessas linhas, uma faixa de 4% pra dentro da borda vira terreno NO QUE A IA VÊ: ela entende que a
          lona acaba ali e pinta só terreno fora. Na colagem a foto real volta inteira, até a borda. */
+      /* (13/10, Gustavo, Paula Freitas: "deixou bug na barra lateral direita da foto, faltando coisa") essa faixa de 4%
+         é SÓ pro que a IA vê — mas desde a v19 a imagem final sai do mesmo quadro (EW), e a faixa trocada ficava na
+         arte: a lona e o talude sumiam na borda. Agora a faixa é marcada (faixaLona) e a foto real volta por cima
+         dela no fim, depois das janelas da IA. */
+      let faixaLona = null;
       try{
         const bl = provisorioW.__bordaLona;
         if(bl){
           const dE = ex2.getImageData(0, 0, W2, h), dp = provisorioW.getContext("2d").getImageData(0, 0, W2, h).data;
           const B = Math.round(w * 0.04); let nL = 0;
+          const FL = document.createElement("canvas"); FL.width = W2; FL.height = h; const dFL = FL.getContext("2d").createImageData(W2, h);
           for(let y = Math.max(0, bl.yH); y < h; y++){ if(bl.px0[y] < 0) continue;
-            if(bl.ladoE[y] === 1){ for(let x = bl.px0[y]; x < Math.min(W2, bl.px0[y] + B); x++){ const i = (y * W2 + x) * 4; dE.data[i] = dp[i]; dE.data[i + 1] = dp[i + 1]; dE.data[i + 2] = dp[i + 2]; nL++; } }
-            if(bl.ladoD[y] === 1){ for(let x = Math.max(0, bl.px1[y] - B + 1); x <= bl.px1[y]; x++){ const i = (y * W2 + x) * 4; dE.data[i] = dp[i]; dE.data[i + 1] = dp[i + 1]; dE.data[i + 2] = dp[i + 2]; nL++; } } }
-          if(nL){ ex2.putImageData(dE, 0, 0); avisos.push("a obra encostava na borda da foto — a IA foi instruída a NÃO continuar a lona pra fora (só terreno/céu em volta)"); }
+            if(bl.ladoE[y] === 1){ for(let x = bl.px0[y]; x < Math.min(W2, bl.px0[y] + B); x++){ const i = (y * W2 + x) * 4; dE.data[i] = dp[i]; dE.data[i + 1] = dp[i + 1]; dE.data[i + 2] = dp[i + 2]; dFL.data[i + 3] = 255; nL++; } }
+            if(bl.ladoD[y] === 1){ for(let x = Math.max(0, bl.px1[y] - B + 1); x <= bl.px1[y]; x++){ const i = (y * W2 + x) * 4; dE.data[i] = dp[i]; dE.data[i + 1] = dp[i + 1]; dE.data[i + 2] = dp[i + 2]; dFL.data[i + 3] = 255; nL++; } } }
+          if(nL){ ex2.putImageData(dE, 0, 0); FL.getContext("2d").putImageData(dFL, 0, 0); faixaLona = FL; avisos.push("a obra encostava na borda da foto — a IA foi instruída a NÃO continuar a lona pra fora (só terreno/céu em volta)"); }
         }
       }catch(_){ }
       /* ═══ (12/10) CÉU DETERMINÍSTICO: o céu em volta da foto não precisa de IA — é um degradê liso tirado do
@@ -151479,6 +151492,8 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           // o que foi pintado vira "conteúdo" pra próxima janela
           { const mj = MJ.getContext("2d"); mj.globalCompositeOperation = "source-over"; mj.fillStyle = "#000"; mj.save(); mj.beginPath(); mj.rect(0, J.y, Wj, lado); mj.clip(); mj.fillRect(0, J.y, Wj, lado); mj.restore(); }
         }
+        // a faixa de 4% "terreno" que a IA viu na borda da lona NÃO fica na arte: a foto real volta por cima dela
+        if(faixaLona){ try{ const RL = document.createElement("canvas"); RL.width = Wj; RL.height = h; const rl = RL.getContext("2d"); rl.drawImage(cvW, 0, 0); rl.globalCompositeOperation = "destination-in"; rl.drawImage(faixaLona, 0, 0); EJ.getContext("2d").drawImage(RL, 0, 0); }catch(_){ } }
         avisos.push("IA por janelas: " + nJ + " chamada(s) (" + janelas.map(function(j){ return j.nome; }).join(", ") + ") — a IA só pintou onde não tinha foto" + (custoT ? " · R$ " + custoT.toFixed(2) : ""));
         r = recorta(EJ); r.__custo = custoT; r.__fid = "high"; r.__modelo = "gpt-image-1";
         r.__janelas = true;
