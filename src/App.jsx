@@ -8868,7 +8868,7 @@ function pxImageDims(file){
 function pxProntoPraPostar(t){
   if(!t)return false;
   var st=String(t.status||"");
-  if(st==="aprovado"&&typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(t))return true;
+  if(st==="aprovado"&&typeof pxSemAprovacaoCliente==="function"&&pxSemAprovacaoCliente(t))return true;   // (13/10) foto de obra e short
   return st==="agendado"||st==="aprovacao_final";
 }
 
@@ -15422,6 +15422,12 @@ function CDrive({cl}){
 
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
 
+/* (13/10/2026, Gustavo) card de vídeo do 🤖 Agente de IA = etiqueta "Edição pela IA" (a mesma do interruptor do card e do Guvi) */
+function _pxEhCardAgenteIA(t){
+  if(!t) return false;
+  const tags=Array.isArray(t.tags)?t.tags:[];
+  return tags.some(function(x){ return /edi[çc][ãa]o\s+pela\s+ia/i.test(String(x||"")); });
+}
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
 
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
@@ -24806,7 +24812,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                                  pra Hellen bater o olho e ir aprovar com o cliente. Antes saía ciano com triângulo — igual "Em produção".
                                  (11:03) Gustavo: "grafite não ficou bom, talvez um vermelho vivo" → VERMELHO VIVO (#ff1a1a). Reprovada/Pausada
                                  usam um vermelho mais fechado (#dc2626) e outro ícone (círculo com !); aqui o ícone é pessoa + visto. */
-                              const isAprovInterno = t.status==="aprovado"&&!(typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(t));   // Foto de obra: aprovado internamente = aprovado (rosa)
+                              const isAprovInterno = t.status==="aprovado"&&!(typeof pxSemAprovacaoCliente==="function"&&pxSemAprovacaoCliente(t));   // Foto de obra e Short: aprovado internamente = aprovado (rosa)
                               const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : (isAprovInterno ? "#ff1a1a" : pubColor.bg));
                               const _title = isReprovada ? "Reprovada" : (isPausada ? "Pausada" : (isShortFromDrive ? "Vídeo short (do Drive)" : (isAprovInterno ? "Aprovado internamente — falta aprovar com o cliente" : (pubColor.label||t.status))));
                               return <span title={_title} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:_bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
@@ -27552,7 +27558,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
           // Override por coluna: se colSortMode[col.id] existir, sobrescreve sortMode global.
-          const _colSort=colSortMode[col.id];
+          /* (13/10/2026, Gustavo) Rascunhos: "coloca o filtro de data de publicação, as mais próximas no topo, como padrão,
+             sem poder mudar" — ordem fixa por publicação (sem data vai pro fim); o menu ⋯ some nessa coluna. */
+          const _colSort=(col.id==="rascunhos")?"pubAsc":colSortMode[col.id];
           const colTasks=visible
             .filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id)
             .filter(t=>!(t.status==="preencher_material"&&typeof pxEhVersaoES==="function"&&pxEhVersaoES(t)))   // (07/10) estrategista vê um card só
@@ -27645,7 +27653,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Ico n="x" size={11}/></button>}
                 {/* Menu ⋯ — ordenação por data de publicação. Visual: minimal, sem fundo,
                     ícone SVG real (não emoji), hover suave. Fica destacado quando há ordem ativa. */}
-                {(function(){
+                {col.id!=="rascunhos"&&(function(){
                   const hasOverride=!!colSortMode[col.id];
                   return <button
                     onClick={e=>{e.stopPropagation();setColMenuOpen(colMenuOpen===col.id?null:col.id);}}
@@ -27656,7 +27664,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
                   </button>;
                 })()}
-                {colMenuOpen===col.id&&(function(){
+                {colMenuOpen===col.id&&col.id!=="rascunhos"&&(function(){
                   const opts=[
                     {id:"producao",   label:"Ordem de produção",          hint:"Urgente → publica antes → prazo → fila", icon:"sparkles", color:"#ea580c"},
                     {id:"pubAsc",     label:"Publicação mais próxima",    hint:"Mais próxima no topo",          icon:"calendar-asc", color:"#7c3aed"},
@@ -27797,6 +27805,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {/* preenchido — sinal pro sócio ir preencher pra o freelancer ser pago. */}
                   {(function(){
                     const _dead = t.status==="reprovado"||t.status==="pausado";
+                    // (13/10/2026, Gustavo) card do 🤖 Agente de IA (etiqueta "Edição pela IA"): sem tipo de conteúdo nem mês de
+                    // pagamento — a IA edita, ninguém é pago por demanda. Então também não alerta "sem tipo"/"sem pagamento".
+                    if(_pxEhCardAgenteIA(t)) return null;
                     // Alerta 1: freelancer marcado mas SEM mês de pagamento
                     const _freelas = ["andre","maria","guilherme"];
                     const _assList = Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []);
@@ -27829,11 +27840,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   })()}
                   <style>{`@keyframes pixelsPulseAlert{0%,100%{transform:scale(1);box-shadow:0 2px 8px rgba(220,38,38,0.55),0 0 0 2px #fff}50%{transform:scale(1.08);box-shadow:0 3px 12px rgba(220,38,38,0.75),0 0 0 3px #fff}}`}</style>
                   {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
-                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t))||pxCapaMostraPub(t,activeUser))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t))||pxCapaMostraPub(t,activeUser)||_pxEhCardAgenteIA(t))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
                     {/* (01/10/2026, Gustavo) Data de publicação na capa — designer/editor bate o olho e sabe se "é pra hoje" */}
                     {pxCapaMostraPub(t,activeUser)&&<PxSeloPublicacao task={t}/>}
+                    {/* (13/10/2026, Gustavo) 🤖 Agente de IA: robozinho próprio no lugar do tipo de conteúdo e do mês de pagamento */}
+                    {_pxEhCardAgenteIA(t)&&<span title="Vídeo editado pelo Agente de IA — não tem tipo de conteúdo nem mês de pagamento" style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",color:"#fff",borderRadius:99,padding:"2px 9px 2px 7px",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",boxShadow:"0 1px 4px rgba(99,102,241,0.35)"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><line x1="12" y1="8" x2="12" y2="4"/><circle cx="12" cy="3" r="1" fill="currentColor"/><circle cx="9" cy="14" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.2" fill="currentColor" stroke="none"/><path d="M9.5 17.5h5"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
+                      Agente de IA
+                    </span>}
                     {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
-                    {t.contentType&&(function(){
+                    {t.contentType&&!_pxEhCardAgenteIA(t)&&(function(){
                       const types={
                         arte:{label:"Arte única",icon:"image"},
                         carrossel:{label:"Carrossel",icon:"layers"},
@@ -27863,7 +27879,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       </span>;
                     })()}
                     {/* Mês de pagamento (formato YYYY-MM → "Mai/26") */}
-                    {t.referenceMonth&&_demTemProducao(t)&&(function(){
+                    {t.referenceMonth&&_demTemProducao(t)&&!_pxEhCardAgenteIA(t)&&(function(){
                       const parts=String(t.referenceMonth).split("-");
                       if(parts.length<2)return null;
                       const monthNames=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -27880,7 +27896,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const hasTopChips=!!(t.contentType||t.referenceMonth||pxCapaMostraPub(t,activeUser));
+                    const hasTopChips=!!(t.contentType||t.referenceMonth||pxCapaMostraPub(t,activeUser)||_pxEhCardAgenteIA(t));
                     // Respiro entre chips (Arte única / Mai/26) e capa: 8px.
                     // Sem chips em cima a capa cola no topo (visual sem espaço morto).
                     const mt=hasVisibleTagStripe?5:(hasTopChips?8:0);
@@ -36621,7 +36637,7 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const [openCard,setOpenCard]=useState(null);
   const [baixando,setBaixando]=useState("");
   const [sel,setSel]=useState({});                 // id → true (seleção manual)
-  const _ehFO=(t)=>(typeof pxEhFotoDeObra==="function")&&pxEhFotoDeObra(t);
+  const _ehFO=(t)=>(typeof pxSemAprovacaoCliente==="function")?pxSemAprovacaoCliente(t):((typeof pxEhFotoDeObra==="function")&&pxEhFotoDeObra(t));
   const _dataPub=(t)=>String(t.publishDate||t.publish_date||"").slice(0,10);
   const _fmtData=(d)=>d?d.split("-").reverse().slice(0,2).join("/"):"sem data";
   const _finais=(t)=>(Array.isArray(t.files)?t.files:[]).filter(function(f){ return f&&f.url&&!f.uploading&&!f.isAnnotation&&!f.isRef&&f.tipo!=="material"&&f.tipo!=="referencia"&&(f.tipo==="final"||!f.tipo); });
@@ -36639,7 +36655,11 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   /* (13/10 12:09, Gustavo) "as bioter devem ser separadas por unidade" → chave da seção = cliente + unidade (só Bioter) */
   const _chave=(t)=>{ const c=String(t.client||"outros"); return c==="bioter"?c+"|"+(_unidade(t)||"Sem unidade"):c; };
   const porCliente={}; lista.forEach(function(t){ const k=_chave(t); (porCliente[k]=porCliente[k]||[]).push(t); });
-  const _nomeSecao=(k)=>{ const cid=k.split("|")[0], un=k.split("|")[1]||""; const cl=CLIENTS.find(function(c){return c.id===cid;}); return String((cl&&cl.name)||cid)+(un?" · "+un:""); };
+  /* (13/10 15:35, Gustavo) "Grupo Bioter só quando é grupo (collab); Bioter Brasil quando for todas do Brasil; e quando é
+     única específica, Bioter Uberlândia, Bioter Toledo…" */
+  const _nomeSecao=(k)=>{ const cid=k.split("|")[0], un=k.split("|")[1]||""; const cl=CLIENTS.find(function(c){return c.id===cid;}); const base=String((cl&&cl.name)||cid);
+    if(cid!=="bioter"||!un) return base;
+    if(/^grupo$/i.test(un)) return "Grupo Bioter"; if(/^brasil$/i.test(un)) return "Bioter Brasil"; if(/^sem unidade$/i.test(un)) return "Bioter (sem unidade)"; return "Bioter "+un; };
   const clientes=Object.keys(porCliente).sort(function(a,b){ return _nomeSecao(a).localeCompare(_nomeSecao(b)); });
   const nClientes=Object.keys(clientes.reduce(function(m,k){ m[k.split("|")[0]]=1; return m; },{})).length;
   const nSel=Object.keys(sel).filter(function(k){ return sel[k]&&lista.some(function(t){return String(t.id)===k;}); }).length;
@@ -36696,12 +36716,12 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const icoOk=<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>;
   const selecionados=lista.filter(function(t){ return sel[String(t.id)]; });
 
-  return (<div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return (<div style={{display:"flex",flexDirection:"column",gap:34,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(function(){})} onClose={function(){ setOpenCard(null); }} currentUser={effectiveUser} canDelete={false} cardPerms={perms}/>)}
     <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
         <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1}}>Aprovar com o cliente</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {nClientes} cliente{nClientes===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).{atrasados.length>0&&<span style={{color:"#b91c1c",fontWeight:700}}> · {atrasados.length} com a data de publicação já passada e ainda sem OK — atrasado{atrasados.length===1?"":"s"}.</span>}</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {nClientes} cliente{nClientes===1?"":"s"}. Foto de obra e Short não entram (aprovado internamente já é aprovado).{atrasados.length>0&&<span style={{color:"#b91c1c",fontWeight:700}}> · {atrasados.length} com a data de publicação já passada e ainda sem OK — atrasado{atrasados.length===1?"":"s"}.</span>}</div>
       </div>
       {lista.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         {baixando&&<span style={{color:"#7c3aed",fontSize:12,fontWeight:700}}>{baixando}</span>}
@@ -36725,7 +36745,8 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
          talvez uma cor sólida no fundo do título da seção" → faixa sólida na cor do cliente + logo em caixa branca. */
       // Cor clara (ex.: verde-limão) → texto escuro em cima, senão branco
       const _rgb=(function(){ const m=String(cor).replace("#","").match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i); if(!m) return [71,85,105]; let h=m[1]; if(h.length===3) h=h.split("").map(function(c){return c+c;}).join(""); return [0,2,4].map(function(i){ return parseInt(h.slice(i,i+2),16); }); })();
-      const _claro=(0.299*_rgb[0]+0.587*_rgb[1]+0.114*_rgb[2])>165;
+      // (13/10 15:35, Gustavo) "o Climaves tá preto a fonte… deixa branca" → sempre branco, com sombra pra segurar o contraste
+      const _claro=false; void _rgb;
       const txt=_claro?"#0f172a":"#fff", txtSub=_claro?"rgba(15,23,42,0.75)":"rgba(255,255,255,0.88)", borda=_claro?"rgba(15,23,42,0.45)":"rgba(255,255,255,0.75)", fundoBtn=_claro?"rgba(15,23,42,0.08)":"rgba(255,255,255,0.14)";
       const btnBranco=function(cheio){ return {font:"inherit",height:34,boxSizing:"border-box",padding:"0 13px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:12.5,border:cheio?"none":"1.5px solid "+borda,background:cheio?(_claro?"#0f172a":"#fff"):fundoBtn,color:cheio?(_claro?"#fff":cor):txt,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",opacity:baixando?.6:1,boxShadow:cheio?"0 1px 3px rgba(0,0,0,0.18)":"none"}; };
       return <div key={chave} style={{background:"#fff",border:"1px solid "+cor+"55",borderRadius:16,overflow:"hidden"}}>
@@ -36735,7 +36756,7 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
             <ClientLogo clientId={cid} size="md"/>
           </div>
           <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
-            <div style={{fontWeight:900,color:txt,fontSize:isMob?16:19,letterSpacing:-.3,textShadow:_claro?"none":"0 1px 2px rgba(0,0,0,0.18)",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{(cl&&cl.name)||cid}{unSecao&&<span style={{background:_claro?"rgba(15,23,42,0.12)":"rgba(255,255,255,0.22)",borderRadius:8,padding:"2px 10px",fontSize:isMob?13:15,fontWeight:800}}>{unSecao}</span>}</div>
+            <div style={{fontWeight:900,color:txt,fontSize:isMob?16:19,letterSpacing:-.3,textShadow:"0 1px 3px rgba(0,0,0,0.35)",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{_nomeSecao(chave)}</div>
             <div style={{color:txtSub,fontSize:11.5,fontWeight:600,marginTop:3}}>{ts.length} card{ts.length===1?"":"s"} esperando o OK do cliente</div>
           </div>
           <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -46746,6 +46767,15 @@ function pxEhFotoDeObra(t){
   const ct=String(t.contentType||t.content_type||"").toLowerCase();
   return /foto\s*de\s*obra/i.test(String(t.title||"")) || ct==="foto";
 }
+/* (13/10/2026, Gustavo) O que NÃO passa pelo "Aprovar com o cliente": aprovado internamente já é aprovado.
+   11:07 "foto de obra não precisa aprovar com o cliente"; 15:35 "short também não precisa passar pela aprovação do
+   cliente… nem aparecer no Aprovar com o cliente". Uma régua só pra aba, badge, calendário (rosa) e alerta da Hellen. */
+function pxSemAprovacaoCliente(t){
+  if(!t) return false;
+  if(pxEhFotoDeObra(t)) return true;
+  return (typeof pxEhShort==="function") && pxEhShort(t);
+}
+if(typeof window!=="undefined"){ window.pxSemAprovacaoCliente=pxSemAprovacaoCliente; }
 /* 15/09/2026 — o botão nasceu preso à data comemorativa e o Vinicius abriu um carrossel
    comum procurando por ele. Qualquer peça escrita pode virar roteiro: o que não faz
    sentido é oferecer num card que JÁ é vídeo. O tom (homenagem × conteúdo) quem decide
@@ -58932,7 +58962,7 @@ export default function AgencyOS(){
     aprovacoes_copys:pendingCopys,
     aprovacoes_publicacao:pendingDesign,
     aprovacoes_video:pendingVideo,
-    aprovacoes_cliente:tasks.filter(t=>!t.deletedAt&&t.status==="aprovado"&&!(typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(t))).length,   // (13/10/2026)
+    aprovacoes_cliente:tasks.filter(t=>!t.deletedAt&&t.status==="aprovado"&&!(typeof pxSemAprovacaoCliente==="function"&&pxSemAprovacaoCliente(t))).length,   // (13/10/2026) foto de obra e short não precisam do cliente
   };
 
   const NAV_VISIBLE=NAV.filter((n,i,arr)=>{
