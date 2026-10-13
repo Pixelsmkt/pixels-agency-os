@@ -144920,6 +144920,21 @@ async function _eaFn(body){
   if(r.data && r.data.erro) throw new Error(r.data.erro);
   return r.data || {};
 }
+/* (13/10 v26) OUTPAINT — Edge Function "outpaint" (Stability AI stable-image/edit/outpaint): estende a foto pra fora
+   (left/right/up/down em px) continuando o padrão da borda; a foto original sai intacta no meio. */
+async function _eaOutpaint(b64, ext, prompt, ctx){
+  const r = await window._sb.functions.invoke("outpaint", { body:{ imagem:b64, left:ext.left || 0, right:ext.right || 0, up:ext.up || 0, down:ext.down || 0, prompt:prompt || "", creativity:(ext.creativity != null ? ext.creativity : 0.15), client_id:(ctx && ctx.client) || null, projeto_id:(ctx && ctx.projeto) || null } });
+  let msg = null;
+  if(r.error){
+    try{ const c = r.error.context; if(c && typeof c.json==="function"){ const j = await c.json(); msg = j && j.erro; } }catch(_){}
+    throw new Error(msg || r.error.message || "o outpaint não respondeu");
+  }
+  if(r.data && r.data.erro) throw new Error(r.data.erro);
+  if(!r.data || !r.data.imagem) throw new Error("o outpaint não devolveu imagem");
+  const img = await _eaCarregarImg("data:image/png;base64," + r.data.imagem);
+  img.__custo = Number(r.data.custo_brl) || 0; img.__segundos = r.data.segundos || null;
+  return img;
+}
 function _eaEhArte(t){ try{ return !(typeof pxIsVideoTask==="function" && pxIsVideoTask(t)); }catch(_){ return true; } }
 function _eaSemHtml(s){ return String(s||"").replace(/<\/p>\s*<p>/gi,"\n").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").trim(); }
 
@@ -149576,7 +149591,52 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   // garante que nenhum canto fica preto, em qualquer foto, sem precisar pedir.
   const precisaCompletar = m.vazio > w * h * 0.005 || Math.abs(giro) >= 0.8, temEntulho = (an.entulho || []).length > 0;
   let iaRodou = false, protReal = null;   // protReal = onde a foto REAL foi colada por cima da IA (o juiz não mexe aí)
-  if(podeIA && (precisaCompletar || temEntulho)){
+  /* ═══ (13/10 20:11, Gustavo: "por que as transições ficam horríveis? como podemos resolver de vez?") v26 OUTPAINT:
+     tudo que é gerado SEPARADO e colado ao lado da foto (v25) tem emenda — a cor casa, o padrão não (nuvem cortada,
+     torrão que não continua). E o gpt-image-1 por inpainting (v19–v24) reimagina a cena. A ferramenta certa é um
+     OUTPAINTER: a foto original sai byte a byte igual e o modelo pinta só pra fora, continuando o padrão da borda.
+     Testado na Katuete (outpaint-k12.png): sem emenda, poste vira poste de verdade, R$ 0,20 e 25 s.
+     Como funciona aqui: calcula quantos px faltam em cada lado NA FOTO (já contando o giro: os cantos do quadro
+     desgirados caem fora da foto), manda a foto inteira pro outpaint, recebe a foto maior e desenha ela no MESMO
+     encaixe/giro de sempre (a original fica exatamente onde estava). Motor por janelas/v25 ficam de reserva. ═══ */
+  const _EA_V26_OUTPAINT = true;
+  let v26ok = false;
+  if(_EA_V26_OUTPAINT && podeIA && precisaCompletar && typeof _eaOutpaint === "function"){
+    try{
+      if(typeof ctx.passo === "function"){ try{ ctx.passo("estendendo a foto pra fora (céu em cima, terra embaixo) com outpainting…"); }catch(_){ } }
+      const s = m.dw / nova.width;
+      const cA = Math.cos(ang), sA = Math.sin(ang);
+      let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+      [[0, 0], [w, 0], [0, h], [w, h]].forEach(function(c){ const x = c[0], y = c[1];
+        const u = w / 2 + (x - w / 2) * cA + (y - h / 2) * sA, v = h / 2 - (x - w / 2) * sA + (y - h / 2) * cA;   // desgira o canto do quadro
+        const pu = (u - m.ox) / s, pv = (v - m.oy) / s;                                                           // em pixels da foto
+        minU = Math.min(minU, pu); maxU = Math.max(maxU, pu); minV = Math.min(minV, pv); maxV = Math.max(maxV, pv); });
+      const marg = Math.round(Math.max(nova.width, nova.height) * 0.02);
+      let left = Math.max(0, Math.ceil(-minU)), right = Math.max(0, Math.ceil(maxU - nova.width)), up = Math.max(0, Math.ceil(-minV)), down = Math.max(0, Math.ceil(maxV - nova.height));
+      if(left) left += marg; if(right) right += marg; if(up) up += marg; if(down) down += marg;
+      if(!left && !right && !up && !down) throw new Error("nada a estender");
+      // a foto vai no tamanho que o quadro precisa (até 1,3× o que ela ocupa) e dentro dos limites da Stability (lado ≤ 2000 px, ≤ 9 MP)
+      let k = Math.min(1, (m.dw * 1.3) / nova.width);
+      const maxExt = Math.max(left, right, up, down); if(maxExt * k > 2000) k = 2000 / maxExt;
+      const outW = nova.width + left + right, outH = nova.height + up + down;
+      if(outW * outH * k * k > 9.0e6) k = Math.sqrt(9.0e6 / (outW * outH));
+      const base = document.createElement("canvas"); base.width = Math.max(64, Math.round(nova.width * k)); base.height = Math.max(64, Math.round(nova.height * k));
+      base.getContext("2d").drawImage(nova, 0, 0, base.width, base.height);
+      const ext = { left:Math.round(left * k), right:Math.round(right * k), up:Math.round(up * k), down:Math.round(down * k), creativity:0.15 };
+      const prompt = "Continue the same photograph seamlessly, same camera, same light. Top: only the same sky as in the photo (" + (an.estiloCeu || "same blue, same kind of clouds") + "). Bottom: only the same ground as at the bottom edge of the photo (" + (an.estiloChao || "same soil, same color and texture") + ")." + (an.estiloLados ? " Sides: " + an.estiloLados + "." : "") + " Nothing else: no new objects, no text, no people, no buildings, no vehicles, no second structure.";
+      const img = await _eaOutpaint(base.toDataURL("image/png").split(",")[1], ext, prompt, ctx);
+      const s2 = m.dw / Math.max(1, img.width - ext.left - ext.right);                        // escala da foto estendida pro quadro (a original continua com m.dw)
+      const m2 = Object.assign({}, m, { ox:m.ox - ext.left * s2, oy:m.oy - ext.up * s2, dw:img.width * s2, dh:img.height * s2 });
+      cv = desenhar(m2, img);
+      cv.__custo = img.__custo; cv.__simples = true; cv.__outpaint = true;
+      // protegido pro juiz = a área da foto original (o resto é o que o outpaint pintou)
+      protReal = document.createElement("canvas"); protReal.width = w; protReal.height = h; protReal.getContext("2d").drawImage(desenhar(m), 0, 0);
+      iaRodou = true; v26ok = true;
+      avisos.push("outpaint (Stability): foto estendida " + (ext.up ? "↑" + ext.up + "px " : "") + (ext.down ? "↓" + ext.down + "px " : "") + (ext.left ? "←" + ext.left + "px " : "") + (ext.right ? "→" + ext.right + "px " : "") + "continuando o padrão da borda — foto original intacta no meio (" + base.width + "×" + base.height + " → " + img.width + "×" + img.height + (img.__segundos ? ", " + img.__segundos + " s" : "") + ")" + (img.__custo ? " · R$ " + img.__custo.toFixed(2) : ""));
+      if(temEntulho) avisos.push("entulho não removido no motor v26 (sem inpainting) — use o Ajuste fino de IA se precisar");
+    }catch(e){ avisos.push("outpaint (v26) falhou: " + _eaErro(e) + " — caiu pro motor v25"); v26ok = false; }
+  }
+  if(!v26ok && podeIA && (precisaCompletar || temEntulho)){
     try{
       /* ═══ (12/10, medido com 4 chamadas reais) o gpt-image SEMPRE amplia o conteúdo opaco até encher a LARGURA da
          saída (faixa lateral do letterbox, transparente ou espelhada, = zoom de 1024/864 = 1,18 e corte em cima/embaixo).
@@ -150199,14 +150259,14 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       if(precisaCompletar) throw new Error("A IA da foto não rodou: " + _eaErro(e) + " — sem ela a Foto de obra sairia com zoom e sem céu/terra completados. Resolve isso (limite em Edição de arte, ou crédito OpenAI) e clica em Gerar arte de novo.");
       avisos.push("IA da foto não rodou (" + _eaErro(e) + ")");
     }
-  } else if(precisaCompletar){ m = procurar(false); cv = desenhar(m); }
+  } else if(precisaCompletar && !v26ok){ m = procurar(false); cv = desenhar(m); }   // (v26) com o outpaint feito, NÃO reencaixa (era isso que dava zoom)
   const horizY = (an.horizonte != null) ? (m.oy + an.horizonte * m.dh) : null;
   if(ctx.calibrarCor !== false){ const vb = _eaVibrarFotoObra(cv, horizY); if(vb && vb.forca > 0.05) avisos.push("cores calibradas (saturação média " + vb.satMedia + " → vibrance " + Math.round(vb.forca * 100) + "%, verdes e céu reforçados)"); }
   if(ctx.calibrarCor !== false){ try{ if(_eaAcabamentoFotoObra(cv, horizY)) avisos.push("acabamento: saturação, iluminação e céu (balanço de branco pelo céu, níveis e textura)"); }catch(_){ } }
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v25: céu e terra gerados à parte pela IA (sem ver a borda da foto — nada de poste/lona continuados), colados céu em cima e terra embaixo, foto intacta; juiz só avisa (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push((cv && cv.__outpaint) ? "motor da foto v26: outpainting (Stability) — a foto original fica intacta e o modelo continua céu em cima e terra embaixo a partir da borda, sem emenda; GPT lê a foto e o juiz só avisa (canvas " : "motor da foto v25: céu e terra gerados à parte pela IA (sem ver a borda da foto — nada de poste/lona continuados), colados céu em cima e terra embaixo, foto intacta; juiz só avisa (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
@@ -150238,7 +150298,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         if(!jz){ avisos.push("juiz: não respondeu — arte segue sem conferência"); break; }
         if(jz.aprovado || !jz.problemas.length){ avisos.push("juiz (GPT): aprovou a arte" + (rodada > 1 ? " depois da correção" : "")); break; }
         /* (13/10 v25) no motor simples o juiz SÓ AVISA: corrigir por área é inpainting de novo (voltaria a puxar poste/lona) */
-        if(cv && cv.__simples){ jz.problemas.forEach(function(pr){ avisos.push("juiz (só aviso, v25): " + pr.tipo + " — " + pr.oQue); }); break; }
+        if(cv && cv.__simples){ jz.problemas.forEach(function(pr){ avisos.push("juiz (só aviso, " + (cv.__outpaint ? "v26" : "v25") + "): " + pr.tipo + " — " + pr.oQue); }); break; }
         /* "emenda" NÃO é corrigida por área (medido em 2 artes: repintar uma faixa cria outra emenda) — só é avisada;
            "produto" idem (a foto real já está colada). Caixa maior que 45% da largura também só avisa. */
         const corrigiveis = jz.problemas.filter(function(pr){ return pr.tipo !== "produto" && pr.tipo !== "emenda" && (pr.x1 - pr.x0) <= 0.45 && (pr.y1 - pr.y0) <= 0.45; });
@@ -150942,7 +151002,7 @@ function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
   const _pctDoPasso = function(m){ m = String(m || "");
     if(/abrindo/.test(m)) return 6; if(/traduzindo/.test(m)) return 12; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
     if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
-    if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
+    if(/estendendo a foto/.test(m)) return 52; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
     if(/completando|limpando/.test(m)) return 56; if(/conferindo/.test(m)) return 72; if(/corrigindo/.test(m)) return 78; if(/salvando/.test(m)) return 86; return null; };
   const setPassoPct = function(m){ setPasso(m);
     const t = _pctDoPasso(m);
