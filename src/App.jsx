@@ -38356,8 +38356,12 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const jaPostados=_candidatos.filter(function(t){ const d=_dataPub(t); return d&&d<_hojeIso; });
   const lista=_candidatos.filter(function(t){ const d=_dataPub(t); return !(d&&d<_hojeIso); })
     .sort(function(a,b){ return (String(a.client||"")+_dataPub(a)).localeCompare(String(b.client||"")+_dataPub(b)); });
-  const porCliente={}; lista.forEach(function(t){ const k=String(t.client||"outros"); (porCliente[k]=porCliente[k]||[]).push(t); });
-  const clientes=Object.keys(porCliente).sort(function(a,b){ const ca=CLIENTS.find(function(c){return c.id===a;}), cb=CLIENTS.find(function(c){return c.id===b;}); return String((ca&&ca.name)||a).localeCompare(String((cb&&cb.name)||b)); });
+  /* (13/10 12:09, Gustavo) "as bioter devem ser separadas por unidade" → chave da seção = cliente + unidade (só Bioter) */
+  const _chave=(t)=>{ const c=String(t.client||"outros"); return c==="bioter"?c+"|"+(_unidade(t)||"Sem unidade"):c; };
+  const porCliente={}; lista.forEach(function(t){ const k=_chave(t); (porCliente[k]=porCliente[k]||[]).push(t); });
+  const _nomeSecao=(k)=>{ const cid=k.split("|")[0], un=k.split("|")[1]||""; const cl=CLIENTS.find(function(c){return c.id===cid;}); return String((cl&&cl.name)||cid)+(un?" · "+un:""); };
+  const clientes=Object.keys(porCliente).sort(function(a,b){ return _nomeSecao(a).localeCompare(_nomeSecao(b)); });
+  const nClientes=Object.keys(clientes.reduce(function(m,k){ m[k.split("|")[0]]=1; return m; },{})).length;
   const nSel=Object.keys(sel).filter(function(k){ return sel[k]&&lista.some(function(t){return String(t.id)===k;}); }).length;
   const _podeMarcar=!!(perms&&(perms.aprovar||perms.colAprovado))||(effectiveUser&&(effectiveUser.level===1||effectiveUser.id==="ellen"));
   const _hoje=()=>{ const d=new Date(); return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); };
@@ -38377,7 +38381,8 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
           const b=await r.blob();
           if(b.size>150*1024*1024){ pulados.push(it.nome+" (muito grande — baixe pelo card)"); continue; }
           const cl=CLIENTS.find(function(c){return c.id===it.t.client;}); const pasta=String((cl&&cl.name)||it.t.client||"Cliente").replace(/[\\/:*?"<>|]+/g," ");
-          zip.folder(pasta).file(it.nome,b); ok++;
+          const sub=(it.t.client==="bioter")?(_unidade(it.t)||"Sem unidade").replace(/[\\/:*?"<>|]+/g," "):"";
+          (sub?zip.folder(pasta).folder(sub):zip.folder(pasta)).file(it.nome,b); ok++;
         }catch(e){ pulados.push(it.nome+" ("+((e&&e.message)||"falhou")+")"); }
       }
       if(!ok) throw new Error("nenhum arquivo pôde ser baixado");
@@ -38416,7 +38421,7 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
     <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
         <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1}}>Aprovar com o cliente</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {clientes.length} cliente{clientes.length===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).{jaPostados.length>0&&<span> · {jaPostados.length} com data já passada ficaram de fora (já foram postados).</span>}</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {nClientes} cliente{nClientes===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).{jaPostados.length>0&&<span> · {jaPostados.length} com data já passada ficaram de fora (já foram postados).</span>}</div>
       </div>
       {lista.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         {baixando&&<span style={{color:"#7c3aed",fontSize:12,fontWeight:700}}>{baixando}</span>}
@@ -38432,8 +38437,9 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
       <div style={{color:"#64748b",fontSize:12.5}}>Quando um card for aprovado internamente ele aparece aqui.</div>
     </div>}
 
-    {clientes.map(function(cid){
-      const cl=CLIENTS.find(function(c){return c.id===cid;}); const cor=(cl&&cl.color)||"#475569"; const ts=porCliente[cid];
+    {clientes.map(function(chave){
+      const cid=chave.split("|")[0], unSecao=chave.split("|")[1]||"";
+      const cl=CLIENTS.find(function(c){return c.id===cid;}); const cor=(cl&&cl.color)||"#475569"; const ts=porCliente[chave];
       const todosSel=ts.every(function(t){ return sel[String(t.id)]; });
       /* (13/10 12:06, Gustavo) "faltou a logo dos clientes, as seções serem mais visíveis de que cliente são,
          talvez uma cor sólida no fundo do título da seção" → faixa sólida na cor do cliente + logo em caixa branca. */
@@ -38442,18 +38448,18 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
       const _claro=(0.299*_rgb[0]+0.587*_rgb[1]+0.114*_rgb[2])>165;
       const txt=_claro?"#0f172a":"#fff", txtSub=_claro?"rgba(15,23,42,0.75)":"rgba(255,255,255,0.88)", borda=_claro?"rgba(15,23,42,0.45)":"rgba(255,255,255,0.75)", fundoBtn=_claro?"rgba(15,23,42,0.08)":"rgba(255,255,255,0.14)";
       const btnBranco=function(cheio){ return {font:"inherit",height:34,boxSizing:"border-box",padding:"0 13px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:12.5,border:cheio?"none":"1.5px solid "+borda,background:cheio?(_claro?"#0f172a":"#fff"):fundoBtn,color:cheio?(_claro?"#fff":cor):txt,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",opacity:baixando?.6:1,boxShadow:cheio?"0 1px 3px rgba(0,0,0,0.18)":"none"}; };
-      return <div key={cid} style={{background:"#fff",border:"1px solid "+cor+"55",borderRadius:16,overflow:"hidden"}}>
+      return <div key={chave} style={{background:"#fff",border:"1px solid "+cor+"55",borderRadius:16,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:cor,color:txt,flexWrap:"wrap"}}>
           <input type="checkbox" checked={todosSel} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); ts.forEach(function(t){ n[String(t.id)]=v; }); return n; }); }} title="Selecionar todos deste cliente" style={{width:17,height:17,cursor:"pointer",accentColor:_claro?"#0f172a":"#fff"}}/>
           <div style={{background:"#fff",borderRadius:10,padding:"5px 10px",display:"flex",alignItems:"center",justifyContent:"center",minWidth:44,height:44,boxSizing:"border-box",boxShadow:"0 1px 3px rgba(0,0,0,0.18)",flexShrink:0}}>
             <ClientLogo clientId={cid} size="md"/>
           </div>
           <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
-            <div style={{fontWeight:900,color:txt,fontSize:isMob?16:19,letterSpacing:-.3,textShadow:_claro?"none":"0 1px 2px rgba(0,0,0,0.18)"}}>{(cl&&cl.name)||cid}</div>
+            <div style={{fontWeight:900,color:txt,fontSize:isMob?16:19,letterSpacing:-.3,textShadow:_claro?"none":"0 1px 2px rgba(0,0,0,0.18)",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{(cl&&cl.name)||cid}{unSecao&&<span style={{background:_claro?"rgba(15,23,42,0.12)":"rgba(255,255,255,0.22)",borderRadius:8,padding:"2px 10px",fontSize:isMob?13:15,fontWeight:800}}>{unSecao}</span>}</div>
             <div style={{color:txtSub,fontSize:11.5,fontWeight:600,marginTop:3}}>{ts.length} card{ts.length===1?"":"s"} esperando o OK do cliente</div>
           </div>
           <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
-            <button disabled={!!baixando} onClick={function(){ baixar(ts,(cl&&cl.name)||cid); }} style={btnBranco(false)}>{icoDown} Baixar do cliente</button>
+            <button disabled={!!baixando} onClick={function(){ baixar(ts,_nomeSecao(chave)); }} style={btnBranco(false)}>{icoDown} Baixar {unSecao?"da unidade":"do cliente"}</button>
             {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou(ts); }} style={btnBranco(true)}>{icoOk} Cliente aprovou todos</button>}
           </div>
         </div>
