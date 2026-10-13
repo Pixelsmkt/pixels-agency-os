@@ -11921,133 +11921,14 @@ function PxBtnEditarContrato({clientId,label,style,onSaved}){
 }
 
 // ======= 03_cliente_ads.jsx =======
-// Integrações de mídia: Meta + Google auth hooks, painéis RealData, ClienteDashboard, ClienteConcorrencia
-// Depende de: 03_cliente_ferramentas (helpers de dados)
+// Cartão de número (KpiCard) e Concorrência do cliente (ClienteConcorrencia).
+// v96 (13/10/2026) M14: cabeçalho atualizado — os painéis de login Meta/Google e o ClienteDashboard saíram (M2).
 
-const {LineChart,BarChart,AreaChart,PieChart,Pie,Cell,Bar:RBar,Line:RLine,Area:RArea,XAxis,YAxis,CartesianGrid,Tooltip:RTooltip,Legend:RLegend,ResponsiveContainer}=recharts;
-
-/* ── TT — Custom Recharts Tooltip ─────────── */
-const TT=({active,payload,label})=>{
-  if(!active||!payload||!payload.length)return null;
-  return(
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 12px",boxShadow:"0 4px 16px rgba(0,0,0,0.12)",fontSize:11}}>
-      {label&&<div style={{color:"#64748b",fontWeight:700,marginBottom:4}}>{label}</div>}
-      {payload.map((p,i)=>(
-        <div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:p.color||p.fill||"#6366f1",flexShrink:0}}/>
-          <span style={{color:"#94a3b8"}}>{p.name}:</span>
-          <span style={{color:"#1e293b",fontWeight:700}}>{typeof p.value==="number"?p.value.toLocaleString("pt-BR"):p.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// Simulate 8-week trend data per client
-const genTrend=(base,variance=0.15,weeks=8)=>Array.from({length:weeks},(_, i)=>{
-  const noise=(Math.random()-0.5)*2*variance;
-  const trend=1+i*0.03; // slight upward trend
-  return Math.round(base*trend*(1+noise));
-});
-
-const WEEKS=["S1","S2","S3","S4","S5","S6","S7","S8"];
-
-const buildMetaData=(cl)=>{
-  const leads=genTrend(cl.meta.leads/4);
-  const spend=genTrend(cl.meta.spend/4);
-  const roas=leads.map((l,i)=>parseFloat(((l*85)/Math.max(spend[i],1)).toFixed(2)));
-  const ctr=genTrend(cl.meta.ctr,0.1);
-  return {
-    weekly:WEEKS.map((w,i)=>({w,leads:leads[i],spend:spend[i],roas:roas[i],ctr:ctr[i]})),
-    placements:[
-      {name:"Feed",value:38,color:"#1877f2"},{name:"Reels",value:27,color:"#1877f2bb"},
-      {name:"Stories",value:23,color:"#1877f266"},{name:"Outros",value:12,color:"#1877f233"},
-    ],
-    devices:[
-      {name:"Mobile",value:72,color:"#1877f2"},{name:"Desktop",value:22,color:"#1877f2aa"},
-      {name:"Tablet",value:6,color:"#1877f244"},
-    ],
-    ages:[
-      {faixa:"18-24",m:15,f:18},{faixa:"25-34",m:28,f:32},{faixa:"35-44",m:18,f:14},
-      {faixa:"45-54",m:10,f:8},{faixa:"55+",m:6,f:4},
-    ],
-    funnel:[
-      {stage:"Impressões",value:cl.meta.spend*120,color:"#1877f2"},
-      {stage:"Cliques",value:Math.round(cl.meta.spend*120*cl.meta.ctr/100),color:"#1877f2cc"},
-      {stage:"Leads",value:cl.meta.leads,color:"#1877f2aa"},
-      {stage:"Conversões",value:Math.round(cl.meta.leads*0.42),color:"#1877f2"},
-    ],
-  };
-};
-
-const buildGoogleData=(cl)=>{
-  const leads=genTrend(cl.google.leads/4);
-  const spend=genTrend(cl.google.spend/4);
-  const imp=genTrend(cl.google.spend*30,0.12);
-  return {
-    weekly:WEEKS.map((w,i)=>({w,leads:leads[i],spend:spend[i],impressoes:imp[i],ctr:parseFloat((cl.google.ctr*(1+(Math.random()-0.5)*0.1)).toFixed(2))})),
-    campaigns:[
-      {name:"Search Brand",clicks:Math.round(cl.google.leads*0.3),cpc:cl.google.cpc,roas:cl.google.roas+0.8,spend:Math.round(cl.google.spend*0.25)},
-      {name:"Search Geral",clicks:Math.round(cl.google.leads*0.4),cpc:cl.google.cpc+0.5,roas:cl.google.roas-0.3,spend:Math.round(cl.google.spend*0.35)},
-      {name:"Performance Max",clicks:Math.round(cl.google.leads*0.2),cpc:cl.google.cpc-0.3,roas:cl.google.roas+1.2,spend:Math.round(cl.google.spend*0.3)},
-      {name:"Display",clicks:Math.round(cl.google.leads*0.1),cpc:cl.google.cpc+1.0,roas:cl.google.roas-0.8,spend:Math.round(cl.google.spend*0.1)},
-    ],
-    devices:[
-      {name:"Mobile",value:65,color:"#34a853"},{name:"Desktop",value:30,color:"#34a853bb"},
-      {name:"Tablet",value:5,color:"#34a85344"},
-    ],
-    funnel:[
-      {stage:"Impressões",value:cl.google.spend*120,color:"#34a853"},
-      {stage:"Cliques",value:Math.round(cl.google.spend*120*cl.google.ctr/100),color:"#34a853cc"},
-      {stage:"Leads",value:cl.google.leads,color:"#34a853aa"},
-      {stage:"Conversões",value:Math.round(cl.google.leads*0.38),color:"#34a853"},
-    ],
-  };
-};
-
-const buildInstaData=(cl)=>{
-  const base=cl.meta.leads*4;
-  return {
-    weekly:WEEKS.map((w,i)=>({
-      w,
-      alcance:Math.round(base*(0.9+i*0.03)*(1+(Math.random()-0.5)*0.1)),
-      eng:parseFloat((cl.meta.ctr*0.7*(1+(Math.random()-0.5)*0.08)).toFixed(2)),
-      seguidores:Math.round(base*0.12+i*Math.round(base*0.008)),
-    })),
-    formats:[
-      {name:"Reels",value:42,color:"#c13584"},{name:"Feed Foto",value:28,color:"#c13584bb"},
-      {name:"Stories",value:20,color:"#c1358466"},{name:"Carrossel",value:10,color:"#c1358433"},
-    ],
-    topHours:[
-      {hora:"8h",eng:2.1},{hora:"12h",eng:3.4},{hora:"15h",eng:2.8},{hora:"18h",eng:5.2},
-      {hora:"20h",eng:6.1},{hora:"22h",eng:4.8},
-    ],
-    growth:WEEKS.map((w,i)=>({w,novos:Math.round(base*0.008*(1+i*0.05)),perdidos:Math.round(base*0.003)})),
-  };
-};
-
-const buildFaceData=(cl)=>{
-  const base=cl.meta.leads*3;
-  return {
-    weekly:WEEKS.map((w,i)=>({
-      w,
-      alcance_org:Math.round(base*0.4*(1+(Math.random()-0.5)*0.15)),
-      alcance_pago:Math.round(cl.meta.spend*25*(1+i*0.02)),
-      eng:parseFloat((cl.meta.ctr*0.55*(1+(Math.random()-0.5)*0.1)).toFixed(2)),
-    })),
-    reactions:[
-      {name:"Curtidas",value:65,color:"#1877f2"},{name:"Amei",value:18,color:"#e53e3e"},
-      {name:"Haha",value:8,color:"#eab308"},{name:"Uau",value:5,color:"#f97316"},
-      {name:"Grr",value:4,color:"#9f1239"},
-    ],
-    postTypes:[
-      {name:"Vídeo",alcance:8200,eng:4.2},{name:"Foto",alcance:4100,eng:2.1},
-      {name:"Link",alcance:2800,eng:1.3},{name:"Live",alcance:6500,eng:7.8},
-    ],
-  };
-};
-
-// Shared chart tooltip style
+// v96 (13/10/2026) M2: apagado o painel de resultados do cliente que nunca aparecia (ClienteDashboard, ClienteInfo,
+// login antigo do Facebook/Google já desligado, guarda do token da Meta no navegador, dados falsos de concorrência com
+// fotos de exemplo, gráficos/funil/rosca de exemplo e o atalho dos componentes do recharts que só eles usavam).
+// Fica só o cartão de número (KpiCard) e a Concorrência (ClienteConcorrencia), que outras telas usam.
+try{ if(typeof window!=="undefined"&&window.localStorage) window.localStorage.removeItem("pixels-google-auth-v1"); }catch(_){ }   // v96 M2: chave do login antigo do Google que ninguém mais lê
 
 // KPI card with trend
 const KpiCard=({label,value,sub,trend,color,good})=>(
@@ -12061,1609 +11942,6 @@ const KpiCard=({label,value,sub,trend,color,good})=>(
   </div>
 );
 
-// Funnel viz
-const FunnelViz=({data,color})=>{
-  const max=data[0]?.value||1;
-  return <div style={{display:"flex",flexDirection:"column",gap:4,margin:"0 auto",width:"100%",maxWidth:340}}>
-    {data.map((d,i)=>{
-      const pct=Math.round(d.value/max*100);
-      return <div key={d.stage}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-          <span style={{color:C.ts,fontSize:11}}>{d.stage}</span>
-          <span style={{color:C.tx,fontSize:11,fontWeight:700}}>{d.value.toLocaleString("pt-BR")}</span>
-        </div>
-        <div style={{background:C.b1,borderRadius:99,height:24,overflow:"hidden",position:"relative"}}>
-          <div style={{width:pct+"%",height:"100%",background:color,borderRadius:99,transition:"width .6s",display:"flex",alignItems:"center",paddingLeft:8}}>
-            <span style={{color:"#fff",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{pct}%</span>
-          </div>
-        </div>
-        {i<data.length-1&&<div style={{color:C.td,fontSize:10,textAlign:"right",marginTop:2}}>
-          ↓ {Math.round(data[i+1].value/d.value*100)}% conversão
-        </div>}
-      </div>;
-    })}
-  </div>;
-};
-
-// MiniDonut
-const MiniDonut=({data,size=120})=>(
-  <PieChart width={size} height={size}>
-    <Pie data={data} cx={size/2-1} cy={size/2-1} innerRadius={size*0.3} outerRadius={size*0.46} paddingAngle={2} dataKey="value">
-      {data.map((d,i)=><Cell key={i} fill={d.color}/>)}
-    </Pie>
-    <RTooltip content={({active,payload})=>active&&payload?.[0]?<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:7,padding:"5px 10px",fontSize:11,color:C.tx}}>{payload[0].name}: {payload[0].value}%</div>:null}/>
-  </PieChart>
-);
-
-// Score circle
-const ScoreCircle=({score,label,color,size=80})=>{
-  const r=size*0.38;const circ=2*Math.PI*r;const dash=score/100*circ;
-  return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.b1} strokeWidth={size*0.1}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={size*0.1}
-        strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={circ/4} strokeLinecap="round"/>
-      <text x={size/2} y={size/2+5} textAnchor="middle" fill={color} fontSize={size*0.22} fontWeight="900">{score}</text>
-    </svg>
-    <div style={{color:C.ts,fontSize:10,fontWeight:600,textAlign:"center"}}>{label}</div>
-  </div>;
-};
-
-/* ─── META AUTH SYSTEM ─────────────────────── */
-
-// Login do Facebook REMOVIDO (19/09/2026)
-// O painel "Conectar conta" era do comeco do app e nunca foi concluido (pedia o
-// App ID na mao). Foi retirado: o SDK do Facebook nao e mais carregado e o login
-// nao e mais chamado. Os dados de anuncios vem da coleta propria (sync-meta-ads),
-// com usuario do sistema, sem login de usuario.
-
-// ── Meta Auth Context ────────────────────────
-const AUTH_STORAGE_KEY="pixels-meta-auth-v1";
-
-function useMetaAuth(){
-  const [auth,setAuth]=useState(null); // {userId,name,picture,accessToken,tokenExpiry,grantedScopes,pages,adAccounts}
-  const [loading,setLoading]=useState(false);
-  const [error,setError]=useState("");
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const saved=(()=>{try{const _v=localStorage.getItem(AUTH_STORAGE_KEY);return _v?{value:_v}:null;}catch(_e){return null;}})();
-        if(saved?.value){
-          const parsed=JSON.parse(saved.value);
-          // Check expiry
-          if(parsed.tokenExpiry&&Date.now()<parsed.tokenExpiry){
-            setAuth(parsed);
-          } else if(parsed.tokenExpiry) {
-            setError("token_expired");
-          }
-        }
-      }catch(e){}
-    })();
-  },[]);
-
-  const saveAuth=async(data)=>{
-    localStorage.setItem(AUTH_STORAGE_KEY,JSON.stringify(data));
-    setAuth(data);
-  };
-
-  const login=async()=>{
-    setError("descontinuada");
-  };
-
-  const fetchPages=async(authData,FB)=>{
-    const token=authData?.accessToken||auth?.accessToken;
-    if(!token)return;
-    try{
-      // Fetch pages
-      const pagesRes=await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,followers_count,profile_picture_url}&limit=50&access_token=${token}`);
-      const pagesData=await pagesRes.json();
-      // Fetch ad accounts
-      const adsRes=await fetch(`https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status,currency,spend_cap&limit=50&access_token=${token}`);
-      const adsData=await adsRes.json();
-      const updated={...(authData||auth),pages:pagesData.data||[],adAccounts:adsData.data||[]};
-      await saveAuth(updated);
-      return updated;
-    }catch(e){/* console.warn removed */}
-  };
-
-  const disconnect=async()=>{
-    try{try{localStorage.removeItem(AUTH_STORAGE_KEY);}catch(_){}}catch(e){}
-    setAuth(null);setError("");
-  };
-
-  return{auth,loading,error,setError,login,fetchPages,disconnect,saveAuth};
-}
-
-/* ─── META LOGIN PANEL (Global) ─────────────── */
-function MetaLoginPanel({onClose}){
-  const {auth,loading,error,setError,login,fetchPages,disconnect}=useMetaAuth();
-  const [appId,setAppId]=useState(()=>localStorage.getItem("pixels-meta-appid")||"");
-  const [showAppIdInput,setShowAppIdInput]=useState(!appId);
-  const [fetchingPages,setFetchingPages]=useState(false);
-  const [step,setStep]=useState("main"); // main | permissions
-
-  const saveAppId=()=>{localStorage.setItem("pixels-meta-appid",appId);setShowAppIdInput(false);};
-
-  const handleLogin=async(withAds)=>{
-    if(!appId){setShowAppIdInput(true);return;}
-    await login(appId,withAds);
-  };
-
-  const handleFetchPages=async()=>{
-    setFetchingPages(true);
-    await fetchPages(null,null);
-    setFetchingPages(false);
-  };
-
-  const isExpired=error==="token_expired";
-  const tokenExpiryDate=auth?.tokenExpiry?new Date(auth.tokenExpiry).toLocaleDateString("pt-BR"):"—";
-  const daysLeft=auth?.tokenExpiry?Math.ceil((auth.tokenExpiry-Date.now())/(1000*60*60*24)):0;
-
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.4)"}}>
-
-      {/* Header */}
-      <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <PlatformLogo id="meta" size={28}/>
-          <div>
-            <div style={{color:C.tx,fontWeight:800,fontSize:16}}>Conectar Meta</div>
-            <div style={{color:C.ts,fontSize:11}}>Facebook + Instagram + Anúncios</div>
-          </div>
-        </div>
-        <button onClick={onClose} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:20}}>✕</button>
-      </div>
-
-      <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:16}}>
-
-        {/* App ID input */}
-        {showAppIdInput&&<div style={{background:"#fffbeb",borderRadius:12,padding:"14px 16px",border:"1px solid #fde68a"}}>
-          <div style={{color:"#92400e",fontWeight:700,fontSize:13,marginBottom:4}}>🔑 Meta App ID necessário</div>
-          <div style={{color:"#78350f",fontSize:11,marginBottom:10,lineHeight:1.6}}>
-            Para usar o Facebook Login, você precisa de um App ID. Crie gratuitamente em{" "}
-            <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener" style={{color:"#1877f2",fontWeight:700}}>developers.facebook.com</a>
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <input value={appId} onChange={e=>setAppId(e.target.value)} placeholder="123456789012345"
-              style={{flex:1,background:"#fff",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 12px",color:C.tx,fontSize:12,outline:"none"}}/>
-            <button onClick={saveAppId} disabled={!appId.trim()}
-              style={{background:appId.trim()?"#1877f2":C.b1,color:appId.trim()?"#fff":C.td,border:"none",borderRadius:8,padding:"8px 16px",fontWeight:700,fontSize:12,cursor:appId.trim()?"pointer":"default"}}>
-              Salvar
-            </button>
-          </div>
-        </div>}
-
-        {/* Token expired warning */}
-        {isExpired&&<div style={{background:"#fff5f5",borderRadius:12,padding:"12px 16px",border:"1px solid #fecaca",display:"flex",gap:10,alignItems:"center"}}>
-          <span style={{fontSize:20}}>⚠</span>
-          <div>
-            <div style={{color:"#e53e3e",fontWeight:700,fontSize:13}}>Token expirado</div>
-            <div style={{color:"#9b1c1c",fontSize:11}}>Faça login novamente para reconectar.</div>
-          </div>
-        </div>}
-
-        {/* Connected state */}
-        {auth&&!isExpired&&<>
-          <div style={{background:"#f0fdf4",borderRadius:14,padding:"16px",border:"1px solid #bbf7d0"}}>
-            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:12}}>
-              {auth.picture&&<img src={auth.picture} style={{width:44,height:44,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>}
-              <div style={{flex:1}}>
-                <div style={{color:"#166534",fontWeight:800,fontSize:14}}>✓ Conectado como {auth.name}</div>
-                <div style={{color:"#15803d",fontSize:11,marginTop:2}}>
-                  Token válido até {tokenExpiryDate} · {daysLeft>0?`${daysLeft} dias restantes`:"Expira hoje"}
-                </div>
-              </div>
-            </div>
-
-            {/* Token expiry bar */}
-            <div style={{marginBottom:10}}>
-              <div style={{background:"#dcfce7",borderRadius:99,height:5,overflow:"hidden"}}>
-                <div style={{width:`${Math.min(100,Math.max(0,daysLeft/60*100))}%`,height:"100%",background:daysLeft>14?C.gr:daysLeft>5?C.yw:C.rd,borderRadius:99,transition:"width .6s"}}/>
-              </div>
-              {daysLeft<=14&&<div style={{color:C.yw,fontSize:10,marginTop:3,fontWeight:600}}>⚠ Token expira em breve — reconecte para não perder acesso</div>}
-            </div>
-
-            {/* Granted permissions */}
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-              {(auth.grantedScopes||"").split(",").filter(Boolean).map(s=>(
-                <span key={s} style={{background:"#dcfce7",color:"#166534",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:600}}>{s}</span>
-              ))}
-            </div>
-          </div>
-
-          {/* Pages connected */}
-          {auth.pages&&<div style={{background:C.card,borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-            <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{color:C.tx,fontWeight:700,fontSize:13}}>📄 {auth.pages.length} Páginas conectadas</div>
-              <button onClick={handleFetchPages} disabled={fetchingPages}
-                style={{background:C.b1,color:C.ts,border:"none",borderRadius:7,padding:"4px 10px",fontSize:10,cursor:"pointer"}}>
-                {fetchingPages?"⟳ Atualizando...":"↺ Atualizar"}
-              </button>
-            </div>
-            <div style={{maxHeight:180,overflowY:"auto"}}>
-              {auth.pages.map(p=>(
-                <div key={p.id} style={{padding:"10px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",gap:10,alignItems:"center"}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:C.tx,fontWeight:600,fontSize:12}}>{p.name}</div>
-                    {p.instagram_business_account&&<div style={{color:"#c13584",fontSize:10,marginTop:2}}>
-                      📸 @{p.instagram_business_account.username} · {p.instagram_business_account.followers_count?.toLocaleString("pt-BR")} seguidores
-                    </div>}
-                  </div>
-                  <span style={{background:C.gr+"18",color:C.gr,borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>✓ OK</span>
-                </div>
-              ))}
-            </div>
-          </div>}
-
-          {/* Ad accounts */}
-          {auth.adAccounts&&auth.adAccounts.length>0&&<div style={{background:C.card,borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-            <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.b1}`}}>
-              <div style={{color:C.tx,fontWeight:700,fontSize:13}}>💰 {auth.adAccounts.length} Contas de Anúncio</div>
-            </div>
-            {auth.adAccounts.map(a=>(
-              <div key={a.id} style={{padding:"10px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{color:C.tx,fontWeight:600,fontSize:12}}>{a.name}</div>
-                  <div style={{color:C.td,fontSize:10}}>ID: {a.id}</div>
-                </div>
-                <span style={{background:a.account_status===1?C.gr+"18":C.rd+"18",color:a.account_status===1?C.gr:C.rd,borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>
-                  {a.account_status===1?"Ativa":"Inativa"}
-                </span>
-              </div>
-            ))}
-          </div>}
-
-          {/* Actions */}
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <button onClick={()=>handleLogin(false)}
-              style={{flex:1,background:"#1877f2",color:"#fff",border:"none",borderRadius:10,padding:"10px 0",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-              ↺ Reconectar / Renovar Token
-            </button>
-            <button onClick={()=>handleLogin(true)}
-              style={{flex:1,background:C.a,color:"#fff",border:"none",borderRadius:10,padding:"10px 0",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-              + Adicionar Acesso a Anúncios
-            </button>
-            <button onClick={disconnect}
-              style={{width:"100%",background:"#fff5f5",color:C.rd,border:"1px solid #fecaca",borderRadius:10,padding:"8px 0",fontWeight:600,fontSize:11,cursor:"pointer"}}>
-              Desconectar conta
-            </button>
-          </div>
-        </>}
-
-        {/* Not connected state */}
-        {!auth&&!isExpired&&<>
-          <div style={{background:C.s1,borderRadius:12,padding:"16px",display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>O que será conectado:</div>
-            {[
-              {icon:"📄",label:"Todas as suas Páginas do Facebook",scope:"pages_show_list"},
-              {icon:"📸",label:"Todos os perfis Instagram Business",scope:"instagram_basic"},
-              {icon:"📊",label:"Métricas e insights orgânicos",scope:"instagram_manage_insights"},
-              {icon:"💰",label:"Contas de anúncio (somente leitura)",scope:"ads_read"},
-            ].map(item=>(
-              <div key={item.scope} style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:16,flexShrink:0}}>{item.icon}</span>
-                <div style={{flex:1}}>
-                  <div style={{color:C.ts,fontSize:12}}>{item.label}</div>
-                  <div style={{color:C.td,fontSize:10,fontFamily:"monospace"}}>{item.scope}</div>
-                </div>
-                <span style={{color:C.gr,fontSize:11}}>✓</span>
-              </div>
-            ))}
-          </div>
-
-          <div style={{background:"#eff6ff",borderRadius:10,padding:"10px 14px",border:"1px solid #bfdbfe",fontSize:11,color:"#1e40af",lineHeight:1.6}}>
-            🔒 <strong>Segurança:</strong> o token fica salvo apenas neste dispositivo. Quando publicado em servidor, migramos para armazenamento seguro no backend — token nunca ficará exposto no frontend.
-          </div>
-
-          <button onClick={()=>handleLogin(false)} disabled={loading||(!appId&&showAppIdInput)}
-            style={{width:"100%",background:loading?C.b1:"#1877f2",color:loading?C.td:"#fff",border:"none",borderRadius:12,padding:"14px 0",fontWeight:800,fontSize:14,cursor:loading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            {loading?<>⟳ Conectando...</>:<><PlatformLogo id="facebook" size={18}/>Entrar com Facebook</>}
-          </button>
-        </>}
-
-        {/* Error */}
-        {error&&error!=="token_expired"&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",color:"#e53e3e",fontSize:12}}>
-          ⚠ {error}
-        </div>}
-
-        {/* Help link */}
-        <div style={{textAlign:"center",color:C.td,fontSize:10}}>
-          Precisa de um App ID? →{" "}
-          <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noopener" style={{color:C.a}}>Criar app gratuito no Meta</a>
-          {" "}(leva ~5 minutos)
-        </div>
-      </div>
-    </div>
-  </div>;
-}
-
-/* ─── INSTAGRAM REAL DATA COMPONENT ────────── */
-const INSTAGRAM_ACCOUNTS={
-  construschorr:{handle:"construschorr",     label:"Construschorr"},
-  arabuta:      {handle:"arabuta.premoldados",label:"Arabutã"},
-  climaves:     {handle:"climaves_",          label:"Climaves"},
-  vetservice:   {handle:"vetservice_consultoria",label:"VetService"},
-  bioter:{
-    chapeco:    {handle:"bioterchapeco",      label:"Bioter Chapecó"},
-    toledo:     {handle:"biotertoledo",       label:"Bioter Toledo"},
-    castro:     {handle:"biotercastro",       label:"Bioter Castro"},
-    paraguay:   {handle:"bioterpy",           label:"Bioter Paraguay"},
-    uberlandia: {handle:"bioterms",           label:"Bioter Uberlândia"},
-    gloria:     {handle:"biotergloriadedourados",label:"Bioter Glória"},
-  },
-};
-
-function InstagramRealData({cl,isMob}){
-  const {auth}=useMetaAuth();
-  const [showLoginPanel,setShowLoginPanel]=useState(false);
-  const [activeUnit,setActiveUnit]=useState("chapeco");
-  const [igData,setIgData]=useState(null);
-  const [mediaList,setMediaList]=useState([]);
-  const [loading,setLoading]=useState(false);
-  const [error,setError]=useState("");
-  const [lastFetch,setLastFetch]=useState(null);
-  const DATA_KEY=`pixels-ig-data-${cl.id}-${activeUnit}`;
-
-  const isBioter=cl.id==="bioter";
-  const accounts=isBioter
-    ?Object.entries(INSTAGRAM_ACCOUNTS.bioter).map(([k,v])=>({id:k,...v}))
-    :[{id:cl.id,...(INSTAGRAM_ACCOUNTS[cl.id]||{handle:cl.id,label:cl.name})}];
-
-  const currentHandle=isBioter
-    ?INSTAGRAM_ACCOUNTS.bioter[activeUnit]?.handle
-    :INSTAGRAM_ACCOUNTS[cl.id]?.handle||cl.id;
-
-  // Load cached data
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const d=(()=>{try{const _v=localStorage.getItem(DATA_KEY);return _v?{value:_v}:null;}catch(_e){return null;}})();
-        if(d?.value){const p=JSON.parse(d.value);setIgData(p.data);setMediaList(p.media||[]);setLastFetch(p.fetchedAt);}
-      }catch(e){}
-    })();
-  },[cl.id,activeUnit]);
-
-  // Resetar dados ao trocar cliente para não mostrar dados do cliente anterior
-  useEffect(()=>{
-    setIgData(null);
-    setFbData(null);
-    setError("");
-  },[cl.id]);
-
-  // Auto-fetch if authenticated and no recent data
-  useEffect(()=>{
-    if(auth&&!igData&&!loading)fetchRealData();
-  },[auth,activeUnit,cl.id]);
-
-  const findPageForHandle=(handle)=>{
-    if(!auth?.pages)return null;
-    return auth.pages.find(p=>{
-      const igAcc=p.instagram_business_account;
-      return igAcc&&(igAcc.username===handle||igAcc.username===handle.replace("@",""));
-    });
-  };
-
-  const fetchRealData=async()=>{
-    if(!auth?.accessToken){setError("not_connected");return;}
-    setLoading(true);setError("");
-    try{
-      const page=findPageForHandle(currentHandle);
-      if(!page?.instagram_business_account){
-        setError(`Página com Instagram @${currentHandle} não encontrada nas contas conectadas.`);
-        setLoading(false);return;
-      }
-      const igId=page.instagram_business_account.id;
-      const pageToken=page.access_token||auth.accessToken;
-
-      // Fetch detailed IG account info
-      const accRes=await fetch(`https://graph.facebook.com/v19.0/${igId}?fields=username,followers_count,follows_count,media_count,biography,website,profile_picture_url&access_token=${pageToken}`);
-      const accData=await accRes.json();
-
-      // Fetch insights
-      const since=Math.floor(Date.now()/1000)-2592000;
-      const until=Math.floor(Date.now()/1000);
-      const insRes=await fetch(`https://graph.facebook.com/v19.0/${igId}/insights?metric=impressions,reach,profile_views&period=day&since=${since}&until=${until}&access_token=${pageToken}`);
-      const insData=await insRes.json();
-
-      // Fetch media
-      const medRes=await fetch(`https://graph.facebook.com/v19.0/${igId}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink,shortcode&limit=24&access_token=${pageToken}`);
-      const medData=await medRes.json();
-
-      const compiled={...accData,insights:insData.data||[],fetchedAt:new Date().toISOString()};
-      const medias=medData.data||[];
-      localStorage.setItem(DATA_KEY,JSON.stringify({data:compiled,media:medias,fetchedAt:compiled.fetchedAt}));
-      setIgData(compiled);setMediaList(medias);setLastFetch(compiled.fetchedAt);
-    }catch(e){setError("Erro: "+e.message);}
-    setLoading(false);
-  };
-
-  const sumMetric=(name)=>{
-    const m=igData?.insights?.find(x=>x.name===name);
-    return m?.values?.reduce((s,v)=>s+(v.value||0),0)||0;
-  };
-
-  const engRate=igData?.followers_count>0
-    ?((mediaList.reduce((s,m)=>s+(m.like_count||0)+(m.comments_count||0),0)/Math.max(mediaList.length,1))/igData.followers_count*100).toFixed(2)
-    :null;
-
-  const IGC="#c13584";
-
-  return <>
-    {showLoginPanel&&<MetaLoginPanel onClose={()=>setShowLoginPanel(false)}/>}
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-
-      {/* Header bar */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",background:"#c1358410",borderRadius:12,borderLeft:"4px solid #c13584",flexWrap:"wrap"}}>
-        <PlatformLogo id="instagram" size={26}/>
-        <div style={{flex:1,minWidth:120}}>
-          <div style={{color:C.tx,fontWeight:800,fontSize:14}}>Instagram</div>
-          <div style={{color:C.ts,fontSize:10}}>
-            {auth
-              ?igData?`@${igData.username} · atualizado ${new Date(lastFetch).toLocaleDateString("pt-BR")}`:`@${currentHandle} · clique em atualizar`
-              :"Não conectado — faça login com o Facebook"}
-          </div>
-        </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {auth&&<button onClick={fetchRealData} disabled={loading}
-            style={{background:C.b1,color:C.ts,border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
-            {loading?"⟳":"↺"} {loading?"Buscando...":"Atualizar"}
-          </button>}
-          <button onClick={()=>setShowLoginPanel(true)}
-            style={{background:auth?C.gr+"18":IGC,color:auth?C.gr:"#fff",border:auth?`1px solid ${C.gr}44`:"none",borderRadius:8,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-            {auth?<>✓ {auth.name.split(" ")[0]}</>:<><PlatformLogo id="facebook" size={13}/>Conectar</>}
-          </button>
-        </div>
-      </div>
-
-      {/* Bioter unit tabs */}
-      {isBioter&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-        {accounts.map(a=>(
-          <button key={a.id} onClick={()=>setActiveUnit(a.id)}
-            style={{padding:"5px 12px",background:activeUnit===a.id?IGC:"transparent",color:activeUnit===a.id?"#fff":C.ts,border:`1px solid ${activeUnit===a.id?IGC:C.b1}`,borderRadius:99,fontSize:11,fontWeight:activeUnit===a.id?700:400,cursor:"pointer",transition:"all .12s"}}>
-            {a.label}
-          </button>
-        ))}
-      </div>}
-
-      {/* Not connected */}
-      {!auth&&<div style={{background:C.card,borderRadius:14,padding:"32px 24px",textAlign:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
-        <PlatformLogo id="instagram" size={48}/>
-        <div style={{color:C.tx,fontWeight:700,fontSize:16,marginTop:12,marginBottom:8}}>Instagram não conectado</div>
-        <div style={{color:C.ts,fontSize:12,marginBottom:20,lineHeight:1.6,maxWidth:340,margin:"0 auto 20px"}}>
-          Entre com sua conta do Facebook e selecione as páginas e contas de anúncio que deseja monitorar.
-        </div>
-        <button onClick={()=>setShowLoginPanel(true)}
-          style={{background:"#1877f2",color:"#fff",border:"none",borderRadius:12,padding:"12px 28px",fontWeight:800,fontSize:14,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8}}>
-          <PlatformLogo id="facebook" size={18}/>Entrar com Facebook
-        </button>
-        <div style={{marginTop:12,color:C.td,fontSize:10}}>Token salvo neste dispositivo · migra para servidor na publicação</div>
-      </div>}
-
-      {/* Error */}
-      {error&&error!=="not_connected"&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:10,padding:"10px 16px",color:"#e53e3e",fontSize:12}}>{error}</div>}
-
-      {/* Loading */}
-      {loading&&<div style={{background:C.card,borderRadius:12,padding:"32px",textAlign:"center"}}>
-        <div style={{fontSize:24,marginBottom:8,animation:"spin 1s linear infinite",display:"inline-block"}}>⟳</div>
-        <div style={{color:C.ts,fontSize:13}}>Buscando dados reais do Instagram...</div>
-        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
-      </div>}
-
-      {/* Real data */}
-      {igData&&!loading&&<>
-        {/* Profile */}
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
-          {igData.profile_picture_url&&<img src={igData.profile_picture_url} alt="profile" style={{width:60,height:60,borderRadius:"50%",objectFit:"cover",border:`3px solid ${IGC}`,flexShrink:0}}/>}
-          <div style={{flex:1,minWidth:130}}>
-            <div style={{color:C.tx,fontWeight:800,fontSize:15}}>@{igData.username}</div>
-            {igData.biography&&<div style={{color:C.ts,fontSize:11,marginTop:4,lineHeight:1.5}}>{igData.biography}</div>}
-            {igData.website&&<a href={igData.website} target="_blank" rel="noopener" style={{color:IGC,fontSize:11,marginTop:4,display:"block"}}>{igData.website}</a>}
-          </div>
-          <div style={{display:"flex",gap:16}}>
-            {[{l:"Seguidores",v:igData.followers_count?.toLocaleString("pt-BR")},{l:"Seguindo",v:igData.follows_count?.toLocaleString("pt-BR")},{l:"Posts",v:igData.media_count?.toLocaleString("pt-BR")}].map(s=>(
-              <div key={s.l} style={{textAlign:"center"}}>
-                <div style={{color:C.tx,fontWeight:900,fontSize:18,lineHeight:1}}>{s.v}</div>
-                <div style={{color:C.td,fontSize:9,marginTop:2}}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* KPIs */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
-          <KpiCard label="Seguidores" value={igData.followers_count?.toLocaleString("pt-BR")||"—"} sub="total" color={IGC} good={true}/>
-          <KpiCard label="Posts" value={igData.media_count?.toLocaleString("pt-BR")||"—"} sub="publicações" color={IGC} good={true}/>
-          {engRate&&<KpiCard label="Engajamento" value={engRate+"%"} sub="taxa média" color={IGC} good={parseFloat(engRate)>=2}/>}
-          <KpiCard label="Curtidas/Post" value={Math.round(mediaList.reduce((s,m)=>s+(m.like_count||0),0)/Math.max(mediaList.length,1)).toLocaleString("pt-BR")} sub="média" color={IGC} good={true}/>
-          <KpiCard label="Comentários/Post" value={Math.round(mediaList.reduce((s,m)=>s+(m.comments_count||0),0)/Math.max(mediaList.length,1))} sub="média" color={IGC} good={true}/>
-          <KpiCard label="Alcance" value={sumMetric("reach").toLocaleString("pt-BR")||"—"} sub="30 dias" color={IGC} good={true}/>
-          <KpiCard label="Impressões" value={sumMetric("impressions").toLocaleString("pt-BR")||"—"} sub="30 dias" color={IGC} good={true}/>
-          <KpiCard label="Visitas Perfil" value={sumMetric("profile_views").toLocaleString("pt-BR")||"—"} sub="30 dias" color={IGC} good={true}/>
-        </div>
-
-        {/* Media grid */}
-        {mediaList.length>0&&<div style={{background:C.card,borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
-          <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.b1}`,display:"flex",justifyContent:"space-between"}}>
-            <div style={{color:C.tx,fontWeight:700,fontSize:13}}>📱 Últimas publicações</div>
-            <div style={{color:C.td,fontSize:11}}>{mediaList.length} posts</div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:2,padding:2}}>
-            {[...mediaList].sort((a,b)=>(b.like_count||0)+(b.comments_count||0)-((a.like_count||0)+(a.comments_count||0))).slice(0,12).map(m=>(
-              <a key={m.id} href={m.permalink} target="_blank" rel="noopener"
-                style={{position:"relative",aspectRatio:"1",display:"block",overflow:"hidden",textDecoration:"none"}}
-                title={m.caption?.slice(0,80)}>
-                {(m.media_url||m.thumbnail_url)
-                  ?<img src={m.media_url||m.thumbnail_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                  :<div style={{width:"100%",paddingTop:"100%",background:IGC+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{m.media_type==="VIDEO"?"🎬":"📷"}</div>}
-                <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0)",transition:"background .15s",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:3}}
-                  onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,0.65)"}
-                  onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0)"}>
-                  <div style={{color:"#fff",fontSize:11,fontWeight:700,textShadow:"0 1px 2px rgba(0,0,0,0.8)",display:"flex",gap:6,opacity:0,transition:"opacity .15s"}}
-                    onMouseEnter={e=>{e.currentTarget.style.opacity="1";}}
-                    onMouseLeave={e=>{e.currentTarget.style.opacity="0";}}>
-                    <span>❤{(m.like_count||0).toLocaleString()}</span>
-                    <span>💬{(m.comments_count||0).toLocaleString()}</span>
-                  </div>
-                </div>
-                {m.media_type==="VIDEO"&&<div style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.6)",borderRadius:4,padding:"1px 5px",color:"#fff",fontSize:9}}>▶</div>}
-              </a>
-            ))}
-          </div>
-        </div>}
-      </>}
-    </div>
-  </>;
-}
-
-/* ─── GOOGLE OAUTH ────────────────────────── */
-const loadGoogleSDK=()=>new Promise((resolve,reject)=>{
-  const timer=setTimeout(()=>reject(new Error("Google SDK timeout")),10000);
-  if(window.google&&window.google.accounts){resolve(window.google.accounts);return;}
-  const s=document.createElement("script");
-  s.src="https://accounts.google.com/gsi/client";
-  s.async=true;
-  s.onload=()=>{if(window.google&&window.google.accounts)resolve(window.google.accounts);else reject(new Error("Google SDK não carregou"));};
-  s.onerror=()=>reject(new Error("Falha ao carregar Google SDK"));
-  document.head.appendChild(s);
-});
-
-const GOOGLE_AUTH_KEY="pixels-google-auth-v1";
-const GOOGLE_SCOPES=[
-  "https://www.googleapis.com/auth/analytics.readonly",
-  "https://www.googleapis.com/auth/userinfo.profile",
-  "https://www.googleapis.com/auth/userinfo.email",
-].join(" ");
-
-function useGoogleAuth(){
-  const [auth,setAuth]=useState(()=>{
-    try{const s=localStorage.getItem(GOOGLE_AUTH_KEY);if(s){const p=JSON.parse(s);if(p.expiresAt&&Date.now()<p.expiresAt)return p;}}catch(e){}
-    return null;
-  });
-  const [loading,setLoading]=useState(false);
-  const [error,setError]=useState("");
-
-  const login=async(clientId)=>{
-    if(!clientId){setError("Informe o Google Client ID");return;}
-    setLoading(true);setError("");
-    try{
-      const gis=await loadGoogleSDK();
-      const tokenResponse=await new Promise((res,rej)=>{
-        const client=gis.oauth2.initTokenClient({
-          client_id:clientId,
-          scope:GOOGLE_SCOPES,
-          callback:(resp)=>resp.error?rej(new Error(resp.error)):res(resp),
-        });
-        client.requestAccessToken();
-      });
-      // Fetch user profile
-      const meRes=await fetch("https://www.googleapis.com/oauth2/v1/userinfo?alt=json",{headers:{Authorization:"Bearer "+tokenResponse.access_token}});
-      const me=await meRes.json();
-      const data={
-        accessToken:tokenResponse.access_token,
-        expiresAt:Date.now()+(tokenResponse.expires_in||3600)*1000,
-        name:me.name,email:me.email,picture:me.picture,
-        clientId,connectedAt:new Date().toISOString(),
-      };
-      localStorage.setItem(GOOGLE_AUTH_KEY,JSON.stringify(data));
-      setAuth(data);
-    }catch(e){
-      if(!e.message||e.message!=="popup_closed_by_user")setError(e.message||"Erro ao conectar com Google");
-    }
-    setLoading(false);
-  };
-
-  const disconnect=()=>{
-    try{localStorage.removeItem(GOOGLE_AUTH_KEY);}catch(e){}
-    if(window.google?.accounts?.oauth2)try{window.google.accounts.oauth2.revoke(auth?.accessToken||"",()=>{});}catch(e){}
-    setAuth(null);setError("");
-  };
-
-  return{auth,loading,error,setError,login,disconnect};
-}
-
-/* ─── GOOGLE LOGIN PANEL ─────────────────── */
-function GoogleLoginPanel({onClose}){
-  const {auth,loading,error,setError,login,disconnect}=useGoogleAuth();
-  const [clientId,setClientId]=useState(()=>localStorage.getItem("pixels-google-clientid")||"");
-  const [showClientIdInput,setShowClientIdInput]=useState(!clientId);
-
-  const saveClientId=()=>{localStorage.setItem("pixels-google-clientid",clientId);setShowClientIdInput(false);};
-  const handleLogin=async()=>{
-    if(!clientId){setShowClientIdInput(true);return;}
-    await login(clientId);
-  };
-
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,width:"100%",maxWidth:460,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.4)"}}>
-      {/* Header */}
-      <div style={{background:"linear-gradient(135deg,#34a853,#0f9d58)",padding:"20px 24px",borderRadius:"20px 20px 0 0",display:"flex",alignItems:"center",gap:14}}>
-        <PlatformLogo id="google" size={32}/>
-        <div>
-          <div style={{color:"#fff",fontWeight:900,fontSize:16}}>Conectar Google</div>
-          <div style={{color:"rgba(255,255,255,0.75)",fontSize:11}}>Google Analytics · Google Ads</div>
-        </div>
-        <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",cursor:"pointer",fontWeight:700}}>✕</button>
-      </div>
-
-      <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
-        {/* Client ID input */}
-        {showClientIdInput&&(<div style={{background:C.s1,borderRadius:12,padding:"14px 16px",border:"1px solid "+C.b1}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:8}}>Google OAuth Client ID</div>
-          <div style={{color:C.ts,fontSize:11,marginBottom:10,lineHeight:1.5}}>
-            Crie em <b>console.cloud.google.com</b> → APIs & Services → Credentials → OAuth 2.0 Client IDs.
-            Tipo: <b>Web Application</b>. Adicione <b>http://localhost:3000</b> e o domínio do app em "Authorized JavaScript Origins".
-          </div>
-          <input value={clientId} onChange={e=>setClientId(e.target.value)}
-            placeholder="Ex: 123456789-abc...apps.googleusercontent.com"
-            style={{width:"100%",background:C.card,border:"1px solid "+C.b1,borderRadius:8,padding:"9px 12px",color:C.tx,fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",marginBottom:8}}/>
-          <button onClick={saveClientId} disabled={!clientId.trim()}
-            style={{background:clientId.trim()?"#34a853":C.b1,color:"#fff",border:"none",borderRadius:8,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:clientId.trim()?"pointer":"default"}}>
-            Salvar Client ID
-          </button>
-        </div>)}
-
-        {!showClientIdInput&&(<>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{color:C.ts,fontSize:11,flex:1}}>Client ID: <span style={{color:C.tx,fontWeight:600}}>{clientId.slice(0,28)}…</span></div>
-            <button onClick={()=>setShowClientIdInput(true)} style={{background:"none",border:"none",color:C.a,fontSize:11,cursor:"pointer",fontWeight:600}}>editar</button>
-          </div>
-
-          {auth?(
-            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              {auth.picture&&<div style={{display:"flex",alignItems:"center",gap:12,background:"#34a85318",borderRadius:12,padding:"12px 14px"}}>
-                <img src={auth.picture} alt="" style={{width:40,height:40,borderRadius:"50%"}}/>
-                <div>
-                  <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{auth.name}</div>
-                  <div style={{color:C.ts,fontSize:11}}>{auth.email}</div>
-                </div>
-                <div style={{marginLeft:"auto",background:"#34a85322",color:"#34a853",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700}}>✓ Conectado</div>
-              </div>}
-              <div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:10,padding:"10px 14px",fontSize:11,color:"#92400e",lineHeight:1.5}}>
-                ⚡ <b>Google Analytics 4</b> disponível — forneça o Property ID em cada cliente.<br/>
-                📊 <b>Google Ads</b> — os dados reais exigem um Developer Token do Google (processo de aprovação). Use a aba Métricas para inserir os números manualmente enquanto isso.
-              </div>
-              <button onClick={disconnect}
-                style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"10px",color:C.td,fontSize:12,cursor:"pointer",fontWeight:600}}>
-                Desconectar Google
-              </button>
-            </div>
-          ):(
-            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{background:C.s1,borderRadius:12,padding:"14px",border:"1px solid "+C.b1,fontSize:11,color:C.ts,lineHeight:1.6}}>
-                <div style={{fontWeight:700,color:C.tx,marginBottom:6}}>O que você ganha ao conectar:</div>
-                <div>✓ Google Analytics 4 — sessões, conversões, origens de tráfego em tempo real</div>
-                <div>✓ Vinculação da conta para futura integração com Google Ads</div>
-                <div>✓ Token salvo neste dispositivo (expira em 1h, renovável)</div>
-              </div>
-              {error&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,padding:"10px 12px",color:"#e53e3e",fontSize:11}}>{error}</div>}
-              <button onClick={handleLogin} disabled={loading}
-                style={{background:loading?"#ccc":"linear-gradient(135deg,#34a853,#0f9d58)",color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:800,fontSize:14,cursor:loading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                <PlatformLogo id="google" size={20}/>{loading?"Conectando…":"Entrar com Google"}
-              </button>
-            </div>
-          )}
-        </>)}
-      </div>
-    </div>
-  </div>;
-}
-
-/* ─── META ADS REAL DATA ─────────────────── */
-function MetaAdsRealData({cl,onOpenLogin}){
-  const {auth}=useMetaAuth();
-  const [insights,setInsights]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [error,setError]=useState("");
-  const [lastFetch,setLastFetch]=useState(null);
-  const DATA_KEY="pixels-meta-ads-"+cl.id;
-  const live=getLiveClient(cl.id)||cl;
-
-  // Load cached
-  useEffect(()=>{
-    try{const s=localStorage.getItem(DATA_KEY);if(s){const p=JSON.parse(s);setInsights(p.data);setLastFetch(p.fetchedAt);}}catch(e){}
-  },[cl.id]);
-
-  const hasAdsScope=auth?.grantedScopes&&auth.grantedScopes.includes("ads_read");
-  const adAccountId=cl.metaId||live.metaId;
-
-  const fetchAdsData=async()=>{
-    if(!auth?.accessToken){setError("not_connected");return;}
-    if(!adAccountId){setError("Nenhum Meta Account ID configurado para este cliente. Adicione em Informações do cliente.");return;}
-    setLoading(true);setError("");
-    try{
-      const id=adAccountId.startsWith("act_")?adAccountId:"act_"+adAccountId;
-      const res=await fetch(`https://graph.facebook.com/v19.0/${id}/insights?fields=spend,impressions,clicks,cpc,ctr,reach,frequency,actions,cost_per_action_type,account_name&date_preset=last_30d&level=account&access_token=${auth.accessToken}`);
-      const json=await res.json();
-      if(json.error){setError("API Meta: "+json.error.message);setLoading(false);return;}
-      const d=(json.data&&json.data[0])||null;
-      if(!d){setError("Nenhum dado disponível para o período. Verifique se há campanhas ativas no período.");setLoading(false);return;}
-      // Parse actions to find leads
-      const findAction=(type)=>{
-        const a=(d.actions||[]).find(x=>x.action_type===type);
-        return a?parseFloat(a.value)||0:0;
-      };
-      const leads=findAction("lead")||findAction("offsite_conversion.fb_pixel_lead")||findAction("onsite_conversion.lead_grouped");
-      const compiled={
-        spend:parseFloat(d.spend)||0,
-        impressions:parseInt(d.impressions)||0,
-        clicks:parseInt(d.clicks)||0,
-        cpc:parseFloat(d.cpc)||0,
-        ctr:parseFloat(d.ctr)||0,
-        reach:parseInt(d.reach)||0,
-        frequency:parseFloat(d.frequency)||0,
-        leads:Math.round(leads),
-        cpl:leads>0?(parseFloat(d.spend)/leads).toFixed(2):0,
-        account_name:d.account_name||id,
-      };
-      localStorage.setItem(DATA_KEY,JSON.stringify({data:compiled,fetchedAt:new Date().toISOString()}));
-      setInsights(compiled);setLastFetch(new Date().toISOString());
-    }catch(e){setError(e.message);}
-    setLoading(false);
-  };
-
-  // Auto-fetch if auth available and no recent data
-  useEffect(()=>{if(auth&&hasAdsScope&&adAccountId&&!insights&&!loading)fetchAdsData();},[auth,cl.id]);
-
-  if(!auth)return(
-    <div style={{background:"#1877f208",border:"1px solid #1877f222",borderRadius:12,padding:"16px 18px",display:"flex",alignItems:"center",gap:12}}>
-      <PlatformLogo id="meta" size={24}/>
-      <div style={{flex:1}}>
-        <div style={{color:C.tx,fontWeight:600,fontSize:12}}>Conecte sua conta Meta para ver dados reais</div>
-        <div style={{color:C.ts,fontSize:11,marginTop:2}}>Os números abaixo são inseridos manualmente via Métricas</div>
-      </div>
-      <button onClick={onOpenLogin} style={{background:"#1877f2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-        <PlatformLogo id="facebook" size={12}/> Conectar
-      </button>
-    </div>
-  );
-
-  if(auth&&!hasAdsScope)return(
-    <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:10}}>
-      <span style={{fontSize:20}}>⚠</span>
-      <div style={{flex:1}}>
-        <div style={{color:"#c2410c",fontWeight:600,fontSize:12}}>Permissão de Anúncios não concedida</div>
-        <div style={{color:"#9a3412",fontSize:11,marginTop:2}}>Reconecte e marque "incluir dados de anúncios"</div>
-      </div>
-      <button onClick={onOpenLogin} style={{background:"#1877f2",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Reconectar</button>
-    </div>
-  );
-
-  if(!adAccountId)return(
-    <div style={{background:C.s1,border:"1px dashed "+C.b1,borderRadius:12,padding:"14px 16px",fontSize:12,color:C.ts}}>
-      ℹ Configure o <b>Meta Account ID</b> nas Informações do cliente (ex: act_1234567890) para buscar dados reais.
-    </div>
-  );
-
-  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {/* Status bar */}
-    <div style={{background:"#1877f210",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-      <PlatformLogo id="meta" size={18}/>
-      <span style={{color:"#1877f2",fontWeight:700,fontSize:12}}>{insights?.account_name||adAccountId}</span>
-      <span style={{color:C.ts,fontSize:10,flex:1}}>{lastFetch?"atualizado "+new Date(lastFetch).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"nunca sincronizado"}</span>
-      <button onClick={fetchAdsData} disabled={loading}
-        style={{background:"#1877f2",color:"#fff",border:"none",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-        {loading?"⟳ Buscando…":"↺ Atualizar"}
-      </button>
-    </div>
-    {error&&error!=="not_connected"&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,padding:"10px 12px",color:"#e53e3e",fontSize:11}}>{error}</div>}
-    {insights&&(
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-        {[
-          {l:"Investimento",v:"R$ "+insights.spend.toLocaleString("pt-BR",{minimumFractionDigits:2}),badge:"real"},
-          {l:"Impressões",v:insights.impressions.toLocaleString("pt-BR"),badge:"real"},
-          {l:"Cliques",v:insights.clicks.toLocaleString("pt-BR"),badge:"real"},
-          {l:"CPC",v:"R$ "+insights.cpc.toFixed(2),badge:"real"},
-          {l:"CTR",v:insights.ctr.toFixed(2)+"%",badge:"real"},
-          {l:"Alcance",v:insights.reach.toLocaleString("pt-BR"),badge:"real"},
-          {l:"Frequência",v:insights.frequency.toFixed(2),badge:"real"},
-          {l:"Leads",v:insights.leads>0?insights.leads.toLocaleString("pt-BR"):"—",badge:"real"},
-          {l:"CPL",v:insights.cpl>0?"R$ "+Number(insights.cpl).toLocaleString("pt-BR",{minimumFractionDigits:2}):"—",badge:"real"},
-        ].map(k=>(
-          <div key={k.l} style={{background:C.card,borderRadius:10,padding:"11px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.07)",borderTop:"2px solid #1877f2"}}>
-            <div style={{color:C.ts,fontSize:9,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
-              {k.l}
-              <span style={{background:"#1877f222",color:"#1877f2",borderRadius:3,padding:"0px 4px",fontSize:8,fontWeight:700}}>API</span>
-            </div>
-            <div style={{color:C.tx,fontWeight:800,fontSize:15,letterSpacing:-0.5}}>{k.v}</div>
-          </div>
-        ))}
-      </div>
-    )}
-    {!insights&&!loading&&!error&&<div style={{color:C.ts,fontSize:12,textAlign:"center",padding:"20px"}}>Clique em ↺ Atualizar para buscar dados reais da API do Meta</div>}
-  </div>);
-}
-
-/* ─── GOOGLE ADS REAL DATA ───────────────── */
-function GoogleAdsRealData({cl,onOpenLogin}){
-  const {auth}=useGoogleAuth();
-  const [ga4Data,setGa4Data]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [error,setError]=useState("");
-  const [lastFetch,setLastFetch]=useState(null);
-  const [ga4PropId,setGa4PropId]=useState(()=>localStorage.getItem("pixels-ga4-"+cl.id)||"");
-  const [editingProp,setEditingProp]=useState(false);
-  const DATA_KEY="pixels-ga4-data-"+cl.id;
-
-  useEffect(()=>{
-    try{const s=localStorage.getItem(DATA_KEY);if(s){const p=JSON.parse(s);setGa4Data(p.data);setLastFetch(p.fetchedAt);}}catch(e){}
-  },[cl.id]);
-
-  const savePropId=(v)=>{setGa4PropId(v);localStorage.setItem("pixels-ga4-"+cl.id,v);setEditingProp(false);};
-
-  const fetchGA4=async()=>{
-    if(!auth?.accessToken){setError("not_connected");return;}
-    if(!ga4PropId){setError("Informe o GA4 Property ID");return;}
-    setLoading(true);setError("");
-    try{
-      const pid=ga4PropId.startsWith("properties/")?ga4PropId:"properties/"+ga4PropId;
-      const res=await fetch(`https://analyticsdata.googleapis.com/v1beta/${pid}:runReport`,{
-        method:"POST",
-        headers:{Authorization:"Bearer "+auth.accessToken,"Content-Type":"application/json"},
-        body:JSON.stringify({
-          dateRanges:[{startDate:"30daysAgo",endDate:"today"}],
-          metrics:[
-            {name:"sessions"},{name:"totalUsers"},{name:"newUsers"},
-            {name:"conversions"},{name:"bounceRate"},{name:"averageSessionDuration"},
-            {name:"screenPageViews"},
-          ],
-          dimensions:[{name:"date"}],
-        }),
-      });
-      const json=await res.json();
-      if(json.error){setError("GA4 API: "+json.error.message);setLoading(false);return;}
-      // Sum totals from rows
-      const totals={sessions:0,users:0,newUsers:0,conversions:0,bounceRate:0,avgDuration:0,pageViews:0,rows:0};
-      (json.rows||[]).forEach(row=>{
-        const [sessions,users,newU,conv,bounce,duration,pages]=row.metricValues.map(m=>parseFloat(m.value)||0);
-        totals.sessions+=sessions;totals.users+=users;totals.newUsers+=newU;
-        totals.conversions+=conv;totals.bounceRate+=bounce;totals.avgDuration+=duration;
-        totals.pageViews+=pages;totals.rows++;
-      });
-      if(totals.rows>0){totals.bounceRate=(totals.bounceRate/totals.rows).toFixed(1);totals.avgDuration=Math.round(totals.avgDuration/totals.rows);}
-      localStorage.setItem(DATA_KEY,JSON.stringify({data:totals,fetchedAt:new Date().toISOString()}));
-      setGa4Data(totals);setLastFetch(new Date().toISOString());
-    }catch(e){setError(e.message);}
-    setLoading(false);
-  };
-
-  // Resetar GA4 data ao trocar cliente
-  useEffect(()=>{setGa4Data(null);},[cl.id]);
-  useEffect(()=>{if(auth&&ga4PropId&&!ga4Data&&!loading)fetchGA4();},[auth,cl.id,ga4PropId]);
-
-  const fmtDuration=(s)=>{const m=Math.floor(s/60);const sec=s%60;return m+"m "+sec+"s";};
-
-  if(!auth)return(
-    <div style={{background:"#34a85308",border:"1px solid #34a85322",borderRadius:12,padding:"16px 18px",display:"flex",alignItems:"center",gap:12}}>
-      <PlatformLogo id="google" size={24}/>
-      <div style={{flex:1}}>
-        <div style={{color:C.tx,fontWeight:600,fontSize:12}}>Conecte sua conta Google para dados reais de Analytics</div>
-        <div style={{color:C.ts,fontSize:11,marginTop:2}}>Os números abaixo são inseridos manualmente via Métricas</div>
-      </div>
-      <button onClick={onOpenLogin} style={{background:"#34a853",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-        Conectar Google
-      </button>
-    </div>
-  );
-
-  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {/* GA4 property config */}
-    <div style={{background:"#34a85310",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-      <PlatformLogo id="google" size={18}/>
-      <span style={{color:"#34a853",fontWeight:700,fontSize:12}}>Google Analytics 4</span>
-      {editingProp?(
-        <div style={{display:"flex",gap:6,flex:1,alignItems:"center"}}>
-          <input defaultValue={ga4PropId} id="ga4inp" placeholder="Property ID (ex: 123456789)"
-            style={{flex:1,background:C.card,border:"1px solid "+C.b1,borderRadius:7,padding:"5px 10px",color:C.tx,fontSize:11,outline:"none"}}/>
-          <button onClick={()=>{const v=document.getElementById("ga4inp").value.trim();if(v)savePropId(v.replace("properties/",""));}}
-            style={{background:"#34a853",color:"#fff",border:"none",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Salvar</button>
-          <button onClick={()=>setEditingProp(false)}
-            style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:7,padding:"5px 10px",fontSize:11,cursor:"pointer"}}>✕</button>
-        </div>
-      ):(
-        <>
-          <span style={{color:C.ts,fontSize:10,flex:1}}>{ga4PropId?"property/"+ga4PropId:"property ID não configurado"} {lastFetch&&("· "+new Date(lastFetch).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))}</span>
-          <button onClick={()=>setEditingProp(true)} style={{background:"none",border:"none",color:C.a,fontSize:11,cursor:"pointer",fontWeight:600}}>✏ property ID</button>
-          <button onClick={fetchGA4} disabled={loading||!ga4PropId}
-            style={{background:"#34a853",color:"#fff",border:"none",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:loading||!ga4PropId?"default":"pointer",opacity:loading||!ga4PropId?.5:1}}>
-            {loading?"⟳":"↺"} {loading?"Buscando…":"Atualizar"}
-          </button>
-        </>
-      )}
-    </div>
-    {!ga4PropId&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:10,padding:"12px 14px",fontSize:11,color:"#92400e",lineHeight:1.6}}>
-      ⚡ Encontre o <b>Property ID</b> em GA4 → Configurações → Propriedade → Informações. É um número como <b>123456789</b>.
-    </div>}
-    {error&&error!=="not_connected"&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:8,padding:"10px 12px",color:"#e53e3e",fontSize:11}}>{error}</div>}
-    {ga4Data&&(
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-        {[
-          {l:"Sessões",v:ga4Data.sessions.toLocaleString("pt-BR")},
-          {l:"Usuários",v:ga4Data.users.toLocaleString("pt-BR")},
-          {l:"Novos Usuários",v:ga4Data.newUsers.toLocaleString("pt-BR")},
-          {l:"Conversões",v:ga4Data.conversions.toLocaleString("pt-BR")},
-          {l:"Taxa Rejeição",v:ga4Data.bounceRate+"%"},
-          {l:"Duração Média",v:fmtDuration(ga4Data.avgDuration)},
-          {l:"Pageviews",v:ga4Data.pageViews.toLocaleString("pt-BR")},
-        ].map(k=>(
-          <div key={k.l} style={{background:C.card,borderRadius:10,padding:"11px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.07)",borderTop:"2px solid #34a853"}}>
-            <div style={{color:C.ts,fontSize:9,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
-              {k.l}
-              <span style={{background:"#34a85322",color:"#34a853",borderRadius:3,padding:"0px 4px",fontSize:8,fontWeight:700}}>API</span>
-            </div>
-            <div style={{color:C.tx,fontWeight:800,fontSize:15,letterSpacing:-0.5}}>{k.v}</div>
-          </div>
-        ))}
-      </div>
-    )}
-    {/* Google Ads note */}
-    <div style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"12px 14px",fontSize:11,color:C.ts,lineHeight:1.6}}>
-      📊 <b>Google Ads (dados de campanhas)</b> requer um <b>Developer Token</b> aprovado pelo Google — processo que leva dias e precisa de backend.
-      Por enquanto, insira os dados manualmente na aba <b>Métricas ✏</b> em Informações do cliente.
-    </div>
-  </div>);
-}
-
-function ClienteDashboard({cl,tab,setTab,isMob}){
-  const PLATFORM_TABS=[
-    {id:"meta",     icon:"meta",label:"Meta Ads",    color:"#1877f2"},
-    {id:"google",   icon:"google",label:"Google Ads",  color:"#34a853"},
-    {id:"instagram",icon:"instagram",label:"Instagram",   color:"#c13584"},
-    {id:"facebook", icon:"facebook",label:"Facebook",    color:"#1877f2"},
-  ];
-  const pc=PLATFORM_TABS.find(p=>p.id===tab);
-  const COL=pc?.color||C.a;
-
-  // Connection modals
-  const [showMetaLogin,setShowMetaLogin]=useState(false);
-  const [showGoogleLogin,setShowGoogleLogin]=useState(false);
-  const {auth:metaAuth}=useMetaAuth();
-  const {auth:googleAuth}=useGoogleAuth();
-
-  // Bioter: 3 ad accounts, 6 social accounts
-  const isBioter=cl.id==="bioter";
-  const [bioterView,setBioterView]=useState("geral"); // geral | unidade | conta
-  const [bioterUnit,setBioterUnit]=useState("chapeco");
-  const [bioterAccount,setBioterAccount]=useState("acc_chapeco");
-
-  const BIOTER_ACCOUNTS=[
-    {id:"acc_chapeco",label:"Chapeco (Conta 01)",units:["chapeco"],color:"#00b4d8"},
-    {id:"acc_castro", label:"Castro (Conta 02)",units:["castro"],color:"#006e99"},
-    {id:"acc_toledo", label:"Toledo/UB/GD/PY (Conta 03)",units:["toledo","uberlandia","gloria","paraguay"],color:"#004d7a"},
-  ];
-
-  const BIOTER_SOCIALS=[
-    {id:"chapeco",   label:"Chapeco",          ig:"instagram.com/bioterchapeco",    fb:"Bioter Chapeco",   color:"#00b4d8"},
-    {id:"toledo",    label:"Toledo",            ig:"instagram.com/biotertoledo",     fb:"Bioter Toledo",    color:"#0090b8"},
-    {id:"castro",    label:"Castro",            ig:"instagram.com/biotercastro",     fb:"Bioter Castro",    color:"#006e99"},
-    {id:"uberlandia",label:"Uberlandia",        ig:"instagram.com/bioterms",         fb:"Bioter Uberlandia",color:"#004d7a"},
-    {id:"gloria",    label:"Gloria de Dourados",ig:"instagram.com/biotergloriadedourados",fb:"Bioter Gloria",color:"#00335c"},
-    {id:"paraguay",  label:"Paraguay",          ig:"instagram.com/bioterpy",         fb:"Bioter Paraguay",  color:"#001f3f"},
-  ];
-
-  // Simulate per-unit multipliers
-  const unitMult={chapeco:1,toledo:0.82,castro:0.71,uberlandia:0.65,gloria:0.54,paraguay:0.44};
-
-  // Get effective cl data scaled by unit
-  const getUnitCl=(unitId)=>{
-    const m=unitMult[unitId]||0.5;
-    return {...cl,meta:{...cl.meta,roas:+(cl.meta.roas*(0.85+Math.random()*0.3)).toFixed(1),leads:Math.round(cl.meta.leads*m),spend:Math.round(cl.meta.spend*m),cpc:+(cl.meta.cpc*(0.9+Math.random()*0.2)).toFixed(2),ctr:+(cl.meta.ctr*(0.9+Math.random()*0.2)).toFixed(2)},google:{...cl.google,roas:+(cl.google.roas*(0.85+Math.random()*0.3)).toFixed(1),leads:Math.round(cl.google.leads*m),spend:Math.round(cl.google.spend*m),cpc:+(cl.google.cpc*(0.9+Math.random()*0.2)).toFixed(2),ctr:+(cl.google.ctr*(0.9+Math.random()*0.2)).toFixed(2)}};
-  };
-
-  const getAccountCl=(accId)=>{
-    const acc=BIOTER_ACCOUNTS.find(a=>a.id===accId);
-    if(!acc)return cl;
-    const totalMult=acc.units.reduce((s,u)=>s+(unitMult[u]||0.5),0);
-    const m=totalMult;
-    return {...cl,meta:{...cl.meta,roas:+(cl.meta.roas*0.95).toFixed(1),leads:Math.round(cl.meta.leads*m),spend:Math.round(cl.meta.spend*m),cpc:cl.meta.cpc,ctr:cl.meta.ctr},google:{...cl.google,roas:+(cl.google.roas*0.95).toFixed(1),leads:Math.round(cl.google.leads*m),spend:Math.round(cl.google.spend*m),cpc:cl.google.cpc,ctr:cl.google.ctr}};
-  };
-
-  // Effective data based on view
-  const effectiveCl=!isBioter?cl:
-    bioterView==="unidade"?getUnitCl(bioterUnit):
-    bioterView==="conta"?getAccountCl(bioterAccount):cl;
-
-  const meta=buildMetaData(effectiveCl);
-  const google=buildGoogleData(effectiveCl);
-  const insta=buildInstaData(effectiveCl);
-  const face=buildFaceData(effectiveCl);
-
-  const metaRoas=effectiveCl.meta.roas;
-  const googleRoas=effectiveCl.google.roas;
-
-  return <div style={{display:"flex",flexDirection:"column",gap:20}}>
-
-    {/* ── PLATFORM TABS ── */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1}}>
-      {PLATFORM_TABS.map(p=>(
-        <button key={p.id} onClick={()=>setTab(p.id)}
-          style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px",background:"none",border:"none",borderBottom:tab===p.id?"2px solid "+p.color:"2px solid transparent",color:tab===p.id?p.color:C.ts,fontWeight:tab===p.id?700:400,fontSize:12,cursor:"pointer",transition:"all .12s",whiteSpace:"nowrap",marginBottom:-1}}>
-          <PlatformLogo id={p.icon} size={14}/>{p.label}
-        </button>
-      ))}
-    </div>
-
-    {/* ── BIOTER CONSOLIDATED UNITS CHART ── */}
-    {isBioter&&bioterView==="geral"&&(tab==="meta"||tab==="google")&&<div style={{background:C.card,borderRadius:14,padding:"16px 18px",border:"1px solid "+C.b1}}>
-      <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Comparativo de {tab==="meta"?"Leads (Meta)":"Leads (Google)"} por Unidade</div>
-      <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={BIOTER_UNITS.map(u=>{
-          const ucl=getUnitCl(u.id);
-          return {name:u.label.split("/")[0],leads:tab==="meta"?ucl.meta.leads:ucl.google.leads,roas:tab==="meta"?ucl.meta.roas:ucl.google.roas,color:u.color};
-        })}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-          <XAxis dataKey="name" tick={{fontSize:9,fill:C.td}} axisLine={false} tickLine={false}/>
-          <YAxis tick={{fontSize:9,fill:C.td}} axisLine={false} tickLine={false} width={30}/>
-          <RTooltip content={<TT/>}/>
-          <RBar dataKey="leads" name="Leads" radius={[4,4,0,0]}>
-            {BIOTER_UNITS.map((u,i)=><Cell key={i} fill={u.color}/>)}
-          </RBar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>}
-
-    {/* ── META ADS ── */}
-    {tab==="meta"&&<>
-      {showMetaLogin&&<MetaLoginPanel onClose={()=>setShowMetaLogin(false)}/>}
-      {/* Platform badge */}
-      <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"#1877f210",borderRadius:12,borderLeft:"4px solid #1877f2"}}>
-        <PlatformLogo id="meta" size={28}/>
-        <div style={{flex:1}}>
-          <div style={{color:C.tx,fontWeight:800,fontSize:15}}>Meta Ads</div>
-          <div style={{color:C.ts,fontSize:11}}>Facebook & Instagram · {new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}</div>
-        </div>
-        <button onClick={()=>setShowMetaLogin(true)}
-          style={{background:metaAuth?C.gr+"18":"#1877f2",color:metaAuth?C.gr:"#fff",border:metaAuth?"1px solid "+C.gr+"44":"none",borderRadius:9,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
-          <PlatformLogo id="facebook" size={14}/>{metaAuth?"✓ "+metaAuth.name.split(" ")[0]:"Conectar conta"}
-        </button>
-      </div>
-
-      {/* Real data from API */}
-      <MetaAdsRealData cl={cl} onOpenLogin={()=>setShowMetaLogin(true)}/>
-
-      {/* KPI grid (manual / live) */}
-      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-        <div style={{height:1,flex:1,background:C.b1}}/>
-        <span style={{color:C.ts,fontSize:10,fontWeight:600}}>DADOS MANUAIS (Métricas)</span>
-        <div style={{height:1,flex:1,background:C.b1}}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(145px,1fr))",gap:8}}>
-        <KpiCard label="ROAS" value={metaRoas+"x"} sub="retorno/invest." trend={metaRoas>=4?"+12%":"-5%"} color="#1877f2" good={metaRoas>=3}/>
-        <KpiCard label="Leads" value={cl.meta.leads.toLocaleString("pt-BR")} sub="último mês" trend="+8%" color="#1877f2" good={true}/>
-        <KpiCard label="CPC" value={"R$"+cl.meta.cpc} sub="custo/clique" trend="-3%" color="#1877f2" good={true}/>
-        <KpiCard label="CTR" value={cl.meta.ctr+"%"} sub="taxa de clique" trend="+1.2%" color="#1877f2" good={cl.meta.ctr>=2}/>
-        <KpiCard label="CPL" value={"R$"+(cl.meta.leads>0?(cl.meta.spend/cl.meta.leads).toFixed(0):"—")} sub="custo/lead" trend="-6%" color="#1877f2" good={true}/>
-        <KpiCard label="Conversões" value={Math.round(cl.meta.leads*0.42)} sub="taxa 42%" trend="+5%" color="#1877f2" good={true}/>
-        <KpiCard label="Frequência" value="3.2" sub="impressões/usuário" trend="+0.3" color="#1877f2" good={true}/>
-        <KpiCard label="CPM" value={"R$"+(cl.meta.spend/Math.max(1,cl.meta.leads)*2.8).toFixed(2)} sub="custo/mil imp." trend="-4%" color="#1877f2" good={true}/>
-      </div>
-
-      {/* Leads + ROAS trend */}
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Leads por Semana</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <AreaChart data={meta.weekly}>
-              <defs><linearGradient id="mgr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1877f2" stopOpacity={0.3}/><stop offset="95%" stopColor="#1877f2" stopOpacity={0}/></linearGradient></defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-              <XAxis dataKey="w" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={30}/>
-              <RTooltip content={<TT/>}/>
-              <RArea type="monotone" dataKey="leads" stroke="#1877f2" fill="url(#mgr)" strokeWidth={2} name="Leads"/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>ROAS Semanal</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={meta.weekly}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-              <XAxis dataKey="w" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={30}/>
-              <RTooltip content={<TT/>}/>
-              <RLine type="monotone" dataKey="roas" stroke="#1877f2" strokeWidth={2.5} dot={{r:3,fill:"#1877f2"}} name="ROAS"/>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Funnel + Distribution */}
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>Funil de Conversão</div>
-          <FunnelViz data={meta.funnel} color="#1877f2"/>
-        </div>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>Distribuição por Posicionamento</div>
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <MiniDonut data={meta.placements} size={130}/>
-            <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
-              {meta.placements.map(p=><div key={p.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:2,background:p.color}}/><span style={{color:C.ts}}>{p.name}</span></div>
-                <span style={{color:C.tx,fontWeight:700}}>{p.value}%</span>
-              </div>)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Demographics + Devices */}
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"2fr 1fr",gap:12}}>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Faixa Etária por Gênero</div>
-          <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={meta.ages} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1} horizontal={false}/>
-              <XAxis type="number" tick={{fontSize:9,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis type="category" dataKey="faixa" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={38}/>
-              <RTooltip content={<TT/>}/>
-              <RBar dataKey="m" name="Masc" fill="#1877f2" stackId="a" radius={[0,3,3,0]}/>
-              <RBar dataKey="f" name="Fem" fill="#c13584" stackId="a" radius={[0,3,3,0]}/>
-              <RLegend wrapperStyle={{fontSize:10,color:C.ts}}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>Dispositivos</div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <MiniDonut data={meta.devices} size={100}/>
-            <div style={{display:"flex",flexDirection:"column",gap:5}}>
-              {meta.devices.map(d=><div key={d.name} style={{display:"flex",alignItems:"center",gap:5,fontSize:10}}>
-                <div style={{width:7,height:7,borderRadius:1,background:d.color}}/><span style={{color:C.ts}}>{d.name}</span><span style={{color:C.tx,fontWeight:700,marginLeft:"auto"}}>{d.value}%</span>
-              </div>)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Spend trend */}
-      <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-        <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Investimento Semanal (R$)</div>
-        <ResponsiveContainer width="100%" height={130}>
-          <BarChart data={meta.weekly}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-            <XAxis dataKey="w" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false}/>
-            <YAxis tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={40}/>
-            <RTooltip content={<TT/>}/>
-            <RBar dataKey="spend" fill="#1877f2" radius={[4,4,0,0]} name="Investimento R$"/>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </>}
-
-    {/* ── GOOGLE ADS ── */}
-    {tab==="google"&&<>
-      {showGoogleLogin&&<GoogleLoginPanel onClose={()=>setShowGoogleLogin(false)}/>}
-      <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"#34a85310",borderRadius:12,borderLeft:"4px solid #34a853"}}>
-        <PlatformLogo id="google" size={28}/>
-        <div style={{flex:1}}>
-          <div style={{color:C.tx,fontWeight:800,fontSize:15}}>Google Ads + Analytics</div>
-          <div style={{color:C.ts,fontSize:11}}>Search, Display & Performance Max · {new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}</div>
-        </div>
-        <button onClick={()=>setShowGoogleLogin(true)}
-          style={{background:googleAuth?C.gr+"18":"#34a853",color:googleAuth?C.gr:"#fff",border:googleAuth?"1px solid "+C.gr+"44":"none",borderRadius:9,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
-          <PlatformLogo id="google" size={14}/>{googleAuth?"✓ "+googleAuth.name.split(" ")[0]:"Conectar conta"}
-        </button>
-      </div>
-
-      {/* Real data from Google APIs */}
-      <GoogleAdsRealData cl={cl} onOpenLogin={()=>setShowGoogleLogin(true)}/>
-
-      {/* Manual KPIs divider */}
-      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-        <div style={{height:1,flex:1,background:C.b1}}/>
-        <span style={{color:C.ts,fontSize:10,fontWeight:600}}>DADOS MANUAIS (Métricas)</span>
-        <div style={{height:1,flex:1,background:C.b1}}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(145px,1fr))",gap:8}}>
-        <KpiCard label="ROAS" value={googleRoas+"x"} sub="retorno/invest." trend={googleRoas>=4?"+9%":"-3%"} color="#34a853" good={googleRoas>=3}/>
-        <KpiCard label="Leads" value={cl.google.leads.toLocaleString("pt-BR")} sub="último mês" trend="+11%" color="#34a853" good={true}/>
-        <KpiCard label="CPC" value={"R$"+cl.google.cpc} sub="custo/clique" trend="-2%" color="#34a853" good={true}/>
-        <KpiCard label="CTR" value={cl.google.ctr+"%"} sub="taxa de clique" trend="+0.8%" color="#34a853" good={cl.google.ctr>=3}/>
-        <KpiCard label="Impressões" value={(cl.google.spend*120).toLocaleString("pt-BR")} sub="total mês" trend="+15%" color="#34a853" good={true}/>
-        <KpiCard label="Quality Score" value="7.2/10" sub="média campanhas" trend="+0.5" color="#34a853" good={true}/>
-        <KpiCard label="Conversões" value={Math.round(cl.google.leads*0.38)} sub="taxa 38%" trend="+7%" color="#34a853" good={true}/>
-        <KpiCard label="CPL" value={"R$"+(cl.google.leads>0?(cl.google.spend/cl.google.leads).toFixed(0):"—")} sub="custo/lead" trend="-5%" color="#34a853" good={true}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Leads + Impressões</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={google.weekly}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-              <XAxis dataKey="w" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={30}/>
-              <RTooltip content={<TT/>}/>
-              <RBar dataKey="leads" fill="#34a853" radius={[3,3,0,0]} name="Leads"/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>CTR Semanal (%)</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={google.weekly}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-              <XAxis dataKey="w" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={28}/>
-              <RTooltip content={<TT/>}/>
-              <RLine type="monotone" dataKey="ctr" stroke="#34a853" strokeWidth={2.5} dot={{r:3,fill:"#34a853"}} name="CTR %"/>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Campaigns table */}
-      <div style={{background:C.card,borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-        <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.b1}`,color:C.tx,fontWeight:700,fontSize:13}}>Performance por Campanha</div>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr style={{background:C.s1}}>
-              {["Campanha","Cliques","CPC","ROAS","Investimento"].map(h=>(
-                <th key={h} style={{padding:"9px 16px",color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.b1}`}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {google.campaigns.map((c,i)=>(
-                <tr key={i} style={{borderBottom:`1px solid ${C.b1}`}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.s1}
-                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <td style={{padding:"10px 16px",color:C.tx,fontWeight:600}}>{c.name}</td>
-                  <td style={{padding:"10px 16px",color:C.ts}}>{c.clicks.toLocaleString("pt-BR")}</td>
-                  <td style={{padding:"10px 16px",color:C.ts}}>R${c.cpc.toFixed(2)}</td>
-                  <td style={{padding:"10px 16px"}}>
-                    <span style={{color:c.roas>=4?C.gr:c.roas>=3?C.yw:C.rd,fontWeight:700}}>{c.roas.toFixed(1)}x</span>
-                  </td>
-                  <td style={{padding:"10px 16px",color:C.ts}}>R${c.spend.toLocaleString("pt-BR")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>Funil de Conversão</div>
-          <FunnelViz data={google.funnel} color="#34a853"/>
-        </div>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>Dispositivos</div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <MiniDonut data={google.devices} size={110}/>
-            <div style={{display:"flex",flexDirection:"column",gap:5}}>
-              {google.devices.map(d=><div key={d.name} style={{display:"flex",alignItems:"center",gap:5,fontSize:10}}>
-                <div style={{width:7,height:7,borderRadius:1,background:d.color}}/><span style={{color:C.ts}}>{d.name}</span><span style={{color:C.tx,fontWeight:700,marginLeft:8}}>{d.value}%</span>
-              </div>)}
-            </div>
-          </div>
-        </div>
-      </div>
-    </>}
-
-    {/* ── INSTAGRAM ── */}
-    {tab==="instagram"&&<InstagramRealData cl={cl} isMob={isMob}/>}
-
-        {tab==="facebook"&&<>
-      <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"#1877f210",borderRadius:12,borderLeft:"4px solid #1877f2"}}>
-        <PlatformLogo id="facebook" size={28}/>
-        <div>
-          <div style={{color:C.tx,fontWeight:800,fontSize:15}}>Facebook</div>
-          <div style={{color:C.ts,fontSize:11}}>Orgânico + Pago · {new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}</div>
-        </div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(145px,1fr))",gap:8}}>
-        <KpiCard label="Seguidores" value={(cl.meta.leads*12).toLocaleString("pt-BR")} sub="total" trend="+1.1%" color="#1877f2" good={true}/>
-        <KpiCard label="Alcance Org." value={(cl.meta.spend*30).toLocaleString("pt-BR")} sub="orgânico" trend="-2%" color="#1877f2" good={false}/>
-        <KpiCard label="Alcance Pago" value={(cl.meta.spend*80).toLocaleString("pt-BR")} sub="tráfego pago" trend="+8%" color="#1877f2" good={true}/>
-        <KpiCard label="Engajamento" value={(cl.meta.ctr*0.6).toFixed(1)+"%"} sub="taxa média" trend="+0.3%" color="#1877f2" good={true}/>
-        <KpiCard label="Curtidas/Post" value={Math.round(cl.meta.leads*0.9)} sub="média" trend="+5%" color="#1877f2" good={true}/>
-        <KpiCard label="Comentários" value={Math.round(cl.meta.leads*0.2)} sub="média/post" trend="+8%" color="#1877f2" good={true}/>
-        <KpiCard label="Compartilhamentos" value={Math.round(cl.meta.leads*0.15)} sub="média/post" trend="+12%" color="#1877f2" good={true}/>
-        <KpiCard label="CPM" value={"R$"+(cl.meta.spend/Math.max(1,cl.meta.leads)*3.2).toFixed(2)} sub="custo/mil imp." trend="-4%" color="#1877f2" good={true}/>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Alcance Orgânico vs Pago</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={face.weekly}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-              <XAxis dataKey="w" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={40}/>
-              <RTooltip content={<TT/>}/>
-              <RBar dataKey="alcance_org" fill="#1877f2aa" radius={[3,3,0,0]} name="Orgânico"/>
-              <RBar dataKey="alcance_pago" fill="#1877f2" radius={[3,3,0,0]} name="Pago"/>
-              <RLegend wrapperStyle={{fontSize:10}}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Engajamento Semanal</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <AreaChart data={face.weekly}>
-              <defs><linearGradient id="fbr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1877f2" stopOpacity={0.3}/><stop offset="95%" stopColor="#1877f2" stopOpacity={0}/></linearGradient></defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1}/>
-              <XAxis dataKey="w" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={28}/>
-              <RTooltip content={<TT/>}/>
-              <RArea type="monotone" dataKey="eng" stroke="#1877f2" fill="url(#fbr)" strokeWidth={2} name="Eng %"/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>Tipos de Reação</div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <MiniDonut data={face.reactions} size={110}/>
-            <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
-              {face.reactions.map(r=><div key={r.name} style={{display:"flex",justifyContent:"space-between",fontSize:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:6,height:6,borderRadius:1,background:r.color}}/><span style={{color:C.ts}}>{r.name}</span></div>
-                <span style={{color:C.tx,fontWeight:700}}>{r.value}%</span>
-              </div>)}
-            </div>
-          </div>
-        </div>
-        <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Performance por Tipo de Post</div>
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={face.postTypes} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke={C.b1} horizontal={false}/>
-              <XAxis type="number" tick={{fontSize:9,fill:C.td}} axisLine={false} tickLine={false}/>
-              <YAxis type="category" dataKey="name" tick={{fontSize:10,fill:C.td}} axisLine={false} tickLine={false} width={40}/>
-              <RTooltip content={<TT/>}/>
-              <RBar dataKey="alcance" fill="#1877f2" radius={[0,3,3,0]} name="Alcance"/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Score cards */}
-      <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
-        <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>Scores de Desempenho</div>
-        <div style={{display:"flex",justifyContent:"space-around",flexWrap:"wrap",gap:12}}>
-          <ScoreCircle score={cl.health} label="Saúde Geral" color={cl.health>=70?C.gr:cl.health>=50?C.yw:C.rd}/>
-          <ScoreCircle score={Math.min(100,Math.round(cl.meta.roas/5*100))} label="ROAS Score" color="#1877f2"/>
-          <ScoreCircle score={Math.min(100,Math.round(cl.meta.ctr/5*100))} label="CTR Score" color="#c13584"/>
-          <ScoreCircle score={Math.min(100,Math.round(cl.nps))} label="NPS Score" color={C.a}/>
-        </div>
-      </div>
-    </>}
-  </div>;
-}
-
-function ClienteInfo({cl}){
-  const mgr=TEAM.find(u=>u.id===cl.manager);
-  const [driveUrl,setDriveUrl]=useState(cl.driveUrl||"");
-  const [driveSaved,setDriveSaved]=useState(!!cl.driveUrl);
-  const [driveEditing,setDriveEditing]=useState(!cl.driveUrl);
-
-  const saveDrive=()=>{
-    cl.driveUrl=driveUrl.trim();
-    setDriveSaved(true);setDriveEditing(false);
-    try{localStorage.setItem("pixels-drive-"+cl.id,driveUrl.trim());}catch(e){}
-  };
-
-  // Load saved drive URL from localStorage
-  useState(()=>{
-    try{
-      const saved=localStorage.getItem("pixels-drive-"+cl.id);
-      if(saved){setDriveUrl(saved);setDriveSaved(true);setDriveEditing(false);cl.driveUrl=saved;}
-    }catch(e){}
-  });
-
-  const groups=[
-    {title:"Dados Cadastrais",items:[
-      {l:"Setor",v:cl.sector},{l:"Status",v:cl.status},
-      {l:"Na Pixels desde",v:cl.since},{l:"Gestor",v:mgr?.name||cl.manager},
-      {l:"MRR",v:"R$ "+cl.contract.toLocaleString("pt-BR")},{l:"NPS",v:cl.nps+"/100"},
-    ]},
-    {title:"Integracoes",items:[
-      {l:"Meta Account ID",v:cl.metaId||"—"},{l:"Google Account ID",v:cl.googleId||"—"},
-      {l:"Meta Pixel",v:cl.connected?"Ativo":"Pendente"},{l:"GA4",v:"Ativo"},
-      {l:"Integracao Meta",v:cl.connected?"Conectada":"Pendente"},{l:"Tag Manager",v:"Instalado"},
-    ]},
-    {title:"Oportunidades de Crescimento",items:[
-      {l:"Upsell potencial",v:(cl.upsell||[]).join(", ")||"—"},
-      {l:"Score de saude",v:cl.health+"/100"},
-    ]},
-  ];
-
-  return (<div style={{display:"flex",flexDirection:"column",gap:12}}>
-
-    {/* ── PASTA DO DRIVE ── */}
-    <div style={{background:C.card,borderRadius:14,overflow:"hidden",border:"1px solid "+C.b1}}>
-      <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <svg width="18" height="18" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
-            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-            <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
-            <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-            <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-            <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
-            <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
-          </svg>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Pasta do Cliente no Drive</div>
-        </div>
-        <div style={{display:"flex",gap:6}}>
-          {driveSaved&&!driveEditing&&(
-            <button onClick={()=>setDriveEditing(true)}
-              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"5px 12px",color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer"}}>
-              Editar
-            </button>
-          )}
-          {driveSaved&&!driveEditing&&driveUrl&&(
-            <a href={driveUrl} target="_blank" rel="noopener"
-              style={{background:"linear-gradient(135deg,#1a73e8,#4285f4)",color:"#fff",border:"none",borderRadius:8,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5}}>
-              Abrir pasta →
-            </a>
-          )}
-        </div>
-      </div>
-
-      <div style={{padding:"16px 18px"}}>
-        {driveEditing?(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{color:C.ts,fontSize:11,lineHeight:1.6}}>
-              Cole o link da pasta compartilhada do Google Drive para este cliente. Quando uma demanda for aprovada, o link aparece automaticamente para o time.
-            </div>
-            <div style={{display:"flex",gap:8}}>
-              <input
-                value={driveUrl}
-                onChange={e=>setDriveUrl(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/..."
-                style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 12px",color:C.tx,fontSize:12,outline:"none",fontFamily:"inherit"}}
-              />
-              <button onClick={saveDrive} disabled={!driveUrl.trim()}
-                style={{background:driveUrl.trim()?"linear-gradient(135deg,#1a73e8,#4285f4)":C.b1,color:driveUrl.trim()?"#fff":C.td,border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12,cursor:driveUrl.trim()?"pointer":"not-allowed",whiteSpace:"nowrap"}}>
-                Salvar
-              </button>
-              {driveSaved&&<button onClick={()=>setDriveEditing(false)}
-                style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 12px",color:C.ts,fontSize:12,cursor:"pointer"}}>
-                Cancelar
-              </button>}
-            </div>
-          </div>
-        ):(
-          driveUrl?(
-            <div style={{display:"flex",alignItems:"center",gap:10,background:C.s1,borderRadius:10,padding:"10px 14px"}}>
-              <svg width="16" height="16" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
-                <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-                <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
-                <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-                <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-                <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
-                <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
-              </svg>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:C.tx,fontSize:12,fontWeight:600}}>Pasta configurada</div>
-                <div style={{color:C.td,fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{driveUrl}</div>
-              </div>
-              <span style={{color:C.gr,fontSize:12}}>✓</span>
-            </div>
-          ):(
-            <div style={{textAlign:"center",padding:"20px 0",color:C.td,fontSize:12}}>
-              Nenhuma pasta configurada ainda.
-              <button onClick={()=>setDriveEditing(true)}
-                style={{display:"block",margin:"8px auto 0",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"6px 14px",color:C.ts,fontSize:11,cursor:"pointer"}}>
-                + Configurar pasta
-              </button>
-            </div>
-          )
-        )}
-      </div>
-    </div>
-
-    {groups.map(g=>(
-      <div key={g.title} style={{background:C.card,borderRadius:14,overflow:"hidden",border:"1px solid "+C.b1}}>
-        <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.b1}`,color:C.tx,fontWeight:700,fontSize:13}}>{g.title}</div>
-        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr"}}>
-          {g.items.map((r,i)=>(
-            <div key={r.l} style={{padding:"11px 18px",borderBottom:i<g.items.length-2?`1px solid ${C.b1}`:"none",borderRight:i%2===0?`1px solid ${C.b1}`:"none"}}>
-              <div style={{color:C.td,fontSize:10,marginBottom:3}}>{r.l}</div>
-              <div style={{color:C.tx,fontSize:13,fontWeight:600}}>{r.v}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    ))}
-  </div>);
-}
-
-/* ─── COMPETITOR INTELLIGENCE ─────────────── */
-
-// Simulated competitor post data (in production: connect Meta Graph API)
-const COMP_POSTS=(clId)=>{
-  const comps=["Concorrente A","Concorrente B","Concorrente C"];
-  const themes={
-    construschorr:["Obra entregue em tempo recorde","Por que escolher o piso vazado?","Comparativo: piso comum vs vazado","5 erros na construção de aviário","Tour completo de granja moderna"],
-    bioter:["Produtividade leiteira +40% com tecnologia","Bem-estar animal na suinocultura","Case: fazenda modelo em SC","Bioter Paraguay — expansão","Resultado real: 6 meses de parceria"],
-    arabuta:["Pré-moldado economiza 30% do tempo","Obra finalizada em 60 dias","Tour pela fábrica","Comparativo: convencional vs pré-moldado","Depoimento: construtor de SC"],
-    climaves:["Inverno chegando: prepare seu aviário","Climatização que reduz mortalidade","Case: granja com 0% de perda","Tecnologia alemã no campo BR","Ar-condicionado vs ventilação natural"],
-    vetservice:["Leite de precisão: +2L por vaca/dia","Robô de ordenha em ação","Vacinação estratégica para rebanho","Nutrição bovina descomplicada","Parceria que transforma fazenda"],
-  };
-  const list=themes[clId]||themes.construschorr;
-  const platforms=["instagram","facebook"];
-  const posts=[];
-  let id=1;
-  platforms.forEach(plat=>{
-    comps.forEach((comp,ci)=>{
-      list.slice(0,4).forEach((theme,ti)=>{
-        const eng=Math.round((8000-ci*1200-ti*400)*(0.8+Math.random()*0.4));
-        const views=Math.round(eng*(12+Math.random()*8));
-        const comments=Math.round(eng*(0.08+Math.random()*0.06));
-        const shares=Math.round(eng*(0.15+Math.random()*0.1));
-        const imgSeed=100+id*7;
-        posts.push({
-          id:id++,
-          platform:plat,
-          competitor:comp,
-          title:theme,
-          desc:`${theme}. ${["Conheça nossa solução","Vem conferir","Saiba mais","Resultados reais","Transforme sua propriedade"][ti%5]}! #agronegocio #${clId}`,
-          thumbnail:`https://picsum.photos/seed/${imgSeed}/400/400`,
-          engagement:eng,
-          views,
-          comments,
-          shares,
-          date:`${20+ci} mar 2026`,
-          type:["Reels","Carrossel","Foto","Vídeo"][ti%4],
-          url:`https://www.${plat==="instagram"?"instagram":"facebook"}.com/p/demo${id}/`,
-          analysis:null,
-        });
-      });
-    });
-  });
-  return posts;
-};
-
-const COMP_LINKS={
-  construschorr:[
-    {comp:"Concorrente A",instagram:"@granja_sc",facebook:"GranjaSC",linkedin:"granja-sc",tiktok:"@grunjasc"},
-    {comp:"Concorrente B",instagram:"@pisovazadopr",facebook:"PisoVazadoPR",linkedin:"piso-vazado-pr",tiktok:null},
-    {comp:"Concorrente C",instagram:"@avicultura_sul",facebook:"AviculturaSul",linkedin:"avicultura-sul",tiktok:"@avicultura_sul"},
-  ],
-  bioter:[
-    {comp:"Concorrente A",instagram:"@agrobiotech_br",facebook:"AgroBiotechBR",linkedin:"agro-biotech",tiktok:"@agrobiotech"},
-    {comp:"Concorrente B",instagram:"@nutricao_bovina",facebook:"NutricaoBovina",linkedin:null,tiktok:null},
-    {comp:"Concorrente C",instagram:"@leite_precisao",facebook:"LeitePrecisao",linkedin:"leite-precisao",tiktok:"@leiteprecisao"},
-  ],
-  arabuta:[
-    {comp:"Concorrente A",instagram:"@premoldados_sc",facebook:"PreMoldadosSC",linkedin:null,tiktok:null},
-    {comp:"Concorrente B",instagram:"@construcao_rural",facebook:"ConstrucaoRural",linkedin:"construcao-rural",tiktok:"@construcaorural"},
-    {comp:"Concorrente C",instagram:"@obra_rapida_br",facebook:"ObraRapidaBR",linkedin:null,tiktok:"@obrarapida"},
-  ],
-};
-
-const META_ADS_DEMO=(clId)=>[
-  {id:"ad1",competitor:"Concorrente A",type:"Vídeo",headline:"Transforme sua granja com tecnologia",desc:"Resultado comprovado em mais de 500 granjas. Solicite uma visita técnica gratuita.",cta:"Saiba mais",spend:"R$ 8.200/mês",thumbnail:`https://picsum.photos/seed/ad1${clId}/400/300`,analysis:null,platform:"meta"},
-  {id:"ad2",competitor:"Concorrente B",type:"Carrossel",headline:"5 motivos para escolher nossa solução",desc:"Qualidade, entrega rápida, suporte técnico 24h e garantia de 2 anos. Consulte nossos representantes.",cta:"Ver Mais",spend:"R$ 5.400/mês",thumbnail:`https://picsum.photos/seed/ad2${clId}/400/300`,analysis:null,platform:"meta"},
-  {id:"ad3",competitor:"Concorrente C",type:"Foto",headline:"Promoção: frete grátis para SC e PR",desc:"Aproveite! Entregamos em todo o sul do Brasil com a melhor estrutura logística.",cta:"Compre Agora",spend:"R$ 12.100/mês",thumbnail:`https://picsum.photos/seed/ad3${clId}/400/300`,analysis:null,platform:"meta"},
-  {id:"ad4",competitor:"Concorrente A",type:"Vídeo",headline:"Case de sucesso: fazenda modelo 2026",desc:"Veja como triplicamos a produtividade em apenas 6 meses com nossa metodologia exclusiva.",cta:"Assistir",spend:"R$ 9.800/mês",thumbnail:`https://picsum.photos/seed/ad4${clId}/400/300`,analysis:null,platform:"google"},
-  {id:"ad5",competitor:"Concorrente B",type:"Texto",headline:"Solicite orçamento — resposta em 2h",desc:"Atendimento especializado. Mais de 1.000 projetos entregues no Sul do Brasil.",cta:"Solicitar",spend:"R$ 4.200/mês",thumbnail:`https://picsum.photos/seed/ad5${clId}/400/300`,analysis:null,platform:"google"},
-];
 
 function ClienteConcorrencia({cl,tab,setTab,readOnly}){
   // ═══ CONCORRÊNCIA v3 — lista única, sem abas ═══
@@ -57844,7 +56122,9 @@ function MindMapEditor({clientId,onBack}){
 
 // ======= 17_gestao_midia.jsx =======
 // Gestão de mídia — área focada em tráfego pago (Erick + sócios).
-// Estrutura: lista de clientes → painel cliente → 9 abas internas.
+// Estrutura: topo (Dashboard · Clientes · Demandas · Relatórios) → QG do cliente (17b) → "Cadastro e acessos →"
+// (só Briefing e Contas e acessos, gravados no servidor).
+// v96 (13/10/2026) M14: cabeçalho atualizado — o painel antigo de 9 abas foi aposentado (M1).
 // Depende de: 00_globals, 00_clientes_data, 04_calendario (helpers)
 
 /* ─── CONSTANTES ─────────────────────────────────────── */
@@ -57870,25 +56150,46 @@ const MEDIA_TASK_STATUS=[
   {id:"relatorio",        label:"Relatório",               color:"#4db8ff"},
   {id:"concluido",        label:"Concluído",               color:"#16a34a"},
 ];
-// Seed V2: clientes de mídia paga reais com investimentos cadastrados.
-// Bioter aparece por UNIDADE (não como cliente único genérico).
-const MEDIA_CLIENTS_SEED_V2=[
-  // ─ Grupo Bioter (cada unidade tem investimento próprio) ─
-  {client_id:"bioter_chapeco",   parent_client:"bioter", bioter_unit:"chapeco",    name:"Bioter Chapecó",              plataforma:"meta_google", investimento_mensal:10000, investimento_meta:5000, investimento_google:5000, status:"em_estruturacao"},
-  {client_id:"bioter_toledo",    parent_client:"bioter", bioter_unit:"toledo",     name:"Bioter Toledo",               plataforma:"meta",        investimento_mensal:300,   investimento_meta:300,  investimento_google:0,    status:"em_estruturacao"},
-  {client_id:"bioter_castro",    parent_client:"bioter", bioter_unit:"castro",     name:"Bioter Castro",               plataforma:"meta",        investimento_mensal:1000,  investimento_meta:1000, investimento_google:0,    status:"em_estruturacao"},
-  {client_id:"bioter_gloria",    parent_client:"bioter", bioter_unit:"gloria",     name:"Bioter Glória de Dourados",   plataforma:"meta",        investimento_mensal:300,   investimento_meta:300,  investimento_google:0,    status:"em_estruturacao"},
-  {client_id:"bioter_uberlandia",parent_client:"bioter", bioter_unit:"uberlandia", name:"Bioter Uberlândia",           plataforma:"meta",        investimento_mensal:700,   investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
-  {client_id:"bioter_paraguay",  parent_client:"bioter", bioter_unit:"paraguay",   name:"Bioter Paraguay / Obligado",  plataforma:"meta",        investimento_mensal:700,   investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
-  // ─ Demais clientes ─
-  {client_id:"construschorr",    parent_client:"construschorr", name:"Construschorr",          plataforma:"meta",        investimento_mensal:1400, investimento_meta:1400, investimento_google:0,    status:"em_estruturacao"},
-  {client_id:"arabuta",          parent_client:"arabuta",       name:"Arabutã Pré-Moldados",   plataforma:"meta",        investimento_mensal:700,  investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
-  {client_id:"vetservice",       parent_client:"vetservice",    name:"VetService",             plataforma:"meta",        investimento_mensal:750,  investimento_meta:750,  investimento_google:0,    status:"em_estruturacao"},
-];
-
+// v96 (13/10/2026) S2: a lista fixa de clientes (MEDIA_CLIENTS_SEED_V2 — Bioter ×6, Construschorr,
+// Arabutã, VetService, com verbas) saiu do código. Ela era recolocada no navegador a cada carga e
+// fazia cliente apagado do banco "ressuscitar". A lista agora vem só de media_clients (useQGClientesSync).
+const MEDIA_CLIENTS_SEED_V2=[];
 /* ─── HELPERS DE STORAGE ─── */
 const MEDIA_LS_KEY="pixels-media-v2";
 const MEDIA_LS_KEY_OLD="pixels-media-v1";
+/* v96 (13/10/2026) S19: ao sair (logout ou sessão encerrada), apaga do navegador os dados de cliente da mídia/ads:
+   cache dos clientes de mídia, texto de alarme, números/nomes de campanha do diagnóstico, dados antigos de
+   Meta/GA4/Instagram e os tokens velhos da Meta/Google (código antigo). Preferências de tela (modo apresentação,
+   vista do Público, ficha aberta, "mostrar todos") ficam. Também zera os caches de memória (17c). */
+const PX_MIDIA_LS_EXATAS=["pixels-meta-auth-v1","pixels-google-auth-v1"];
+const PX_MIDIA_LS_PREFIXOS=["pixels-meta-ads-","pixels-ga4-data-","pixels-ig-data-","px_tcli_","px_diag_","px_tseg_","px_ads_","px_qg_","px_midia_"];
+const PX_MIDIA_LS_FICAM=["px_ads_vista","px_qg_clientes_todos","px_ficha_midia_aberta","px_modo_apresentacao","px_diag_dias"];
+/* v96 (13/10/2026) REVISAO RB [PARA F3]: preferências de tela que não são dado de cliente também ficam
+   (cartão fechado, aviso de erro já dado hoje). A "colinha vista" saiu da lista de prefixos apagados. */
+const PX_MIDIA_LS_FICAM_PREFIXOS=["px_tcli_fechado_","px_tseg_erro:"];
+/* v96 (13/10/2026) REVISAO RB [PARA F3] ALTA: o store antigo da mídia (pixels-media-v2/v1) NÃO é mais apagado inteiro ao sair.
+   Sai o cache de clientes (vem do banco). O que a pessoa digitou no painel antigo e AINDA não subiu para o servidor
+   (_pxMidiaMigraLocal) fica, para subir no próximo login — senão seria perda sem volta. O que já subiu não está mais lá. */
+function _pxMidiaLimpaStoreAntigo(st,k){
+  try{
+    const raw=st.getItem(k); if(!raw) return;
+    let o=null; try{ o=JSON.parse(raw); }catch(_){ st.removeItem(k); return; }
+    const fica={}; let tem=false;
+    PX_MIDIA_SECOES_LOCAIS.forEach(function(sec){ const v=o&&o[sec]; if(v&&typeof v==="object"&&Object.keys(v).length){ fica[sec]=v; tem=true; } });
+    if(tem){ fica.clients=[]; st.setItem(k,JSON.stringify(fica)); } else st.removeItem(k);
+  }catch(_){ }
+}
+function _pxMidiaLimpaSaida(){
+  try{ _pxMidiaLimpaStoreAntigo(window.localStorage,"pixels-media-v2"); _pxMidiaLimpaStoreAntigo(window.localStorage,"pixels-media-v1"); }catch(_){ }
+  const limpa=function(st){ try{ if(!st) return 0; const del=[]; for(let i=0;i<st.length;i++){ const k=st.key(i); if(!k||PX_MIDIA_LS_FICAM.indexOf(k)>=0||PX_MIDIA_LS_FICAM_PREFIXOS.some(function(p){ return k.indexOf(p)===0; })) continue;
+      if(PX_MIDIA_LS_EXATAS.indexOf(k)>=0||PX_MIDIA_LS_PREFIXOS.some(function(p){ return k.indexOf(p)===0; })) del.push(k); }
+    del.forEach(function(k){ try{ st.removeItem(k); }catch(_){ } }); return del.length; }catch(_){ return 0; } };
+  try{ limpa(window.localStorage); }catch(_){ }
+  try{ limpa(window.sessionStorage); }catch(_){ }
+  try{ if(typeof _pxMidiaLimpaMemoria==="function") _pxMidiaLimpaMemoria(); }catch(_){ }
+}
+/* v96 S19: o token antigo da Meta (login descontinuado) não fica mais guardado nem com alguém logado */
+try{ if(typeof window!=="undefined"&&window.localStorage) window.localStorage.removeItem("pixels-meta-auth-v1"); }catch(_){ }
 function loadMediaStore(){
   try{const raw=localStorage.getItem(MEDIA_LS_KEY); if(!raw)return null; return JSON.parse(raw);}
   catch(e){return null;}
@@ -57899,33 +56200,8 @@ function saveMediaStore(store){
 function initMediaStore(){
   const ex=loadMediaStore();
   if(ex){
-    // Migração leve: garante que todos os clientes do seed V2 existem no store.
-    // Não sobrescreve investimentos/resultados que o usuário já personalizou.
-    const seedIds=new Set(MEDIA_CLIENTS_SEED_V2.map(c=>c.client_id));
-    const existingIds=new Set((ex.clients||[]).map(c=>c.client_id));
-    const missing=MEDIA_CLIENTS_SEED_V2.filter(c=>!existingIds.has(c.client_id));
-    if(missing.length>0){
-      const enriched=missing.map(c=>Object.assign({
-        meta_principal:"", resultado_mes:"", responsavel:"erick",
-        ultima_atualizacao:new Date().toISOString(), proxima_acao:"",
-      },c));
-      ex.clients=[...(ex.clients||[]),...enriched];
-      saveMediaStore(ex);
-    }
-    // Atualiza investimentos zerados pros valores do seed (uma vez só).
-    let changed=false;
-    ex.clients=(ex.clients||[]).map(c=>{
-      const sd=MEDIA_CLIENTS_SEED_V2.find(s=>s.client_id===c.client_id);
-      if(!sd)return c;
-      const out={...c};
-      if((!c.investimento_mensal||Number(c.investimento_mensal)===0)&&sd.investimento_mensal){out.investimento_mensal=sd.investimento_mensal;changed=true;}
-      if((!c.investimento_meta||Number(c.investimento_meta)===0)&&sd.investimento_meta){out.investimento_meta=sd.investimento_meta;changed=true;}
-      if((!c.investimento_google||Number(c.investimento_google)===0)&&sd.investimento_google){out.investimento_google=sd.investimento_google;changed=true;}
-      if(!c.parent_client&&sd.parent_client){out.parent_client=sd.parent_client;changed=true;}
-      if(!c.bioter_unit&&sd.bioter_unit){out.bioter_unit=sd.bioter_unit;changed=true;}
-      return out;
-    });
-    if(changed)saveMediaStore(ex);
+    // v96 (13/10/2026) S2: não completa mais clientes nem verbas a partir da lista fixa — o banco manda.
+    if(!Array.isArray(ex.clients)) ex.clients=[];
     return ex;
   }
   // Tenta importar do V1 (caso usuário tenha customizado)
@@ -57945,6 +56221,200 @@ function initMediaStore(){
   return seed;
 }
 
+/* ─── v96 (13/10/2026) S1/M1/R12/Q1: o que o painel antigo guardava só no navegador vai para o servidor ───
+   Briefing           → media_briefings  (1 linha por cliente de mídia; colunas = nomes dos campos)
+   Contas e acessos   → media_access     (1 linha por cliente; colunas em snake_case, ver PX_MIDIA_ACESSO_MAP)
+   Histórico (eventos)→ media_history    (o QG mostra; ver PENDENCIAS F2)
+   Demandas antigas   → client_demandas  (o quadro da aba Demandas)
+   Todas já existiam no banco (vazias), com RLS de agência. Cada pessoa, ao abrir o app, sobe UMA vez o que estava
+   no navegador dela (_pxMidiaMigraLocal); o que sobe sai do navegador. Se der erro, fica no navegador e tenta de novo. */
+const PX_MIDIA_BRIEF_CAMPOS=["objetivo","publico","regiao","servicos","oferta","ticket","objecoes","concorrentes","observacoes"];
+const PX_MIDIA_DIAG_CAMPOS=["diag_funcionando","diag_melhorar","diag_gargalo","diag_proxima"];   // "Diagnóstico rápido" do Dashboard antigo (preservado no servidor)
+const PX_MIDIA_ACESSO_MAP=[["metaAccount","meta_account"],["bm","bm"],["pixel","pixel"],["googleAds","google_ads"],["gtm","gtm"],["analytics","analytics"],["landingPage","landing_page"],["whatsapp","whatsapp"],["statusMeta","status_meta"],["statusGoogle","status_google"],["observacoes","observacoes"]];
+const PX_MIDIA_SECOES_LOCAIS=["briefings","access","history","tasks","goals","campaigns","results","reports"];   // o que o painel antigo digitava (só neste navegador)
+const PX_MIDIA_DEM_STATUS={planejamento:"nao_iniciada",configuracao:"andamento",otimizacao:"andamento",relatorio:"andamento",aguard_cliente:"aguardando",aguard_aprovacao:"revisao",concluido:"concluida"};
+function _pxMidiaTxt(x){ return x==null?"":String(x); }
+function _pxMidiaQuem(p){
+  const u=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER:{};
+  return {id:(p&&p.id)||u.id||null, nome:(p&&p.nome)||u.name||u.id||""};
+}
+/* Grava um evento no histórico do servidor. Devolve true se gravou. */
+function _pxMidiaHistSrv(clientId,ev,quem){
+  if(!window._sb||!clientId) return Promise.resolve(false);
+  const q=_pxMidiaQuem(quem);
+  const row={client_id:clientId,type:(ev&&ev.type)||null,label:(ev&&ev.label)||"",payload:(ev&&ev.payload)||null,user_name:q.nome,user_id:q.id};
+  if(ev&&ev.ts) row.ts=ev.ts;
+  return window._sb.from("media_history").insert(row).then(function(r){ return !r.error; },function(){ return false; });
+}
+/* v96 (13/10/2026) S3: o banco só aceita gravar Briefing/Contas de quem tem "midia.cadastro.editar", e metas só dos sócios.
+   Para quem não tem a chave, a subida não tenta (ou, se o banco recusar, para em silêncio e só tenta de novo no dia
+   seguinte) — o dado continua no navegador até alguém com a chave entrar neste computador. Nada se perde. */
+const PX_MIDIA_MIGRA_NEG="px_midia_migra_neg";   // prefixo px_midia_: some no logout (outro login tenta de novo)
+function _pxMidiaHoje(){ const d=new Date(); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
+function _pxMidiaNegado(uid,sec){ try{ const o=JSON.parse(localStorage.getItem(PX_MIDIA_MIGRA_NEG)||"{}")||{}; return o[(uid||"?")+"|"+sec]===_pxMidiaHoje(); }catch(_){ return false; } }
+function _pxMidiaNegar(uid,sec){ try{ const o=JSON.parse(localStorage.getItem(PX_MIDIA_MIGRA_NEG)||"{}")||{}; o[(uid||"?")+"|"+sec]=_pxMidiaHoje(); localStorage.setItem(PX_MIDIA_MIGRA_NEG,JSON.stringify(o)); }catch(_){ } }
+function _pxMidiaErroPerm(err){ if(!err) return false; const m=String(err.message||"").toLowerCase(); return err.code==="42501"||m.indexOf("row-level security")>=0||m.indexOf("permission denied")>=0||m.indexOf("sem permiss")>=0||m.indexOf("só os sócios")>=0; }
+function _pxMidiaPodeChave(chave,quem){
+  if(typeof pxBloco!=="function") return true;
+  const uid=(quem&&quem.id)||((typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:null);
+  if(!uid) return false;   // ainda sem saber quem é: tenta de novo quando a Gestão de mídia abrir
+  try{ return !!pxBloco(chave,uid); }catch(_){ return false; }
+}
+let _pxMidiaMigrando=null;
+/* Sobe uma vez para o servidor o que o painel antigo deixou no navegador desta pessoa.
+   Regra de conflito: o servidor manda. Campo vazio no servidor é preenchido; campo com texto diferente NÃO é
+   sobrescrito — o texto deste computador vai para o histórico do cliente (media_history, tipo *_navegador). */
+function _pxMidiaMigraLocal(quem){
+  if(_pxMidiaMigrando) return _pxMidiaMigrando;
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const st0=loadMediaStore();
+  if(!sb||!st0) return Promise.resolve(false);
+  const cheio=function(o){ return o&&typeof o==="object"&&Object.keys(o).some(function(k){ const v=o[k]; return Array.isArray(v)?v.length>0:(v&&typeof v==="object"?Object.keys(v).some(function(j){ return _pxMidiaTxt(v[j]).trim()!==""; }):false); }); };
+  if(!PX_MIDIA_SECOES_LOCAIS.some(function(sec){ return cheio(st0[sec]); })) return Promise.resolve(false);
+  const q=_pxMidiaQuem(quem);
+  const feitos={briefings:[],access:[],history:[],tasks:[],goals:[],campaigns:[],results:[],reports:[]};
+  const ficha=async function(secao,tabela,pares,tipoHist,nomeHist,chave){
+    const loc=st0[secao]||{};
+    const ids=Object.keys(loc).filter(function(id){ const o=loc[id]||{}; return pares.some(function(p){ return _pxMidiaTxt(o[p[0]]).trim()!==""; }); });
+    Object.keys(loc).forEach(function(id){ if(ids.indexOf(id)<0) feitos[secao].push(id); });   // vazios: só limpa
+    if(!ids.length) return;
+    if(chave&&(!_pxMidiaPodeChave(chave,quem)||_pxMidiaNegado(q.id,secao))) return;   // v96 S3: sem a chave, nem tenta
+    const r=await sb.from(tabela).select("*").in("client_id",ids);
+    if(r.error){ console.warn("[midia migra] "+tabela,r.error.message); return; }
+    const srv={}; (r.data||[]).forEach(function(x){ srv[x.client_id]=x; });
+    for(const id of ids){
+      const o=loc[id]||{}; const s=srv[id]||null; const patch={}; const difs={};
+      pares.forEach(function(p){ const lv=_pxMidiaTxt(o[p[0]]); if(lv.trim()==="") return; const sv=_pxMidiaTxt(s&&s[p[1]]);
+        if(sv.trim()==="") patch[p[1]]=lv; else if(sv!==lv) difs[p[1]]=lv; });
+      let ok=true;
+      if(Object.keys(patch).length){
+        patch.client_id=id; patch.updated_at=new Date().toISOString();
+        const w=s?await sb.from(tabela).update(patch).eq("client_id",id).select("client_id"):await sb.from(tabela).insert(patch).select("client_id");
+        ok=!w.error&&Array.isArray(w.data)&&w.data.length>0;
+        if(!ok){
+          // v96 S3: recusa do banco (ou 0 linhas = política barrou) → para esta seção hoje, sem aviso; o dado fica no navegador
+          if(_pxMidiaErroPerm(w.error)||(!w.error&&s)){ _pxMidiaNegar(q.id,secao); return; }
+          console.warn("[midia migra] "+tabela+" "+id,(w.error&&w.error.message)||"0 linhas");
+        }
+      }
+      if(ok&&Object.keys(difs).length){
+        ok=await _pxMidiaHistSrv(id,{type:tipoHist,label:nomeHist+": texto diferente achado no computador de "+(q.nome||"alguém")+" (o do servidor foi mantido; o deste computador ficou aqui)",payload:{campos:difs}},quem);
+      }
+      if(ok) feitos[secao].push(id);
+    }
+  };
+  const historico=async function(){
+    const loc=st0.history||{};
+    for(const id of Object.keys(loc)){
+      const evs=(loc[id]||[]).filter(function(e){ return e&&e.label; });
+      if(!evs.length){ feitos.history.push(id); continue; }
+      const r=await sb.from("media_history").select("ts,label").eq("client_id",id);
+      if(r.error){ console.warn("[midia migra] historico",r.error.message); continue; }
+      const ja={}; (r.data||[]).forEach(function(x){ ja[new Date(x.ts).getTime()+"|"+x.label]=1; });
+      const novos=evs.filter(function(e){ return !ja[new Date(e.ts).getTime()+"|"+e.label]; }).map(function(e){
+        return {client_id:id,type:e.type||null,label:e.label,payload:{origem:"navegador"},user_name:e.user||"",user_id:null,ts:e.ts||new Date().toISOString()}; });
+      if(!novos.length){ feitos.history.push(id); continue; }
+      const w=await sb.from("media_history").insert(novos);
+      if(w.error){ console.warn("[midia migra] historico "+id,w.error.message); continue; }
+      feitos.history.push(id);
+    }
+  };
+  const demandas=async function(){
+    const loc=st0.tasks||{};
+    for(const id of Object.keys(loc)){
+      const lista=(loc[id]||[]).filter(function(t){ return t&&_pxMidiaTxt(t.titulo||t.title).trim(); });
+      if(!lista.length){ feitos.tasks.push(id); continue; }
+      const mc=(st0.clients||[]).find(function(c){ return c.client_id===id; })||null;
+      const pai=(mc&&mc.parent_client)||(String(id).indexOf("bioter_")===0?"bioter":id);
+      const unidMc=(mc&&mc.bioter_unit)||(String(id).indexOf("bioter_")===0?String(id).slice(7):"");
+      const r=await sb.from("client_demandas").select("titulo,created_at").eq("client_id",pai);
+      if(r.error){ console.warn("[midia migra] demandas",r.error.message); continue; }
+      const ja={}; (r.data||[]).forEach(function(x){ ja[x.titulo+"|"+new Date(x.created_at).getTime()]=1; });
+      const novas=lista.filter(function(t){ return !ja[_pxMidiaTxt(t.titulo||t.title).trim()+"|"+new Date(t.created_at||0).getTime()]; }).map(function(t){
+        return {client_id:pai,unidade:t.unidade||unidMc||"",titulo:_pxMidiaTxt(t.titulo||t.title).trim(),categoria:"trafego",
+          descricao:_pxMidiaTxt(t.descricao)+(t.tipo&&t.tipo!=="outro"?((t.descricao?"\n":"")+"Tipo: "+String(t.tipo).replace(/_/g," ")):""),
+          status:PX_MIDIA_DEM_STATUS[t.status]||"nao_iniciada",prioridade:"normal",responsavel:t.responsavel||"",
+          prazo:t.prazo||null,tarefas:[],created_by:q.nome||"",created_at:t.created_at||new Date().toISOString(),updated_at:new Date().toISOString()}; });
+      if(!novas.length){ feitos.tasks.push(id); continue; }
+      const w=await sb.from("client_demandas").insert(novas);
+      if(w.error){ console.warn("[midia migra] demandas "+id,w.error.message); continue; }
+      feitos.tasks.push(id);
+    }
+  };
+  /* v96 (13/10/2026) R5: metas antigas (aba Metas do painel antigo) → ads_metas, pela função oficial
+     (ads_metas_ler + ads_metas_salvar; o servidor mantém media_goals igual). Só os sócios mudam metas: para os
+     outros não tenta (S3). Só preenche campo VAZIO do mês (meta herdada do mês anterior conta como vazia);
+     valor diferente, e investimento/conversões (que não existem na meta nova), vão para o histórico do cliente. */
+  const metas=async function(){
+    const loc=st0.goals||{};
+    const MAP=[["leads","leads_meta"],["cpl","cpl_max"],["roas","roas_meta"]];
+    const num=function(x){ const n=Number(String(x==null?"":x).replace(",",".")); return isFinite(n)&&n>0?n:null; };
+    if(_pxMidiaNegado(q.id,"goals")) return;
+    for(const id of Object.keys(loc)){
+      const meses=loc[id]||{};
+      const chaves=Object.keys(meses).filter(function(m){ const g=meses[m]||{}; return /^\d{4}-\d{2}$/.test(m)&&(MAP.some(function(p){ return num(g[p[0]])!==null; })||num(g.investimento)!==null||num(g.conversoes)!==null); });
+      if(!chaves.length){ feitos.goals.push(id); continue; }
+      let ok=true; const difs={};
+      for(const m of chaves){
+        const g=meses[m]||{};
+        const r=await sb.rpc("ads_metas_ler",{p_client:id,p_mes:m+"-01"});
+        if(r.error||!r.data||r.data.ok===false){ ok=false; if(_pxMidiaErroPerm(r.error)||(r.data&&_pxMidiaErroPerm({message:r.data.erro}))){ _pxMidiaNegar(q.id,"goals"); return; } console.warn("[midia migra] metas "+id+" "+m,(r.error&&r.error.message)||(r.data&&r.data.erro)||""); break; }
+        if(!r.data.pode_editar){ _pxMidiaNegar(q.id,"goals"); return; }   // S3: não é sócio — fica no navegador, sem aviso
+        const meta=r.data.meta||{}; const propria=meta.herdada?{}:meta;
+        const p={fat_meta:meta.fat_meta,fat_real:propria.fat_real,vendas_meta:meta.vendas_meta,vendas_real:propria.vendas_real,leads_meta:meta.leads_meta,cpl_max:meta.cpl_max,ctr_min:meta.ctr_min,roas_meta:meta.roas_meta,obs:propria.obs};
+        let muda=false;
+        MAP.forEach(function(par){ const lv=num(g[par[0]]); if(lv===null) return; const sv=num(propria[par[1]]);
+          if(sv===null){ p[par[1]]=lv; muda=true; } else if(sv!==lv){ difs[m]=difs[m]||{}; difs[m][par[1]]=lv; } });
+        if(num(g.investimento)!==null||num(g.conversoes)!==null){ difs[m]=difs[m]||{}; if(num(g.investimento)!==null) difs[m].investimento=num(g.investimento); if(num(g.conversoes)!==null) difs[m].conversoes=num(g.conversoes); }
+        if(!muda) continue;
+        Object.keys(p).forEach(function(k){ p[k]=(p[k]===null||p[k]===undefined)?"":String(p[k]); });
+        const w=await sb.rpc("ads_metas_salvar",{p_client:id,p_mes:m+"-01",p:p});
+        if(w.error||!w.data||w.data.ok===false){ ok=false; if(_pxMidiaErroPerm(w.error)||(w.data&&_pxMidiaErroPerm({message:w.data.erro}))){ _pxMidiaNegar(q.id,"goals"); return; } console.warn("[midia migra] metas "+id+" "+m,(w.error&&w.error.message)||(w.data&&w.data.erro)||""); break; }
+      }
+      if(ok&&Object.keys(difs).length) ok=await _pxMidiaHistSrv(id,{type:"metas_navegador",label:"Metas antigas deste computador ("+(q.nome||"alguém")+"): valores que não entraram na meta do mês (diferentes do servidor, ou investimento/conversões)",payload:{meses:difs}},quem);
+      if(ok) feitos.goals.push(id);
+    }
+  };
+  /* Campanhas, Resultados e Relatórios digitados à mão no painel antigo não têm mais tela (o QG usa os números
+     reais). Para não perder nada, cada lista vira UM registro de arquivo no histórico do cliente (media_history). */
+  const arquivo=async function(sec,nome){
+    const loc=st0[sec]||{};
+    for(const id of Object.keys(loc)){
+      const itens=Array.isArray(loc[id])?loc[id]:[];
+      if(!itens.length){ feitos[sec].push(id); continue; }
+      const label="Arquivo do painel antigo — "+nome+" ("+itens.length+" "+(itens.length===1?"item":"itens")+", computador de "+(q.nome||"alguém")+")";
+      const r=await sb.from("media_history").select("id").eq("client_id",id).eq("type","arquivo_"+sec).eq("label",label).limit(1);
+      if(r.error){ console.warn("[midia migra] arquivo "+sec,r.error.message); continue; }
+      if(!(r.data&&r.data.length)){
+        const ok=await _pxMidiaHistSrv(id,{type:"arquivo_"+sec,label:label,payload:{secao:sec,itens:itens}},quem);
+        if(!ok) continue;
+      }
+      feitos[sec].push(id);
+    }
+  };
+  _pxMidiaMigrando=(async function(){
+    try{
+      await ficha("briefings","media_briefings",PX_MIDIA_BRIEF_CAMPOS.concat(PX_MIDIA_DIAG_CAMPOS).map(function(k){ return [k,k]; }),"briefing_navegador","Briefing","midia.cadastro.editar");
+      await ficha("access","media_access",PX_MIDIA_ACESSO_MAP,"acessos_navegador","Contas e acessos","midia.cadastro.editar");
+      await historico();
+      await demandas();
+      await metas();
+      await arquivo("campaigns","Campanhas");
+      await arquivo("results","Resultados");
+      await arquivo("reports","Relatórios");
+    }catch(e){ console.warn("[midia migra]",(e&&e.message)||e); }
+    const tot=PX_MIDIA_SECOES_LOCAIS.reduce(function(n,sec){ return n+feitos[sec].length; },0);
+    if(!tot) return false;
+    // Tira do navegador só o que subiu (relê o store atual para não pisar em mudança feita enquanto subia)
+    const st=loadMediaStore()||{};
+    PX_MIDIA_SECOES_LOCAIS.forEach(function(sec){ if(!st[sec]) return; const o=Object.assign({},st[sec]); feitos[sec].forEach(function(id){ delete o[id]; }); st[sec]=o; });
+    saveMediaStore(st);
+    try{ window.dispatchEvent(new CustomEvent("px:midia-local-migrado",{detail:feitos})); }catch(_){ }
+    return true;
+  })().finally(function(){ _pxMidiaMigrando=null; });
+  return _pxMidiaMigrando;
+}
+
 /* ─── HOOK PRINCIPAL ─────────────────────────────────── */
 function useMediaStore(){
   const [store,setStore]=useState(()=>initMediaStore());
@@ -57955,94 +56425,62 @@ function useMediaStore(){
       return next;
     });
   };
+  // v96 (13/10/2026) S1/M1: quando a subida para o servidor termina, relê o navegador (já sem o que subiu)
+  useEffect(function(){
+    const f=function(){ setStore(initMediaStore()); };
+    window.addEventListener("px:midia-local-migrado",f);
+    return function(){ window.removeEventListener("px:midia-local-migrado",f); };
+  },[]);
+  // v96 (13/10/2026) R12: o histórico do cliente passa a ser gravado no servidor (media_history), igual para todos.
+  // Se o servidor recusar, guarda no navegador como antes e sobe depois (_pxMidiaMigraLocal).
   const addHistory=(clientId,event)=>{
-    update(prev=>{
-      const h=prev.history||{};
-      const list=h[clientId]||[];
-      const newEvent={
-        id:Date.now()+"-"+Math.random().toString(36).slice(2,7),
-        ts:new Date().toISOString(),
-        user:CURRENT_USER.name||CURRENT_USER.id,
-        ...event
-      };
-      return {...prev,history:{...h,[clientId]:[newEvent,...list].slice(0,500)}};
+    const ts=new Date().toISOString();
+    _pxMidiaHistSrv(clientId,Object.assign({},event,{ts:ts})).then(function(ok){
+      if(ok) return;
+      update(prev=>{
+        const h=prev.history||{};
+        const list=h[clientId]||[];
+        const newEvent={
+          id:Date.now()+"-"+Math.random().toString(36).slice(2,7),
+          ts:ts,
+          user:CURRENT_USER.name||CURRENT_USER.id,
+          ...event
+        };
+        return {...prev,history:{...h,[clientId]:[newEvent,...list].slice(0,500)}};
+      });
     });
   };
   return {store,update,addHistory};
 }
 
-/* ─── HOOK: dados consolidados de Funil Digital + ROI por cliente ─── */
-/* Busca media_funnel_entries (counts) + client_roi_monthly (valor faturado)
-   pra todos os clientes do store no mês de referência (default: mês atual).
-   Retorna { funnels: {clientId: entry}, roi: {clientId: row}, loading } */
-function useMediaConsolidated(clients,refYear,refMonth){
-  const [funnels,setFunnels]=useState({});
-  const [roi,setRoi]=useState({});
-  const [loading,setLoading]=useState(true);
-  const clientIds=(clients||[]).map(function(c){return c.client_id;}).join(",");
-  useEffect(function(){
-    let active=true;
-    if(!window._sb||!clients||clients.length===0){setLoading(false);return;}
-    setLoading(true);
-    const ids=clients.map(function(c){return c.client_id;});
-    Promise.all([
-      window._sb.from("media_funnel_entries").select("*").in("client_id",ids).eq("year",refYear).eq("month",refMonth),
-      window._sb.from("client_roi_monthly").select("*").in("client_id",ids).eq("year",refYear).eq("month",refMonth),
-    ]).then(function(results){
-      if(!active)return;
-      const fnMap={}; (results[0].data||[]).forEach(function(r){fnMap[r.client_id]=r;});
-      const roMap={}; (results[1].data||[]).forEach(function(r){roMap[r.client_id]=r;});
-      setFunnels(fnMap); setRoi(roMap); setLoading(false);
-    }).catch(function(e){console.warn("[mediaConsolidated]",e?.message||e);setLoading(false);});
-    return function(){active=false;};
-  },[clientIds,refYear,refMonth]);
-  return {funnels,roi,loading};
-}
-
-/* ─── HELPERS: extrai dados consolidados por cliente ─── */
-function _mGetClientFunilData(clientId,funnelEntry,roiEntry,investimento){
-  // Funnel stages → first = leads, last = vendas, penúltimo = oportunidades
-  const stages=(funnelEntry&&Array.isArray(funnelEntry.stages))?funnelEntry.stages:[];
-  const leads=stages.length>0?Number(stages[0].quantity||0):0;
-  const vendas=stages.length>0?Number(stages[stages.length-1].quantity||0):0;
-  const oportunidades=stages.length>=2?Number(stages[stages.length-2].quantity||0):0;
-  // Retorno gerado = soma dos valores em client_roi_monthly.sales
-  const sales=(roiEntry&&Array.isArray(roiEntry.sales))?roiEntry.sales:[];
-  const retorno=sales.reduce(function(s,v){return s+Number(v.value||0);},0);
-  // ROI = (retorno - investimento) / investimento
-  const inv=Number(investimento)||0;
-  const roi=inv>0?Math.round(((retorno-inv)/inv)*1000)/10:null;
-  // CPL
-  const cpl=leads>0?Math.round((inv/leads)*100)/100:null;
-  // Status do funil: atualizado | pendente | incompleto
-  let funilStatus="pendente";
-  if(funnelEntry){
-    const algumaEtapaPreenchida=stages.some(function(s){return Number(s.quantity||0)>0;});
-    const todasEtapasPreenchidas=stages.length>0&&stages.every(function(s){return Number(s.quantity||0)>0;});
-    if(todasEtapasPreenchidas)funilStatus="atualizado";
-    else if(algumaEtapaPreenchida)funilStatus="incompleto";
-    else funilStatus="pendente";
-  }
-  const lastUpdate=funnelEntry?.updated_at||funnelEntry?.submitted_at||null;
-  return {leads,vendas,oportunidades,retorno,roi,cpl,funilStatus,lastUpdate};
-}
+/* v96 (13/10/2026) M6: saíram useMediaConsolidated e _mGetClientFunilData — buscavam funil e retorno do mês
+   (2 consultas a cada atualização) e calculavam CPL/ROI/contagens que nenhuma tela mostrava. O QG (17b) já
+   busca e mostra o funil e o retorno do jeito certo. */
 
 /* ─── FORMATADORES (prefixo _m pra não conflitar com outros módulos) ─── */
 const _mFmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
 const _mFmtDate=iso=>iso?new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):"—";
-const _mFmtDateShort=iso=>iso?new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—";
-const _mFmtRelative=iso=>{
-  if(!iso)return "—";
-  const d=new Date(iso); const now=new Date();
-  const diff=Math.floor((now-d)/86400000);
-  if(diff===0)return "Hoje";
-  if(diff===1)return "Ontem";
-  if(diff<7)return `${diff} dias atrás`;
-  return _mFmtDate(iso);
-};
+
+/* v96 (13/10/2026) Q1: categorias do quadro de Demandas de mídia (as mesmas do CDemandasCentral embutido) */
+const _PX_MIDIA_DEM_CATS=["trafego","conjunto","anuncio","campanha"];
+function _pxMidiaDemCats(){ return (typeof _DEM_CATS_MIDIA!=="undefined"&&Array.isArray(_DEM_CATS_MIDIA))?_DEM_CATS_MIDIA:_PX_MIDIA_DEM_CATS; }
+/* Opções de cliente do formulário do quadro (igual ao CDemandasCentral: Bioter em Grupo + cada unidade "bioter::<unidade>") */
+function _pxMidiaDemClientes(){
+  const out=[];
+  ((typeof CLIENTS!=="undefined"?CLIENTS:[])||[]).filter(function(c){ return c&&String(c.name||"").trim(); }).slice()
+    .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); })
+    .forEach(function(c){
+      if(c.id==="bioter"){
+        out.push({id:"bioter",name:"Grupo Bioter (todas as unidades)"});
+        const us=(typeof BIOTER_GROUP_UNITS!=="undefined"&&Array.isArray(BIOTER_GROUP_UNITS))?BIOTER_GROUP_UNITS:[];
+        us.forEach(function(u){ out.push({id:"bioter::"+String(u.id||"").replace("bioter_",""),name:"   · "+u.name}); });
+      }else out.push({id:c.id,name:c.name});
+    });
+  return out;
+}
 
 /* ═══════════════════════════════════════════════════════════════
-   PAGE GESTÃO DE MÍDIA — lista de clientes + filtros + ações
+   PAGE GESTÃO DE MÍDIA — topo + abas (o conteúdo de Dashboard, Clientes e Relatórios vem do QG, 17b)
    ═══════════════════════════════════════════════════════════════ */
 function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, onNavTo}){
   /* 20/09: _vu = quem está sendo VISTO (respeita o "Visualizar como").
@@ -58051,16 +56489,11 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
   const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:_vu,perms:perms}):true; };
   const {store,update,addHistory}=useMediaStore();
   const [openClient,setOpenClient]=useState(null);
+  const [cadastroClient,setCadastroClient]=useState(null);   // v96 R1/R14: declarado aqui em cima (o ouvinte de "abrir conta" fecha o Cadastro)
   const [showNovoCliente,setShowNovoCliente]=useState(false);
-  const [showNovaDemanda,setShowNovaDemanda]=useState(false);
-  const [showRelatorio,setShowRelatorio]=useState(false);
-  // Filtros
-  const [fClient,setFClient]=useState("todos");
-  const [fPlat,setFPlat]=useState("todos");
-  const [fStatus,setFStatus]=useState("todos");
-  const [fResp,setFResp]=useState("todos");
-  const [fMonth,setFMonth]=useState("");
-  const [fChip,setFChip]=useState("todos");
+  // v96 (13/10/2026) R11: saiu o modal "Relatório geral" — a ação da busca leva à aba Relatórios do topo (QGRelatorios, 17b)
+  // v96 (13/10/2026) M5: saíram os filtros do topo que nunca eram desenhados (chips e seletores de Cliente,
+  // Plataforma, Status, Responsável e Mês, incluindo o "Sem funil" que nunca filtrou).
   const [topTab,setTopTab]=useState("visao"); // visao | demandas | clientes | relatorios
   /* 20/09: aba do topo desligada em Acessos › Time — cai na primeira liberada.
      Fica AQUI (e não junto de TABS_TOP) porque abaixo há return antecipado:
@@ -58075,297 +56508,122 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
   const alternarPrivado=function(){ setPrivado(function(v){ const nv=!v; try{ localStorage.setItem("px_modo_apresentacao",nv?"1":"0"); }catch(_){} window._pxPrivado=nv; return nv; }); };
   useEffect(function(){ window._pxPrivado=privado; },[privado]);
   useEffect(function(){ const f=function(e){ if(e.ctrlKey&&e.shiftKey&&(e.key==="O"||e.key==="o")){ e.preventDefault(); alternarPrivado(); } }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
-  const [demFilter,setDemFilter]=useState("todas"); // chips da aba demandas
-  const [verLegadoDem,setVerLegadoDem]=useState(false); // lista antiga de demandas de mídia
-  const [editingDem,setEditingDem]=useState(null);  // {clientId, task} pra modo editar
-  // Próximas ações (media_actions, criadas no Dashboard/cliente) — entram na aba Demandas
-  const [mediaAcoes,setMediaAcoes]=useState([]);
-  const [acoesTick,setAcoesTick]=useState(0);
+
+  // v96 (13/10/2026) S1/M1/Q1: sobe para o servidor (uma vez) o que o painel antigo deixou neste navegador
+  useEffect(function(){ try{ _pxMidiaMigraLocal(); }catch(_){ } },[]);
+
+  /* v96 (13/10/2026) R1/R14: o 17e ("Decidir no cliente ›" / "Ver no cliente ›") pede para abrir o cliente da conta
+     direto na aba pedida (evento "pixels:midia-abrir-conta", detail={conta, unidade, sub, atendido}). Só marca
+     atendido=true se achou o cliente — senão o 17e continua no jeito antigo. As contas vêm do banco (cópia própria),
+     porque o cache window._pxAdsAccounts pode ter sido zerado pelo prazo de 30 min. */
+  const _clientesRef=useRef([]); _clientesRef.current=store.clients||[];
+  const _contasRef=useRef(null);
   useEffect(function(){
     if(!window._sb) return; let alive=true;
-    window._sb.from("media_actions").select("*").order("prazo",{ascending:true,nullsFirst:false}).then(function(r){ if(alive&&!r.error) setMediaAcoes(r.data||[]); });
-    let t=null; const bump=function(){ clearTimeout(t); t=setTimeout(function(){ setAcoesTick(function(x){return x+1;}); },400); };
-    const ch=window._sb.channel("gm-acoes").on("postgres_changes",{event:"*",schema:"public",table:"media_actions"},bump).subscribe();
-    return function(){ alive=false; clearTimeout(t); try{ window._sb.removeChannel(ch); }catch(_){} };
-  },[acoesTick]);
-  const concluirAcao=function(a,done){
-    setMediaAcoes(function(prev){ return prev.map(function(x){ return x.id===a.id?Object.assign({},x,{done:done}):x; }); });
-    window._sb.from("media_actions").update({done:done,done_by:done?(currentUser&&currentUser.id)||null:null,done_at:done?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq("id",a.id).then(function(r){ if(r.error&&typeof pixelsToast!=="undefined") pixelsToast.error(r.error.message); });
-  };
+    window._sb.from("ads_accounts").select("ad_account_id,client_id,unidade").then(function(r){ if(alive&&!r.error) _contasRef.current=r.data||[]; },function(){});
+    return function(){ alive=false; };
+  },[]);
+  useEffect(function(){
+    const f=function(e){
+      try{
+        const d=e&&e.detail; if(!d||!d.conta) return;
+        const conta=String(d.conta).replace(/^act_/,"");
+        const contas=(_contasRef.current&&_contasRef.current.length?_contasRef.current:(window._pxAdsAccounts||[]));
+        const a=contas.find(function(x){ return String(x.ad_account_id).replace(/^act_/,"")===conta; }); if(!a) return;
+        const uni=d.unidade||a.unidade||null;
+        const mc=_clientesRef.current.find(function(c){ return (c.parent_client||c.client_id)===a.client_id&&((c.bioter_unit||null)===(uni||null)); })
+          ||(!d.unidade?null:_clientesRef.current.find(function(c){ return (c.parent_client||c.client_id)===a.client_id&&((c.bioter_unit||null)===(a.unidade||null)); }));
+        if(!mc) return;
+        window._pxSubDesejada=d.sub||"ia";
+        setCadastroClient(null); setTopTab("visao"); setOpenClient(mc.client_id);
+        try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){ }
+        d.atendido=true;
+      }catch(_){ }
+    };
+    window.addEventListener("pixels:midia-abrir-conta",f);
+    return function(){ window.removeEventListener("pixels:midia-abrir-conta",f); };
+  },[]);
 
-  // Excluir demanda interna (clientId, demandaId)
-  const deleteDem=function(clientId,demandaId){
-    update(function(prev){
-      const all=prev.tasks||{};
-      const cur=all[clientId]||[];
-      return {...prev,tasks:{...all,[clientId]:cur.filter(function(x){return x.id!==demandaId;})}};
-    });
-    addHistory(clientId,{type:"task",label:"Demanda excluída"});
-    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda removida.",2000);
-  };
-
-  const isSocio=_vu?.level===1;
   const canManageClients=_bl("midia.novo_cliente");           // padrão: só sócios
   // Demandas de mídia (novo quadro): sócios + gestor de mídia editam
   const podeEditarDemandasMidia=_bl("midia.demandas.editar"); // padrão: sócio, gestor ou Erick
+  // v96 (13/10/2026) Q8: as chaves "Nova demanda de mídia" e "Relatório geral" de Acessos passam a valer.
+  // Nova demanda também exige poder editar o quadro de demandas (é lá que ela é criada).
+  const podeNovaDemanda=_bl("midia.nova_demanda")&&podeEditarDemandasMidia;
+  const podeRelatorioGeral=_bl("midia.relatorio")&&_bl("midia.top.relatorios");   // v96 R11: a ação abre a aba Relatórios, então ela também precisa estar liberada
 
-  // Mês de referência: usa fMonth se setado, senão mês atual
-  const _refDate=fMonth?new Date(fMonth+"-01T00:00:00"):new Date();
-  const refYear=_refDate.getFullYear();
-  const refMonth=_refDate.getMonth()+1;
-  const consolidated=useMediaConsolidated(store.clients||[],refYear,refMonth);
+  /* v96 (13/10/2026) Q10/R10: o número da aba Demandas conta os cartões ABERTOS (não concluídos) do quadro de
+     Demandas de mídia (client_demandas, categorias de mídia) — a mesma fonte que o quadro mostra. Antes somava a
+     lista antiga do navegador + "próximas ações" + tarefas do portal. */
+  const [demAbertas,setDemAbertas]=useState(null);
+  useEffect(function(){
+    if(!window._sb) return; let alive=true; let t=null;
+    const contar=function(){
+      window._sb.from("client_demandas").select("id",{count:"exact",head:true})
+        .in("categoria",_pxMidiaDemCats()).is("deleted_at",null).neq("status","concluida")
+        .then(function(r){ if(alive) setDemAbertas(r&&!r.error?(r.count||0):null); },function(){ if(alive) setDemAbertas(null); });
+    };
+    contar();
+    let ch=null;
+    try{ ch=window._sb.channel("gm-dem-badge").on("postgres_changes",{event:"*",schema:"public",table:"client_demandas"},function(){ clearTimeout(t); t=setTimeout(contar,600); }).subscribe(); }catch(_){ }
+    return function(){ alive=false; clearTimeout(t); try{ if(ch) window._sb.removeChannel(ch); }catch(_){ } };
+  },[]);
 
-  // Cadastro completo (painel antigo: briefing, metas, campanhas, contas, histórico)
-  const [cadastroClient,setCadastroClient]=useState(null);
+  /* v96 (13/10/2026) Q1: "+ Nova demanda" (botão do topo e busca) abre o MESMO formulário do quadro de Demandas e
+     grava em client_demandas (servidor). Antes gravava só no navegador, numa lista antiga escondida.
+     Se um cliente estiver aberto, ele já vem escolhido (Bioter: a unidade). */
+  const [novaDem,setNovaDem]=useState(null);
+  const abrirNovaDemanda=function(){
+    if(!podeNovaDemanda) return;
+    if(typeof _DemandaModal!=="function"){ setOpenClient(null); setTopTab("demandas"); return; }   // reserva: o quadro tem o próprio botão
+    const ini={categoria:"trafego"};
+    const mc=openClient?(store.clients||[]).find(function(c){ return c.client_id===openClient; }):null;
+    if(mc){ ini.client_id=mc.parent_client||mc.client_id; if(mc.bioter_unit) ini.unidade=mc.bioter_unit; }
+    setNovaDem(ini);
+  };
+  const salvarNovaDemanda=async function(dados){
+    const sb=window._sb; if(!sb) return;
+    let cid=String(dados.client_id||""); let unid="";
+    if(cid.indexOf("bioter::")===0){ unid=cid.slice(8); cid="bioter"; }
+    if(!cid){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolha o cliente da demanda."); return; }
+    const row={
+      client_id:cid, unidade:unid,
+      titulo:String(dados.titulo||"").trim(), categoria:dados.categoria||"trafego", descricao:dados.descricao||"",
+      status:dados.status||"nao_iniciada", prioridade:dados.prioridade||"normal", responsavel:dados.responsavel||"",
+      data_inicio:dados.data_inicio||null, prazo:dados.prazo||null, hora:dados.hora||null, cidade:dados.cidade||null, resumo:dados.resumo||null,
+      tarefas:Array.isArray(dados.tarefas)?dados.tarefas:[],
+      created_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:"",
+      updated_at:new Date().toISOString(),
+    };
+    try{
+      const r=await sb.from("client_demandas").insert(row).select("id");
+      if(r&&r.error) throw r.error;
+      if(!r||!Array.isArray(r.data)||!r.data.length) throw new Error("o servidor não confirmou (sem permissão?)");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda criada — está no quadro da aba Demandas.");
+      setNovaDem(null);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando: "+((e&&e.message)||""),5500);
+    }
+  };
+
+  // Cadastro e acessos (v96 M1: o painel antigo ficou só com Briefing e Contas e acessos, no servidor)
   if(cadastroClient&&store.clients.find(c=>c.client_id===cadastroClient)){
     return <MediaClientPanel
       clientData={store.clients.find(c=>c.client_id===cadastroClient)}
-      store={store} update={update} addHistory={addHistory}
+      store={store} addHistory={addHistory}
       onBack={()=>setCadastroClient(null)}
-      isMob={isMob} currentUser={currentUser}/>;
+      isMob={isMob} currentUser={currentUser} viewUser={_vu} perms={perms}/>;
   }
 
-  // Filtragem
-  const visibleClients=(store.clients||[]).filter(c=>{
-    if(fClient!=="todos"&&c.client_id!==fClient)return false;
-    if(fPlat!=="todos"&&c.plataforma!==fPlat)return false;
-    if(fStatus!=="todos"&&c.status!==fStatus)return false;
-    if(fResp!=="todos"&&c.responsavel!==fResp)return false;
-    // Chips
-    if(fChip==="com_alerta"&&!(c.status==="atencao"||c.status==="critico"))return false;
-    if(fChip==="sem_invest"&&!(!c.investimento_mensal||Number(c.investimento_mensal)===0))return false;
-    if(fChip==="em_estruturacao"&&c.status!=="em_estruturacao")return false;
-    if(fChip==="ativos"&&c.status!=="ativa"&&c.status!=="em_dia")return false;
-    if(fChip==="sem_funil"){
-      // precisa que clientFunilData exista — mas neste momento ele ainda não está calculado.
-      // Truque: marcação postergada na renderização. Aqui só passa todos; filtro real abaixo.
-    }
-    return true;
-  });
-
-  // KPIs do topo — consolidados do Funil Digital + ROI
-  const allClients=store.clients||[];
-  const totalInvest=allClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
-  const totalInvestVisivel=visibleClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
-  const ativosCount=allClients.filter(c=>c.status==="ativa"||c.status==="em_dia").length;
-  const estruturacaoCount=allClients.filter(c=>c.status==="em_estruturacao").length;
-  const alertaCount=allClients.filter(c=>c.status==="atencao"||c.status==="critico").length;
-  const semInvestCount=allClients.filter(c=>!c.investimento_mensal||Number(c.investimento_mensal)===0).length;
-  const lastUpdate=allClients.reduce((latest,c)=>{
-    if(!c.ultima_atualizacao)return latest;
-    const ts=new Date(c.ultima_atualizacao).getTime();
-    return ts>latest?ts:latest;
-  },0);
-  const lastUpdateLabel=lastUpdate?_mFmtRelative(new Date(lastUpdate).toISOString()):"—";
-
-  // ── Consolidação Funil Digital + ROI por cliente ──
-  // Pra cada cliente, calcula leads/oportunidades/vendas (do funil) + retorno/ROI (do client_roi_monthly)
-  const clientFunilData={};
-  let totalRetorno=0, totalRoiInvestido=0, totalLeads=0, totalVendas=0, totalOpp=0;
-  let semFunilCount=0, comFunilCount=0, funilIncompletoCount=0;
-  allClients.forEach(c=>{
-    const data=_mGetClientFunilData(c.client_id,consolidated.funnels[c.client_id],consolidated.roi[c.client_id],c.investimento_mensal);
-    clientFunilData[c.client_id]=data;
-    if(data.funilStatus==="pendente")semFunilCount++;
-    else comFunilCount++;
-    if(data.funilStatus==="incompleto")funilIncompletoCount++;
-    totalRetorno+=Number(data.retorno||0);
-    totalLeads+=Number(data.leads||0);
-    totalVendas+=Number(data.vendas||0);
-    totalOpp+=Number(data.oportunidades||0);
-    if(Number(c.investimento_mensal)>0)totalRoiInvestido+=Number(c.investimento_mensal);
-  });
-  const roiGeral=totalRoiInvestido>0?Math.round(((totalRetorno-totalRoiInvestido)/totalRoiInvestido)*1000)/10:null;
-  const semDadosRetorno=allClients.filter(c=>(Number(c.investimento_mensal)||0)>0 && (clientFunilData[c.client_id]?.funilStatus==="pendente"||!clientFunilData[c.client_id]?.retorno)).length;
-  const cpl=totalLeads>0?totalInvest/totalLeads:null;
-
-  const KpiCard=({label,value,sub,icon,color="#0f172a",bg="#f8fafc",muted})=>(
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{position:"absolute",top:0,right:0,width:36,height:36,background:bg,borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center",color}}>
-        <Ico n={icon} size={15} color={color}/>
-      </div>
-      <div style={{color:muted?"#94a3b8":color,fontSize:muted?13:22,fontWeight:800,lineHeight:1.1,letterSpacing:-.5,marginBottom:4,paddingRight:36}}>{value}</div>
-      <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
-      {sub&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,fontWeight:500}}>{sub}</div>}
-    </div>
-  );
-
-  const chipDefs=[
-    {id:"todos",            label:"Todos",                  count:allClients.length},
-    {id:"ativos",           label:"Ativos",                 count:ativosCount,         color:"#16a34a"},
-    {id:"em_estruturacao",  label:"Em estruturação",        count:estruturacaoCount,   color:"#64748b"},
-    {id:"com_alerta",       label:"Com alerta",             count:alertaCount,         color:"#ef4444"},
-    {id:"sem_invest",       label:"Sem investimento",       count:semInvestCount,      color:"#94a3b8"},
-    {id:"sem_funil",        label:"Sem Funil Digital",      count:semFunilCount,       color:"#f97316"},
-  ];
-
-  // ── Aba Demandas: agrega demandas de mídia (internas + via portal) ──
-  const allMediaDemands=[];
-  (tasks||[]).forEach(function(t){
-    if(t.deletedAt)return;
-    const tipo=t.internoTipo||t.interno_tipo||t.tipo_solicitacao||t.contentType||t.content_type;
-    if(tipo!=="trafego")return;
-    allMediaDemands.push({
-      id:t.id,source:"portal",
-      client_id:t.client,title:t.title,
-      tipo:"trafego",priority:t.priority,status:t.status,
-      deadline:t.deadline,responsavel:(t.assignees||[])[0]||t.assignee,
-      created_at:t.createdAt||t.created_at,
-    });
-  });
-  Object.entries(store.tasks||{}).forEach(function(kv){
-    const cid=kv[0],list=kv[1];
-    (list||[]).forEach(function(d){
-      allMediaDemands.push({
-        id:d.id,source:"interno",
-        client_id:cid,title:d.titulo||d.title,
-        tipo:d.tipo,priority:d.priority||"media",status:d.status,
-        deadline:d.prazo||d.deadline,prazo:d.prazo,responsavel:d.responsavel,
-        unidade:d.unidade||"",
-        created_at:d.created_at,descricao:d.descricao,
-        _raw:d,
-      });
-    });
-  });
-  // Próximas ações → demandas (fonte "acao"); concluídas ficam no bucket concluído
-  (mediaAcoes||[]).forEach(function(a){
-    const resp=(Array.isArray(a.assignees)&&a.assignees[0])||"erick";
-    allMediaDemands.push({id:a.id,source:"acao",client_id:a.client_id,title:a.titulo,tipo:"acao",priority:"media",status:a.done?"concluido":"acao_pendente",deadline:a.prazo?String(a.prazo).slice(0,10):"",responsavel:resp,created_at:a.created_at,_acao:a});
-  });
-  // Classifica em buckets pros KPIs da aba Demandas
-  const _isAtrasada=function(d){if(!d.deadline||d.status==="concluido"||d.status==="interno_executado")return false;return new Date(d.deadline+"T00:00:00")<new Date();};
-  const demNovas=allMediaDemands.filter(function(d){return d.status==="planejamento"||d.status==="interno_demanda"||d.status==="acao_pendente";}).length;
-  const demAndamento=allMediaDemands.filter(function(d){return d.status==="configuracao"||d.status==="otimizacao"||d.status==="interno_execucao"||d.status==="interno_triagem";}).length;
-  const demAguardando=allMediaDemands.filter(function(d){return d.status==="aguard_cliente"||d.status==="aguard_aprovacao"||d.status==="interno_aguardando"||d.status==="interno_avaliacao";}).length;
-  const demConcluidas=allMediaDemands.filter(function(d){return d.status==="concluido"||d.status==="interno_executado"||d.status==="interno_aprovado";}).length;
-  const demAtrasadas=allMediaDemands.filter(_isAtrasada).length;
-
+  /* v96 (13/10/2026) Q1/R10/M6: saíram a lista "Demandas do modelo antigo" (navegador + portal + próximas ações),
+     os cartões/contas dela e a leitura duplicada de media_actions (as próximas ações seguem no QG, 17b). */
   const TABS_TOP=[
     {id:"visao",     label:"Dashboard",   icon:"chart"},
     {id:"clientes",  label:"Clientes",    icon:"users"},
-    {id:"demandas",  label:"Demandas",    icon:"zap",      badge:demNovas+demAndamento+demAguardando},
+    {id:"demandas",  label:"Demandas",    icon:"zap",      badge:demAbertas},
     {id:"relatorios",label:"Relatórios",  icon:"file-text"},
   ].filter(function(t){ return _bl("midia.top."+t.id); });
   const _emCliente=!!openClient&&(topTab==="visao"||topTab==="clientes");
-
-  // Helper: renderiza cabeçalho de seção dentro das abas
-  const SectionTitle=({title,sub,right})=>(
-    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{title}</div>
-        {sub&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500}}>{sub}</div>}
-      </div>
-      {right}
-    </div>
-  );
-
-  // Filtros visíveis (chips + selects) — extraídos pra reaproveitar entre abas
-  const FilterChips=()=>(
-    <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
-      {chipDefs.map(ch=>{
-        const active=fChip===ch.id;
-        const col=ch.color||"#9F43F6";
-        return <button key={ch.id} onClick={()=>setFChip(ch.id)}
-          style={{background:active?col:"#fff",border:`1px solid ${active?col:"#e2e8f0"}`,borderRadius:99,padding:"6px 13px",color:active?"#fff":"#475569",fontSize:12,fontWeight:active?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}>
-          {ch.label}
-          <span style={{background:active?"rgba(255,255,255,.25)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:700,minWidth:18,textAlign:"center"}}>{ch.count}</span>
-        </button>;
-      })}
-    </div>
-  );
-  const FilterSelects=()=>(
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-      <MidiaFilterSelect label="Cliente"     value={fClient} onChange={setFClient}
-        options={[{id:"todos",label:"Todos"},...store.clients.map(c=>({id:c.client_id,label:c.name}))]}/>
-      <MidiaFilterSelect label="Plataforma"  value={fPlat} onChange={setFPlat}
-        options={[{id:"todos",label:"Todas"},...MEDIA_PLATFORMS]}/>
-      <MidiaFilterSelect label="Status"      value={fStatus} onChange={setFStatus}
-        options={[{id:"todos",label:"Todos"},...MEDIA_STATUS_OPTS]}/>
-      <MidiaFilterSelect label="Responsável" value={fResp} onChange={setFResp}
-        options={[{id:"todos",label:"Todos"},...TEAM.filter(u=>u.id==="erick"||u.level===1).map(u=>({id:u.id,label:u.name}))]}/>
-      <input type="month" value={fMonth} onChange={e=>setFMonth(e.target.value)}
-        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 10px",fontSize:11.5,fontWeight:500,color:"#0f172a",outline:"none",fontFamily:"inherit",cursor:"pointer"}}/>
-      {(fClient!=="todos"||fPlat!=="todos"||fStatus!=="todos"||fResp!=="todos"||fMonth||fChip!=="todos")&&
-        <button onClick={()=>{setFClient("todos");setFPlat("todos");setFStatus("todos");setFResp("todos");setFMonth("");setFChip("todos");}}
-          style={{background:"none",border:"none",color:"#dc2626",fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8,fontFamily:"inherit"}}>
-          × Limpar filtros
-        </button>
-      }
-    </div>
-  );
-
-  // Card de demanda (aba Demandas)
-  const DemandaCard=({d})=>{
-    const cl=d.client_id?CLIENTS.find(c=>c.id===(d.client_id.startsWith("bioter_")?"bioter":d.client_id)):null;
-    const isPortal=d.source==="portal";
-    // Unidade Bioter — vem do form (campo unidade) ou inferida do client_id "bioter_xxx"
-    const unitId=d.unidade||(d.client_id&&d.client_id.startsWith("bioter_")?d.client_id.slice(7):"");
-    const unitObj=unitId&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(u=>u.id===unitId):null;
-    const clientLabel=cl?(unitObj?(cl.name+" "+(unitObj.pickerLabel||unitObj.label)):cl.name):"Sem cliente";
-    const PRIO={baixa:{l:"Baixa",c:"#64748b",bg:"#f1f5f9"},media:{l:"Média",c:"#f97316",bg:"#fff7ed"},alta:{l:"Alta",c:"#ef4444",bg:"#fef2f2"},urgente:{l:"Urgente",c:"#dc2626",bg:"#fee2e2"}}[d.priority]||{l:"—",c:"#94a3b8",bg:"#f1f5f9"};
-    const STAT_MAP={
-      planejamento:{l:"Planejamento",c:"#64748b"},configuracao:{l:"Configuração",c:"#0284c7"},otimizacao:{l:"Em otimização",c:"#7c3aed"},aguard_cliente:{l:"Aguardando cliente",c:"#ea580c"},aguard_aprovacao:{l:"Aguardando aprovação",c:"#eab308"},relatorio:{l:"Relatório",c:"#4db8ff"},concluido:{l:"Concluído",c:"#16a34a"},
-      acao_pendente:{l:"Próxima ação",c:"#d97706"},interno_demanda:{l:"Entrada",c:"#9F43F6"},interno_triagem:{l:"Em triagem",c:"#6366f1"},interno_execucao:{l:"Em execução",c:"#f97316"},interno_aguardando:{l:"Aguardando cliente",c:"#0ea5e9"},interno_avaliacao:{l:"Avaliação",c:"#eab308"},interno_aprovado:{l:"Aprovada",c:"#22c55e"},interno_executado:{l:"Executada",c:"#8b5cf6"},
-    };
-    const ST=STAT_MAP[d.status]||{l:d.status||"—",c:"#64748b"};
-    // Prazo: usa d.deadline (portal) ou d.prazo (interno do form)
-    const deadlineStr=d.deadline||d.prazo||"";
-    const dl=deadlineStr?Math.ceil((new Date(deadlineStr+"T00:00:00")-new Date())/86400000):null;
-    const dlC=dl===null?"#94a3b8":dl<0?"#ef4444":dl<=2?"#f97316":"#64748b";
-    const resp=d.responsavel?TEAM.find(u=>u.id===d.responsavel):null;
-    // Botões editar/excluir só fazem sentido pra demandas internas (não portal)
-    const canManageThis=!isPortal&&d.source==="interno";
-    return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"13px 15px",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}
-      onMouseEnter={e=>{e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.boxShadow="0 6px 18px rgba(159,67,246,0.08)";}}
-      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-      {/* Logo + cliente (com unidade Bioter) */}
-      <div style={{display:"flex",alignItems:"center",gap:9,minWidth:200,flex:"0 0 200px"}}>
-        {cl?<ClientLogo clientId={cl.id} size="sm"/>:<div style={{width:28,height:28,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11,fontWeight:700}}>?</div>}
-        <div style={{minWidth:0}}>
-          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{clientLabel}</div>
-          {isPortal&&<div style={{color:"#9F43F6",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:3,marginTop:1}}><Ico n="zap" size={9} color="#9F43F6"/>Via Portal</div>}
-        </div>
-      </div>
-      {/* Título + tipo */}
-      <div style={{flex:"1 1 240px",minWidth:0}}>
-        <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{d.title||"(sem título)"}</div>
-        {d.tipo&&d.tipo!=="trafego"&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600}}>{d.tipo.replace(/_/g," ")}</div>}
-      </div>
-      {/* Badges */}
-      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-        <span style={{background:PRIO.bg,color:PRIO.c,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{PRIO.l}</span>
-        <span style={{background:ST.c+"18",color:ST.c,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{ST.l}</span>
-      </div>
-      {/* Responsável + prazo */}
-      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:140}}>
-        {resp?<div style={{display:"flex",alignItems:"center",gap:6}}><UserAvatar user={resp} size={20}/><span style={{color:"#475569",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{resp.name.split(" ")[0]}</span></div>:<span style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>—</span>}
-        {deadlineStr&&<span style={{color:dlC,fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
-          <Ico n="calendar" size={11}/>
-          {dl!==null&&dl<0?(Math.abs(dl)+"d atraso"):dl===0?"Hoje":dl===1?"Amanhã":new Date(deadlineStr+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
-        </span>}
-      </div>
-      {/* Próxima ação (Dashboard de mídia): concluir direto daqui */}
-      {d.source==="acao"&&podeEditarDemandasMidia&&<div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
-        <button onClick={function(e){e.stopPropagation();concluirAcao(d._acao,!d._acao.done);}}
-          style={{background:d._acao.done?"#dcfce7":"#fff",color:d._acao.done?"#15803d":"#0f172a",border:"1px solid "+(d._acao.done?"#bbf7d0":"#e2e8f0"),borderRadius:9,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{d._acao.done?"✓ Concluída":"Concluir"}</button>
-      </div>}
-      {/* Botões editar + excluir (apenas demandas internas) */}
-      {canManageThis&&<div style={{display:"flex",alignItems:"center",gap:4,marginLeft:"auto"}}>
-        <button title="Editar" onClick={function(e){e.stopPropagation();setEditingDem&&setEditingDem({clientId:d.client_id,task:d._raw||d});}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}
-          style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",transition:"all .12s"}}>
-          <Ico n="edit" size={14}/>
-        </button>
-        <button title="Excluir" onClick={async function(e){e.stopPropagation();const _ok=(typeof pixelsConfirm==="function")?await pixelsConfirm('"'+(d.title||"Demanda")+'" será removida.',{title:"Excluir demanda?",danger:true}):confirm("Excluir demanda?");if(_ok){deleteDem&&deleteDem(d.client_id,d.id);}}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";e.currentTarget.style.color="#dc2626";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}
-          style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",cursor:"pointer",transition:"all .12s"}}>
-          <Ico n="trash" size={14}/>
-        </button>
-      </div>}
-    </div>;
-  };
 
   return <div className={privado?"px-privado":""} style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif",maxWidth:1240,width:"100%",margin:"0 auto"}}>
     {privado&&<div style={{display:"flex",alignItems:"center",gap:10,background:"#2f1a5e",color:"#fff",borderRadius:12,padding:"8px 14px",fontSize:12.5,fontWeight:700}}><span style={{fontSize:15}}>🙈</span><span>Modo apresentação: nomes e números da carteira estão borrados. Só o cliente aberto aparece nítido.</span><button onClick={alternarPrivado} style={{marginLeft:"auto",background:"#fff",color:"#2f1a5e",border:0,borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:800,cursor:"pointer",minHeight:0}}>Mostrar tudo (Ctrl+Shift+O)</button></div>}
@@ -58380,7 +56638,7 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
         {TABS_TOP.map(t=>{
           const active=t.id==="clientes"?(topTab==="clientes"||_emCliente):t.id==="visao"?(topTab==="visao"&&!_emCliente):topTab===t.id;
           const ir=function(){ if(t.id==="visao"||t.id==="clientes") setOpenClient(null); setTopTab(t.id); };
-          return <button key={t.id} onClick={ir}
+          return <button key={t.id} onClick={ir} title={t.id==="demandas"&&typeof t.badge==="number"?(t.badge+" demanda"+(t.badge!==1?"s":"")+" aberta"+(t.badge!==1?"s":"")+" no quadro"):undefined}
             style={{background:active?"#fff":"transparent",color:active?"#0f172a":"#7b7590",border:"none",borderRadius:9,padding:"6px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,boxShadow:active?"0 1px 3px rgba(15,13,26,.10)":"none",whiteSpace:"nowrap",minHeight:0,transition:"all .12s"}}>
             {t.label}
             {typeof t.badge==="number"&&t.badge>0&&<span style={{background:active?"#9F43F614":"#e8e5f0",color:active?"#9F43F6":"#7b7590",borderRadius:99,padding:"1px 6px",fontSize:10,fontWeight:800,minWidth:16,textAlign:"center"}}>{t.badge}</span>}
@@ -58392,12 +56650,12 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
           {privado?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
           :<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
         </button>
-        {typeof QGBusca==="function"&&<QGBusca clients={(store.clients||[]).slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name));})} openClient={openClient} onCliente={function(id){ setTopTab("visao"); setOpenClient(id); window.scrollTo({top:0,behavior:"smooth"}); }} onTop={function(id){ if(id==="visao"||id==="clientes") setOpenClient(null); setTopTab(id); }} acoes={[{lbl:"Nova demanda",run:function(){setShowNovaDemanda(true);}},{lbl:"Relatório geral",run:function(){setShowRelatorio(true);}}].concat(canManageClients?[{lbl:"Novo cliente",run:function(){setShowNovoCliente(true);}}]:[])}/>}
+        {typeof QGBusca==="function"&&<QGBusca clients={(store.clients||[]).slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name));})} openClient={openClient} onCliente={function(id){ setTopTab("visao"); setOpenClient(id); window.scrollTo({top:0,behavior:"smooth"}); }} onTop={function(id){ if(id==="visao"||id==="clientes") setOpenClient(null); setTopTab(id); }} acoes={[].concat(podeNovaDemanda?[{lbl:"Nova demanda",run:abrirNovaDemanda}]:[]).concat(podeRelatorioGeral?[{lbl:"Relatório geral",run:function(){ setOpenClient(null); setTopTab("relatorios"); }}]:[]).concat(canManageClients?[{lbl:"Novo cliente",run:function(){setShowNovoCliente(true);}}]:[])}/>}
         {typeof QGAdsSino==="function"&&<QGAdsSino onAbrirConta={function(accId){ try{ const a=(window._pxAdsAccounts||[]).find(function(x){return x.ad_account_id===accId;}); if(!a) return; const mc=(store.clients||[]).find(function(c){ return (c.parent_client||c.client_id)===a.client_id&&((c.bioter_unit||null)===(a.unidade||null)); }); if(mc){ setTopTab("visao"); setOpenClient(mc.client_id); window.scrollTo({top:0,behavior:"smooth"}); } }catch(_){} }}/>}
-        <button onClick={()=>setShowNovaDemanda(true)}
+        {podeNovaDemanda&&<button onClick={abrirNovaDemanda}
           style={{background:"#fff",color:"#3d3853",border:"1px solid #cfc9dd",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
           <Ico n="plus" size={13}/> Nova demanda
-        </button>
+        </button>}
         {canManageClients&&<button onClick={()=>setShowNovoCliente(true)}
           style={{background:"#7326d6",color:"#fff",border:"1px solid #7326d6",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
           <Ico n="plus" size={13} color="#fff"/> Novo cliente
@@ -58414,89 +56672,11 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
       onNovoCliente={canManageClients?()=>setShowNovoCliente(true):null}
       onAbrirCadastro={(id)=>setCadastroClient(id)}/>}
 
-    {topTab==="demandas"&&<>
-      {/* ── NOVO: mesmas demandas do Estratégia, filtradas pra mídia (tráfego + campanha) ── */}
-      {typeof CDemandasCentral==="function"&&<CDemandasCentral isMob={isMob} embutida={true}
-        somenteCategorias={["trafego","conjunto","anuncio","campanha"]}
+    {topTab==="demandas"&&typeof CDemandasCentral==="function"&&<CDemandasCentral isMob={isMob} embutida={true}
+        somenteCategorias={_pxMidiaDemCats()}
         titulo="Demandas de mídia"
         subtitulo="Tráfego pago e campanhas de todos os clientes — com etapas, responsáveis e prazos. Tudo que for Tráfego Pago ou Campanha cai aqui."
         canEditProp={podeEditarDemandasMidia}/>}
-
-      {/* ── Modelo antigo, recolhido (some quando não tiver mais nada) ── */}
-      {allMediaDemands.length>0&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,overflow:"hidden",marginTop:4}}>
-        <div onClick={()=>setVerLegadoDem(!verLegadoDem)}
-          style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:verLegadoDem?"#fafbfc":"#fff"}}>
-          <Ico n="folder" size={14} color="#94a3b8"/>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5}}>Demandas do modelo antigo</div>
-            <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>Lista anterior (internas + portal) — as novas nascem no quadro aí de cima</div>
-          </div>
-          <span style={{background:"#f1f5f9",color:"#64748b",borderRadius:99,padding:"1px 9px",fontSize:10.5,fontWeight:700}}>{allMediaDemands.length}</span>
-          <Ico n={verLegadoDem?"chevronRight":"chevronRight"} size={13} color="#94a3b8"/>
-        </div>
-        {verLegadoDem&&<div style={{borderTop:"1px solid #f1f5f9",padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"170px"},1fr))`,gap:10}}>
-        <KpiCard label="Novas"                value={demNovas}      icon="zap"       color="#9F43F6" bg="#9F43F614"/>
-        <KpiCard label="Em andamento"         value={demAndamento}  icon="settings"  color="#f97316" bg="#fff7ed"/>
-        <KpiCard label="Aguardando aprovação" value={demAguardando} icon="clock"     color="#eab308" bg="#fef9c3"/>
-        <KpiCard label="Concluídas"           value={demConcluidas} icon="check"     color="#16a34a" bg="#dcfce7"/>
-        <KpiCard label="Atrasadas"            value={demAtrasadas}  icon="alert"     color={demAtrasadas>0?"#ef4444":"#94a3b8"} bg={demAtrasadas>0?"#fef2f2":"#f8fafc"}/>
-      </div>
-
-      {/* Chips de filtro de demandas */}
-      <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
-        {[
-          {id:"todas",       label:"Todas",                  count:allMediaDemands.length,                                                color:"#9F43F6"},
-          {id:"novas",       label:"Novas",                  count:demNovas,                                                              color:"#9F43F6"},
-          {id:"andamento",   label:"Em andamento",           count:demAndamento,                                                          color:"#f97316"},
-          {id:"aguardando",  label:"Aguardando aprovação",   count:demAguardando,                                                         color:"#eab308"},
-          {id:"concluidas",  label:"Concluídas",             count:demConcluidas,                                                         color:"#16a34a"},
-          {id:"atrasadas",   label:"Atrasadas",              count:demAtrasadas,                                                          color:"#ef4444"},
-          {id:"portal",      label:"Via Portal",             count:allMediaDemands.filter(d=>d.source==="portal").length,                color:"#7c3aed"},
-        ].map(ch=>{
-          const active=demFilter===ch.id;
-          return <button key={ch.id} onClick={()=>setDemFilter(ch.id)}
-            style={{background:active?ch.color:"#fff",border:`1px solid ${active?ch.color:"#e2e8f0"}`,borderRadius:99,padding:"6px 13px",color:active?"#fff":"#475569",fontSize:12,fontWeight:active?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
-            {ch.label}
-            <span style={{background:active?"rgba(255,255,255,.25)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:700,minWidth:18,textAlign:"center"}}>{ch.count}</span>
-          </button>;
-        })}
-      </div>
-
-      {/* Lista de demandas */}
-      {(()=>{
-        const filtered=allMediaDemands.filter(d=>{
-          if(demFilter==="todas")return true;
-          if(demFilter==="novas")return d.status==="planejamento"||d.status==="interno_demanda";
-          if(demFilter==="andamento")return d.status==="configuracao"||d.status==="otimizacao"||d.status==="interno_execucao"||d.status==="interno_triagem";
-          if(demFilter==="aguardando")return d.status==="aguard_cliente"||d.status==="aguard_aprovacao"||d.status==="interno_aguardando"||d.status==="interno_avaliacao";
-          if(demFilter==="concluidas")return d.status==="concluido"||d.status==="interno_executado"||d.status==="interno_aprovado";
-          if(demFilter==="atrasadas")return _isAtrasada(d);
-          if(demFilter==="portal")return d.source==="portal";
-          return true;
-        }).sort((a,b)=>{
-          // Atrasadas primeiro, depois por prioridade, depois por prazo
-          const aAt=_isAtrasada(a),bAt=_isAtrasada(b);
-          if(aAt&&!bAt)return -1;
-          if(!aAt&&bAt)return 1;
-          const m={urgente:0,alta:1,media:2,baixa:3};
-          const pa=m[a.priority]==null?2:m[a.priority], pb=m[b.priority]==null?2:m[b.priority];
-          if(pa!==pb)return pa-pb;
-          if(a.deadline&&b.deadline)return new Date(a.deadline)-new Date(b.deadline);
-          return 0;
-        });
-        if(filtered.length===0)return <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:52,height:52,borderRadius:13,background:"#9F43F614",color:"#9F43F6",marginBottom:12}}><Ico n="zap" size={24}/></div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhuma demanda</div>
-          <div style={{color:"#64748b",fontSize:12,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>{allMediaDemands.length===0?"Crie a primeira demanda clicando em \"Nova demanda\" no topo.":"Nenhuma demanda nesse filtro."}</div>
-        </div>;
-        return <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {filtered.map(d=><DemandaCard key={d.id+"-"+d.source} d={d}/>)}
-        </div>;
-      })()}
-        </div>}
-      </div>}
-    </>}
 
     {/* ───── ABA RELATÓRIOS: renderizada pelo QGMidiaRoot (modo="relatorios") ───── */}
 
@@ -58504,294 +56684,41 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
     {showNovoCliente&&<MediaNovoClienteModal
       store={store} update={update} addHistory={addHistory}
       onClose={()=>setShowNovoCliente(false)}/>}
-    {showNovaDemanda&&<MediaNovaDemandaModal
-      store={store} update={update} addHistory={addHistory}
-      preselectClient={typeof showNovaDemanda==="string"?showNovaDemanda:null}
-      onClose={()=>setShowNovaDemanda(false)}/>}
-    {editingDem&&<MediaNovaDemandaModal
-      store={store} update={update} addHistory={addHistory}
-      initialTask={editingDem}
-      onClose={()=>setEditingDem(null)}/>}
-    {showRelatorio&&<MediaRelatorioGeral
-      store={store} onClose={()=>setShowRelatorio(false)}/>}
+    {novaDem&&typeof _DemandaModal==="function"&&<_DemandaModal inicial={novaDem} isMob={isMob}
+      clientes={_pxMidiaDemClientes()} cats={_pxMidiaDemCats()} semCats={null}
+      onSalvar={salvarNovaDemanda} onFechar={function(){ setNovaDem(null); }}/>}
   </div>;
 }
 
-/* ─── Relatorio geral ─── */
-function MediaRelatorioGeral({store,onClose}){
-  const clients=store.clients||[];
-  const totalInvest=clients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
-  const totalMeta=clients.reduce((s,c)=>s+(Number(c.investimento_meta)||0),0);
-  const totalGoogle=clients.reduce((s,c)=>s+(Number(c.investimento_google)||0),0);
-  const ativos=clients.filter(c=>c.status==="ativa"||c.status==="em_dia");
-  const alertas=clients.filter(c=>c.status==="atencao"||c.status==="critico");
-  const semDados=clients.filter(c=>!c.resultado_mes);
-  return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-    <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:820,maxHeight:"90vh",overflow:"auto",boxShadow:"0 30px 80px rgba(0,0,0,0.3)"}}>
-      <div style={{padding:"18px 24px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:"#fff",zIndex:2}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Ico n="file-text" size={15} color="#fff"/>
-          </div>
-          <div>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Relatório geral</div>
-            <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>Visão consolidada de tráfego pago</div>
-          </div>
-        </div>
-        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 10px",color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center"}}><Ico n="x" size={14}/></button>
-      </div>
-      <div style={{padding:"22px 24px",display:"flex",flexDirection:"column",gap:18}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
-          <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{color:"#7c3aed",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{_mFmtBRL(totalInvest)}</div>
-            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Investimento total</div>
-          </div>
-          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{color:"#1d4ed8",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{_mFmtBRL(totalMeta)}</div>
-            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Meta Ads</div>
-          </div>
-          <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{color:"#ea580c",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{_mFmtBRL(totalGoogle)}</div>
-            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Google Ads</div>
-          </div>
-          <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{color:"#16a34a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{ativos.length}</div>
-            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Clientes ativos</div>
-          </div>
-        </div>
+/* v96 (13/10/2026) R11: saiu MediaRelatorioGeral (modal duplicado; lia só o cadastro e listava "sem dados" todos os clientes).
+   Relatórios ficam num lugar só: a aba Relatórios do topo (QGRelatorios, 17b). */
 
-        <div>
-          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:8}}>Investimento por cliente</div>
-          <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
-            {clients.slice().sort((a,b)=>(Number(b.investimento_mensal)||0)-(Number(a.investimento_mensal)||0)).map((c,i)=>{
-              const pct=totalInvest>0?Math.round((Number(c.investimento_mensal)||0)/totalInvest*100):0;
-              const pcl=c.parent_client||c.client_id;
-              return <div key={c.client_id} style={{padding:"10px 14px",borderBottom:i<clients.length-1?"1px solid #f1f5f9":"none",display:"flex",alignItems:"center",gap:10}}>
-                <ClientLogo clientId={pcl} size="sm"/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600}}>{c.name}</div>
-                  <div style={{height:4,background:"#f1f5f9",borderRadius:99,marginTop:5,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:pct+"%",background:"#9F43F6",borderRadius:99}}/>
-                  </div>
-                </div>
-                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,minWidth:90,textAlign:"right"}}>{_mFmtBRL(c.investimento_mensal)}</div>
-                <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,minWidth:30,textAlign:"right"}}>{pct}%</div>
-              </div>;
-            })}
-          </div>
-        </div>
-
-        {alertas.length>0&&<div>
-          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-            <Ico n="alert" size={13} color="#ef4444"/> Principais alertas ({alertas.length})
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {alertas.map(c=><div key={c.client_id} style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#7f1d1d"}}>
-              <strong>{c.name}</strong> — {MEDIA_STATUS_OPTS.find(s=>s.id===c.status)?.label||c.status}
-              {c.proxima_acao&&<span style={{color:"#991b1b",fontWeight:500}}> · {c.proxima_acao}</span>}
-            </div>)}
-          </div>
-        </div>}
-
-        {semDados.length>0&&<div>
-          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:8}}>Clientes sem dados de performance</div>
-          <div style={{color:"#64748b",fontSize:12,lineHeight:1.6}}>
-            {semDados.map(c=>c.name).join(" · ")}
-          </div>
-        </div>}
-      </div>
-    </div>
-  </div>;
-}
-
-/* ─── Card de cliente ──────────────────────────────────── */
-function MediaClientCard({client,onOpen,onNovaDemanda,isMob,funilData}){
-  const parentId=client.parent_client||client.client_id;
-  const cl=CLIENTS.find(c=>c.id===parentId);
-  const status=MEDIA_STATUS_OPTS.find(s=>s.id===client.status)||MEDIA_STATUS_OPTS[4];
-  const plat=MEDIA_PLATFORMS.find(p=>p.id===client.plataforma)||MEDIA_PLATFORMS[0];
-  const resp=TEAM.find(u=>u.id===client.responsavel);
-  const investMeta=Number(client.investimento_meta)||0;
-  const investGoogle=Number(client.investimento_google)||0;
-  const investTotal=Number(client.investimento_mensal)||0;
-  const semInvest=investTotal===0;
-  const hasAlert=client.status==="atencao"||client.status==="critico";
-  const semResultado=!client.resultado_mes;
-
-  // Dados consolidados do Funil Digital + ROI
-  const fd=funilData||{leads:0,vendas:0,oportunidades:0,retorno:0,roi:null,cpl:null,funilStatus:"pendente"};
-  const funilStatusCfg={
-    atualizado:{label:"Funil atualizado",color:"#16a34a",bg:"#dcfce7"},
-    incompleto:{label:"Funil incompleto",color:"#f97316",bg:"#fff7ed"},
-    pendente:  {label:"Funil pendente",  color:"#ef4444",bg:"#fef2f2"},
-  };
-  const fdSt=funilStatusCfg[fd.funilStatus]||funilStatusCfg.pendente;
-  const hasFunilData=fd.funilStatus!=="pendente";
-  const hasPerformance=fd.leads>0||fd.vendas>0||fd.oportunidades>0;
-  const hasRetorno=Number(fd.retorno)>0;
-
-  // Alertas
-  const alerts=[];
-  if(semInvest)alerts.push("Sem investimento cadastrado");
-  if(fd.funilStatus==="pendente"&&!semInvest)alerts.push("Funil Digital pendente");
-  if(fd.funilStatus==="incompleto")alerts.push("Funil Digital incompleto");
-  if(client.status==="pausado")alerts.push("Conta pausada");
-  if(client.status==="atencao")alerts.push("Performance em atenção");
-  if(client.status==="critico")alerts.push("Performance crítica");
-  const lastUpdate=client.ultima_atualizacao?new Date(client.ultima_atualizacao):null;
-  if(lastUpdate){
-    const days=Math.floor((new Date()-lastUpdate)/86400000);
-    if(days>=14)alerts.push("Sem atualização há "+days+" dias");
-  }
-
-  return <div style={{background:"#fff",border:`1px solid ${hasAlert?"#fecaca":"#e2e8f0"}`,borderRadius:14,padding:isMob?"14px":"16px 18px",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif",display:"flex",flexDirection:"column",gap:14,position:"relative",overflow:"hidden"}}
-    onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 22px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=hasAlert?"#ef4444":"#cbd5e1";}}
-    onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=hasAlert?"#fecaca":"#e2e8f0";}}>
-
-    {/* Faixa lateral de status */}
-    <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:status.color,opacity:.7}}/>
-
-    {/* Conteúdo em colunas */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(200px,1.1fr) minmax(160px,.9fr) minmax(170px,1fr) minmax(170px,1fr) minmax(200px,1.1fr) auto",gap:isMob?14:14,alignItems:"stretch"}}>
-
-      {/* Col 1 — Identidade */}
-      <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0,paddingLeft:6}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-          <div style={{flexShrink:0}}><ClientLogo clientId={parentId} size="md"/></div>
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.name}</div>
-            <div style={{color:"#94a3b8",fontSize:10,marginTop:1,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{plat.label}</div>
-          </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:7,marginTop:4}}>
-          {resp&&<UserAvatar user={resp} size={22}/>}
-          <div style={{minWidth:0}}>
-            <div style={{color:"#475569",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resp?.name||"—"}</div>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500}}>Atualizado {_mFmtRelative(client.ultima_atualizacao)}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Col 2 — Investimento */}
-      <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
-        <div style={{color:"#7c3aed",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Investimento</div>
-        <div style={{color:semInvest?"#94a3b8":"#0f172a",fontSize:16,fontWeight:800,lineHeight:1.1,letterSpacing:-.3}}>
-          {semInvest?"—":_mFmtBRL(investTotal)}
-        </div>
-        {!semInvest&&(investMeta>0||investGoogle>0)&&<div style={{display:"flex",flexDirection:"column",gap:2,marginTop:2}}>
-          {investMeta>0&&<span style={{color:"#1d4ed8",fontSize:10,fontWeight:600}}>Meta {_mFmtBRL(investMeta)}</span>}
-          {investGoogle>0&&<span style={{color:"#ea580c",fontSize:10,fontWeight:600}}>Google {_mFmtBRL(investGoogle)}</span>}
-        </div>}
-        {semInvest&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontStyle:"italic"}}>Aguardando cadastro</div>}
-      </div>
-
-      {/* Col 3 — Retorno + ROI + Funil Digital status */}
-      <div style={{background:hasRetorno?"#f0fdf4":"#f8fafc",border:`1px solid ${hasRetorno?"#bbf7d0":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"space-between",gap:4}}>
-        <div>
-          <div style={{color:hasRetorno?"#16a34a":"#64748b",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Retorno · ROI</div>
-          <div style={{color:hasRetorno?"#0f172a":"#94a3b8",fontSize:14.5,fontWeight:800,lineHeight:1.1,letterSpacing:-.3,marginTop:3}}>
-            {hasRetorno?_mFmtBRL(fd.retorno):"—"}
-          </div>
-          {fd.roi!==null&&<div style={{color:fd.roi>=0?"#16a34a":"#ef4444",fontSize:11.5,fontWeight:700,marginTop:2}}>
-            ROI {fd.roi>=0?"+":""}{fd.roi.toFixed(1)}%
-          </div>}
-          {!hasRetorno&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontStyle:"italic",lineHeight:1.4,marginTop:2}}>Aguardando preenchimento</div>}
-        </div>
-        <span style={{background:fdSt.bg,color:fdSt.color,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,whiteSpace:"nowrap",alignSelf:"flex-start",marginTop:4}}>{fdSt.label}</span>
-      </div>
-
-      {/* Col 4 — Performance (Leads / Oportunidades / Vendas) */}
-      <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
-        <div style={{color:"#64748b",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Performance</div>
-        {hasPerformance?<>
-          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:8,marginTop:3}}>
-            <div>
-              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,lineHeight:1}}>{fd.leads.toLocaleString("pt-BR")}</div>
-              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,marginTop:2}}>Leads</div>
-            </div>
-            <div>
-              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,lineHeight:1}}>{fd.oportunidades.toLocaleString("pt-BR")}</div>
-              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,marginTop:2}}>Oport.</div>
-            </div>
-            <div>
-              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,lineHeight:1}}>{fd.vendas.toLocaleString("pt-BR")}</div>
-              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,marginTop:2}}>Vendas</div>
-            </div>
-          </div>
-          {fd.cpl!==null&&fd.cpl>0&&<div style={{color:"#475569",fontSize:10.5,marginTop:4,fontWeight:600}}>
-            CPL {_mFmtBRL(fd.cpl)}
-          </div>}
-        </>:<div style={{color:"#94a3b8",fontSize:11,fontWeight:500,fontStyle:"italic",lineHeight:1.4}}>
-          Aguardando preenchimento do Funil Digital
-        </div>}
-      </div>
-
-      {/* Col 5 — Status / Alertas / Próxima ação */}
-      <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{background:status.bg,color:status.color,borderRadius:6,padding:"3px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{status.label}</span>
-        </div>
-        {alerts.length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
-          {alerts.slice(0,2).map((a,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5,color:"#dc2626",fontSize:10.5,fontWeight:600}}>
-            <Ico n="alert" size={10} color="#dc2626"/> {a}
-          </div>)}
-          {alerts.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>+ {alerts.length-2} alerta{alerts.length-2!==1?"s":""}</div>}
-        </div>}
-        {client.proxima_acao&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"6px 9px",marginTop:4}}>
-          <div style={{color:"#92400e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Próxima ação</div>
-          <div style={{color:"#78350f",fontSize:11,lineHeight:1.35,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{client.proxima_acao}</div>
-        </div>}
-      </div>
-
-      {/* Col 6 — Ações */}
-      <div style={{display:"flex",flexDirection:"column",gap:6,justifyContent:"center",alignItems:"stretch",minWidth:isMob?"auto":130}}>
-        <button onClick={onOpen}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background .12s",whiteSpace:"nowrap"}}
-          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
-          onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
-          Abrir painel <Ico n="chevron-right" size={11} color="#fff"/>
-        </button>
-        {onNovaDemanda&&<button onClick={onNovaDemanda}
-          style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.color="#9F43F6";}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
-          <Ico n="plus" size={11}/> Nova demanda
-        </button>}
-      </div>
-    </div>
-  </div>;
-}
-/* ─── Filtro inline ──────────────────────────────────── */
-function MidiaFilterSelect({label,value,onChange,options}){
-  const active=value!=="todos"&&value!=="";
-  return <div style={{display:"inline-flex",alignItems:"center",gap:0,position:"relative"}}>
-    <select value={value} onChange={e=>onChange(e.target.value)}
-      style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:`1px solid ${active?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 28px 6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",appearance:"none",WebkitAppearance:"none"}}>
-      {options.map(o=><option key={o.id} value={o.id}>{value==="todos"?label+": ":""}{o.label}</option>)}
-    </select>
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":"#64748b"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}><polyline points="6 9 12 15 18 9"/></svg>
-  </div>;
-}
+/* v96 (13/10/2026) M4/M5: saíram MediaClientCard (cartão de cliente antigo, nunca desenhado) e MidiaFilterSelect
+   (seletor dos filtros mortos do topo). */
 
 /* ═══════════════════════════════════════════════════════════════
-   PAINEL CLIENTE — 9 abas internas
+   CADASTRO E ACESSOS — botão "Cadastro e acessos →" do cliente no QG (17b)
+   v96 (13/10/2026) M1/S1/S6/S7: o painel antigo de 9 abas foi aposentado. Ficaram só Briefing e Contas e acessos,
+   agora gravados no servidor (media_briefings / media_access), iguais para todo mundo.
+   As outras 7 abas saíram porque já têm lugar no QG:
+     Dashboard (KPIs digitados, Diagnóstico rápido, funil) → Visão geral (números reais da Meta) + Diagnóstico; o funil
+       é o que o cliente lança no Portal e o QG já lê pela unidade certa (por isso S6 e S7 somem junto);
+     Metas → Gestão › Metas · Campanhas → Campanhas (reais) · Demandas → aba Demandas do topo (quadro no servidor)
+     Resultados (digitados) → Visão geral / fechamento da semana · Relatórios → aba Relatórios do topo
+     Histórico → Histórico do cliente (os eventos agora vão para media_history; ver R12).
+   Nada que estava no navegador foi apagado sem antes subir (ver _pxMidiaMigraLocal).
    ═══════════════════════════════════════════════════════════════ */
-function MediaClientPanel({clientData,store,update,addHistory,onBack,isMob,currentUser}){
-  const [tab,setTab]=useState("dashboard");
-  const cl=CLIENTS.find(c=>c.id===clientData.client_id);
-  const isSocio=currentUser?.level===1;
-  const canEdit=(typeof pxBloco==="function")?pxBloco("midia.cadastro.editar",{user:currentUser}):(isSocio||currentUser?.id==="erick");
+function MediaClientPanel({clientData,store,addHistory,onBack,isMob,currentUser,viewUser,perms}){
+  const [tab,setTab]=useState("briefing");
+  const cl=CLIENTS.find(c=>c.id===clientData.client_id)||CLIENTS.find(c=>c.id===clientData.parent_client);
+  const _vu=viewUser||currentUser;
+  const isSocio=_vu?.level===1;
+  // v96 (13/10/2026) M1: a permissão respeita o "Visualizar como" e o perms da tela (antes usava sempre o logado)
+  const canEdit=(typeof pxBloco==="function")?pxBloco("midia.cadastro.editar",{user:_vu,perms:perms}):(isSocio||_vu?.id==="erick");
 
   const TABS=[
-    {id:"dashboard", label:"Dashboard"},
     {id:"briefing",  label:"Briefing"},
-    {id:"metas",     label:"Metas"},
-    {id:"campanhas", label:"Campanhas"},
-    {id:"demandas",  label:"Demandas"},
-    {id:"resultados",label:"Resultados"},
-    {id:"relatorios",label:"Relatórios"},
     {id:"contas",    label:"Contas e acessos"},
-    {id:"historico", label:"Histórico"},
   ];
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -58808,7 +56735,7 @@ function MediaClientPanel({clientData,store,update,addHistory,onBack,isMob,curre
         {cl&&<ClientLogo clientId={cl.id} size="md"/>}
         <div style={{minWidth:0}}>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?16:20,letterSpacing:-.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{clientData.name}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{MEDIA_PLATFORMS.find(p=>p.id===clientData.plataforma)?.label||"—"} · Gestão de mídia</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{MEDIA_PLATFORMS.find(p=>p.id===clientData.plataforma)?.label||"—"} · Cadastro e acessos</div>
         </div>
       </div>
     </div>
@@ -58823,16 +56750,8 @@ function MediaClientPanel({clientData,store,update,addHistory,onBack,isMob,curre
       ))}
     </div>
 
-    {/* Conteúdo de cada tab */}
-    {tab==="dashboard" &&<MediaTabDashboard  data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="briefing"  &&<MediaTabBriefing   data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="metas"     &&<MediaTabMetas      data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="campanhas" &&<MediaTabCampanhas  data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="demandas"  &&<MediaTabDemandas   data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="resultados"&&<MediaTabResultados data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="relatorios"&&<MediaTabRelatorios data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="contas"    &&<MediaTabContas     data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
-    {tab==="historico" &&<MediaTabHistorico  data={clientData} store={store}/>}
+    {tab==="briefing" &&<MediaTabBriefing data={clientData} store={store} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="contas"   &&<MediaTabContas   data={clientData} store={store} addHistory={addHistory} canEdit={canEdit}/>}
   </div>;
 }
 
@@ -58841,1052 +56760,158 @@ const MSI={width:"100%",background:"#fff",border:"1px solid #e8edf2",borderRadiu
 const MLB={color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block",fontFamily:"inherit"};
 const MCARD={background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",fontFamily:"'Inter',system-ui,sans-serif"};
 
-/* ═══════════════════════════════════════════════════════════════
-   ABA 1 — DASHBOARD
-   ═══════════════════════════════════════════════════════════════ */
-function MediaTabDashboard({data,store,update,addHistory,canEdit}){
-  const results=(store.results?.[data.client_id]||[]);
-  const lastMonth=results[0]||{};
-  const prevMonth=results[1]||{};
-  const diff=(curr,prev)=>{
-    const c=Number(curr)||0, p=Number(prev)||0;
-    if(p===0)return null;
-    return ((c-p)/p)*100;
-  };
-  const fmt=(n)=>typeof n==="number"?n.toLocaleString("pt-BR"):(n||"—");
-
-  // Diagnóstico rápido — editável
-  const briefing=store.briefings?.[data.client_id]||{};
-  const [diag,setDiag]=useState({
-    funcionando:briefing.diag_funcionando||"",
-    melhorar:briefing.diag_melhorar||"",
-    gargalo:briefing.diag_gargalo||"",
-    proxima:briefing.diag_proxima||"",
-  });
-  const saveDiag=()=>{
-    update(prev=>{
-      const b=prev.briefings||{};
-      const old=b[data.client_id]||{};
-      return {...prev,briefings:{...b,[data.client_id]:{...old,
-        diag_funcionando:diag.funcionando,
-        diag_melhorar:diag.melhorar,
-        diag_gargalo:diag.gargalo,
-        diag_proxima:diag.proxima,
-      }}};
-    });
-    addHistory(data.client_id,{type:"diag",label:"Diagnóstico rápido atualizado"});
-    pixelsToast.success("Diagnóstico salvo.",2500);
-  };
-
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {/* KPIs */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
-      <KPI label="Investimento"    value={_mFmtBRL(lastMonth.investimento)} delta={diff(lastMonth.investimento,prevMonth.investimento)} reverse/>
-      <KPI label="Leads"           value={fmt(lastMonth.leads)}            delta={diff(lastMonth.leads,prevMonth.leads)}/>
-      <KPI label="Custo por lead"  value={lastMonth.cpl?_mFmtBRL(lastMonth.cpl):"—"} delta={diff(lastMonth.cpl,prevMonth.cpl)} reverse/>
-      <KPI label="Cliques"         value={fmt(lastMonth.cliques)}          delta={diff(lastMonth.cliques,prevMonth.cliques)}/>
-      <KPI label="CPC"             value={lastMonth.cpc?_mFmtBRL(lastMonth.cpc):"—"} delta={diff(lastMonth.cpc,prevMonth.cpc)} reverse/>
-      <KPI label="CTR"             value={lastMonth.ctr?(lastMonth.ctr+"%"):"—"} delta={diff(lastMonth.ctr,prevMonth.ctr)}/>
-      <KPI label="Conversões"      value={fmt(lastMonth.conversoes)}       delta={diff(lastMonth.conversoes,prevMonth.conversoes)}/>
-      <KPI label="Campanhas ativas" value={fmt((store.campaigns?.[data.client_id]||[]).filter(c=>c.status==="ativa").length)}/>
-    </div>
-
-    {/* Diagnóstico rápido */}
-    <div style={MCARD}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Diagnóstico rápido</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Resumo estratégico editável — atualize sempre que mexer nas campanhas</div>
-        </div>
-        {canEdit&&<button onClick={saveDiag}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-          Salvar
-        </button>}
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div>
-          <label style={MLB}>O que está funcionando</label>
-          <textarea value={diag.funcionando} onChange={e=>setDiag({...diag,funcionando:e.target.value})} disabled={!canEdit}
-            placeholder="Ex: Campanha XYZ trazendo leads abaixo de R$ 8" rows={3}
-            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
-        </div>
-        <div>
-          <label style={MLB}>O que precisa melhorar</label>
-          <textarea value={diag.melhorar} onChange={e=>setDiag({...diag,melhorar:e.target.value})} disabled={!canEdit}
-            placeholder="Ex: Públicos com CPM alto, criar variações" rows={3}
-            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
-        </div>
-        <div>
-          <label style={MLB}>Principal gargalo</label>
-          <textarea value={diag.gargalo} onChange={e=>setDiag({...diag,gargalo:e.target.value})} disabled={!canEdit}
-            placeholder="Ex: Página de destino com baixa conversão" rows={3}
-            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
-        </div>
-        <div>
-          <label style={MLB}>Próxima ação recomendada</label>
-          <textarea value={diag.proxima} onChange={e=>setDiag({...diag,proxima:e.target.value})} disabled={!canEdit}
-            placeholder="Ex: Subir criativo novo + ajustar público" rows={3}
-            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
-        </div>
-      </div>
-    </div>
-
-    {/* Funil de Vendas — alimentado pelo Portal do Cliente */}
-    <MediaFunnelView clientId={data.client_id} clientName={data.name} canEdit={canEdit}/>
-
-    {/* Mini gráfico de leads últimos 6 meses */}
-    {results.length>0&&<div style={MCARD}>
-      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Evolução de leads (últimos {Math.min(results.length,6)} períodos)</div>
-      <MediaBarChart data={results.slice(0,6).reverse().map(r=>({label:r.periodo||"—",value:Number(r.leads)||0}))}/>
-    </div>}
-  </div>;
-}
-
-/* ─── KPI card ─────────────────────────────────────── */
-function KPI({label,value,delta,reverse}){
-  let deltaColor="#94a3b8", deltaIcon="—", deltaText="";
-  if(typeof delta==="number"){
-    const positive=reverse?delta<0:delta>0;
-    deltaColor=positive?"#16a34a":delta===0?"#94a3b8":"#dc2626";
-    deltaIcon=delta>0?"↑":delta<0?"↓":"—";
-    deltaText=Math.abs(delta).toFixed(1)+"%";
-  }
-  return <div style={{...MCARD,padding:"12px 14px"}}>
-    <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
-    <div style={{color:"#0f172a",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.3}}>{value}</div>
-    {delta!==null&&deltaText&&<div style={{color:deltaColor,fontSize:10,fontWeight:600,marginTop:3}}>{deltaIcon} {deltaText}</div>}
-  </div>;
-}
-
-/* ─── MediaFunnelView ─────────────────────────────────
-   Funil de Vendas — read-only (dados vêm do Portal do Cliente via Supabase).
-   Pixels (sócios+Erick) podem corrigir/editar manualmente quando necessário.
-─────────────────────────────────────────────────────── */
-const _MEDIA_MES_NAMES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-function MediaFunnelView({clientId, clientName, canEdit}){
-  const now=new Date();
-  const [month,setMonth]=useState(now.getMonth()+1);
-  const [year,setYear]=useState(now.getFullYear());
-  const stages=getFunnelForClient(clientId);
-  const [entry,setEntry]=useState(null);
-  const [loading,setLoading]=useState(true);
-  const [history,setHistory]=useState([]);
-  const [editMode,setEditMode]=useState(false);
-  const [form,setForm]=useState({});
-  const [saving,setSaving]=useState(false);
-  // Fetch entry atual + histórico
-  const reload=useCallback(function(){
-    if(!clientId||!window._sb){setLoading(false);return;}
-    setLoading(true);
-    window._sb.from("media_funnel_entries").select("*")
-      .eq("client_id",clientId).eq("month",month).eq("year",year)
-      .maybeSingle()
-      .then(function(r){setEntry(r.data||null);setLoading(false);})
-      .catch(function(e){console.warn("[mfunnel]",e?.message||e);setLoading(false);});
-    window._sb.from("media_funnel_entries").select("*")
-      .eq("client_id",clientId)
-      .order("year",{ascending:false}).order("month",{ascending:false}).limit(12)
-      .then(function(r){setHistory(r.data||[]);});
-  },[clientId,month,year]);
-  useEffect(function(){reload();},[reload]);
-  // Realtime — atualiza quando cliente salva no Portal
-  useEffect(function(){
-    if(!clientId||!window._sb)return undefined;
-    const ch=window._sb.channel("mfunnel-"+clientId+"-"+year+"-"+month)
-      .on("postgres_changes",{event:"*",schema:"public",table:"media_funnel_entries",filter:"client_id=eq."+clientId},function(){reload();})
-      .subscribe();
-    return function(){try{window._sb.removeChannel(ch);}catch(e){}};
-  },[clientId,month,year,reload]);
-  // Espelha entry no form ao entrar em modo de edição
-  function enterEdit(){
-    const init={};
-    if(entry&&Array.isArray(entry.stages))entry.stages.forEach(function(s){init[s.id]=s.quantity||0;});
-    stages.forEach(function(s){if(init[s.id]===undefined)init[s.id]=0;});
-    setForm(init);setEditMode(true);
-  }
-  function handleSaveAdmin(){
-    if(saving||!window._sb)return;
-    const currentStages=stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number(form[s.id]||0)};});
-    const userId=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"unknown";
-    const payload={client_id:clientId,month:month,year:year,stages:currentStages,updated_by:userId};
-    if(!entry)payload.submitted_by=userId;
-    setSaving(true);
-    window._sb.from("media_funnel_entries")
-      .upsert(payload,{onConflict:"client_id,month,year"})
-      .select().maybeSingle()
-      .then(function(r){setSaving(false);if(r.data)setEntry(r.data);setEditMode(false);if(typeof pixelsToast!=="undefined")pixelsToast.success("Funil atualizado pela equipe.");})
-      .catch(function(e){setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e?.message||""));});
-  }
-  // Stages efetivos (mostra os do entry se existir, senão zerados)
-  const effectiveStages=editMode
-    ? stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number(form[s.id]||0)};})
-    : (entry&&Array.isArray(entry.stages)&&entry.stages.length>0
-        ? entry.stages
-        : stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:0};}));
-  const conv=calcFunnelConversions(effectiveStages);
-  const maxQty=Math.max.apply(null,effectiveStages.map(function(s){return s.quantity||0;}).concat([1]));
-  const isEmpty=!entry||(entry.stages||[]).every(function(s){return !s.quantity;});
-  const yearOpts=[year-1,year,year+1];
-
-  return <div style={MCARD}>
-    {/* Header */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:12,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:8}}>
-          📈 Funil de vendas
-          {isEmpty&&!loading&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:99}}>NÃO PREENCHIDO</span>}
-        </div>
-        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
-          Dados preenchidos pelo cliente no Portal. Consumido aqui pra cruzar com resultados de mídia.
-        </div>
-      </div>
-      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));setEditMode(false);}}
-          style={{...MSI,padding:"6px 10px",fontSize:12,fontWeight:600,width:"auto",cursor:"pointer"}}>
-          {_MEDIA_MES_NAMES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
-        </select>
-        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));setEditMode(false);}}
-          style={{...MSI,padding:"6px 10px",fontSize:12,fontWeight:600,width:"auto",cursor:"pointer"}}>
-          {yearOpts.map(function(y){return <option key={y} value={y}>{y}</option>;})}
-        </select>
-        {canEdit&&!editMode&&<button onClick={enterEdit}
-          style={{background:"#f1f5f9",color:"#0f172a",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-          {entry?"Corrigir":"Preencher"}
-        </button>}
-      </div>
-    </div>
-
-    {/* Aviso quando cliente ainda não preencheu o MÊS ATUAL */}
-    {isEmpty&&!loading&&!editMode&&month===now.getMonth()+1&&year===now.getFullYear()&&
-      <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#92400e",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
-        <span style={{fontSize:18}}>⚠</span>
-        <span>{clientName||"Cliente"} ainda não atualizou o funil deste mês.</span>
-      </div>
-    }
-
-    {/* Bars + inputs (quando editing) ou só bars */}
-    <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
-      {effectiveStages.map(function(s,i){
-        const qty=s.quantity||0;
-        const w=Math.max(8,(qty/maxQty)*100);
-        const convPair=conv.pairwise[i];
-        return <div key={s.id} style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{minWidth:200,display:"flex",alignItems:"center",gap:8}}>
-            <span style={{width:22,height:22,borderRadius:6,background:"#f5f3ff",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{i+1}</span>
-            <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{s.name}</span>
-          </div>
-          <div style={{flex:1,height:28,background:"#f1f5f9",borderRadius:7,position:"relative",overflow:"hidden",minWidth:100}}>
-            <div style={{position:"absolute",inset:0,width:w+"%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",borderRadius:7,transition:"width .3s"}}/>
-            {convPair!=null&&qty>0&&<span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:convPair>=70?"#16a34a":convPair>=40?"#ca8a04":"#dc2626",fontSize:9,fontWeight:700,background:"rgba(255,255,255,0.94)",padding:"1px 5px",borderRadius:99}}>↘ {convPair}%</span>}
-          </div>
-          {editMode
-            ? <input type="number" inputMode="decimal" min="0" value={form[s.id]||0} onChange={function(e){setForm(Object.assign({},form,{[s.id]:Math.max(0,parseInt(e.target.value,10)||0)}));}}
-                style={{...MSI,width:70,padding:"5px 8px",fontSize:13,fontWeight:700,textAlign:"center"}}/>
-            : <span style={{minWidth:60,textAlign:"right",color:"#0f172a",fontSize:13,fontWeight:700}}>{qty}</span>
-          }
-        </div>;
-      })}
-    </div>
-
-    {/* Ações em modo edit */}
-    {editMode&&<div style={{display:"flex",gap:8,marginBottom:14,justifyContent:"flex-end"}}>
-      <button onClick={function(){setEditMode(false);}}
-        style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-      <button onClick={handleSaveAdmin} disabled={saving}
-        style={{background:saving?"#cbd5e1":"#7c3aed",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving?"Salvando...":"Salvar"}</button>
-    </div>}
-
-    {/* Conversão total + última atualização */}
-    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
-      <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:10,padding:"12px 14px",border:"1px solid #ddd6fe"}}>
-        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Conversão total</div>
-        <div style={{color:"#7c3aed",fontWeight:800,fontSize:22,marginTop:3}}>{conv.total}%</div>
-      </div>
-      <div style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",border:"1px solid #e2e8f0"}}>
-        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Última atualização</div>
-        <div style={{color:"#0f172a",fontWeight:600,fontSize:12,marginTop:5}}>
-          {entry
-            ? new Date(entry.updated_at||entry.submitted_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})
-            : "—"
-          }
-        </div>
-        {entry&&entry.updated_by&&<div style={{color:"#64748b",fontSize:10,marginTop:2}}>por {entry.updated_by}</div>}
-      </div>
-    </div>
-
-    {/* Histórico mensal */}
-    {history.length>0&&<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #e2e8f0"}}>
-      <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Histórico mensal</div>
-      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-        {history.slice(0,8).map(function(h){
-          const c=calcFunnelConversions(h.stages||[]);
-          const isCurrent=h.month===month&&h.year===year;
-          return <div key={h.id} onClick={function(){setMonth(h.month);setYear(h.year);}}
-            style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:7,background:isCurrent?"#f5f3ff":"transparent",cursor:"pointer"}}>
-            <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{_MEDIA_MES_NAMES[h.month-1]}/{h.year}</span>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <span style={{color:"#64748b",fontSize:10}}>Topo: <b style={{color:"#0f172a"}}>{h.stages?.[0]?.quantity||0}</b></span>
-              <span style={{color:"#64748b",fontSize:10}}>Fim: <b style={{color:"#0f172a"}}>{h.stages?.[h.stages.length-1]?.quantity||0}</b></span>
-              <span style={{color:"#7c3aed",fontSize:11,fontWeight:700,background:"#f5f3ff",padding:"2px 7px",borderRadius:99}}>{c.total}%</span>
-            </div>
-          </div>;
-        })}
-      </div>
-    </div>}
-  </div>;
-}
-
-/* ─── Mini bar chart sem libs ──────────────────────── */
-function MediaBarChart({data}){
-  if(!data||data.length===0)return null;
-  const max=Math.max(...data.map(d=>d.value),1);
-  return <div style={{display:"flex",alignItems:"flex-end",gap:10,height:140,padding:"0 4px"}}>
-    {data.map((d,i)=>(
-      <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,minWidth:0}}>
-        <div style={{color:"#475569",fontSize:11,fontWeight:600}}>{d.value}</div>
-        <div style={{width:"100%",height:(d.value/max)*100+"%",minHeight:4,background:"linear-gradient(180deg,#0f172a,#334155)",borderRadius:"6px 6px 0 0",transition:"height .3s"}}/>
-        <div style={{color:"#94a3b8",fontSize:10,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",width:"100%",textAlign:"center"}}>{d.label}</div>
-      </div>
-    ))}
-  </div>;
-}
+/* v96 (13/10/2026) M1/S6/S7: saíram MediaTabDashboard, KPI, MediaFunnelView (o "Salvar" do funil que dizia
+   "salvo" sem gravar, e que procurava a unidade Bioter com o código errado), MediaBarChart, MediaTabMetas,
+   MediaTabCampanhas, MediaTabDemandas, MediaTabResultados, MediaTabRelatorios e MediaTabHistorico. */
 
 /* ═══════════════════════════════════════════════════════════════
-   ABA 2 — BRIEFING
+   FICHA NO SERVIDOR — usada por Briefing e Contas e acessos
+   v96 (13/10/2026) S1/S2: lê e grava 1 linha por cliente em `tabela`.
+   - Grava só os campos que VOCÊ mudou (não apaga o que um colega mudou em outro campo).
+   - Se um colega mudou o MESMO campo depois que você abriu, pergunta antes de substituir.
+   - Confere o erro do servidor: só diz "salvo" se o servidor confirmou.
+   - Se o servidor não responder, mostra a cópia antiga deste computador só para leitura.
    ═══════════════════════════════════════════════════════════════ */
-function MediaTabBriefing({data,store,update,addHistory,canEdit}){
-  const existing=store.briefings?.[data.client_id]||{};
-  const [b,setB]=useState({
-    objetivo:existing.objetivo||"",
-    publico:existing.publico||"",
-    regiao:existing.regiao||"",
-    servicos:existing.servicos||"",
-    oferta:existing.oferta||"",
-    ticket:existing.ticket||"",
-    objecoes:existing.objecoes||"",
-    concorrentes:existing.concorrentes||"",
-    observacoes:existing.observacoes||"",
-  });
-  const save=()=>{
-    // Detecta campos alterados pra histórico granular
-    const changed=Object.keys(b).filter(k=>b[k]!==(existing[k]||""));
-    update(prev=>({...prev,briefings:{...(prev.briefings||{}),[data.client_id]:{...(prev.briefings?.[data.client_id]||{}),...b}}}));
-    if(changed.length>0){
-      addHistory(data.client_id,{type:"briefing",label:`Briefing atualizado (${changed.length} campo${changed.length>1?"s":""}: ${changed.join(", ")})`});
+function MidiaFichaServidor({tabela,clientId,titulo,sub,campos,localVals,canEdit,onSalvo}){
+  const vazio=function(){ const o={}; campos.forEach(function(c){ o[c.col]=c.padrao||""; }); return o; };
+  const [st,setSt]=useState({loading:true,erro:null,row:null});
+  const [f,setF]=useState(vazio);
+  const [doLocal,setDoLocal]=useState(false);   // formulário veio da cópia do navegador (ainda não está no servidor)
+  const [salvando,setSalvando]=useState(false);
+  const deRow=function(row){ const o=vazio(); campos.forEach(function(c){ const v=row&&row[c.col]; if(v!=null&&v!=="") o[c.col]=String(v); }); return o; };
+  const temLocal=!!(localVals&&campos.some(function(c){ return _pxMidiaTxt(localVals[c.col]).trim()!==""; }));
+  const carregar=useCallback(function(){
+    if(!window._sb||!clientId){ setSt({loading:false,erro:"sem conexão com o servidor",row:null}); return; }
+    setSt(function(s){ return Object.assign({},s,{loading:true}); });
+    window._sb.from(tabela).select("*").eq("client_id",clientId).maybeSingle().then(function(r){
+      if(r.error){ setSt({loading:false,erro:r.error.message||"erro",row:null}); setF(Object.assign(vazio(),localVals||{})); setDoLocal(false); return; }
+      const row=r.data||null;
+      setSt({loading:false,erro:null,row:row});
+      // Servidor vazio e este computador ainda tem a cópia antiga: mostra a cópia para a pessoa conferir e salvar
+      if(!row&&temLocal){ setF(Object.assign(vazio(),localVals)); setDoLocal(true); }
+      else { setF(deRow(row)); setDoLocal(false); }
+    },function(e){ setSt({loading:false,erro:(e&&e.message)||"erro",row:null}); setF(Object.assign(vazio(),localVals||{})); });
+  },[tabela,clientId]);
+  useEffect(function(){ carregar(); },[carregar]);
+  const podeSalvar=canEdit&&!st.loading&&!st.erro&&!salvando;
+  const salvar=async function(){
+    if(!podeSalvar) return;
+    const base=st.row||{};
+    const mudou=campos.filter(function(c){ return _pxMidiaTxt(f[c.col])!==_pxMidiaTxt(base[c.col]||c.padrao||""); }).map(function(c){ return c.col; });
+    if(!mudou.length){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nada mudou.",2000); return; }
+    setSalvando(true);
+    try{
+      const r0=await window._sb.from(tabela).select("*").eq("client_id",clientId).maybeSingle();
+      if(r0.error) throw r0.error;
+      const atual=r0.data||{};
+      const conflito=mudou.filter(function(k){ return _pxMidiaTxt(atual[k])!==_pxMidiaTxt(base[k])&&_pxMidiaTxt(atual[k])!==_pxMidiaTxt(f[k]); });
+      if(conflito.length){
+        const nomes=conflito.map(function(k){ const c=campos.find(function(x){ return x.col===k; }); return c?c.l:k; }).join(", ");
+        const ok=(typeof pixelsConfirm==="function")
+          ?await pixelsConfirm("Alguém mudou "+nomes+" depois que você abriu esta tela. Substituir pelo que você digitou?",{title:"Campo mudou enquanto você editava",danger:true,okText:"Substituir",cancelText:"Cancelar"})
+          :window.confirm("Alguém mudou "+nomes+" depois que você abriu. Substituir?");
+        if(!ok){ setSalvando(false); return; }
+      }
+      const patch={client_id:clientId,updated_at:new Date().toISOString()};
+      mudou.forEach(function(k){ patch[k]=f[k]; });
+      const r=await window._sb.from(tabela).upsert(patch,{onConflict:"client_id"}).select("*").maybeSingle();
+      if(r.error) throw r.error;
+      if(!r.data) throw new Error("o servidor não confirmou a gravação (sem permissão?)");
+      setSt({loading:false,erro:null,row:r.data}); setF(deRow(r.data)); setDoLocal(false);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Salvo no servidor — todos veem igual.",2500);
+      if(onSalvo) onSalvo(mudou.map(function(k){ const c=campos.find(function(x){ return x.col===k; }); return c?c.l:k; }));
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||"erro no servidor"),6000);
     }
-    pixelsToast.success("Briefing salvo.",2500);
+    setSalvando(false);
   };
-  const FIELDS=[
-    {k:"objetivo",     l:"Objetivo do cliente",          ph:"Ex: gerar 30 leads/mês de obras residenciais"},
-    {k:"publico",      l:"Público-alvo",                 ph:"Ex: homens 30-55, classe B/C, região metropolitana"},
-    {k:"regiao",       l:"Região",                       ph:"Ex: Joinville, Florianópolis, raio 50km"},
-    {k:"servicos",     l:"Serviços prioritários",        ph:"Ex: construção pré-moldada residencial"},
-    {k:"oferta",       l:"Oferta",                       ph:"Ex: 10% off na primeira obra + orçamento grátis"},
-    {k:"ticket",       l:"Ticket médio",                 ph:"Ex: R$ 80 mil"},
-    {k:"objecoes",     l:"Objeções comuns",              ph:"Ex: preço, prazo de entrega, qualidade do material"},
-    {k:"concorrentes", l:"Concorrentes",                 ph:"Ex: Tecnocon, Construtora XYZ, ABC Pré-Moldados"},
-    {k:"observacoes",  l:"Observações estratégicas",     ph:"Notas livres sobre a operação, sazonalidade, etc"},
-  ];
+  const editavel=canEdit&&!st.erro&&!st.loading;
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{...MCARD,padding:"14px 18px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,gap:10,flexWrap:"wrap"}}>
         <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Briefing estratégico</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Alterações ficam registradas no histórico</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>{titulo}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{sub}</div>
         </div>
-        {canEdit&&<button onClick={save}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-          Salvar
+        {canEdit&&<button onClick={salvar} disabled={!podeSalvar}
+          style={{background:podeSalvar?"#0f172a":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:podeSalvar?"pointer":"not-allowed",fontFamily:"inherit"}}>
+          {salvando?"Salvando...":"Salvar"}
         </button>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:14}}>
-        {FIELDS.map(f=>(
-          <div key={f.k} style={{gridColumn:["objetivo","observacoes"].includes(f.k)?"span 2":"span 1"}}>
-            <label style={MLB}>{f.l}</label>
-            <textarea value={b[f.k]} onChange={e=>setB({...b,[f.k]:e.target.value})} disabled={!canEdit}
-              placeholder={f.ph} rows={["objetivo","observacoes"].includes(f.k)?3:2}
-              style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:["objetivo","observacoes"].includes(f.k)?74:54}}/>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   ABA 3 — METAS
-   ═══════════════════════════════════════════════════════════════ */
-function MediaTabMetas({data,store,update,addHistory,canEdit}){
-  const [refMonth,setRefMonth]=useState(()=>{
-    const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
-  });
-  const goals=store.goals?.[data.client_id]||{};
-  const monthGoals=goals[refMonth]||{leads:"",cpl:"",investimento:"",conversoes:"",roas:""};
-  const [g,setG]=useState(monthGoals);
-  useEffect(()=>{setG(goals[refMonth]||{leads:"",cpl:"",investimento:"",conversoes:"",roas:""});},[refMonth]);
-
-  const save=()=>{
-    update(prev=>{
-      const allGoals=prev.goals||{};
-      const clientGoals=allGoals[data.client_id]||{};
-      return {...prev,goals:{...allGoals,[data.client_id]:{...clientGoals,[refMonth]:g}}};
-    });
-    addHistory(data.client_id,{type:"goal",label:`Metas atualizadas (${refMonth})`});
-    pixelsToast.success("Metas salvas.",2500);
-  };
-
-  // Calcula percentual atingido com base no último resultado deste mês
-  const results=(store.results?.[data.client_id]||[]).filter(r=>(r.periodo||"").startsWith(refMonth));
-  const monthResult=results[0]||{};
-  const pct=(reach,goal)=>{
-    const r=Number(reach)||0, t=Number(goal)||0;
-    if(t===0)return null;
-    return Math.round((r/t)*100);
-  };
-
-  const ROWS=[
-    {k:"leads",        l:"Meta de leads",              real:monthResult.leads,        invert:false},
-    {k:"cpl",          l:"Meta de custo por lead",     real:monthResult.cpl,          invert:true},
-    {k:"investimento", l:"Meta de investimento",       real:monthResult.investimento, invert:false, currency:true},
-    {k:"conversoes",   l:"Meta de conversões",         real:monthResult.conversoes,   invert:false},
-    {k:"roas",         l:"Meta de ROAS (ou faturamento)",real:monthResult.roas,       invert:false},
-  ];
-
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={MCARD}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:10}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Metas mensais</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Defina metas e acompanhe o atingimento em tempo real</div>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <input type="month" value={refMonth} onChange={e=>setRefMonth(e.target.value)}
-            style={{...MSI,width:"auto",cursor:"pointer"}}/>
-          {canEdit&&<button onClick={save}
-            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-            Salvar
-          </button>}
-        </div>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {ROWS.map(row=>{
-          const reached=pct(row.real,g[row.k]);
-          const isOK=reached!==null&&(row.invert?reached<=100:reached>=80);
-          const barColor=reached===null?"#cbd5e1":isOK?"#16a34a":reached>=50?"#eab308":"#dc2626";
-          return <div key={row.k} style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr auto",gap:12,alignItems:"center"}}>
-            <div>
-              <div style={{color:"#475569",fontSize:11,fontWeight:600,marginBottom:4}}>{row.l}</div>
-              <input type="number" inputMode="decimal" value={g[row.k]} onChange={e=>setG({...g,[row.k]:e.target.value})} disabled={!canEdit}
-                placeholder="0" style={{...MSI,fontSize:14,fontWeight:700,padding:"7px 10px"}}/>
-            </div>
-            <div style={{textAlign:"right",minWidth:120}}>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Realizado</div>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:16,marginTop:2}}>{row.currency?_mFmtBRL(row.real):(row.real||"—")}</div>
-              {reached!==null&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4,justifyContent:"flex-end"}}>
-                <div style={{width:80,height:5,background:"#e2e8f0",borderRadius:99,overflow:"hidden"}}>
-                  <div style={{width:Math.min(reached,100)+"%",height:"100%",background:barColor,transition:"width .3s"}}/>
-                </div>
-                <span style={{color:barColor,fontSize:11,fontWeight:700,minWidth:36,textAlign:"right"}}>{reached}%</span>
-              </div>}
-            </div>
+      {st.loading&&<div style={{color:"#94a3b8",fontSize:12,padding:"6px 0 12px"}}>Carregando do servidor…</div>}
+      {st.erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:10,padding:"10px 12px",fontSize:12,marginBottom:12}}>
+        Não consegui ler do servidor ({st.erro}). {temLocal?"Abaixo está a cópia antiga deste computador, só para consulta.":"Tente de novo em instantes."} Nada foi salvo.
+        <button onClick={carregar} style={{marginLeft:8,background:"#fff",border:"1px solid #fecaca",borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,color:"#991b1b",cursor:"pointer"}}>Tentar de novo</button>
+      </div>}
+      {doLocal&&!st.erro&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",color:"#92400e",borderRadius:10,padding:"10px 12px",fontSize:12,marginBottom:12}}>
+        {canEdit?<>Este texto estava só neste computador e ainda não está no servidor. Confira e clique em <b>Salvar</b> para todos verem.</>
+          :<>Este texto estava só neste computador e ainda não está no servidor. Quem pode editar o cadastro precisa abrir esta tela neste computador e salvar.</>}{/* v96 S3 */}
+      </div>}
+      {!st.loading&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
+        {campos.map(function(c){
+          const span=c.span2&&!_pxMob()?"span 2":"span 1";
+          return <div key={c.col} style={{gridColumn:span}}>
+            <label style={MLB}>{c.l}</label>
+            {c.opts
+              ? <select value={f[c.col]||c.padrao||""} onChange={function(e){ const v=e.target.value; setF(function(p){ return Object.assign({},p,{[c.col]:v}); }); }} disabled={!editavel} style={MSI}>
+                  {c.opts.map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}
+                </select>
+              : c.linhas
+                ? <textarea value={f[c.col]||""} onChange={function(e){ const v=e.target.value; setF(function(p){ return Object.assign({},p,{[c.col]:v}); }); }} disabled={!editavel}
+                    placeholder={c.ph} rows={c.linhas} style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:c.linhas>=3?74:54}}/>
+                : <input value={f[c.col]||""} onChange={function(e){ const v=e.target.value; setF(function(p){ return Object.assign({},p,{[c.col]:v}); }); }} disabled={!editavel} placeholder={c.ph} style={MSI}/>}
           </div>;
         })}
-      </div>
+      </div>}
     </div>
   </div>;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ABA 4 — CAMPANHAS
+   ABA — BRIEFING (servidor: media_briefings)
    ═══════════════════════════════════════════════════════════════ */
-function MediaTabCampanhas({data,store,update,addHistory,canEdit}){
-  const campanhas=store.campaigns?.[data.client_id]||[];
-  const [showForm,setShowForm]=useState(false);
-  const [editing,setEditing]=useState(null);
-  const [f,setF]=useState({nome:"",plataforma:"meta",objetivo:"",status:"ativa",orcamento:"",publico:"",criativo:"",pagina:"",observacoes:""});
-
-  const startNew=()=>{setEditing(null);setF({nome:"",plataforma:"meta",objetivo:"",status:"ativa",orcamento:"",publico:"",criativo:"",pagina:"",observacoes:""});setShowForm(true);};
-  const startEdit=(c)=>{setEditing(c.id);setF({...c});setShowForm(true);};
-  const saveCampaign=()=>{
-    if(!f.nome.trim())return pixelsToast.error("Nome da campanha é obrigatório.",2500);
-    update(prev=>{
-      const allCamp=prev.campaigns||{};
-      const cur=allCamp[data.client_id]||[];
-      let next;
-      if(editing){
-        next=cur.map(c=>c.id===editing?{...f,id:editing}:c);
-      } else {
-        next=[{...f,id:"camp-"+Date.now(),created_at:new Date().toISOString()},...cur];
-      }
-      return {...prev,campaigns:{...allCamp,[data.client_id]:next}};
-    });
-    addHistory(data.client_id,{type:"campaign",label:editing?`Campanha editada: ${f.nome}`:`Nova campanha criada: ${f.nome}`});
-    pixelsToast.success("Campanha salva.",2500);
-    setShowForm(false);
-  };
-  const removeCampaign=(c)=>{
-    if(!confirm(`Remover campanha "${c.nome}"?`))return;
-    update(prev=>{
-      const allCamp=prev.campaigns||{};
-      const cur=allCamp[data.client_id]||[];
-      return {...prev,campaigns:{...allCamp,[data.client_id]:cur.filter(x=>x.id!==c.id)}};
-    });
-    addHistory(data.client_id,{type:"campaign",label:`Campanha removida: ${c.nome}`});
-  };
-
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Campanhas</div>
-        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{campanhas.length} campanha{campanhas.length!==1?"s":""} cadastrada{campanhas.length!==1?"s":""}</div>
-      </div>
-      {canEdit&&<button onClick={startNew}
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-        <Ico n="plus" size={13}/> Nova campanha
-      </button>}
-    </div>
-
-    {showForm&&<div style={MCARD}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>{editing?"Editar campanha":"Nova campanha"}</div>
-        <button onClick={()=>setShowForm(false)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:4}}><Ico n="x" size={16}/></button>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"span 2"}}>
-          <label style={MLB}>Nome da campanha</label>
-          <input value={f.nome} onChange={e=>setF({...f,nome:e.target.value})} placeholder="Ex: Construschorr - Conversões - Out/26" style={MSI}/>
-        </div>
-        <div>
-          <label style={MLB}>Plataforma</label>
-          <select value={f.plataforma} onChange={e=>setF({...f,plataforma:e.target.value})} style={MSI}>
-            {MEDIA_PLATFORMS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={MLB}>Status</label>
-          <select value={f.status} onChange={e=>setF({...f,status:e.target.value})} style={MSI}>
-            <option value="ativa">Ativa</option>
-            <option value="pausada">Pausada</option>
-            <option value="rascunho">Rascunho</option>
-            <option value="encerrada">Encerrada</option>
-          </select>
-        </div>
-        <div>
-          <label style={MLB}>Objetivo</label>
-          <input value={f.objetivo} onChange={e=>setF({...f,objetivo:e.target.value})} placeholder="Ex: Geração de leads" style={MSI}/>
-        </div>
-        <div>
-          <label style={MLB}>Orçamento</label>
-          <input value={f.orcamento} onChange={e=>setF({...f,orcamento:e.target.value})} placeholder="Ex: R$ 50/dia" style={MSI}/>
-        </div>
-        <div style={{gridColumn:"span 2"}}>
-          <label style={MLB}>Público</label>
-          <input value={f.publico} onChange={e=>setF({...f,publico:e.target.value})} placeholder="Ex: Homens 30-55, raio 50km de Joinville" style={MSI}/>
-        </div>
-        <div>
-          <label style={MLB}>Criativo</label>
-          <input value={f.criativo} onChange={e=>setF({...f,criativo:e.target.value})} placeholder="Ex: Vídeo 30s + 3 imagens" style={MSI}/>
-        </div>
-        <div>
-          <label style={MLB}>Página de destino</label>
-          <input value={f.pagina} onChange={e=>setF({...f,pagina:e.target.value})} placeholder="URL da landing page" style={MSI}/>
-        </div>
-        <div style={{gridColumn:"span 2"}}>
-          <label style={MLB}>Observações / histórico de otimizações</label>
-          <textarea value={f.observacoes} onChange={e=>setF({...f,observacoes:e.target.value})} rows={3} style={{...MSI,resize:"vertical",minHeight:74}}/>
-        </div>
-      </div>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
-        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button onClick={saveCampaign} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
-      </div>
-    </div>}
-
-    {campanhas.length===0&&!showForm
-      ? <div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-          <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhuma campanha cadastrada</div>
-          <div style={{color:"#94a3b8",fontSize:11}}>Use "Nova campanha" para começar.</div>
-        </div>
-      : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {campanhas.map(c=>{
-          const plat=MEDIA_PLATFORMS.find(p=>p.id===c.plataforma);
-          const statusColor={ativa:"#16a34a",pausada:"#eab308",rascunho:"#64748b",encerrada:"#94a3b8"}[c.status]||"#64748b";
-          return <div key={c.id} style={{...MCARD,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-            <div style={{flex:1,minWidth:200}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{c.nome}</div>
-              <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{plat?.label||"—"} · {c.objetivo||"sem objetivo"} · {c.orcamento||"sem orçamento"}</div>
-            </div>
-            <span style={{background:statusColor+"22",color:statusColor,borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,textTransform:"capitalize"}}>{c.status}</span>
-            {canEdit&&<>
-              <button onClick={()=>startEdit(c)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
-              <button onClick={()=>removeCampaign(c)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",padding:6}}><Ico n="trash" size={14}/></button>
-            </>}
-          </div>;
-        })}
-      </div>
-    }
-  </div>;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   ABA 5 — DEMANDAS DE MÍDIA
-   ═══════════════════════════════════════════════════════════════ */
-function MediaTabDemandas({data,store,update,addHistory,canEdit}){
-  const demandas=store.tasks?.[data.client_id]||[];
-  const [showForm,setShowForm]=useState(false);
-  const [f,setF]=useState({titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:""});
-
-  const TIPOS=[
-    {id:"criar_campanha",   label:"Criar campanha"},
-    {id:"ajustar_orcamento",label:"Ajustar orçamento"},
-    {id:"revisar_publicos", label:"Revisar públicos"},
-    {id:"subir_criativos",  label:"Subir criativos"},
-    {id:"conferir_pixel",   label:"Conferir pixel/tag"},
-    {id:"config_conversoes",label:"Configurar conversões"},
-    {id:"criar_relatorio",  label:"Criar relatório"},
-    {id:"analisar_queda",   label:"Analisar queda de resultado"},
-    {id:"outro",            label:"Outro"},
+function MediaTabBriefing({data,store,addHistory,canEdit}){
+  const local=store.briefings?.[data.client_id]||null;   // cópia antiga do navegador (só enquanto não subiu)
+  const CAMPOS=[
+    {col:"objetivo",     l:"Objetivo do cliente",          ph:"Ex: gerar 30 leads/mês de obras residenciais", linhas:3, span2:true},
+    {col:"publico",      l:"Público-alvo",                 ph:"Ex: homens 30-55, classe B/C, região metropolitana", linhas:2},
+    {col:"regiao",       l:"Região",                       ph:"Ex: Joinville, Florianópolis, raio 50km", linhas:2},
+    {col:"servicos",     l:"Serviços prioritários",        ph:"Ex: construção pré-moldada residencial", linhas:2},
+    {col:"oferta",       l:"Oferta",                       ph:"Ex: 10% off na primeira obra + orçamento grátis", linhas:2},
+    {col:"ticket",       l:"Ticket médio",                 ph:"Ex: R$ 80 mil", linhas:2},
+    {col:"objecoes",     l:"Objeções comuns",              ph:"Ex: preço, prazo de entrega, qualidade do material", linhas:2},
+    {col:"concorrentes", l:"Concorrentes",                 ph:"Ex: Tecnocon, Construtora XYZ, ABC Pré-Moldados", linhas:2},
+    {col:"observacoes",  l:"Observações estratégicas",     ph:"Notas livres sobre a operação, sazonalidade, etc", linhas:3, span2:true},
   ];
-
-  const saveTask=()=>{
-    if(!f.titulo.trim())return pixelsToast.error("Título é obrigatório.",2500);
-    update(prev=>{
-      const all=prev.tasks||{};
-      const cur=all[data.client_id]||[];
-      return {...prev,tasks:{...all,[data.client_id]:[{...f,id:"task-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
-    });
-    addHistory(data.client_id,{type:"task",label:`Demanda criada: ${f.titulo}`});
-    pixelsToast.success("Demanda criada.",2500);
-    setShowForm(false);
-    setF({titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:""});
-  };
-  const changeStatus=(taskId,newStatus)=>{
-    update(prev=>{
-      const all=prev.tasks||{};
-      const cur=all[data.client_id]||[];
-      return {...prev,tasks:{...all,[data.client_id]:cur.map(t=>t.id===taskId?{...t,status:newStatus}:t)}};
-    });
-    addHistory(data.client_id,{type:"task",label:"Status de demanda atualizado"});
-  };
-  const removeTask=(t)=>{
-    if(!confirm(`Remover "${t.titulo}"?`))return;
-    update(prev=>{
-      const all=prev.tasks||{};
-      const cur=all[data.client_id]||[];
-      return {...prev,tasks:{...all,[data.client_id]:cur.filter(x=>x.id!==t.id)}};
-    });
-  };
-
-  // Agrupa por status
-  const byStatus={};
-  MEDIA_TASK_STATUS.forEach(s=>byStatus[s.id]=[]);
-  demandas.forEach(d=>{if(byStatus[d.status])byStatus[d.status].push(d);});
-
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Demandas de mídia</div>
-        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{demandas.length} demanda{demandas.length!==1?"s":""} · separadas do fluxo de design/vídeo</div>
-      </div>
-      {canEdit&&<button onClick={()=>setShowForm(true)}
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-        <Ico n="plus" size={13}/> Nova demanda
-      </button>}
-    </div>
-
-    {showForm&&<div style={MCARD}>
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{gridColumn:"span 2"}}>
-          <label style={MLB}>Título</label>
-          <input value={f.titulo} onChange={e=>setF({...f,titulo:e.target.value})} placeholder="Ex: Subir 3 criativos novos pra campanha de obras" style={MSI}/>
-        </div>
-        <div>
-          <label style={MLB}>Tipo</label>
-          <select value={f.tipo} onChange={e=>setF({...f,tipo:e.target.value})} style={MSI}>
-            {TIPOS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={MLB}>Status</label>
-          <select value={f.status} onChange={e=>setF({...f,status:e.target.value})} style={MSI}>
-            {MEDIA_TASK_STATUS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={MLB}>Responsável</label>
-          <select value={f.responsavel} onChange={e=>setF({...f,responsavel:e.target.value})} style={MSI}>
-            {TEAM.filter(u=>u.id==="erick"||u.level===1).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={MLB}>Prazo</label>
-          <input type="date" value={f.prazo} onChange={e=>setF({...f,prazo:e.target.value})} style={MSI}/>
-        </div>
-        <div style={{gridColumn:"span 2"}}>
-          <label style={MLB}>Descrição</label>
-          <textarea value={f.descricao} onChange={e=>setF({...f,descricao:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/>
-        </div>
-      </div>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
-        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button onClick={saveTask} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Criar demanda</button>
-      </div>
-    </div>}
-
-    {/* Lista agrupada por status */}
-    {MEDIA_TASK_STATUS.map(s=>{
-      const list=byStatus[s.id];
-      if(list.length===0)return null;
-      return <div key={s.id}>
-        <div style={{color:s.color,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{s.label} ({list.length})</div>
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {list.map(t=>{
-            const resp=TEAM.find(u=>u.id===t.responsavel);
-            return <div key={t.id} style={{...MCARD,padding:"10px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:s.color,flexShrink:0}}/>
-              <div style={{flex:1,minWidth:180}}>
-                <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{t.titulo}</div>
-                <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{TIPOS.find(x=>x.id===t.tipo)?.label}{t.prazo?` · prazo ${_mFmtDateShort(t.prazo)}`:""}</div>
-              </div>
-              {resp&&<UserAvatar user={resp} size={22}/>}
-              {canEdit&&<select value={t.status} onChange={e=>changeStatus(t.id,e.target.value)}
-                style={{...MSI,width:"auto",padding:"4px 8px",fontSize:11}}>
-                {MEDIA_TASK_STATUS.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
-              </select>}
-              {canEdit&&<button onClick={()=>removeTask(t)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",padding:6}}><Ico n="trash" size={14}/></button>}
-            </div>;
-          })}
-        </div>
-      </div>;
-    })}
-    {demandas.length===0&&!showForm&&<div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-      <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhuma demanda</div>
-      <div style={{color:"#94a3b8",fontSize:11}}>Crie demandas específicas de tráfego sem misturar com o kanban de design.</div>
-    </div>}
-  </div>;
+  return <MidiaFichaServidor tabela="media_briefings" clientId={data.client_id} campos={CAMPOS} localVals={local} canEdit={canEdit}
+    titulo="Briefing estratégico" sub="Fica no servidor: todos da agência veem o mesmo. Alterações ficam registradas no histórico."
+    onSalvo={function(nomes){ if(addHistory) addHistory(data.client_id,{type:"briefing",label:"Briefing atualizado ("+nomes.length+" campo"+(nomes.length>1?"s":"")+": "+nomes.join(", ")+")"}); }}/>;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ABA 6 — RESULTADOS
+   ABA — CONTAS E ACESSOS (servidor: media_access)
    ═══════════════════════════════════════════════════════════════ */
-function MediaTabResultados({data,store,update,addHistory,canEdit}){
-  const results=store.results?.[data.client_id]||[];
-  const [showForm,setShowForm]=useState(false);
-  const [f,setF]=useState({periodo:"",granularidade:"mes",investimento:"",impressoes:"",alcance:"",cliques:"",ctr:"",cpc:"",leads:"",cpl:"",conversoes:"",roas:"",observacoes:""});
-
-  const saveResult=()=>{
-    if(!f.periodo)return pixelsToast.error("Período é obrigatório.",2500);
-    update(prev=>{
-      const all=prev.results||{};
-      const cur=all[data.client_id]||[];
-      const next=[{...f,id:"res-"+Date.now(),created_at:new Date().toISOString()},...cur];
-      // Ordena: mais recente primeiro
-      next.sort((a,b)=>(b.periodo||"").localeCompare(a.periodo||""));
-      return {...prev,results:{...all,[data.client_id]:next}};
-    });
-    addHistory(data.client_id,{type:"result",label:`Resultado registrado (${f.periodo})`});
-    pixelsToast.success("Resultado salvo.",2500);
-    setShowForm(false);
-    setF({periodo:"",granularidade:"mes",investimento:"",impressoes:"",alcance:"",cliques:"",ctr:"",cpc:"",leads:"",cpl:"",conversoes:"",roas:"",observacoes:""});
-  };
-  const removeResult=(r)=>{
-    if(!confirm(`Remover resultado ${r.periodo}?`))return;
-    update(prev=>{
-      const all=prev.results||{};
-      const cur=all[data.client_id]||[];
-      return {...prev,results:{...all,[data.client_id]:cur.filter(x=>x.id!==r.id)}};
-    });
-  };
-
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Resultados</div>
-        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{results.length} registro{results.length!==1?"s":""} de desempenho</div>
-      </div>
-      {canEdit&&<button onClick={()=>setShowForm(true)}
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-        <Ico n="plus" size={13}/> Registrar resultado
-      </button>}
-    </div>
-
-    {showForm&&<div style={MCARD}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
-        <div>
-          <label style={MLB}>Período</label>
-          <input value={f.periodo} onChange={e=>setF({...f,periodo:e.target.value})} placeholder="2026-05 ou 2026-05-15" style={MSI}/>
-        </div>
-        <div>
-          <label style={MLB}>Granularidade</label>
-          <select value={f.granularidade} onChange={e=>setF({...f,granularidade:e.target.value})} style={MSI}>
-            <option value="dia">Dia</option><option value="semana">Semana</option><option value="mes">Mês</option>
-          </select>
-        </div>
-        <div><label style={MLB}>Investimento (R$)</label><input type="number" inputMode="decimal" value={f.investimento} onChange={e=>setF({...f,investimento:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>Impressões</label><input type="number" inputMode="decimal" value={f.impressoes} onChange={e=>setF({...f,impressoes:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>Alcance</label><input type="number" inputMode="decimal" value={f.alcance} onChange={e=>setF({...f,alcance:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>Cliques</label><input type="number" inputMode="decimal" value={f.cliques} onChange={e=>setF({...f,cliques:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>CTR (%)</label><input type="number" inputMode="decimal" step="0.01" value={f.ctr} onChange={e=>setF({...f,ctr:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>CPC (R$)</label><input type="number" inputMode="decimal" step="0.01" value={f.cpc} onChange={e=>setF({...f,cpc:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>Leads</label><input type="number" inputMode="decimal" value={f.leads} onChange={e=>setF({...f,leads:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>CPL (R$)</label><input type="number" inputMode="decimal" step="0.01" value={f.cpl} onChange={e=>setF({...f,cpl:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>Conversões</label><input type="number" inputMode="decimal" value={f.conversoes} onChange={e=>setF({...f,conversoes:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>ROAS</label><input type="number" inputMode="decimal" step="0.01" value={f.roas} onChange={e=>setF({...f,roas:e.target.value})} style={MSI}/></div>
-      </div>
-      <div style={{marginTop:12}}>
-        <label style={MLB}>Observações</label>
-        <textarea value={f.observacoes} onChange={e=>setF({...f,observacoes:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/>
-      </div>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
-        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button onClick={saveResult} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar resultado</button>
-      </div>
-    </div>}
-
-    {results.length>0&&<div style={MCARD}>
-      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Evolução de leads</div>
-      <MediaBarChart data={results.slice(0,8).reverse().map(r=>({label:r.periodo,value:Number(r.leads)||0}))}/>
-    </div>}
-
-    {results.length>0&&<div style={MCARD}>
-      <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11.5}}>
-          <thead>
-            <tr style={{borderBottom:"1px solid #e2e8f0"}}>
-              {["Período","Invest.","Impr.","Cliques","CTR","CPC","Leads","CPL","Conv.","ROAS","",""].map((h,i)=>
-                <th key={i} style={{textAlign:"left",padding:"8px 8px",color:"#64748b",fontWeight:700,textTransform:"uppercase",fontSize:9.5,letterSpacing:.4}}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {results.map(r=><tr key={r.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-              <td style={{padding:"8px 8px",color:"#0f172a",fontWeight:600}}>{r.periodo}</td>
-              <td style={{padding:"8px 8px"}}>{r.investimento?_mFmtBRL(r.investimento):"—"}</td>
-              <td style={{padding:"8px 8px"}}>{r.impressoes||"—"}</td>
-              <td style={{padding:"8px 8px"}}>{r.cliques||"—"}</td>
-              <td style={{padding:"8px 8px"}}>{r.ctr?r.ctr+"%":"—"}</td>
-              <td style={{padding:"8px 8px"}}>{r.cpc?_mFmtBRL(r.cpc):"—"}</td>
-              <td style={{padding:"8px 8px",color:"#0f172a",fontWeight:600}}>{r.leads||"—"}</td>
-              <td style={{padding:"8px 8px"}}>{r.cpl?_mFmtBRL(r.cpl):"—"}</td>
-              <td style={{padding:"8px 8px"}}>{r.conversoes||"—"}</td>
-              <td style={{padding:"8px 8px"}}>{r.roas||"—"}</td>
-              <td style={{padding:"8px 8px",color:"#94a3b8"}}>{r.observacoes?<span title={r.observacoes}>💬</span>:""}</td>
-              <td style={{padding:"8px 8px"}}>{canEdit&&<button onClick={()=>removeResult(r)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",padding:4}}><Ico n="trash" size={13}/></button>}</td>
-            </tr>)}
-          </tbody>
-        </table>
-      </div>
-    </div>}
-
-    {results.length===0&&!showForm&&<div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-      <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhum resultado registrado</div>
-      <div style={{color:"#94a3b8",fontSize:11}}>Registre resultados diários, semanais ou mensais.</div>
-    </div>}
-  </div>;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   ABA 7 — RELATÓRIOS
-   ═══════════════════════════════════════════════════════════════ */
-function MediaTabRelatorios({data,store,update,addHistory,canEdit}){
-  const reports=store.reports?.[data.client_id]||[];
-  const [showForm,setShowForm]=useState(false);
-  const [f,setF]=useState({mes:"",data:"",responsavel:"erick",status:"rascunho",link:"",resultados:"",atencao:"",proximas:"",enviado:false});
-
-  const saveReport=()=>{
-    if(!f.mes)return pixelsToast.error("Mês é obrigatório.",2500);
-    update(prev=>{
-      const all=prev.reports||{};
-      const cur=all[data.client_id]||[];
-      return {...prev,reports:{...all,[data.client_id]:[{...f,id:"rep-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
-    });
-    addHistory(data.client_id,{type:"report",label:`Relatório criado (${f.mes})`});
-    pixelsToast.success("Relatório salvo.",2500);
-    setShowForm(false);
-    setF({mes:"",data:"",responsavel:"erick",status:"rascunho",link:"",resultados:"",atencao:"",proximas:"",enviado:false});
-  };
-  const toggleEnviado=(r)=>{
-    update(prev=>{
-      const all=prev.reports||{};
-      const cur=all[data.client_id]||[];
-      return {...prev,reports:{...all,[data.client_id]:cur.map(x=>x.id===r.id?{...x,enviado:!x.enviado}:x)}};
-    });
-    addHistory(data.client_id,{type:"report",label:`Relatório ${r.mes} ${r.enviado?"marcado como não enviado":"marcado como enviado ao cliente"}`});
-  };
-
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Relatórios mensais</div>
-        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{reports.length} relatório{reports.length!==1?"s":""}</div>
-      </div>
-      {canEdit&&<button onClick={()=>setShowForm(true)}
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-        <Ico n="plus" size={13}/> Novo relatório
-      </button>}
-    </div>
-
-    {showForm&&<div style={MCARD}>
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:12}}>
-        <div><label style={MLB}>Mês</label><input type="month" value={f.mes} onChange={e=>setF({...f,mes:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>Data do relatório</label><input type="date" value={f.data} onChange={e=>setF({...f,data:e.target.value})} style={MSI}/></div>
-        <div><label style={MLB}>Status</label>
-          <select value={f.status} onChange={e=>setF({...f,status:e.target.value})} style={MSI}>
-            <option value="rascunho">Rascunho</option><option value="revisao">Em revisão</option><option value="finalizado">Finalizado</option>
-          </select>
-        </div>
-        <div style={{gridColumn:"span 3"}}><label style={MLB}>Link do relatório (Drive/Notion/PDF)</label><input value={f.link} onChange={e=>setF({...f,link:e.target.value})} placeholder="https://..." style={MSI}/></div>
-        <div style={{gridColumn:"span 3"}}><label style={MLB}>Principais resultados</label><textarea value={f.resultados} onChange={e=>setF({...f,resultados:e.target.value})} rows={3} style={{...MSI,resize:"vertical",minHeight:74}}/></div>
-        <div style={{gridColumn:"span 3"}}><label style={MLB}>Pontos de atenção</label><textarea value={f.atencao} onChange={e=>setF({...f,atencao:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/></div>
-        <div style={{gridColumn:"span 3"}}><label style={MLB}>Próximas ações</label><textarea value={f.proximas} onChange={e=>setF({...f,proximas:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/></div>
-      </div>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
-        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button onClick={saveReport} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar relatório</button>
-      </div>
-    </div>}
-
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {reports.map(r=>{
-        const resp=TEAM.find(u=>u.id===r.responsavel);
-        const statusColor={rascunho:"#64748b",revisao:"#eab308",finalizado:"#16a34a"}[r.status]||"#64748b";
-        return <div key={r.id} style={{...MCARD,padding:"12px 16px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-            <div style={{flex:1,minWidth:180}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{r.mes}</div>
-                <span style={{background:statusColor+"22",color:statusColor,borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700,textTransform:"capitalize"}}>{r.status}</span>
-                {r.enviado&&<span style={{background:"#dcfce7",color:"#15803d",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="check" size={9}/> Enviado ao cliente</span>}
-              </div>
-              <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{resp?.name||"—"}{r.data?` · ${_mFmtDate(r.data)}`:""}</div>
-            </div>
-            {r.link&&<a href={r.link} target="_blank" rel="noopener noreferrer" style={{background:"#f1f5f9",color:"#0f172a",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5}}>
-              <Ico n="link" size={11}/> Abrir
-            </a>}
-            {canEdit&&<button onClick={()=>toggleEnviado(r)}
-              style={{background:r.enviado?"#fff":"#0f172a",color:r.enviado?"#0f172a":"#fff",border:r.enviado?"1px solid #e2e8f0":"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              {r.enviado?"Desmarcar":"Marcar enviado"}
-            </button>}
-          </div>
-          {(r.resultados||r.atencao||r.proximas)&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:12,fontSize:11}}>
-            {r.resultados&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Resultados</div><div style={{color:"#475569",lineHeight:1.5}}>{r.resultados}</div></div>}
-            {r.atencao&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Atenção</div><div style={{color:"#475569",lineHeight:1.5}}>{r.atencao}</div></div>}
-            {r.proximas&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Próximas ações</div><div style={{color:"#475569",lineHeight:1.5}}>{r.proximas}</div></div>}
-          </div>}
-        </div>;
-      })}
-    </div>
-
-    {reports.length===0&&!showForm&&<div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-      <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhum relatório</div>
-      <div style={{color:"#94a3b8",fontSize:11}}>Crie o primeiro relatório mensal pra esse cliente.</div>
-    </div>}
-  </div>;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   ABA 8 — CONTAS E ACESSOS
-   ═══════════════════════════════════════════════════════════════ */
-function MediaTabContas({data,store,update,addHistory,canEdit}){
-  const existing=store.access?.[data.client_id]||{};
-  const [a,setA]=useState({
-    metaAccount:existing.metaAccount||"",
-    bm:existing.bm||"",
-    pixel:existing.pixel||"",
-    googleAds:existing.googleAds||"",
-    gtm:existing.gtm||"",
-    analytics:existing.analytics||"",
-    landingPage:existing.landingPage||"",
-    whatsapp:existing.whatsapp||"",
-    statusMeta:existing.statusMeta||"pendente",
-    statusGoogle:existing.statusGoogle||"pendente",
-    observacoes:existing.observacoes||"",
-  });
-  const save=()=>{
-    update(prev=>({...prev,access:{...(prev.access||{}),[data.client_id]:a}}));
-    addHistory(data.client_id,{type:"access",label:"Contas e acessos atualizados"});
-    pixelsToast.success("Acessos salvos.",2500);
-  };
-  const ROWS=[
-    {k:"metaAccount", l:"Conta Meta Ads",       ph:"ID da conta de anúncios Meta"},
-    {k:"bm",          l:"Business Manager (BM)",ph:"ID do BM"},
-    {k:"pixel",       l:"Pixel Meta",           ph:"ID do pixel"},
-    {k:"googleAds",   l:"Conta Google Ads",     ph:"ID Google Ads (XXX-XXX-XXXX)"},
-    {k:"gtm",         l:"GTM (Google Tag Manager)",ph:"GTM-XXXXX"},
-    {k:"analytics",   l:"Google Analytics",     ph:"GA4 measurement ID"},
-    {k:"landingPage", l:"Landing page",         ph:"URL da página de captura"},
-    {k:"whatsapp",    l:"WhatsApp vinculado",   ph:"Número usado nos anúncios"},
+function MediaTabContas({data,store,addHistory,canEdit}){
+  // cópia antiga do navegador (chaves camelCase) → nomes das colunas do servidor
+  const loc=store.access?.[data.client_id]||null;
+  const local=loc?(function(){ const o={}; PX_MIDIA_ACESSO_MAP.forEach(function(p){ if(loc[p[0]]!=null) o[p[1]]=loc[p[0]]; }); return o; })():null;
+  const ST=[["pendente","Pendente"],["ok","OK"],["bloqueado","Bloqueado"]];
+  const CAMPOS=[
+    {col:"meta_account", l:"Conta Meta Ads",            ph:"ID da conta de anúncios Meta"},
+    {col:"bm",           l:"Business Manager (BM)",     ph:"ID do BM"},
+    {col:"pixel",        l:"Pixel Meta",                ph:"ID do pixel"},
+    {col:"google_ads",   l:"Conta Google Ads",          ph:"ID Google Ads (XXX-XXX-XXXX)"},
+    {col:"gtm",          l:"GTM (Google Tag Manager)",  ph:"GTM-XXXXX"},
+    {col:"analytics",    l:"Google Analytics",          ph:"GA4 measurement ID"},
+    {col:"landing_page", l:"Landing page",              ph:"URL da página de captura"},
+    {col:"whatsapp",     l:"WhatsApp vinculado",        ph:"Número usado nos anúncios"},
+    {col:"status_meta",  l:"Status acesso Meta",        opts:ST, padrao:"pendente"},
+    {col:"status_google",l:"Status acesso Google",      opts:ST, padrao:"pendente"},
+    {col:"observacoes",  l:"Observações",               linhas:2, span2:true},
   ];
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={MCARD}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Contas e acessos</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Não armazene senhas aqui — só IDs e identificadores operacionais</div>
-        </div>
-        {canEdit&&<button onClick={save}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-          Salvar
-        </button>}
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-        {ROWS.map(r=>(
-          <div key={r.k}>
-            <label style={MLB}>{r.l}</label>
-            <input value={a[r.k]} onChange={e=>setA({...a,[r.k]:e.target.value})} disabled={!canEdit} placeholder={r.ph} style={MSI}/>
-          </div>
-        ))}
-        <div>
-          <label style={MLB}>Status acesso Meta</label>
-          <select value={a.statusMeta} onChange={e=>setA({...a,statusMeta:e.target.value})} disabled={!canEdit} style={MSI}>
-            <option value="pendente">Pendente</option><option value="ok">OK</option><option value="bloqueado">Bloqueado</option>
-          </select>
-        </div>
-        <div>
-          <label style={MLB}>Status acesso Google</label>
-          <select value={a.statusGoogle} onChange={e=>setA({...a,statusGoogle:e.target.value})} disabled={!canEdit} style={MSI}>
-            <option value="pendente">Pendente</option><option value="ok">OK</option><option value="bloqueado">Bloqueado</option>
-          </select>
-        </div>
-        <div style={{gridColumn:"span 2"}}>
-          <label style={MLB}>Observações</label>
-          <textarea value={a.observacoes} onChange={e=>setA({...a,observacoes:e.target.value})} disabled={!canEdit} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/>
-        </div>
-      </div>
-    </div>
-  </div>;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   ABA 9 — HISTÓRICO
-   ═══════════════════════════════════════════════════════════════ */
-function MediaTabHistorico({data,store}){
-  const events=store.history?.[data.client_id]||[];
-  const typeColor={
-    briefing:"#7c3aed", goal:"#0284c7", campaign:"#16a34a", task:"#ea580c",
-    result:"#4db8ff", report:"#eab308", access:"#64748b", diag:"#a140ff",
-    status:"#dc2626",
-  };
-  return <div style={MCARD}>
-    <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Histórico do cliente</div>
-    {events.length===0
-      ? <div style={{color:"#94a3b8",fontSize:12,padding:"16px 0"}}>Nenhum evento registrado ainda.</div>
-      : <div style={{display:"flex",flexDirection:"column",gap:0}}>
-          {events.map((e,i)=>{
-            const color=typeColor[e.type]||"#94a3b8";
-            return <div key={e.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:i<events.length-1?"1px solid #f1f5f9":"none"}}>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0,paddingTop:2}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:color}}/>
-                {i<events.length-1&&<div style={{width:1,flex:1,background:"#e2e8f0",marginTop:4}}/>}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{e.label}</div>
-                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{e.user} · {_mFmtDate(e.ts)} {new Date(e.ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</div>
-              </div>
-            </div>;
-          })}
-        </div>
-    }
-  </div>;
+  return <MidiaFichaServidor tabela="media_access" clientId={data.client_id} campos={CAMPOS} localVals={local} canEdit={canEdit}
+    titulo="Contas e acessos" sub="Fica no servidor: todos da agência veem o mesmo. Não guarde senhas aqui — só IDs e identificadores."
+    onSalvo={function(nomes){ if(addHistory) addHistory(data.client_id,{type:"access",label:"Contas e acessos atualizados ("+nomes.join(", ")+")"}); }}/>;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -59896,8 +56921,10 @@ function MediaNovoClienteModal({store,update,addHistory,onClose}){
   const [f,setF]=useState({client_id:"",name:"",plataforma:"meta",investimento_mensal:"",meta_principal:"",responsavel:"erick"});
   // Clientes que ainda não foram cadastrados em mídia
   const available=CLIENTS.filter(c=>!store.clients.some(mc=>mc.client_id===c.id));
-  const save=()=>{
+  const [salvando,setSalvando]=useState(false);
+  const save=async()=>{
     if(!f.client_id)return pixelsToast.error("Selecione um cliente.",2500);
+    if(salvando) return;
     const c=CLIENTS.find(x=>x.id===f.client_id);
     const newClient={
       client_id:f.client_id,
@@ -59910,7 +56937,28 @@ function MediaNovoClienteModal({store,update,addHistory,onClose}){
       responsavel:f.responsavel,
       ultima_atualizacao:new Date().toISOString(),
       proxima_acao:"",
+      parent_client:f.client_id,
+      bioter_unit:null,
+      // v96 (13/10/2026) R6: a verba do cadastro (media_clients.investimento_meta/google) é a fonte única — o valor digitado
+      // vai também para a plataforma escolhida (Meta + Google: fica no total; a divisão se acerta em Gestão › Orçamento)
+      investimento_meta:f.plataforma==="meta"?(Number(f.investimento_mensal)||0):0,
+      investimento_google:f.plataforma==="google"?(Number(f.investimento_mensal)||0):0,
     };
+    /* v96 (13/10/2026) S2/REVISAO RB: grava a linha do cliente direto no servidor (media_clients) e só diz "adicionado"
+       se o servidor confirmou. Antes dependia da sincronização do QG estar aberta: criado pela aba Demandas, ou por
+       quem não edita a mídia, o cliente sumia no próximo carregamento. */
+    if(window._sb){
+      setSalvando(true);
+      try{
+        const r=await window._sb.from("media_clients").insert(Object.assign({},newClient,{updated_at:new Date().toISOString()})).select("client_id");
+        if(r.error) throw r.error;
+        if(!Array.isArray(r.data)||!r.data.length) throw new Error("o servidor não confirmou (sem permissão?)");
+      }catch(e){
+        setSalvando(false);
+        return pixelsToast.error("Não consegui adicionar o cliente: "+((e&&e.message)||"erro no servidor"),6000);
+      }
+      setSalvando(false);
+    }
     update(prev=>({...prev,clients:[...prev.clients,newClient]}));
     addHistory(f.client_id,{type:"status",label:`Cliente ${c?.name||f.client_id} adicionado em Gestão de mídia`});
     pixelsToast.success("Cliente adicionado.",2500);
@@ -59948,100 +56996,13 @@ function MediaNovoClienteModal({store,update,addHistory,onClose}){
     </div>
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
       <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-      <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Adicionar cliente</button>
+      <button onClick={save} disabled={salvando} style={{background:salvando?"#cbd5e1":"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:salvando?"not-allowed":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando...":"Adicionar cliente"}</button>
     </div>
   </ModalShell>;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   MODAL — Nova demanda de mídia (cross-cliente)
-   ═══════════════════════════════════════════════════════════════ */
-function MediaNovaDemandaModal({store,update,addHistory,onClose,initialTask,preselectClient}){
-  // Modo editar: initialTask traz {clientId, task}. Modo criar: form vazio.
-  const isEdit=!!(initialTask&&initialTask.task);
-  const [f,setF]=useState(()=>{
-    if(isEdit){
-      const t=initialTask.task;
-      return {client_id:initialTask.clientId||"",titulo:t.titulo||"",tipo:t.tipo||"criar_campanha",status:t.status||"planejamento",responsavel:t.responsavel||"erick",prazo:t.prazo||"",descricao:t.descricao||"",unidade:t.unidade||""};
-    }
-    return {client_id:preselectClient||"",titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:"",unidade:""};
-  });
-  const TIPOS=[
-    {id:"criar_campanha",label:"Criar campanha"},
-    {id:"ajustar_orcamento",label:"Ajustar orçamento"},
-    {id:"revisar_publicos",label:"Revisar públicos"},
-    {id:"subir_criativos",label:"Subir criativos"},
-    {id:"conferir_pixel",label:"Conferir pixel/tag"},
-    {id:"config_conversoes",label:"Configurar conversões"},
-    {id:"criar_relatorio",label:"Criar relatório"},
-    {id:"analisar_queda",label:"Analisar queda de resultado"},
-    {id:"outro",label:"Outro"},
-  ];
-  // Bioter tem unidades — mostrar picker quando cliente=bioter
-  const isBioter=f.client_id==="bioter";
-  const save=()=>{
-    if(!f.client_id)return pixelsToast.error("Cliente é obrigatório.",2500);
-    if(!f.titulo.trim())return pixelsToast.error("Título é obrigatório.",2500);
-    if(isEdit){
-      update(prev=>{
-        const all=prev.tasks||{};
-        const cur=all[f.client_id]||[];
-        return {...prev,tasks:{...all,[f.client_id]:cur.map(t=>t.id===initialTask.task.id?{...t,...f,updated_at:new Date().toISOString()}:t)}};
-      });
-      addHistory(f.client_id,{type:"task",label:`Demanda editada: ${f.titulo}`});
-      pixelsToast.success("Demanda atualizada.",2500);
-    } else {
-      update(prev=>{
-        const all=prev.tasks||{};
-        const cur=all[f.client_id]||[];
-        return {...prev,tasks:{...all,[f.client_id]:[{...f,id:"task-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
-      });
-      addHistory(f.client_id,{type:"task",label:`Demanda criada: ${f.titulo}`});
-      pixelsToast.success("Demanda criada.",2500);
-    }
-    onClose();
-  };
-  return <ModalShell onClose={onClose} title={isEdit?"Editar demanda de mídia":"Nova demanda de mídia"}>
-    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-      <div style={{gridColumn:"span 2"}}>
-        <label style={MLB}>Cliente</label>
-        <select value={f.client_id} onChange={e=>setF({...f,client_id:e.target.value,unidade:""})} style={MSI} disabled={isEdit}>
-          <option value="">Selecione...</option>
-          {store.clients.map(c=><option key={c.client_id} value={c.client_id}>{c.name}</option>)}
-        </select>
-      </div>
-      {isBioter&&<div style={{gridColumn:"span 2"}}>
-        <label style={MLB}>Unidade Bioter</label>
-        <select value={f.unidade} onChange={e=>setF({...f,unidade:e.target.value})} style={MSI}>
-          <option value="">Geral (sem unidade)</option>
-          {(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).map(u=><option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>)}
-        </select>
-      </div>}
-      <div>
-        <label style={MLB}>Tipo</label>
-        <select value={f.tipo} onChange={e=>setF({...f,tipo:e.target.value})} style={MSI}>
-          {TIPOS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-        </select>
-      </div>
-      <div>
-        <label style={MLB}>Prazo (opcional)</label>
-        <input type="date" value={f.prazo} onChange={e=>setF({...f,prazo:e.target.value})} style={MSI}/>
-      </div>
-      <div style={{gridColumn:"span 2"}}>
-        <label style={MLB}>Título</label>
-        <input value={f.titulo} onChange={e=>setF({...f,titulo:e.target.value})} placeholder="Ex: Subir 3 criativos novos" style={MSI}/>
-      </div>
-      <div style={{gridColumn:"span 2"}}>
-        <label style={MLB}>Descrição</label>
-        <textarea value={f.descricao} onChange={e=>setF({...f,descricao:e.target.value})} rows={3} style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:70}}/>
-      </div>
-    </div>
-    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
-      <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-      <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{isEdit?"Salvar alterações":"Criar demanda"}</button>
-    </div>
-  </ModalShell>;
-}
+/* v96 (13/10/2026) Q1/Q17: saiu MediaNovaDemandaModal (gravava a demanda só no navegador; o campo "Unidade Bioter"
+   nunca aparecia). O "+ Nova demanda" agora usa o formulário do quadro de Demandas (_DemandaModal) e grava no servidor. */
 
 /* ─── ModalShell — wrapper padrão dos modais da Gestão de Mídia ─── */
 function ModalShell({title, children, onClose, maxWidth}){
@@ -61340,6 +58301,7 @@ export default function AgencyOS(){
       clearTimeout(safety);
       if(event==="PASSWORD_RECOVERY"){ setRecoveryMode(true); }
       if(event==="SIGNED_OUT"||!session){
+        if(event==="SIGNED_OUT"){ try{ _pxMidiaLimpaSaida(); }catch(_e){} }   // v96 (13/10/2026) S19: sessão encerrada (inclusive em outra aba) limpa dados de mídia
         tokenRef.current=null;
         ls.del(PROFILE_KEY);
         setAuthState("login");setCurrentProfile(null);setClientPortal(null);
@@ -61379,7 +58341,11 @@ export default function AgencyOS(){
             profileLoaded=true;
             ls.set(PROFILE_KEY,profile);
             if(profile.user_type==="client"){setClientPortal(profile);setAuthState("portal");}
-            else{setCurrentProfile(profile);setAuthState("app");}
+            else{setCurrentProfile(profile);setAuthState("app");
+              // v96 (13/10/2026) S1/M1/Q1: sobe para o servidor, uma vez, o que o painel antigo da mídia deixou neste navegador
+              // (antes de qualquer "sair", que apaga esses dados do navegador — S19)
+              setTimeout(function(){ try{ _pxMidiaMigraLocal({id:profile.team_id||null,nome:profile.name||""}); }catch(_e){} },2500);
+            }
           }
         }catch(e){console.warn("auth profile load failed:",e?.message||e);}
         // Fallback: se não carregou profile, manda pra login pra não travar em loading
@@ -61569,6 +58535,7 @@ export default function AgencyOS(){
     pendingRef.current.clear();
     ls.del(TASKS_KEY);ls.del(PROFILE_KEY); try{localStorage.removeItem(TASKS_KEY+"-lastsync");}catch(_){}
     TEAM.forEach(u=>ls.del("pixels-perms-"+u.id));
+    try{ _pxMidiaLimpaSaida(); }catch(_e){}   // v96 (13/10/2026) S19: limpa dados de mídia/ads do navegador ao sair
     setAuthState("login");setCurrentProfile(null);setClientPortal(null);setTasksRaw([]);
     await _sb.auth.signOut();
   };
@@ -62843,14 +59810,14 @@ const QG={
   borda:"#e5e9f0", txt:"#0f172a", txt2:"#475569", txt3:"#94a3b8",
 };
 const QG_FONT="'Inter',system-ui,sans-serif";
-const QG_ORIGENS_ADS=["meta","google"];
+/* v96 (13/10/2026) M4: removido QG_ORIGENS_ADS — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ─── FORMATADORES ───────────────────────────────────── */
 const _qgBRL=function(n,dec){ const v=Number(n||0); const d=(dec===undefined||dec===null)?2:dec; return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }; /* regra 09/09: dinheiro com centavos */
 const _qgBRLk=function(n){ return _qgBRL(n,2); }; /* sem "12,3 mil": valor exato sempre */
 const _qgNum=function(n){ return Number(n||0).toLocaleString("pt-BR"); };
 const _qgPct=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return (n>0?"+":"")+Number(n).toLocaleString("pt-BR",{maximumFractionDigits:dec===undefined?0:dec})+"%"; };
-const _qgX=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1})+"x"; };
+/* v96 (13/10/2026) M4: removido _qgX — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 const _qgDiv=function(a,b){ a=Number(a||0); b=Number(b||0); return b>0?a/b:null; };
 const _qgIso=function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const _qgFmtD=function(iso){ if(!iso) return "—"; const p=String(iso).slice(0,10).split("-"); return p[2]+"/"+p[1]; };
@@ -62886,53 +59853,93 @@ function _qgPlataformas(mc){ const p=mc.plataforma||""; if(p==="meta_google") re
 /* ─── HOOK: sincroniza clientes de mídia com Supabase ──
    O store antigo vivia só no localStorage (cada navegador via uma coisa).
    Agora media_clients é a fonte de verdade: carrega de lá, e qualquer mudança
-   em store.clients é gravada (upsert) — o localStorage segue como cache. */
-function useQGClientesSync(store,update){
-  const _lastSent=useRef("");
+   em store.clients é gravada — o localStorage segue como cache.
+   // v96 (13/10/2026) S2: grava SÓ o cliente que mudou e SÓ os campos que mudaram
+   // (antes reenviava a lista inteira: o último a salvar apagava a edição do outro),
+   // só para quem pode editar a mídia, e cliente que não está no banco não "ressuscita"
+   // a partir do navegador (o banco manda; o app não sobe mais clientes locais). */
+function useQGClientesSync(store,update,canEdit){
+  const _base=useRef({});          /* v96 S2: client_id → última versão conhecida no banco (sem updated_at) */
   const _hydrated=useRef(false);
   const COLS=["client_id","name","plataforma","investimento_mensal","investimento_meta","investimento_google","meta_principal","resultado_mes","status","responsavel","proxima_acao","ultima_atualizacao","parent_client","bioter_unit"];
-  const _row=function(c){ const r={}; COLS.forEach(function(k){ r[k]=c[k]===undefined?null:c[k]; }); r.investimento_mensal=Number(c.investimento_mensal||0); r.investimento_meta=Number(c.investimento_meta||0); r.investimento_google=Number(c.investimento_google||0); r.updated_at=new Date().toISOString(); return r; };
+  const _row=function(c){ const r={}; COLS.forEach(function(k){ r[k]=c[k]===undefined?null:c[k]; }); r.investimento_mensal=Number(c.investimento_mensal||0); r.investimento_meta=Number(c.investimento_meta||0); r.investimento_google=Number(c.investimento_google||0); return r; };
+  const _igual=function(a,b){ return JSON.stringify(a===undefined?null:a)===JSON.stringify(b===undefined?null:b); };
   useEffect(function(){
     if(!window._sb) return;
     let alive=true;
     window._sb.from("media_clients").select("*").then(function(r){
-      if(!alive||r.error){ _hydrated.current=true; return; }
+      if(!alive) return;
+      /* v96 S2/Q6: erro ao ler o banco → NÃO libera gravação (sem base não dá pra saber o que mudou) */
+      if(r.error){ try{ console.error("[pixels-midia-erro] clientes de mídia:",r.error.message); }catch(_){ }
+        /* v96 (13/10/2026) revisão RB: o erro aparece na tela (antes só no console, e toda edição era descartada calada) */
+        try{ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui carregar a lista de clientes de mídia ("+r.error.message+"). O que você mudar agora NÃO será salvo — recarregue a página."); }catch(_){ }
+        return; }
       const rows=r.data||[];
       const local=store.clients||[];
-      const byId={}; rows.forEach(function(x){ byId[x.client_id]=x; });
-      // clientes locais que não existem no banco → sobem (migração automática)
-      const faltam=local.filter(function(c){ return !byId[c.client_id]; }).map(_row);
-      if(faltam.length) window._sb.from("media_clients").upsert(faltam,{onConflict:"client_id"}).then(function(x){ if(x.error) console.warn("[qg clientes] seed:",x.error.message); });
-      // estado final = banco + locais que faltavam. BANCO VENCE SEMPRE.
+      // estado final = banco. BANCO VENCE SEMPRE.
       // (22/09/2026, varredura) Antes, verba ZERADA no banco era trocada pelo valor do seed do
-      // navegador — e o seed ainda dizia "Google 1000" pra Arabutã e Construschorr, que não
-      // rodam Google. Zerar no banco não adiantava: o app reescrevia 1000 na hora. Agora só
-      // um campo que NÃO EXISTE no banco (null) pega o valor local, e verba nunca.
+      // navegador. Agora só um campo que NÃO EXISTE no banco (null) pega o valor local, e verba nunca.
+      // v96 S2: cliente que só existe no navegador não volta mais pro banco (era o "cliente apagado que ressuscita").
       const merged=rows.map(function(x){
         const l=local.find(function(c){return c.client_id===x.client_id;})||{};
         const out=Object.assign({},l,x);
         COLS.forEach(function(k){ if(/^investimento/.test(k)) return; const db=x[k]; const vazio=db===null||db===undefined; if(vazio&&l[k]!==undefined&&l[k]!==null&&l[k]!=="") out[k]=l[k]; });
         return out;
-      }).concat(local.filter(function(c){ return !byId[c.client_id]; }));
-      // assinatura = o que está NO BANCO; se o merge ficou diferente, o efeito abaixo grava
-      _lastSent.current=JSON.stringify(rows.map(_row).concat(faltam).map(function(r){ const c=Object.assign({},r); delete c.updated_at; return c; }));
+      });
+      // base = o que está NO BANCO; se o merge ficou diferente (campo vazio preenchido pelo cache), o efeito abaixo grava só esse campo
+      /* v96 (13/10/2026) revisão RB: a base é o que aparece na tela (banco + campo vazio vindo do cache). Assim abrir a tela NÃO grava
+         nada sozinho; só a edição de alguém grava. */
+      const b={}; merged.forEach(function(x){ b[x.client_id]=_row(x); });
+      _base.current=b;
       _hydrated.current=true;
       update(function(prev){ return Object.assign({},prev,{clients:merged}); });
-    }).catch(function(e){ console.warn("[qg clientes] load:",e&&e.message); _hydrated.current=true; });
+    }).catch(function(e){ try{ console.error("[pixels-midia-erro] clientes de mídia:",e&&e.message); }catch(_){ } try{ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui carregar a lista de clientes de mídia. O que você mudar agora NÃO será salvo."); }catch(_){ } });
     return function(){ alive=false; };
   // eslint-disable-next-line
   },[]);
   useEffect(function(){
     if(!window._sb||!_hydrated.current) return;
-    const rows=(store.clients||[]).map(_row);
-    const sig=JSON.stringify(rows.map(function(r){ const c=Object.assign({},r); delete c.updated_at; return c; }));
-    if(sig===_lastSent.current) return;
-    _lastSent.current=sig;
-    window._sb.from("media_clients").upsert(rows,{onConflict:"client_id"}).then(function(x){ if(x.error) console.warn("[qg clientes] save:",x.error.message); });
-  },[store.clients]);
+    if(!canEdit) return;   /* v96 S2: só quem pode editar a mídia grava */
+    (store.clients||[]).forEach(function(c){
+      if(!c||!c.client_id) return;
+      const novo=_row(c); const antes=_base.current[c.client_id];
+      if(!antes){
+        /* cliente novo (botão "+ Novo cliente"): insere 1 linha */
+        _base.current[c.client_id]=novo;
+        window._sb.from("media_clients").upsert(Object.assign({},novo,{updated_at:new Date().toISOString()}),{onConflict:"client_id"}).then(function(x){ if(x.error){ delete _base.current[c.client_id]; console.error("[pixels-midia-erro] salvar cliente:",x.error.message); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar o cliente ("+x.error.message+")"); } });
+        return;
+      }
+      const patch={}; let n=0;
+      COLS.forEach(function(k){ if(k!=="client_id"&&!_igual(novo[k],antes[k])){ patch[k]=novo[k]; n++; } });
+      if(!n) return;
+      _base.current[c.client_id]=novo;
+      patch.updated_at=new Date().toISOString();
+      /* v96 S2: atualiza 1 linha, só os campos alterados */
+      /* v96 (13/10/2026) revisão RB: em erro NÃO volta a base (antes cada mudança seguinte reenviava o patch que falhou e repetia o aviso).
+         Avisa uma vez por cliente e motivo. */
+      window._sb.from("media_clients").update(patch).eq("client_id",c.client_id).then(function(x){ if(x.error){ console.error("[pixels-midia-erro] salvar cliente:",x.error.message); const k=c.client_id+"|"+x.error.message; window._pxMidiaSalvarErro=window._pxMidiaSalvarErro||{}; if(!window._pxMidiaSalvarErro[k]){ window._pxMidiaSalvarErro[k]=1; if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar "+(c.name||"o cliente")+" ("+x.error.message+"). A mudança ficou só na sua tela."); } } });
+    });
+    /* cliente que sumiu da lista local NÃO é apagado no banco: não existe botão de apagar
+       cliente de mídia, e apagar por diferença de lista apagaria cliente dos outros. */
+  },[store.clients,canEdit]);
 }
 
 /* ─── HOOK: dados consolidados do QG ─────────────────── */
+/* v96 (13/10/2026) G4: o servidor devolve no máximo ~1000 linhas por pedido. O QG pedia até 20 mil linhas de uma vez e, se viessem
+   só as primeiras 1000, somava só elas SEM AVISAR (hoje são ~1.500 linhas de campanha em 10 semanas). Agora busca em páginas de
+   1000 com ordem fixa até completar o total que o banco informa; se passar do teto (max) ou faltar linha, marca "cortado" e a tela avisa.
+   O certo (G3) é o servidor mandar o total pronto por cliente e mês — pedido em PENDENCIAS (C2). */
+async function _qgPaginado(mk,max){
+  const TAM=1000; let out=[], total=null, de=0;
+  for(let volta=0;volta<40;volta++){
+    const r=await mk(volta===0).range(de,de+TAM-1);
+    if(r.error) return {data:out,error:r.error,cortado:out.length>0};
+    if(volta===0&&typeof r.count==="number") total=r.count;
+    const d=r.data||[]; out=out.concat(d); de+=d.length;
+    if(!d.length||out.length>=max||(total!==null&&out.length>=total)||(total===null&&d.length<TAM)) break;
+  }
+  return {data:out,error:null,total:total,cortado:total!==null?out.length<total:false};
+}
 function useQGData(clients,year,month){
   const [data,setData]=useState({budgets:[],closings:[],funnels:{},roi:{},produtos:{},goals:{},loading:true});
   const [tick,setTick]=useState(0);
@@ -62945,6 +59952,18 @@ function useQGData(clients,year,month){
     const funClientIds=Array.from(new Set(funKeys.map(function(k){return k.client_id;})));
     const portalIds=Array.from(new Set((clients||[]).map(_qgPortalClientId)));
     const weeks=_qgLastWeeks(10); const minStart=weeks[weeks.length-1].start;
+    /* v96 (13/10/2026) R4/G3/G4/R5/R17 (rodada 2): primeiro os números PRONTOS do servidor (um json por pedido, sem o corte de 1.000 linhas):
+       mês (midia_numeros_mes), cada uma das 10 semanas (ads_numeros), metas (ads_metas_ler_mes) e unidades (ads_unidades_ler).
+       Só se o servidor falhar é que o navegador baixa o dia a dia (em páginas) e soma, como antes. */
+    const _fimW=function(ini){ const d=new Date(ini+"T12:00:00"); d.setDate(d.getDate()+6); return d.toISOString().slice(0,10); };
+    const _rpcJ=function(fn,args){ return Promise.resolve(window._sb.rpc(fn,args)).then(function(r){ return (r&&!r.error&&r.data&&r.data.ok!==false)?r.data:null; },function(){ return null; }); };
+    const _srv=Promise.all([_rpcJ("midia_numeros_mes",{p_ano:year,p_mes:month})].concat(weeks.map(function(w){ return _rpcJ("ads_numeros",{p_clients:null,p_de:w.start,p_ate:_fimW(w.start)}); })).concat([_rpcJ("ads_metas_ler_mes",{p_mes:year+"-"+String(month).padStart(2,"0")+"-01"}),_rpcJ("ads_unidades_ler",{})]));
+    _srv.then(function(sv){
+    if(!alive) return;
+    const _mes=sv[0], _sems=sv.slice(1,1+weeks.length), _metas=sv[1+weeks.length], _unis=sv[2+weeks.length];
+    const numServ=!!(_mes&&Array.isArray(_mes.clientes)&&_sems.every(function(x){ return x&&Array.isArray(x.clientes); }));
+    if(_unis&&Array.isArray(_unis.unidades)&&typeof _adsUnidadesDoServidor==="function") _adsUnidadesDoServidor(_unis.unidades);
+    const _vazio=Promise.resolve({data:[],error:null});
     Promise.all([
       window._sb.from("media_budgets").select("*").in("client_id",ids).eq("year",year).eq("month",month),
       window._sb.from("media_weekly_closings").select("*").in("client_id",ids).gte("week_start",minStart).order("week_start",{ascending:false}),
@@ -62953,12 +59972,12 @@ function useQGData(clients,year,month){
       window._sb.from("playbooks").select("client_id,data").in("client_id",portalIds),
       window._sb.from("media_goals").select("*").in("client_id",ids).eq("ref_month",year+"-"+String(month).padStart(2,"0")),
       // Meta Ads (fonte única de gasto/leads): dia a dia, nível conta, do começo do mês e das últimas 10 semanas
-      window._sb.from("ads_daily").select("ad_account_id,data,gasto,leads,conversas").eq("nivel","conta").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(3000),
+      numServ?_vazio:_qgPaginado(function(c){ return window._sb.from("ads_daily").select("ad_account_id,data,gasto,leads,conversas",c?{count:"exact"}:undefined).eq("nivel","conta").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").order("data").order("ad_account_id"); },3000),   /* v96 G4: em páginas, avisa se cortar */
       // nível campanha: só pra saber quanto do gasto foi em campanhas de LEAD (custo por lead não usa engajamento/seguidores/etc.)
-      window._sb.from("ads_daily").select("ad_account_id,data,campaign_id,campaign_nome,objetivo,gasto,leads,conversas").eq("nivel","campanha").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(20000),
+      numServ?_vazio:_qgPaginado(function(c){ return window._sb.from("ads_daily").select("ad_account_id,data,campaign_id,campaign_nome,objetivo,gasto,leads,conversas",c?{count:"exact"}:undefined).eq("nivel","campanha").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").order("data").order("ad_account_id").order("campaign_id"); },20000),   /* v96 G4 */
       window._pxAdsAccounts?Promise.resolve({data:window._pxAdsAccounts}):window._sb.from("ads_accounts").select("*"),
       // classificação única de cada campanha (view do banco) — a mesma que o 17c, o coletor e a análise usam
-      window._sb.from("ads_campanhas_tipo").select("ad_account_id,campaign_id,tipo"),
+      numServ?_vazio:_qgPaginado(function(c){ return window._sb.from("ads_campanhas_tipo").select("ad_account_id,campaign_id,tipo",c?{count:"exact"}:undefined).order("ad_account_id").order("campaign_id"); },20000),   /* v96 G4: a view inteira também passava de 1000 */
     ]).then(function(rs){
       if(!alive) return;
       const funnels={}; (rs[2].data||[]).forEach(function(r){ funnels[r.client_id+"|"+(r.unit||"grupo")]=r; });
@@ -62967,23 +59986,38 @@ function useQGData(clients,year,month){
       const goals={}; (rs[5].data||[]).forEach(function(r){ goals[r.client_id]=r; });
       rs.forEach(function(r,i){ if(r.error) console.warn("[qg data]",i,r.error.message); });
       if(rs[8]&&rs[8].data&&!window._pxAdsAccounts) window._pxAdsAccounts=rs[8].data; /* rs[8] = ads_accounts (rs[7] é o nível campanha) */
-      setData({budgets:rs[0].data||[],closings:rs[1].data||[],funnels:funnels,roi:roi,produtos:produtos,goals:goals,ads:(rs[6]&&rs[6].data)||[],adsCamp:(rs[7]&&rs[7].data)||[],adsAccounts:(rs[8]&&rs[8].data)||[],adsTipos:(function(){ const m={}; ((rs[9]&&rs[9].data)||[]).forEach(function(t){ m[t.ad_account_id+"|"+t.campaign_id]=t.tipo; }); return m; })(),loading:false});
+      const _cortes=[[6,"gasto por conta"],[7,"gasto por campanha"],[9,"tipo das campanhas"]].filter(function(x){ return rs[x[0]]&&rs[x[0]].cortado; }).map(function(x){return x[1];});   /* v96 G4 */
+      if(_cortes.length) console.warn("[qg data] cortado:",_cortes.join(", "));
+      const _ix=function(arr){ const m={}; (arr||[]).forEach(function(r){ if(r&&r.client_id) m[r.client_id]=r; }); return m; };
+      const numMes=numServ?_ix(_mes.clientes):null; const numSem={}, numSemFim={};
+      if(numServ) weeks.forEach(function(w,iw){ numSem[w.start]=_ix(_sems[iw].clientes); numSemFim[w.start]=_fimW(w.start); });
+      const metasMes=(_metas&&_metas.metas)?_metas.metas:null;
+      setData({numServ:numServ,numMes:numMes,numMesJanela:numServ?[String(_mes.mes).slice(0,10),String(_mes.ate).slice(0,10)]:null,numSem:numSem,numSemFim:numSemFim,numMesInfo:numServ?{limites:_mes.limites,fontes:_mes.fontes,ate:_mes.ate}:null,metasMes:metasMes,metasPodeEditar:!!(_metas&&_metas.pode_editar),
+        cortes:_cortes,budgets:rs[0].data||[],closings:rs[1].data||[],funnels:funnels,roi:roi,produtos:produtos,goals:goals,ads:(rs[6]&&rs[6].data)||[],adsCamp:(rs[7]&&rs[7].data)||[],adsAccounts:(rs[8]&&rs[8].data)||[],adsTipos:(function(){ const m={}; ((rs[9]&&rs[9].data)||[]).forEach(function(t){ m[t.ad_account_id+"|"+t.campaign_id]=t.tipo; }); return m; })(),loading:false});
     }).catch(function(e){ console.warn("[qg data]",e&&e.message); if(alive) setData(function(p){return Object.assign({},p,{loading:false});}); });
+    });   /* fim do _srv.then (v96 R4) */
     return function(){ alive=false; };
   },[idsKey,year,month,tick]);
   // Realtime: qualquer mudança nas 4 tabelas → recarrega (debounce)
   useEffect(function(){
     if(!window._sb) return;
-    let t=null; const bump=function(){ clearTimeout(t); t=setTimeout(function(){ setTick(function(x){return x+1;}); },600); };
+    /* v96 (13/10/2026) G6: com a aba do navegador escondida não recarrega nada — guarda que houve mudança e recarrega uma vez ao voltar.
+       A coleta da Meta insere milhares de linhas em ads_daily: essas esperam 5 s de calmaria (antes 0,6 s = recarga a cada lote). */
+    let t=null, pendente=false;
+    const agora=function(){ if(typeof document!=="undefined"&&document.hidden){ pendente=true; return; } setTick(function(x){return x+1;}); };
+    const bumpEm=function(ms){ return function(){ clearTimeout(t); t=setTimeout(agora,ms); }; };
+    const bump=bumpEm(600), bumpAds=bumpEm(5000);
+    const vis=function(){ if(!document.hidden&&pendente){ pendente=false; setTick(function(x){return x+1;}); } };
+    try{ document.addEventListener("visibilitychange",vis); }catch(_){ }
     const ch=window._sb.channel("qg-midia-"+year+"-"+month)
       .on("postgres_changes",{event:"*",schema:"public",table:"media_budgets"},bump)
       .on("postgres_changes",{event:"*",schema:"public",table:"media_weekly_closings"},bump)
       .on("postgres_changes",{event:"*",schema:"public",table:"media_funnel_entries"},bump)
       .on("postgres_changes",{event:"*",schema:"public",table:"client_roi_monthly"},bump)
       .on("postgres_changes",{event:"*",schema:"public",table:"media_goals"},bump)
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"ads_daily"},bump)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"ads_daily"},bumpAds)
       .subscribe();
-    return function(){ clearTimeout(t); try{ window._sb.removeChannel(ch); }catch(_){} };
+    return function(){ clearTimeout(t); try{ document.removeEventListener("visibilitychange",vis); }catch(_){ } try{ window._sb.removeChannel(ch); }catch(_){} };
   },[year,month]);
   return Object.assign({},data,{reload:function(){ setTick(function(x){return x+1;}); }});
 }
@@ -62997,42 +60031,71 @@ function _qgGoogleGasto(closingsMes,linhasTodas){ const sum=function(arr,k){ ret
 function _qgAdsConta(mc,data){ if(!mc||!data||!data.adsAccounts||!data.adsAccounts.length||typeof adsContaDoCliente!=="function") return null; const r=adsContaDoCliente(mc,data.adsAccounts); return (r&&r.conta&&!r.compartilhada)?r.conta:null; }
 /* lead = leads (formulário) + conversas (WhatsApp) — colunas já separadas no banco, sem sobreposição (definição 09/09/2026) */
 /* último dia fechado do mês pedido: ontem se for o mês corrente, senão o último dia do mês */
+/* v96 (13/10/2026) R6/E1: UMA conta só para o ritmo da verba (antes copiada em 3 telas, cada uma com seus limites).
+   Dia de referência = ontem no mês corrente (o dado de hoje é parcial), o mês inteiro em mês passado, 0 em mês futuro.
+   esperado = verba × dia/dias do mês · ritmo = gasto ÷ esperado · acima de 1,15 = vai estourar · abaixo de 0,8 = vai sobrar.
+   Usada no placar e na Gestão (17b) e na Visão geral (17c). O ideal é vir pronta do servidor — pedido em PENDENCIAS (C2). */
+/* v96 (13/10/2026) 2.13.02: "de onde veio este número" — passe o mouse no custo por lead / leads / gasto do placar.
+   Diz a fonte (Meta pela API, Google lançado à mão, fechamento, funil), o período e a conta feita. */
+const _QG_FONTE={meta_api:"Meta (API, coleta automática)","meta_api+google_manual":"Meta (API) + Google lançado à mão no fechamento",fechamentos:"fechamento semanal (lançado à mão)",linhas:"linhas de orçamento (lançadas à mão)",funil:"funil do Portal",nenhuma:"sem fonte"};
+function qgExplica(c,qual,year,month){
+  if(!c) return "";
+  const fimIso=_qgFimMesAteOntem(year,month); const per="01/"+String(month).padStart(2,"0")+" a "+fimIso.slice(8,10)+"/"+fimIso.slice(5,7)+"/"+year;
+  if(qual==="cpl"&&c.cplServidor) return "Custo por lead (regra única, calculada no servidor) = "+_qgBRL(c.gastoLead,2)+" (gasto só das campanhas de lead da Meta) ÷ "+_qgNum(c.leadsMeta)+" leads da Meta = "+(c.cpl?_qgBRL(c.cpl,2):"—")+". Período: "+per+"."+(c.googleGasto>0.005?" O Google lançado à mão ("+_qgBRL(c.googleGasto,2)+") fica fora do custo por lead.":"")+(c.gastoOutras>0.005?" Fora da conta: "+_qgBRL(c.gastoOutras,2)+" em engajamento/seguidores/alcance.":"");   /* v96 R4 */
+  if(qual==="cpl") return "Custo por lead = "+_qgBRL(c.gastoLead,2)+" (gasto só das campanhas de lead) ÷ "+_qgNum(c.leads)+" leads = "+(c.cpl?_qgBRL(c.cpl,2):"—")+". Período: "+per+". Gasto: "+(_QG_FONTE[c.gastoFonte]||c.gastoFonte)+". Leads: "+(_QG_FONTE[c.leadsFonte]||c.leadsFonte)+"."+(c.gastoOutras>0.005?" Fora da conta: "+_qgBRL(c.gastoOutras,2)+" em engajamento/seguidores/alcance.":"");
+  if(qual==="leads") return _qgNum(c.leads)+" leads (formulário + conversas de WhatsApp) de "+per+". Fonte: "+(_QG_FONTE[c.leadsFonte]||c.leadsFonte)+".";
+  if(qual==="gasto") return _qgBRL(c.gasto,2)+" investidos de "+per+". Fonte: "+(_QG_FONTE[c.gastoFonte]||c.gastoFonte)+(c.orcamento>0?". Verba do mês: "+_qgBRL(c.orcamento,2)+" (cadastro do cliente).":".");
+  return "";
+}
+function pxRitmoVerba(gasto,verba,year,month){
+  const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month; const passado=new Date(year,month-1,1)<hoje&&!ehMesAtual;
+  const diasNoMes=new Date(year,month,0).getDate(); const diaRef=ehMesAtual?Math.max(1,hoje.getDate()-1):(passado?diasNoMes:0);
+  const v=Number(verba)||0, g=Number(gasto)||0; const esperado=v>0?v*diaRef/diasNoMes:0; const ritmo=esperado>0?g/esperado:null;
+  const nivel=ritmo===null?null:ritmo>1.15?"alto":ritmo<0.8?"baixo":"ok";
+  const txt=ritmo===null?(v>0?null:"sem verba definida"):nivel==="alto"?"acima do ritmo · vai estourar":nivel==="baixo"?"abaixo do ritmo · vai sobrar":"no ritmo";
+  return {ehMesAtual:ehMesAtual,passado:passado,diasNoMes:diasNoMes,diaRef:diaRef,esperado:esperado,ritmo:ritmo,nivel:nivel,txt:txt,pctVerba:v>0?g/v*100:null,pctMes:diasNoMes>0?diaRef/diasNoMes*100:0};
+}
 function _qgFimMesAteOntem(year,month){ const d=new Date(); d.setDate(d.getDate()-1); const ontem=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); const fim=year+"-"+String(month).padStart(2,"0")+"-"+String(new Date(year,month,0).getDate()).padStart(2,"0"); return ontem<fim?ontem:fim; }
 /* ═══ UNIDADES DENTRO DE UMA MESMA CONTA DE ANÚNCIOS (19/09/2026) ═══
    A conta "Bioter Toledo 2023" roda campanhas de quatro unidades e a unidade está escrita no nome:
    "[Pixels] [Uberlândia] [Leads - Wpp] [25/06/26]". Glória, Paraguay e Uberlândia não têm conta própria,
    então sem isso o gasto delas aparecia todo no Toledo e elas ficavam com R$ 0,00 na lista.
    Campanha sem colchete de unidade fica com a unidade dona da conta — nada some da soma. */
-const QG_UNIDADES=[
-  {u:"uberlandia",lbl:"Uberlândia",re:/uberl[âa]ndia/i},
-  {u:"paraguay",lbl:"Paraguay",re:/paraguay|paraguai|obligado/i},
-  {u:"gloria",lbl:"Glória de Dourados",re:/gl[óo]ria/i},
-  {u:"toledo",lbl:"Toledo",re:/toledo/i},
-  {u:"chapeco",lbl:"Chapecó",re:/chapec[óo]/i},
-  {u:"castro",lbl:"Castro",re:/castro/i}
-];
-const _qgUnidadeLbl=function(u){ const o=QG_UNIDADES.find(function(x){return x.u===u;}); return o?o.lbl:(u||"—"); };
-function _qgUnidadeCamp(nome,padrao){
-  const blocos=String(nome||"").match(/\[([^\]]+)\]/g)||[];
-  for(let i=0;i<blocos.length;i++){ const t=blocos[i].slice(1,-1).trim();
-    for(let j=0;j<QG_UNIDADES.length;j++) if(QG_UNIDADES[j].re.test(t)) return QG_UNIDADES[j].u; }
-  return padrao||null;
-}
+/* v96 (13/10/2026) R17/E6: a tabela de unidades era copiada aqui e no 17c (ADS_UNIDADES). Agora existe UMA (17c) e estas
+   duas funções só repassam para ela. Campanha sem etiqueta de unidade continua na unidade dona da conta, mas a lista de
+   clientes passa a AVISAR quantas são (antes caíam calado no Toledo). O ideal (unidade gravada por campanha no banco) foi
+   pedido ao servidor — PENDENCIAS (C2). */
+const _qgUnidadeLbl=function(u){ const l=(typeof _adsUnidadeLbl==="function")?_adsUnidadeLbl(u):""; return l||u||"—"; };
+function _qgUnidadeCamp(nome,padrao){ return (typeof _adsUnidadeCamp==="function")?_adsUnidadeCamp(nome,padrao):(padrao||null); }
 /* quebra a conta do cliente por unidade, no período — só unidades COM tráfego pago */
 function _qgPorUnidade(mc,data,ini,fim){
   const acc=_qgAdsConta(mc,data); if(!acc) return [];
+  /* v96 (13/10/2026) R4/R17 (rodada 2): com os números do servidor, cada unidade da conta vem pronta (e já respeita a unidade escolhida
+     à mão em cada campanha — ads_unidade_campanhas). Unidades da conta = ads_unidades_ler (conta própria ou compartilhada). */
+  if(data.numServ&&data.numMesJanela&&ini===data.numMesJanela[0]&&fim===data.numMesJanela[1]){
+    const unis=(typeof _adsUnidadesLista==="function"?_adsUnidadesLista():[]).filter(function(u){ return String(u.conta_propria||"")===String(acc.ad_account_id)||String(u.conta_compartilhada||"")===String(acc.ad_account_id); });
+    const rows=Object.keys(data.numMes||{}).map(function(k){ return data.numMes[k]; });
+    if(typeof _adsUniCampCarregar==="function") _adsUniCampCarregar(acc.ad_account_id);   /* conta campanhas sem unidade (cache; 1 pedido por conta) */
+    const semEtq=(window._pxAdsSemUnidade||{})[acc.ad_account_id]||null;
+    const arrS=unis.map(function(u){ const r=rows.find(function(x){ return x.unidade===u.unidade; }); if(!r) return null;
+        return {u:u.unidade,lbl:u.nome||_qgUnidadeLbl(u.unidade),gasto:Number(r.gasto)||0,gastoLead:Number(r.gasto_lead)||0,leads:Number(r.leads_form)||0,conversas:Number(r.conversas_wpp)||0,res:Number(r.resultados)||0,cpl:(r.cpl===null||r.cpl===undefined)?null:Number(r.cpl),nCamps:null,nSemEtq:(semEtq&&u.unidade===acc.unidade)?semEtq:0}; })
+      .filter(function(o){ return o&&o.gasto>0; }).sort(function(a,b){ return b.gasto-a.gasto; });
+    return arrS.length>1?arrS:[];
+  }
   const camp=(data.adsCamp||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
   if(!camp.length) return [];
   const tipos=data.adsTipos||{}; const por={};
   camp.forEach(function(r){
-    const u=_qgUnidadeCamp(r.campaign_nome,acc.unidade)||acc.unidade||"—";
-    const o=por[u]||(por[u]={u:u,lbl:_qgUnidadeLbl(u),gasto:0,gastoLead:0,leads:0,conversas:0,camps:{}});
+    const _etq=_qgUnidadeCamp(r.campaign_nome,null);   /* v96 R17: null = sem etiqueta de unidade no nome */
+    const u=_etq||acc.unidade||"—";
+    const o=por[u]||(por[u]={u:u,lbl:_qgUnidadeLbl(u),gasto:0,gastoLead:0,leads:0,conversas:0,camps:{},semEtq:{}});
+    if(!_etq) o.semEtq[r.campaign_id]=1;
     const t=tipos[acc.ad_account_id+"|"+r.campaign_id]||(typeof _adsClassifica==="function"?_adsClassifica(r.objetivo,[],r.campaign_nome):"outro");
     const g=Number(r.gasto||0); o.gasto+=g; o.camps[r.campaign_id]=1;
     if(t==="form"){ o.leads+=Number(r.leads||0); o.gastoLead+=g; }
     else if(t==="lead_wpp"||t==="eng_wpp"){ o.conversas+=Number(r.conversas||0); o.gastoLead+=g; }
   });
-  const arr=Object.keys(por).map(function(k){ const o=por[k]; o.res=o.leads+o.conversas; o.nCamps=Object.keys(o.camps).length; o.cpl=o.res>0?o.gastoLead/o.res:null; return o; })
+  const arr=Object.keys(por).map(function(k){ const o=por[k]; o.res=o.leads+o.conversas; o.nCamps=Object.keys(o.camps).length; o.nSemEtq=Object.keys(o.semEtq||{}).length; o.cpl=o.res>0?o.gastoLead/o.res:null; return o; })
     .filter(function(o){ return o.gasto>0; })
     .sort(function(a,b){ return b.gasto-a.gasto; });
   return arr.length>1?arr:[];    /* uma unidade só = conta normal, não precisa abrir em filhas */
@@ -63043,7 +60106,24 @@ function _qgClienteDaUnidade(u,mc,clients){
   const achado=todos.find(function(x){ return x.bioter_unit===u&&(x.parent_client||x.client_id)===(mc.parent_client||mc.client_id); });
   return achado||null;
 }
-function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
+/* v96 (13/10/2026) R4/E1/G3/G4/R6 (rodada 2): números da Meta prontos do SERVIDOR — midia_numeros_mes (mês) e ads_numeros (semanas).
+   Regra única do custo por lead: gasto das campanhas de lead ÷ resultados delas, SÓ Meta (o Google lançado à mão aparece à parte).
+   Nada de baixar dia a dia de todas as contas e somar no navegador. Se o servidor falhar, cai no jeito antigo (useQGData baixa em páginas).
+   undefined = janela que o servidor não cobre (usa o cálculo local) · null = sem dado da Meta (cai no fechamento, como antes). */
+function _qgNumServ(mc,data,ini,fim){
+  if(!data||!data.numServ||!mc) return undefined;
+  let tab=null;
+  if(data.numMesJanela&&ini===data.numMesJanela[0]&&fim===data.numMesJanela[1]) tab=data.numMes;
+  else if(data.numSem&&data.numSem[ini]&&data.numSemFim&&data.numSemFim[ini]===fim) tab=data.numSem[ini];
+  if(!tab) return undefined;
+  const r=tab[mc.client_id]; if(!r) return null;
+  /* grupo (ex.: "bioter" inteiro) sem conta própria: antes não tinha número da Meta; continua sem (as unidades têm o seu — nada soma 2x) */
+  if(!mc.bioter_unit&&!(typeof adsContaDoCliente==="function"&&adsContaDoCliente(mc,data.adsAccounts||window._pxAdsAccounts))) return null;
+  if(!r.ultimo_dia&&!(Number(r.gasto)>0)&&!(Number(r.resultados)>0)) return null;   /* sem linha no período: nunca "R$ 0" com selo de API */
+  return {gasto:Number(r.gasto)||0,gastoLead:Number(r.gasto_lead)||0,leads:Number(r.resultados)||0,leadsForm:Number(r.leads_form)||0,conversas:Number(r.conversas_wpp)||0,dias:Number(r.dias_com_gasto)||0,cpl:(r.cpl===null||r.cpl===undefined)?null:Number(r.cpl),ultimoDia:r.ultimo_dia||null,servidor:true,linha:r};
+}
+function _qgAdsSoma(mc,data,ini,fim){ const _sv=_qgNumServ(mc,data,ini,fim); if(_sv!==undefined) return _sv;   /* v96 R4: servidor primeiro */
+  const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
   /* sem linha nenhuma no período = a API não trouxe nada (conta nova, coleta falhou): devolve null pra cair no fechamento manual — nunca "R$ 0" com selo de API */
   if(!rows.length) return null;
   const o={gasto:0,gastoLead:0,leads:0,leadsForm:0,conversas:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); if(Number(r.gasto||0)>0) o.dias++; });
@@ -63102,7 +60182,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
     // gasto: Meta API (+ Google dos fechamentos/linhas) > fechamentos semanais > linhas > 0
     const cInv=fPlat==="meta"?sum(closingsMes,"investimento_meta"):fPlat==="google"?sum(closingsMes,"investimento_google"):sum(closingsMes,"investimento");
     const gInvGoogle=_qgGoogleGasto(closingsMes,linhasTodas);
-    if(adsMes){ gasto=adsMes.gasto+(fPlat==="todos"?gInvGoogle:0); gastoLead=adsMes.gastoLead+(fPlat==="todos"?gInvGoogle:0); gastoFonte=(fPlat==="todos"&&gInvGoogle>0)?"meta_api+google_manual":"meta_api"; }
+    if(adsMes){ gasto=adsMes.gasto+(fPlat==="todos"?gInvGoogle:0); gastoLead=adsMes.servidor?adsMes.gastoLead:adsMes.gastoLead+(fPlat==="todos"?gInvGoogle:0); gastoFonte=(fPlat==="todos"&&gInvGoogle>0)?"meta_api+google_manual":"meta_api"; }   /* v96 R4: com o servidor, o gasto de lead é só Meta (regra única) */
     else if(closingsMes.length&&cInv>0){ gasto=cInv; gastoFonte="fechamentos"; }
     else if(linhas.length&&sum(linhas,"gasto")>0){ gasto=sum(linhas,"gasto"); gastoFonte="linhas"; }
     else { gasto=0; gastoFonte="nenhuma"; }
@@ -63126,7 +60206,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
   const saldo=orcamento-gasto;
   const usoPct=orcamento>0?gasto/orcamento*100:null;
   if(gastoLead===null) gastoLead=gasto;
-  const cpl=_qgDiv(gastoLead,leads), cpq=_qgDiv(gasto,qualificados), cac=_qgDiv(gasto,vendas), ticket=_qgDiv(receita,vendas);
+  const cpl=(adsMes&&adsMes.servidor)?adsMes.cpl:_qgDiv(gastoLead,leads), cpq=_qgDiv(gasto,qualificados)   /* v96 R4: CPL = o do servidor (Meta: gasto de lead ÷ resultados) */, cac=_qgDiv(gasto,vendas), ticket=_qgDiv(receita,vendas);
   const roas=_qgDiv(receita,gasto);
   const roiPct=(gasto>0&&receita>0)?((receita-gasto)/gasto*100):null;
   // situação dos dados
@@ -63168,10 +60248,10 @@ function qgCalcCliente(mc,data,year,month,filtro){
   const porRegiao=agrupa("regiao","uf","leads_por_regiao");
   // semanas
   const closingsCliente=(data.closings||[]).filter(function(w){return w.client_id===mc.client_id;});
-  const _adsAcc=_qgAdsConta(mc,data); const _adsUlt=_adsAcc?(data.ads||[]).filter(function(r){return r.ad_account_id===_adsAcc.ad_account_id;}).map(function(r){return r.data+"T23:59:00";}).sort().pop():null;
+  const _adsAcc=_qgAdsConta(mc,data); const _adsUlt=(adsMes&&adsMes.servidor)?(adsMes.ultimoDia?adsMes.ultimoDia+"T23:59:00":null):_adsAcc?(data.ads||[]).filter(function(r){return r.ad_account_id===_adsAcc.ad_account_id;}).map(function(r){return r.data+"T23:59:00";}).sort().pop():null;
   const ultimaAtualizacao=[mc.ultima_atualizacao,_adsUlt,funil&&(funil.updated_at||funil.submitted_at),roi&&roi.updated_at].concat(closingsCliente.map(function(w){return w.updated_at;})).concat(linhasTodas.map(function(b){return b.updated_at;})).filter(Boolean).sort().pop()||null;
   const distribuido=sum(linhasTodas,"orcamento");
-  return {mc:mc,orcamento:orcamento,distribuido:distribuido,gasto:gasto,gastoLead:gastoLead,gastoOutras:Math.max(0,gasto-gastoLead),gastoFonte:gastoFonte,saldo:saldo,usoPct:usoPct,leads:leads,leadsFonte:leadsFonte,qualificados:qualificados,qualFonte:qualFonte,oportunidades:oportunidades,vendas:vendas,vendasFonte:vendasFonte,receita:receita,
+  return {mc:mc,orcamento:orcamento,distribuido:distribuido,gasto:gasto,gastoLead:gastoLead,gastoOutras:(adsMes&&adsMes.servidor)?Math.max(0,adsMes.gasto-adsMes.gastoLead):Math.max(0,gasto-gastoLead),leadsMeta:adsMes?adsMes.leads:null,googleGasto:(adsMes&&adsMes.servidor)?Math.max(0,gasto-adsMes.gasto):0,cplServidor:!!(adsMes&&adsMes.servidor),gastoFonte:gastoFonte,saldo:saldo,usoPct:usoPct,leads:leads,leadsFonte:leadsFonte,qualificados:qualificados,qualFonte:qualFonte,oportunidades:oportunidades,vendas:vendas,vendasFonte:vendasFonte,receita:receita,
     cpl:cpl,cpq:cpq,cac:cac,ticket:ticket,roas:roas,roiPct:roiPct,roic:roiPct,situacao:situacao,temFunil:temFunil,temFechamento:temFechamento,funil:funil,stages:stages,roi:roi,vendasLista:vendasLista,vendasTodas:vendasTodas,
     linhas:linhas,linhasTodas:linhasTodas,closingsMes:closingsMes,closingsCliente:closingsCliente,porPlat:porPlat,porProduto:porProduto,porRegiao:porRegiao,ultimaAtualizacao:ultimaAtualizacao,filtrando:filtrando,metaApi:!!adsMes};
 }
@@ -63190,8 +60270,11 @@ function qgCalcSemana(mc,data,week){
 /* ─── META MENSAL DE LEADS + RITMO ───────────────────── */
 // meta: media_goals (Supabase) > store.goals (localStorage antigo). Retorna {meta, esperado, pct, status, cor, label}
 function qgMeta(mc,data,year,month,leads,store){
-  let meta=null; const g=(data.goals||{})[mc.client_id]; if(g&&Number(g.meta_leads)>0) meta=Number(g.meta_leads);
-  if(meta===null&&store&&store.goals&&store.goals[mc.client_id]){ const k=year+"-"+String(month).padStart(2,"0"); const lg=store.goals[mc.client_id][k]; if(lg&&Number(lg.leads)>0) meta=Number(lg.leads); }
+  /* v96 (13/10/2026) R5 (rodada 2): fonte única = Gestão › Metas (ads_metas, via ads_metas_ler_mes; mês sem meta herda a do último).
+     media_goals fica só como reserva (o servidor espelha nos dois sentidos) e o navegador só para quem ainda tinha. */
+  let meta=null; const _am=(data.metasMes||{})[mc.client_id]; if(_am&&Number(_am.leads_meta)>0) meta=Number(_am.leads_meta);
+  const g=(data.goals||{})[mc.client_id]; if(meta===null&&!data.metasMes&&g&&Number(g.meta_leads)>0) meta=Number(g.meta_leads);
+  if(meta===null&&!data.metasMes&&store&&store.goals&&store.goals[mc.client_id]){ const k=year+"-"+String(month).padStart(2,"0"); const lg=store.goals[mc.client_id][k]; if(lg&&Number(lg.leads)>0) meta=Number(lg.leads); }
   const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month;
   const diasMes=new Date(year,month,0).getDate();
   const fracao=ehMesAtual?Math.min(1,Math.max(1,hoje.getDate()-1)/diasMes):(new Date(year,month-1,1)<hoje?1:0); /* até ontem — mesma régua do card de verba */
@@ -63204,7 +60287,7 @@ function qgMeta(mc,data,year,month,leads,store){
   else if(razao>=0.95){ status="no_ritmo"; label="No ritmo"; cor=QG.roxo; }
   else if(razao>=0.8){ status="atencao"; label="Atenção"; cor=QG.amar; }
   else { status="abaixo"; label="Abaixo do ritmo"; cor=QG.verm; }
-  return {meta:meta,esperado:esperado,pct:pct,status:status,label:label,cor:cor,fracao:fracao};
+  return {meta:meta,esperado:esperado,pct:pct,status:status,label:label,cor:cor,fracao:fracao,herdada:!!(_am&&_am.herdada&&Number(_am.leads_meta)>0)};   /* v96 R5 */
 }
 
 /* ─── ALERTAS (só os que importam) ───────────────────── */
@@ -63218,7 +60301,7 @@ function qgAlertas(calcs,fechAtual,data,store,year,month){
     else if(c.usoPct!==null&&c.usoPct>=90) out.push({nivel:"atencao",cliente:c.mc,titulo:n+" com orçamento quase esgotado",detalhe:Math.round(c.usoPct)+"% usado · saldo "+_qgBRL(c.saldo),tipo:"orcamento"});
     const sems=_qgLastWeeks(3); const s0=qgCalcSemana(c.mc,data,sems[0]), s1=qgCalcSemana(c.mc,data,sems[1]), s2=qgCalcSemana(c.mc,data,sems[2]);
     const a=s1, b=s2; /* só semanas fechadas — a corrente é parcial */
-    if(a.w&&b.w&&b.leads>=5&&a.leads<b.leads*0.7) out.push({nivel:"atencao",cliente:c.mc,titulo:"Queda forte de leads em "+n,detalhe:_qgNum(b.leads)+" → "+_qgNum(a.leads)+" leads ("+Math.round((1-a.leads/b.leads)*100)+"%)",tipo:"leads"});
+    if(a.w&&b.w&&b.leads>=(typeof ADS_MIN_RESULTADOS!=="undefined"?ADS_MIN_RESULTADOS:10)&&a.leads<b.leads*0.7)/* v96 (13/10/2026) R16: régua única (era 5) */ out.push({nivel:"atencao",cliente:c.mc,titulo:"Queda forte de leads em "+n,detalhe:_qgNum(b.leads)+" → "+_qgNum(a.leads)+" leads ("+Math.round((1-a.leads/b.leads)*100)+"%)",tipo:"leads"});
     if(c.orcamento>0&&!c.temFunil&&m.fracao>0.3) out.push({nivel:"info",cliente:c.mc,titulo:"Funil desatualizado: "+n,detalhe:"Cliente não preencheu o Funil Digital no Portal este mês",tipo:"funil"});
     if(c.orcamento>0&&!fechAtual[c.mc.client_id]) out.push({nivel:"info",cliente:c.mc,titulo:"Fechamento semanal pendente: "+n,detalhe:_qgWeekLabel(sems[0].start),tipo:"fechamento"});
   });
@@ -63238,14 +60321,7 @@ function QGCard({title,sub,right,children,pad,style,flat,className}){
     {children}
   </section>;
 }
-// Número grande em linha (sem card por métrica) — usado no hero
-function QGBig({label,value,sub,cor,icon,size}){
-  return <div style={{minWidth:0,padding:"2px 0"}}>
-    <div style={{color:QG.txt3,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>{icon}{label}</div>
-    <div style={{color:cor||QG.txt,fontWeight:800,fontSize:size||26,letterSpacing:-.4,lineHeight:1.1,marginTop:5,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{value}</div>
-    {sub&&<div style={{color:QG.txt3,fontSize:11.5,marginTop:4,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>}
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido QGBig — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 function QGBar({pct,cor,h,marca}){
   const p=pct===null||pct===undefined?0:Math.max(0,Math.min(100,pct));
   return <div style={{height:h||8,background:"#eef0f4",borderRadius:99,overflow:"visible",position:"relative",flex:1,minWidth:40}}>
@@ -63254,12 +60330,7 @@ function QGBar({pct,cor,h,marca}){
   </div>;
 }
 function QGPill({children,cor,bg}){ return <span style={{background:bg||QG.cinzaBg,color:cor||"#64748b",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>{children}</span>; }
-function QGDelta({cur,prev,inverse}){
-  if(cur===null||cur===undefined||prev===null||prev===undefined||!(Math.abs(prev)>0)) return <span style={{color:QG.txt3,fontSize:11,fontWeight:700}}>—</span>;
-  const d=(cur-prev)/Math.abs(prev)*100; if(!isFinite(d)) return null;
-  const up=d>0; const bom=inverse?!up:up; const zero=Math.abs(d)<0.5;
-  return <span style={{color:zero?QG.txt3:bom?QG.verde:QG.verm,fontSize:11,fontWeight:800,whiteSpace:"nowrap"}}>{zero?"=":(up?"↑":"↓")} {Math.abs(Math.round(d))}%</span>;
-}
+/* v96 (13/10/2026) M4: removido QGDelta — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 function QGEmpty({texto,alt}){ return <div style={{color:QG.txt3,fontSize:12.5,fontWeight:600,padding:"18px 0",textAlign:"center"}}>{texto}{alt&&<div style={{fontWeight:500,fontSize:11.5,marginTop:3}}>{alt}</div>}</div>; }
 function QGSel({value,onChange,options,width}){
   return <select value={value} onChange={function(e){onChange(e.target.value);}} style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:9,padding:"7px 28px 7px 11px",fontSize:12.5,fontWeight:700,color:QG.txt,outline:"none",fontFamily:QG_FONT,cursor:"pointer",minWidth:width||120}}>
@@ -63280,21 +60351,7 @@ function QGPlatIco({id,size}){ const s=size||14;
 function QGPlat({id,size,label}){ return <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:QG.txt2,whiteSpace:"nowrap"}}><QGPlatIco id={id} size={size}/>{label!==false&&(id==="google"?"Google Ads":"Meta Ads")}</span>; }
 function _qgMeses(){ const now=new Date(); const out=[]; for(let i=0;i<12;i++){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); out.push({id:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"),label:QG_MESES[d.getMonth()]+" "+d.getFullYear()}); } return out; }
 
-/* ─── Bloco de meta (usado no hero do dashboard e do cliente) ── */
-function QGMetaBloco({leads,m,onEditar,compact}){
-  return <div style={{minWidth:0}}>
-    <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
-      <span style={{fontWeight:900,fontSize:compact?22:30,letterSpacing:-1,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{_qgNum(leads)}</span>
-      <span style={{color:QG.txt3,fontSize:13,fontWeight:700}}>/ {m.meta?_qgNum(m.meta)+" meta":"sem meta"}{onEditar&&<button onClick={onEditar} title="Definir meta mensal de leads" style={{background:"none",border:"none",color:QG.roxo,cursor:"pointer",fontSize:11,fontWeight:800,fontFamily:QG_FONT,padding:"0 4px",minHeight:0,minWidth:0}}>editar</button>}</span>
-      {m.meta&&<span style={{marginLeft:"auto",color:m.cor,fontWeight:900,fontSize:compact?15:18,letterSpacing:-.4}}>{m.pct.toLocaleString("pt-BR",{maximumFractionDigits:1})}%</span>}
-    </div>
-    <div style={{margin:"8px 0 6px"}}><QGBar pct={m.meta?m.pct:0} cor={m.meta?m.cor:"#e5e9f0"} h={compact?8:10} marca={m.meta?m.fracao*100:null}/></div>
-    <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11.5,fontWeight:700,color:QG.txt2,flexWrap:"wrap"}}>
-      <span style={{color:m.meta?QG.txt2:QG.txt3}}>{m.meta?"Esperado até hoje: "+_qgNum(m.esperado):(onEditar?"Defina a meta mensal":"Meta não definida")}</span>
-      {m.meta&&<QGPill cor={m.cor} bg={m.cor+"14"}>{m.label}</QGPill>}
-    </div>
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido QGMetaBloco — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ═══════════════════════════════════════════════════════
    PRÓXIMAS AÇÕES — checklist por cliente (media_actions)
@@ -63344,12 +60401,7 @@ function QGIco({name,size,cor,sw}){
   if(name==="users") return <svg {...p}><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.2a3.2 3.2 0 0 1 0 5.8"/><path d="M17.2 14.2A5 5 0 0 1 20.5 19"/></svg>;
   return null;
 }
-function QGSecTitle({ico,cor,children,right}){
-  return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:10}}>
-    <div style={{display:"flex",alignItems:"center",gap:7,color:QG.txt3,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}><span style={{width:24,height:24,borderRadius:8,background:cor+"14",color:cor,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><QGIco name={ico} size={14} sw={2.2}/></span>{children}</div>
-    {right}
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido QGSecTitle (só o cartão antigo usava) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ─── Popover de responsáveis (toggle por pessoa) ─── */
 function QGAssignPop({value,onChange,onClose}){
@@ -63426,74 +60478,19 @@ function QGAcoes({clientId,acoes,api,currentUser,canEdit,compact}){
   </div>;
 }
 
-/* ─── Card do cliente (dashboard) ─── */
-function QGCardCliente({c,m,data,year,month,acoes,api,currentUser,canEdit,onOpenClient,stOpt,isMob}){
-  const mc=c.mc; const st=(stOpt||[]).find(function(s){return s.id===mc.status;});
-  const mesLabel=QG_MESES[month-1];
-  const plat=function(id){ const p=c.porPlat[id]; const ativa=p.ativa; const pct=p.orcamento>0?Math.min(100,p.gasto/p.orcamento*100):0;
-    return <div style={{opacity:ativa?1:.4,minWidth:0}}>
-      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,whiteSpace:"nowrap"}}>
-        <QGPlat id={id} size={13}/>
-        <span style={{fontSize:14,fontWeight:800,letterSpacing:-.3,color:QG.txt,fontFeatureSettings:"'tnum'"}}>{ativa?_qgBRLk(p.gasto):"—"}{ativa&&p.orcamento>0&&<span style={{fontSize:11,color:QG.txt3,fontWeight:600}}> / {_qgBRLk(p.orcamento)}</span>}</span>
-      </div>
-      <div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}><QGBar pct={pct} cor={id==="meta"?QG.meta:QG.google} h={5}/><span style={{fontSize:10.5,fontWeight:700,color:QG.txt3,minWidth:28,textAlign:"right"}}>{ativa&&p.orcamento>0?Math.round(pct)+"%":""}</span></div>
-    </div>; };
-  const roicOk=c.roic!==null&&c.roic!==undefined&&isFinite(c.roic);
-  const divisor={borderLeft:isMob?"none":"1px solid "+QG.borda,paddingLeft:isMob?0:16,borderTop:isMob?"1px solid "+QG.borda:"none",paddingTop:isMob?12:0};
-  return <section style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,padding:"16px 18px",fontFamily:QG_FONT,minWidth:0,display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",alignItems:"center",gap:10}}>
-      {typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(mc)} size="sm"/>}
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{fontWeight:800,fontSize:14.5,letterSpacing:-.3,color:QG.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mc.name}</div>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,fontSize:11.5,color:QG.txt3,fontWeight:600}}>{m.meta?<QGPill cor={m.cor} bg={m.cor+"14"}>{m.label}</QGPill>:<span>{st?st.label:"—"}</span>}<span>· {_qgNum(c.leads)} leads{m.meta?" de "+_qgNum(m.meta):""}</span></div>
-      </div>
-      <button onClick={function(){onOpenClient(mc.client_id);}} style={QG_BTN("sm")}>Abrir cliente ›</button>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 0.85fr 1.6fr",gap:isMob?12:18,alignItems:"start"}}>
-      <div>
-        <QGSecTitle ico="wallet" cor={QG.roxo}>Orçamento</QGSecTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>{plat("meta")}{plat("google")}</div>
-      </div>
-      <div style={divisor}>
-        <QGSecTitle ico="trend" cor={QG.verde}>ROIC</QGSecTitle>
-        <div style={{fontSize:26,fontWeight:800,letterSpacing:-.6,color:roicOk?_qgRoicCor(c.roic):"#cbd5e1",lineHeight:1.1}}>{roicOk?_qgPct(c.roic):"—"}</div>
-        <div style={{fontSize:11,color:QG.txt3,fontWeight:500,marginTop:5}}>{roicOk?_qgBRLk(c.receita)+" receita · "+_qgBRLk(c.gasto)+" investido":"sem dados"}</div>
-        {c.vendas>0&&<div style={{fontSize:11.5,color:QG.verde,fontWeight:700,marginTop:3}}>{_qgNum(c.vendas)} venda{c.vendas!==1?"s":""}</div>}
-      </div>
-      <div style={divisor}>
-        <QGSecTitle ico="list" cor={QG.amar} right={(function(){ const n=(acoes||[]).filter(function(a){return a.client_id===mc.client_id&&!a.done;}).length; return n>0?<span style={{fontSize:11,fontWeight:800,color:QG.amar,background:QG.amarBg,borderRadius:99,padding:"2px 8px"}}>{n}</span>:null; })()}>Próximas ações</QGSecTitle>
-        <QGAcoes clientId={mc.client_id} acoes={acoes} api={api} currentUser={currentUser} canEdit={canEdit}/>
-      </div>
-    </div>
-  </section>;
-}
+/* v96 (13/10/2026) M4: removido QGCardCliente — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ═══════════════════════════════════════════════════════
    DASHBOARD
    ═══════════════════════════════════════════════════════ */
 function QGDashboard({clients,data,store,year,month,setPeriodo,isMob,canEdit,onOpenClient,onFechamento,onEditarMeta,acoes,acoesApi,currentUser}){
-  const calcs=clients.map(function(c){ return qgCalcCliente(c,data,year,month,{}); }).filter(function(c){ return c.orcamento>0||c.gasto>0||c.leads>0||c.vendas>0; });
-  const sum=function(k){ return calcs.reduce(function(s,c){return s+Number(c[k]||0);},0); };
-  const invMeta=calcs.reduce(function(s,c){return s+c.porPlat.meta.gasto;},0), invGoogle=calcs.reduce(function(s,c){return s+c.porPlat.google.gasto;},0);
-  const orcMeta=calcs.reduce(function(s,c){return s+c.porPlat.meta.orcamento;},0), orcGoogle=calcs.reduce(function(s,c){return s+c.porPlat.google.orcamento;},0);
-  const gasto=sum("gasto"), leads=sum("leads"), vendas=sum("vendas"), receita=sum("receita"), orcamento=sum("orcamento");
-  const roic=(gasto>0&&receita>0)?(receita-gasto)/gasto*100:null;
-  const metas=calcs.map(function(c){ return qgMeta(c.mc,data,year,month,c.leads,store); });
-  const metaTotal=metas.reduce(function(s,m){return s+(m.meta||0);},0);
-  const mG=metaTotal>0?(function(){ const fr=metas.find(function(m){return m.meta;}).fracao; const esperado=Math.round(metaTotal*fr); const pct=leads/metaTotal*100; const razao=esperado>0?leads/esperado:1; const st=pct>=100?["batida","Meta batida",QG.verde]:razao>=1.05?["acima","Acima do ritmo",QG.verde]:razao>=0.95?["no_ritmo","No ritmo",QG.roxo]:razao>=0.8?["atencao","Atenção",QG.amar]:["abaixo","Abaixo do ritmo",QG.verm]; return {meta:metaTotal,esperado:esperado,pct:pct,fracao:fr,status:st[0],label:st[1],cor:st[2]}; })():{meta:null,esperado:null,pct:null,fracao:0,status:"sem_meta",label:"Sem meta",cor:QG.cinza};
+  /* v96 (13/10/2026) M6: saíram as contas que ninguém via (totais, metas, ROIC, semanas, alertas, investimento por plataforma).
+     A tela do Dashboard mostra só o Painel (17c) e a faixa do fechamento; os números do Painel vêm do banco (ads_painel). */
   // semana
   const semanas=_qgLastWeeks(2);
   const fechAtual={}; (data.closings||[]).forEach(function(w){ if(w.week_key===semanas[0].key) fechAtual[w.client_id]=w; });
   const comOrc=clients.filter(function(c){return Number(c.investimento_mensal||0)>0;});
   const pendentes=comOrc.filter(function(c){return !fechAtual[c.client_id];});
-  const agg=function(wk){ const a={investimento:0,leads:0,vendas:0,receita:0}; clients.forEach(function(c){ const s=qgCalcSemana(c,data,wk); a.investimento+=s.investimento; a.leads+=s.leads; a.vendas+=s.vendas; a.receita+=s.receita; }); a.roic=(a.investimento>0&&a.receita>0)?(a.receita-a.investimento)/a.investimento*100:null; return a; };
-  const s0=agg(semanas[0]), s1=agg(semanas[1]);
-  const alertasBrutos=qgAlertas(calcs,fechAtual,data,store,year,month);
-  const _fech=alertasBrutos.filter(function(a){return a.tipo==="fechamento";});
-  const alertas=alertasBrutos.filter(function(a){return a.tipo!=="fechamento";}).concat(_fech.length>1?[{nivel:"info",tipo:"fechamento_grupo",titulo:"Fechamento semanal pendente em "+_fech.length+" clientes",detalhe:_fech.map(function(a){return a.cliente.name;}).join(", ")}]:_fech);
-  const [verTodos,setVerTodos]=useState(false);
-  const mesLabel=QG_MESES[month-1]+" "+year;
-  const stOpt=(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[]);
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:QG_FONT}}>
     {/* ── Painel (Meta Ads): prioridades · clientes · agência — 17c_qg_ads.jsx ── */}
     {typeof QGAdsPainel==="function"?<QGAdsPainel clients={clients} onOpenClient={onOpenClient} isMob={isMob}/>:<QGCard><QGEmpty texto="Painel indisponível."/></QGCard>}
@@ -63537,7 +60534,7 @@ function QGTabelaClientes({calcs,metas,data,isMob,onOpenClient,stOpt,semanaFech,
               <span style={{color:"#c3c8d4",fontSize:13,lineHeight:1,fontFamily:"monospace"}}>{ultima?"└":"├"}</span>
               <span style={{color:"#c3c8d4",fontSize:12,lineHeight:1}}>→</span>
               <span style={{fontSize:12.5}}>{u.lbl}</span>
-              <span style={{fontSize:10.5,color:QG.txt3,fontWeight:600}}>{u.nCamps} {u.nCamps>1?"campanhas":"campanha"}</span>
+              {u.nCamps!==null&&u.nCamps!==undefined&&<span style={{fontSize:10.5,color:QG.txt3,fontWeight:600}}>{u.nCamps} {u.nCamps>1?"campanhas":"campanha"}</span>}{u.nSemEtq>0&&<span title={"Campanha sem unidade (nem etiqueta [Uberlândia] no nome, nem escolhida à mão) entra aqui, na unidade dona da conta. Confira se é mesmo de "+u.lbl+". O servidor também avisa todo dia (alarme das 06h16)."} style={{fontSize:10.5,color:QG.amar,fontWeight:700}}>⚠ {u.nSemEtq} sem unidade definida</span>}{/* v96 (13/10/2026) R17/E6 */}
             </div>
           </td>
           <td style={Object.assign({},QG_TDR,{color:QG.txt2,fontSize:12.5})}>{_qgBRL(u.gasto)}</td>
@@ -63597,7 +60594,7 @@ function QGClientesPage({clients,data,store,year,month,setPeriodo,isMob,canEdit,
       <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:QG.txt3,fontSize:13,pointerEvents:"none"}}>⌕</span>
       <input value={busca} onChange={function(e){ setBusca(e.target.value); setSel(null); }} onFocus={function(){ setFocado(true); }} onBlur={function(){ setTimeout(function(){ setFocado(false); },150); }}
         onKeyDown={function(e){ if(e.key==="Enter"&&sugestoes.length){ escolher(sugestoes[0]); } if(e.key==="Escape") limpar(); }}
-        placeholder="Digite o cliente…" autoFocus={!todos} style={{border:"1px solid "+(sel?QG.roxo:QG.line),borderRadius:10,padding:"7px 28px 7px 28px",fontSize:13,fontFamily:"inherit",width:isMob?150:220,background:"#fff",minHeight:0,fontWeight:sel?700:500,color:sel?QG.roxo:QG.txt}}/>
+        placeholder="Digite o cliente…" autoFocus={!todos} style={{border:"1px solid "+(sel?QG.roxo:QG.borda),/* v96 (13/10/2026) Q18: QG.line não existe (saía "undefined") */borderRadius:10,padding:"7px 28px 7px 28px",fontSize:13,fontFamily:"inherit",width:isMob?150:220,background:"#fff",minHeight:0,fontWeight:sel?700:500,color:sel?QG.roxo:QG.txt}}/>
       {busca&&<button onClick={limpar} title="Limpar" style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",border:0,background:"transparent",color:QG.txt3,cursor:"pointer",fontSize:14,minHeight:0,padding:"2px 4px"}}>×</button>}
       {focado&&!sel&&termo&&<div style={{position:"absolute",left:0,top:38,minWidth:"100%",width:260,background:"#fff",border:"1px solid "+QG.borda,borderRadius:12,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:6,zIndex:60,maxHeight:300,overflowY:"auto"}}>
         {sugestoes.length===0?<div style={{padding:"8px 10px",fontSize:12.5,color:QG.txt3}}>Nenhum cliente com "{busca.trim()}".</div>
@@ -63734,57 +60731,59 @@ function QGClienteNav({mc,clients,onTrocar,isMob,compacto}){
     {seta(1,"Próximo cliente")}
   </span>;
 }
-/* ─── Seletor de cliente (topo único, modelo 1) — grupos (ex.: Bioter) abrem as unidades ao lado ─── */
-function QGClienteSeletor({mc,clients,onTrocar,nomeCurto,isMob}){
-  const [aberto,setAberto]=useState(false);
-  const [q,setQ]=useState("");
-  const [grp,setGrp]=useState(null);
-  const ref=useRef(null);
-  useEffect(function(){ if(!aberto) return; const h=function(e){ if(ref.current&&!ref.current.contains(e.target)) setAberto(false); }; document.addEventListener("mousedown",h); return function(){ document.removeEventListener("mousedown",h); }; },[aberto]);
-  useEffect(function(){ if(!aberto){ setQ(""); setGrp(null); } else { setGrp(mc.parent_client&&mc.parent_client!==mc.client_id?mc.parent_client:null); } },[aberto]);
-  const byId={}; clients.forEach(function(x){ byId[x.client_id]=x; });
-  const grupos={}; const raiz=[];
-  clients.forEach(function(x){ const pai=x.parent_client&&x.parent_client!==x.client_id?x.parent_client:null; if(pai){ (grupos[pai]=grupos[pai]||[]).push(x); if(!byId[pai]&&!raiz.some(function(r){return r.client_id===pai;})) raiz.push({client_id:pai,name:(typeof CLIENTS!=="undefined"?(CLIENTS.find(function(c){return c.id===pai;})||{}).name:null)||("Grupo "+pai),_virtual:true}); } else raiz.push(x); });
-  raiz.sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
-  const unidade=function(x){ return String(x.name||"").replace(/^Bioter\s+/,"").replace(/^Grupo\s+/,""); };
-  const escolher=function(x){ if(x._virtual) return; setAberto(false); if(x.client_id!==mc.client_id) onTrocar(x.client_id); };
-  const Linha=function(x,extra,semGrupo){ const on=x.client_id===mc.client_id; const temGrupo=!semGrupo&&!!grupos[x.client_id]; const paiDoAtual=temGrupo&&mc.parent_client===x.client_id; const ativoGrp=grp===x.client_id;
-    return <button key={x.client_id} onMouseEnter={function(){ if(temGrupo) setGrp(x.client_id); }} onClick={function(){ if(temGrupo) setGrp(x.client_id); else escolher(x); }} style={{display:"flex",alignItems:"center",gap:8,background:(on||ativoGrp)?QG.roxoBg:"transparent",color:(on||paiDoAtual)?QG.roxo:QG.txt2,border:"none",borderRadius:9,padding:"7px 9px",fontSize:12.5,fontWeight:(on||paiDoAtual)?800:600,cursor:"pointer",fontFamily:QG_FONT,textAlign:"left",minHeight:0,width:"100%"}}>
-      {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(x)} size="xs"/></span>}
-      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{extra||x.name}</span>
-      {temGrupo&&<span style={{marginLeft:"auto",fontSize:10.5,color:QG.txt3,fontWeight:700}}>{grupos[x.client_id].length} unidades <span style={{fontSize:12}}>›</span></span>}
-      {on&&!temGrupo&&<span style={{marginLeft:"auto",fontSize:11}}>✓</span>}
-    </button>; };
-  const busca=q.trim().toLowerCase();
-  const achados=busca?clients.filter(function(x){ return String(x.name||"").toLowerCase().indexOf(busca)>=0; }):[];
-  const sub=grp?(grupos[grp]||[]).slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); }):[];
-  const paiObj=grp?(byId[grp]||raiz.find(function(r){return r.client_id===grp;})):null;
-  return <span ref={ref} style={{position:"relative",display:"inline-flex",minWidth:0}}>
-    <button onClick={function(){setAberto(!aberto);}} title="Trocar de cliente" style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid "+(aberto?QG.roxo:"#cfc9dd"),borderRadius:10,padding:"5px 12px 5px 6px",cursor:"pointer",fontFamily:QG_FONT,minHeight:0,maxWidth:isMob?"70vw":380}}>
-      {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(mc)} size="sm"/></span>}
-      <span style={{color:QG.txt,fontWeight:800,fontSize:isMob?14:15,letterSpacing:-.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mc.parent_client&&mc.parent_client!==mc.client_id&&byId[mc.parent_client]?<span><span style={{color:QG.txt3,fontWeight:600}}>{byId[mc.parent_client].name} / </span>{unidade(mc)}</span>:mc.name}</span>
-      <span style={{color:QG.txt3,fontSize:10,flexShrink:0}}>▼</span>
-    </button>
-    {aberto&&<div style={{position:"absolute",left:0,top:44,zIndex:60,display:"flex",alignItems:"flex-start",gap:6,fontFamily:QG_FONT}}>
-      <div style={{width:290,maxWidth:"calc(100vw - 32px)",background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:8}}>
-        <input autoFocus value={q} onChange={function(e){setQ(e.target.value);}} placeholder="Buscar cliente ou unidade…" style={{width:"100%",boxSizing:"border-box",border:"1px solid "+QG.borda,borderRadius:9,padding:"7px 10px",fontSize:12.5,fontFamily:QG_FONT,outline:"none",marginBottom:6}}/>
-        <div style={{maxHeight:340,overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
-          {busca?(achados.length?achados.map(function(x){ return Linha(x); }):<div style={{padding:"10px 8px",fontSize:12,color:QG.txt3}}>Nenhum cliente encontrado.</div>):raiz.map(function(x){ return Linha(x); })}
-        </div>
-      </div>
-      {!busca&&grp&&paiObj&&<div style={{width:236,background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:8}}>
-        <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3,padding:"6px 9px 6px"}}>{paiObj.name}</div>
-        <div style={{display:"flex",flexDirection:"column",gap:1,maxHeight:340,overflowY:"auto"}}>
-          {!paiObj._virtual&&Linha(paiObj,<span>Visão do grupo</span>,true)}
-          {sub.map(function(x){ return Linha(x,unidade(x)); })}
-        </div>
-      </div>}
-    </div>}
-  </span>;
-}
+/* v96 (13/10/2026) M4: removido QGClienteSeletor — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
-function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriodo,isMob,canEdit,tasks,onBack,onTrocar,onFechamento,onNovaLinha,onEditLinha,onEditarMeta,onAbrirCadastro,acoes,acoesApi,currentUser,viewUser,perms}){
+/* v96 (13/10/2026) R12: "Histórico" era duas coisas com o mesmo nome — os números da Meta (aqui) e os eventos do painel antigo
+   (só no navegador de quem registrou). Os eventos agora moram no banco (media_history, gravados pelo 17) e aparecem AQUI, embaixo
+   dos números, iguais para todo mundo. Registros de arquivo (o que estava só no navegador de alguém) abrem com "ver detalhes". */
+function QGHistoricoEventos({mc,isMob}){
+  const [st,setSt]=useState({loading:true,rows:[]}); const [n,setN]=useState(30); const [aberto,setAberto]=useState({}); const [tick,setTick]=useState(0);
+  useEffect(function(){
+    if(!window._sb||!mc){ setSt({loading:false,rows:[]}); return; } let vivo=true; setSt(function(p){return Object.assign({},p,{loading:true});});
+    window._sb.from("media_history").select("id,type,label,payload,user_name,ts").eq("client_id",mc.client_id).order("ts",{ascending:false}).limit(300).then(function(r){
+      if(!vivo) return; if(r.error){ setSt({loading:false,rows:[],erro:r.error.message}); return; } setSt({loading:false,rows:r.data||[]}); },function(e){ if(vivo) setSt({loading:false,rows:[],erro:(e&&e.message)||String(e)}); });
+    return function(){ vivo=false; };
+  },[mc&&mc.client_id,tick]);
+  const fmt=function(t){ try{ const d=new Date(t); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return String(t||""); } };
+  const arquivo=function(t){ t=String(t||""); return t.indexOf("arquivo_")===0||/_navegador$/.test(t); };
+  const rows=st.rows||[];
+  return <QGCard pad={isMob?"14px":"16px 20px"} style={{marginTop:12}}>
+    <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:8}}><b style={{fontSize:14,color:QG.txt}}>O que foi feito neste cliente</b><span style={{fontSize:12,color:QG.txt3}}>orçamento, metas, cadastro e o que estava só no navegador de alguém · mais novo primeiro</span></div>
+    {st.loading?<div style={{fontSize:12.5,color:QG.txt3}}>lendo…</div>
+     :st.erro?<div style={{fontSize:12.5,color:QG.verm}}>Não consegui ler o histórico ({st.erro}). Isto é erro, não falta de registro. <a onClick={function(){ setTick(function(x){return x+1;}); }} style={{color:QG.roxo,fontWeight:700,cursor:"pointer",textDecoration:"underline"}}>Tentar de novo</a></div>
+     :!rows.length?<div style={{fontSize:12.5,color:QG.txt3}}>Nenhum registro ainda.</div>
+     :<div>{rows.slice(0,n).map(function(h){ const arq=arquivo(h.type); const ab=!!aberto[h.id];
+        return <div key={h.id} style={{padding:"8px 0",borderTop:"1px solid "+QG.borda,fontSize:12.5}}>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"baseline"}}>
+            <span style={{color:QG.txt3,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(h.ts)}</span>
+            <span style={{color:QG.txt,minWidth:0,flex:"1 1 260px"}}>{h.label||h.type}</span>
+            {h.user_name&&<span style={{color:QG.txt3,whiteSpace:"nowrap"}}>{h.user_name}</span>}
+            {arq&&h.payload&&<a onClick={function(){ const o=Object.assign({},aberto); o[h.id]=!ab; setAberto(o); }} style={{color:QG.roxo,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{ab?"esconder":"ver detalhes"}</a>}
+          </div>
+          {arq&&ab&&<pre style={{margin:"6px 0 0",background:QG.cinzaBg,borderRadius:8,padding:"8px 10px",fontSize:11.5,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:260,overflow:"auto",color:QG.txt2}}>{(function(){ try{ return JSON.stringify(h.payload,null,2); }catch(_){ return String(h.payload); } })()}</pre>}
+        </div>; })}
+        {rows.length>n&&<div style={{marginTop:8}}><button onClick={function(){ setN(n+50); }} style={QG_BTN("sm")}>Ver mais {Math.min(50,rows.length-n)}</button></div>}
+      </div>}
+  </QGCard>;
+}
+function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriodo,isMob,canEdit,tasks,onBack,onTrocar,onFechamento,onEditarMeta,onAbrirCadastro,acoes,acoesApi,currentUser,viewUser,perms}){
+  /* v96 (13/10/2026) S5/E3: o filtro de unidade pertence ao cliente aberto logo depois do clique na unidade.
+     Trocar de cliente por qualquer caminho (setas, busca, Painel, seletor) zera; sair do cliente também zera.
+     Precisa rodar AQUI, antes das abas renderizarem e lerem o filtro. */
+  if(typeof _pxNavClienteAberto==="function") _pxNavClienteAberto(mc.client_id);
+  useEffect(function(){ return function(){ if(typeof _pxNavSaiuDoCliente==="function") _pxNavSaiuDoCliente(); }; },[]);
+  const _uniAtiva=(typeof _adsUnidadeAtiva==="function")?_adsUnidadeAtiva():null;
+  /* v96 (13/10/2026) Q13: "ver a conta inteira" (17c) avisa por evento; aqui só remonta as abas, sem recarregar o app */
+  const [uniV,setUniV]=useState(0);
+  useEffect(function(){ const h=function(){ setUniV(function(x){return x+1;}); }; window.addEventListener("pixels:ads-unidade",h); return function(){ window.removeEventListener("pixels:ads-unidade",h); }; },[]);
+  /* v96 (13/10/2026) R17 (rodada 2): com unidade escolhida, carrega do servidor a unidade de cada campanha (escolha manual > etiqueta > conta);
+     quando chega, o evento acima remonta as abas já com ela */
+  const _accUni=(_uniAtiva&&typeof adsContaDoCliente==="function")?adsContaDoCliente(mc,window._pxAdsAccounts):null;
+  useEffect(function(){ if(_accUni&&_accUni.conta&&typeof _adsUniCampCarregar==="function") _adsUniCampCarregar(_accUni.conta.ad_account_id); },[_uniAtiva,_accUni&&_accUni.conta&&_accUni.conta.ad_account_id]);
   const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:viewUser||currentUser,perms:perms}):true; };
+  /* v96 (13/10/2026) R5 (rodada 2): a meta mora em Gestão › Metas — só sócio muda (ads_metas_salvar). Se a leitura das metas falhar, volta ao jeito antigo. */
+  const podeMeta=(data&&data.metasMes)?!!data.metasPodeEditar:canEdit;
+  const _sai=(typeof useAdsSaida==="function")?useAdsSaida():{alertasSairam:false,alertasAte:""};   /* v96 R2 (rodada 2): os alertas antigos do placar saem na data */
   const c=qgCalcCliente(mc,data,year,month,{});
   const m=qgMeta(mc,data,year,month,c.leads,store);
   const semanas=_qgLastWeeks(2);
@@ -63844,6 +60843,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
         {st&&st.id!=="em_estruturacao"&&<QGPill cor={st.color} bg={st.bg}>{st.label}</QGPill>}
         {!isMob&&<span style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",color:QG.txt3,fontSize:12,fontWeight:600}}><span>Gestor <b style={{color:QG.txt2}}>{resp}</b></span>{_qgPlataformas(mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})}<span>atualizado {_qgRel(c.ultimaAtualizacao)}</span></span>}
         <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          {temMeta&&adsConta&&typeof AdsSeloFrescor==="function"&&<AdsSeloFrescor conta={adsConta.conta}/>}{/* v96 (13/10/2026) 2.13.03: até quando vão os dados desta conta */}
           <QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>
           <button onClick={onAbrirCadastro} style={QG_BTN("ghost")}>Cadastro e acessos →</button>
         </div>
@@ -63854,8 +60854,9 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
         const diasNoMes=new Date(year,month,0).getDate(); const diaRef=ehMesAtual?Math.max(1,hoje.getDate()-1):(passado?diasNoMes:0);
         const mesPct=diasNoMes>0?diaRef/diasNoMes*100:0;
         const projGasto=c.gasto>0&&diaRef>0?c.gasto/diaRef*diasNoMes:0; const projLeads=c.leads>0&&diaRef>0?Math.round(c.leads/diaRef*diasNoMes):0;
-        const esperado=c.orcamento>0?c.orcamento*diaRef/diasNoMes:0; const ritmo=esperado>0?c.gasto/esperado:null;
-        const ritmoTxt=ritmo===null?null:ritmo>1.15?["acima do ritmo · vai estourar",QG.verm]:ritmo<0.8?["abaixo do ritmo · vai sobrar",QG.amar]:["no ritmo",QG.verde];
+        const _rv=pxRitmoVerba(c.gasto,c.orcamento,year,month);   /* v96 (13/10/2026) R6: mesma conta de ritmo em todas as telas */
+        const esperado=_rv.esperado; const ritmo=_rv.ritmo;
+        const ritmoTxt=ritmo===null?null:[_rv.txt,_rv.nivel==="alto"?QG.verm:_rv.nivel==="baixo"?QG.amar:QG.verde];
         const pm=month===1?{y:year-1,m:12}:{y:year,m:month-1}; const cp=qgCalcCliente(mc,data,pm.y,pm.m,{});
         const dLeads=cp.leads>0?(c.leads-cp.leads)/cp.leads*100:null; const dCpl=cp.cpl&&c.cpl?(c.cpl-cp.cpl)/cp.cpl*100:null;
         const Delta=function(d,inv){ if(d===null||!isFinite(d)) return null; const bom=inv?d<=0:d>=0; return <span style={{color:bom?QG.verde:QG.verm,fontWeight:800}}>{d>=0?"▲":"▼"} {Math.abs(Math.round(d))}%</span>; };
@@ -63866,7 +60867,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
         return <div className="px-sens" style={{background:"#fff",color:QG.txt,borderTop:"1px solid "+QG.borda,borderRadius:"0 0 18px 18px",padding:isMob?"16px 14px":"18px 20px",display:"grid",gridTemplateColumns:isMob?"1fr":"1.1fr 1fr .9fr",gap:isMob?16:24}}>
           <div style={{minWidth:0}}>
             {Eye("Verba · "+QG_MESES[month-1])}
-            <div style={grande}>{_qgBRL(c.gasto,2)}{c.orcamento>0&&<span style={{fontSize:14,fontWeight:700,color:QG.txt3,letterSpacing:0}}> de {_qgBRLk(c.orcamento)}</span>}</div>
+            <div style={Object.assign({cursor:"help"},grande)} title={qgExplica(c,"gasto",year,month)}>{_qgBRL(c.gasto,2)}{c.orcamento>0&&<span style={{fontSize:14,fontWeight:700,color:QG.txt3,letterSpacing:0}}> de {_qgBRLk(c.orcamento)}</span>}</div>
             {c.orcamento>0?<>
               {Barra(c.usoPct,ehMesAtual?mesPct:null)}
               <div style={sub}><b style={{color:QG.txt}}>{Math.round(c.usoPct)}% gasto</b>{ehMesAtual&&<span> · mês em <b style={{color:QG.txt}}>{Math.round(mesPct)}%</b></span>}{ritmoTxt&&<span> · <b style={{color:ritmoTxt[1]}}>{ritmoTxt[0]}</b></span>}{ehMesAtual&&projGasto>0&&<span> · fecha em <b style={{color:QG.txt}}>{_qgBRLk(projGasto)}</b></span>}</div>
@@ -63874,9 +60875,9 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
           </div>
           <div style={{minWidth:0}}>
             {Eye("Leads")}
-            <div style={grande}>{_qgNum(c.leads)}{c.cpl?<span style={{fontSize:14,fontWeight:700,color:QG.txt3,letterSpacing:0}}> · {_qgBRL(c.cpl,2)} cada</span>:null}</div>
+            <div style={Object.assign({cursor:"help"},grande)} title={qgExplica(c,"leads",year,month)}>{_qgNum(c.leads)}{c.cpl?<span title={qgExplica(c,"cpl",year,month)} style={{fontSize:14,fontWeight:700,color:QG.txt3,letterSpacing:0}}> · {_qgBRL(c.cpl,2)} cada</span>:null}</div>{/* v96 (13/10/2026) 2.13.02: passe o mouse = de onde veio o número */}
             {m.meta?Barra(m.pct,m.fracao*100,m.cor):<div style={{height:7,marginTop:10}}/>}
-            <div style={sub}>{m.meta?<span>meta <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title={canEdit?"clique pra editar a meta":undefined} style={{color:QG.txt,textDecoration:canEdit?"underline dotted":"none",cursor:canEdit?"pointer":"default"}}>{_qgNum(m.meta)}</a> · <b style={{color:QG.txt}}>{Math.round(m.pct)}%</b> · <b style={{color:m.cor}}>{m.label.toLowerCase()}</b>{ehMesAtual&&projLeads>0&&<span> · fecha em ~<b style={{color:QG.txt}}>{_qgNum(projLeads)}</b></span>}</span>:<span><a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:QG.roxo,fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a></span>}
+            <div style={sub}>{m.meta?<span>meta <a onClick={podeMeta?function(){onEditarMeta(mc,m.meta);}:undefined} title={podeMeta?"clique pra editar a meta":(m.herdada?"meta do mês anterior (Gestão › Metas)":"meta definida pelos sócios em Gestão › Metas")} style={{color:QG.txt,textDecoration:podeMeta?"underline dotted":"none",cursor:podeMeta?"pointer":"default"}}>{_qgNum(m.meta)}</a> · <b style={{color:QG.txt}}>{Math.round(m.pct)}%</b> · <b style={{color:m.cor}}>{m.label.toLowerCase()}</b>{ehMesAtual&&projLeads>0&&<span> · fecha em ~<b style={{color:QG.txt}}>{_qgNum(projLeads)}</b></span>}</span>:<span>{podeMeta?<a onClick={function(){onEditarMeta(mc,m.meta);}} style={{color:QG.roxo,fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a>:<span style={{color:QG.txt3}}>sem meta</span>}</span>}{/* v96 (13/10/2026) Q12: sem permissão não parece link */}
               {(dLeads!==null||dCpl!==null)&&<div style={{marginTop:2,color:QG.txt3}}>vs. {QG_MESES[pm.m-1].toLowerCase()}: {dLeads!==null&&<span>{Delta(dLeads,false)} leads</span>}{dLeads!==null&&dCpl!==null&&" · "}{dCpl!==null&&<span>custo {Delta(dCpl,true)}</span>}</div>}
               {c.vendas>0&&<div style={{marginTop:2}}><b style={{color:QG.verde}}>{_qgNum(c.vendas)}</b> vendas{c.receita>0?" · "+_qgBRLk(c.receita):""}{c.roic!==null?" · ROIC "+_qgPct(c.roic):""}</div>}
             </div>
@@ -63884,12 +60885,16 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
           <div style={{minWidth:0,borderLeft:isMob?"none":"1px solid "+QG.borda,paddingLeft:isMob?0:20,borderTop:isMob?"1px solid "+QG.borda:"none",paddingTop:isMob?14:0}}>
             {Eye("Semana "+_qgWeekLabel(s0.start))}
             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6,flexWrap:"wrap"}}>{s0.w?<QGPill cor={QG.verde} bg={QG.verdeBg}>fechada</QGPill>:<QGPill cor={QG.amar} bg={QG.amarBg}>pendente</QGPill>}{s0.w&&<span style={{fontSize:13}}><b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>}</div>
-            {alertas.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</div>}
+            {alertas.length>0&&!_sai.alertasSairam&&<div title={"Alertas antigos (calculados na tela) — saem em "+(_sai.alertasAte?_sai.alertasAte.slice(8,10)+"/"+_sai.alertasAte.slice(5,7):"")+"; depois ficam só os da IA nova."} style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</div>}
             {canEdit&&<div style={{marginTop:10}}><button onClick={function(){onFechamento(mc.client_id,semanas[0]);}} style={QG_BTN("sm")}>{s0.w?"Editar fechamento":"Fechar semana"}</button></div>}
           </div>
         </div>;
       })()}
     </QGCard>
+    {/* v96 (13/10/2026) Q7: o placar e a aba Gestão são do cadastro do cliente — com unidade escolhida, isso fica dito */}
+    {_uniAtiva&&mc.bioter_unit!==_uniAtiva&&<div style={{background:"#fffbeb",border:"1px solid #f3dca0",borderRadius:12,padding:"8px 14px",fontSize:12,color:"#6b4d00",lineHeight:1.5}}>
+      <b>Filtro de unidade: {(typeof _adsUnidadeLbl==="function"?_adsUnidadeLbl(_uniAtiva):_uniAtiva)}.</b> Vale nas abas Visão geral, Alertas, Campanhas, Criativos, Público, Diagnóstico e Histórico. O placar do mês acima e a aba Gestão mostram <b>{mc.name}</b> inteiro.{/* v96 (13/10/2026) M14 (revisão RB): Leads está oculta · Q7 rodada 2: Diagnóstico agora corta pela unidade */}
+    </div>}
     {temMeta&&adsConta&&typeof TCliCartao==="function"&&<TCliCartao mc={mc} conta={adsConta.conta} isMob={isMob} onAbrir={function(v){ window._pxTCliVista=v||"decidir"; setSub("ia"); }}/>}
 
     {/* ── Sub-abas + período ── */}
@@ -63901,25 +60906,28 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
       </div>
       {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<div style={{borderTop:"1px solid "+QG.borda,background:"#fbfaff",padding:isMob?"8px 10px":"8px 14px",display:"flex",alignItems:"center",justifyContent:isMob?"flex-start":"flex-end",gap:10,overflowX:"auto"}} className="scroll-x"><span style={{fontSize:11,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3,marginRight:"auto",whiteSpace:"nowrap"}}>Período</span><QGAdsBarraPeriodo compact/></div>}
     </div>
+    <Fragment key={"uni"+uniV}>{/* v96 Q13: remonta as abas quando o filtro de unidade sai */}
     {subAtiva==="ia"&&temMeta&&typeof TCliDecisoes==="function"&&<TCliDecisoes key={mc.client_id} mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="visao"&&temMeta&&typeof QGAdsVisaoGeral==="function"&&<QGAdsVisaoGeral mc={mc} conta={adsConta.conta} compartilhada={adsConta.compartilhada} isMob={isMob} canEdit={canEdit} verbaMensal={Number(mc.investimento_meta)||0}/>}
     {subAtiva==="estrategia"&&temMeta&&typeof QGAdsEstrategia==="function"&&<QGAdsEstrategia mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="campanhas"&&temMeta&&typeof QGAdsCampanhasTab==="function"&&<QGAdsCampanhasTab mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="criativos"&&temMeta&&typeof QGAdsCriativos==="function"&&<QGAdsCriativos mc={mc} conta={adsConta.conta} isMob={isMob}/>}
-    {subAtiva==="publico"&&temMeta&&typeof QGAdsPublico==="function"&&<QGAdsPublico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
+    {subAtiva==="publico"&&temMeta&&typeof QGAdsPublico==="function"&&<QGAdsPublico mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}   {/* v96 S12 */}
     {/* 20/09: Diagnóstico — o que a Meta mediu + o que o cliente falou (cérebro da Pixels) */}
     {subAtiva==="diagnostico"&&temMeta&&typeof QGAdsDiagnostico==="function"&&<QGAdsDiagnostico mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit&&_bl("midia.cerebro")} currentUser={currentUser}/>}
     {subAtiva==="leads"&&temMeta&&typeof QGAdsLeads==="function"&&<QGAdsLeads mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit} currentUser={currentUser}/>}
     {subAtiva==="historico"&&temMeta&&typeof QGAdsHistorico==="function"&&<QGAdsHistorico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
+    {subAtiva==="historico"&&<QGHistoricoEventos mc={mc} isMob={isMob}/>}{/* v96 (13/10/2026) R12: o que foi feito no cliente, do banco (media_history) */}
+    </Fragment>
     {subAtiva==="gestao"&&typeof TMetasMes==="function"&&<TMetasMes key={mc.client_id+":"+year+"-"+month} mc={mc} year={year} month={month} isMob={isMob}/>}
     {subAtiva==="gestao"&&(function(){
       /* ── Gestão do mês: verba · resultado · semana (sólidos) + plataformas + ações/demandas + portal ── */
       const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month;
       const diasNoMes=new Date(year,month,0).getDate(); const diaRef=ehMesAtual?Math.max(1,hoje.getDate()-1):diasNoMes;
       const projecao=c.gasto>0&&diaRef>0?c.gasto/diaRef*diasNoMes:0;
-      const esperado=c.orcamento>0?c.orcamento*diaRef/diasNoMes:0;
-      const ritmo=esperado>0?c.gasto/esperado:null;
-      const ritmoTxt=ritmo===null?"sem verba definida":ritmo>1.15?"acima do ritmo · vai estourar":ritmo<0.8?"abaixo do ritmo · vai sobrar":"no ritmo";
+      const _rv=pxRitmoVerba(c.gasto,c.orcamento,year,month);   /* v96 (13/10/2026) R6: mesma conta de ritmo do placar */
+      const esperado=_rv.esperado; const ritmo=_rv.ritmo;
+      const ritmoTxt=_rv.txt||(c.orcamento>0?"o mês ainda não começou":"sem verba definida");
       const s1=Object.assign({key:semanas[1].key,start:semanas[1].start},qgCalcSemana(mc,data,semanas[1]));
       const nAcoes=(acoes||[]).filter(function(a){return a.client_id===mc.client_id&&!a.done;}).length;
       const Solido=function(bg,eyebrow,big,sub,extra){ if(typeof AdsSolido==="function") return <AdsSolido bg={bg} eyebrow={eyebrow} big={big} sub={sub} extra={extra}/>; return <div style={{background:bg,color:"#fff",borderRadius:18,padding:"18px 20px",minWidth:0,display:"flex",flexDirection:"column",gap:4}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"#d9ccf5"}}>{eyebrow}</div><div style={{fontSize:30,fontWeight:900,letterSpacing:-1,lineHeight:1.05,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{big}</div><div style={{fontSize:12.5,color:"#e9e0fb",lineHeight:1.45}}>{sub}</div>{extra}</div>; };
@@ -63927,7 +60935,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
       return <>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14}}>
         {Solido("#2f1a5e","Verba do mês · "+QG_MESES[month-1],c.orcamento>0?_qgBRL(c.gasto,2)+" de "+_qgBRLk(c.orcamento):_qgBRLk(c.gasto),<span>{c.orcamento>0?<span><b style={{color:"#fff"}}>{ritmoTxt}</b> · projeção de fim do mês <b style={{color:"#fff"}}>{_qgBRLk(projecao)}</b></span>:"defina o orçamento nas plataformas abaixo"}</span>,c.orcamento>0?Barra(c.usoPct,esperado/c.orcamento*100):null)}
-        {Solido("#5a34a3","Resultado do mês",_qgNum(c.leads)+" leads",<span>custo por lead <b style={{color:"#fff"}}>{c.cpl?_qgBRL(c.cpl,2):"—"}</b>{c.gastoOutras>0.005&&<span> (só campanhas de lead · {_qgBRL(c.gastoOutras,2)} em outras finalidades fora da conta)</span>}{m.meta?<span> · meta <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title="Clique pra editar a meta" style={{color:"#fff",textDecoration:canEdit?"underline dotted":"none",cursor:canEdit?"pointer":"default"}}>{_qgNum(m.meta)}</a> ({Math.round(m.pct)}%) · {m.label}</span>:<span> · <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:"#fff",textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a></span>}</span>,m.meta?Barra(m.pct,m.fracao*100):null)}
+        {Solido("#5a34a3","Resultado do mês",_qgNum(c.leads)+" leads",<span>custo por lead <b style={{color:"#fff"}}>{c.cpl?_qgBRL(c.cpl,2):"—"}</b>{c.gastoOutras>0.005&&<span> (só campanhas de lead · {_qgBRL(c.gastoOutras,2)} em outras finalidades fora da conta)</span>}{m.meta?<span> · meta <a onClick={podeMeta?function(){onEditarMeta(mc,m.meta);}:undefined} title={podeMeta?"Clique pra editar a meta":"meta definida pelos sócios em Gestão › Metas"} style={{color:"#fff",textDecoration:podeMeta?"underline dotted":"none",cursor:podeMeta?"pointer":"default"}}>{_qgNum(m.meta)}</a> ({Math.round(m.pct)}%) · {m.label}</span>:<span> · {podeMeta?<a onClick={function(){onEditarMeta(mc,m.meta);}} style={{color:"#fff",textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a>:"sem meta"}</span>}{/* v96 (13/10/2026) Q12 */}</span>,m.meta?Barra(m.pct,m.fracao*100):null)}
         {Solido("#8a63cf","Semana "+_qgWeekLabel(s0.start),s0.w?_qgNum(s0.leads)+" leads":"fechamento pendente",<span>{s0.w?<span>semana anterior <b style={{color:"#fff"}}>{_qgNum(s1.leads)}</b>{s1.leads>0?" · "+(s0.leads>=s1.leads?"▲":"▼")+" "+Math.abs(Math.round((s0.leads-s1.leads)/s1.leads*100))+"%":""}</span>:<span>o Erick registra leads, investimento e observação da semana</span>}</span>,canEdit?<div style={{marginTop:6}}><button onClick={function(){onFechamento(mc.client_id,semanas[0]);}} style={{background:"#fff",color:"#2f1a5e",border:0,borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:QG_FONT,minHeight:0}}>{s0.w?"Editar fechamento":"Fechar semana"}</button></div>:null)}
       </div>
 
@@ -63997,78 +61005,34 @@ function QGFunil({c}){
   </div>;
 }
 
-/* ─── Árvore de orçamento: Plataforma › Produto › Região › Público › Campanha (expansível) ── */
-function QGArvoreOrcamento({linhas,mc,onEdit,isMob}){
-  const [aberto,setAberto]=useState({});
-  if(!linhas.length) return <QGEmpty texto="Nenhuma linha de orçamento neste mês." alt='Use "+ Nova linha de orçamento" pra dividir por Meta/Google, produto, região, público ou campanha.'/>;
-  // monta árvore
-  const NIVEIS=[function(b){return b.plataforma;},function(b){return b.produto||b.servico||"";},function(b){return b.regiao||"";},function(b){return b.publico||"";},function(b){return b.campanha||"";}];
-  const root={kids:{},ordem:[],linhas:[]};
-  linhas.forEach(function(b){
-    let node=root; const chaves=NIVEIS.map(function(f){return String(f(b)||"").trim();});
-    // pula níveis vazios no MEIO mantendo a folha
-    chaves.forEach(function(k,i){ if(!k) return; if(!node.kids[k]){ node.kids[k]={key:k,nivel:i,kids:{},ordem:[],linhas:[]}; node.ordem.push(k); } node=node.kids[k]; });
-    node.linhas.push(b);
-  });
-  const soma=function(node){ const t={orcamento:0,gasto:0,leads:0,vendas:0,receita:0}; node.linhas.forEach(function(b){ t.orcamento+=Number(b.orcamento||0); t.gasto+=Number(b.gasto||0); t.leads+=Number(b.leads||0); t.vendas+=Number(b.vendas||0); t.receita+=Number(b.receita||0); }); node.ordem.forEach(function(k){ const s=soma(node.kids[k]); t.orcamento+=s.orcamento; t.gasto+=s.gasto; t.leads+=s.leads; t.vendas+=s.vendas; t.receita+=s.receita; }); node.tot=t; return t; };
-  soma(root);
-  const rows=[];
-  const walk=function(node,path,depth){
-    node.ordem.forEach(function(k){ const ch=node.kids[k]; const id=path+"/"+k; const temFilhos=ch.ordem.length>0||ch.linhas.length>1||(ch.linhas.length===1&&ch.ordem.length>0); const open=aberto[id]!==undefined?aberto[id]:depth<1;
-      rows.push({id:id,depth:depth,nome:k,nivel:ch.nivel,tot:ch.tot,temFilhos:temFilhos,open:open,linha:(!ch.ordem.length&&ch.linhas.length===1)?ch.linhas[0]:null,nLinhas:ch.linhas.length});
-      if(open){ walk(ch,id,depth+1); if(ch.ordem.length&&ch.linhas.length){ ch.linhas.forEach(function(b){ rows.push({id:id+"/#"+b.id,depth:depth+1,nome:"(sem detalhe)",nivel:5,tot:{orcamento:Number(b.orcamento||0),gasto:Number(b.gasto||0),leads:Number(b.leads||0),vendas:Number(b.vendas||0),receita:Number(b.receita||0)},temFilhos:false,open:false,linha:b}); }); } else if(!ch.ordem.length&&ch.linhas.length>1){ ch.linhas.forEach(function(b){ rows.push({id:id+"/#"+b.id,depth:depth+1,nome:b.campanha||b.publico||b.regiao||"(linha)",nivel:5,tot:{orcamento:Number(b.orcamento||0),gasto:Number(b.gasto||0),leads:Number(b.leads||0),vendas:Number(b.vendas||0),receita:Number(b.receita||0)},temFilhos:false,open:false,linha:b}); }); } }
-    });
-  };
-  walk(root,"",0);
-  const NIVEL_LBL=["Plataforma","Produto","Região","Público","Campanha",""];
-  return <div style={{overflowX:"auto"}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:isMob?720:0}}>
-    <thead><tr><th style={QG_TH}>Segmento</th><th style={QG_THR}>Orçamento</th><th style={QG_THR}>Gasto</th><th style={QG_THR}>Uso</th><th style={QG_THR}>Leads</th><th style={QG_THR}>Vendas</th><th style={QG_THR}>ROIC</th>{onEdit&&<th style={QG_TH}></th>}</tr></thead>
-    <tbody>{rows.map(function(r){ const t=r.tot; const uso=t.orcamento>0?t.gasto/t.orcamento*100:null; const roic=(t.gasto>0&&t.receita>0)?(t.receita-t.gasto)/t.gasto*100:null; const top=r.depth===0;
-      return <tr key={r.id} style={{background:top?"#fafbfc":"transparent"}}>
-        <td style={Object.assign({},QG_TD,{paddingLeft:12+r.depth*22,fontWeight:top?800:600})}>
-          <span onClick={r.temFilhos?function(){ setAberto(Object.assign({},aberto,{[r.id]:!r.open})); }:undefined} style={{display:"inline-flex",alignItems:"center",gap:7,cursor:r.temFilhos?"pointer":"default"}}>
-            <span style={{width:14,color:QG.txt3,fontSize:11,display:"inline-block"}}>{r.temFilhos?(r.open?"▾":"▸"):"·"}</span>
-            {r.nivel===0?<QGPlat id={r.nome} size={14}/>:<span>{r.nome}</span>}
-            {!top&&r.nivel<5&&<span style={{color:QG.txt3,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{NIVEL_LBL[r.nivel]}</span>}
-          </span>
-        </td>
-        <td style={Object.assign({},QG_TDR,{fontWeight:top?800:600})}>{_qgBRL(t.orcamento)}</td>
-        <td style={QG_TDR}>{_qgBRL(t.gasto)}</td>
-        <td style={QG_TDR}><div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"flex-end"}}><div style={{width:56}}><QGBar pct={uso} h={5} cor={uso>=100?QG.verm:uso>=90?QG.amar:QG.roxo}/></div><span style={{fontSize:11.5,fontWeight:700,color:QG.txt2,minWidth:34,textAlign:"right"}}>{uso===null?"—":Math.round(uso)+"%"}</span></div></td>
-        <td style={QG_TDR}>{_qgNum(t.leads)}</td>
-        <td style={Object.assign({},QG_TDR,{color:t.vendas>0?QG.verde:QG.txt3,fontWeight:t.vendas>0?800:600})}>{_qgNum(t.vendas)}</td>
-        <td style={QG_TDR}><QGRoic v={roic}/></td>
-        {onEdit&&<td style={QG_TDR}>{r.linha&&<button style={QG_BTN("sm")} onClick={function(){onEdit(r.linha);}}>Editar</button>}</td>}
-      </tr>; })}</tbody>
-  </table></div>;
-}
+/* v96 (13/10/2026) M4: removido QGArvoreOrcamento — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
-/* ─── Histórico semanal enxuto ───────────────────────── */
-function QGHistoricoSemanal({rows,isMob,onEditar}){
-  const [tudo,setTudo]=useState(false);
-  const lista=tudo?rows:rows.slice(0,6);
-  return <QGCard title="Histórico semanal" sub="Leads e investimento do fechamento · vendas e receita do Portal" right={rows.length>6&&<button style={QG_BTN("ghost")} onClick={function(){setTudo(!tudo);}}>{tudo?"Ver menos":"Histórico completo"}</button>}>
-    <div style={{overflowX:"auto"}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:isMob?520:0}}>
-      <thead><tr><th style={QG_TH}>Semana</th><th style={QG_THR}>Leads</th><th style={QG_THR}>Vendas</th><th style={QG_THR}>Receita</th><th style={QG_THR}>ROIC</th>{onEditar&&<th style={QG_TH}></th>}</tr></thead>
-      <tbody>{lista.map(function(r,i){ const prev=rows[i+1];
-        return <tr key={r.key}><td style={Object.assign({},QG_TD,{fontWeight:700})}>{_qgWeekLabel(r.start)}{i===0&&<span style={{marginLeft:6,color:QG.roxo,fontSize:10,fontWeight:800}}>ATUAL</span>}{!r.w&&<span style={{marginLeft:6,color:QG.txt3,fontSize:10.5,fontWeight:600}}>não fechada</span>}</td>
-          <td style={Object.assign({},QG_TDR,{fontWeight:800})}>{r.w?_qgNum(r.leads):<span style={{color:QG.txt3,fontWeight:600}}>—</span>} {r.w&&prev&&prev.w&&<QGDelta cur={r.leads} prev={prev.leads}/>}</td>
-          <td style={Object.assign({},QG_TDR,{color:r.vendas>0?QG.verde:QG.txt3,fontWeight:r.vendas>0?800:600})}>{_qgNum(r.vendas)}</td>
-          <td style={Object.assign({},QG_TDR,{color:r.receita>0?QG.verde:QG.txt3,fontWeight:800})}>{r.receita>0?_qgBRLk(r.receita):"—"}</td>
-          <td style={QG_TDR}><QGRoic v={r.roic}/></td>
-          {onEditar&&<td style={QG_TDR}><button style={QG_BTN("sm")} onClick={function(){onEditar(r);}}>{r.w?"Editar":"Registrar"}</button></td>}
-        </tr>; })}</tbody>
-    </table></div>
-  </QGCard>;
-}
+/* v96 (13/10/2026) M4: removido QGHistoricoSemanal — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ─── Demandas do cliente (portal + internas) ────────── */
 function QGDemandasCliente({mc,tasks,store,soSeTiver}){
-  const dems=[]; (tasks||[]).forEach(function(t){ if(t.deletedAt) return; const tipo=t.internoTipo||t.interno_tipo||t.tipo_solicitacao||t.contentType||t.content_type; if(tipo!=="trafego") return; if(t.client!==_qgPortalClientId(mc)&&t.client!==mc.client_id) return; if(mc.bioter_unit&&t.bioterUnit&&t.bioterUnit!==mc.bioter_unit) return; dems.push({id:"p"+t.id,title:t.title,status:t.status,deadline:t.deadline}); });
-  ((store&&store.tasks&&store.tasks[mc.client_id])||[]).forEach(function(d){ dems.push({id:"i"+d.id,title:d.titulo||d.title,status:d.status,deadline:d.prazo||d.deadline}); });
-  const concl=function(s){ return s==="concluido"||s==="interno_executado"||s==="interno_aprovado"||s==="publicado"||s==="aprovado"; };
+  /* v96 (13/10/2026) Q1/R10: UMA fonte — as demandas do quadro (client_demandas, as mesmas da aba Demandas do topo). Antes este cartão lia
+     a lista antiga do navegador (store.tasks) e tarefas do portal: a mesma demanda aparecia em dois lugares, ou só num. */
+  const [rows,setRows]=useState(null); const [erroD,setErroD]=useState("");
+  const _cid=mc&&(mc.parent_client||mc.client_id); const _uni=mc&&mc.bioter_unit;
+  useEffect(function(){
+    if(!window._sb||!_cid) return; let vivo=true;
+    const cats=(typeof _DEM_CATS_MIDIA!=="undefined"&&Array.isArray(_DEM_CATS_MIDIA))?_DEM_CATS_MIDIA:["trafego","conjunto","anuncio","campanha"];
+    /* v96 (13/10/2026) R10 (rodada 2): leitor único do servidor (midia_demandas_ler — categorias de mídia vêm do servidor). Se falhar, lê a tabela como antes. */
+    const direto=function(){ let q=window._sb.from("client_demandas").select("id,titulo,status,prazo,unidade,categoria").eq("client_id",_cid).is("deleted_at",null).in("categoria",cats).order("prazo",{ascending:true,nullsFirst:false}).limit(200);
+      if(_uni) q=q.eq("unidade",_uni);
+      q.then(function(r){ if(!vivo) return; if(r.error){ setErroD(r.error.message); setRows([]); return; } setErroD(""); setRows(r.data||[]); },function(e){ if(vivo){ setErroD((e&&e.message)||String(e)); setRows([]); } }); };
+    Promise.resolve(window._sb.rpc("midia_demandas_ler",{p_client:mc.client_id,p_unidade:_uni||null,p_abertas:false})).then(function(r){ if(!vivo) return;
+      if(r&&!r.error&&r.data&&r.data.ok&&Array.isArray(r.data.itens)){ setErroD(""); setRows(r.data.itens); return; } direto(); },function(){ if(vivo) direto(); });
+    return function(){ vivo=false; };
+  },[_cid,_uni]);
+  const dems=(rows||[]).map(function(d){ return {id:"d"+d.id,title:d.titulo,status:d.status,deadline:d.prazo}; });
+  const concl=function(s){ return s==="concluida"||s==="concluido"||s==="interno_executado"||s==="interno_aprovado"||s==="publicado"||s==="aprovado"; };
   const abertas=dems.filter(function(d){return !concl(d.status);}), fechadas=dems.filter(function(d){return concl(d.status);});
-  const lbl=function(s){ const m=(typeof MEDIA_TASK_STATUS!=="undefined"?MEDIA_TASK_STATUS:[]).find(function(x){return x.id===s;}); return m?m:{label:String(s||"—").replace("interno_",""),color:QG.txt3}; };
+  const _ST={nao_iniciada:{label:"Não iniciada",color:QG.txt3},andamento:{label:"Em andamento",color:QG.roxo},aguardando:{label:"Aguardando",color:QG.amar},revisao:{label:"Em revisão",color:QG.amar},concluida:{label:"Concluída",color:QG.verde}};
+  const lbl=function(s){ if(_ST[s]) return _ST[s]; const m=(typeof MEDIA_TASK_STATUS!=="undefined"?MEDIA_TASK_STATUS:[]).find(function(x){return x.id===s;}); return m?m:{label:String(s||"—").replace("interno_",""),color:QG.txt3}; };
+  if(erroD) return <QGCard title="Demandas"><div style={{fontSize:12.5,color:QG.verm}}>Não consegui ler as demandas ({erroD}). Isto é erro, não falta de demanda.</div></QGCard>;
+  if(rows===null) return null;
   if(soSeTiver&&dems.length===0) return null;
   return <QGCard title="Demandas" sub={abertas.length+" aberta"+(abertas.length!==1?"s":"")+" · "+fechadas.length+" concluída"+(fechadas.length!==1?"s":"")}>
     {dems.length===0?<QGEmpty texto="Nenhuma demanda de tráfego pra este cliente."/>:<div>{abertas.concat(fechadas.slice(0,5)).map(function(d){ const s=lbl(d.status); const ok=concl(d.status); return <div key={d.id} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f4f8",fontSize:12.5,opacity:ok?.55:1}}><span style={{fontWeight:600,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.title}</span><span style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>{d.deadline&&<span style={{color:QG.txt3,fontSize:11}}>{_qgFmtD(d.deadline)}</span>}<span style={{color:s.color,fontSize:10.5,fontWeight:800,textTransform:"uppercase"}}>{s.label}</span></span></div>; })}</div>}
@@ -64079,13 +61043,7 @@ function QGDemandasCliente({mc,tasks,store,soSeTiver}){
    RELATÓRIOS — relatório de verdade, na própria aba
    Consolidado do mês + um bloco limpo por cliente (funil, ROI, vendas, leads, plataformas, semanas)
    ═══════════════════════════════════════════════════════ */
-function QGKpi({label,value,sub,cor,dest}){
-  return <div style={{background:dest?QG.roxoBg:"#fff",border:"1px solid "+(dest?"#ddd6fe":QG.borda),borderRadius:12,padding:"12px 14px",minWidth:0}}>
-    <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,whiteSpace:"nowrap"}}>{label}</div>
-    <div style={{color:cor||QG.txt,fontWeight:900,fontSize:22,letterSpacing:-.6,marginTop:4,lineHeight:1.05,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{value}</div>
-    {sub&&<div style={{color:QG.txt3,fontSize:11,fontWeight:600,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>}
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido QGKpi — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 function QGMiniBarras({rows,cor,fmt}){ // rows [{label,v}]
   const max=Math.max.apply(null,rows.map(function(r){return Number(r.v||0);}).concat([1]));
   return <div style={{display:"flex",alignItems:"flex-end",gap:6,height:64}}>
@@ -64117,7 +61075,7 @@ function pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise){
 }
 async function pxRelatorioAbrir(mc,c,m,year,month,acoes){
   let analise=null;
-  try{ if(window._sb&&window._pxAdsAccounts&&typeof adsContaDoCliente==="function"){ const r=adsContaDoCliente(mc,window._pxAdsAccounts); if(r&&r.conta){ const mIni=year+"-"+String(month).padStart(2,"0")+"-01", mFim=year+"-"+String(month).padStart(2,"0")+"-31"; const q=await window._sb.from("ads_analises").select("resumo,gerado_em,periodo_inicio,periodo_fim").eq("ad_account_id",r.conta.ad_account_id).eq("escopo","cliente").gte("periodo_fim",mIni).lte("periodo_fim",mFim).order("gerado_em",{ascending:false}).limit(1); analise=(q.data||[])[0]||null; /* só leitura cujo período cai no mês do relatório */ } } }catch(_){ }
+  try{ if(window._sb&&window._pxAdsAccounts&&typeof adsContaDoCliente==="function"){ const r=adsContaDoCliente(mc,window._pxAdsAccounts); if(r&&r.conta){ const mIni=year+"-"+String(month).padStart(2,"0")+"-01", mFim=year+"-"+String(month).padStart(2,"0")+"-"+String(new Date(year,month,0).getDate()).padStart(2,"0"); /* v96 (13/10/2026) Q5: último dia REAL do mês (antes "-31" = data inválida em meses de 30/28 dias e a leitura da IA nunca vinha) */ const q=await window._sb.from("ads_analises").select("resumo,gerado_em,periodo_inicio,periodo_fim").eq("ad_account_id",r.conta.ad_account_id).eq("escopo","cliente").gte("periodo_fim",mIni).lte("periodo_fim",mFim).order("gerado_em",{ascending:false}).limit(1); analise=(q.data||[])[0]||null; /* só leitura cujo período cai no mês do relatório */ } } }catch(_){ }
   pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise);
 }
 function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClient,acoes}){
@@ -64179,44 +61137,7 @@ const QG_INP={width:"100%",border:"1px solid "+QG.borda,borderRadius:9,padding:"
 const QG_LBL={color:QG.txt3,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5,display:"block"};
 function QGField({label,children,span}){ return <label style={{display:"block",gridColumn:span?"span "+span:undefined,minWidth:0}}><span style={QG_LBL}>{label}</span>{children}</label>; }
 
-// Linha de orçamento (segmentação)
-function QGLinhaModal({linha,clientId,clients,data,year,month,onClose,onSaved,currentUser}){
-  const ed=!!(linha&&linha.id);
-  const [f,setF]=useState(function(){ return Object.assign({client_id:clientId||(linha&&linha.client_id)||"",plataforma:"meta",produto:"",regiao:"",publico:"",campanha:"",orcamento:"",gasto:"",leads:"",vendas:"",receita:""},linha||{}); });
-  const [saving,setSaving]=useState(false);
-  const mc=clients.find(function(c){return c.client_id===f.client_id;});
-  /* (24/09/2026) O cadastro de produtos e do grupo — nao filtra mais por unidade. */
-  const prods=mc?((data.produtos||{})[_qgPortalClientId(mc)]||[]).map(function(p){return p.nome;}):[];
-  const sug=function(k){ return Array.from(new Set((data.budgets||[]).filter(function(b){return b.client_id===f.client_id;}).map(function(b){return b[k];}).filter(Boolean))); };
-  const regs=sug("regiao").concat((typeof PX_UF_LISTA!=="undefined"?PX_UF_LISTA:[]).filter(function(u){return sug("regiao").indexOf(u)<0;}));
-  const set=function(k){ return function(e){ setF(Object.assign({},f,{[k]:e.target.value})); }; };
-  const salvar=function(){
-    if(!f.client_id){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Escolha o cliente."); return; }
-    setSaving(true);
-    const row={client_id:f.client_id,year:year,month:month,plataforma:f.plataforma||"meta",produto:String(f.produto||"").trim(),servico:"",regiao:String(f.regiao||"").trim(),publico:String(f.publico||"").trim(),campanha:String(f.campanha||"").trim(),orcamento:Number(f.orcamento||0),gasto:Number(f.gasto||0),leads:parseInt(f.leads||0,10)||0,qualificados:0,vendas:parseInt(f.vendas||0,10)||0,receita:Number(f.receita||0),updated_by:(currentUser&&currentUser.id)||"",updated_at:new Date().toISOString()};
-    if(ed) row.id=linha.id;
-    window._sb.from("media_budgets").upsert(row,{onConflict:"id"}).then(function(r){ setSaving(false); if(r.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+r.error.message); return; } if(typeof pixelsToast!=="undefined") pixelsToast.success("Linha salva."); onSaved(); onClose(); });
-  };
-  const excluir=async function(){ if(typeof pixelsConfirm==="function"&&!(await pixelsConfirm("Excluir esta linha de orçamento?",{okText:"Excluir",danger:true}))) return; window._sb.from("media_budgets").delete().eq("id",linha.id).then(function(r){ if(r.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error(r.error.message); return; } onSaved(); onClose(); }); };
-  return <ModalShell title={(ed?"Editar":"Nova")+" linha de orçamento · "+(mc?mc.name+" · ":"")+QG_MESES[month-1]+"/"+year} onClose={onClose} maxWidth={600}>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,fontFamily:QG_FONT}}>
-      {!clientId&&!ed&&<QGField label="Cliente" span={2}><select value={f.client_id} onChange={set("client_id")} style={QG_INP}><option value="">Selecione…</option>{clients.map(function(c){return <option key={c.client_id} value={c.client_id}>{c.name}</option>;})}</select></QGField>}
-      <QGField label="Plataforma"><select value={f.plataforma} onChange={set("plataforma")} style={QG_INP}><option value="meta">Meta Ads</option><option value="google">Google Ads</option></select></QGField>
-      <QGField label="Produto / serviço"><input list="qg-prods" value={f.produto} onChange={set("produto")} placeholder="ex.: Biodigestor" style={QG_INP}/><datalist id="qg-prods">{prods.map(function(p){return <option key={p} value={p}/>;})}</datalist></QGField>
-      <QGField label="Região (UF casa com as vendas do Portal)"><input list="qg-regs" value={f.regiao} onChange={set("regiao")} placeholder="ex.: PR, SC" style={QG_INP}/><datalist id="qg-regs">{regs.map(function(p){return <option key={p} value={p}/>;})}</datalist></QGField>
-      <QGField label="Público"><input list="qg-pubs" value={f.publico} onChange={set("publico")} placeholder="ex.: Produtores rurais" style={QG_INP}/><datalist id="qg-pubs">{sug("publico").map(function(p){return <option key={p} value={p}/>;})}</datalist></QGField>
-      <QGField label="Campanha" span={2}><input value={f.campanha} onChange={set("campanha")} placeholder="nome da campanha (opcional)" style={QG_INP}/></QGField>
-      <QGField label="Orçamento (R$)"><input type="number" inputMode="decimal" value={f.orcamento} onChange={set("orcamento")} style={QG_INP}/></QGField>
-      <QGField label="Gasto até agora (R$)"><input type="number" inputMode="decimal" value={f.gasto} onChange={set("gasto")} style={QG_INP}/></QGField>
-      <QGField label="Leads"><input type="number" inputMode="numeric" value={f.leads} onChange={set("leads")} style={QG_INP}/></QGField>
-      <QGField label="Vendas / receita (só se não vierem do Portal)"><div style={{display:"flex",gap:6}}><input type="number" inputMode="numeric" value={f.vendas} onChange={set("vendas")} placeholder="vendas" style={QG_INP}/><input type="number" inputMode="decimal" value={f.receita} onChange={set("receita")} placeholder="R$" style={QG_INP}/></div></QGField>
-    </div>
-    <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:16}}>
-      <div>{ed&&<button style={Object.assign(QG_BTN(),{color:QG.verm})} onClick={excluir}>Excluir</button>}</div>
-      <div style={{display:"flex",gap:8}}><button style={QG_BTN()} onClick={onClose}>Cancelar</button><button style={QG_BTN("roxo")} disabled={saving} onClick={salvar}>{saving?"Salvando…":"Salvar"}</button></div>
-    </div>
-  </ModalShell>;
-}
+/* v96 (13/10/2026) M4: removido QGLinhaModal (o botão que abria nunca existiu) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 // Fechamento semanal — poucos campos; vendas/receita vêm do Portal
 function QGFechamentoModal({clientId,week,clients,data,onClose,onSaved,currentUser}){
@@ -64303,7 +61224,6 @@ function QGBusca({clients,openClient,onCliente,onTop,acoes}){
    RAIZ — Dashboard / Clientes / Cliente + modais
    ═══════════════════════════════════════════════════════ */
 function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,viewUser,perms,tasks,onNovoCliente,onAbrirCadastro,openClient,setOpenClient}){
-  useQGClientesSync(store,update);
   /* ─── Trava por cliente (19/09/2026) ───
      A Gestão de mídia mostrava todos os clientes pra qualquer um que abrisse a
      tela — as chaves verCliente_<id> só valiam na tela de Clientes. Agora valem
@@ -64335,33 +61255,49 @@ function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,viewUser,pe
   const year=parseInt(periodo.slice(0,4),10), month=parseInt(periodo.slice(5,7),10);
   const data=useQGData(clients,year,month);
   const acoesApi=useQGAcoes(clients.map(function(c){return c.client_id;}));
-  const [linhaModal,setLinhaModal]=useState(null);
+  /* v96 (13/10/2026) M4: estado da janela de linha de orçamento removido (nenhum botão abria) */
   const [fechModal,setFechModal]=useState(null);
   /* 20/09: _vu = quem está sendo visto ("Visualizar como"); currentUser segue
      sendo o logado, que é quem assina o que vai pro banco. */
   const _vu=viewUser||currentUser;
   const isSocio=_vu&&_vu.level===1;
   const canEdit=(typeof pxBloco==="function")?pxBloco("midia.editar",{user:_vu,perms:perms}):!!(isSocio||(_vu&&(_vu.id==="erick"||_vu.dash==="gestor")));
+  useQGClientesSync(store,update,canEdit);   // v96 (13/10/2026) S2: grava só com permissão de editar a mídia
   const abrir=function(id){ setOpenClient(id); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){} };
   const editarMeta=async function(mc,atual){
     if(typeof pixelsPrompt!=="function") return;
     const v=await pixelsPrompt("Meta mensal de leads · "+mc.name+" · "+QG_MESES[month-1]+"/"+year,{inputType:"number",defaultValue:atual?String(atual):"",placeholder:"ex.: 100 · 0 remove a meta",okText:"Salvar meta"});
     if(v===null||v===undefined) return; const n=parseInt(v,10)||0; const ref=year+"-"+String(month).padStart(2,"0");
+    /* v96 (13/10/2026) R5 (rodada 2): grava na fonte única (Gestão › Metas) — lê a meta inteira do mês e troca só os leads, para não apagar
+       faturamento/vendas/CPL/CTR. O servidor mantém media_goals igual. Sem a leitura nova (servidor fora), grava como antes. */
+    if(data&&data.metasMes){
+      try{
+        const lr=await window._sb.rpc("ads_metas_ler",{p_client:mc.client_id,p_mes:ref+"-01"}); if(lr.error) throw new Error(lr.error.message);
+        const mm=(lr.data&&lr.data.meta)||{}; const p={}; ["fat_meta","fat_real","vendas_meta","vendas_real","cpl_max","ctr_min","roas_meta"].forEach(function(k){ p[k]=(mm[k]===null||mm[k]===undefined)?"":String(mm[k]); }); p.obs=mm.obs||""; p.leads_meta=n>0?String(n):"";
+        const sr=await window._sb.rpc("ads_metas_salvar",{p_client:mc.client_id,p_mes:ref+"-01",p:p});
+        if(sr.error||!sr.data||!sr.data.ok) throw new Error((sr.data&&sr.data.erro)||(sr.error&&sr.error.message)||"Não salvou.");
+        if(addHistory) addHistory(mc.client_id,{type:"goal",label:"Meta de leads "+ref+": "+n});
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Meta salva (Gestão › Metas).");
+        data.reload(); return;
+      }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(e&&e.message||e)); return; }
+    }
     const r=await window._sb.from("media_goals").upsert({client_id:mc.client_id,ref_month:ref,meta_leads:n,updated_by:(currentUser&&currentUser.id)||"",updated_at:new Date().toISOString()},{onConflict:"client_id,ref_month"});
     if(r.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+r.error.message); return; }
-    // espelha no store antigo (aba Metas do cadastro)
-    update(function(prev){ const g=prev.goals||{}; const cg=g[mc.client_id]||{}; return Object.assign({},prev,{goals:Object.assign({},g,{[mc.client_id]:Object.assign({},cg,{[ref]:Object.assign({},cg[ref]||{},{leads:n})})})}); });
+    /* v96 (13/10/2026) R5: não espelha mais a meta no navegador (store.goals, aba Metas do painel antigo, que está saindo — M1).
+       A meta passa a morar num lugar só no banco; a leitura do navegador fica só como reserva de quem já tinha. Unificar
+       media_goals × ads_metas (Gestão › Metas) é do servidor — pedido em PENDENCIAS (C2). */
     if(addHistory) addHistory(mc.client_id,{type:"goal",label:"Meta de leads "+ref+": "+n});
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Meta salva.");
     data.reload();
   };
   const mc=openClient?clients.find(function(c){return c.client_id===openClient;}):null;
   const modais=<>
-    {linhaModal&&<QGLinhaModal linha={linhaModal.linha} clientId={linhaModal.clientId} clients={clients} data={data} year={year} month={month} currentUser={currentUser} onClose={function(){setLinhaModal(null);}} onSaved={data.reload}/>}
+    {/* v96 (13/10/2026) G4: se o banco devolveu menos linhas do que tem, a tela diz — número cortado não passa calado */}
+    {data.cortes&&data.cortes.length>0&&<div role="alert" style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:12,padding:"9px 14px",fontSize:12.5,marginBottom:12,fontFamily:QG_FONT}}><b>Números possivelmente incompletos.</b> O servidor devolveu só parte das linhas ({data.cortes.join(", ")}). Os totais de gasto e leads desta tela podem estar menores que os reais — confira na Visão geral do cliente, que lê direto do banco.</div>}
     {fechModal&&<QGFechamentoModal clientId={fechModal.clientId} week={fechModal.week} clients={clients} data={data} currentUser={currentUser} onClose={function(){setFechModal(null);}} onSaved={data.reload}/>}
   </>;
   const common={clients:clients,data:data,store:store,year:year,month:month,setPeriodo:setPeriodo,isMob:isMob,canEdit:canEdit,onOpenClient:abrir,onEditarMeta:editarMeta,acoes:acoesApi.lista,acoesApi:acoesApi,currentUser:currentUser,viewUser:_vu,perms:perms,
-    onNovaLinha:function(cid){ setLinhaModal({linha:null,clientId:cid}); },onEditLinha:function(b){ setLinhaModal({linha:b,clientId:b.client_id}); },
+    
     onFechamento:function(cid,week){ setFechModal({clientId:cid,week:week||_qgLastWeeks(1)[0]}); }};
   if(mc) return <>{modais}<QGCliente {...common} mc={mc} update={update} addHistory={addHistory} tasks={tasks} onBack={function(){setOpenClient(null);}} onTrocar={function(id){setOpenClient(id);}} onAbrirCadastro={function(){onAbrirCadastro(mc.client_id);}}/></>;
   if(modo==="clientes") return <>{modais}<QGClientesPage {...common} onNovoCliente={onNovoCliente}/></>;
@@ -64374,6 +61310,7 @@ function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,viewUser,pe
 // v2 (08/09/2026): redesenho "claro premium" (mockup claude/mockup-trafego-v2.html) + período selecionável +
 // filtros de status/objetivo + preview de criativo (imagem / Reel embutido) + chip Geral.
 // SOMENTE LEITURA das tabelas ads_*. Escritas: botão "Atualizar" (edge analisar-ads) e a aba Leads (leads_qualidade).
+// v96 (13/10/2026) M14: a aba Leads está oculta (17b SUBS_OCULTAS); os textos de tela não mandam mais o usuário para ela.
 // Fontes:
 //   ads_accounts                          → conta do cliente (client_id + unidade)
 //   RPC ads_periodo(conta, de, até)       → somas por conta / campanha / anúncio do período escolhido (JSON pequeno; some o teto de 1000 linhas)
@@ -64388,7 +61325,10 @@ const ADS={ground:"#f4f3f8",surface:"#fff",surface2:"#f3f1f8",ink:"#0f0d1a",ink2
   accent:"#7326d6",accentSoft:"#f1e9fd",ok:"#12805a",okSoft:"#e2f5ec",warn:"#b45309",warnSoft:"#fef3c7",crit:"#c92a2a",critSoft:"#fde8e8",gold:"#8a6a12",goldSoft:"#fbf1d8",tipBg:"#1b1530",tipInk:"#f4f1f9"};
 const ADS_FONT="'Inter',system-ui,-apple-system,sans-serif";
 const ADS_MONO={fontFamily:ADS_FONT,fontVariantNumeric:"tabular-nums",fontFeatureSettings:"'tnum'",letterSpacing:"-.01em"};
-const ADS_MIN_RESULTADOS=3; // nada de campeão/culpado abaixo disso
+/* v96 (13/10/2026) R16/R7 (escolha A): UMA régua só para o app inteiro — 10 resultados, a mesma do Diagnóstico (ads_diag_painel).
+   Antes era 3 aqui, 10 no Diagnóstico: o Público chamava de "melhor" uma faixa com 5 leads que o Diagnóstico chamava de "pouco dado".
+   Abaixo disso a tela mostra o número, em cinza, como "pouco dado ainda" — nada de campeão, culpado, "melhor" ou "pior". */
+const ADS_MIN_RESULTADOS=10;
 const ADS_MAXW=1240;
 
 /* ─── formatadores ─── */
@@ -64414,13 +61354,7 @@ function _adsNivelCusto(cpa,media,resultados){
 const _adsCor=function(n){ return n==="o"?ADS.ok:n==="w"?ADS.warn:n==="c"?ADS.crit:ADS.muted; };
 const _adsBgCor=function(n){ return n==="o"?ADS.okSoft:n==="w"?ADS.warnSoft:n==="c"?ADS.critSoft:ADS.surface2; };
 
-/* ─── frentes pelo padrão de nome (agrupamento da Visão geral) ─── */
-const ADS_FRENTES=[
-  {id:"forms",titulo:"Captação por formulário",desc:"lead preenche formulário dentro do Facebook",teste:function(n){ return /\[Leads\s*-\s*Forms\]/i.test(n); },tipo:"lead"},
-  {id:"wpp",titulo:"Captação por WhatsApp",desc:"conversa direta no WhatsApp",teste:function(n){ return /\[Leads\s*-\s*Wpp\]|\[Lead-?Wpp\]|\[Leads\]/i.test(n); },tipo:"lead"},
-  {id:"marca",titulo:"Marca e topo de funil",desc:"seguidores e engajamento · não medem lead nem conversa",teste:function(n){ return /\[Seguidores\]|\[Engajamento\]|\[Alcance\]|\[Marca\]/i.test(n); },tipo:"marca"},
-];
-function _adsFrenteDe(nome){ for(let i=0;i<ADS_FRENTES.length;i++){ if(ADS_FRENTES[i].teste(String(nome||""))) return ADS_FRENTES[i].id; } return "outras"; }
+/* v96 (13/10/2026) M4: removido ADS_FRENTES/_adsFrenteDe — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 function _adsNomeCurto(nome){
   let s=String(nome||"").replace(/\[Pixels\]/ig,"").replace(/\[\d{2}\/\d{2}\/\d{2,4}\]/g,"").replace(/\[Leads\s*-\s*Forms\]|\[Leads\s*-\s*Wpp\]|\[Lead-?Wpp\]|\[Leads\]/ig,"");
   const m=String(nome||"").match(/\[(\d{2}\/\d{2})\/\d{2,4}\]/); const data=m?m[1]:"";
@@ -64483,16 +61417,7 @@ function _adsClassifica(objetivo,conjuntos,nome){
 function _adsResDe(x,cfg){ if(!cfg||!cfg.campo) return null; if(cfg.campo==="resultados"){ if(x&&x.res!==undefined&&x.res!==null&&x.tipo) return Number(x.res||0); /* já veio do banco pela finalidade */ if(cfg.id==="form") return Number(x.leads||0); if(cfg.id==="lead_wpp"||cfg.id==="eng_wpp") return Number(x.conversas||0); return 0; } if(cfg.campo==="alcance_mil") return Number(x.alcance||0)/1000; return Number(x[cfg.campo]||0); }
 function AdsObjTag({tipo,small}){ const t=_adsTipo(tipo); return <span style={{display:"inline-flex",alignItems:"center",background:t.bg,color:t.cor,borderRadius:7,padding:small?"2px 7px":"4px 9px",fontSize:small?10.5:11.5,fontWeight:700,whiteSpace:"nowrap",fontFamily:ADS_FONT}}>{t.label}</span>; }
 
-/* ─── tooltip de 4 partes ─── */
-function AdsTip({texto,children,partes}){
-  const [on,setOn]=useState(false);
-  return <span onMouseEnter={function(){setOn(true);}} onMouseLeave={function(){setOn(false);}} style={{position:"relative",display:"inline-flex",alignItems:"center",gap:4,cursor:"help",borderBottom:"1px dotted "+ADS.line2}}>
-    {children}
-    {on&&<span style={{position:"absolute",zIndex:50,left:0,top:"calc(100% + 8px)",background:ADS.tipBg,color:ADS.tipInk,borderRadius:10,padding:"10px 12px",width:280,fontSize:12,lineHeight:1.45,fontWeight:400,boxShadow:"0 10px 30px rgba(15,23,42,.25)",fontFamily:ADS_FONT,textTransform:"none",letterSpacing:0,whiteSpace:"normal"}}>
-      {partes?partes.map(function(p,i){ return p[1]?<span key={i} style={{display:"block",marginBottom:i<partes.length-1?6:0}}><b style={{color:"#c9b6ff",fontWeight:600}}>{p[0]}</b> {p[1]}</span>:null; }):texto}
-    </span>}
-  </span>;
-}
+/* v96 (13/10/2026) M4: removido AdsTip (só o AdsHero usava) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ─── contas ─── */
 function useAdsAccounts(){
@@ -64506,7 +61431,11 @@ function adsContaDoCliente(mc,accounts){
   const ativas=accounts.filter(function(a){ return a.client_id===cid&&a.ativo!==false; });
   let acc=ativas.find(function(a){ return (a.unidade||null)===un; })||null;
   let compartilhada=null;
-  if(!acc&&un&&["uberlandia","gloria","paraguay"].indexOf(un)>=0){ acc=ativas.find(function(a){return a.unidade==="toledo";})||null; compartilhada="Toledo"; }
+  /* v96 (13/10/2026) R17 (rodada 2): unidade sem conta própria usa a conta indicada pelo servidor (ads_unidades_ler.conta_compartilhada);
+     a lista fixa (Uberlândia/Glória/Paraguai → Toledo) fica só de reserva */
+  if(!acc&&un){ const _us=(window._pxAdsUnidadesSrv||[]).find(function(x){ return x.unidade===un; });
+    if(_us&&_us.conta_compartilhada){ acc=ativas.find(function(a){ return String(a.ad_account_id)===String(_us.conta_compartilhada); })||null; if(acc){ const dono=(window._pxAdsUnidadesSrv||[]).find(function(x){ return String(x.conta_propria||"")===String(_us.conta_compartilhada); }); compartilhada=(dono&&dono.nome)||_adsUnidadeLbl(acc.unidade)||"Toledo"; } } }
+  if(!acc&&un&&!window._pxAdsUnidadesSrv&&["uberlandia","gloria","paraguay"].indexOf(un)>=0){ acc=ativas.find(function(a){return a.unidade==="toledo";})||null; compartilhada="Toledo"; }
   if(!acc&&!un&&ativas.length===1) acc=ativas[0];
   return acc?{conta:acc,compartilhada:compartilhada}:null;
 }
@@ -64554,11 +61483,11 @@ function QGAdsBarraPeriodo({compact}){
 const ADS_FAM_LEAD={form:1,lead_wpp:1,eng_wpp:1}; /* finalidades que geram lead — só elas entram no custo por lead */
 const _adsEhLead=function(tipo){ return !!ADS_FAM_LEAD[tipo]; };
 const ADS_DEF_CPL="Custo por lead = gasto SÓ das campanhas de lead (formulário / WhatsApp) ÷ leads. Engajamento, reconhecimento, seguidores, vídeo e tráfego têm outra finalidade e ficam fora da conta.";
-const ADS_DEF_LEAD="Lead = pessoa que chegou. Cada campanha conta pela finalidade dela: campanha de formulário conta o formulário preenchido (a conversa que vem depois é a mesma pessoa); campanha de WhatsApp conta a conversa iniciada. Quem respondeu ou virou negócio se marca na aba Leads.";
+const ADS_DEF_LEAD="Lead = pessoa que chegou. Cada campanha conta pela finalidade dela: campanha de formulário conta o formulário preenchido (a conversa que vem depois é a mesma pessoa); campanha de WhatsApp conta a conversa iniciada. Se respondeu ou virou negócio, a Meta não sabe: isso vem do que o cliente conta.";   // v96 (13/10/2026) M14: aba Leads está oculta
 /* "leads_meta" fica só no banco: a Meta só carimba lead em conversa quando a campanha está configurada pra isso, varia por conta e não dá pra auditar — não aparece na tela (decisão 09/09). */
 function _adsSubLeads(x){ x=x||{}; const f=Number(x.leads||0), c=Number(x.conversas||0); const partes=[]; if(f>0||c===0) partes.push(_adsNum(f)+" formulário"); if(c>0||f===0) partes.push(_adsNum(c)+" WhatsApp"); return partes.join(" · "); }
 window._pxAdsPer=window._pxAdsPer||{};
-const ADS_CACHE_MS=10*60*1000; /* 10 min: depois disso a tela relê o banco (a coleta das 07:00 muda os números) */
+const ADS_CACHE_MS=10*60*1000; /* 10 min: depois disso a tela relê o banco (a coleta da madrugada muda os números; horário em ads_rotinas_horarios) · v96 Q15 */
 function _adsCacheOk(o){ return !!(o&&o._em&&(Date.now()-o._em)<ADS_CACHE_MS); }
 function _adsLimpaCaches(){ window._pxAdsPer={}; window._pxAdsCache={}; window._pxAdsPrev={}; window._pxAdsPainel=null; }
 function _adsEnriquece(j){
@@ -64582,7 +61511,36 @@ const ADS_UNIDADES=[
   {u:"castro",lbl:"Castro",re:/castro/i}
 ];
 const _adsUnidadeLbl=function(u){ const o=ADS_UNIDADES.find(function(x){return x.u===u;}); return o?o.lbl:(u||""); };
-function _adsUnidadeCamp(nome,padrao){
+/* v96 (13/10/2026) R17/E6 (rodada 2): as unidades vêm do servidor (ads_unidades_ler — a tabela única) e a unidade de cada campanha
+   também (ads_unidade_campanhas: escolha manual > etiqueta > conta). A tabela acima fica só como reserva se o servidor falhar. */
+window._pxAdsUnidadesSrv=window._pxAdsUnidadesSrv||null;
+function _adsUnidadesDoServidor(lista){
+  try{ if(!Array.isArray(lista)||!lista.length) return; const novas=[];
+    lista.slice().sort(function(a,b){ return (a.ordem||0)-(b.ordem||0); }).forEach(function(u){ if(!u||!u.unidade) return; let re=null; try{ re=new RegExp(u.padrao||u.unidade,"i"); }catch(_){ re=new RegExp(String(u.unidade).replace(/[^a-z]/gi,""),"i"); } novas.push({u:u.unidade,lbl:u.nome||u.unidade,re:re}); });
+    if(novas.length){ ADS_UNIDADES.splice.apply(ADS_UNIDADES,[0,ADS_UNIDADES.length].concat(novas)); window._pxAdsUnidadesSrv=lista; }
+  }catch(_){ }
+}
+function _adsUnidadesLista(){ return window._pxAdsUnidadesSrv||[]; }
+let _adsUnidadesPed=null;
+function _adsUnidadesGarantir(){ if(window._pxAdsUnidadesSrv||_adsUnidadesPed||!window._sb) return; _adsUnidadesPed=Promise.resolve(window._sb.rpc("ads_unidades_ler",{})).then(function(r){ if(r&&!r.error&&r.data&&r.data.ok) _adsUnidadesDoServidor(r.data.unidades); },function(){ }); }
+/* unidade de cada campanha por conta: {campaign_id: unidade}; "sem_unidade" fica de fora (cai na regra do nome/conta) */
+window._pxAdsUniCamp=window._pxAdsUniCamp||{};
+const _adsUniCampPed={};
+function _adsUniCampOk(accountId){ return !!(accountId&&window._pxAdsUniCamp[accountId]); }
+function _adsUniCampCarregar(accountId){
+  if(!accountId||!window._sb) return Promise.resolve(null);
+  if(window._pxAdsUniCamp[accountId]) return Promise.resolve(window._pxAdsUniCamp[accountId]);
+  if(_adsUniCampPed[accountId]) return _adsUniCampPed[accountId];
+  _adsUniCampPed[accountId]=Promise.resolve(window._sb.rpc("ads_unidade_campanhas",{p_conta:String(accountId),p_dias:400})).then(function(r){
+    if(!r||r.error||!r.data||!r.data.ok) return null;
+    const m={}; (r.data.campanhas||[]).forEach(function(c){ if(c&&c.campaign_id&&c.unidade&&c.origem!=="sem_unidade") m[c.campaign_id]=c.unidade; });
+    window._pxAdsUniCamp[accountId]=m; window._pxAdsSemUnidade=window._pxAdsSemUnidade||{}; window._pxAdsSemUnidade[accountId]=Number(r.data.sem_unidade||0);
+    try{ window.dispatchEvent(new CustomEvent("pixels:ads-unidade")); }catch(_){ }
+    return m; },function(){ return null; }).then(function(m){ delete _adsUniCampPed[accountId]; return m; });
+  return _adsUniCampPed[accountId];
+}
+function _adsUnidadeCamp(nome,padrao,campId,accountId){
+  if(campId&&accountId){ const m=window._pxAdsUniCamp[accountId]; if(m&&m[campId]) return m[campId]; }   /* v96 R17: escolha do servidor primeiro */
   const blocos=String(nome||"").match(/\[([^\]]+)\]/g)||[];
   for(let i=0;i<blocos.length;i++){ const t=blocos[i].slice(1,-1).trim();
     for(let j=0;j<ADS_UNIDADES.length;j++) if(ADS_UNIDADES[j].re.test(t)) return ADS_UNIDADES[j].u; }
@@ -64590,15 +61548,64 @@ function _adsUnidadeCamp(nome,padrao){
 }
 /* unidade escolhida na lista de clientes (gravada pelo 17b) */
 const _adsUnidadeAtiva=function(){ return (typeof window!=="undefined"&&window._pxAdsUnidade)||null; };
+/* v96 (13/10/2026) E3/S5: as variáveis soltas de navegação ganharam dono e validade, sem mudar quem as escreve
+   (17b, 17c e 17e continuam usando window._pxAdsUnidade / window._pxSubDesejada):
+   · _pxSubDesejada (aba pedida ao abrir um cliente) vale só PX_NAV_VALIDADE_MS depois de gravada — se ninguém
+     abrir cliente nesse tempo, ela some (antes "sequestrava" a próxima abertura de cliente, horas depois);
+   · _pxAdsUnidade (filtro de unidade) passa a ter DONO: o primeiro cliente aberto logo depois do clique na
+     unidade. Abrir OUTRO cliente por qualquer caminho (setas ‹ ›, busca, Painel, seletor) zera o filtro (S5),
+     e voltar pra lista também zera. */
+const PX_NAV_VALIDADE_MS=8000;
+const _pxNavSt={uni:null,uniEm:0,uniDono:null,sub:null,subEm:0};
+(function(){
+  if(typeof window==="undefined") return;
+  const def=function(nome,get,set){ try{ const d=Object.getOwnPropertyDescriptor(window,nome); if(d&&d.get) return; const atual=d?d.value:undefined; Object.defineProperty(window,nome,{configurable:true,enumerable:false,get:get,set:set}); if(atual!==undefined&&atual!==null) set(atual); }catch(_){ } };
+  def("_pxAdsUnidade",function(){ return _pxNavSt.uni; },function(v){ _pxNavSt.uni=v||null; _pxNavSt.uniEm=Date.now(); _pxNavSt.uniDono=null; });
+  def("_pxSubDesejada",function(){ return (_pxNavSt.sub&&(Date.now()-_pxNavSt.subEm)<PX_NAV_VALIDADE_MS)?_pxNavSt.sub:null; },function(v){ _pxNavSt.sub=v||null; _pxNavSt.subEm=Date.now(); });
+})();
+/* chamado pelo QGCliente (17b) a cada render, ANTES das abas lerem o filtro */
+function _pxNavClienteAberto(clientId){
+  _pxMidiaCachesValidade(); _adsUnidadesGarantir(); _adsHorarios();   /* v96 R17: unidades do servidor · Q15: horários */
+  if(!_pxNavSt.uni) return;
+  if(_pxNavSt.uniDono===clientId) return;                                   /* mesmo cliente: mantém */
+  if(!_pxNavSt.uniDono&&(Date.now()-_pxNavSt.uniEm)<PX_NAV_VALIDADE_MS){ _pxNavSt.uniDono=clientId; return; } /* acabou de clicar na unidade */
+  _pxNavSt.uni=null; _pxNavSt.uniDono=null;                                 /* outro cliente: zera (S5) */
+}
+function _pxNavSaiuDoCliente(){ _pxNavSt.uni=null; _pxNavSt.uniDono=null; }
+/* v96 E3: caches de memória da mídia ganham prazo (30 min) — antes viviam até recarregar a página */
+const PX_MIDIA_CACHE_MS=30*60*1000;
+function _pxMidiaLimpaMemoria(){
+  try{
+    window._pxAdsPer={}; window._pxAdsCache={}; window._pxAdsPrev={}; window._pxAdsPainel=null;
+    window._pxAdsBench={}; window._pxSug={}; window._pxSedes={}; window._pxGeo={};
+    window._pxAdsAccounts=null; window._pxAdsAlertas=null; window._pxAdsAlStatus=null; window._pxAdsStAn=null;
+    window._pxThumbT=null; window._pxAdsUltDia={};   /* v96 S16 / 2.13.03 */
+    _pxNavSt.uni=null; _pxNavSt.uniDono=null; _pxNavSt.sub=null;
+    window._pxAdsUniCamp={};   /* v96 R17 */
+    window._pxMidiaCacheEm=Date.now();
+  }catch(_){ }
+}
+function _pxMidiaCachesValidade(){
+  try{ if(!window._pxMidiaCacheEm){ window._pxMidiaCacheEm=Date.now(); return; }
+    /* v96 (13/10/2026) revisão RB (ALTA): no prazo de 30 min a lista de CONTAS fica (só o logout zera). Zerar aqui fazia
+       _adsUnidadeDonaDaConta devolver null e a campanha sem colchete sumia da unidade dona (Chapecó/Castro zeradas com o cliente aberto). */
+    if(Date.now()-window._pxMidiaCacheEm>PX_MIDIA_CACHE_MS){ const u=_pxNavSt.uni, d=_pxNavSt.uniDono, acc=window._pxAdsAccounts; _pxMidiaLimpaMemoria(); _pxNavSt.uni=u; _pxNavSt.uniDono=d; if(acc) window._pxAdsAccounts=acc; } }catch(_){ }
+}
+/* v96 Q7: filtro de unidade para telas que leem linhas com nome de campanha (Leads, Histórico) */
+function _adsFiltroUnidadeNome(accountId){
+  const uni=_adsUnidadeAtiva(); if(!uni) return null;
+  const dona=_adsUnidadeDonaDaConta(accountId);
+  return function(nome,campId){ return _adsUnidadeCamp(nome,dona,campId,accountId)===uni; };   /* v96 R17: campanha pelo id (escolha manual) */
+}
 const _adsUnidadeDonaDaConta=function(accountId){
   const l=(typeof window!=="undefined"&&window._pxAdsAccounts)||[];
   const c=l.find(function(x){ return String(x.ad_account_id)===String(accountId); });
   return (c&&c.unidade)||null;
 };
 /* corta um retorno de ads_periodo para uma unidade só e refaz os totais da conta */
-function _adsFiltraUnidade(cur,unidade,padrao){
+function _adsFiltraUnidade(cur,unidade,padrao,accountId){
   if(!cur||!unidade) return cur;
-  const camps=(cur.campanhas||[]).filter(function(c){ return _adsUnidadeCamp(c.nome,padrao)===unidade; });
+  const camps=(cur.campanhas||[]).filter(function(c){ return _adsUnidadeCamp(c.nome,padrao,c.id,accountId)===unidade; });
   const ids={}; camps.forEach(function(c){ ids[c.id]=1; });
   const som=function(k){ return camps.reduce(function(t,c){ return t+Number(c[k]||0); },0); };
   const ehLead=function(t){ return t==="form"||t==="lead_wpp"||t==="eng_wpp"; };
@@ -64622,7 +61629,7 @@ function _adsFiltraUnidade(cur,unidade,padrao){
 function useAdsPeriodoDados(accountId,Pfixo){
   const G=useAdsPeriodo(); const P=Pfixo||G.P; /* Pfixo: janela própria da tela (ex.: Estratégia usa no mínimo 14 dias) */
   const uni=_adsUnidadeAtiva();
-  const key=accountId+"|"+P.key+(uni?"|u:"+uni:"");
+  const key=accountId+"|"+P.key+(uni?"|u:"+uni+"|d:"+(_adsUnidadeDonaDaConta(accountId)||"")+(_adsUniCampOk(accountId)?"|m":""):"");   /* v96 R17: "m" = já com a unidade de cada campanha do servidor */   /* v96 revisão RB: a unidade dona entra na chave */
   const [st,setSt]=useState(function(){ return _adsCacheOk(window._pxAdsPer[key])?window._pxAdsPer[key]:{loading:true,cur:null,prev:null}; });
   useEffect(function(){
     if(!accountId||!window._sb){ setSt({loading:false,cur:null,prev:null}); return; }
@@ -64631,8 +61638,9 @@ function useAdsPeriodoDados(accountId,Pfixo){
     Promise.all([
       window._sb.rpc("ads_periodo",{p_account:accountId,p_de:P.ini,p_ate:P.fim}),
       window._sb.rpc("ads_periodo",{p_account:accountId,p_de:P.prevIni,p_ate:P.prevFim}),
-    ]).then(function(r){ if(!alive) return; if(r[0].error){ setSt({loading:false,cur:null,prev:null,erro:r[0].error.message}); return; } const res={loading:false,cur:_adsFiltraUnidade(_adsEnriquece(r[0].data),uni,_adsUnidadeDonaDaConta(accountId)),prev:_adsFiltraUnidade(_adsEnriquece(r[1].error?null:r[1].data),uni,_adsUnidadeDonaDaConta(accountId)),_em:Date.now()}; window._pxAdsPer[key]=res; setSt(res); })
-    .catch(function(e){ if(alive) setSt({loading:false,cur:null,prev:null,erro:e.message||String(e)}); });
+      uni?_adsUniCampCarregar(accountId):Promise.resolve(null),   /* v96 R17 */
+    ]).then(function(r){ if(!alive) return; if(r[0].error){ _pxMidiaErro("os números do período",accountId,r[0].error.message); setSt({loading:false,cur:null,prev:null,erro:r[0].error.message}); return; } const res={loading:false,cur:_adsFiltraUnidade(_adsEnriquece(r[0].data),uni,_adsUnidadeDonaDaConta(accountId),accountId),prev:_adsFiltraUnidade(_adsEnriquece(r[1].error?null:r[1].data),uni,_adsUnidadeDonaDaConta(accountId),accountId),_em:Date.now()}; window._pxAdsPer[key]=res; setSt(res); })
+    .catch(function(e){ if(alive){ _pxMidiaErro("os números do período",accountId,e.message||String(e)); setSt({loading:false,cur:null,prev:null,erro:e.message||String(e)}); } });   /* v96 Q6 (revisão RB) */
     return function(){ alive=false; };
   },[key]);
   return Object.assign({P:P},st);
@@ -64683,24 +61691,51 @@ function _adsTotaisConta(conta){ const c=conta||{}; const gl=Number(c.gasto_lead
 
 /* ─── primitivos visuais v2 ─── */
 /* faixa de unidade: quando a tela está vendo só uma unidade da conta, isso não pode ficar escondido */
-function AdsFaixaUnidade(){
+function AdsFaixaUnidade({contaInteira}){
   const u=_adsUnidadeAtiva(); if(!u) return null;
+  /* v96 (13/10/2026) Q7: tela que não consegue separar por unidade avisa — antes dizia "Vendo só X" e mostrava a conta toda */
+  if(contaInteira) return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:ADS.warnSoft,border:"1px solid #f3dca0",borderRadius:12,padding:"9px 14px",marginBottom:14}}>
+    <span style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:"#6b4d00"}}>Mostrando a conta inteira</span>
+    <span style={{fontSize:12,color:"#6b4d00"}}>esta tela ainda não separa por unidade — os números incluem todas as unidades da conta, não só <b>{_adsUnidadeLbl(u)}</b></span>
+  </div>;
   return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#f3eeff",border:"1px solid #e0d4fb",borderRadius:12,padding:"9px 14px",marginBottom:14}}>
     <span style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.accent}}>Vendo só</span>
     <b style={{fontSize:13.5,color:ADS.ink}}>{_adsUnidadeLbl(u)}</b>
     <span style={{fontSize:11.5,color:ADS.muted}}>campanhas dessa unidade dentro da conta</span>
-    <a onClick={function(){ window._pxAdsUnidade=null; window._pxAdsPer={}; window.location.reload(); }}
+    {/* v96 (13/10/2026) Q13: tira só o filtro e relê as abas — antes recarregava o app inteiro (window.location.reload) */}
+    <a onClick={function(){ window._pxAdsUnidade=null; try{ window.dispatchEvent(new CustomEvent("pixels:ads-unidade")); window.dispatchEvent(new CustomEvent("pixels:ads-periodo")); }catch(_){ } }}
        style={{marginLeft:"auto",fontSize:12,fontWeight:700,color:ADS.accent,cursor:"pointer"}}>ver a conta inteira ›</a>
   </div>;
 }
-function AdsWrap({children}){ return <div className="px-ads" style={{maxWidth:ADS_MAXW,margin:"0 auto",fontFamily:ADS_FONT,color:ADS.ink}}><AdsFaixaUnidade/>{children}</div>; }
+/* v96 (13/10/2026) Q6: erro do servidor não pode virar "sem dados". Faixa com o motivo + "Tentar de novo",
+   registro no console com [pixels-midia-erro], aviso (toast) no app e — quando existir no banco — aviso no mesmo lugar
+   dos alarmes de tráfego via RPC midia_erro_avisar (pedido ao construtor do banco). No máximo 1 aviso por tela,
+   por cliente/conta e por dia. */
+/* v96 (13/10/2026) G4 (rodada 2): o servidor corta em 1.000 linhas, calado, qualquer pedido de tabela e qualquer RPC que devolve
+   LINHAS. _adsTudo busca em páginas de 1.000 (ordem fixa) até completar o total que o banco informa; marca "cortado" se passar do teto. */
+function _adsTudo(mk,max){ return (typeof _qgPaginado==="function")?_qgPaginado(mk,max||20000):mk(true); }
+const _pxMidiaErrosAvisados={};
+function _pxMidiaErro(tela,quem,msg){
+  const m=String((msg&&msg.message)||msg||"erro desconhecido").slice(0,300);
+  try{ console.error("[pixels-midia-erro]",tela,quem||"",m); }catch(_){ }
+  const k=tela+"|"+(quem||"")+"|"+new Date().toISOString().slice(0,10);
+  if(_pxMidiaErrosAvisados[k]) return; _pxMidiaErrosAvisados[k]=1;
+  try{ if(typeof pixelsToast!=="undefined"&&pixelsToast.error) pixelsToast.error("Não consegui carregar "+tela+" ("+m+")"); }catch(_){ }
+  try{ if(window._sb&&window._pxMidiaErroRpc!==false) window._sb.rpc("midia_erro_avisar",{p_tela:tela,p_quem:String(quem||""),p_msg:m}).then(function(r){ if(r&&r.error&&(r.error.code==="PGRST202"||/not find|does not exist/i.test(r.error.message||""))) window._pxMidiaErroRpc=false; },function(){}); }catch(_){ }
+}
+function AdsErroCarga({tela,erro,onTentar,compacto}){
+  return <div role="alert" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:ADS.critSoft,color:ADS.crit,border:"1px solid #f6c9c9",borderRadius:compacto?10:14,padding:compacto?"8px 12px":"12px 16px",fontSize:compacto?12:13,marginBottom:compacto?10:14}}>
+    <span><b>Não consegui carregar{tela?" "+tela:""}</b> ({String(erro||"erro no servidor")}). Isto é erro, não falta de dados.</span>
+    {onTentar&&<button type="button" onClick={onTentar} style={{marginLeft:"auto",background:"#fff",color:ADS.crit,border:"1px solid "+ADS.crit,borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:ADS_FONT,minHeight:0}}>Tentar de novo</button>}
+  </div>;
+}
+function AdsWrap({children,contaInteira}){ return <div className="px-ads" style={{maxWidth:ADS_MAXW,margin:"0 auto",fontFamily:ADS_FONT,color:ADS.ink}}><AdsFaixaUnidade contaInteira={contaInteira}/>{children}</div>; }   /* v96 Q7: contaInteira */
 function AdsCard({children,style,borda,onClick,className}){ return <div className={className} onClick={onClick} style={Object.assign({background:ADS.surface,border:"1px solid "+(borda||ADS.line),borderRadius:18,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,13,26,.04)",minWidth:0},style||{})}>{children}</div>; }
 function AdsSec({t,s,children,right,style}){ return <section style={Object.assign({marginBottom:24},style||{})}>
   <div style={{display:"flex",alignItems:"baseline",gap:10,margin:"0 0 12px",flexWrap:"wrap"}}><h2 style={{margin:0,fontSize:15,fontWeight:800,letterSpacing:"-.2px",color:ADS.ink}}>{t}</h2>{s&&<span style={{fontSize:12,color:ADS.muted}}>{s}</span>}{right&&<span style={{marginLeft:"auto"}}>{right}</span>}</div>
   {children}</section>; }
 function AdsEyebrow({children}){ return <div style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",color:ADS.muted,fontWeight:800}}>{children}</div>; }
-function AdsDelta({d,inverso,label}){ if(d===null||d===undefined||!isFinite(d)) return null; const up=d>0; const neutro=Math.abs(d)<0.5; const ruim=inverso?up:!up; const bg=neutro?"#eeedf3":ruim?ADS.critSoft:ADS.okSoft; const cor=neutro?ADS.ink2:ruim?ADS.crit:ADS.ok; return <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:12,fontWeight:800,borderRadius:8,padding:"3px 8px",background:bg,color:cor}}>{neutro?"=":up?"▲":"▼"} {Math.abs(Math.round(d))}%{label?" "+label:""}</span>; }
-function AdsHero({lab,val,delta,inverso,hint,cor,tip}){ return <AdsCard><AdsEyebrow>{tip?<AdsTip partes={tip}>{lab}</AdsTip>:lab}</AdsEyebrow><div style={{fontSize:40,fontWeight:900,letterSpacing:"-1.4px",lineHeight:1.05,margin:"8px 0 6px",color:cor||ADS.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>{delta!==undefined&&<AdsDelta d={delta} inverso={inverso} label="vs. período anterior"/>}{hint&&<div style={{fontSize:12,color:ADS.muted,marginTop:6,lineHeight:1.4}}>{hint}</div>}</AdsCard>; }
+/* v96 (13/10/2026) M4: removido AdsDelta/AdsHero — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 function AdsChip({on,onClick,children,n}){ return <button onClick={onClick} style={{border:"1px solid "+(on?ADS.accent:ADS.line),background:on?ADS.accent:"#fff",color:on?"#fff":ADS.ink2,borderRadius:99,padding:"6px 12px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:ADS_FONT,whiteSpace:"nowrap",minHeight:0}}>{children}{n!==undefined&&<span style={{opacity:.65,marginLeft:5,fontWeight:600}}>{n}</span>}</button>; }
 function AdsTag({n,children}){ return <span style={{fontSize:10,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase",padding:"3px 7px",borderRadius:6,background:_adsBgCor(n),color:_adsCor(n),whiteSpace:"nowrap"}}>{children}</span>; }
 function AdsDot({n}){ return <span style={{width:8,height:8,borderRadius:"50%",background:_adsCor(n),display:"inline-block",flexShrink:0}}/>; }
@@ -64719,10 +61754,58 @@ function AdsLoading({t,forma}){ const B=function(w,h,mt){ return <div style={{wi
   </div>; }
 /* estilos globais da área de mídia: foco visível, esqueleto, impressão */
 (function(){ try{ if(typeof document==="undefined"||document.getElementById("px-ads-css")) return; const st=document.createElement("style"); st.id="px-ads-css"; /* modo apresentação: .px-privado borra tudo marcado .px-sens (números, nomes de clientes); .px-livre libera o cliente que está sendo mostrado */ st.textContent=".px-privado .px-sens{filter:blur(7px) !important;user-select:none;pointer-events:none;transition:filter .2s} .px-privado .px-sens-forte{filter:blur(12px) !important;user-select:none;pointer-events:none} .px-privado .px-livre{filter:none !important;user-select:auto;pointer-events:auto} @keyframes pxsh{0%{background-position:200% 0}100%{background-position:-200% 0}} .px-ads button:focus-visible,.px-ads a:focus-visible,.px-ads select:focus-visible,.px-ads input:focus-visible{outline:2px solid #7326d6;outline-offset:2px} @media (prefers-reduced-motion:reduce){.px-ads *{animation:none!important;transition:none!important}}"; document.head.appendChild(st); }catch(_){ } })();
+/* v96 (13/10/2026) R2 (rodada 2): UM sistema de aviso — a IA nova. As regras antigas (aba Alertas, R1–R11 calculadas na tela) e a
+   "Leitura da IA" mostram "saem em DD/MM" e somem DEPOIS da data (nada é apagado; a data mora no servidor: ads_avisos_cliente →
+   alertas_antigos_ate / leitura_ia_ate, e o Vini muda quando quiser). Quem não tem PIN não lê essa função → usa a data combinada (27/10). */
+const ADS_SAIDA_PADRAO="2026-10-27";
+window._pxAdsSaida=window._pxAdsSaida||null; let _adsSaidaPed=null;
+function useAdsSaida(){
+  const [,setN]=useState(0);
+  useEffect(function(){ if(window._pxAdsSaida||_adsSaidaPed||!window._sb) return; let vivo=true;
+    _adsSaidaPed=Promise.resolve(window._sb.rpc("ads_avisos_cliente",{p_client:null,p_dias:1})).then(function(r){ const d=(r&&!r.error&&r.data&&r.data.ok)?r.data:null; const hz=window._pxAdsHorarios||{}; window._pxAdsSaida={alertas:(d&&d.alertas_antigos_ate)||hz.alertas_antigos_ate||ADS_SAIDA_PADRAO,leitura:(d&&d.leitura_ia_ate)||hz.leitura_ia_ate||ADS_SAIDA_PADRAO,doServidor:!!d}; },function(){ const hz=window._pxAdsHorarios||{}; window._pxAdsSaida={alertas:hz.alertas_antigos_ate||ADS_SAIDA_PADRAO,leitura:hz.leitura_ia_ate||ADS_SAIDA_PADRAO,doServidor:false}; })   /* sem PIN: tenta as datas do ads_rotinas_horarios (se o C2 incluir) */.then(function(){ _adsSaidaPed=null; if(vivo) setN(function(x){return x+1;}); });
+    return function(){ vivo=false; }; },[]);
+  const d=window._pxAdsSaida||{alertas:ADS_SAIDA_PADRAO,leitura:ADS_SAIDA_PADRAO}; const hoje=_adsIso(new Date());
+  return {alertasAte:String(d.alertas).slice(0,10),leituraAte:String(d.leitura).slice(0,10),alertasSairam:hoje>String(d.alertas).slice(0,10),leituraSaiu:hoje>String(d.leitura).slice(0,10)};
+}
+/* v96 (13/10/2026) Q15 (rodada 2): horário das rotinas lido do agendamento (ads_rotinas_horarios — muda sozinho quando o cron muda).
+   Reserva fixa se a função falhar: coleta 04h00. */
+window._pxAdsHorarios=window._pxAdsHorarios||null; let _adsHorPed=null;
+function _adsHorarios(){
+  if(!window._pxAdsHorarios&&!_adsHorPed&&window._sb){ _adsHorPed=Promise.resolve(window._sb.rpc("ads_rotinas_horarios",{})).then(function(r){ if(r&&!r.error&&r.data&&r.data.ok) window._pxAdsHorarios=r.data; },function(){ }); }
+  return window._pxAdsHorarios||{coleta:"04h00",texto:"Coleta da Meta a partir das 04h00."};
+}
 /* frescor dos dados: uma frase só, usada na barra de contexto */
-function _adsFrescor(){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; let ult=null; if(c&&Array.isArray(c.dias)){ c.dias.forEach(function(r){ if(!ult||r.data>ult) ult=r.data; }); } if(!ult&&window._pxAdsPer){ Object.keys(window._pxAdsPer).forEach(function(k){ const v=window._pxAdsPer[k]; if(v&&v.de&&(!ult||v.ate>ult)) ult=v.ate; }); } return ult?"dados até "+_adsFmtD(ult)+" · próxima coleta 07:00":"coleta diária às 07:00"; }
+function _adsFrescor(){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; let ult=null; if(c&&Array.isArray(c.dias)){ c.dias.forEach(function(r){ if(!ult||r.data>ult) ult=r.data; }); } if(!ult&&window._pxAdsPer){ Object.keys(window._pxAdsPer).forEach(function(k){ const v=window._pxAdsPer[k]; if(v&&v.de&&(!ult||v.ate>ult)) ult=v.ate; }); } return ult?"dados até "+_adsFmtD(ult)+" · próxima coleta amanhã a partir das "+_adsHorarios().coleta:"coleta diária a partir das "+_adsHorarios().coleta; }   /* Q15 rodada 2 */   /* v96 (13/10/2026) Q15: horário real (coleta começa às 4h; IA lê às 5h45; decisões às 6h15) */
+/* v96 (13/10/2026) 2.13.03: selo de frescor POR CONTA, no topo do cliente (antes só havia uma frase geral na barra que gruda,
+   tirada do cache do Dashboard). Mostra o último dia com dado desta conta; em vermelho quando a coleta está atrasada —
+   assim "zero leads" por coleta parada não se confunde com cliente parado. Uma consulta pequena (1 linha), com cache de 10 min. */
+window._pxAdsUltDia=window._pxAdsUltDia||{};
+function useAdsUltimoDia(accountId){
+  const [st,setSt]=useState(function(){ const c=window._pxAdsUltDia[accountId]; return c&&Date.now()-c.em<ADS_CACHE_MS?c:null; });
+  useEffect(function(){
+    if(!accountId||!window._sb) return; const c=window._pxAdsUltDia[accountId]; if(c&&Date.now()-c.em<ADS_CACHE_MS){ setSt(c); return; }
+    let vivo=true;
+    window._sb.from("ads_daily").select("data").eq("ad_account_id",accountId).eq("nivel","conta").order("data",{ascending:false}).limit(1).then(function(r){
+      if(!vivo) return; const v={ult:r.error?null:(((r.data||[])[0]||{}).data||null),erro:r.error?r.error.message:null,em:Date.now()}; window._pxAdsUltDia[accountId]=v; setSt(v); });
+    return function(){ vivo=false; };
+  },[accountId]);
+  return st;
+}
+function AdsSeloFrescor({conta,compacto}){
+  const st=useAdsUltimoDia(conta&&conta.ad_account_id);
+  if(!st) return null;
+  const ontem=_adsAddDays(_adsIso(new Date()),-1);
+  if(st.erro) return <span title={st.erro} style={{fontSize:11,fontWeight:700,color:ADS.crit,background:ADS.critSoft,borderRadius:99,padding:"3px 9px",whiteSpace:"nowrap"}}>não consegui ver até quando vão os dados</span>;
+  if(!st.ult) return <span style={{fontSize:11,fontWeight:700,color:ADS.warn,background:ADS.warnSoft,borderRadius:99,padding:"3px 9px",whiteSpace:"nowrap"}}>sem dado coletado desta conta</span>;
+  const atraso=Math.round((new Date(ontem+"T12:00:00")-new Date(String(st.ult).slice(0,10)+"T12:00:00"))/86400000);
+  const cedo=new Date().getHours()<7;   /* até 6h30 a coleta de ontem ainda pode estar rodando */
+  const nivel=atraso<=0?"ok":(atraso===1&&cedo)?"ok":atraso<=1?"w":"c";
+  const cor=nivel==="ok"?ADS.muted:nivel==="w"?ADS.warn:ADS.crit, bg=nivel==="ok"?ADS.surface2:nivel==="w"?ADS.warnSoft:ADS.critSoft;
+  const txt="dados até "+_adsFmtD(st.ult)+(nivel==="ok"?"":" · coleta atrasada "+atraso+" dia"+(atraso>1?"s":""));
+  return <span title={nivel==="ok"?("Coleta da Meta em dia. "+(_adsHorarios().texto||"")):"O último dia com dado desta conta é "+_adsFmtD(st.ult)+". Pode ser conta sem gasto (parada) ou falha na coleta — confira antes de concluir que o cliente parou."} style={{fontSize:compacto?10.5:11,fontWeight:700,color:cor,background:bg,borderRadius:99,padding:"3px 9px",whiteSpace:"nowrap"}}>{txt}</span>;
+}
 /* benchmark interno: mediana do custo por lead da carteira, por tipo de campanha (7 dias) */
-function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=r.tipo||_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=3&&o.g>0;}).map(function(o){return o.g/o.res;}).sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
+function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=r.tipo||_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=ADS_MIN_RESULTADOS&&o.g>0;}).map(function(o){return o.g/o.res;})/* v96 R16: régua única */.sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
 function QGAdsEmBreve({nome,dica}){ return <AdsCard style={{textAlign:"center",color:ADS.muted,fontSize:13,border:"1px dashed "+ADS.line2}}>{nome}{dica?<div style={{marginTop:6,fontSize:12.5}}>{dica}</div>:null}</AdsCard>; }
 function AdsBtn({children,onClick,primary,disabled,small,style}){ return <button onClick={onClick} disabled={disabled} style={Object.assign({background:primary?ADS.accent:"#fff",color:primary?"#fff":ADS.ink,border:primary?"none":"1px solid "+ADS.line2,borderRadius:10,padding:small?"6px 11px":"9px 14px",fontSize:small?12:12.5,fontWeight:800,cursor:disabled?"default":"pointer",fontFamily:ADS_FONT,opacity:disabled?.6:1,minHeight:0,whiteSpace:"nowrap"},style||{})}>{children}</button>; }
 
@@ -64738,8 +61821,10 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const [coletando,setColetando]=useState(false);
   /* "Hoje": puxa agora da Meta só esta conta (1 dia, sem quebras/criativos) e relê as telas */
   const coletarHoje=async function(){ if(!window._sb||!conta) return; setColetando(true); setMsg(""); try{ const r=await window._sb.functions.invoke("sync-meta-ads",{body:{accounts:[conta.ad_account_id],days:1,breakdowns:false,creatives:false}}); if(r.error) throw new Error(r.error.message||"falha na coleta"); _adsLimpaCaches(); try{ window.dispatchEvent(new CustomEvent("pixels:ads-periodo")); }catch(_){} setMsg("Coleta de hoje atualizada."); } catch(e){ setMsg("Não deu pra coletar agora: "+(e.message||e)); } setColetando(false); };
+  const _podeIA=(typeof useTCliPode==="function")?useTCliPode():false;   /* v96 (13/10/2026) S8: atualizar a leitura gasta crédito de IA — só aprovador com PIN */
+  const SAI=useAdsSaida();   /* v96 R2 (rodada 2): a Leitura da IA sai na data do servidor */
   const atualizar=async function(){
-    if(!window._sb||!conta) return; setAtualizando(true); setMsg("");
+    if(!window._sb||!conta||!canEdit||!_podeIA) return; setAtualizando(true); setMsg("");
     try{ const r=await window._sb.functions.invoke("analisar-ads",{body:{account:conta.ad_account_id,dias:7,gerado_por:"manual"}}); if(r.error) throw new Error(r.error.message||"falha na análise"); setMsg("Leitura atualizada."); _adsLimpaCaches(); D.reload(); try{ window.dispatchEvent(new CustomEvent("pixels:ads-periodo")); }catch(_){} }
     catch(e){ setMsg("Não deu pra atualizar: "+(e.message||e)); }
     setAtualizando(false);
@@ -64760,7 +61845,10 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   // ritmo do mês (gasto do mês vem da série se o período cobrir; senão só verba)
   const mesIni=P.fim.slice(0,8)+"01"; const gastoMes=(cur.serie||[]).filter(function(s){return s.data>=mesIni;}).reduce(function(s,x){return s+Number(x.gasto||0);},0);
   const cobreMes=P.preset==="mes"; /* % da verba só faz sentido no mês corrente */ const diasMes=new Date(Number(P.fim.slice(0,4)),Number(P.fim.slice(5,7)),0).getDate(); const diaAtual=Number(P.fim.slice(8,10));
-  const ritmo=verba>0&&cobreMes?gastoMes/verba*100:null; const ritmoEsp=diaAtual/diasMes*100;
+  /* v96 (13/10/2026) R6: ritmo pela MESMA conta do placar do cliente (pxRitmoVerba, 17b) — antes o "esperado" usava o último dia do período
+     e o placar usava ontem; podiam dizer coisas diferentes no mesmo mês */
+  const _rv=(typeof pxRitmoVerba==="function"&&cobreMes&&verba>0)?pxRitmoVerba(gastoMes,verba,Number(P.fim.slice(0,4)),Number(P.fim.slice(5,7))):null;
+  const ritmo=verba>0&&cobreMes?gastoMes/verba*100:null; const ritmoEsp=_rv?_rv.pctMes:diaAtual/diasMes*100;
   /* frentes por tema (nome) — só campanhas de lead; marca à parte */
   const temas={}; leadCamps.forEach(function(c){ const t=_adsTemaDe(c.nome)||"Outras"; (temas[t]=temas[t]||[]).push(c); });
   const totGasto=leadCamps.reduce(function(s,c){return s+c.gasto;},0)||1, totRes=leadCamps.reduce(function(s,c){return s+Number(c.res||0);},0)||1;
@@ -64780,7 +61868,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const tipCusto=[["O que é","quanto custou, em média, cada lead no período: gasto SÓ das campanhas de lead ÷ leads (formulário nas campanhas de formulário, conversa nas de WhatsApp). Engajamento, reconhecimento, seguidores, vídeo e tráfego não entram."],["Como está",_adsBRL(T.cpa)+" contra "+_adsBRL(prev.cpa)+" no período anterior."],["Referência","a própria conta: campanhas acima de 1,5× essa média ficam em atenção; acima de 2× são críticas."],["Leitura",media&&prev.cpa?(T.cpa>prev.cpa*1.15?"piorou — vale olhar quais frentes puxaram o custo.":T.cpa<prev.cpa*0.85?"melhorou em relação ao período anterior.":"estável."):""]];
   return <AdsWrap>
     {compartilhada&&<div style={{fontSize:12,color:ADS.muted,marginBottom:10}}>Conta compartilhada com Bioter {compartilhada} — as praças só se distinguem pelo nome da campanha.</div>}
-    {P.parcial&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:ADS.warnSoft,border:"1px solid "+ADS.warn+"55",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5}}><b style={{color:ADS.warn}}>Hoje é dado parcial.</b><span style={{color:ADS.ink2}}>A coleta automática roda às 07:00; o que está aqui é o que a Meta já fechou até a última coleta. A Meta ainda reatribui conversas por até 7 dias.</span><AdsBtn onClick={coletarHoje} disabled={coletando} style={{marginLeft:"auto"}}>{coletando?"Coletando…":"↻ Puxar agora da Meta"}</AdsBtn>{msg&&<span style={{fontSize:12,color:ADS.muted}}>{msg}</span>}</div>}
+    {P.parcial&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:ADS.warnSoft,border:"1px solid "+ADS.warn+"55",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5}}><b style={{color:ADS.warn}}>Hoje é dado parcial.</b><span style={{color:ADS.ink2}}>{"A coleta automática começa às "+_adsHorarios().coleta+";"} o que está aqui é o que a Meta já fechou até a última coleta. A Meta ainda reatribui conversas por até 7 dias.</span><AdsBtn onClick={coletarHoje} disabled={coletando} style={{marginLeft:"auto"}}>{coletando?"Coletando…":"↻ Puxar agora da Meta"}</AdsBtn>{msg&&<span style={{fontSize:12,color:ADS.muted}}>{msg}</span>}</div>}
     {/* três números — sólidos, um tom cada */}
     {(function(){ const tipoDom=(function(){ const g={}; camps.forEach(function(c){ if(c.fam==="leads") g[c.tipo]=(g[c.tipo]||0)+c.gasto; }); return Object.keys(g).sort(function(x,y){return g[y]-g[x];})[0]||null; })(); const bench=tipoDom?_adsBenchCarteira(tipoDom):null; const cfgDom=tipoDom?_adsTipo(tipoDom):null;
       /* três números grandes, uma linha de contexto cada — o detalhe fica no tooltip */
@@ -64790,18 +61878,20 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
         <div style={{fontSize:12.5,fontWeight:700,minHeight:18,textShadow:"0 1px 1px rgba(15,13,26,.25)"}}>{bom===null?<span style={{color:ADS_SOL.sub,fontWeight:500}}>sem período anterior</span>:<span><span style={{color:bom?"#9fe3c3":"#ffb4b4"}}>{d>=0?"▲":"▼"} {Math.abs(Math.round(d))}%</span><span style={{color:ADS_SOL.sub,fontWeight:500}}> vs. período anterior</span></span>}</div>
         <div style={{fontSize:12.5,color:ADS_SOL.sub,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",textShadow:"0 1px 1px rgba(15,13,26,.2)"}}>{linha}</div>
       </div>; };
-      const linhaInv=T.gastoOutras>0.005?<span><b style={{color:"#fff"}}>{_adsBRL0(T.gastoLead)}</b> em lead · <b style={{color:"#fff"}}>{_adsBRL0(T.gastoOutras)}</b> em {outrasNomes.length&&outrasNomes.join(" + ").length<=24?outrasNomes.join(" + ").toLowerCase():"marca e outras"}</span>:(verba>0?(ritmo!==null?<span><b style={{color:"#fff"}}>{Math.round(ritmo)}%</b> da verba do mês · esperado {Math.round(ritmoEsp)}%</span>:<span>verba do mês {_adsBRL0(verba)}</span>):<span>verba mensal não definida</span>);
+      const linhaInv=T.gastoOutras>0.005?<span><b style={{color:"#fff"}}>{_adsBRL0(T.gastoLead)}</b> em lead · <b style={{color:"#fff"}}>{_adsBRL0(T.gastoOutras)}</b> em {outrasNomes.length&&outrasNomes.join(" + ").length<=24?outrasNomes.join(" + ").toLowerCase():"marca e outras"}</span>:(verba>0?(ritmo!==null?<span><b style={{color:"#fff"}}>{Math.round(ritmo)}%</b> da verba do mês · esperado {Math.round(ritmoEsp)}%{_rv&&_rv.txt?" · "+_rv.txt:""}</span>:<span>verba do mês {_adsBRL0(verba)}</span>):<span>verba mensal não definida</span>);
       const linhaCpl=bench&&T.cpa?<span>carteira em {cfgDom.curto}: <b style={{color:"#fff"}}>{_adsBRL(bench.mediana)}</b> · você {_adsX(T.cpa/bench.mediana)}</span>:<span>{_adsBRL0(T.gastoLead)} em campanhas de lead ÷ {_adsNum(T.resLead)}</span>;
+      /* v96 (13/10/2026) 2.13.02: cada número grande diz de onde veio (fonte, período, conta) ao passar o mouse */
+      const _orig=" · Fonte: Meta (API, coleta automática), conta "+(conta.nome||conta.ad_account_id)+(_adsUnidadeAtiva()?" (só a unidade "+_adsUnidadeLbl(_adsUnidadeAtiva())+")":"")+" · período "+_adsFmtD(P.ini)+" a "+_adsFmtD(P.fim)+".";
       return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.3fr .8fr 1.3fr",gap:14,marginBottom:22}}>
-      {Big(ADS_SOL.escuro,"Investido",_adsBRL(T.gasto),_adsDelta(T.gasto,prev.gasto),true,linhaInv,verba>0&&ritmo!==null?Math.round(ritmo)+"% da verba do mês ("+_adsBRL0(verba)+") · esperado "+Math.round(ritmoEsp)+"% até dia "+diaAtual:undefined)}
-      {Big(ADS_SOL.medio,"Leads",_adsNum(T.resultados),_adsDelta(T.resultados,prev.resultados),false,_adsSubLeads(T),ADS_DEF_LEAD)}
-      {Big(ADS_SOL.claro,"Custo por lead",_adsBRL(T.cpa),_adsDelta(T.cpa,prev.cpa),true,linhaCpl,ADS_DEF_CPL+(prev.cpa?" Era "+_adsBRL(prev.cpa)+" no período anterior.":""))}
+      {Big(ADS_SOL.escuro,"Investido",_adsBRL(T.gasto),_adsDelta(T.gasto,prev.gasto),true,linhaInv,(verba>0&&ritmo!==null?Math.round(ritmo)+"% da verba do mês ("+_adsBRL0(verba)+") · esperado "+Math.round(ritmoEsp)+"% até dia "+(_rv?_rv.diaRef:diaAtual)+(_rv&&_rv.txt?" · "+_rv.txt:""):"Gasto de todas as campanhas")+_orig)/* v96 R6 · 2.13.02 */}
+      {Big(ADS_SOL.medio,"Leads",_adsNum(T.resultados),_adsDelta(T.resultados,prev.resultados),false,_adsSubLeads(T),ADS_DEF_LEAD+_orig)}
+      {Big(ADS_SOL.claro,"Custo por lead",_adsBRL(T.cpa),_adsDelta(T.cpa,prev.cpa),true,linhaCpl,ADS_DEF_CPL+" Conta: "+_adsBRL(T.gastoLead)+" ÷ "+_adsNum(T.resLead)+"."+(prev.cpa?" Era "+_adsBRL(prev.cpa)+" no período anterior.":"")+_orig)}
     </div>; })()}
 
-    {/* leitura da IA — manchete curta, números com delta, Decidir agora / Deixe rodar */}
-    <AdsSec t="A leitura da IA" s={A?<span>gerada {_adsFmtHora(A.gerado_em)} · sempre sobre os <b style={{color:ADS.ink2}}>últimos 7 dias</b> ({_adsFmtD(A.periodo_inicio)} a {_adsFmtD(A.periodo_fim)}), independente do período escolhido acima · o detalhe por campanha está na aba <b style={{color:ADS.ink2}}>Alertas</b></span>:"ainda não gerada pra esta conta"}>
+    {/* leitura da IA — manchete curta, números com delta, Decidir agora / Deixe rodar * · v96 (13/10/2026) M14: com PIN a aba se chama 🧠 Decisões */}
+    {!SAI.leituraSaiu&&<AdsSec t="A leitura da IA" s={A?<span><b style={{color:ADS.warn}}>sai em {_adsFmtD(SAI.leituraAte)}</b> (os avisos ficam só com a IA nova) · gerada {_adsFmtHora(A.gerado_em)} · sempre sobre os <b style={{color:ADS.ink2}}>últimos 7 dias</b> ({_adsFmtD(A.periodo_inicio)} a {_adsFmtD(A.periodo_fim)}), independente do período escolhido acima · o detalhe por campanha está na aba <b style={{color:ADS.ink2}}>{_podeIA?"🧠 Decisões":"Alertas"}</b></span>:"ainda não gerada pra esta conta"}>
       <AdsLeituraIA A={A} conta={conta} camps={camps} media={media} isMob={isMob} canEdit={canEdit} atualizar={atualizar} atualizando={atualizando} msg={msg}/>
-    </AdsSec>
+    </AdsSec>}{/* v96 R2 */}
 
     {/* onde o dinheiro está — tabela objetiva por frente */}
     {(function(){
@@ -64874,14 +61964,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
    ═══════════════════════════════════════════════════════ */
 const ADS_ST_LBL={ACTIVE:["Ativa","o"],PAUSED:["Pausada","n"],CAMPAIGN_PAUSED:["Campanha pausada","n"],ADSET_PAUSED:["Conjunto pausado","n"],ARCHIVED:["Arquivada","n"],DELETED:["Excluída","n"],IN_PROCESS:["Processando","n"],WITH_ISSUES:["Com problemas","c"],DISAPPROVED:["Reprovada","c"],PENDING_REVIEW:["Em revisão","w"]};
 function _adsStatus(s){ return ADS_ST_LBL[s]||[String(s||"—"),"n"]; }
-function _adsResumoPublico(p){
-  p=p||{}; const out=[];
-  if(p.age_min||p.age_max) out.push((p.age_min||18)+"–"+(p.age_max||65)+(p.age_max>=65?"+":"")+" anos");
-  const g=Array.isArray(p.genders)?p.genders:[]; out.push(g.indexOf(1)>=0&&g.indexOf(2)<0?"homens":g.indexOf(2)>=0&&g.indexOf(1)<0?"mulheres":"todos os gêneros");
-  let ints=0; (p.flexible_spec||[]).forEach(function(f){ ints+=(f.interests||[]).length; }); if(ints) out.push(ints+" interesse"+(ints>1?"s":"")); else if(p.targeting_automation&&p.targeting_automation.advantage_audience) out.push("Advantage+");
-  const geo=p.geo_locations||{}; const nC=(geo.cities||[]).length+(geo.custom_locations||[]).length+(geo.regions||[]).length; if(nC) out.push(nC+" localiza"+(nC>1?"ções":"ção")); else if((geo.countries||[]).length) out.push(geo.countries.join(", "));
-  return out.join(" · ");
-}
+/* v96 (13/10/2026) M4: removido _adsResumoPublico (só a sub-aba conjuntos usava) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 // campanhas do período já classificadas + status do snapshot
 function _adsCampanhasEnriquecidas(cur,ent){
   const tipos=_adsTiposDasCampanhas(ent,cur&&cur.campanhas); const entCamp={}; (ent||[]).filter(function(e){return e.nivel==="campanha";}).forEach(function(e){ entCamp[e.entidade_id]=e; });
@@ -65282,10 +62365,7 @@ function pxPinsCobertura(alvos,todos,raioKm,opts){
   }
   return best;
 }
-/* mesma análise em vários raios — pro gestor ver quantos pins cada raio pede */
-function pxPinsPorRaio(alvos,todos,raios){
-  return (raios||[20,25,30,40,50,60,80]).map(function(r){ const x=pxPinsCobertura(alvos,todos,r); return {raio:r,pins:x.pins.length,sobreposicao:x.sobreposicao,vazamento:x.vazamento}; });
-}
+/* v96 (13/10/2026) M4: removido pxPinsPorRaio — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 const PX_PIN_RAIOS=[20,25,30,40,50,60,80];   // a Meta aceita de 1 a 80 km num pin
 const PX_UF_NOME={AC:"Acre",AL:"Alagoas",AP:"Amapá",AM:"Amazonas",BA:"Bahia",CE:"Ceará",DF:"Distrito Federal",ES:"Espírito Santo",GO:"Goiás",MA:"Maranhão",MT:"Mato Grosso",MS:"Mato Grosso do Sul",MG:"Minas Gerais",PA:"Pará",PB:"Paraíba",PR:"Paraná",PE:"Pernambuco",PI:"Piauí",RJ:"Rio de Janeiro",RN:"Rio Grande do Norte",RS:"Rio Grande do Sul",RO:"Rondônia",RR:"Roraima",SC:"Santa Catarina",SP:"São Paulo",SE:"Sergipe",TO:"Tocantins"};
 const _pinNorm=function(t){ return String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); };
@@ -65330,38 +62410,14 @@ function _pinResolveArea(a,todos){
   if(!campo) return [];
   return todos.filter(function(m){ return (!uf||m.uf===uf)&&_pinNorm(m[campo])===nm; });
 }
-async function pxPinsAreasDoBriefing(texto,clienteNome,todos){
-  if(typeof askClaude!=="function") throw new Error("IA indisponível");
-  const ufs=Array.from(new Set(todos.map(function(m){return m.uf;})));
-  const cat=ufs.map(function(uf){
-    const meso={}; const imed={};
-    todos.forEach(function(m){ if(m.uf!==uf) return; (meso[m.meso]=meso[m.meso]||new Set()).add(m.micro); (imed[m.intermediaria]=imed[m.intermediaria]||new Set()).add(m.imediata); });
-    return uf+"\n  mesorregiões › microrregiões: "+Object.keys(meso).sort().map(function(k){ return k+" ("+Array.from(meso[k]).sort().join(", ")+")"; }).join("; ")+
-      "\n  regiões intermediárias › imediatas: "+Object.keys(imed).sort().map(function(k){ return k+" ("+Array.from(imed[k]).sort().join(", ")+")"; }).join("; ");
-  }).join("\n");
-  const sys="Você é analista de mídia paga. Converte a descrição de área de atuação de um cliente em áreas OFICIAIS do IBGE, "+
-    "pra montar a segmentação geográfica de anúncios da Meta. Responda SÓ com JSON válido, sem markdown.";
-  const pedido="Cliente: "+(clienteNome||"")+"\n\nO QUE O CLIENTE ESCREVEU NO BRIEFING:\n"+texto+"\n\nÁREAS OFICIAIS DISPONÍVEIS (use os nomes EXATAMENTE assim):\n"+cat+
-    "\n\nDevolva {\"areas\":[{\"nivel\":\"municipio|microrregiao|mesorregiao|regiao_imediata|regiao_intermediaria|estado\",\"nome\":\"…\",\"uf\":\"SC\",\"grupo\":\"atual|expansao\",\"trecho\":\"o pedaço do briefing que justifica\"}],\"resumo\":\"uma frase do que entendeu\"}\n\n"+
-    "REGRAS:\n- grupo \"atual\" = onde o cliente JÁ atua/vende hoje (ou região de maior concentração); \"expansao\" = onde ele QUER chegar. Sem distinção no texto → \"atual\".\n"+
-    "- Cidade citada pelo nome → nivel municipio (nome exato do município).\n"+
-    "- Região informal → a área oficial MAIS JUSTA que corresponde, sem inflar: \"Extremo Oeste de SC\" = microrregião São Miguel do Oeste; \"Oeste Catarinense\" = mesorregião Oeste Catarinense; \"Sudoeste do Paraná\" = mesorregião Sudoeste Paranaense; \"Noroeste do RS\" perto da divisa com SC = as microrregiões do norte do Noroeste Rio-grandense, não a mesorregião inteira, a menos que o texto diga o estado/região toda.\n"+
-    "- Cidade de referência entre parênteses (\"Vale gaúcho (Estrela / Carlos Barbosa)\") → a microrregião/região imediata dessas cidades.\n"+
-    "- \"Todo o estado\" → nivel estado. Não repita área já contida em outra do mesmo grupo.\n- Só use nomes da lista acima.\n- No campo trecho NÃO use aspas duplas.";
-  /* até 2 tentativas: JSON quebrado (aspas dentro do "trecho") acontece de vez em quando */
-  let j=null, ultimo="";
-  for(let tent=0;tent<2&&!j;tent++){
-    const resp=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),max_tokens:2500,system:sys,messages:[{role:"user",content:pedido}]});
-    const txt=((resp&&resp.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
-    const ini=txt.indexOf("{"), fim=txt.lastIndexOf("}");
-    if(ini<0||fim<ini){ ultimo="a IA não devolveu as áreas"; continue; }
-    try{ j=JSON.parse(txt.slice(ini,fim+1)); }catch(e){ ultimo=(e&&e.message)||String(e); }
-  }
-  if(!j) throw new Error(ultimo||"a IA não devolveu as áreas");
-  const areas=(j.areas||[]).map(function(a){ return {nivel:a.nivel,nome:a.nome,uf:String(a.uf||"").toUpperCase(),grupo:a.grupo==="expansao"?"expansao":"atual",trecho:a.trecho||""}; });
-  return {areas:areas,resumo:j.resumo||""};
-}
+/* v96 (13/10/2026) G10 (rodada 2, escolha A): removido pxPinsAreasDoBriefing — a IA dos pins roda SÓ no servidor (edge pins-briefing pela fila);
+   a tela pede com midia_pins_refazer e acompanha com midia_pins_estado. Código original em mods/orig/. */
+/* v96 (13/10/2026) S12/G10: abrir a aba Público NÃO chama mais a IA nem grava nada — mostra a última análise salva
+   (o servidor refaz sozinho alguns minutos depois que o briefing muda: pins-briefing + fila midia_pins_fila).
+   Refazer na hora: botão "Refazer pins com IA", só para quem pode editar a mídia. Quem não pode editar
+   também não grava raio/expansão/área (muda só na própria tela). */
 function QGPinsBriefing({mc,isMob}){
+  const canEdit=(arguments[0]||{}).canEdit;   // v96 (13/10/2026) S8: canEdit lido assim para manter a assinatura exata (trava do marcos.json)
   const cid=(mc&&(mc.parent_client||mc.client_id))||""; const un=(mc&&mc.bioter_unit)||"";
   const [br,setBr]=useState(null);           // {texto, hash, ufs}
   const [salvo,setSalvo]=useState(undefined); // linha de midia_pins_briefing (null = não tem)
@@ -65373,8 +62429,11 @@ function QGPinsBriefing({mc,isMob}){
   const [aberto,setAberto]=useState(true);
   const [copiado,setCopiado]=useState(false);
   const ref=useRef(null); const mapRef=useRef(null); const voaRef=useRef({});
+  const [erroCarga,setErroCarga]=useState(""); const [tickCarga,setTickCarga]=useState(0);   /* v96 Q6 */
+  const _podeIA=(typeof useTCliPode==="function")?useTCliPode():false;   /* v96 (13/10/2026) S8: "Refazer pins com IA" gasta crédito — só aprovador com PIN */
+  const _ia=useAdsIaCredito();   /* v96 Q14 */
   /* briefing */
-  useEffect(function(){ let vivo=true; setBr(null); setSalvo(undefined); setErro("");
+  useEffect(function(){ let vivo=true; setBr(null); setSalvo(undefined); setErro(""); setErroCarga("");
     (async function(){
       try{
         const sb=window._sb; if(!sb||!cid) return;
@@ -65382,6 +62441,7 @@ function QGPinsBriefing({mc,isMob}){
           sb.from("clients").select("briefing_data,name").eq("client_id",cid).maybeSingle(),
           sb.from("midia_pins_briefing").select("*").eq("client_id",cid).eq("unidade",un).maybeSingle()]);
         if(!vivo) return;
+        if(c.error||s.error) throw new Error((c.error||s.error).message);   /* v96 Q6: erro não vira "briefing vazio" */
         let b=(c.data&&c.data.briefing_data)||{};
         /* (25/09/2026) unidade da Bioter lê SÓ o briefing dela — nunca cai no do grupo. Mesmo texto
            da edge function pins-briefing e do gatilho _pins_texto (senão o hash não bate). */
@@ -65396,39 +62456,39 @@ function QGPinsBriefing({mc,isMob}){
         const row=s.data||null; setSalvo(row);
         if(row){ setRaio(row.raio_km||40); setExp(!!row.incluir_expansao); }
         else { const _rb=(g("publico","raio_anuncio").match(/(\d+)/)||[])[1]; setRaio(_rb&&PX_PIN_RAIOS.indexOf(Number(_rb))>=0?Number(_rb):40); } /* (25/09/2026) raio do briefing */
-      }catch(e){ if(vivo) setErro((e&&e.message)||String(e)); }
+      }catch(e){ if(vivo){ const m=(e&&e.message)||String(e); _pxMidiaErro("os pins do briefing",cid+(un?"/"+un:""),m); setErroCarga(m); } }
     })();
-    return function(){ vivo=false; }; },[cid,un]);
+    return function(){ vivo=false; }; },[cid,un,tickCarga]);
   /* municípios das UFs (do texto + das áreas salvas) */
   const ufsNec=useMemo(function(){ const s=new Set((br&&br.ufs)||[]); ((salvo&&salvo.areas)||[]).forEach(function(a){ if(a.uf) s.add(a.uf); }); return Array.from(s).sort(); },[br,salvo]);
   useEffect(function(){ let vivo=true; if(!ufsNec.length){ setTodos(null); return; }
     _pinSedes(ufsNec).then(function(t){ if(vivo) setTodos(t); }).catch(function(e){ if(vivo) setErro("Municípios do IBGE: "+((e&&e.message)||e)); });
     return function(){ vivo=false; }; },[ufsNec.join(",")]);
+  /* v96 (13/10/2026) G10 (rodada 2): "Refazer pins com IA" só PEDE ao servidor (midia_pins_refazer, só sócio) — nenhuma IA roda na tela.
+     A tela mostra "atualizando…" lendo midia_pins_estado a cada 15 s (parado com a aba escondida) e, quando o pedido sai da fila,
+     relê a análise salva. */
+  const [fila,setFila]=useState(null);   /* {pendente, erro, pedido_em} da unidade deste cliente */
+  const lerFila=function(){ if(!window._sb||!cid) return Promise.resolve(null); return Promise.resolve(window._sb.rpc("midia_pins_estado",{p_client:cid})).then(function(r){ if(!r||r.error||!r.data||!r.data.ok) return null; const it=(r.data.fila||[]).find(function(f){ return String(f.unidade||"")===String(un||""); })||null; return it; },function(){ return null; }); };
+  useEffect(function(){ let vivo=true; lerFila().then(function(it){ if(vivo) setFila(it&&it.pendente?it:null); }); return function(){ vivo=false; }; },[cid,un]);
+  useEffect(function(){
+    if(!fila||!fila.pendente) return; let vivo=true; const t0=Date.now();
+    const id=setInterval(function(){ if(document.hidden) return; if(Date.now()-t0>15*60*1000){ clearInterval(id); return; }
+      lerFila().then(function(it){ if(!vivo) return; if(it&&it.pendente) return; clearInterval(id); setFila(null); if(it&&it.erro) setErro("O servidor não conseguiu refazer: "+it.erro); else setTickCarga(function(x){ return x+1; }); }); },15000);
+    return function(){ vivo=false; clearInterval(id); }; },[fila&&fila.pendente,cid,un]);
   const analisar=async function(){
-    if(!br||!br.texto){ return; }
-    setErro(""); setLendo("lendo o briefing");
+    if(!canEdit||!_podeIA) return;   /* v96 S12: só quem pode editar a mídia · v96 S8: e com o PIN aberto (o servidor também confere: só sócio) */
+    setErro(""); setLendo("pedindo ao servidor");
     try{
-      let t=todos; if(!t||!t.length) t=await _pinSedes(br.ufs.length?br.ufs:["SC","PR","RS"]);
-      setLendo("a IA está traduzindo o briefing em regiões do IBGE");
-      const r=await pxPinsAreasDoBriefing(br.texto,br.nome,t);
-      const extra=r.areas.map(function(a){return a.uf;}).filter(function(u){ return u&&!t.some(function(m){return m.uf===u;}); });
-      if(extra.length) t=await _pinSedes(Array.from(new Set(ufsNec.concat(extra))));
-      const row={client_id:cid,unidade:un,areas:r.areas,resumo:r.resumo,raio_km:raio,incluir_expansao:exp,briefing_hash:br.hash,
-        updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"",updated_at:new Date().toISOString()};
-      const {data,error}=await window._sb.from("midia_pins_briefing").upsert(row,{onConflict:"client_id,unidade"}).select("*").maybeSingle();
-      if(error) throw error;
-      setSalvo(data||row); setTodos(t);
-    }catch(e){ setErro("Não deu pra analisar: "+((e&&e.message)||e)); }
+      const r=await window._sb.rpc("midia_pins_refazer",{p_client:cid,p_unidade:un||""});
+      if(r.error) throw new Error(r.error.message); if(!r.data||!r.data.ok) throw new Error((r.data&&r.data.erro)||"o servidor recusou");
+      setFila({pendente:true,pedido_em:new Date().toISOString()});
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(r.data.msg||"Pedido na fila. O servidor refaz em até 5 minutos.");
+    }catch(e){ setErro("Não deu pra pedir: "+((e&&e.message)||e)); }
     setLendo("");
   };
-  /* primeira vez: analisa sozinho */
-  const autoFeito=useRef(false);
-  /* primeira vez, ou o briefing mudou desde a última leitura: refaz sozinho (o servidor também refaz
-     em até ~7 min depois que o briefing para de mudar — pins-briefing, fila midia_pins_fila) */
-  useEffect(function(){ if(autoFeito.current||salvo===undefined||!br||!br.texto||!todos||un==="paraguay") return;
-    if(salvo!==null&&salvo.briefing_hash===br.hash) return;
-    autoFeito.current=true; analisar(); },[salvo,br,todos]);
-  const guardar=function(patch){ if(!salvo||!salvo.id) return; setSalvo(Object.assign({},salvo,patch)); window._sb.from("midia_pins_briefing").update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",salvo.id).then(function(){}); };
+  /* v96 (13/10/2026) S12/G10: a análise automática ao abrir a aba saiu (gastava crédito de IA e gravava pins
+     por cima a cada abertura, de qualquer pessoa). Quem refaz sozinho é o servidor, depois que o briefing muda. */
+  const guardar=function(patch){ if(!salvo||!salvo.id) return; setSalvo(Object.assign({},salvo,patch)); if(!canEdit) return; /* v96 S12: sem permissão muda só na tela */ window._sb.from("midia_pins_briefing").update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",salvo.id).then(function(){}); };
   const tiraArea=function(i){ const a=(salvo.areas||[]).slice(); a.splice(i,1); guardar({areas:a}); };
   /* alvos */
   const areasUsadas=((salvo&&salvo.areas)||[]).filter(function(a){ return exp||a.grupo!=="expansao"; });
@@ -65480,18 +62540,22 @@ function QGPinsBriefing({mc,isMob}){
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ADS.muted} strokeWidth="2.6" style={{transform:aberto?"rotate(180deg)":"none"}}><polyline points="6 9 12 15 18 9"/></svg>
   </div>;
   let corpo=null;
-  if(erro) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.crit}}>{erro} <button type="button" onClick={analisar} style={{marginLeft:8,background:"none",border:"none",color:ADS.accent,fontWeight:800,cursor:"pointer"}}>tentar de novo</button></div>;
+  const btnRefazer=(canEdit&&_podeIA)?<button type="button" onClick={_ia.sem?_adsSemCreditoAvisar:analisar} style={{background:_ia.sem?ADS.line2:ADS.accent,color:"#fff",border:"none",borderRadius:99,padding:"5px 12px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:ADS_FONT,minHeight:0}}>Refazer pins com IA{_ia.sem?" · sem crédito de IA":""}</button>:null;   /* v96 S12 */
+  const _btnRef=(fila&&fila.pendente)?<span style={{fontSize:12,fontWeight:800,color:ADS.accent,background:ADS.accentSoft,borderRadius:99,padding:"5px 12px",whiteSpace:"nowrap"}}>atualizando… o servidor refaz em até 5 min</span>:btnRefazer;   /* v96 G10 (rodada 2) */
+  if(erroCarga) corpo=<div style={{padding:12}}><AdsErroCarga compacto tela="os pins do briefing" erro={erroCarga} onTentar={function(){ setTickCarga(function(x){return x+1;}); }}/></div>;   /* v96 Q6 */
+  else if(erro) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.crit}}>{erro} {canEdit&&<button type="button" onClick={analisar} style={{marginLeft:8,background:"none",border:"none",color:ADS.accent,fontWeight:800,cursor:"pointer"}}>tentar de novo</button>}</div>;
   else if(!br||salvo===undefined) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>Lendo o briefing…</div>;
   else if(un==="paraguay") corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>Unidade fora do Brasil — a base do IBGE não cobre o Paraguai. Os pins desta unidade ficam a critério do gestor.</div>;
   else if(!br.texto) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>O briefing{un?" desta unidade":""} não tem <b>Cidades de atuação</b> nem <b>Localização geográfica</b> preenchidas. Preenche lá e a análise aparece aqui.</div>;
-  else if(lendo||!salvo) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.accent,fontWeight:700}}>{lendo||"preparando"}…</div>;
+  else if(lendo) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.accent,fontWeight:700}}>{lendo}…</div>;
+  else if(!salvo) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}><span>Ainda não há análise de pins salva para este briefing. O servidor faz sozinho alguns minutos depois que o briefing muda.</span>{_btnRef}</div>;   /* v96 S12: sem análise automática */
   else corpo=<div>
     <div style={{padding:"10px 16px",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",borderBottom:"1px solid "+ADS.line,background:"#fbfaff"}}>
       <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".08em",textTransform:"uppercase"}}>Raio</span>
       {PX_PIN_RAIOS.map(function(r){ const x=porRaio.find(function(p){return p.raio===r;}); return <span key={r}>{Chip(raio===r,r+" km"+(x?" · "+x.pins+" pin"+(x.pins>1?"s":""):""),function(){ setRaio(r); guardar({raio_km:r}); },x?(x.pins+" pins · "+x.sob+" cidades em 2+ pins · "+x.vaza+" cidades de fora dentro dos raios"):"")}</span>; })}
       {temExp&&<span style={{marginLeft:isMob?0:"auto",display:"inline-flex",gap:6}}>{Chip(!exp,"Atuação atual",function(){ setExp(false); guardar({incluir_expansao:false}); })}{Chip(exp,"+ expansão",function(){ setExp(true); guardar({incluir_expansao:true}); })}</span>}
     </div>
-    {mudouBriefing&&<div style={{padding:"8px 16px",background:ADS.warnSoft,color:"#6b4d00",fontSize:12,borderBottom:"1px solid "+ADS.line}}>O briefing mudou depois desta análise. <button type="button" onClick={analisar} style={{background:"none",border:"none",color:ADS.accent,fontWeight:800,cursor:"pointer",padding:0}}>Refazer</button></div>}
+    {mudouBriefing&&<div style={{padding:"8px 16px",background:ADS.warnSoft,color:"#6b4d00",fontSize:12,borderBottom:"1px solid "+ADS.line}}>O briefing mudou depois desta análise. {(fila&&fila.pendente)?<b>Atualizando… o servidor refaz em até 5 min.</b>:(canEdit&&_podeIA)?<button type="button" onClick={_ia.sem?_adsSemCreditoAvisar:analisar} style={{background:"none",border:"none",color:ADS.accent,fontWeight:800,cursor:"pointer",padding:0}}>Refazer pins com IA</button>:<span>O servidor refaz sozinho em alguns minutos.</span>}</div>}{/* v96 S8/G10 */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.6fr) minmax(260px,1fr)"}}>
       <div style={{position:"relative"}}>
         <div ref={ref} style={{height:isMob?340:460,background:"#eef0f4"}}/>
@@ -65529,9 +62593,9 @@ function QGPinsBriefing({mc,isMob}){
         {(salvo.areas||[]).map(function(a,i){ const n=todos?_pinResolveArea(a,todos).length:0; const off=a.grupo==="expansao"&&!exp;
           return <span key={i} title={a.trecho||""} style={{display:"inline-flex",alignItems:"center",gap:6,background:off?"#f4f3f8":a.grupo==="expansao"?"#fff7ed":ADS.okSoft,color:off?ADS.muted:a.grupo==="expansao"?"#9a3412":ADS.ok,border:"1px solid "+(off?ADS.line:a.grupo==="expansao"?"#fed7aa":"#bfe6d3"),borderRadius:99,padding:"3px 6px 3px 10px",fontSize:11.5,fontWeight:700,opacity:off?.7:1}}>
             {a.nome} – {a.uf}<span style={{fontWeight:600,opacity:.75}}>· {String(a.nivel||"").replace("regiao_","região ").replace("microrregiao","microrregião").replace("mesorregiao","mesorregião").replace("municipio","cidade")} · {n} cid.{a.grupo==="expansao"?" · expansão":""}</span>
-            <button type="button" onClick={function(){ tiraArea(i); }} title="Tirar esta área" style={{background:"none",border:"none",color:"inherit",cursor:"pointer",padding:"0 2px",fontSize:13,lineHeight:1}}>×</button>
+            {canEdit&&<button type="button" onClick={function(){ tiraArea(i); }} title="Tirar esta área" style={{background:"none",border:"none",color:"inherit",cursor:"pointer",padding:"0 2px",fontSize:13,lineHeight:1}}>×</button>}
           </span>; })}
-        <button type="button" onClick={analisar} style={{background:"none",border:"1px dashed "+ADS.line2,borderRadius:99,padding:"3px 10px",fontSize:11.5,fontWeight:700,color:ADS.accent,cursor:"pointer"}}>↻ ler o briefing de novo</button>
+        {(fila&&fila.pendente)?<span style={{fontSize:11.5,fontWeight:700,color:ADS.accent}}>atualizando…</span>:(canEdit&&_podeIA)&&<button type="button" onClick={_ia.sem?_adsSemCreditoAvisar:analisar} style={{background:"none",border:"1px dashed "+ADS.line2,borderRadius:99,padding:"3px 10px",fontSize:11.5,fontWeight:700,color:ADS.accent,cursor:"pointer"}}>↻ Refazer pins com IA</button>}{/* v96 S8/G10: mesma trava dos outros botões */}
       </div>
       {semMatch.length>0&&<div style={{fontSize:11,color:ADS.warn,marginTop:6}}>Não achei no IBGE: {semMatch.map(function(a){return a.nome+" – "+a.uf;}).join(", ")}</div>}
     </div>
@@ -65546,7 +62610,7 @@ function QGPinsBriefing({mc,isMob}){
    "sincronizar briefing com Gestão de mídia… público-alvo, faixa etária, cliente dos sonhos,
     tudo que for relevante" → lê DIRETO do briefing (sem cópia; Bioter: só a unidade), mostra no
    topo da aba Público e compara com o que a Meta entrega (idade, gênero, estado) no período.
-   Divergência vira aviso. A mesma ficha vai pro analisar-ads (leitura da IA, aba Alertas).
+   Divergência vira aviso. A mesma ficha vai pro analisar-ads (Leitura da IA, na Visão geral).   v96 (13/10/2026) M14
    ═══════════════════════════════════════════════════════════════════════════════════ */
 const PX_FICHA_MIDIA=[
   {sec:"publico",   id:"cliente_ideal",        l:"Cliente dos sonhos",            grande:true},
@@ -65669,7 +62733,7 @@ function QGFichaBriefing({mc,rows,isMob,periodoLbl}){
           {avisos.map(function(a,i){ return <div key={"a"+i} style={{background:ADS.warnSoft,border:"1px solid #f3d38a",borderRadius:10,padding:"8px 11px"}}><div style={{fontSize:12,fontWeight:800,color:"#6b4d00"}}>⚠ {a.t} fora do briefing</div><div style={{fontSize:11.5,color:"#6b4d00",marginTop:2}}>{a.b}</div><div style={{fontSize:11.5,color:ADS.ink2,marginTop:2}}>{a.m}</div></div>; })}
           {bate.map(function(a,i){ return <div key={"b"+i} style={{background:ADS.okSoft,border:"1px solid #bfe6d3",borderRadius:10,padding:"8px 11px"}}><div style={{fontSize:12,fontWeight:800,color:ADS.ok}}>✓ {a.t} bate</div><div style={{fontSize:11.5,color:ADS.ok,marginTop:2}}>{a.b}</div><div style={{fontSize:11.5,color:ADS.ink2,marginTop:2}}>{a.m}</div></div>; })}
         </div>
-        <div style={{fontSize:11,color:ADS.muted,marginTop:6}}>Com Advantage+ ligado a Meta pode ir além do público definido — diferença aqui é pra conferir se o lead dessa faixa vira venda (aba Leads).</div>
+        <div style={{fontSize:11,color:ADS.muted,marginTop:6}}>Com Advantage+ ligado a Meta pode ir além do público definido — diferença aqui é pra conferir com o cliente se o lead dessa faixa vira venda.</div>   {/* v96 (13/10/2026) M14 */}
       </div>}
       <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:"12px 18px"}}>{pub.map(Bloco)}</div>
       {(camp.length>0||neg.length>0)&&<div style={{borderTop:"1px solid "+ADS.line}}>
@@ -65726,6 +62790,7 @@ function AdsPublicoBloco({p,isMob}){
 function AdsEntregaReal({accountId,P,campId,cfg,isMob}){
   const Q=useAdsQuebras(accountId,P,[campId]);
   if(Q.loading) return <div style={{fontSize:12,color:ADS.muted}}>Lendo entrega por posicionamento…</div>;
+  if(Q.erro) return <AdsErroCarga compacto tela="a entrega por posicionamento" erro={Q.erro} onTentar={Q.reload}/>;   /* v96 (13/10/2026) Q6 (revisão RB) */
   const rows=(Q.rows||[]).filter(function(r){return r.dimensao==="posicionamento"&&Number(r.gasto)>0;}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);});
   if(!rows.length) return <div style={{fontSize:12.5,color:ADS.muted}}>Sem quebra por posicionamento neste período.</div>;
   const tot=rows.reduce(function(s,r){return s+Number(r.gasto);},0)||1; const top=rows.slice(0,8); const resto=rows.slice(8).reduce(function(s,r){return s+Number(r.gasto);},0);
@@ -65775,7 +62840,7 @@ function useAdsAtivosCampanha(accountId,campId,P){
   const [st,setSt]=useState({loading:true,porAd:{}});
   const key=(P&&P.key)||"";
   useEffect(function(){ if(!accountId||!campId||!P||!window._sb){ setSt({loading:false,porAd:{}}); return; } let alive=true; setSt({loading:true,porAd:{}});
-    window._sb.rpc("ads_ativos_campanha",{p_account:accountId,p_campaign:campId,p_de:P.ini,p_ate:P.fim}).then(function(r){ if(!alive) return; const m={}; (r.error?[]:(r.data||[])).forEach(function(x){ (m[x.ad_id]=m[x.ad_id]||[]).push(x); }); setSt({loading:false,porAd:m}); }).catch(function(){ if(alive) setSt({loading:false,porAd:{}}); });
+    _adsTudo(function(c){ return window._sb.rpc("ads_ativos_campanha",{p_account:accountId,p_campaign:campId,p_de:P.ini,p_ate:P.fim},c?{count:"exact"}:undefined).order("ad_id").order("dimensao").order("valor"); }).then(/* v96 G4 */function(r){ if(!alive) return; const m={}; (r.error?[]:(r.data||[])).forEach(function(x){ (m[x.ad_id]=m[x.ad_id]||[]).push(x); }); setSt({loading:false,porAd:m}); }).catch(function(){ if(alive) setSt({loading:false,porAd:{}}); });
     return function(){ alive=false; }; },[accountId,campId,key]);
   return st;
 }
@@ -66025,28 +63090,11 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
       </AdsSec>}
     </>}
 
-    {sub==="conjuntos"&&<AdsSec t={"Conjuntos · "+conjComDados.length} s={"fatia da verba × "+(cfg.custoLbl||"custo")+" · "+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)+" · destaque quando a verba está invertida"}>
-      {conjComDados.length===0?<div style={{fontSize:13,color:ADS.muted}}>Nenhum conjunto com dados.</div>:
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {invertido&&<div style={{background:ADS.warnSoft,border:"1px solid "+ADS.warn+"66",borderRadius:12,padding:"11px 14px",fontSize:13}}><b style={{color:ADS.warn}}>Verba invertida.</b> {_adsNomeCurto(piorCj.nome)} tem o pior custo ({_adsBRL(piorCj.m.cpa)}) e recebe {Math.round(Number(piorCj.m.gasto)/somaCj*100)}% da verba, enquanto {_adsNomeCurto(melhorCj.nome)} entrega a {_adsBRL(melhorCj.m.cpa)} com {Math.round(Number(melhorCj.m.gasto)/somaCj*100)}%.</div>}
-        {cjOrd.map(function(x){ const m=x.m||{}; const n=_adsNivelCusto(m.cpa,mediaConta,m.resultados); const fatia=Number(m.gasto||0)/somaCj*100; const st2=_adsStatus(x.status_efetivo); const fs=x.fase_aprendizado; const fsL=fs==="SUCCESS"?["concluído","o"]:fs==="LEARNING"?["aprendendo","w"]:fs==="LEARNING_LIMITED"?["limitado","c"]:null; const poucos2=Number(m.resultados||0)<ADS_MIN_RESULTADOS;
-          return <AdsCard key={x.entidade_id} borda={x===piorCj&&invertido?ADS.warn:x===melhorCj&&cjValidos.length>1?ADS.ok:ADS.line} style={{padding:"14px 18px"}}>
-            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.6fr 1fr 120px",gap:16,alignItems:"center"}}>
-              <div style={{minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{width:8,height:8,borderRadius:"50%",background:x.status_efetivo==="ACTIVE"?ADS.ok:"#c9c5d6"}}/><span style={{fontWeight:800,fontSize:14}}>{x.nome}</span>{fsL&&<AdsTag n={fsL[1]}>{fsL[0]}</AdsTag>}{x.status_efetivo!=="ACTIVE"&&<span style={{fontSize:11,color:ADS.muted}}>{st2[0].toLowerCase()}</span>}{poucos2&&<AdsTag n="n">amostra pequena</AdsTag>}</div>
-                <div style={{fontSize:12,color:ADS.muted,marginTop:3}}>{_adsResumoPublico(x.publico)}{x.otimizacao?" · otimiza pra "+(x.otimizacao||"").toLowerCase().replace(/_/g," "):""}</div>
-                <div style={{display:"flex",gap:14,marginTop:8,fontSize:12,color:ADS.ink2,flexWrap:"wrap"}}><span><b style={ADS_MONO}>{_adsNum(m.impressoes)}</b> impressões</span><span>CTR <b style={Object.assign({color:_adsCor(Number(m.ctr||0)>1.5?"o":Number(m.ctr||0)>=1?"w":"c")},ADS_MONO)}>{_adsPct(m.ctr,2)}</b></span><span>freq. <b style={ADS_MONO}>{Number(m.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:2})}</b></span><span><b style={ADS_MONO}>{_adsNum(m.resultados)}</b> {cfg.resLbl||"resultados"}</span></div>
-              </div>
-              <div><div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:ADS.muted,marginBottom:4}}><span>fatia da verba</span><span style={Object.assign({fontWeight:700,color:ADS.ink2},ADS_MONO)}>{Math.round(fatia)}% · {_adsBRL0(m.gasto)}</span></div><AdsBarra pct={fatia} h={10} cor="#b58ff2" alt={1}/></div>
-              <div style={{textAlign:isMob?"left":"right"}}><div style={{fontSize:24,fontWeight:900,letterSpacing:"-.6px",color:_adsCor(n)}}>{m.cpa?_adsBRL(m.cpa):"—"}</div><div style={{fontSize:11,color:ADS.muted}}>por {cfg.resSing||"resultado"}</div></div>
-            </div>
-          </AdsCard>; })}
-      </div>}
-    </AdsSec>}
+    {/* v96 (13/10/2026) M4: removida a sub-aba "conjuntos" — não estava no menu (SUBS), ninguém chegava nela; os conjuntos aparecem em "Conjuntos e anúncios" */}
 
     {sub==="estrutura"&&(E.loading?<AdsLoading t="Lendo conjuntos e anúncios…"/>:<QGAdsEstrutura conta={conta} campId={campId} P={P} cfg={cfg} tipo={tipo} X={X} ent={ent} E={E} isMob={isMob} notaConj={notaConj} mediaConta={mediaConta}/>)}
     {sub==="criativos"&&<QGAdsCriativos mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
-    {sub==="publico"&&<QGAdsPublico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
+    {sub==="publico"&&<QGAdsPublico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido canEdit={canEdit}/>}
     {sub==="historico"&&<QGAdsHistorico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
   </AdsWrap>;
 }
@@ -66076,7 +63124,16 @@ function useAdsSemanaAnterior(accountId,de,ate){
   return st;
 }
 /* ── Leitura da IA (painel escuro): manchete curta + 3 números com delta + Decidir agora (impacto em R$, ação, feito) + Deixe rodar ── */
-function AdsLeituraIA({A,conta,camps,media,isMob,canEdit,atualizar,atualizando,msg}){
+/* v96 (13/10/2026) Q14/2.10.13: botão de IA sem crédito avisa NA HORA (usa o saldo do 17e) em vez de chamar a IA e falhar depois */
+function useAdsIaCredito(){ return (typeof useIaSemCredito==="function")?useIaSemCredito():{sem:false}; }
+const _adsSemCreditoAvisar=function(){ if(typeof _tiaAvisarSemCredito==="function") _tiaAvisarSemCredito(); else if(typeof pixelsToast!=="undefined") pixelsToast.error("A IA está sem crédito."); };
+function AdsLeituraIA({A,conta,camps,media,isMob,canEdit:_canEditTela,atualizar,atualizando,msg}){
+  /* v96 (13/10/2026) S8 (escolha A): a leitura é para toda a equipe ler; o que gasta crédito de IA ou decide
+     ("↻ Atualizar leitura", "Feito", "Ignorar", "🧠 Resolver") só para aprovador com o PIN aberto (useTCliPode, do 17e).
+     O Erick (e o "Visualizar como") vê o texto e o botão "Abrir", sem nenhum botão de IA. */
+  const _podeIA=(typeof useTCliPode==="function")?useTCliPode():false;
+  const canEdit=!!(_canEditTela&&_podeIA);
+  const _ia=useAdsIaCredito();   /* v96 Q14 */
   const accountId=conta&&conta.ad_account_id;
   const S=useAdsSugestoesStatus(accountId);
   const prevSem=useAdsSemanaAnterior(accountId,A&&A.periodo_inicio,A&&A.periodo_fim);
@@ -66110,9 +63167,9 @@ function AdsLeituraIA({A,conta,camps,media,isMob,canEdit,atualizar,atualizando,m
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <span style={{display:"inline-flex",gap:7,alignItems:"center",background:criticos.length?"rgba(255,120,120,.16)":"rgba(255,255,255,.10)",border:"1px solid "+(criticos.length?"rgba(255,140,140,.35)":"rgba(255,255,255,.14)"),borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase"}}><span style={{width:7,height:7,borderRadius:"50%",background:criticos.length?"#ff8a8a":"#9fe3c3"}}/>{pendentes.length?pendentes.length+" decis"+(pendentes.length>1?"ões":"ão")+" pra hoje":"nada urgente"}</span>
       {A&&<span style={{fontSize:11.5,color:"rgba(255,255,255,.55)"}}>últimos 7 dias · {_adsFmtD(A.periodo_inicio)} – {_adsFmtD(A.periodo_fim)} · gerada {_adsFmtHora(A.gerado_em)}</span>}
-      {canEdit&&<button onClick={atualizar} disabled={atualizando} style={{marginLeft:"auto",background:"rgba(255,255,255,.12)",color:"#fff",border:"1px solid rgba(255,255,255,.22)",borderRadius:10,padding:"7px 13px",fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:ADS_FONT,opacity:atualizando?.7:1,minHeight:0}}>{atualizando?"Analisando… ~20 s":(A?"↻ Atualizar leitura":"Gerar leitura")}</button>}
+      {canEdit&&<button onClick={_ia.sem?_adsSemCreditoAvisar:atualizar} disabled={atualizando} title={_ia.sem?"A IA está sem crédito — clique para ver o saldo":undefined} style={{marginLeft:"auto",background:"rgba(255,255,255,.12)",color:_ia.sem?"rgba(255,255,255,.5)":"#fff",border:"1px solid rgba(255,255,255,.22)",borderRadius:10,padding:"7px 13px",fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:ADS_FONT,opacity:atualizando?.7:1,minHeight:0}}>{atualizando?"Analisando… ~20 s":(A?"↻ Atualizar leitura":"Gerar leitura")+(_ia.sem?" · sem crédito de IA":"")}</button>}
     </div>
-    {!A&&<div style={{marginTop:14}}><h3 style={{margin:"0 0 6px",fontSize:18,fontWeight:800}}>Ainda não há leitura pra {conta.nome}.</h3><p style={{margin:0,fontSize:13,color:"rgba(255,255,255,.8)"}}>A análise automática roda todo dia de manhã nas contas com gasto. {canEdit?"Você pode gerar agora (~20 s).":""}</p></div>}
+    {!A&&<div style={{marginTop:14}}><h3 style={{margin:"0 0 6px",fontSize:18,fontWeight:800}}>Ainda não há leitura pra {conta.nome}.</h3><p style={{margin:0,fontSize:13,color:"rgba(255,255,255,.8)"}}>A análise automática roda todo dia de manhã nas contas com gasto. {canEdit?"Você pode gerar agora (~20 s).":"Quem gera é um aprovador, com o PIN aberto."}</p></div>}   {/* v96 S8 */}
     {A&&<>
       {/* manchete + números, uma linha só */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) auto",gap:isMob?14:28,alignItems:"center",marginTop:18}}>
@@ -66137,7 +63194,7 @@ function AdsLeituraIA({A,conta,camps,media,isMob,canEdit,atualizar,atualizando,m
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{width:6,height:6,borderRadius:"50%",background:cor,flexShrink:0}}/><span style={{fontSize:14,fontWeight:700,lineHeight:1.35}}>{d.titulo}</span></div>
               <div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:3,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>{fatos.map(function(f,j){ return <span key={j}>{j?"· ":""}{f.indexOf("a mais")>0?<b style={{color:"#ffc98a"}}>{f}</b>:f}</span>; })}{d.acao&&<span style={{color:"#fff",fontWeight:700}}>→ {d.acao}</span>}{!d.acao&&!fatos.length&&d.detalhe&&d.detalhe!==d.titulo&&<span>{d.detalhe}</span>}</div>
             </div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{typeof TCliResolver==="function"&&<TCliResolver/>/* v82 Resolver */}{c&&Btn("Abrir",function(){ _adsAbrirCampanha(c.id); },true)}{canEdit&&Btn("Feito",function(){ S.marcar(d.chave,"feito",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}{canEdit&&Btn("Ignorar",function(){ S.marcar(d.chave,"ignorado",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{typeof TCliResolver==="function"&&<TCliResolver/>/* v82 Resolver */}{c&&Btn("Abrir",function(){ _adsAbrirCampanha(c.id); },true)}{/* v96 (13/10/2026) R1: "Feito"/"Ignorar" saíram daqui — a decisão é tomada num lugar só, a 🧠 Decisões do cliente (o "🧠 Resolver" leva até lá). Aqui só lê e aponta. */}</div>
           </div>; })}
         {pendentes.length>3&&<div style={{marginTop:6}}>{Btn(verTudo?"Mostrar só 3":"Ver mais "+(pendentes.length-3),function(){ setVerTudo(!verTudo); })}</div>}
       </div>
@@ -66161,19 +63218,22 @@ function AdsLeituraIA({A,conta,camps,media,isMob,canEdit,atualizar,atualizando,m
    ═══════════════════════════════════════════════════════ */
 function useAdsAtivosConta(accountId,P){
   const [st,setSt]=useState({loading:true,rows:[]}); const key=(P&&P.key)||"";
+  const [tick,setTick]=useState(0);   /* v96 (13/10/2026) Q6: erro vira erro (com Tentar de novo), não "sem dados" */
   useEffect(function(){ if(!accountId||!P||!window._sb){ setSt({loading:false,rows:[]}); return; } let alive=true; setSt({loading:true,rows:[]});
-    window._sb.rpc("ads_ativos_conta",{p_account:accountId,p_de:P.ini,p_ate:P.fim}).then(function(r){ if(alive) setSt({loading:false,rows:r.error?[]:(r.data||[])}); }).catch(function(){ if(alive) setSt({loading:false,rows:[]}); });
-    return function(){ alive=false; }; },[accountId,key]);
-  return st;
+    _adsTudo(function(c){ return window._sb.rpc("ads_ativos_conta",{p_account:accountId,p_de:P.ini,p_ate:P.fim},c?{count:"exact"}:undefined).order("campaign_id").order("ad_id").order("dimensao").order("valor"); }).then(/* v96 G4 */function(r){ if(!alive) return; if(r.error){ _pxMidiaErro("os ativos dos anúncios (Alertas)",accountId,r.error.message); setSt({loading:false,rows:[],erro:r.error.message}); return; } setSt({loading:false,rows:r.data||[]}); }).catch(function(e){ if(!alive) return; const m=(e&&e.message)||String(e); _pxMidiaErro("os ativos dos anúncios (Alertas)",accountId,m); setSt({loading:false,rows:[],erro:m}); });
+    return function(){ alive=false; }; },[accountId,key,tick]);
+  return Object.assign({},st,{reload:function(){ setTick(function(x){return x+1;}); }});
 }
 /* quebras por campanha (idade + posicionamento) — uma chamada por campanha de lead com gasto */
 function useAdsQuebrasPorCampanha(accountId,P,ids){
   const key=(ids||[]).slice().sort().join(",")+"|"+((P&&P.key)||"");
   const [st,setSt]=useState({loading:true,por:{}});
+  const [tick,setTick]=useState(0);   /* v96 (13/10/2026) Q6: erro vira erro (com Tentar de novo), não "sem dados" */
   useEffect(function(){ if(!accountId||!P||!ids||!ids.length||!window._sb){ setSt({loading:false,por:{}}); return; } let alive=true; setSt({loading:true,por:{}});
-    Promise.all(ids.slice(0,12).map(function(id){ return window._sb.rpc("ads_quebras_conta",{p_account:accountId,p_de:P.ini,p_ate:P.fim,p_campaigns:[id]}).then(function(r){ return [id,r.error?[]:(r.data||[])]; }).catch(function(){ return [id,[]]; }); })).then(function(arr){ if(!alive) return; const m={}; arr.forEach(function(x){ m[x[0]]=x[1]; }); setSt({loading:false,por:m}); });
-    return function(){ alive=false; }; },[accountId,key]);
-  return st;
+    let erro=null;
+    Promise.all(ids.slice(0,12).map(function(id){ return _adsTudo(function(c){ return window._sb.rpc("ads_quebras_conta",{p_account:accountId,p_de:P.ini,p_ate:P.fim,p_campaigns:[id]},c?{count:"exact"}:undefined).order("dimensao").order("valor"); }).then(/* v96 G4 */function(r){ if(r.error) erro=r.error.message; return [id,r.error?[]:(r.data||[])]; }).catch(function(e){ erro=(e&&e.message)||String(e); return [id,[]]; }); })).then(function(arr){ if(!alive) return; const m={}; arr.forEach(function(x){ m[x[0]]=x[1]; }); if(erro) _pxMidiaErro("o público das campanhas (Alertas)",accountId,erro); setSt({loading:false,por:m,erro:erro}); });
+    return function(){ alive=false; }; },[accountId,key,tick]);
+  return Object.assign({},st,{reload:function(){ setTick(function(x){return x+1;}); }});
 }
 function _adsSugestoes(ctx){
   const camps=ctx.camps, medias=ctx.medias, ent=ctx.ent, conj=ctx.conjuntos||[], ativos=ctx.ativos||[], quebras=ctx.quebras||{};
@@ -66212,7 +63272,7 @@ function _adsSugestoes(ctx){
     /* R9: aprendizado limitado */
     const cjEnt=ent.filter(function(e){return e.nivel==="conjunto"&&e.parent_id===c.id&&e.status_efetivo==="ACTIVE";}); const lim=cjEnt.filter(function(e){return e.fase_aprendizado==="LEARNING_LIMITED";}); if(lim.length&&cjEnt.length>=2) add(9,gasto*0.15,"Consolidar os conjuntos de "+nome,lim.length+" de "+cjEnt.length+" conjuntos ativos em \"aprendizado limitado\" — a verba está pulverizada e nenhum junta resultados suficientes (a Meta pede ~50 por semana).","Juntar conjuntos parecidos num só (ou subir a verba dos que ficam).",null);
     /* R8: quebras que só gastam (idade / posicionamento), só com base */
-    const q=quebras[c.id]||[]; [["idade","faixa de "],["posicionamento",""]].forEach(function(dim){ const rows=q.filter(function(r){return r.dimensao===dim[0]&&Number(r.gasto)>0;}); const tq=rows.reduce(function(s,r){return s+Number(r.gasto);},0); if(!(tq>=100)||res<5) return; const ruim=rows.filter(function(r){ return Number(r.gasto)/tq>=0.2&&Number(r.resultados||0)===0; }).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);})[0]; if(!ruim) return; const lblV=_adsValLbl(dim[0],ruim.valor); out.push({chave:"r8:"+c.id+":"+dim[0]+":"+ruim.valor,regra:8,c:c,prio:Number(ruim.gasto),titulo:(dim[0]==="idade"?"Excluir a faixa "+lblV:"Tirar o posicionamento "+lblV)+" de "+nome,motivo:lblV+" levou "+Math.round(Number(ruim.gasto)/tq*100)+"% da verba ("+brl(ruim.gasto)+") e não trouxe nenhum "+lbl+", enquanto a campanha fez "+res+".",acao:dim[0]==="idade"?(c.ent&&c.ent.publico&&c.ent.publico.targeting_automation&&Number(c.ent.publico.targeting_automation.advantage_audience)===1?"Com Advantage+ ligado a idade é só sugestão: mudar pra público original e limitar a faixa.":"Ajustar a faixa etária do conjunto."):"Editar posicionamentos manuais no conjunto e desmarcar esse.",impacto:Number(ruim.gasto)}); });
+    const q=quebras[c.id]||[]; [["idade","faixa de "],["posicionamento",""]].forEach(function(dim){ const rows=q.filter(function(r){return r.dimensao===dim[0]&&Number(r.gasto)>0;}); const tq=rows.reduce(function(s,r){return s+Number(r.gasto);},0); if(!(tq>=100)||res<ADS_MIN_RESULTADOS) return;/* v96 R16: régua única (era 5) */ const ruim=rows.filter(function(r){ return Number(r.gasto)/tq>=0.2&&Number(r.resultados||0)===0; }).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);})[0]; if(!ruim) return; const lblV=_adsValLbl(dim[0],ruim.valor); out.push({chave:"r8:"+c.id+":"+dim[0]+":"+ruim.valor,regra:8,c:c,prio:Number(ruim.gasto),titulo:(dim[0]==="idade"?"Excluir a faixa "+lblV:"Tirar o posicionamento "+lblV)+" de "+nome,motivo:lblV+" levou "+Math.round(Number(ruim.gasto)/tq*100)+"% da verba ("+brl(ruim.gasto)+") e não trouxe nenhum "+lbl+", enquanto a campanha fez "+res+".",acao:dim[0]==="idade"?(c.ent&&c.ent.publico&&c.ent.publico.targeting_automation&&Number(c.ent.publico.targeting_automation.advantage_audience)===1?"Com Advantage+ ligado a idade é só sugestão: mudar pra público original e limitar a faixa.":"Ajustar a faixa etária do conjunto."):"Editar posicionamentos manuais no conjunto e desmarcar esse.",impacto:Number(ruim.gasto)}); });
   });
   out.sort(function(a,b){ return (b.prio||0)-(a.prio||0); });
   return out;
@@ -66419,9 +63479,10 @@ function AdsEstrategiaDetalhe({s,ctx,isMob}){
   </div>;
 }
 function QGAdsEstrategia({mc,conta,isMob,canEdit}){
+  const SAI=useAdsSaida();   /* v96 R2 (rodada 2) */
   const accountId=conta&&conta.ad_account_id;
   const D=useAdsVisaoGeral(accountId);
-  /* 19/09: a Estratégia precisa de amostra — com menos de 14 dias quase nada é julgado (mínimo de 3 resultados por campanha).
+  /* 19/09: a Estratégia precisa de amostra — com menos de 14 dias quase nada é julgado (mínimo de ADS_MIN_RESULTADOS = 10 resultados por campanha · v96 M14).
      Então ela SEMPRE usa pelo menos 14 dias fechados, mesmo com o período em 7/ontem/hoje. Aviso na tela quando isso acontece. */
   const Pg=useAdsPeriodo().P; const Pbase=(Pg.dias<14)?_adsPeriodoCalc({preset:"14"}):Pg; const alargado=Pbase!==Pg;
   const X=useAdsPeriodoDados(accountId,Pbase);
@@ -66435,6 +63496,7 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   const [filtro,setFiltro]=useState("pendentes");
   const [abertoS,setAbertoS]=useState(null);   // recomendação com o "porquê / como fazer" aberto (19/09)
   const [verRegras,setVerRegras]=useState(false);
+  if(SAI.alertasSairam) return <AdsWrap><AdsCard style={{background:ADS.surface2,border:"1px dashed "+ADS.line2,fontSize:13,color:ADS.ink2,lineHeight:1.6}}><b>As regras antigas saíram em {_adsFmtD(SAI.alertasAte)}.</b> Os avisos agora vêm só da IA nova (🔔 alarmes e 🧠 Decisões, com os sócios). Nada foi apagado: as marcações de feito/ignorado continuam no banco.</AdsCard></AdsWrap>;   /* v96 R2 */
   if(D.loading||X.loading||AT.loading||Q.loading) return <AdsLoading t="Montando a estratégia…"/>;
   const P=X.P; const medias=_adsMediaPorTipo(camps); const gastoLeadTotal=camps.filter(function(c){return c.fam==="leads";}).reduce(function(s,c){return s+Number(c.gasto||0);},0);
   const sug=_adsSugestoes({camps:camps,medias:medias,ent:D.ent||[],conjuntos:(X.cur||{}).conjuntos||[],ativos:AT.rows,quebras:Q.por,gastoLeadTotal:gastoLeadTotal});
@@ -66447,6 +63509,9 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   const corDe=function(r){ return r===11?ADS.ok:(r===2||r===3||r===4)?ADS.crit:ADS.warn; };
   /* Estratégia (19/09): uma lista de ações, da que mais vale dinheiro pra que menos vale. Título em uma linha; o porquê e o como abrem no clique. */
   return <AdsWrap>
+    <div style={{background:ADS.warnSoft,border:"1px solid #f3dca0",borderRadius:12,padding:"8px 14px",marginBottom:12,fontSize:12,color:"#6b4d00"}}><b>Estas regras antigas saem em {_adsFmtD(SAI.alertasAte)}.</b> Daí em diante os avisos vêm só da IA nova (🔔 alarmes e 🧠 Decisões).</div>{/* v96 R2 (rodada 2) */}
+    {/* v96 (13/10/2026) Q6: se parte da leitura falhou, a lista pode estar incompleta — diz isso em vez de "nada pra fazer" */}
+    {(AT.erro||Q.erro)&&<AdsErroCarga tela={AT.erro?"os ativos dos anúncios":"o público das campanhas"} erro={(AT.erro||Q.erro)+" — as ações abaixo podem estar incompletas"} onTentar={function(){ if(AT.erro) AT.reload(); if(Q.erro) Q.reload(); }}/>}
     <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:14}}>
       <div style={{fontSize:isMob?16:19,fontWeight:800,letterSpacing:"-.3px",color:ADS.ink}}>{pend.length?<span><b>{pend.length} {pend.length===1?"ação":"ações"}</b> pra fazer{nCampPend?" em "+nCampPend+" campanha"+(nCampPend>1?"s":""):""}{impTot>0?<span> · <b style={{color:ADS.crit}}>{_adsBRL0(impTot)}</b> em jogo</span>:null}</span>:<span>Nada pra fazer com os dados de {_adsFmtD(P.ini)}–{_adsFmtD(P.fim)}</span>}</div>
       <span style={{fontSize:12,color:ADS.muted}}>dados de <b style={{color:ADS.ink2}}>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)}</b>{alargado?" (a estratégia usa no mínimo 14 dias — com "+Pg.dias+" dia"+(Pg.dias>1?"s":"")+" não há amostra pra julgar)":""} · "em jogo" = o que a campanha gastou acima do que custaria na média da conta</span>
@@ -66481,7 +63546,12 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
 
 function QGAdsCampanhasTab({mc,conta,isMob,canEdit}){
   const [campId,setCampId]=useState(function(){ const d=window._pxAdsCampDesejada||null; window._pxAdsCampDesejada=null; return d; });
-  useEffect(function(){ const d=window._pxAdsCampDesejada||null; window._pxAdsCampDesejada=null; setCampId(d); },[mc&&mc.client_id]);
+  /* v96 (13/10/2026) Q4: na 1ª montagem o useState acima já leu a campanha pedida — o efeito não pode zerar (antes zerava
+     e "Abrir campanha" caía na lista). Depois, só troca quando muda o cliente. */
+  const _primCamp=useRef(true);
+  useEffect(function(){ if(_primCamp.current){ _primCamp.current=false; return; } const d=window._pxAdsCampDesejada||null; window._pxAdsCampDesejada=null; setCampId(d); },[mc&&mc.client_id]);
+  /* v96 Q4: pedido de campanha com a aba Campanhas já aberta (ex.: "Abrir" na leitura da IA) também abre o detalhe */
+  useEffect(function(){ const h=function(e){ const d=e&&e.detail||{}; if(d.sub==="campanhas"&&window._pxAdsCampDesejada){ const c=window._pxAdsCampDesejada; window._pxAdsCampDesejada=null; setCampId(c); } }; window.addEventListener("pixels:qg-sub",h); return function(){ window.removeEventListener("pixels:qg-sub",h); }; },[]);
   if(campId) return <QGAdsCampanha mc={mc} conta={conta} campId={campId} isMob={isMob} canEdit={canEdit} onVoltar={function(){setCampId(null);}}/>;
   return <QGAdsCampanhas mc={mc} conta={conta} isMob={isMob} onAbrir={setCampId}/>;
 }
@@ -66502,26 +63572,7 @@ function useAdsAlertasGlobais(){
   },[]);
   return st;
 }
-function QGAdsBarraGlobal({onAbrirConta}){
-  const alertas=useAdsAlertasGlobais();
-  const accounts=useAdsAccounts();
-  const [aberto,setAberto]=useState(false);
-  if(!alertas||alertas.length===0) return null;
-  const nomeConta=function(id){ const a=(accounts||[]).find(function(x){return x.ad_account_id===id;}); if(!a) return id; const un=a.unidade?{chapeco:"Chapecó",toledo:"Toledo",castro:"Castro"}[a.unidade]||a.unidade:null; const base=(typeof CLIENTS!=="undefined"?(CLIENTS.find(function(c){return c.id===a.client_id;})||{}).name:null)||a.client_id; return un?base.replace(/^Grupo\s+/,"")+" "+un:base; };
-  const contas=Array.from(new Set(alertas.map(function(a){return a.ad_account_id;})));
-  const curto=function(a){ return String(a.titulo||"").replace(/^(Anúncio|Campanha)\s+"?/,"").replace(/"\s*/g," ").replace(/\[Pixels\]\s*/g,"").replace(/\[\d{2}\/\d{2}\/\d{2,4}\]/g,"").replace(/\s+/g," ").trim(); };
-  return <div style={{background:ADS.critSoft,border:"1px solid "+ADS.crit+"55",borderRadius:14,padding:"10px 14px",marginBottom:12,fontFamily:ADS_FONT}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-      <span style={{width:23,height:23,borderRadius:"50%",background:ADS.crit,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>!</span>
-      <span style={{fontSize:13.5,color:ADS.crit,fontWeight:700,flex:1,minWidth:240}}>{alertas.length} ponto{alertas.length>1?"s":""} crítico{alertas.length>1?"s":""} em {contas.length} cliente{contas.length>1?"s":""}<span style={{fontWeight:400,color:ADS.ink2}}> — {contas.slice(0,3).map(function(id){ const a=alertas.find(function(x){return x.ad_account_id===id;}); return nomeConta(id)+": "+curto(a); }).join(" · ")}{contas.length>3?" · …":""}</span></span>
-      <button onClick={function(){setAberto(!aberto);}} style={{background:ADS.crit,color:"#fff",border:0,borderRadius:8,padding:"6px 13px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:ADS_FONT,minHeight:0}}>{aberto?"Fechar":"Ver todos"}</button>
-    </div>
-    {aberto&&<div style={{marginTop:10,display:"flex",flexDirection:"column",gap:6}}>{contas.map(function(id){ return <div key={id} style={{background:"#fff",borderRadius:10,padding:"9px 12px",border:"1px solid "+ADS.crit+"33"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><b style={{fontSize:13}}>{nomeConta(id)}</b>{onAbrirConta&&<AdsBtn small onClick={function(){onAbrirConta(id);}}>Abrir</AdsBtn>}</div>
-      {alertas.filter(function(a){return a.ad_account_id===id;}).map(function(a,i){ return <div key={i} style={{fontSize:12.5,color:ADS.ink2,marginTop:4}}><b style={{color:ADS.ink}}>{a.titulo}</b> — {a.detalhe} <span style={{color:ADS.muted}}>→ {a.acao}</span></div>; })}
-    </div>; })}</div>}
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido QGAdsBarraGlobal (a barra do topo usa QGAdsSino) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 // Sino de alertas críticos (topo único) — substitui a faixa vermelha; abre popover com os pontos por conta
 function QGAdsSino({onAbrirConta}){
@@ -66572,40 +63623,8 @@ function useAdsCriativos(accountId,ids){
 }
 const ADS_CTA={LEARN_MORE:"Saiba mais",WHATSAPP_MESSAGE:"WhatsApp",SEND_MESSAGE:"Enviar mensagem",SIGN_UP:"Cadastre-se",GET_QUOTE:"Pedir orçamento",CONTACT_US:"Fale conosco",APPLY_NOW:"Solicitar agora",MESSAGE_PAGE:"Mensagem",GET_OFFER:"Ver oferta",SHOP_NOW:"Comprar",NO_BUTTON:"sem botão",LIKE_PAGE:"Curtir página",WATCH_MORE:"Assistir",SEE_DETAILS:"Ver detalhes",VIEW_INSTAGRAM_PROFILE:"Ver perfil",SUBSCRIBE:"Inscrever-se",DOWNLOAD:"Baixar",BOOK_TRAVEL:"Reservar",CALL_NOW:"Ligar"};
 const _adsCta=function(c){ return c?(ADS_CTA[c]||String(c).toLowerCase().replace(/_/g," ")):""; };
-function QGAdsPerfilAnuncio({accountId,adId,periodo,mediaCtr}){
-  const [q,setQ]=useState(null);
-  useEffect(function(){ let alive=true; if(!window._sb) return; setQ(null); window._sb.rpc("ads_quebras_por_anuncio",{p_account:accountId,p_ad_id:adId,p_de:periodo.ini,p_ate:periodo.fim}).then(function(r){ if(alive) setQ(r.error?[]:(r.data||[])); }); return function(){alive=false;}; },[accountId,adId,periodo.ini,periodo.fim]);
-  if(q===null) return <div style={{fontSize:12,color:ADS.muted}}>Lendo perfil de público…</div>;
-  if(!q.length) return <div style={{fontSize:12,color:ADS.muted}}>Sem quebra por anúncio neste período.</div>;
-  const dims=[["idade","Idade"],["genero","Gênero"],["posicionamento","Posicionamento"],["dispositivo","Dispositivo"],["regiao","Região"]];
-  const GEN={male:"Homens",female:"Mulheres",unknown:"Não informado"};
-  return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:14}}>{dims.map(function(d){ const rows=q.filter(function(x){return x.dimensao===d[0]&&Number(x.gasto)>0;}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);}).slice(0,5); if(!rows.length) return null; const tot=rows.reduce(function(s,x){return s+Number(x.gasto);},0)||1;
-    return <div key={d[0]}><AdsEyebrow>{d[1]}</AdsEyebrow><div style={{marginTop:6}}>{rows.map(function(x){ const cpa=Number(x.resultados)>0?Number(x.gasto)/Number(x.resultados):null; const ctr=Number(x.impressoes)>0?Number(x.cliques)/Number(x.impressoes)*100:null; const susp=mediaCtr&&ctr!==null&&ctr>mediaCtr*2; const lbl=(typeof _adsValLbl==="function")?_adsValLbl(d[0],x.valor):(GEN[x.valor]||x.valor); return <div key={x.valor} style={{display:"grid",gridTemplateColumns:"1fr 64px",gap:6,alignItems:"center",fontSize:11.5,marginBottom:5}}><div><div style={{display:"flex",justifyContent:"space-between",color:ADS.ink2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lbl}{susp&&<span title="CTR muito acima da conta" style={{color:ADS.warn,marginLeft:4}}>⚠</span>}</span><span style={{color:ADS.muted}}>{Math.round(Number(x.gasto)/tot*100)}%</span></div><AdsBarra pct={Number(x.gasto)/tot*100} h={5} cor="#b58ff2" alt={1}/></div><span style={Object.assign({textAlign:"right",fontWeight:700,color:cpa?ADS.ink:ADS.muted},ADS_MONO)}>{cpa?_adsBRL(cpa):"—"}</span></div>; })}</div></div>; })}</div>;
-}
-/* mural de cartões de alturas diferentes (19/09).
-   Com a capa na proporção original, um 9:16 e um 16:9 na mesma linha deixariam buraco branco embaixo do menor.
-   Aqui cada cartão ocupa só a própria altura E a ordem do ranking é mantida da esquerda pra direita
-   (coluna de CSS não serve: ela encheria a 1ª coluna inteira antes de ir pra 2ª, e o topo da tela mostraria
-   o 1º, o 26º, o 51º… em vez dos quatro primeiros). */
-function AdsMur({cols,gap,children}){
-  const ref=useRef(null);
-  const itens=React.Children.toArray(children);
-  useEffect(function(){
-    const el=ref.current; if(!el) return;
-    const U=8;
-    /* as linhas têm U px e nenhum espaço entre elas: o próprio "+gap" vira o respiro embaixo do cartão */
-    const medir=function(){ Array.prototype.forEach.call(el.children,function(c){ const filho=c.firstElementChild; const h=(filho||c).getBoundingClientRect().height; if(h>0) c.style.gridRowEnd="span "+Math.max(1,Math.ceil((h+gap)/U)); }); };
-    medir();
-    let ro=null;
-    if(window.ResizeObserver){ ro=new ResizeObserver(medir); Array.prototype.forEach.call(el.children,function(c){ ro.observe(c.firstElementChild||c); }); }
-    window.addEventListener("resize",medir);
-    const t=setTimeout(medir,400);                                   /* capas que chegam depois */
-    return function(){ if(ro) ro.disconnect(); window.removeEventListener("resize",medir); clearTimeout(t); };
-  },[itens.length,cols,gap]);
-  return <div ref={ref} style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:gap,rowGap:0,gridAutoRows:"8px",alignItems:"start"}}>
-    {itens.map(function(c,i){ return <div key={c.key||i} style={{gridRowEnd:"span 30",minWidth:0}}>{c}</div>; })}
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido QGAdsPerfilAnuncio (a janela do criativo usa useAdsQuebraAnuncio) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
+/* v96 (13/10/2026) M4: removido AdsMur — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 /* capa do criativo (imagem real; vídeo com play).
    19/09 v2 — REGRA ÚNICA PRA TODO CRIATIVO, TODO CLIENTE:
    a capa vem SEMPRE da função ads-thumb, que busca na Meta a imagem cheia, na proporção original do criativo.
@@ -66615,12 +63634,18 @@ function AdsMur({cols,gap,children}){
 const ADS_VAGA=9/16;   /* a vaga do criativo é sempre 1080x1920 — a arte se encaixa dentro dela */
 const _adsMai=function(t){ t=String(t||""); return t?t.charAt(0).toUpperCase()+t.slice(1):t; };
 const _adsThumbBase=function(){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/ads-thumb"; };
-const _adsThumbUrl=function(adId){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId); };
+/* v96 (13/10/2026) S16: a capa passa a levar a "senha do dia" (&t=) — sem ela, quando a trava ligar, link copiado não abre capa.
+   O ticket vem de ads_thumb_chave (vale 24 h; a mesma chamada devolve o mesmo enquanto faltar mais de 2 h). Pede de novo
+   quando faltar menos de 2 h. Sem ticket ainda, o link sai como antes (servidor em modo transição). */
+const _adsThumbT=function(){ const x=window._pxThumbT; if((!x||new Date(x.vale_ate)-Date.now()<7200000)&&window._sb&&!window._pxThumbTPed){ window._pxThumbTPed=1; window._sb.rpc("ads_thumb_chave").then(function(r){ window._pxThumbTPed=0; if(r&&r.data&&r.data.ok){ window._pxThumbT=r.data; try{ window.dispatchEvent(new CustomEvent("pixels:thumb-t")); }catch(_){ } } },function(){ window._pxThumbTPed=0; }); } return (x&&x.ticket)?"&t="+encodeURIComponent(x.ticket):""; };
+const _adsThumbUrl=function(adId){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId)+_adsThumbT(); };
 /* capa de UM ativo dentro de um anúncio agrupado (vídeo ou imagem do flexível) */
-const _adsThumbAtivo=function(adId,valor){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId)+"&asset="+encodeURIComponent(valor); };
+const _adsThumbAtivo=function(adId,valor){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId)+"&asset="+encodeURIComponent(valor)+_adsThumbT(); };   /* v96 S16 */
 /* razao = a VAGA tem sempre a mesma proporção (9:16 nos cards). A arte entra inteira dentro dela,
    na proporção original, e o que sobrar fica branco — assim a grade nunca desalinha. */
 function AdsCapa({cr,adId,ativo,h,maxH,razao,radius,children,onClick,dark,fixa}){
+  const [,_setT]=useState(0);   /* v96 S16: quando o ticket chega, refaz o link */
+  useEffect(function(){ const f=function(){ _setT(function(x){return x+1;}); }; window.addEventListener("pixels:thumb-t",f); return function(){ window.removeEventListener("pixels:thumb-t",f); }; },[]);
   const id=adId||(cr&&cr.ad_id)||null;
   const salvo=(ativo&&ativo.thumb)||(cr&&(cr.image_url||cr.thumbnail_url))||null;
   const dono=ativo&&(ativo.ad||id);
@@ -66669,13 +63694,14 @@ function useAdsPreview(adId,formato){
 const ADS_GEN_LBL={male:"Homens",female:"Mulheres",unknown:"Não informado"};
 
 /* uma leitura do banco serve todas as abas */
-function useAdsQuebraAnuncio(accountId,adId,P){
+function useAdsQuebraAnuncio(accountId,adId,P,onErro,tick){   /* v96 Q6: onErro/tick opcionais */
   const [q,setQ]=useState(null);
   useEffect(function(){ let vivo=true; if(!window._sb||!accountId||!adId) return; setQ(null);
+    const falha=function(m){ _pxMidiaErro("o detalhe do criativo",accountId,m); if(onErro) onErro(m); };
     window._sb.rpc("ads_quebras_por_anuncio",{p_account:accountId,p_ad_id:adId,p_de:P.ini,p_ate:P.fim})
-      .then(function(r){ if(vivo) setQ(r.error?[]:(r.data||[])); })
-      .catch(function(){ if(vivo) setQ([]); });
-    return function(){ vivo=false; }; },[accountId,adId,P.ini,P.fim]);
+      .then(function(r){ if(!vivo) return; if(r.error) falha(r.error.message); setQ(r.error?[]:(r.data||[])); })
+      .catch(function(e){ if(!vivo) return; falha((e&&e.message)||String(e)); setQ([]); });
+    return function(){ vivo=false; }; },[accountId,adId,P.ini,P.fim,tick||0]);
   return q;
 }
 
@@ -66684,13 +63710,14 @@ function useAdsQuebraAnuncio(accountId,adId,P){
    qual CTA rendem mais dentro do mesmo anúncio) e Conversa (iniciadas → respondidas
    → 2ª → 3ª → 5ª+). Regra de ouro: métrica sem dado NÃO aparece — a aba some, não
    vira caixinha zerada. */
-function useAdsRpcAnuncio(rpc,accountId,adId,P){
+function useAdsRpcAnuncio(rpc,accountId,adId,P,onErro,tick){   /* v96 Q6: onErro/tick opcionais */
   const [d,setD]=useState(null);
   useEffect(function(){ let vivo=true; if(!window._sb||!accountId||!adId) return; setD(null);
+    const falha=function(m){ _pxMidiaErro("o detalhe do criativo",accountId,rpc+": "+m); if(onErro) onErro(m); };
     window._sb.rpc(rpc,{p_account:accountId,p_ad_id:adId,p_de:P.ini,p_ate:P.fim})
-      .then(function(r){ if(vivo) setD(r.error?false:(r.data==null?false:r.data)); })
-      .catch(function(){ if(vivo) setD(false); });
-    return function(){ vivo=false; }; },[rpc,accountId,adId,P.ini,P.fim]);
+      .then(function(r){ if(!vivo) return; if(r.error) falha(r.error.message); setD(r.error?false:(r.data==null?false:r.data)); })
+      .catch(function(e){ if(!vivo) return; falha((e&&e.message)||String(e)); setD(false); });
+    return function(){ vivo=false; }; },[rpc,accountId,adId,P.ini,P.fim,tick||0]);
   return d;
 }
 
@@ -67043,17 +64070,7 @@ function AdsBlocoT({t,s,primeiro}){
   </div>;
 }
 
-/* barra horizontal de um corte: rótulo à esquerda, barra, número à direita */
-function AdsCorteLinha({lbl,pct,val,sub,cor,destaque,i}){
-  return <div style={{display:"grid",gridTemplateColumns:"minmax(96px,1.1fr) minmax(0,1.5fr) auto",gap:12,alignItems:"center",padding:"9px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
-    <div style={{fontSize:12.5,fontWeight:destaque?800:600,color:destaque?ADS.ink:ADS.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={lbl}>{lbl}</div>
-    <div><span style={{display:"block",height:8,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:Math.max(2,Math.min(100,pct))+"%",background:cor||"#9F43F6",borderRadius:99}}/></span></div>
-    <div style={{textAlign:"right",minWidth:78}}>
-      <b style={Object.assign({fontSize:13,fontWeight:800,color:ADS.ink},ADS_MONO)}>{val}</b>
-      {sub&&<div style={{fontSize:10.5,color:ADS.muted,marginTop:1,whiteSpace:"nowrap"}}>{sub}</div>}
-    </div>
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido AdsCorteLinha (só o AdsPublicoDim usava) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ── gráfico de colunas de uma dimensão (19/09): igual ao da aba Público, dentro do painel ── */
 /* ── os números num cartão só, com fio de cabelo entre as células ──
@@ -67167,24 +64184,7 @@ function AdsGraficoDim({q,dim,resLbl}){
   </div>;
 }
 
-/* ── uma dimensão do público ── */
-function AdsPublicoDim({q,dim,lbl,sub}){
-  const rs=(q||[]).filter(function(x){ return x.dimensao===dim&&Number(x.gasto||0)>0; })
-    .sort(function(a,b){ return Number(b.gasto)-Number(a.gasto); });
-  if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted}}>A Meta não devolveu {lbl.toLowerCase()} para este criativo no período.</div>;
-  const tot=rs.reduce(function(s,x){ return s+Number(x.gasto||0); },0)||1;
-  const nome=function(v){ return dim==="genero"?(ADS_GEN_LBL[v]||v):_adsValLbl(dim,v); };
-  return <div>
-    {rs.slice(0,9).map(function(x,i){
-      const g=Number(x.gasto||0), res=Number(x.resultados||0);
-      const cpa=res>0?g/res:null; const pct=g/tot*100;
-      return <AdsCorteLinha key={x.valor} i={i} lbl={nome(x.valor)} pct={pct}
-        val={Math.round(pct)+"%"} sub={cpa?_adsBRLc(cpa)+" cada":(res>0?_adsNum(res)+" res.":_adsBRL0(g))}
-        cor={i===0?ADS.accent:"#c2a9ef"} destaque={i===0}/>;
-    })}
-    {sub&&<div style={{fontSize:11,color:ADS.muted,marginTop:10,lineHeight:1.45}}>{sub}</div>}
-  </div>;
-}
+/* v96 (13/10/2026) M4: removido AdsPublicoDim — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ── horário: 24 colunas, o pico marcado ── */
 function AdsHorario({q}){
@@ -67291,13 +64291,15 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
   const metaUrl="https://business.facebook.com/adsmanager/manage/ads?act="+conta.ad_account_id+"&selected_ad_ids="+a.id;
   /* 19/09: um assunto por aba, em vez de tudo empilhado num bloco só */
   const [abaLb,setAbaLb]=useState("resumo");
-  const Qa=useAdsQuebraAnuncio(conta&&conta.ad_account_id,a.id,P);
+  /* v96 (13/10/2026) Q6: se alguma leitura do criativo falhar, a janela diz (antes a aba sumia como se não houvesse dado) */
+  const [lbErro,setLbErro]=useState(""); const [lbTick,setLbTick]=useState(0);
+  const Qa=useAdsQuebraAnuncio(conta&&conta.ad_account_id,a.id,P,setLbErro,lbTick);
   /* 20/09: vídeo, textos e conversa — cada aba só aparece se o dado existir */
-  const Vd=useAdsRpcAnuncio("ads_video_por_anuncio",conta&&conta.ad_account_id,a.id,P);
-  const Tx=useAdsRpcAnuncio("ads_textos_por_anuncio",conta&&conta.ad_account_id,a.id,P);
-  const Cv=useAdsRpcAnuncio("ads_conversa_por_anuncio",conta&&conta.ad_account_id,a.id,P);
-  const Ps=useAdsRpcAnuncio("ads_pessoas_por_anuncio",conta&&conta.ad_account_id,a.id,P);
-  const Cx=useAdsRpcAnuncio("ads_contexto_por_anuncio",conta&&conta.ad_account_id,a.id,P);
+  const Vd=useAdsRpcAnuncio("ads_video_por_anuncio",conta&&conta.ad_account_id,a.id,P,setLbErro,lbTick);
+  const Tx=useAdsRpcAnuncio("ads_textos_por_anuncio",conta&&conta.ad_account_id,a.id,P,setLbErro,lbTick);
+  const Cv=useAdsRpcAnuncio("ads_conversa_por_anuncio",conta&&conta.ad_account_id,a.id,P,setLbErro,lbTick);
+  const Ps=useAdsRpcAnuncio("ads_pessoas_por_anuncio",conta&&conta.ad_account_id,a.id,P,setLbErro,lbTick);
+  const Cx=useAdsRpcAnuncio("ads_contexto_por_anuncio",conta&&conta.ad_account_id,a.id,P,setLbErro,lbTick);
   const temPessoas=!!(Ps&&(Number(Ps.cliques_pessoas||0)>0||Number(Ps.engajamento_post||0)>0));
   const temContexto=!!(Cx&&(Cx.atribuicao||Cx.otimizacao_dia||Cx.conjunto_nome));
   const temVideo=!!(Vd&&Array.isArray(Vd.curva)&&Vd.curva.length>=3);
@@ -67413,6 +64415,7 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
         {/* 20/09: tinha flex:1 e jogava o rodape pro fim da coluna. Em aba curta
             sobrava um vazio enorme e o botao ficava orfao. Agora o rodape segue o conteudo. */}
         <div style={{marginTop:22,minWidth:0}}>
+          {lbErro&&<AdsErroCarga compacto tela="parte do detalhe deste criativo" erro={lbErro} onTentar={function(){ setLbErro(""); setLbTick(function(x){return x+1;}); }}/>}
 
           {abaLb==="resumo"&&<div>
             {a.video&&a.r25!==null&&<>
@@ -67561,7 +64564,7 @@ function useAdsStatusAnuncios(accountId,snapshotEm){
     if(!accountId||!snapshotEm||!window._sb){ return; }
     const k=accountId+"|"+snapshotEm; const c=window._pxAdsStAn&&window._pxAdsStAn[k]; if(c){ setSt({pronto:true,mapa:c}); return; }
     let alive=true;
-    window._sb.from("ads_entidades").select("entidade_id,status_efetivo").eq("ad_account_id",accountId).eq("nivel","anuncio").eq("snapshot_em",snapshotEm).limit(2000).then(function(r){ if(!alive) return; const m={}; (r.data||[]).forEach(function(x){ m[x.entidade_id]=x.status_efetivo; }); window._pxAdsStAn=window._pxAdsStAn||{}; window._pxAdsStAn[k]=m; setSt({pronto:!r.error,mapa:m}); });
+    _adsTudo(function(c){ return window._sb.from("ads_entidades").select("entidade_id,status_efetivo",c?{count:"exact"}:undefined).eq("ad_account_id",accountId).eq("nivel","anuncio").eq("snapshot_em",snapshotEm).order("entidade_id"); },5000).then(/* v96 G4 */function(r){ if(!alive) return; const m={}; (r.data||[]).forEach(function(x){ m[x.entidade_id]=x.status_efetivo; }); window._pxAdsStAn=window._pxAdsStAn||{}; window._pxAdsStAn[k]=m; setSt({pronto:!r.error,mapa:m}); });
     return function(){ alive=false; };
   },[accountId,snapshotEm]);
   return st;
@@ -67896,28 +64899,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   PERSONA QUE CONVERTE — cruzamento das quebras da Meta no período
-   O que a Meta cruza (testado 10/09/2026): idade×gênero (campanha e conjunto) e posicionamento×dispositivo. Idade×região, idade×posicionamento,
-   região×gênero ela RECUSA — por isso a persona por estado usa os conjuntos cujo público é só daquele estado (idade×gênero do conjunto)
-   + a quebra de região; e "posicionamento por idade" não existe: mostramos posicionamento×dispositivo.
-   ═══════════════════════════════════════════════════════ */
-function useAdsPersona(accountId,P){
-  const [st,setSt]=useState({loading:true,rows:[]}); const key=(P&&P.key)||"";
-  useEffect(function(){ if(!accountId||!P||!window._sb){ setSt({loading:false,rows:[]}); return; } let alive=true; setSt({loading:true,rows:[]});
-    window._sb.rpc("ads_persona",{p_account:accountId,p_de:P.ini,p_ate:P.fim}).then(function(r){ if(alive) setSt({loading:false,rows:r.error?[]:(r.data||[])}); }).catch(function(){ if(alive) setSt({loading:false,rows:[]}); });
-    return function(){ alive=false; }; },[accountId,key]);
-  return st;
-}
-const ADS_UF_ID={452:"Paraná",459:"Santa Catarina",456:"Rio Grande do Sul",458:"São Paulo",449:"Minas Gerais",455:"Rio de Janeiro",450:"Mato Grosso do Sul",448:"Mato Grosso",445:"Goiás"};
-/* estados em que um conjunto entrega, pelo targeting */
-function _adsEstadosDoConjunto(p){
-  p=p||{}; const g=p.geo_locations||{}; const s={};
-  (g.cities||[]).forEach(function(c){ if(c.region) s[c.region]=1; });
-  (g.regions||[]).forEach(function(r){ if(r.name) s[r.name]=1; });
-  (g.custom_locations||[]).concat(g.places||[]).forEach(function(c){ const n=ADS_UF_ID[Number(c.region_id)]; if(n) s[n]=1; else if(c.region) s[c.region]=1; });
-  return Object.keys(s);
-}
+/* v96 (13/10/2026) M4: removido useAdsPersona/ADS_UF_ID/_adsEstadosDoConjunto (a RPC ads_persona ficou sem uso na tela — ver PENDENCIAS) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 const _adsGen=function(v){ return v==="male"?"Homens":v==="female"?"Mulheres":"Não informado"; };
 /* ═══════════════════════════════════════════════════════
    CORTE DE PÚBLICO — tooltip com o cruzamento REAL da Meta + janela de detalhe (10/09/2026)
@@ -67958,7 +64940,7 @@ function AdsCruzTip({x,dim,cruz,resNome,resNomePl}){
 function useAdsCorteDetalhe(accountId,dim,valor,campIds,de,ate){
   const [st,setSt]=useState({loading:true,data:null});
   useEffect(function(){ if(!accountId||!window._sb){ setSt({loading:false,data:null}); return; } let alive=true; setSt({loading:true,data:null});
-    window._sb.rpc("ads_corte_detalhe",{p_account:accountId,p_dimensao:dim,p_valor:String(valor),p_de:de,p_ate:ate,p_campaigns:campIds&&campIds.length?campIds:null}).then(function(r){ if(!alive) return; if(r.error) console.warn("[ads corte]",r.error.message); setSt({loading:false,data:r.error?null:r.data}); }).catch(function(){ if(alive) setSt({loading:false,data:null}); });
+    window._sb.rpc("ads_corte_detalhe",{p_account:accountId,p_dimensao:dim,p_valor:String(valor),p_de:de,p_ate:ate,p_campaigns:campIds&&campIds.length?campIds:null}).then(function(r){ if(!alive) return; if(r.error){ _pxMidiaErro("o detalhe do corte (Público)",accountId,r.error.message); setSt({loading:false,data:null,erro:r.error.message}); return; } setSt({loading:false,data:r.data}); }).catch(function(e){ if(alive) setSt({loading:false,data:null,erro:(e&&e.message)||String(e)}); });   /* v96 (13/10/2026) Q6 (revisão RB) */
     return function(){ alive=false; }; },[accountId,dim,String(valor),(campIds||[]).join(","),de,ate]);
   return st;
 }
@@ -67973,7 +64955,7 @@ function AdsLeadALead({conta,P,campIds,filtroLbl,isMob}){
   const mostrar=verTudo?ks:ks.slice(0,7);
   const primeiroDia=rows.length?rows.reduce(function(m,r){ const d=String(r.data).slice(0,10); return d<m?d:m; },"9999"):null;
   return <AdsSec t="Quando cada lead entrou" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · {filtroLbl} · hora do clique que gerou o lead, no fuso da conta · bloco de 1 hora (a Meta não dá o minuto)</span>}>
-    {LH.loading?<div style={{fontSize:12.5,color:ADS.muted}}>lendo hora a hora…</div>:!rows.length?<div style={{fontSize:12.5,color:ADS.muted}}>sem hora por anúncio neste período — a coleta por anúncio começou em 29/08; dias anteriores só têm a hora por campanha (na janela do corte).</div>:
+    {LH.loading?<div style={{fontSize:12.5,color:ADS.muted}}>lendo hora a hora…</div>:LH.erro?<AdsErroCarga compacto tela="a hora de cada lead" erro={LH.erro} onTentar={LH.reload}/>:!rows.length?<div style={{fontSize:12.5,color:ADS.muted}}>sem hora por anúncio neste período — a coleta por anúncio começou em 29/08; dias anteriores só têm a hora por campanha (na janela do corte).</div>:
     <AdsCard style={{padding:"14px 18px"}}>
       <div style={{fontSize:12.5,color:ADS.ink2,marginBottom:10}}><b style={{color:ADS.ink}}>{_adsNum(tot)}</b> leads em <b style={{color:ADS.ink}}>{ks.length}</b> dias{primeiroDia&&primeiroDia>P.ini?<span> · hora por anúncio disponível a partir de {_adsFmtD(primeiroDia)}</span>:null}</div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"10px 22px"}}>
@@ -67988,10 +64970,11 @@ function AdsLeadALead({conta,P,campIds,filtroLbl,isMob}){
 }
 function useAdsLeadsHora(accountId,campIds,de,ate){
   const [st,setSt]=useState({loading:true,rows:[]});
+  const [tick,setTick]=useState(0);   /* v96 (13/10/2026) Q6: erro vira erro (com Tentar de novo), não "sem dados" */
   useEffect(function(){ if(!accountId||!window._sb){ setSt({loading:false,rows:[]}); return; } let alive=true; setSt({loading:true,rows:[]});
-    window._sb.rpc("ads_leads_hora",{p_account:accountId,p_de:de,p_ate:ate,p_campaigns:campIds&&campIds.length?campIds:null}).then(function(r){ if(!alive) return; if(r.error) console.warn("[ads leads hora]",r.error.message); setSt({loading:false,rows:r.error?[]:(r.data||[])}); }).catch(function(){ if(alive) setSt({loading:false,rows:[]}); });
-    return function(){ alive=false; }; },[accountId,(campIds||[]).join(","),de,ate]);
-  return st;
+    _adsTudo(function(c){ return window._sb.rpc("ads_leads_hora",{p_account:accountId,p_de:de,p_ate:ate,p_campaigns:campIds&&campIds.length?campIds:null},c?{count:"exact"}:undefined).order("data").order("hora").order("ad_id").order("campaign_id"); }).then(/* v96 G4: lead a lead passava de 1.000 linhas em 30 dias */function(r){ if(!alive) return; if(r.error){ _pxMidiaErro("a hora de cada lead (Público)",accountId,r.error.message); setSt({loading:false,rows:[],erro:r.error.message}); return; } setSt({loading:false,rows:r.data||[]}); }).catch(function(e){ if(!alive) return; const m=(e&&e.message)||String(e); _pxMidiaErro("a hora de cada lead (Público)",accountId,m); setSt({loading:false,rows:[],erro:m}); });
+    return function(){ alive=false; }; },[accountId,(campIds||[]).join(","),de,ate,tick]);
+  return Object.assign({},st,{reload:function(){ setTick(function(x){return x+1;}); }});
 }
 function AdsCorteModal({conta,dim,x,campIds,filtroLbl,resNome,resNomePl,isMob,onClose}){
   useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
@@ -68031,7 +65014,8 @@ function AdsCorteModal({conta,dim,x,campIds,filtroLbl,resNome,resNomePl,isMob,on
         </div>
         <button onClick={onClose} style={{background:ADS.surface2,border:0,borderRadius:99,width:34,height:34,cursor:"pointer",fontSize:16,color:ADS.ink2,flexShrink:0}}>✕</button>
       </div>
-      {!S.loading&&<>
+      {S.erro&&<AdsErroCarga compacto tela="o detalhe deste corte" erro={S.erro}/>}{LH.erro&&<AdsErroCarga compacto tela="a hora de cada lead" erro={LH.erro} onTentar={LH.reload}/>}{/* v96 Q6 */}
+      {!S.loading&&!S.erro&&<>
         {/* linha do tempo */}
         <div style={{marginTop:18}}>
           <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:900}}>Linha do tempo</span><span style={{fontSize:12,color:ADS.muted}}>{resNomePl} por dia · passe o mouse pra ver o dia{cfg?" e o cruzamento daquele dia":""} · clique no dia pra ver a hora</span></div>
@@ -68097,13 +65081,15 @@ function _adsValLbl(dim,v){ if(ADS_VAL_LBL[v]) return ADS_VAL_LBL[v]; if(dim==="
 function useAdsQuebras(accountId,periodo,campIds){
   const key=(campIds||[]).join(",")+"|"+(periodo?periodo.key:"");
   const [st,setSt]=useState({loading:true,rows:[]});
+  const [tick,setTick]=useState(0);   /* v96 (13/10/2026) Q6: erro vira erro (com Tentar de novo), não "sem dados" */
   useEffect(function(){
     if(!accountId||!periodo||!window._sb){ setSt({loading:false,rows:[]}); return; }
     let alive=true; setSt(function(p){return Object.assign({},p,{loading:true});});
-    window._sb.rpc("ads_quebras_conta",{p_account:accountId,p_de:periodo.ini,p_ate:periodo.fim,p_campaigns:campIds&&campIds.length?campIds:null}).then(function(r){ if(!alive) return; if(r.error) console.warn("[ads público]",r.error.message); setSt({loading:false,rows:r.error?[]:(r.data||[])}); });
+    _adsTudo(function(c){ return window._sb.rpc("ads_quebras_conta",{p_account:accountId,p_de:periodo.ini,p_ate:periodo.fim,p_campaigns:campIds&&campIds.length?campIds:null},c?{count:"exact"}:undefined).order("dimensao").order("valor"); }).then(/* v96 G4 */function(r){ if(!alive) return; if(r.error){ _pxMidiaErro("o Público",accountId,r.error.message); setSt({loading:false,rows:[],erro:r.error.message}); return; } setSt({loading:false,rows:r.data||[]}); })
+      .catch(function(e){ if(!alive) return; const m=(e&&e.message)||String(e); _pxMidiaErro("o Público",accountId,m); setSt({loading:false,rows:[],erro:m}); });
     return function(){alive=false;};
-  },[accountId,key]);
-  return st;
+  },[accountId,key,tick]);
+  return Object.assign({},st,{reload:function(){ setTick(function(x){return x+1;}); }});
 }
 /* ─── gráficos animados (sem biblioteca): número contando, colunas, rosca, barras ─── */
 /* Paleta Pixels pra dados: só tons do roxo da marca (#9F43F6 / #7326d6), do mais escuro ao mais claro */
@@ -68177,7 +65163,7 @@ function AdsBarrasH({dados,max,fmt,chave,isMob,onPick}){
     {hov!==null&&dados[hov]&&dados[hov].tip&&<AdsTipBox x="50%" y={top}>{dados[hov].tip}</AdsTipBox>}
     {dados.map(function(x,i){ const on=hov===i; return <div key={x.key||i} onMouseEnter={function(e){setHov(i);setTop(e.currentTarget.offsetTop);}} onMouseLeave={function(){setHov(null);}} onClick={function(){ if(onPick) onPick(x); }} style={{display:"grid",gridTemplateColumns:isMob?"96px 1fr 76px":"140px 1fr 90px 90px",gap:10,alignItems:"center",fontSize:12.5,padding:"3px 6px",margin:"0 -6px",borderRadius:8,background:on?ADS.surface2:"transparent",transition:"background .15s",cursor:onPick?"pointer":"default"}}>
       <span style={{color:ADS.ink2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.lbl}>{x.lbl}{x.susp&&<span title="CTR acima de 2× o da conta — possível clique acidental" style={{color:ADS.warn,marginLeft:4}}>⚠</span>}</span>
-      <span>{x.fraco?<span style={{fontSize:11,color:ADS.muted}}>amostra pequena · {_adsNum(x.res)} res. · {_adsBRL0(x.gasto)}</span>:<span style={{display:"block",height:9,borderRadius:99,background:"#ecebf2",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:(go?Math.max(0,Math.min(100,x.val/max*100)):0)+"%",borderRadius:99,background:x.cor,transition:"width .9s "+ADS_EASE+" "+(i*50)+"ms"}}/></span>}<span style={{display:"block",marginTop:3,height:4,borderRadius:99,background:"#ecebf2",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:(go?x.fatia:0)+"%",borderRadius:99,background:"#c48ffa",transition:"width .9s "+ADS_EASE+" "+(i*50+150)+"ms"}}/></span></span>
+      <span>{x.fraco?<span style={{fontSize:11,color:ADS.muted}}>pouco dado ainda · {_adsNum(x.res)} res. · {_adsBRL0(x.gasto)}</span>:<span style={{display:"block",height:9,borderRadius:99,background:"#ecebf2",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:(go?Math.max(0,Math.min(100,x.val/max*100)):0)+"%",borderRadius:99,background:x.cor,transition:"width .9s "+ADS_EASE+" "+(i*50)+"ms"}}/></span>}<span style={{display:"block",marginTop:3,height:4,borderRadius:99,background:"#ecebf2",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:(go?x.fatia:0)+"%",borderRadius:99,background:"#c48ffa",transition:"width .9s "+ADS_EASE+" "+(i*50+150)+"ms"}}/></span></span>
       <span style={Object.assign({textAlign:"right",fontWeight:800,fontSize:13.5,color:x.fraco?ADS.muted:ADS.ink},ADS_MONO)}>{x.val?fmt(x.val):"—"}</span>
       {!isMob&&<span style={Object.assign({textAlign:"right",fontSize:11,color:ADS.muted},ADS_MONO)}>{Math.round(x.fatia)}% · {Math.round(x.fatiaRes)}%</span>}
     </div>; })}
@@ -68188,7 +65174,7 @@ function _adsIcoVista(v){ const s={width:14,height:14,display:"block"}; if(v==="
 function AdsSegVista({v,onChange,small}){ return <span style={{display:"inline-flex",background:ADS.surface2,borderRadius:9,padding:2,gap:1}}>{[["barras","Barras"],["colunas","Colunas"],["pizza","Pizza"]].map(function(o){ const on=v===o[0]; return <button key={o[0]} title={o[1]} onClick={function(){onChange(o[0]);}} style={{display:"inline-flex",alignItems:"center",gap:5,background:on?"#fff":"transparent",color:on?ADS.accent:ADS.muted,border:0,borderRadius:7,padding:small?"4px 7px":"5px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:ADS_FONT,boxShadow:on?"0 1px 3px rgba(15,13,26,.12)":"none",minHeight:0,transition:"all .15s"}}>{_adsIcoVista(o[0])}{!small&&o[1]}</button>; })}</span>; }
 function AdsSegMetrica({v,onChange}){ return <span style={{display:"inline-flex",background:ADS.surface2,borderRadius:9,padding:2,gap:1}}>{[["cpa","Custo por resultado"],["gasto","Verba"],["res","Resultados"]].map(function(o){ const on=v===o[0]; return <button key={o[0]} onClick={function(){onChange(o[0]);}} style={{background:on?"#fff":"transparent",color:on?ADS.ink:ADS.muted,border:0,borderRadius:7,padding:"5px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:ADS_FONT,boxShadow:on?"0 1px 3px rgba(15,13,26,.12)":"none",minHeight:0,whiteSpace:"nowrap",transition:"all .15s"}}>{o[1]}</button>; })}</span>; }
 
-function QGAdsPublico({mc,conta,isMob,campId,embutido}){
+function QGAdsPublico({mc,conta,isMob,campId,embutido,canEdit}){   /* v96 S12: canEdit chega até os pins */
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
   const [filtro,setFiltro]=useState(campId?"camp:"+campId:"todas");
@@ -68203,7 +65189,13 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
   const temOutras=camps.some(function(c){return c.fam!=="leads"&&Number(c.gasto||0)>0;});
   /* "todas" = campanhas de lead (engajamento/seguidores/etc. têm outra finalidade e distorceriam o custo por lead) */
   const campIds=(function(){ if(filtro==="todas") return temOutras?camps.filter(function(c){return c.fam==="leads";}).map(function(c){return c.id;}):null; if(filtro.indexOf("camp:")===0) return [filtro.slice(5)]; if(filtro.indexOf("tipo:")===0){ const t=filtro.slice(5); return camps.filter(function(c){return c.tipo===t;}).map(function(c){return c.id;}); } return null; })();
-  const Q=useAdsQuebras(conta&&conta.ad_account_id,X.P,campIds);
+  /* v96 (13/10/2026) Q7: com unidade escolhida, "toda a conta" vira "toda a unidade" — os cortes passam a ser só das
+     campanhas da unidade (as mesmas que a Visão geral usa). Unidade sem campanha no período → nenhum corte (nunca a conta toda). */
+  const _uniPub=_adsUnidadeAtiva();
+  /* v96 (13/10/2026) revisão RB: lista VAZIA de campanhas (ex.: unidade sem campanha de lead) virava null = conta inteira. Agora vira
+     a sentinela (nenhum corte). E com unidade, nada é pedido enquanto as campanhas da unidade ainda carregam. */
+  const campIdsU=(_uniPub&&!campId&&campIds===null)?(camps.length?camps.map(function(c){return c.id;}):["__sem_campanha_na_unidade__"]):(Array.isArray(campIds)&&!campIds.length?["__sem_campanha_no_filtro__"]:campIds);
+  const Q=useAdsQuebras((_uniPub&&X.loading)?null:(conta&&conta.ad_account_id),X.P,campIdsU);
   if(D.loading||X.loading||Q.loading) return <AdsLoading t="Lendo público…"/>;
   const P=X.P; const rows=Q.rows||[];
   const base=rows.filter(function(r){return r.dimensao==="idade";});
@@ -68255,31 +65247,32 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
         v==="colunas"?<AdsColunas dados={serie} fmt={fmtM} chave={chave} isMob={isMob} h={dim==="genero"||dim==="dispositivo"?120:150} onPick={pick}/>:
         v==="pizza"?<AdsRosca dados={seriePizza} total={seriePizza.reduce(function(s,x){return s+x.val;},0)} chave={chave} isMob={isMob} centro={metrica==="res"?_adsNum(rTot):_adsBRL0(gTot)} centroLbl={metrica==="res"?"resultados":"na verba"} fmtLeg={function(d){ return d.cpa&&!d.poucos?_adsBRL(d.cpa)+"/res.":(d.res?_adsNum(d.res)+" res.":"—"); }} onPick={pick}/>:
         <AdsBarrasH dados={serie} max={maxBar} fmt={fmtM} chave={chave} isMob={isMob} onPick={pick}/>}
-      {(nota||susp.length>0)&&<p style={{fontSize:12.5,color:ADS.ink2,margin:"14px 0 0",lineHeight:1.5,paddingTop:12,borderTop:"1px solid "+ADS.line}}>{nota}{susp.length>0&&<span> <span style={{color:ADS.warn,fontWeight:700}}>⚠ possível clique acidental</span> em {susp.map(function(x){return x.lbl+" (CTR "+_adsPct(x.ctr,2)+")";}).join(", ")} — marque a qualidade desses leads antes de aumentar verba.</span>}</p>}
+      {(nota||susp.length>0)&&<p style={{fontSize:12.5,color:ADS.ink2,margin:"14px 0 0",lineHeight:1.5,paddingTop:12,borderTop:"1px solid "+ADS.line}}>{nota}{susp.length>0&&<span> <span style={{color:ADS.warn,fontWeight:700}}>⚠ possível clique acidental</span> em {susp.map(function(x){return x.lbl+" (CTR "+_adsPct(x.ctr,2)+")";}).join(", ")} — confira com o cliente se esses leads são bons antes de aumentar verba.</span>}</p>}   {/* v96 (13/10/2026) M14: não manda mais para a aba Leads (oculta) */}
     </AdsCard>;
   };
   /* heróis sólidos: um tom de roxo Pixels por card */
-  const heroi=function(lab,m,bg){ return <AdsSolido bg={bg} eyebrow={lab} big={m?m.lbl:"—"} sub={m?<span><b style={{color:"#fff"}}><AdsNumAnim v={m.cpa} fmt={_adsBRL}/></b> por lead · <AdsNumAnim v={m.res} fmt={_adsNum}/> leads</span>:"nenhum corte com 3+ leads"}/>; };
-  const filtroLbl=filtro==="todas"?(temOutras?"campanhas de lead":"toda a conta"):filtro.indexOf("tipo:")===0?((_adsTipo(filtroTipo)||{}).label||filtroTipo):_adsNomeCurto((camps.find(function(c){return c.id===filtro.slice(5);})||{}).nome||"campanha");
+  const heroi=function(lab,m,bg){ return <AdsSolido bg={bg} eyebrow={lab} big={m?m.lbl:"—"} sub={m?<span><b style={{color:"#fff"}}><AdsNumAnim v={m.cpa} fmt={_adsBRL}/></b> por lead · <AdsNumAnim v={m.res} fmt={_adsNum}/> leads</span>:"nenhum corte com "+ADS_MIN_RESULTADOS+"+ leads ainda"}/>; };   /* v96 R7: mesma régua do Diagnóstico */
+  const filtroLbl=filtro==="todas"?(temOutras?"campanhas de lead":(_uniPub?"toda a unidade":"toda a conta")):filtro.indexOf("tipo:")===0?((_adsTipo(filtroTipo)||{}).label||filtroTipo):_adsNomeCurto((camps.find(function(c){return c.id===filtro.slice(5);})||{}).nome||"campanha");
   return <AdsWrap>
     {/* (25/09/2026) onde pôr os pins — análise geográfica do briefing */}
     {/* (25/09/2026) quem queremos atingir — ficha do briefing × entrega da Meta */}
     {typeof QGFichaBriefing==="function"&&<QGFichaBriefing mc={mc} rows={rows} isMob={isMob} periodoLbl={(P&&P.ini&&typeof _adsFmtD==="function")?(_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)):""}/>}
-    {typeof QGPinsBriefing==="function"&&<QGPinsBriefing mc={mc} isMob={isMob}/>}
-    {corte&&<AdsCorteModal conta={conta} dim={corte.dim} x={corte.x} campIds={campIds} filtroLbl={filtroLbl} resNome={resNome} resNomePl={resNomePl} isMob={isMob} onClose={function(){setCorte(null);}}/>}
-    {!embutido&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
+    {typeof QGPinsBriefing==="function"&&<QGPinsBriefing mc={mc} isMob={isMob} canEdit={!!canEdit}/>}
+    {corte&&<AdsCorteModal conta={conta} dim={corte.dim} x={corte.x} campIds={campIdsU} filtroLbl={filtroLbl} resNome={resNome} resNomePl={resNomePl} isMob={isMob} onClose={function(){setCorte(null);}}/>}
+    {Q.erro&&<AdsErroCarga tela="os cortes de público" erro={Q.erro} onTentar={Q.reload}/>}
+    {!embutido&&!Q.erro&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
       {heroi("Faixa etária que rende mais",mIdade,ADS_SOL.escuro)}
       {heroi("Posicionamento que rende mais",mPos?Object.assign({},mPos,{lbl:mPos.lbl.replace(" · "," ")}):null,ADS_SOL.medio)}
       {heroi("Gênero que rende mais",mGen,ADS_SOL.claro)}
     </div>}
-    <AdsSec t="Cortes de público" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · <b style={{color:ADS.ink2}}><AdsNumAnim v={totGasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={totRes} fmt={_adsNum}/></b> {resNomePl} · média <b style={{color:ADS.ink2}}><AdsNumAnim v={media||0} fmt={_adsBRL}/></b> por {resNome}{filtro==="todas"&&temOutras?" · só campanhas de lead":""}</span>} right={!campId&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><AdsChip on={filtro==="todas"} onClick={function(){setFiltro("todas");}}>{temOutras?"Campanhas de lead":"Toda a conta"}</AdsChip>{tiposPresentes.map(function(t){ return <AdsChip key={t.id} on={filtro==="tipo:"+t.id} onClick={function(){setFiltro("tipo:"+t.id);}}>{t.label}</AdsChip>; })}{typeof QGSel==="function"&&<QGSel value={filtro.indexOf("camp:")===0?filtro:""} onChange={function(v){ if(v) setFiltro(v); }} options={[{id:"",label:"por campanha…"}].concat(camps.slice().sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));}).map(function(c){return {id:"camp:"+c.id,label:_adsNomeCurto(c.nome)};}))} width={200}/>}</div>}>
+    <AdsSec t="Cortes de público" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · <b style={{color:ADS.ink2}}><AdsNumAnim v={totGasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={totRes} fmt={_adsNum}/></b> {resNomePl} · média <b style={{color:ADS.ink2}}><AdsNumAnim v={media||0} fmt={_adsBRL}/></b> por {resNome}{filtro==="todas"&&temOutras?" · só campanhas de lead":""}</span>} right={!campId&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><AdsChip on={filtro==="todas"} onClick={function(){setFiltro("todas");}}>{temOutras?"Campanhas de lead":(_uniPub?"Toda a unidade":"Toda a conta")}</AdsChip>{tiposPresentes.map(function(t){ return <AdsChip key={t.id} on={filtro==="tipo:"+t.id} onClick={function(){setFiltro("tipo:"+t.id);}}>{t.label}</AdsChip>; })}{typeof QGSel==="function"&&<QGSel value={filtro.indexOf("camp:")===0?filtro:""} onChange={function(v){ if(v) setFiltro(v); }} options={[{id:"",label:"por campanha…"}].concat(camps.slice().sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));}).map(function(c){return {id:"camp:"+c.id,label:_adsNomeCurto(c.nome)};}))} width={200}/>}</div>}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
         <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".06em",textTransform:"uppercase"}}>Ver como</span><AdsSegVista v={vista} onChange={mudaVista}/>
         <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".06em",textTransform:"uppercase",marginLeft:isMob?0:10}}>Métrica</span><AdsSegMetrica v={metrica} onChange={setMetrica}/>
-        <span style={{fontSize:11.5,color:ADS.muted,marginLeft:"auto"}}>{metrica==="cpa"?"roxo escuro = barato · roxo claro = caro · listrado = amostra pequena":metrica==="gasto"?"onde a verba foi parar":"quem entregou os resultados"}</span>
+        <span style={{fontSize:11.5,color:ADS.muted,marginLeft:"auto"}}>{metrica==="cpa"?"roxo escuro = barato · roxo claro = caro · cinza listrado = pouco dado ainda (menos de "+ADS_MIN_RESULTADOS+" resultados, a mesma régua do Diagnóstico)":metrica==="gasto"?"onde a verba foi parar":"quem entregou os resultados"}</span>
       </div>
       {/* 19/09: cinco cartões empilhados competiam entre si. Agora é um menu à esquerda e UM gráfico grande à direita. */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"236px minmax(0,1fr)",gap:14,alignItems:"start"}}>
+      {Q.erro?null:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"236px minmax(0,1fr)",gap:14,alignItems:"start"}}>   {/* v96 Q6: com erro não mostra "sem entrega" falso */}
         <AdsCard style={{padding:6}}>
           {dims.map(function(d){
             const on=d===dimSel; const mm=melhorDe(d);
@@ -68295,10 +65288,10 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
             </div>; })}
         </AdsCard>
         <div style={{minWidth:0}}>{bloco(dimSel)}</div>
-      </div>
+      </div>}
       <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>Passe o mouse num corte pra ver o cruzamento real da Meta (idade↔gênero, posicionamento↔aparelho — os únicos que ela entrega); clique pra abrir 3 meses por dia e a hora do dia. Só cortes com {ADS_MIN_RESULTADOS}+ resultados entram na comparação; na pizza o custo vira fatia da verba (custo não soma).</div>
     </AdsSec>
-    {!embutido&&<AdsLeadALead conta={conta} P={P} campIds={campIds} filtroLbl={filtroLbl} isMob={isMob}/>}
+    {!embutido&&<AdsLeadALead conta={conta} P={P} campIds={campIdsU} filtroLbl={filtroLbl} isMob={isMob}/>}
   </AdsWrap>;
 }
 
@@ -68319,7 +65312,7 @@ function useAdsPainel(){
 }
 function _adsPainelCalc(data,accounts,clients){
   const hoje=String(data.hoje||_adsIso(new Date())).slice(0,10);
-  /* último dia com coleta na maioria das contas (antes das 07h o dia anterior ainda não chegou) */
+  /* último dia com coleta na maioria das contas (antes das 6h30 o dia anterior pode não ter chegado) · v96 Q15 */
   const ontemReal=_adsAddDays(hoje,-1);
   /* janela SEMPRE ancorada em ontem (igual às telas do cliente). Se a coleta atrasou, avisa — não desloca a janela. */
   const ontem=ontemReal;
@@ -68450,12 +65443,18 @@ function _adsExcecoes(W,C){
   const rank={c:0,w:1,g:2}; out.sort(function(a,b){ return (rank[a.nivel]-rank[b.nivel])||(b.money-a.money); });
   return out;
 }
-function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
+function QGAdsPainel({clients,onOpenClient,isMob,direita}){
   const P=useAdsPainel(); const accounts=useAdsAccounts(); const AL=useAdsAlertasStatus();
   const [verOcultos,setVerOcultos]=useState(false);
   const [nDias,setNDias]=useState(7);
   const tblRef=useRef(null); const wrapRef=useRef(null); const [tblW,setTblW]=useState(0); const [wrapW,setWrapW]=useState(0);
-  useEffect(function(){ const m=function(){ if(tblRef.current) setTblW(tblRef.current.getBoundingClientRect().width); if(wrapRef.current) setWrapW(wrapRef.current.getBoundingClientRect().width); }; m(); window.addEventListener("resize",m); const id=setInterval(m,800); return function(){ window.removeEventListener("resize",m); clearInterval(id); }; },[]);
+  useEffect(function(){ const m=function(){ if(tblRef.current) setTblW(tblRef.current.getBoundingClientRect().width); if(wrapRef.current) setWrapW(wrapRef.current.getBoundingClientRect().width); }; m(); window.addEventListener("resize",m);
+    /* v96 (13/10/2026) G6: media a largura a cada 0,8 s para sempre (mesmo com a aba do navegador escondida). Agora só quando o tamanho muda
+       (ResizeObserver); navegador sem ResizeObserver mantém o relógio, mas parado com a aba escondida. */
+    let ro=null, id=null;
+    if(typeof ResizeObserver!=="undefined"){ ro=new ResizeObserver(function(){ m(); }); if(tblRef.current) ro.observe(tblRef.current); if(wrapRef.current) ro.observe(wrapRef.current); }
+    else id=setInterval(function(){ if(!document.hidden) m(); },800);
+    return function(){ window.removeEventListener("resize",m); if(ro) ro.disconnect(); if(id) clearInterval(id); }; },[!!(P.loading||!accounts||!P.data)]);   /* v96 G6: refaz quando a tabela aparece (antes dela, as refs estão vazias) */
   const go=useAdsEntra((P.data?"ok":"no")+"|"+(accounts?accounts.length:0)+"|"+nDias);
   if(P.loading||!accounts) return <AdsLoading t="Lendo as contas…"/>;
   if(!P.data) return <AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13,fontFamily:ADS_FONT}}>Não deu pra ler o painel{P.erro?": "+P.erro:""}.</AdsCard>;
@@ -68466,7 +65465,8 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
   const todas=_adsExcecoes(W,C);
   const ativo=function(p){ const st=AL.mapa[p.chave]; if(!st) return true; if(st.status==="visto"||st.status==="resolvido") return false; if(st.status==="adiado") return !st.ate||st.ate<hojeIso; return true; };
   const vivas=todas.filter(ativo); const nOcultos=todas.length-vivas.length;
-  const abrir=function(p){ try{ window._pxSubDesejada=p.abrir||"campanhas"; }catch(_){ } onOpenClient(p.cliente.client_id); };
+  /* v96 (13/10/2026) Q4: cartão que cita uma campanha abre o DETALHE dela (antes caía na lista de campanhas do cliente) */
+  const abrir=function(p){ try{ window._pxSubDesejada=p.abrir||"campanhas"; window._pxAdsCampDesejada=(p.abrir!=="visao"&&p.camp)?p.camp:null; }catch(_){ } onOpenClient(p.cliente.client_id); };
   /* selo do card = pior exceção viva do cliente (mesma fonte da coluna) */
   const seloDe=function(cid){ const ex=vivas.filter(function(p){ return p.cliente.client_id===cid; }); const nc=ex.filter(function(p){return p.nivel==="c";}).length; if(nc) return {k:"c",t:nc+" crítico"+(nc>1?"s":""),cor:D.crit,bg:D.critSoft}; if(ex.some(function(p){return p.nivel==="w";})) return {k:"w",t:"conferir",cor:D.warn,bg:D.warnSoft}; if(ex.some(function(p){return p.nivel==="g";})) return {k:"g",t:"melhorou",cor:D.ok,bg:D.okSoft}; return null; };
   const ordem={c:0,w:1,g:2,o:3,p:4};
@@ -68515,10 +65515,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
   </div></div></div>;
 
   /* ── modo "só clientes" (aba Clientes de mídia): cabeçalho + cards, sem faixa nem coluna ── */
-  if(soClientes) return <div style={{fontFamily:F,color:D.ink}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 2px 10px",flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15,color:D.ink}}>Clientes de mídia · {cards.length}</span><span style={{fontSize:12,color:D.muted}}>{jan} · janela fechada</span>{direita}<span style={{marginLeft:"auto"}}>{Sel}</span></div>
-    {Tabela}
-  </div>;
+  /* v96 (13/10/2026) M4: removido o modo "soClientes" (ninguém chamava o Painel assim) */
 
   return <div className="px-sens" style={{fontFamily:F,color:D.ink,display:"flex",flexDirection:"column",gap:22}}>
 
@@ -68526,7 +65523,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
     <div style={{position:"relative",overflow:"hidden",borderRadius:16,background:D.hero,color:"#fff",padding:isMob?"20px 18px":"26px 30px 22px",display:"flex",flexWrap:"wrap",gap:isMob?18:"20px 36px",alignItems:"center",boxShadow:"0 16px 36px -18px rgba(47,26,94,.45)"}}>
       <div style={{position:"absolute",right:"-8%",top:"-60%",width:460,height:460,borderRadius:"50%",background:"radial-gradient(closest-side,rgba(255,255,255,.14),transparent 70%)",pointerEvents:"none"}}/>
       <div style={{position:"relative",minWidth:0,flex:"1 1 420px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>{Eyebrow("Leitura · "+jan+" · fechada",D.heroMuted)}<span style={{fontSize:11,color:D.heroMuted}}>{C.atrasado?"a coleta de "+_adsFmtD(C.ontemReal)+" ainda não chegou":"coleta "+_adsFmtD(C.hoje)+" 07:00 · hoje fica fora"} · <a onClick={P.reload} style={{color:"#fff",cursor:"pointer",fontWeight:700}}>atualizar</a></span></div>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>{Eyebrow("Leitura · "+jan+" · fechada",D.heroMuted)}<span style={{fontSize:11,color:D.heroMuted}}>{C.atrasado?"a coleta de "+_adsFmtD(C.ontemReal)+" ainda não chegou":"coleta "+_adsFmtD(C.hoje)+" a partir das "+_adsHorarios().coleta+" · hoje fica fora"} · <a onClick={P.reload} style={{color:"#fff",cursor:"pointer",fontWeight:700}}>atualizar</a></span></div>
         <div style={{margin:"10px 0 0",fontFamily:ADS_SERIF,fontWeight:400,fontSize:isMob?20:25,lineHeight:1.3,color:"#fff",maxWidth:640}}>
           <span style={{fontWeight:500}}>{_adsNum(A.cur.res)} leads</span> por {_adsBRL(A.cur.gasto)}{cpl?<span> — <em style={{color:"#e9ddff"}}>{_adsBRL(cpl)} cada</em></span>:null}{dCpl!==null?", "+Math.abs(dCpl)+"% "+(dCpl<0?"mais barato":dCpl>0?"mais caro":"igual")+" que os "+nDias+" dias anteriores":""}{dG!==null?", gastando "+Math.abs(dG)+"% "+(dG<0?"menos":"mais"):""}. {nCrit?<span><span style={{fontWeight:500}}>{nCrit} ponto{nCrit>1?"s":""}</span> pede{nCrit>1?"m":""} ação hoje</span>:"Nada crítico hoje"}{nWarn?", "+nWarn+" pra conferir":""}.
         </div>
@@ -68549,7 +65546,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
       <div style={{flex:isMob?"1 1 100%":"1 1 340px",maxWidth:(isMob||empilhado)?"none":420,minWidth:0,background:D.surface,border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow}}>
         <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"18px 20px 12px"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Precisa de você</span><span style={{fontSize:11.5,color:D.muted}}>{vivas.length?nCrit+" crítico"+(nCrit===1?"":"s")+" · por dinheiro em jogo":"tudo visto"}</span></div>
         <div style={{padding:"0 14px 14px",display:"grid",gap:12,gridTemplateColumns:empilhado&&!isMob?"repeat(auto-fill,minmax(320px,1fr))":"1fr"}}>
-          {vivas.length===0&&!verOcultos&&<div style={{padding:"20px 16px",color:D.muted,textAlign:"center",fontSize:12}}>Nada pendente. As regras rodam de novo a cada coleta (07:00).</div>}
+          {vivas.length===0&&!verOcultos&&<div style={{padding:"20px 16px",color:D.muted,textAlign:"center",fontSize:12}}>Nada pendente. As regras rodam de novo a cada coleta (a partir das {_adsHorarios().coleta}).</div>}
           {(verOcultos?todas:vivas).slice(0,verOcultos?40:8).map(function(p,i){ const cor=p.nivel==="c"?D.crit:p.nivel==="w"?D.warn:D.ok; const st=AL.mapa[p.chave]; const oculto=!ativo(p);
             return <div key={p.chave} style={{border:"1px solid "+D.line,borderRadius:14,padding:"14px 16px 12px",display:"grid",gridTemplateColumns:"auto 1fr",gap:12,background:D.surface2,opacity:go?(oculto?.55:1):0,transition:"opacity .4s ease "+(i*50)+"ms"}}>
               <span style={{width:4,borderRadius:4,background:oculto?D.line2:cor}}/>
@@ -68558,7 +65555,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
                 <div style={{fontSize:13.5,fontWeight:800,lineHeight:1.3,marginTop:4,color:D.ink}}>{p.titulo}</div>
                 <div style={{fontSize:12,color:D.ink2,marginTop:5,lineHeight:1.5}}>{p.detalhe}{p.acao?<span style={{color:D.muted}}> → {p.acao}</span>:null}</div>
                 <div style={{display:"flex",gap:4,marginTop:11,alignItems:"center",flexWrap:"wrap"}}>
-                  <Btn primary onClick={function(){abrir(p);}}>{p.abrir==="visao"?"Abrir conta →":"Abrir campanha →"}</Btn>
+                  <Btn primary onClick={function(){abrir(p);}}>{p.abrir==="visao"?"Abrir conta →":p.camp?"Abrir campanha →":"Ver campanhas →"}</Btn>{/* v96 Q4: só diz "Abrir campanha" quando abre uma */}
                   {!oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"visto");}}>visto</Btn>}
                   {!oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"adiado",3);}}>adiar 3 dias</Btn>}
                   {oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"adiado",0);}}>reabrir</Btn>}
@@ -68595,12 +65592,12 @@ function useAdsLeads(accountId,periodo){
     let alive=true; setSt(function(p){return Object.assign({},p,{loading:true});});
     (async function(){
       try{
-        const d=await window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,adset_id,ad_id,ad_nome,gasto,leads,conversas,ctr").eq("ad_account_id",accountId).eq("nivel","anuncio").gte("data",periodo.ini).lte("data",periodo.fim).or("leads.gt.0,conversas.gt.0").order("data",{ascending:false}).limit(1000);
+        const d=await _adsTudo(function(c){ return window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,adset_id,ad_id,ad_nome,gasto,leads,conversas,ctr",c?{count:"exact"}:undefined).eq("ad_account_id",accountId).eq("nivel","anuncio").gte("data",periodo.ini).lte("data",periodo.fim).or("leads.gt.0,conversas.gt.0").order("data",{ascending:false}).order("ad_id"); },10000);   /* v96 G4 */
         if(d.error) throw new Error(d.error.message);
         const m=await window._sb.from("leads_qualidade").select("*").eq("ad_account_id",accountId).gte("data_lead",periodo.ini).lte("data_lead",periodo.fim).order("created_at");
         if(m.error) throw new Error(m.error.message);
         if(alive) setSt({loading:false,slots:d.data||[],marcas:m.data||[]});
-      }catch(e){ console.warn("[ads leads]",e&&e.message); if(alive) setSt({loading:false,slots:[],marcas:[],erro:e.message}); }
+      }catch(e){ console.warn("[ads leads]",e&&e.message); _pxMidiaErro("os leads",accountId,e&&e.message); if(alive) setSt({loading:false,slots:[],marcas:[],erro:e.message}); }
     })();
     return function(){alive=false;};
   },[accountId,periodo&&periodo.key,tick]);
@@ -68618,15 +65615,21 @@ function QGAdsLeads({mc,conta,isMob,canEdit,currentUser}){
   const me=(currentUser&&currentUser.id)||(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"";
   const go=useAdsEntra((P&&P.key)+"|"+(L.slots||[]).length+"|"+(L.marcas||[]).length+"|"+L.loading);
   if(L.loading) return <AdsLoading t="Lendo leads…"/>;
-  if(L.erro) return <AdsWrap><AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13}}>Erro: {L.erro}</AdsCard></AdsWrap>;
-  const marcas={}; L.marcas.forEach(function(q){ const k=q.ad_id+"|"+q.data_lead; (marcas[k]=marcas[k]||[]).push(q); });
+  if(L.erro) return <AdsWrap><AdsErroCarga tela="os leads" erro={L.erro} onTentar={L.reload}/></AdsWrap>;   /* v96 (13/10/2026) Q6 */
+  /* v96 (13/10/2026) Q7: com unidade escolhida, lead e marcação só das campanhas da unidade (antes as marcações eram da conta toda) */
+  const _fu=_adsFiltroUnidadeNome(conta&&conta.ad_account_id);
+  const _slots=_fu?(L.slots||[]).filter(function(x){ return _fu(x.campaign_nome,x.campaign_id); }):(L.slots||[]);
+  /* v96 (13/10/2026) revisão RB: marcação filtrada pelo campaign_id das campanhas da unidade (o nome gravado na marcação pode ser antigo) */
+  const _idsUni={}; _slots.forEach(function(x){ if(x.campaign_id) _idsUni[x.campaign_id]=1; }); (((X.cur||{}).campanhas)||[]).forEach(function(c){ if(c.id) _idsUni[c.id]=1; });
+  const _marcas=_fu?(L.marcas||[]).filter(function(x){ return x.campaign_id?!!_idsUni[x.campaign_id]:_fu(x.campaign_nome,x.campaign_id); }):(L.marcas||[]);
+  const marcas={}; _marcas.forEach(function(q){ const k=q.ad_id+"|"+q.data_lead; (marcas[k]=marcas[k]||[]).push(q); });
   const grupos={}; let totLeads=0;
   const tipoCamp={}; (((X.cur||{}).campanhas)||[]).forEach(function(c){ tipoCamp[c.id]=c.tipo; });
-  L.slots.forEach(function(s){ const t=tipoCamp[s.campaign_id]||"outro"; const n=t==="form"?Number(s.leads||0):_adsEhLead(t)?Number(s.conversas||0):0; if(n<=0) return; totLeads+=n; const k=s.ad_id+"|"+s.data; grupos[k]={key:k,s:s,n:n,origem:t==="form"?"formulario":"whatsapp",marcas:(marcas[k]||[]).slice(0,n)}; });
+  _slots.forEach(function(s){ const t=tipoCamp[s.campaign_id]||"outro"; const n=t==="form"?Number(s.leads||0):_adsEhLead(t)?Number(s.conversas||0):0; if(n<=0) return; totLeads+=n; const k=s.ad_id+"|"+s.data; grupos[k]={key:k,s:s,n:n,origem:t==="form"?"formulario":"whatsapp",marcas:(marcas[k]||[]).slice(0,n)}; });
   const lista=Object.keys(grupos).map(function(k){return grupos[k];}).sort(function(a,b){ return String(b.s.data).localeCompare(String(a.s.data))||(b.n-a.n); });
-  const todas=L.marcas; const nMarc=Math.min(todas.length,totLeads); const nQual=todas.filter(function(q){return q.status==="qualificado"||q.status==="cliente";}).length; const nCli=todas.filter(function(q){return q.status==="cliente";}).length; const nDesc=todas.filter(function(q){return q.status==="descartado";}).length; const nPend=Math.max(0,totLeads-nMarc);
+  const todas=_marcas; const nMarc=Math.min(todas.length,totLeads); const nQual=todas.filter(function(q){return q.status==="qualificado"||q.status==="cliente";}).length; const nCli=todas.filter(function(q){return q.status==="cliente";}).length; const nDesc=todas.filter(function(q){return q.status==="descartado";}).length; const nPend=Math.max(0,totLeads-nMarc);
   /* custo bruto = gasto das campanhas de lead no período (T.gastoLead, mesma fonte da Visão geral) — não só dos anúncios com resultado */
-  const gastoTot=Number(_adsTotaisConta((X.cur||{}).conta).gastoLead||0)||L.slots.reduce(function(s,x){return s+Number(x.gasto||0);},0);
+  const gastoTot=Number(_adsTotaisConta((X.cur||{}).conta).gastoLead||0)||_slots.reduce(function(s,x){return s+Number(x.gasto||0);},0);
   const custoBruto=_adsDiv(gastoTot,totLeads); const custoQual=nQual>0?gastoTot/nQual:null;
   const base=nMarc>=10&&nMarc/Math.max(totLeads,1)>=0.3;
   const motivos={}; todas.filter(function(q){return q.status==="descartado";}).forEach(function(q){ motivos[q.motivo_descarte||"outro"]=(motivos[q.motivo_descarte||"outro"]||0)+1; });
@@ -68711,8 +65714,9 @@ function QGAdsLeads({mc,conta,isMob,canEdit,currentUser}){
 function useAdsMarcos(accountId,dias){
   const [st,setSt]=useState({rows:[]});
   useEffect(function(){ if(!accountId||!window._sb){ setSt({rows:[]}); return; } let alive=true; const fim=_adsIso(new Date()); const ini=_adsAddDays(fim,-(dias+13));
-    window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,gasto").eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).gt("gasto",0).order("data").limit(3000).then(function(r){ if(!alive) return; setSt({rows:r.error?[]:(r.data||[])}); });
-    return function(){alive=false;}; },[accountId,dias]);
+    const _fu=_adsFiltroUnidadeNome(accountId);   /* v96 (13/10/2026) Q7: marcos só das campanhas da unidade escolhida */
+    _adsTudo(function(c){ return window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,gasto",c?{count:"exact"}:undefined).eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).gt("gasto",0).order("data").order("campaign_id"); },10000).then(/* v96 G4 */function(r){ if(!alive) return; if(r.error) console.warn("[pixels-midia-erro] marcos do histórico:",r.error.message); const rs=r.error?[]:(r.data||[]); setSt({rows:_fu?rs.filter(function(x){ return _fu(x.campaign_nome,x.campaign_id); }):rs}); });
+    return function(){alive=false;}; },[accountId,dias,_adsUnidadeAtiva()]);
   /* por campanha: primeiro e último dia com gasto → "começou" / "parou" na semana */
   const marcos={}; const porCamp={}; st.rows.forEach(function(r){ const o=porCamp[r.campaign_id]||(porCamp[r.campaign_id]={nome:r.campaign_nome,ini:r.data,fim:r.data}); if(r.data<o.ini) o.ini=r.data; if(r.data>o.fim) o.fim=r.data; });
   const hoje=_adsIso(new Date()); const janIni=_adsAddDays(hoje,-dias);
@@ -68721,26 +65725,38 @@ function useAdsMarcos(accountId,dias){
 }
 function useAdsHistorico(accountId,campId,dias){
   const [st,setSt]=useState({loading:true,rows:[]});
+  const [tick,setTick]=useState(0);   /* v96 Q6: "Tentar de novo" */
   useEffect(function(){
     if(!accountId||!window._sb){ setSt({loading:false,rows:[]}); return; }
     let alive=true; setSt(function(p){return Object.assign({},p,{loading:true});});
     /* janela termina ONTEM (hoje é parcial) — mesma âncora das outras telas */
     const fim=_adsAddDays(_adsIso(new Date()),-1); const ini=_adsAddDays(fim,-(dias-1));
     /* nível conta só pra gasto/impressões/alcance/cliques; LEADS sempre pela finalidade de cada campanha (tipo do banco) */
-    let q=window._sb.from("ads_daily").select("data,gasto,impressoes,alcance,cliques,frequencia").eq("ad_account_id",accountId).gte("data",ini).lte("data",fim).order("data").limit(400);
-    q=campId?q.eq("nivel","campanha").eq("campaign_id",campId):q.eq("nivel","conta");
-    let qc=window._sb.from("ads_daily").select("data,campaign_id,gasto,leads,conversas").eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).limit(4000);
-    if(campId) qc=qc.eq("campaign_id",campId);
+    /* v96 (13/10/2026) Q7: com unidade escolhida (e sem campanha fixa), o dia a dia é a soma das campanhas DA UNIDADE
+       (nível campanha), não o nível conta. Alcance somado entre campanhas é aproximado (a mesma pessoa pode estar em duas). */
+    const _fu=campId?null:_adsFiltroUnidadeNome(accountId);
+    /* v96 (13/10/2026) revisão RB/G4: nível campanha em páginas de 1000 (o servidor corta em 1000 sem erro e sumiam os dias mais novos) */
+    const _pag=function(mk,max){ return (typeof _qgPaginado==="function")?_qgPaginado(mk,max):mk(true).limit(max); };
+    let q=_fu?_pag(function(c){ return window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,gasto,impressoes,alcance,cliques",c?{count:"exact"}:undefined).eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).order("data").order("campaign_id"); },20000)
+      :window._sb.from("ads_daily").select("data,gasto,impressoes,alcance,cliques,frequencia").eq("ad_account_id",accountId).gte("data",ini).lte("data",fim).order("data").limit(400);
+    if(!_fu) q=campId?q.eq("nivel","campanha").eq("campaign_id",campId):q.eq("nivel","conta");
+    const qc=_pag(function(c){ let x=window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,gasto,leads,conversas",c?{count:"exact"}:undefined).eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim); if(campId) x=x.eq("campaign_id",campId); return x.order("data").order("campaign_id"); },20000);
     const qt=window._sb.from("ads_campanhas_tipo").select("campaign_id,tipo").eq("ad_account_id",accountId);
-    Promise.all([q,qc,qt]).then(function(rr){ if(!alive) return; const r=rr[0], rc=rr[1], rt=rr[2]; if(r.error) console.warn("[ads histórico]",r.error.message); const rows=r.error?[]:(r.data||[]);
+    Promise.all([q,qc,qt,_fu?_adsUniCampCarregar(accountId):null]).then(function(rr){ if(!alive) return; const r=rr[0], rc=rr[1], rt=rr[2];   /* v96 R17: espera a unidade de cada campanha */
+      /* v96 (13/10/2026) Q6: erro do servidor não vira "sem histórico" */
+      const _err=r.error||rc.error||rt.error; if(_err){ if(typeof _pxMidiaErro==="function") _pxMidiaErro("Histórico",accountId,_err.message); setSt({loading:false,rows:[],erro:_err.message}); return; }
+      let rows=r.data||[];
+      const _cortado=!!((r&&r.cortado)||(rc&&rc.cortado));   /* v96 G4 */
+      if(_fu){ const pd={}; rows.forEach(function(x){ if(!_fu(x.campaign_nome,x.campaign_id)) return; const o=pd[x.data]||(pd[x.data]={data:x.data,gasto:0,impressoes:0,alcance:0,cliques:0}); o.gasto+=Number(x.gasto||0); o.impressoes+=Number(x.impressoes||0); o.alcance+=Number(x.alcance||0); o.cliques+=Number(x.cliques||0); });
+        rows=Object.keys(pd).sort().map(function(k){ const o=pd[k]; o.frequencia=o.alcance>0?o.impressoes/o.alcance:null; return o; }); }
       const tipoDe={}; (rt.data||[]).forEach(function(t){ tipoDe[t.campaign_id]=t.tipo; });
-      const porDia={}; (rc.data||[]).forEach(function(x){ const t=tipoDe[x.campaign_id]||"outro"; const o=porDia[x.data]||(porDia[x.data]={gastoLead:0,leads:0,conversas:0}); if(_adsEhLead(t)) o.gastoLead+=Number(x.gasto||0); if(t==="form") o.leads+=Number(x.leads||0); else if(t==="lead_wpp"||t==="eng_wpp") o.conversas+=Number(x.conversas||0); });
+      const porDia={}; (rc.data||[]).forEach(function(x){ if(_fu&&!_fu(x.campaign_nome,x.campaign_id)) return; const t=tipoDe[x.campaign_id]||"outro"; const o=porDia[x.data]||(porDia[x.data]={gastoLead:0,leads:0,conversas:0}); if(_adsEhLead(t)) o.gastoLead+=Number(x.gasto||0); if(t==="form") o.leads+=Number(x.leads||0); else if(t==="lead_wpp"||t==="eng_wpp") o.conversas+=Number(x.conversas||0); });
       /* dia sem linha de campanha = 0 lead (nunca herda a soma do nível conta) */
       rows.forEach(function(d){ const o=porDia[d.data]; d.gastoLead=o?o.gastoLead:0; d.leads=o?o.leads:0; d.conversas=o?o.conversas:0; });
-      setSt({loading:false,rows:rows}); });
+      setSt({loading:false,rows:rows,cortado:_cortado}); });
     return function(){alive=false;};
-  },[accountId,campId,dias]);
-  return st;
+  },[accountId,campId,dias,_adsUnidadeAtiva(),_adsUnidadeDonaDaConta(accountId),tick]);
+  return Object.assign({},st,{reload:function(){ setTick(function(x){return x+1;}); }});
 }
 function _adsSemanaIni(iso){ const d=new Date(String(iso).slice(0,10)+"T12:00:00"); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return _adsIso(d); }
 /* gráfico de área animado com crosshair (histórico) */
@@ -68794,6 +65810,7 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
   const H=useAdsHistorico(conta&&conta.ad_account_id,campId||null,dias);
   const marcos=useAdsMarcos(conta&&conta.ad_account_id,dias);
   if(H.loading) return <AdsLoading t="Lendo histórico…"/>;
+  if(H.erro) return <AdsWrap><AdsErroCarga tela="o histórico" erro={H.erro} onTentar={H.reload}/></AdsWrap>;   /* v96 (13/10/2026) Q6 */
   const rows=H.rows||[];
   if(!rows.length) return <AdsWrap><QGAdsEmBreve nome="Sem histórico neste período"/></AdsWrap>;
   const sem={}; rows.forEach(function(r){ const k=_adsSemanaIni(r.data); const o=sem[k]||(sem[k]={k:k,gasto:0,gastoLead:0,impressoes:0,alcance:0,cliques:0,leads:0,conversas:0,dias:0}); ["gasto","gastoLead","impressoes","alcance","cliques","leads","conversas"].forEach(function(f){ o[f]+=Number(r[f]||0); }); o.dias++; });
@@ -68825,6 +65842,7 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
   const TD=Object.assign({padding:"9px 10px",borderBottom:"1px solid #f1f0f5",fontSize:12.5,color:ADS.ink2,textAlign:"right"},ADS_MONO);
   const ult8=semanas.slice(-8);
   return <AdsWrap>
+    {H.cortado&&<AdsErroCarga compacto tela="tudo do histórico" erro="o servidor devolveu só parte das linhas; os números podem estar menores que os reais"/>}{/* v96 (13/10/2026) G4 */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1fr 1fr",gap:14,marginBottom:22}}>
       <AdsCard style={{borderLeft:"4px solid "+_adsCor(nv),display:"flex",gap:16,alignItems:"center"}}>
         <div style={{minWidth:0,flex:1}}><AdsEyebrow>Estamos melhorando?</AdsEyebrow><div style={{fontSize:26,fontWeight:900,letterSpacing:"-.6px",margin:"6px 0 4px",color:nv==="n"?ADS.ink:_adsCor(nv)}}>{veredito?titulo:"Ainda cedo"}</div><div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>{veredito||"O veredito compara 4 semanas fechadas com as 4 anteriores — aparece com 6+ semanas de dados."}</div></div>
@@ -68917,13 +65935,18 @@ function useAdsCerebro(conta,P){
   useEffect(function(){
     if(!cid||!P||!window._sb){ setSt({loading:false,d:null,erro:null}); return; }
     let vivo=true; setSt(function(p){ return Object.assign({},p,{loading:true}); });
-    window._sb.rpc("ads_diag_painel",{p_conta:cid,p_de:P.ini,p_ate:P.fim}).then(function(r){
+    /* v96 (13/10/2026) Q7 (rodada 2): com unidade escolhida, o servidor corta o Diagnóstico pela unidade (ads_diag_painel_unidade).
+       Se essa função falhar, cai no ads_diag_painel da conta inteira e a faixa amarela continua avisando. */
+    const uni=_adsUnidadeAtiva();
+    const conta0=function(){ return window._sb.rpc("ads_diag_painel",{p_conta:cid,p_de:P.ini,p_ate:P.fim}); };
+    const pedido=uni?Promise.resolve(window._sb.rpc("ads_diag_painel_unidade",{p_conta:cid,p_de:P.ini,p_ate:P.fim,p_unidade:uni,p_campanhas:null})).then(function(r){ return (r&&!r.error&&r.data)?r:conta0(); },function(){ return conta0(); }):conta0();
+    Promise.resolve(pedido).then(function(r){
       if(!vivo) return;
-      if(r.error){ setSt({loading:false,d:null,erro:r.error.message}); return; }
+      if(r.error){ _pxMidiaErro("o diagnóstico",cid,r.error.message); setSt({loading:false,d:null,erro:r.error.message}); return; }   /* v96 Q6 */
       setSt({loading:false,d:r.data||null,erro:null});
-    });
+    },function(e){ if(vivo) setSt({loading:false,d:null,erro:(e&&e.message)||String(e)}); });
     return function(){ vivo=false; };
-  },[cid,P&&P.key,tick]);
+  },[cid,P&&P.key,tick,_adsUnidadeAtiva()]);
   return Object.assign({},st,{recarregar:function(){ setTick(function(x){return x+1;}); }});
 }
 
@@ -68998,7 +66021,12 @@ function AdsLinhaCorte({s,dim,maxGasto,alerta,isMob}){
   </div>;
 }
 
-function QGAdsDiagnostico({mc,conta,isMob,canEdit,currentUser}){
+function QGAdsDiagnostico({mc,conta,isMob,canEdit:_canEditTela,currentUser}){
+  /* v96 (13/10/2026) S8: "Guardar e deixar a IA ler" chama a IA de tráfego — só aprovador com o PIN aberto.
+     Vale nas duas entradas (aba Diagnóstico antiga, no 17b, e 🧠 Decisões › Diagnóstico, no 17e). Sem PIN a tela é só leitura. */
+  const _podeIA=(typeof useTCliPode==="function")?useTCliPode():false;
+  const canEdit=!!(_canEditTela&&_podeIA);
+  const _ia=useAdsIaCredito();   /* v96 Q14 */
   const {P}=useAdsPeriodo();
   const C=useAdsCerebro(conta,P);
   const [dim,setDim]=useState("idade_genero");
@@ -69013,7 +66041,8 @@ function QGAdsDiagnostico({mc,conta,isMob,canEdit,currentUser}){
   const me=(currentUser&&currentUser.id)||(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"";
 
   if(C.loading) return <AdsLoading t="Lendo o diagnóstico…"/>;
-  if(C.erro) return <AdsWrap><AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13}}>Erro: {C.erro}</AdsCard></AdsWrap>;
+  if(C.erro) return <AdsWrap contaInteira><AdsErroCarga tela="o diagnóstico" erro={C.erro} onTentar={C.recarregar}/></AdsWrap>;   /* v96 Q6/Q7 */
+  const _soUnidade=!!(C.d&&C.d.conta&&C.d.conta.filtro_unidade);   /* v96 Q7 (rodada 2): o servidor já cortou pela unidade */
   const D=C.d||{};
   const cab=D.conta||{};
   const cortes=D.cortes||{};
@@ -69114,7 +66143,7 @@ function QGAdsDiagnostico({mc,conta,isMob,canEdit,currentUser}){
     </AdsCard>;
   };
 
-  return <AdsWrap>
+  return <AdsWrap contaInteira={!_soUnidade}>   {/* v96 (13/10/2026) Q7: com ads_diag_painel_unidade a faixa vira "Vendo só X"; sem ela, avisa que é a conta inteira */}
     {/* ── o que o cliente falou ─────────────────────────── */}
     <AdsSec t="O que o cliente falou" s="escreva do seu jeito — a IA separa os fatos e você confere. O texto original nunca é apagado.">
       <AdsCard style={{padding:isMob?"14px":"16px 18px"}}>
@@ -69132,13 +66161,13 @@ function QGAdsDiagnostico({mc,conta,isMob,canEdit,currentUser}){
           </select>
           <input type="date" value={quando} onChange={function(e){ setQuando(e.target.value); }} disabled={!canEdit||!!salvando}
             style={{border:"1px solid "+ADS.line,borderRadius:10,padding:"7px 11px",fontSize:12.5,fontFamily:"inherit",minHeight:0}}/>
-          <button onClick={guardar} disabled={!canEdit||!!salvando||!String(texto).trim()}
+          <button onClick={_ia.sem?_adsSemCreditoAvisar:guardar} disabled={!canEdit||!!salvando||!String(texto).trim()}
             style={{marginLeft:isMob?0:"auto",border:0,borderRadius:11,padding:"9px 16px",fontSize:13,fontWeight:800,fontFamily:"inherit",
               background:(!canEdit||!!salvando||!String(texto).trim())?ADS.line2:ADS.accent,color:"#fff",
               cursor:(!canEdit||!!salvando||!String(texto).trim())?"default":"pointer",minHeight:0}}>
-            {salvando==="gravando"?"Guardando…":salvando==="lendo"?"A IA está lendo…":"Guardar e deixar a IA ler"}</button>
+            {salvando==="gravando"?"Guardando…":salvando==="lendo"?"A IA está lendo…":"Guardar e deixar a IA ler"+(_ia.sem?" · sem crédito de IA":"")}</button>
         </div>
-        {!canEdit&&<div style={{fontSize:12,color:ADS.muted,marginTop:8}}>Só quem edita a conta pode registrar.</div>}
+        {!canEdit&&<div style={{fontSize:12,color:ADS.muted,marginTop:8}}>{_podeIA?"Só quem tem a permissão \"Registrar o que o cliente falou\" pode registrar.":"Registrar usa a IA de tráfego: só os aprovadores, com o PIN aberto (aba 🧠 Decisões › Diagnóstico)."}</div>}   {/* v96 S8 */}
         {erro&&<div style={{marginTop:10,background:ADS.critSoft,color:ADS.crit,borderRadius:10,padding:"9px 12px",fontSize:12.5}}>{erro}</div>}
       </AdsCard>
 
@@ -69358,8 +66387,41 @@ const _socRotuloPerfil=function(a){
 const SOC_DAILY_COLS="client_id,unidade,ig_user_id,username,data,reach,follower_count_delta,total_followers,media_count,views,profile_views,website_clicks,accounts_engaged,total_interactions,likes,comments,saves,shares,replies,profile_links_taps,links_taps,views_por_tipo,online_followers";
 const SOC_POST_COLS="client_id,unidade,ig_user_id,media_id,media_type,media_product_type,permalink,caption,publicado_em,reach,likes,comments,saved,shares,video_views,total_interactions,profile_visits,follows,avg_watch_time,video_view_total_time,media_url,thumbnail_url,children";
 
+/* v96 (13/10/2026) G11: o servidor corta em 1.000 linhas, calado, qualquer leitura de tabela. _socTudo lê em páginas
+   de 1.000 (quem chama põe uma ordem fixa) até completar o total que o banco informa na 1ª página. Teto de 40 páginas. */
+async function _socTudo(mk){
+  const TAM=1000; let out=[], total=null;
+  for(let volta=0;volta<40;volta++){
+    const r=await mk(volta===0).range(out.length,out.length+TAM-1);
+    if(r.error) return {data:out,error:r.error};
+    if(volta===0&&typeof r.count==="number") total=r.count;
+    const d=r.data||[]; out=out.concat(d);
+    if(!d.length||(total!==null&&out.length>=total)||(total===null&&d.length<TAM)) break;
+  }
+  return {data:out,error:null};
+}
+/* v96 (13/10/2026) Q6: erro do servidor não pode virar "sem dados". A tela mostra "Não consegui carregar (motivo)" +
+   "Tentar de novo" (SocErroCarga) e avisa no mesmo lugar dos alarmes de tráfego via midia_erro_avisar —
+   no máximo 1 aviso por tela e por dia (o servidor também segura repetição). */
+const _socErrosAvisados={};
+function _socErro(tela,quem,msg){
+  const m=String((msg&&msg.message)||msg||"erro desconhecido").slice(0,300);
+  try{ console.error("[pixels-redes-erro]",tela,quem||"",m); }catch(_){ }
+  const h=new Date(); const dia=h.getFullYear()+"-"+(h.getMonth()+1)+"-"+h.getDate();
+  const k=tela+"|"+dia;
+  if(_socErrosAvisados[k]) return; _socErrosAvisados[k]=1;
+  try{ if(window._sb&&window._pxMidiaErroRpc!==false) window._sb.rpc("midia_erro_avisar",{p_tela:"Gestão de redes · "+tela,p_quem:String(quem||""),p_msg:m}).then(function(r){ if(r&&r.error&&(r.error.code==="PGRST202"||/not find|does not exist/i.test(r.error.message||""))) window._pxMidiaErroRpc=false; },function(){}); }catch(_){ }
+}
+function SocErroCarga({tela,erro,onTentar,compacto}){
+  return <div role="alert" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:SOC.vermBg,color:SOC.verm,border:"1px solid #f6c9c9",borderRadius:compacto?10:14,padding:compacto?"8px 12px":"12px 16px",fontSize:compacto?12:13,lineHeight:1.45,fontFamily:SOC_FONT,minWidth:0,wordBreak:"break-word"}}>
+    <span style={{minWidth:0}}><b>Não consegui carregar{tela?" "+tela:""}</b> ({String(erro||"erro no servidor")}). Isto é erro, não falta de dados.</span>
+    {onTentar&&<button type="button" onClick={onTentar} style={{marginLeft:"auto",background:"#fff",color:SOC.verm,border:"1px solid "+SOC.verm,borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:SOC_FONT,minHeight:0,whiteSpace:"nowrap"}}>Tentar de novo</button>}
+  </div>;
+}
+
 function useSocDados(dias){
   const [st,setSt]=useState({loading:true,erro:null,contas:[],diario:[],posts:[]});
+  const [tick,setTick]=useState(0);   /* v96 Q6: "Tentar de novo" */
   useEffect(function(){
     if(!window._sb){ setSt({loading:false,erro:"Sem conexão com o banco.",contas:[],diario:[],posts:[]}); return; }
     let vivo=true;
@@ -69373,38 +66435,67 @@ function useSocDados(dias){
           .select("id,client_id,unidade,handle,network,ig_user_id,page_id")
           .in("network",["instagram","facebook","tiktok","youtube"]);
         if(rc.error) throw new Error(rc.error.message);
-        const rd=await window._sb.from("social_daily").select(SOC_DAILY_COLS)
-          .gte("data",_socISO(corte2)).order("data",{ascending:true});
-        if(rd.error) throw new Error(rd.error.message);
-        const rp=await window._sb.from("social_posts").select(SOC_POST_COLS)
-          .gte("publicado_em",_socISO(corte)).order("publicado_em",{ascending:false});
+        /* v96 (13/10/2026) G11: o dia a dia (hoje ~1.200 linhas em 92 dias) vinha cortado em 1.000. Agora vem pronto do
+           servidor (social_daily_desde, um json só); se a função falhar, lê a tabela em páginas, como reserva. */
+        let diario=null;
+        const rdf=await window._sb.rpc("social_daily_desde",{p_de:_socISO(corte2)});
+        if(!rdf.error&&rdf.data&&rdf.data.ok&&Array.isArray(rdf.data.linhas)) diario=rdf.data.linhas;
+        else{
+          try{ console.warn("[redes] social_daily_desde falhou, lendo a tabela em páginas:",(rdf.error&&rdf.error.message)||(rdf.data&&rdf.data.erro)); }catch(_){ }
+          const rd=await _socTudo(function(c){ return window._sb.from("social_daily").select(SOC_DAILY_COLS,c?{count:"exact"}:undefined)
+            .gte("data",_socISO(corte2)).order("data",{ascending:true}).order("ig_user_id",{ascending:true}); });
+          if(rd.error) throw new Error(rd.error.message);
+          diario=rd.data;
+        }
+        const rp=await _socTudo(function(c){ return window._sb.from("social_posts").select(SOC_POST_COLS,c?{count:"exact"}:undefined)
+          .gte("publicado_em",_socISO(corte)).order("publicado_em",{ascending:false}).order("media_id",{ascending:true}); });   /* v96 G11: em páginas */
         if(rp.error) throw new Error(rp.error.message);
-        if(vivo) setSt({loading:false,erro:null,contas:rc.data||[],diario:rd.data||[],posts:rp.data||[]});
+        if(vivo) setSt({loading:false,erro:null,contas:rc.data||[],diario:diario||[],posts:rp.data||[]});
       }catch(e){
-        if(vivo) setSt({loading:false,erro:(e&&e.message)||"Falha ao ler os dados.",contas:[],diario:[],posts:[]});
+        const m=(e&&e.message)||"Falha ao ler os dados.";
+        _socErro("a entrada (perfis e dia a dia)","",m);   /* v96 Q6 */
+        if(vivo) setSt({loading:false,erro:m,contas:[],diario:[],posts:[]});
       }
     })();
     return function(){ vivo=false; };
-  },[dias]);
-  return st;
+  },[dias,tick]);
+  return Object.assign({},st,{recarregar:function(){ setTick(function(t){ return t+1; }); }});
 }
 
 /* Última coleta de cada perfil — fora da janela. */
+/* v96 (13/10/2026) G11/Q6: vem pronta do servidor (social_ultima_coleta → {ok, por_perfil:{ig_user_id:"AAAA-MM-DD"}}).
+   Reserva: as linhas mais novas da tabela (as 1.000 mais recentes cobrem todos os perfis ativos).
+   Devolve {mapa, erro, recarregar}: mapa=null enquanto lê OU se as duas leituras falharem (aí erro tem o motivo). */
 function useSocUltimaColeta(){
-  const [m,setM]=useState(null);
+  const [st,setSt]=useState({mapa:null,erro:null});
+  const [tick,setTick]=useState(0);
   useEffect(function(){
-    if(!window._sb){ setM({}); return; }
+    if(!window._sb){ setSt({mapa:{},erro:null}); return; }
     let vivo=true;
-    window._sb.from("social_daily").select("ig_user_id,data").order("data",{ascending:false}).limit(2000)
-      .then(function(r){
-        if(!vivo) return;
+    setSt(function(p){ return {mapa:p.mapa,erro:null}; });
+    (async function(){
+      let erro=null;
+      try{
+        const r=await window._sb.rpc("social_ultima_coleta");
+        if(!r.error&&r.data&&r.data.ok&&r.data.por_perfil&&typeof r.data.por_perfil==="object"){ if(vivo) setSt({mapa:r.data.por_perfil,erro:null}); return; }
+        erro=(r.error&&r.error.message)||(r.data&&r.data.erro)||"resposta vazia";
+        try{ console.warn("[redes] social_ultima_coleta falhou, lendo a tabela:",erro); }catch(_){ }
+      }catch(e){ erro=(e&&e.message)||String(e); }
+      try{
+        const r2=await window._sb.from("social_daily").select("ig_user_id,data").order("data",{ascending:false}).limit(1000);
+        if(r2.error) throw new Error(r2.error.message);
         const o={};
-        (r.data||[]).forEach(function(x){ if(x&&x.ig_user_id&&!o[x.ig_user_id]) o[x.ig_user_id]=x.data; });
-        setM(o);
-      });
+        (r2.data||[]).forEach(function(x){ if(x&&x.ig_user_id&&!o[x.ig_user_id]) o[x.ig_user_id]=x.data; });
+        if(vivo) setSt({mapa:o,erro:null});
+      }catch(e){
+        const m=(e&&e.message)||erro||"falha";
+        _socErro("a última coleta de cada perfil","",m);
+        if(vivo) setSt({mapa:null,erro:m});
+      }
+    })();
     return function(){ vivo=false; };
-  },[]);
-  return m;
+  },[tick]);
+  return {mapa:st.mapa,erro:st.erro,recarregar:function(){ setTick(function(t){ return t+1; }); }};
 }
 
 /* Leitura do cliente aberto: tudo dele, sem janela.
@@ -69414,39 +66505,54 @@ function useSocUltimaColeta(){
    - quantas linhas de Facebook, comentários e stories existem
    - a última rodada do coletor */
 function useSocCliente(clientId){
-  const [st,setSt]=useState({loading:true,erro:null,diario:[],posts:[],demo:[],demoEm:null,fb:null,fbUlt:null,coment:null,stories:null,storiesLista:[],log:null});
+  const [st,setSt]=useState({loading:true,erro:null,erroParte:null,diario:[],posts:[],demo:[],demoEm:null,fb:null,fbUlt:null,coment:null,stories:null,storiesLista:[],log:null});
+  const [tick,setTick]=useState(0);   /* v96 Q6: "Tentar de novo" */
   useEffect(function(){
     if(!clientId||!window._sb){ setSt(function(p){ return Object.assign({},p,{loading:false}); }); return; }
     let vivo=true;
-    setSt(function(p){ return Object.assign({},p,{loading:true,erro:null}); });
+    setSt(function(p){ return Object.assign({},p,{loading:true,erro:null,erroParte:null}); });
     (async function(){
       try{
-        const rd=await window._sb.from("social_daily").select(SOC_DAILY_COLS).eq("client_id",clientId).order("data",{ascending:true});
+        /* v96 (13/10/2026) G11: diário, publicações e público em páginas de 1.000 — a Bioter tem 1.345 publicações e
+           a tela mostrava só 1.000 (o servidor corta calado). */
+        const rd=await _socTudo(function(c){ return window._sb.from("social_daily").select(SOC_DAILY_COLS,c?{count:"exact"}:undefined).eq("client_id",clientId).order("data",{ascending:true}).order("ig_user_id",{ascending:true}); });
         if(rd.error) throw new Error(rd.error.message);
-        const rp=await window._sb.from("social_posts").select(SOC_POST_COLS).eq("client_id",clientId).order("publicado_em",{ascending:false});
+        const rp=await _socTudo(function(c){ return window._sb.from("social_posts").select(SOC_POST_COLS,c?{count:"exact"}:undefined).eq("client_id",clientId).order("publicado_em",{ascending:false}).order("media_id",{ascending:true}); });
         if(rp.error) throw new Error(rp.error.message);
+        /* v96 (13/10/2026) Q6: as leituras de apoio que falham não viram mais "—"/"nada coletado" calado: o motivo vai
+           para erroParte (faixa "Não consegui carregar parte…" + Tentar de novo). */
+        const falhas=[];
         const rq=await window._sb.from("social_demografia").select("coletado_em").eq("client_id",clientId).order("coletado_em",{ascending:false}).limit(1);
+        if(rq.error) falhas.push("público: "+rq.error.message);
         let demo=[], demoEm=null;
         if(!rq.error&&rq.data&&rq.data[0]){
           demoEm=rq.data[0].coletado_em;
-          const rr=await window._sb.from("social_demografia").select("unidade,ig_user_id,publico,dimensao,valor,pessoas").eq("client_id",clientId).eq("coletado_em",demoEm);
-          if(!rr.error) demo=rr.data||[];
+          const rr=await _socTudo(function(c){ return window._sb.from("social_demografia").select("unidade,ig_user_id,publico,dimensao,valor,pessoas",c?{count:"exact"}:undefined).eq("client_id",clientId).eq("coletado_em",demoEm).order("id",{ascending:true}); });
+          if(!rr.error) demo=rr.data||[]; else falhas.push("público: "+rr.error.message);
         }
         const rf=await window._sb.from("social_fb_posts").select("publicado_em,coletado_em",{count:"exact"}).eq("client_id",clientId).order("coletado_em",{ascending:false}).limit(1);
+        if(rf.error) falhas.push("Facebook: "+rf.error.message);
         const rcm=await window._sb.from("social_comentarios").select("id",{count:"exact",head:true}).eq("client_id",clientId);
+        if(rcm.error) falhas.push("comentários: "+rcm.error.message);
         const rs=await window._sb.from("social_stories").select("media_id,ig_user_id,media_type,publicado_em,reach,replies,views,shares,total_interactions,follows,profile_visits,taps_forward,taps_back,exits",{count:"exact"}).eq("client_id",clientId).order("publicado_em",{ascending:false}).limit(500);
+        if(rs.error) falhas.push("stories: "+rs.error.message);
         const rl=await window._sb.from("social_coleta_log").select("rodou_em,ok,erro").eq("client_id",clientId).order("rodou_em",{ascending:false}).limit(1);
-        if(vivo) setSt({loading:false,erro:null,diario:rd.data||[],posts:rp.data||[],demo:demo,demoEm:demoEm,
+        if(rl.error) falhas.push("registro da coleta: "+rl.error.message);
+        const erroParte=falhas.length?falhas.join(" · "):null;
+        if(erroParte) _socErro("parte do cliente (público, comentários, stories…)",clientId,erroParte);
+        if(vivo) setSt({loading:false,erro:null,erroParte:erroParte,diario:rd.data||[],posts:rp.data||[],demo:demo,demoEm:demoEm,
           fb:rf.error?null:(rf.count||0), fbUlt:(!rf.error&&rf.data&&rf.data[0])?rf.data[0].coletado_em:null,
           coment:rcm.error?null:(rcm.count||0), stories:rs.error?null:(rs.count||0), storiesLista:rs.error?[]:(rs.data||[]),
           log:(!rl.error&&rl.data&&rl.data[0])?rl.data[0]:null});
       }catch(e){
-        if(vivo) setSt(function(p){ return Object.assign({},p,{loading:false,erro:(e&&e.message)||"Falha ao ler o cliente."}); });
+        const m=(e&&e.message)||"Falha ao ler o cliente.";
+        _socErro("o histórico do cliente",clientId,m);   /* v96 Q6 */
+        if(vivo) setSt(function(p){ return Object.assign({},p,{loading:false,erro:m}); });
       }
     })();
     return function(){ vivo=false; };
-  },[clientId]);
-  return st;
+  },[clientId,tick]);
+  return Object.assign({},st,{recarregar:function(){ setTick(function(t){ return t+1; }); }});
 }
 
 /* ─── PEÇAS VISUAIS ──────────────────────────────────── */
@@ -69481,8 +66587,8 @@ function SocEyebrow({children,style}){
   return <div style={Object.assign({fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",color:SOC.txt3,fontWeight:800},style||{})}>{children}</div>;
 }
 /* O aviso honesto: sem coleta não é zero. */
-function SocSemColeta({perfil,temId,ultima,compacto}){
-  const motivo=!temId
+function SocSemColeta({perfil,temId,ultima,compacto,semLeitura}){
+  const motivo=(semLeitura&&temId&&!ultima)?"Não consegui ler a data da última coleta (erro no servidor, veja o aviso acima). Não dá pra dizer se ele nunca foi coletado.":!temId   /* v96 Q6 */
     ? "Este perfil está cadastrado, mas sem o identificador do Instagram — o coletor não consegue encontrá-lo."
     : (ultima? "A última coleta foi em "+_socDiaLongo(ultima)+" ("+_socRel(ultima)+"). Não há nada dentro do período escolhido."
              : "Este perfil nunca foi coletado. O identificador está cadastrado, então basta rodar a coleta.");
@@ -70090,15 +67196,21 @@ function SocCapa({post,razao,radius,children,onClick,story,child}){
 
 /* Comentários de UMA publicação — só quando ela abre. */
 function useSocComentarios(mediaId){
-  const [st,setSt]=useState({loading:!!mediaId,lista:[]});
+  const [st,setSt]=useState({loading:!!mediaId,lista:[],erro:null});
+  const [tick,setTick]=useState(0);   /* v96 Q6 */
   useEffect(function(){
-    if(!mediaId||!window._sb){ setSt({loading:false,lista:[]}); return; }
-    let vivo=true; setSt({loading:true,lista:[]});
+    if(!mediaId||!window._sb){ setSt({loading:false,lista:[],erro:null}); return; }
+    let vivo=true; setSt({loading:true,lista:[],erro:null});
     window._sb.from("social_comentarios").select("comment_id,texto,autor,publicado_em,likes").eq("media_id",mediaId).order("publicado_em",{ascending:false}).limit(200)
-      .then(function(r){ if(vivo) setSt({loading:false,lista:r.data||[]}); });
+      .then(function(r){
+        if(!vivo) return;
+        /* v96 (13/10/2026) Q6: erro do servidor não vira "nenhum comentário" */
+        if(r&&r.error){ _socErro("os comentários da publicação",String(mediaId),r.error.message); setSt({loading:false,lista:[],erro:r.error.message}); return; }
+        setSt({loading:false,lista:(r&&r.data)||[],erro:null});
+      },function(e){ if(!vivo) return; const m=(e&&e.message)||String(e); _socErro("os comentários da publicação",String(mediaId),m); setSt({loading:false,lista:[],erro:m}); });
     return function(){ vivo=false; };
-  },[mediaId]);
-  return st;
+  },[mediaId,tick]);
+  return Object.assign({},st,{recarregar:function(){ setTick(function(t){ return t+1; }); }});
 }
 
 /* ─── PUBLICAÇÕES DE ANÚNCIO (21/09/2026) ─────────────────
@@ -70108,7 +67220,11 @@ function useSocComentarios(mediaId){
    ZERO casaram com as 228 publicações orgânicas; e elas somam 1.296.944 impressões.
    Aqui a gente lê o outro lado do banco (ads_creatives + ads_daily) e mostra as duas
    origens na mesma tela — cada uma com os números que ela tem, sem misturar. */
-const _socThumbAd=function(adId){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/ads-thumb?ad="+encodeURIComponent(adId); };
+/* v96 (13/10/2026) S16: a capa do anúncio leva a "senha do dia" (&t=<ticket> do ads_thumb_chave), como no 17c (_adsThumbT).
+   Usa o mesmo window._pxThumbT/_pxThumbTPed do 17c (um ticket só para o app inteiro; o 17c limpa no logout). Pede de novo
+   quando faltar menos de 2 h. Sem ticket ainda, o link sai como antes (servidor em modo transição). */
+const _socThumbT=function(){ const x=window._pxThumbT; if((!x||new Date(x.vale_ate)-Date.now()<7200000)&&window._sb&&!window._pxThumbTPed){ window._pxThumbTPed=1; window._sb.rpc("ads_thumb_chave").then(function(r){ window._pxThumbTPed=0; if(r&&r.data&&r.data.ok){ window._pxThumbT=r.data; try{ window.dispatchEvent(new CustomEvent("pixels:thumb-t")); }catch(_){ } } },function(){ window._pxThumbTPed=0; }); } return (x&&x.ticket)?"&t="+encodeURIComponent(x.ticket):""; };
+const _socThumbAd=function(adId){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/ads-thumb?ad="+encodeURIComponent(adId)+_socThumbT(); };   /* v96 S16 */
 const SOC_CTA={WHATSAPP_MESSAGE:"Chamar no WhatsApp",MESSAGE_PAGE:"Enviar mensagem",LEARN_MORE:"Saiba mais",SIGN_UP:"Cadastre-se",CALL_NOW:"Ligar agora",SHOP_NOW:"Comprar agora",CONTACT_US:"Fale conosco",GET_QUOTE:"Pedir orçamento",SEND_MESSAGE:"Enviar mensagem",APPLY_NOW:"Candidatar-se",BOOK_TRAVEL:"Reservar",SUBSCRIBE:"Assinar",DOWNLOAD:"Baixar",GET_DIRECTIONS:"Como chegar",WATCH_MORE:"Assistir mais"};
 const _socCta=function(c){ const k=String(c||"").toUpperCase(); return SOC_CTA[k]||(c?String(c).replace(/_/g," ").toLowerCase():null); };
 const _socBRL=function(v){ const n=Number(v); return isFinite(n)?n.toLocaleString("pt-BR",{style:"currency",currency:"BRL",minimumFractionDigits:n>=100?0:2,maximumFractionDigits:n>=100?0:2}):"—"; };
@@ -70123,18 +67239,21 @@ function useSocPagas(clientId){
     let vivo=true; setSt({loading:true,lista:[],erro:null});
     (async function(){
       try{
-        const rc=await window._sb.from("ads_creatives")
-          .select("ad_id,ad_nome,formato,titulo,corpo,cta,link_destino,thumbnail_url,image_url,video_url,video_segundos,post_instagram,ad_account_id")
-          .eq("client_id",clientId).not("post_instagram","is",null).limit(600);
+        /* v96 (13/10/2026) G11: hook sem uso hoje (ver regra-publicacoes-so-posts-e-impulsionamento), mas se voltar não pode
+           somar errado: criativos e dia a dia em páginas de 1.000 (antes: limit 600 e lotes de 120 anúncios cortados em 1.000 linhas). */
+        const rc=await _socTudo(function(c){ return window._sb.from("ads_creatives")
+          .select("ad_id,ad_nome,formato,titulo,corpo,cta,link_destino,thumbnail_url,image_url,video_url,video_segundos,post_instagram,ad_account_id",c?{count:"exact"}:undefined)
+          .eq("client_id",clientId).not("post_instagram","is",null).order("ad_id",{ascending:true}); });
         if(rc.error) throw new Error(rc.error.message);
         const cr=rc.data||[];
         if(!cr.length){ if(vivo) setSt({loading:false,lista:[],erro:null}); return; }
         const ids=cr.map(function(c){ return c.ad_id; });
         const linhas=[];
         for(let i=0;i<ids.length;i+=120){
-          const rd=await window._sb.from("ads_daily")
-            .select("ad_id,data,campaign_nome,adset_nome,objetivo,gasto,impressoes,alcance,cliques,cliques_link,leads,conversas,compras,video_3s,video_p25,video_p50,video_p75,video_p100,video_thruplay,video_tempo_medio,engajamento_post")
-            .eq("nivel","anuncio").in("ad_id",ids.slice(i,i+120)).limit(20000);
+          const lote=ids.slice(i,i+120);
+          const rd=await _socTudo(function(c){ return window._sb.from("ads_daily")
+            .select("ad_id,data,campaign_nome,adset_nome,objetivo,gasto,impressoes,alcance,cliques,cliques_link,leads,conversas,compras,video_3s,video_p25,video_p50,video_p75,video_p100,video_thruplay,video_tempo_medio,engajamento_post",c?{count:"exact"}:undefined)
+            .eq("nivel","anuncio").in("ad_id",lote).order("ad_id",{ascending:true}).order("data",{ascending:true}); });
           if(rd.error) throw new Error(rd.error.message);
           (rd.data||[]).forEach(function(x){ linhas.push(x); });
         }
@@ -70189,21 +67308,23 @@ function useSocPagas(clientId){
    texto. Devolve um mapa media_id → números do anúncio.                                 */
 function useSocImpulsionados(clientId){
   const [st,setSt]=useState({loading:!!clientId,mapa:{},erro:null});
+  const [tick,setTick]=useState(0);   /* v96 Q6 */
   useEffect(function(){
     if(!clientId||!window._sb){ setSt({loading:false,mapa:{},erro:null}); return; }
     let vivo=true; setSt({loading:true,mapa:{},erro:null});
-    window._sb.from("social_posts_impulsionados")
-      .select("media_id,unidade,anuncios,ad_nome,gasto,impressoes,alcance,cliques,cliques_link,conversas,leads,video_3s,video_p25,video_p50,video_p75,video_p100,video_thruplay,de,ate,tem_numeros")
-      .eq("client_id",clientId).limit(800)
+    /* v96 (13/10/2026) G11: em páginas (antes limit 800, que o servidor ainda cortaria em 1.000) */
+    _socTudo(function(c){ return window._sb.from("social_posts_impulsionados")
+      .select("media_id,unidade,anuncios,ad_nome,gasto,impressoes,alcance,cliques,cliques_link,conversas,leads,video_3s,video_p25,video_p50,video_p75,video_p100,video_thruplay,de,ate,tem_numeros",c?{count:"exact"}:undefined)
+      .eq("client_id",clientId).order("media_id",{ascending:true}); })
       .then(function(r){
         if(!vivo) return;
-        if(r&&r.error){ setSt({loading:false,mapa:{},erro:r.error.message}); return; }
+        if(r&&r.error){ _socErro("as publicações impulsionadas",clientId,r.error.message); setSt({loading:false,mapa:{},erro:r.error.message}); return; }   /* v96 Q6 */
         const m={}; ((r&&r.data)||[]).forEach(function(x){ m[String(x.media_id)]=x; });
         setSt({loading:false,mapa:m,erro:null});
-      },function(e){ if(vivo) setSt({loading:false,mapa:{},erro:String((e&&e.message)||e)}); });
+      },function(e){ if(!vivo) return; const msg=String((e&&e.message)||e); _socErro("as publicações impulsionadas",clientId,msg); setSt({loading:false,mapa:{},erro:msg}); });
     return function(){ vivo=false; };
-  },[clientId]);
-  return st;
+  },[clientId,tick]);
+  return Object.assign({},st,{recarregar:function(){ setTick(function(t){ return t+1; }); }});
 }
 const _socEhAd=function(p){ return !!(p&&p.origem==="anuncio"); };
 const _socFreq=function(p){ return (p.impressoes&&p.reach)?p.impressoes/p.reach:null; };
@@ -70466,9 +67587,10 @@ function SocLightbox({post,todos,demo,seguidores,imp,onClose,isMob}){
             {Num("Dia e hora",[diaSemana,hora].filter(Boolean).join(", ")||"—","quando foi publicada")}
             {Num("Formato",_socTipo(post.media_type),R.nMesmo?R.nMesmo+" do mesmo tipo no perfil":null)}
           </div>
-          {K("Comentários · "+(C.loading?"…":C.lista.length))}
+          {K("Comentários · "+(C.loading?"…":C.erro?"?":C.lista.length))}
           {C.loading&&<div style={{fontSize:12,color:SOC.txt3}}>Lendo…</div>}
-          {!C.loading&&!C.lista.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>{_socTem(post.comments)&&post.comments>0?"A Meta contou "+post.comments+", mas o coletor de comentários ainda não passou por aqui.":"Nenhum comentário guardado."}</div>}
+          {!C.loading&&C.erro&&<SocErroCarga compacto tela="os comentários" erro={C.erro} onTentar={C.recarregar}/>}{/* v96 (13/10/2026) Q6 */}
+          {!C.loading&&!C.erro&&!C.lista.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>{_socTem(post.comments)&&post.comments>0?"A Meta contou "+post.comments+", mas o coletor de comentários ainda não passou por aqui.":"Nenhum comentário guardado."}</div>}
           {!C.loading&&C.lista.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:320,overflow:"auto"}}>
             {C.lista.map(function(c){ return <div key={c.comment_id} style={{background:SOC.chao,border:"1px solid "+SOC.borda,borderRadius:12,padding:"9px 12px",minWidth:0}}>
               <div style={{fontSize:13,color:SOC.txt,lineHeight:1.5,wordBreak:"break-word"}}>{c.texto}</div>
@@ -70741,6 +67863,7 @@ function SocPublicacoes({posts,boost,dias,isMob,demo,seguidores}){
         {_socN(lista.length)} {lista.length===1?"publicação":"publicações"}{nImp?" · "+nImp+(nImp===1?" impulsionada":" impulsionadas")+(gastoTotal>0?" ("+_socBRL(gastoTotal)+" em mídia)":""):""}{comNum.length&&medias.reach!==null?" · alcance médio "+_socN(Math.round(medias.reach)):""}. Clique na capa pra ver a mídia em tamanho real, com o vídeo tocando e o carrossel passando.
         {boost&&boost.loading&&<span style={{color:SOC.roxo}}> · vendo quais foram impulsionadas…</span>}
       </div>
+      {boost&&!boost.loading&&boost.erro&&<div style={{marginTop:10}}><SocErroCarga compacto tela="quais publicações foram impulsionadas" erro={boost.erro} onTentar={boost.recarregar}/></div>}{/* v96 (13/10/2026) Q6: sem isso o erro virava "nenhuma impulsionada" */}
     </SocCard>
 
     {!lista.length&&<SocCard><div style={{fontSize:12.5,color:SOC.txt3}}>Nada com esses filtros.</div></SocCard>}
@@ -70866,7 +67989,7 @@ function SocHistorico({diario,posts,isMob}){
 }
 
 /* ─── ABA: CONTAS (as quatro fontes) ─────────────────── */
-function SocContas({contas,clientId,dados,ultimaColeta,isMob}){
+function SocContas({contas,clientId,dados,ultimaColeta,ucErro,isMob}){
   const ig=contas.filter(function(a){ return a.network==="instagram"; });
   const fb=contas.filter(function(a){ return a.network==="facebook"; });
   const tk=contas.filter(function(a){ return a.network==="tiktok"; });
@@ -70898,7 +68021,7 @@ function SocContas({contas,clientId,dados,ultimaColeta,isMob}){
     ]}/>
     <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><div style={{fontSize:15,fontWeight:800,letterSpacing:-.2,color:SOC.txt}}>As quatro fontes</div><div style={{fontSize:12,color:SOC.txt3}}>o que cada uma entrega hoje</div></div>
     <Fonte nome="Instagram" conta={ig.length?ig.map(_socRotuloPerfil).join(" · "):"nenhum perfil cadastrado"} cor={SOC.roxo}
-      pill={!ig.length?"não cadastrado":semId.length?"falta identificador":ult?"funcionando":"nunca coletado"} pillCor={(!ig.length||semId.length||!ult)?SOC.amar:SOC.verde} pillBg={(!ig.length||semId.length||!ult)?SOC.amarBg:SOC.verdeBg}
+      pill={!ig.length?"não cadastrado":semId.length?"falta identificador":ult?"funcionando":ucErro?"coleta não lida":"nunca coletado"} pillCor={(!ig.length||semId.length||!ult)?SOC.amar:SOC.verde} pillBg={(!ig.length||semId.length||!ult)?SOC.amarBg:SOC.verdeBg}
       ultima={ult?_socRel(ult):"—"}
       linhas={[
         ["Dias de alcance",_socN(r.diasAlcance),r.diasAlcance?(_socDia(r.primeiroDia)+" a "+_socDia(r.ultimoDia)+" · a Meta só guarda 90"):"a Meta só guarda 90"],
@@ -70943,7 +68066,7 @@ function SocContas({contas,clientId,dados,ultimaColeta,isMob}){
 
 /* ─── PAINEL DO CLIENTE ──────────────────────────────── */
 const SOC_ABAS=[["visao","Visão geral"],["publicacoes","Publicações"],["publico","Público"],["historico","Histórico"],["contas","Contas"]];
-function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVoltar,bl}){
+function SocCliente({clientId,contas,diario,posts,ultimaColeta,ucErro,dias,isMob,onVoltar,bl}){
   const [aba,setAba]=useState("visao");
   const [perfil,setPerfil]=useState("todos");
   useEffect(function(){ setAba("visao"); setPerfil("todos"); },[clientId]);
@@ -70976,7 +68099,7 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
         <button onClick={onVoltar} style={SOC_BTN("sm")}>← Todos os clientes</button>
         <div style={{fontSize:17,fontWeight:900,letterSpacing:-.4,color:SOC.txt,minWidth:0,wordBreak:"break-word"}}>{_socNomeCliente(clientId)}</div>
         {handle?<SocPill>{handle}</SocPill>:<SocPill>{minhasIg.length===1?"1 perfil":minhasIg.length+" perfis"}</SocPill>}
-        {ultimaDoCliente?<SocPill cor={SOC.verde} bg={SOC.verdeBg}>coletado {_socRel(ultimaDoCliente)}</SocPill>:<SocPill cor={SOC.amar} bg={SOC.amarBg}>nunca coletado</SocPill>}
+        {ultimaDoCliente?<SocPill cor={SOC.verde} bg={SOC.verdeBg}>coletado {_socRel(ultimaDoCliente)}</SocPill>:ucErro?<SocPill cor={SOC.verm} bg={SOC.vermBg} titulo={ucErro.erro}>coleta não lida</SocPill>:<SocPill cor={SOC.amar} bg={SOC.amarBg}>nunca coletado</SocPill>}
         <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {seg!==null&&<SocPill>{_socN(seg)} seguidores</SocPill>}
           {minhasIg.length>1&&<select value={perfil} onChange={function(e){ setPerfil(e.target.value); }}
@@ -71007,15 +68130,17 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
     </div>}
 
     {!semAba&&C.loading&&<SocCarregando t="Lendo o histórico do cliente…"/>}
-    {!semAba&&!C.loading&&C.erro&&<SocCard titulo="Não consegui ler o histórico"><div style={{fontSize:12.5,color:SOC.txt2,wordBreak:"break-word"}}>{C.erro}</div></SocCard>}
+    {!semAba&&!C.loading&&C.erro&&<SocErroCarga tela="o histórico do cliente" erro={C.erro} onTentar={C.recarregar}/>}{/* v96 Q6 */}
+    {!semAba&&!C.loading&&!C.erro&&C.erroParte&&<SocErroCarga compacto tela="parte dos dados do cliente" erro={C.erroParte} onTentar={C.recarregar}/>}
+    {!semAba&&ucErro&&<SocErroCarga compacto tela="a última coleta de cada perfil" erro={ucErro.erro} onTentar={ucErro.recarregar}/>}
     {!semAba&&!C.loading&&!C.erro&&(vazio&&abaAtiva!=="contas"
-      ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null} temId={contaSel?!!contaSel.ig_user_id:minhasIg.some(function(a){ return !!a.ig_user_id; })} ultima={ultimaDoCliente}/></SocCard>
+      ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null} temId={contaSel?!!contaSel.ig_user_id:minhasIg.some(function(a){ return !!a.ig_user_id; })} ultima={ultimaDoCliente} semLeitura={!!ucErro}/></SocCard>
       : <>
-        {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} stories={C.storiesLista.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; })} pagas={P} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
+        {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} stories={C.storiesLista.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; })} pagas={null} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}{/* v96 (13/10/2026): "pagas={P}" apontava para uma variável que não existe mais (useSocPagas saiu em 21/09) — ReferenceError na Visão geral. Agora null: o bloco Orgânico × pago some, como já era a intenção. */}
         {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} boost={IMP} dias={dias} isMob={isMob} demo={meuDemo} seguidores={seg}/>}
         {abaAtiva==="publico"&&<SocPublico demo={meuDemo} demoEm={C.demoEm} seguidores={seg} isMob={isMob}/>}
         {abaAtiva==="historico"&&<SocHistorico diario={meuDiarioTudo} posts={meusPostsTudo} isMob={isMob}/>}
-        {abaAtiva==="contas"&&<SocContas contas={minhasContas} clientId={clientId} dados={C} ultimaColeta={ultimaColeta} isMob={isMob}/>}
+        {abaAtiva==="contas"&&<SocContas contas={minhasContas} clientId={clientId} dados={C} ultimaColeta={ultimaColeta} ucErro={ucErro} isMob={isMob}/>}
       </>)}
   </SocWrap>;
 }
@@ -71023,36 +68148,38 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
 /* ─── INVENTÁRIO DA AGÊNCIA — o que existe no banco, por perfil ── */
 /* Só ids e contagens (colunas leves), pra montar a tabela da entrada sem puxar legenda nem número. */
 function useSocInventario(){
-  const [st,setSt]=useState({loading:true,posts:{},comNum:{},coment:{},fb:{},demo:{},stories:{},log:null});
+  const [st,setSt]=useState({loading:true,erro:null,posts:{},comNum:{},coment:{},fb:{},demo:{},stories:{},log:null});
+  const [tick,setTick]=useState(0);   /* v96 Q6 */
   useEffect(function(){
     if(!window._sb){ setSt(function(p){ return Object.assign({},p,{loading:false}); }); return; }
     let vivo=true;
-    const chave=function(r){ return r.client_id+"|"+(r.unidade||""); };
-    const conta=function(rows,filtro){ const o={}; (rows||[]).forEach(function(r){ if(filtro&&!filtro(r)) return; const k=chave(r); o[k]=(o[k]||0)+1; }); return o; };
+    setSt(function(p){ return Object.assign({},p,{loading:true,erro:null}); });
+    /* v96 (13/10/2026) G11: antes baixava até 20 mil linhas de 5 tabelas e contava no navegador — e o servidor cortava cada
+       leitura em 1.000 (a tela mostrava 1.000 publicações, 1.000 do Facebook e 1.000 do público, quando são 2.148, 1.879 e 18.163).
+       Agora as contagens vêm prontas: social_inventario() → {ok, posts, comNum, coment, fb, demo, stories, log}, chave "cliente|unidade".
+       Reserva segura: se a função falhar, NÃO volta a contar no navegador (daria número errado) — mostra o erro com "Tentar de novo". */
     (async function(){
+      let m=null;
       try{
-        const rp=await window._sb.from("social_posts").select("client_id,unidade,reach").limit(20000);
-        const rc=await window._sb.from("social_comentarios").select("client_id,unidade").limit(20000);
-        const rf=await window._sb.from("social_fb_posts").select("client_id,unidade").limit(20000);
-        const rd=await window._sb.from("social_demografia").select("client_id,unidade,coletado_em").limit(20000);
-        const rs=await window._sb.from("social_stories").select("client_id,unidade").limit(5000);
-        const rl=await window._sb.from("social_coleta_log").select("rodou_em,ok").order("rodou_em",{ascending:false}).limit(1);
-        /* demografia: só o retrato mais recente de cada perfil */
-        const ultDemo={}; (rd.data||[]).forEach(function(r){ const k=chave(r); if(!ultDemo[k]||String(r.coletado_em)>ultDemo[k]) ultDemo[k]=String(r.coletado_em); });
-        if(vivo) setSt({loading:false,
-          posts:conta(rp.data), comNum:conta(rp.data,function(r){ return _socTem(r.reach); }),
-          coment:conta(rc.data), fb:conta(rf.data),
-          demo:conta(rd.data,function(r){ return String(r.coletado_em)===ultDemo[chave(r)]; }),
-          stories:conta(rs.data), log:(rl.data&&rl.data[0])||null});
-      }catch(_){ if(vivo) setSt(function(p){ return Object.assign({},p,{loading:false}); }); }
+        const r=await window._sb.rpc("social_inventario");
+        if(r.error) m=r.error.message;
+        else if(!r.data||!r.data.ok) m=(r.data&&r.data.erro)||"resposta vazia";
+        else{
+          const d=r.data; const ob=function(x){ return (x&&typeof x==="object")?x:{}; };
+          if(vivo) setSt({loading:false,erro:null,posts:ob(d.posts),comNum:ob(d.comNum),coment:ob(d.coment),fb:ob(d.fb),demo:ob(d.demo),stories:ob(d.stories),log:d.log||null});
+          return;
+        }
+      }catch(e){ m=(e&&e.message)||String(e); }
+      _socErro("as contagens do banco (inventário)","",m);
+      if(vivo) setSt({loading:false,erro:m,posts:{},comNum:{},coment:{},fb:{},demo:{},stories:{},log:null});
     })();
     return function(){ vivo=false; };
-  },[]);
-  return st;
+  },[tick]);
+  return Object.assign({},st,{recarregar:function(){ setTick(function(t){ return t+1; }); }});
 }
 
 /* ─── PAINEL DE ENTRADA — a agência inteira ───────────── */
-function SocPainelAgencia({contas,diario,posts,ultimaColeta,inv,dias,isMob,busca,onAbrir}){
+function SocPainelAgencia({contas,diario,posts,ultimaColeta,ucErro,inv,dias,isMob,busca,onAbrir}){
   const ig=contas.filter(function(a){ return a.network==="instagram"; });
   const chave=function(a){ return a.client_id+"|"+(a.unidade||""); };
   const termo=String(busca||"").trim().toLowerCase();
@@ -71067,7 +68194,9 @@ function SocPainelAgencia({contas,diario,posts,ultimaColeta,inv,dias,isMob,busca
     const nP=inv.posts[k]||0, nN=inv.comNum[k]||0;
     let estado=["","—"];
     if(!a.ig_user_id) estado=["wr","sem identificador"];
+    else if(!ult&&ucErro) estado=["","coleta não lida"];   /* v96 Q6: erro ao ler ≠ "nunca coletado" */
     else if(!ult) estado=["wr","nunca coletado"];
+    else if(inv.erro) estado=["","contagem não lida"];   /* v96 Q6: erro ao contar ≠ "publicações faltando" */
     else if(!nP) estado=["wr","publicações faltando"];
     else if(nN<nP*0.3) estado=["","completando números"];
     else estado=["ok","completo"];
@@ -71086,14 +68215,16 @@ function SocPainelAgencia({contas,diario,posts,ultimaColeta,inv,dias,isMob,busca
   const faltando=linhas.filter(function(l){ return l.estado[0]==="wr"; });
   const th={fontSize:10.5,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,fontWeight:800,textAlign:"right",padding:"0 10px 9px",borderBottom:"1px solid "+SOC.borda,whiteSpace:"nowrap"};
   const td={padding:"9px 10px",borderBottom:"1px solid #f2f0f7",textAlign:"right",whiteSpace:"nowrap",fontWeight:700,fontSize:12.5,color:SOC.txt};
-  const z=<span style={{color:SOC.borda2,fontWeight:600}}>—</span>;
+  const z=inv.erro?<span title="não consegui ler as contagens" style={{color:SOC.verm,fontWeight:700}}>?</span>:<span style={{color:SOC.borda2,fontWeight:600}}>—</span>;   /* v96 Q6 */
   const un=function(t){ return <span style={{fontWeight:600,color:SOC.txt3,fontSize:11.5}}>{t}</span>; };
   const g2={display:"grid",gridTemplateColumns:isMob?"1fr":"1.25fr 1fr",gap:14,alignItems:"start",minWidth:0};
   return <>
+    {inv.erro&&<SocErroCarga tela="as contagens do banco (publicações, público, comentários, Facebook)" erro={inv.erro} onTentar={inv.recarregar}/>}{/* v96 Q6 */}
+    {ucErro&&<SocErroCarga tela="a última coleta de cada perfil" erro={ucErro.erro} onTentar={ucErro.recarregar}/>}{/* v96 Q6 */}
     <SocSolidos isMob={isMob} itens={[
       {eye:"Seguidores somados", big:_socN(totSeg), s:deCliente.length+" perfis de "+nClientes+" clientes · fora a conta da própria Pixels"},
       {eye:"Alcance somado · "+dias+" dias", big:_socN(totR), s:"soma dos dias de todos os perfis — serve pra comparar, não é “pessoas”"},
-      {eye:"Guardado no banco", big:inv.loading?"…":_socN(totLinhas+diario.length), s:inv.loading?"contando…":(_socN(diario.length)+" dias + "+_socN(Object.keys(inv.posts).reduce(function(s,k){ return s+inv.posts[k]; },0))+" publicações + "+_socN(Object.keys(inv.demo).reduce(function(s,k){ return s+inv.demo[k]; },0))+" do público + "+_socN(Object.keys(inv.fb).reduce(function(s,k){ return s+inv.fb[k]; },0))+" do Facebook + "+_socN(Object.keys(inv.coment).reduce(function(s,k){ return s+inv.coment[k]; },0))+" comentários")},
+      {eye:"Guardado no banco", big:inv.erro?"?":inv.loading?"…":_socN(totLinhas+diario.length), s:inv.erro?"não consegui contar — veja o aviso acima":inv.loading?"contando…":(_socN(diario.length)+" dias + "+_socN(Object.keys(inv.posts).reduce(function(s,k){ return s+inv.posts[k]; },0))+" publicações + "+_socN(Object.keys(inv.demo).reduce(function(s,k){ return s+inv.demo[k]; },0))+" do público + "+_socN(Object.keys(inv.fb).reduce(function(s,k){ return s+inv.fb[k]; },0))+" do Facebook + "+_socN(Object.keys(inv.coment).reduce(function(s,k){ return s+inv.coment[k]; },0))+" comentários")},
     ]}/>
     <SocCard titulo="Todos os perfis" sub="clique pra abrir o cliente" direita={<SocPill cor={SOC.roxo} bg={SOC.roxoBg}>ordenado por seguidores</SocPill>} pad="12px 20px 14px">
       <div style={{overflowX:"auto",minWidth:0}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:860}}>
@@ -71138,14 +68269,16 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
   const [busca,setBusca]=useState("");
   const [aberto,setAberto]=useState(null);
   const D=useSocDados(dias);
-  const ultimaColeta=useSocUltimaColeta();
+  const UC=useSocUltimaColeta();   /* v96 G11/Q6: {mapa, erro, recarregar} */
+  const ultimaColeta=UC.mapa;
+  const ucErro=UC.erro?UC:null;
   const inv=useSocInventario();
 
   const _vu=viewUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null);
   const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:_vu,perms:perms}):true; };
 
   if(D.loading) return <SocWrap><SocCarregando t="Lendo as redes…"/></SocWrap>;
-  if(D.erro) return <SocWrap><SocCard titulo="Não consegui ler os dados"><div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55,wordBreak:"break-word"}}>{D.erro}</div></SocCard></SocWrap>;
+  if(D.erro) return <SocWrap><SocErroCarga tela="os perfis e o dia a dia das redes" erro={D.erro} onTentar={D.recarregar}/></SocWrap>;   /* v96 Q6 */
 
   const porCliente={};
   D.contas.forEach(function(a){ (porCliente[a.client_id]=porCliente[a.client_id]||[]).push(a); });
@@ -71154,7 +68287,7 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
   const comColeta=ultimaColeta?igTodas.filter(function(a){ return a.ig_user_id&&ultimaColeta[a.ig_user_id]; }).length:null;
 
   if(aberto&&porCliente[aberto]) return <SocCliente clientId={aberto} contas={D.contas} diario={D.diario} posts={D.posts}
-    ultimaColeta={ultimaColeta} dias={dias} isMob={isMob} bl={_bl} onVoltar={function(){ setAberto(null); }}/>;
+    ultimaColeta={ultimaColeta} ucErro={ucErro} dias={dias} isMob={isMob} bl={_bl} onVoltar={function(){ setAberto(null); }}/>;
 
   return <SocWrap>
     <SocCard pad="12px 20px">
@@ -71175,7 +68308,7 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
     </SocCard>
     {!igTodas.length
       ? <SocCard titulo="Nenhum perfil cadastrado"><div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>Os perfis ficam em Acessos › Time › Redes sociais. Cadastre um perfil de Instagram com o identificador para ele aparecer aqui.</div></SocCard>
-      : <SocPainelAgencia contas={D.contas} diario={D.diario} posts={D.posts} ultimaColeta={ultimaColeta} inv={inv} dias={dias} isMob={isMob} busca={busca} onAbrir={function(id){ setAberto(id); }}/>}
+      : <SocPainelAgencia contas={D.contas} diario={D.diario} posts={D.posts} ultimaColeta={ultimaColeta} ucErro={ucErro} inv={inv} dias={dias} isMob={isMob} busca={busca} onAbrir={function(id){ setAberto(id); }}/>}
   </SocWrap>;
 }
 
@@ -71185,29 +68318,228 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
    v79: 🧠 IA DENTRO DO CLIENTE — selo na lista, cartão no topo do cliente e aba "🧠 Decisões" (a Central só daquele cliente).
    v75: 🧱 MONTADOR DE CAMPANHA (copia de um modelo que funciona, valida na Meta sem criar, publica PAUSADO com PIN 2x).
    v73: PIN ÚNICO DA AGÊNCIA e toda mudança pede o PIN 2 vezes (1º abre a revisão com valor/cidades/público da Meta, 2º envia).
-   QUEM VÊ: só os aprovadores (Vinícius e Gustavo). Chave no banco: auto.config ads_ia_visivel_para = 'aprovadores'.
+   QUEM VÊ: só os sócios aprovadores. Chave no banco: auto.config ads_ia_visivel_para = 'aprovadores'.
+   v96 (13/10/2026) S8: exceção — a "Leitura da IA" da Visão geral (17c) é só leitura para toda a equipe; o que gasta crédito
+   ou leva às decisões (Atualizar leitura, 🧠 Resolver, Decisões, Sala, Montador) continua só para os aprovadores.
    Para qualquer outra pessoa (ex.: Erick) o banco responde {pode:false} e esta tela devolve a Gestão de mídia
    EXATAMENTE como sempre foi — sem PIN, sem barra, sem botão, sem texto novo.
    SEGURANÇA DE VERDADE fica no banco: PIN só em hash, conferido no servidor, 5 erros = bloqueio, ticket de uso único para
    cada alteração. Esta tela é só a porta; se ela falhar ao consultar o banco, mostra a Gestão de mídia normal (nunca tranca
    os sócios fora) — as alterações continuam travadas no servidor.
-   Pode ser removido sem efeito colateral: basta tirar o <TSegPortao> em volta da PageGestaoMidia. */
+   v96 (13/10/2026) M14: NÃO dá mais para remover só tirando o <TSegPortao>: o 17b e o 17c usam peças daqui (TCliSelo, TCliPrecisa,
+   TCliCartao, TCliDecisoes, TMetasMes, TCenFaixa, TCliResolver, useTCliPode) — todas chamadas com "typeof", então somem sem quebrar,
+   mas a aba 🧠 Decisões e as Metas do mês somem junto. */
 
 const _tsegRpc = async function (fn, args) {
   const r = await window._sb.rpc(fn, args || {});
   if (r.error) throw new Error(r.error.message || "Erro no servidor");
   return r.data;
 };
-const _tsegHora = function (iso) {
+/* ---------- v96 (13/10/2026) E5: UM formatador de R$, número e data para o arquivo inteiro ----------
+   Antes eram 9 cópias (_tcenBrl, _tmetaBrl, _tdgBRL, _tmetaNum, _tdgNum, _tdgDM, _tcolData, _tcolHora, _tsegHora). Os nomes
+   antigos continuam existindo, mas agora apontam para estes. Vazio/sem número = "—" em todo lugar. */
+const _tiaBrl = function (v, casas) {
+  if (v === null || v === undefined || v === "" || !isFinite(Number(v))) return "—";
+  const c = casas === 0 ? 0 : 2;
+  return "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: c, maximumFractionDigits: c });
+};
+const _tiaNum = function (v, casas) {
+  if (v === null || v === undefined || v === "" || !isFinite(Number(v))) return "—";
+  return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: casas || 0 });
+};
+const _tiaUsd = function (v) { return isFinite(Number(v)) ? Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"; };
+const _tiaDM = function (d) { return d ? String(d).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : ""; };   // "2026-10-12" → "12/10"
+const _tiaHora = function (iso) {
   if (!iso) return "";
-  const d = new Date(iso);
+  const d = new Date(iso); if (isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 };
-const _tsegQuando = function (iso) {
+const _tiaQuando = function (iso) {
   if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + _tsegHora(iso);
+  const d = new Date(iso); if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + _tiaHora(iso);
 };
+const _tsegHora = _tiaHora;
+const _tsegQuando = _tiaQuando;
+/* v96 (13/10/2026) P2_13_03: "até quando vão os dados". Normal = dados até ontem (antes das 7h, anteontem ainda é normal,
+   porque a coleta da madrugada pode não ter terminado). Atrasou = selo vermelho com quantos dias. */
+const _tiaFrescor = function (ate) {
+  if (!ate) return null;
+  const p = String(ate).slice(0, 10).split("-").map(Number); if (p.length !== 3 || !p[0]) return null;
+  const agora = new Date();
+  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  const dAte = new Date(p[0], p[1] - 1, p[2]);
+  const atras = Math.round((hoje - dAte) / 86400000) - 1;   // 0 = dados até ontem
+  const tolera = (agora.getHours() * 60 + agora.getMinutes()) < 390 ? 1 : 0;   // v96 (13/10/2026) Q15 rodada 2: coleta às 4h, dados prontos às 6h30
+  const atrasado = atras > tolera;
+  return { ate: _tiaDM(ate), dias: Math.max(0, atras), atrasado: atrasado,
+    txt: "dados até " + _tiaDM(ate) + (atrasado ? ": coleta atrasada " + atras + (atras > 1 ? " dias" : " dia") : "") };
+};
+function TiaSeloDados({ ate, extra, estilo, pill }) {   // v96 P2_13_03: o selo usado nas telas que já mostravam "números até"
+  const f = _tiaFrescor(ate); if (!f) return null;
+  if (pill && !f.atrasado) return <span className="tdg-pill" title="Os números vão até este dia. O último dia ainda pode subir um pouco.">{f.txt}{extra || ""}</span>;
+  return <span title={f.atrasado ? "A coleta da Meta não chegou nos últimos dias. Confira se é falta de gasto ou falha na coleta antes de decidir." : "Os números vão até este dia. O último dia ainda pode subir um pouco."}
+    style={Object.assign({ fontSize: 11, fontWeight: f.atrasado ? 800 : 600, color: f.atrasado ? "#b91c1c" : "#94a3b8", background: f.atrasado ? "#fee2e2" : "transparent",
+      borderRadius: 999, padding: f.atrasado ? "2px 8px" : 0, whiteSpace: "nowrap" }, estilo || {})}>{f.atrasado ? "⚠️ " : ""}{f.txt}{extra || ""}</span>;
+}
+/* v96 (13/10/2026) R16: régua mínima única. O Diagnóstico usa a do servidor (amostra_min); quando a tela precisa de uma régua
+   própria (ex.: conversas 5+ dos criativos) usa esta. Escolha do Vini (R7, opção A): 10 resultados. */
+const _TIA_AMOSTRA_MIN = 10;
+/* v96 (13/10/2026) M14/Q15 (rodada 2): os horários vêm do agendamento do servidor (ads_rotinas_horarios) — mudou lá, muda aqui sozinho.
+   Os valores abaixo são só a reserva, se a função falhar (horários aprovados no Q15, Brasília). */
+const _TIA_HORARIOS = { decisoes: "06h20", analise: "06h30", mercado: "segunda, 8h", texto: "" };
+/* v96 (13/10/2026) R4/R6 (rodada 2): limites do ritmo de verba e de leads vêm do servidor (ads_placar_mes → limites, em auto.config).
+   Reserva igual à de hoje, se a função falhar. */
+const _TIA_LIMITES = { leads_ok: 0.95, leads_perto: 0.75, verba_alto: 1.15, verba_baixo: 0.8 };
+window._tiaCfg = window._tiaCfg || { lido: false, prom: null, ouvintes: [] };
+const _tiaCfgLer = function () {
+  const C = window._tiaCfg;
+  if (C.lido || C.prom || !window._sb) return C.prom || Promise.resolve();
+  if (C.t && Date.now() - C.t < 300000) return Promise.resolve();   // falhou há pouco: tenta de novo daqui a 5 min (até lá, a reserva)
+  C.t = Date.now(); let nOk = 0;
+  C.prom = Promise.all([
+    _tsegRpc("ads_rotinas_horarios").then(function (h) { if (h && h.ok) { nOk++; ["decisoes", "analise", "mercado", "alarmes", "coleta", "rechecagem", "texto"].forEach(function (k) { if (h[k]) _TIA_HORARIOS[k] = h[k]; }); } }).catch(function () {}),
+    _tsegRpc("ads_placar_mes", { p_clients: [], p_mes: null }).then(function (r) { const l = r && r.ok && r.limites; if (l) { nOk++; Object.keys(_TIA_LIMITES).forEach(function (k) { if (isFinite(Number(l[k])) && Number(l[k]) > 0) _TIA_LIMITES[k] = Number(l[k]); }); } }).catch(function () {}),
+  ]).then(function () { if (nOk === 2) C.lido = true; }).finally(function () { C.prom = null; (C.ouvintes || []).slice().forEach(function (f) { try { f(); } catch (_) {} }); });
+  return C.prom;
+};
+function useTiaCfg() {   // re-desenha quando horários/limites chegarem do servidor
+  const [, setN] = useState(0);
+  useEffect(function () {
+    const f = function () { setN(function (n) { return n + 1; }); };
+    window._tiaCfg.ouvintes.push(f); _tiaCfgLer();
+    return function () { window._tiaCfg.ouvintes = window._tiaCfg.ouvintes.filter(function (x) { return x !== f; }); };
+  }, []);
+  return { h: _TIA_HORARIOS, l: _TIA_LIMITES };
+}
+
+/* ---------- v96 (13/10/2026) G6: rotinas pausam com a aba do navegador escondida e atualizam ao voltar ---------- */
+const _tiaVisivel = function () { try { return typeof document === "undefined" || !document.hidden; } catch (_) { return true; } };
+const _tiaAoVoltar = function (fn) {   // devolve a função que tira o ouvinte
+  const h = function () { if (_tiaVisivel()) { try { fn(); } catch (_) {} } };
+  try { document.addEventListener("visibilitychange", h); } catch (_) {}
+  return function () { try { document.removeEventListener("visibilitychange", h); } catch (_) {} };
+};
+
+/* ---------- v96 (13/10/2026) Q14 / P2_10_05 / P2_10_13: crédito da IA conhecido por todas as peças ----------
+   Um lugar só guarda o "Saldo da IA" (ia_saldo_status). Quando a Anthropic recusou por falta de crédito (zerou_em), os botões
+   que usam IA ficam cinza com "sem crédito de IA" e avisam NA HORA (em vez de abrir a Sala e falhar depois de 1 min).
+   Ao informar o saldo novo no 💳 Saldo da IA, o servidor apaga o zerou_em e tudo volta sozinho.
+   Outros arquivos podem usar: useIaSemCredito() e _tiaAvisarSemCredito() (com typeof, como os TCli*). */
+window._tia = window._tia || { st: null, t: 0, carregando: null, ouvintes: [] };
+const _tiaAvisar = function () { (window._tia.ouvintes || []).slice().forEach(function (f) { try { f(); } catch (_) {} }); };
+const _tiaSaldoLer = function (forcar) {
+  const T = window._tia;
+  if (T.carregando) return T.carregando;
+  if (!forcar && T.st && Date.now() - T.t < 60000) return Promise.resolve(T.st);
+  T.carregando = _tsegRpc("ia_saldo_status").then(function (r) { if (r && r.ok) { T.st = r; T.t = Date.now(); } return T.st; })
+    .catch(function () { return T.st; })
+    .finally(function () { T.carregando = null; _tiaAvisar(); });
+  return T.carregando;
+};
+const _tiaSaldoGuardar = function (r) { if (r && r.ok) { window._tia.st = r; window._tia.t = Date.now(); _tiaAvisar(); } };
+function useIaSaldo() {
+  const [, setN] = useState(0);
+  useEffect(function () {
+    const f = function () { setN(function (n) { return n + 1; }); };
+    window._tia.ouvintes.push(f);
+    if (window._tcli && window._tcli.ok) _tiaSaldoLer(false);   // só quem vê a IA pergunta (o servidor responde "sem permissão" para o resto)
+    return function () { window._tia.ouvintes = window._tia.ouvintes.filter(function (x) { return x !== f; }); };
+  }, []);
+  return window._tia.st;
+}
+const _tiaSemCreditoDe = function (st) { return !!(st && st.ok && st.zerou_em); };
+function useIaSemCredito() { const st = useIaSaldo(); return _tiaSemCreditoDe(st) ? { sem: true, desde: st.zerou_em } : { sem: false, desde: null }; }
+const _tiaSemCreditoAgora = function () { return _tiaSemCreditoDe(window._tia && window._tia.st); };
+const _TIA_SEM_TXT = "sem crédito de IA";
+const _tiaAvisarSemCredito = function () {
+  const st = window._tia && window._tia.st;
+  const t = "A IA está sem crédito" + (st && st.zerou_em ? " desde " + _tiaQuando(st.zerou_em) : "") + ". Recarregue no console da Anthropic e informe o saldo novo no 💳 Saldo da IA (barra de cima): os botões voltam sozinhos.";
+  if (typeof pixelsToast !== "undefined") pixelsToast.error(t, 6000); else try { window.alert(t); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent("pixels:tia-saldo-abrir")); } catch (_) {}
+};
+// envolve a ação de um botão de IA: sem crédito → avisa na hora e não abre nada
+const _tiaComCredito = function (fn) { return function () { if (_tiaSemCreditoAgora()) { _tiaAvisarSemCredito(); return; } return fn.apply(this, arguments); }; };
+
+/* ---------- v96 (13/10/2026) G7: lista de decisões abertas baixada UMA vez e dividida ----------
+   A barra (contador), a Central, a aba Decisões do cliente e a faixa da campanha usam a mesma cópia (vale 30 s; pedidos
+   iguais ao mesmo tempo viram um só). Depois de aprovar/recusar/etc., quem mudou pede de novo com forcar=true.
+   As FECHADAS (Concluídos) só são pedidas quando alguém abre a aba Concluídos. */
+window._tcenPed = window._tcenPed || { r: null, t: 0, prom: null, ouvintes: [] };
+const _tcenPedidosLer = function (forcar) {
+  const P = window._tcenPed;
+  if (P.prom) return P.prom;
+  if (!forcar && P.r && Date.now() - P.t < 30000) return Promise.resolve(P.r);
+  P.prom = _tsegRpc("ads_pedidos_ler", { p_aberto: true }).then(function (r) {
+    if (!r || !r.ok) throw new Error((r && r.erro) || "resposta vazia");
+    P.r = r; P.t = Date.now(); return r;
+  }).finally(function () { P.prom = null; setTimeout(function () { (P.ouvintes || []).slice().forEach(function (f) { try { f(); } catch (_) {} }); }, 0); });
+  return P.prom;
+};
+/* v96 (13/10/2026) G7 rodada 2: telas de UMA conta (aba Decisões do cliente) ou de UMA campanha (faixa) pedem só o que é delas
+   (ads_pedidos_ler_conta). Cópia de 30 s por conta/campanha. Se a função falhar, cai na lista inteira + filtro na tela (jeito anterior). */
+window._tcenPedConta = window._tcenPedConta || {};
+const _tcenFiltra = function (r, conta, camp) {
+  if (!r || !r.ok) return r;
+  return Object.assign({}, r, { itens: (r.itens || []).filter(function (p) {
+    if (conta && p.ad_account_id !== conta) return false;
+    if (!camp) return true;
+    if (p.entidade_id === camp) return true;
+    return (Array.isArray(p.caminho) ? p.caminho : []).some(function (c) { return c.nivel === "campanha" && c.id === camp; });
+  }) });
+};
+const _tcenPedidosConta = function (aberto, conta, camp, forcar) {
+  const C = window._tcenPedConta; const k = (aberto ? "a" : "f") + ":" + conta + ":" + (camp || "");
+  const c = C[k];
+  if (c && c.prom) return c.prom;
+  if (!forcar && c && c.r && Date.now() - c.t < 30000) return Promise.resolve(c.r);
+  const prom = _tsegRpc("ads_pedidos_ler_conta", { p_aberto: !!aberto, p_conta: conta, p_campanha: camp || null })
+    .then(function (r) { if (!r || !r.ok) throw new Error((r && r.erro) || "resposta vazia"); return r; })
+    .catch(function () {   // reserva: o jeito anterior
+      return (aberto ? _tcenPedidosLer(!!forcar) : _tsegRpc("ads_pedidos_ler", { p_aberto: false }))
+        .then(function (r) { if (!r || !r.ok) throw new Error((r && r.erro) || "resposta vazia"); return _tcenFiltra(r, conta, camp); });
+    })
+    .then(function (r) { C[k] = { r: r, t: Date.now() }; return r; }, function (e) { delete C[k]; throw e; });
+  C[k] = { r: c && c.r, t: c ? c.t : 0, prom: prom };
+  return prom;
+};
+// depois de decidir algo: esquece as cópias por conta e avisa quem mostra decisões (faixa, contador)
+const _tcenPedidosMudou = function () {
+  window._tcenPedConta = {}; window._tcenPed.t = 0;
+  setTimeout(function () { try { window.dispatchEvent(new CustomEvent("pixels:tcen-mudou")); } catch (_) {} }, 0);   // só quem precisa reler ouve isto (sem laço)
+};
+const _tcenPedidosOuvir = function (f) { window._tcenPed.ouvintes.push(f); return function () { window._tcenPed.ouvintes = window._tcenPed.ouvintes.filter(function (x) { return x !== f; }); }; };
+
+/* ---------- v96 (13/10/2026) R1/R14: decidir e dar visto num lugar só, o cliente ----------
+   Pede à Gestão de mídia para abrir o cliente desta conta direto na aba 🧠 Decisões. Quem atende é o PageGestaoMidia (17_gestao_midia,
+   evento "pixels:midia-abrir-conta"): marca detail.atendido = true. Se ninguém atender (versão antiga do app), devolve false e a
+   tela que chamou continua mostrando o jeito antigo — nada some. */
+const _tiaIrCliente = function (conta, unidade, sub) {
+  if (!conta) return false;
+  const det = { conta: conta, unidade: unidade || null, sub: sub || "ia", atendido: false };
+  try { window.dispatchEvent(new CustomEvent("pixels:midia-abrir-conta", { detail: det })); } catch (_) { return false; }
+  if (!det.atendido) return false;
+  setTimeout(function () { try { window.dispatchEvent(new CustomEvent("pixels:qg-sub", { detail: { sub: sub || "ia" } })); } catch (_) {} }, 80);   // se o cliente já estava aberto
+  return true;
+};
+
+/* ---------- v96 (13/10/2026) S19: ao sair da conta, nada da IA de tráfego fica na memória do navegador ----------
+   (o localStorage px_tcli_/px_diag_/px_tseg_ quem limpa é o 17_gestao_midia, _pxMidiaLimpaSaida) */
+const _tiaLimpaMemoria = function () {
+  try { if (typeof _tcliSetOk === "function") _tcliSetOk(false); } catch (_) {}
+  try { const T = window._tcli; if (T) { T.resumo = null; T.ontem = null; T.t = 0; T.contagem = null; T.painelOk = undefined; } } catch (_) {}
+  try { window._tia.st = null; window._tia.t = 0; } catch (_) {}
+  try { window._tcenPed.r = null; window._tcenPed.t = 0; window._tcenPedConta = {}; } catch (_) {}
+  try { if (typeof _tmetaCache !== "undefined") Object.keys(_tmetaCache).forEach(function (k) { delete _tmetaCache[k]; }); } catch (_) {}
+  try { if (typeof _tsegAvisados !== "undefined") Object.keys(_tsegAvisados).forEach(function (k) { delete _tsegAvisados[k]; }); } catch (_) {}
+  try { window._pxTCliVista = null; } catch (_) {}
+};
+try {
+  if (window._sb && window._sb.auth && !window._tiaSaidaOuvindo) {
+    window._tiaSaidaOuvindo = true;
+    window._sb.auth.onAuthStateChange(function (ev) { if (ev === "SIGNED_OUT") _tiaLimpaMemoria(); });
+  }
+} catch (_) {}
 const _TSEG_COR = { critico: "#dc2626", atencao: "#d97706", info: "#2563eb" };
 const _TSEG_EVENTO = {
   pin_criado: "Criou o PIN", pin_trocado: "Trocou o PIN", pin_errado: "Errou o PIN", entrada: "Entrou na Gestão de mídia",
@@ -71215,6 +68547,37 @@ const _TSEG_EVENTO = {
   ticket_negado: "Tentou aprovar sem permissão", ticket_adulterado: "Alteração diferente da aprovada (barrada)",
   pin_zerado: "Zerou o PIN de alguém", pin_obrigatorio: "Mudou a exigência do PIN",
 };
+
+/* ---------- v96 (13/10/2026) Q6: erro do servidor NÃO vira "sem dados" ----------
+   TSegErroCarga mostra "Não consegui carregar (motivo)" + "Tentar de novo" e avisa os sócios (no máx. 1 aviso por tela e por conta/cliente por dia).
+   O aviso usa a RPC public.ads_erro_tela_avisar(p_tela, p_conta, p_motivo) — feita pelo construtor C, grava junto dos alarmes de tráfego.
+   Se a RPC ainda não existir, o aviso é ignorado em silêncio (a faixa na tela aparece do mesmo jeito). */
+const _tsegMotivo = function (e) { const m = String((e && (e.message || e.erro)) || e || "").trim(); return m || "erro no servidor"; };
+const _tsegAvisados = {};
+const _tsegAvisarErro = function (tela, conta, motivo) {
+  try {
+    if (!window._sb || window._tsegSemAvisoRpc) return;
+    const dia = new Date().toISOString().slice(0, 10);
+    const k = "px_tseg_erro:" + tela + ":" + (conta || "-") + ":" + dia;
+    if (_tsegAvisados[k]) return; _tsegAvisados[k] = 1;
+    try { if (localStorage.getItem(k)) return; } catch (_) {}
+    // v96 (13/10/2026) Q6 (revisão RA): a marca "já avisei hoje" só é gravada quando o servidor recebeu o aviso
+    window._sb.rpc("ads_erro_tela_avisar", { p_tela: tela, p_conta: conta ? String(conta) : null, p_motivo: String(motivo || "").slice(0, 300) })
+      .then(function (r) {
+        if (r && r.error && (r.error.code === "PGRST202" || /could not find|does not exist/i.test(r.error.message || ""))) window._tsegSemAvisoRpc = true;
+        if (r && !r.error) { try { localStorage.setItem(k, "1"); } catch (_) {} }
+      })
+      .catch(function () {});
+  } catch (_) {}
+};
+function TSegErroCarga({ motivo, onTentar, tela, conta, pequeno }) {
+  useEffect(function () { if (motivo && tela) _tsegAvisarErro(tela, conta, motivo); }, [motivo, tela, conta]);
+  if (!motivo) return null;
+  return <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: pequeno ? "6px 9px" : "9px 12px", margin: "6px 0", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <span style={{ color: "#b91c1c", fontWeight: 800, fontSize: pequeno ? 12 : 13 }}>Não consegui carregar ({motivo}).</span>
+    {onTentar && <button onClick={onTentar} style={{ background: "#fff", color: "#b91c1c", border: "1.5px solid #fca5a5", borderRadius: 8, padding: "4px 10px", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Tentar de novo</button>}
+  </div>;
+}
 
 /* ---------- campo de PIN (6 números, nunca fica salvo) ---------- */
 function TSegCampoPin({ valor, onChange, onEnter, autoFocus, rotulo }) {
@@ -71289,7 +68652,7 @@ function TSegCriarPin({ st, trocando, onPronto, onCancelar }) {
         {etapa === "senha"
           ? "Primeiro digite a senha da sua conta. Assim ninguém cria ou troca o PIN só porque achou seu computador logado."
           : st && st.modo === "agencia"
-            ? "6 números que só você e o Gustavo sabem — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o PIN: nem a equipe, nem o Claude."
+            ? "6 números que só os sócios sabem — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o PIN: nem a equipe, nem o Claude."   /* v96 (13/10/2026) M14: sem nome fixo */
             : "6 números, que só você sabe — é ele que aprova qualquer mudança nas campanhas. Não use data de nascimento, 123456 nem número repetido. Ninguém vê o seu PIN: nem a equipe, nem o Claude."}
       </div>
       {etapa === "senha" ? (
@@ -71332,12 +68695,16 @@ function TSegEntrada({ st, onPronto }) {
     try {
       const r = await _tsegRpc("ads_desbloquear", { p_pin: pin });
       setPin("");
+      if (r && !r.ok && (r.motivo === "bloqueado" || /bloquead/i.test(r.erro || ""))) { onPronto && onPronto(); }   // v96 (13/10/2026) S11 (revisão RA): bloqueou agora → relê o status e já mostra a tela com "Esqueci meu PIN"
       if (!r || !r.ok) throw new Error((r && r.erro) || "Não abriu.");
       onPronto && onPronto();
     } catch (e) { setMsg(e.message); } finally { setOcupado(false); }
   };
 
   const bloqueado = st && st.bloqueado_ate;
+  // v96 (13/10/2026) S11: PIN da agência bloqueado tem saída na tela — o sócio cria um PIN novo com a senha de login
+  // (o servidor, ads_pin_definir, já aceita isso no modo agência mesmo bloqueado; o outro sócio recebe o aviso "PIN trocado")
+  const podeRecriar = !!(st && st.modo === "agencia" && st.aprovador);
   return (
     <div style={{ maxWidth: 420, margin: "56px auto", background: "#fff", border: "1px solid #e5e9f0", borderRadius: 20,
       padding: "28px 28px 24px", boxShadow: "0 10px 30px rgba(15,23,42,.06)", fontFamily: "'Inter',system-ui,sans-serif" }}>
@@ -71349,11 +68716,18 @@ function TSegEntrada({ st, onPronto }) {
         <div>
           <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>PIN bloqueado</div>
           <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
-            {String(bloqueado).indexOf("infinity") >= 0
-              ? "Muitos erros. Peça para o outro sócio zerar seu PIN em Gestão de mídia › Segurança."
-              : "Muitos erros seguidos. Tente de novo às " + _tsegHora(bloqueado) + "."}
+            {podeRecriar
+              ? (String(bloqueado).indexOf("infinity") >= 0 ? "Muitos erros seguidos. " : "Muitos erros seguidos. Dá para tentar de novo às " + _tsegHora(bloqueado) + ", ou ") +
+                (String(bloqueado).indexOf("infinity") >= 0 ? "Clique em \"Esqueci meu PIN\", digite a senha da sua conta e crie um PIN novo." : "clique em \"Esqueci meu PIN\" e crie um novo com a senha da sua conta.")
+              : String(bloqueado).indexOf("infinity") >= 0
+                ? "Muitos erros. Peça para um sócio zerar seu PIN em Gestão de mídia › Segurança."
+                : "Muitos erros seguidos. Tente de novo às " + _tsegHora(bloqueado) + "."}
             {" "}O outro sócio já foi avisado.
           </div>
+          {podeRecriar && <div style={{ marginTop: 14 }}>
+            <TSegBotao onClick={function () { setModo("criar"); setMsg(""); }}>Esqueci meu PIN</TSegBotao>
+            <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 6 }}>O PIN novo vale para os dois sócios. O outro sócio recebe um aviso de que o PIN foi trocado.</div>
+          </div>}
         </div>
       ) : (
         <div>
@@ -71390,11 +68764,18 @@ function TSegJanela({ titulo, onFechar, children, largura }) {
 }
 
 /* ---------- alarmes ---------- */
-function TSegAlarmes({ itens, onVisto, onFechar, carregando }) {
+function TSegAlarmes({ itens, onVisto, onFechar, carregando, erro, onTentar }) {
+  // v96 (13/10/2026) R14: o visto de alarme de uma conta é dado dentro do cliente (🧠 Decisões › "Alarmes desta conta").
+  //   Aqui a janela só lista e leva até lá. Alarme sem conta (ex.: erro de tela) continua com "Marcar como visto" aqui.
+  //   Se o app não conseguir abrir o cliente (versão antiga da Gestão de mídia), o "Marcar como visto" volta, como antes.
+  const [semNav, setSemNav] = useState(false);
+  const irCliente = function (a) { if (_tiaIrCliente(a.ad_account_id, null, "ia")) onFechar(); else setSemNav(true); };
   return (
     <TSegJanela titulo="🔔 Alarmes do tráfego (últimos 14 dias)" onFechar={onFechar}>
+      {!semNav && (itens || []).some(function (a) { return a.ad_account_id && !a.visto_em; }) && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>O visto é dado dentro do cliente, na aba 🧠 Decisões. Aqui fica a lista de todos.</div>}
       {carregando && <div style={{ color: "#64748b", fontSize: 13 }}>Carregando…</div>}
-      {!carregando && (!itens || !itens.length) && <div style={{ color: "#64748b", fontSize: 13 }}>Nenhum alarme. Tudo certo por aqui.</div>}
+      <TSegErroCarga motivo={erro} onTentar={onTentar} tela="alarmes" />{/* v96 Q6 */}
+      {!carregando && !erro && (!itens || !itens.length) && <div style={{ color: "#64748b", fontSize: 13 }}>Nenhum alarme. Tudo certo por aqui.</div>}
       {(itens || []).map(function (a) {
         const via = (a.whats || []).map(function (w) { return w.via === "texto" ? "WhatsApp enviado" : w.via === "modelo" ? "WhatsApp (modelo) enviado" : w.via === "espera_janela" ? "WhatsApp esperando a pessoa escrever no Guvi" : w.via === "erro" ? "WhatsApp com erro" : ""; }).filter(Boolean);
         return (
@@ -71409,7 +68790,9 @@ function TSegAlarmes({ itens, onVisto, onFechar, carregando }) {
               <div style={{ fontSize: 11, color: "#94a3b8" }}>{via.length ? Array.from(new Set(via)).join(" · ") : "Só aviso no app"}</div>
               {a.visto_em
                 ? <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>✓ visto por {a.visto_por} {_tsegQuando(a.visto_em)}</div>
-                : <button onClick={function () { onVisto(a.id); }} style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Marcar como visto</button>}
+                : (a.ad_account_id && !semNav)
+                  ? <button onClick={function () { irCliente(a); }} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Ver no cliente ›</button>
+                  : <button onClick={function () { onVisto(a.id); }} style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Marcar como visto</button>}
             </div>
           </div>
         );
@@ -71427,10 +68810,11 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
   const [pin, setPin] = useState("");
   const [msg, setMsg] = useState("");
   const [trocar, setTrocar] = useState(!!abrirCriar);
+  const [erroP, setErroP] = useState(""); const [erroL, setErroL] = useState("");   // v96 Q6
 
   const carregar = async function () {
-    try { setPessoas((await _tsegRpc("ads_pin_pessoas")) || []); } catch (e) { setMsg(e.message); }
-    try { setLog((await _tsegRpc("ads_seguranca_log_ler", { p_limite: 150 })) || []); } catch (e) { setMsg(e.message); }
+    try { setPessoas((await _tsegRpc("ads_pin_pessoas")) || []); setErroP(""); } catch (e) { setErroP(_tsegMotivo(e)); }
+    try { setLog((await _tsegRpc("ads_seguranca_log_ler", { p_limite: 150 })) || []); setErroL(""); } catch (e) { setErroL(_tsegMotivo(e)); }
   };
   useEffect(function () { carregar(); }, []);
 
@@ -71465,7 +68849,8 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
 
       {aba === "pessoas" && (
         <div>
-          {!pessoas.length && <div style={{ fontSize: 13, color: "#64748b" }}>Ninguém criou PIN ainda.</div>}
+          <TSegErroCarga motivo={erroP} onTentar={carregar} tela="seguranca_pins" />
+          {!erroP && !pessoas.length && <div style={{ fontSize: 13, color: "#64748b" }}>Ninguém criou PIN ainda.</div>}
           {pessoas.map(function (p) {
             return (
               <div key={p.uid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f1f5f9", gap: 10 }}>
@@ -71475,6 +68860,7 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
                     PIN de {_tsegQuando(p.trocado_em)}{p.erros ? " · " + p.erros + " erro(s)" : ""}{p.bloqueado ? " · 🔒 bloqueado" : ""}
                   </div>
                 </div>
+                {p.nome === "PIN da agência" && st && st.aprovador && <TSegBotao tipo="secundario" onClick={function () { setTrocar(true); }}>{p.bloqueado ? "Esqueci o PIN: criar outro" : "Trocar o PIN"}</TSegBotao>}{/* v96 (13/10/2026) S11 */}
                 {p.nome !== "PIN da agência" && <TSegBotao tipo="secundario" onClick={function () {
                   setMsg(""); setPin("");
                   setPedePin({ titulo: "Zerar o PIN de " + p.nome + "? A pessoa vai ter que criar outro (com a senha da conta).",
@@ -71489,6 +68875,7 @@ function TSegSeguranca({ st, onFechar, onMudou, abrirCriar }) {
       {aba === "registro" && (
         <div style={{ maxHeight: "55vh", overflowY: "auto" }}>
           <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>Tudo que acontece com PIN e aprovações. Ninguém consegue apagar nem editar este registro.</div>
+          <TSegErroCarga motivo={erroL} onTentar={carregar} tela="seguranca_registro" />
           {(log || []).slice().reverse().map(function (l) {
             const ruim = l.evento === "pin_errado" || l.evento === "ticket_negado" || l.evento === "ticket_adulterado";
             return (
@@ -71547,11 +68934,7 @@ const _TCEN_NUM = {
   ritmo_mes: ["Ritmo do mês", "R$"], verba_mes: ["Verba do mês", "R$"], gasto_hoje: ["Gasto hoje", "R$"], media_7d: ["Média 7 dias", "R$"],
   saldo: ["Saldo", "R$"], limite: ["Limite", "R$"],
 };
-const _tcenBrl = function (v) {
-  const n = Number(v);
-  if (!isFinite(n)) return String(v);
-  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
+const _tcenBrl = function (v) { return _tiaBrl(v); };   // v96 (13/10/2026) E5: formatador único
 const _tcenNivelUrl = { campanha: ["campaigns", "selected_campaign_ids"], conjunto: ["adsets", "selected_adset_ids"], anuncio: ["ads", "selected_ad_ids"] };
 const _tcenLink = function (conta, c) {
   if (!conta) return null;
@@ -71571,9 +68954,17 @@ const _TCEN_ORIGEM = { montador: "Montador", ia: "IA (análise)", regra: "Regra 
 const _TCEN_HIST = {
   criado: "Criado", atualizado: "Números atualizados", aprovado: "Aprovou com PIN", aprovado_1: "1ª aprovação com PIN", aprovado_2: "2ª aprovação com PIN",
   aplicado: "Aplicado na Meta", erro_ao_aplicar: "Erro ao aplicar", barrado: "Barrado pela segurança", ja_estava: "Já estava assim na Meta",
+  pin_1: "1º PIN (abriu a revisão)", pin_2: "2º PIN (enviou para a Meta)",   // v96 M8: nomes dos eventos do PIN 2x
   recusado: "Recusou", monitorar: "Pôs em monitorar", concluido: "Concluiu", desfazer_pedido: "Pediu para desfazer", aprovacao_vencida: "1ª aprovação venceu (24 h)",
 };
 
+// v96 (13/10/2026) S11 (revisão RA): PIN bloqueado ao aprovar/publicar → botão que abre "criar PIN novo com a senha da conta"
+function TSegBloqSaida() {
+  return <div style={{ marginTop: 6, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 9, padding: "7px 10px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+    <span style={{ fontSize: 12, color: "#7f1d1d", flex: 1, minWidth: 180 }}>PIN bloqueado. Crie um PIN novo com a senha da sua conta (o outro sócio recebe o aviso).</span>
+    <button onClick={function () { _tcliAbrir({ painel: "criar" }); }} style={{ background: "#b91c1c", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Esqueci meu PIN</button>
+  </div>;
+}
 function TCenChip({ cor, children }) {
   const c = { verde: ["#dcfce7", "#166534"], amarelo: ["#fef3c7", "#92400e"], vermelho: ["#fee2e2", "#b91c1c"], azul: ["#dbeafe", "#1e40af"], cinza: ["#f1f5f9", "#475569"], roxo: ["#ede9fe", "#5b21b6"] }[cor] || ["#f1f5f9", "#475569"];
   return <span style={{ background: c[0], color: c[1], borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>{children}</span>;
@@ -71625,39 +69016,59 @@ function TCenCartao({ p, eu, onMudou }) {
   const a = p.acao || {};
   const ad = _tcenAntesDepois(a);
   const exec = _tcenExecutavel(a);
-  const souPrimeiro = p.aprov1_uid && eu && p.aprov1_uid === eu;
+  // v96 (13/10/2026) M8: regra dos 2 sócios removida da tela — 1 sócio aprova com o PIN 2x. Pedido antigo em "aguardando" vira um pedido normal.
   const caminho = Array.isArray(p.caminho) ? p.caminho : [];
   const conta = p.ad_account_id;
   const toast = function (t, tipo) { if (typeof pixelsToast !== "undefined") (tipo === "erro" ? pixelsToast.error : pixelsToast.success)(t, 3500); };
+  const semIa = useIaSemCredito().sem;   // v96 (13/10/2026) Q14: sem crédito, "Montar com a IA" avisa na hora
 
   const fazer = async function (fn) {
     setOcupado(true); setMsg("");
     try { await fn(); } catch (e) { setMsg(e.message || String(e)); } finally { setOcupado(false); }
+  };
+  // v96 (13/10/2026) S9: a conferência com a Meta (só leitura) fica numa função própria, para dar "Ler a Meta de novo" sem pedir o 1º PIN outra vez
+  const pin1Em = useRef(0);   // v96 (13/10/2026) S9 (revisão RA): a revisão vale 10 min depois do 1º PIN
+  const [bloq, setBloq] = useState(false);   // v96 (13/10/2026) S11 (revisão RA): PIN bloqueado ao aprovar → caminho "Esqueci meu PIN"
+  const olhaBloq = function (r) { if (r && !r.ok && (r.motivo === "bloqueado" || /bloquead/i.test(r.erro || ""))) setBloq(true); };
+  const lerMeta = async function () {
+    if (pin1Em.current && Date.now() - pin1Em.current > 600000) { setRev(null); setModo("aprovar"); setMsg("A revisão venceu (10 min). Digite o 1º PIN de novo."); return; }
+    setRev(null);
+    let d = null, falha = "";
+    try {
+      const inv = await window._sb.functions.invoke("ads-aplicar", { body: { pedido_id: p.id, revisar: true } });
+      d = inv && inv.data;
+      if (!d && inv && inv.error) falha = (inv.error.context && inv.error.context.status === 401) ? "sua sessão venceu, entre de novo no app" : "o servidor não respondeu";
+    } catch (e) { falha = e.message || String(e); }
+    if (d && !d.ok && /digite o pin primeiro/i.test(d.erro || "")) { setModo("aprovar"); setMsg("A revisão venceu (10 min). Digite o 1º PIN de novo."); return; }   // v96 S9 (revisão RA)
+    if (!d || !d.ok) { setRev({ erro: (d && d.erro) || falha || "a Meta não respondeu" }); return; }
+    setRev(d.revisao || {});
   };
   const aprovar = function () {   // 1º PIN: abre a revisão
     if (pin.length !== 6) return;
     fazer(async function () {
       const r = await _tsegRpc("ads_pedido_aprovar", { p_id: p.id, p_pin: pin, p_etapa: 1 });
       setPin("");
+      olhaBloq(r);
       if (!r || !r.ok) throw new Error((r && r.erro) || "Não aprovou.");
+      pin1Em.current = Date.now(); setBloq(false);
       setRev(null); setModo("revisar");
-      const inv = await window._sb.functions.invoke("ads-aplicar", { body: { pedido_id: p.id, revisar: true } });
-      const d = inv && inv.data;
-      if (!d || !d.ok) { setRev({ erro: (d && d.erro) || "Não consegui ler a Meta agora. Confira no Gerenciador antes de enviar." }); return; }
-      setRev(d.revisao || {});
+      await lerMeta();
     });
   };
   const enviar = function () {    // 2º PIN: depois de revisar, envia para a Meta
     if (pin.length !== 6) return;
+    if (!rev || rev.erro) { setMsg("Sem a conferência com a Meta não dá para enviar. Clique em \"Ler a Meta de novo\"."); return; }   // v96 (13/10/2026) S9: nunca envia sem conferência
+    if (rev.verba_confere === false) { setMsg("A verba na Meta não é a do pedido. Não dá para enviar; amanhã a IA recalcula."); return; }   // v96 S9 (revisão RA)
     fazer(async function () {
       const r = await _tsegRpc("ads_pedido_aprovar", { p_id: p.id, p_pin: pin, p_etapa: 2 });
       setPin("");
+      olhaBloq(r);
       if (!r || !r.ok) { if (r && r.recomecar) { setModo("aprovar"); setRev(null); } throw new Error((r && r.erro) || "Não aprovou."); }
       setMsg("Enviando para a Meta…");
       const inv = await window._sb.functions.invoke("ads-aplicar", { body: { pedido_id: p.id } });
       const d = inv && inv.data;
       if (inv.error && !d) { const st = inv.error && inv.error.context && inv.error.context.status;   // v80 M12: 401 = sessão vencida (texto certo)
-        throw new Error(st === 401 ? "Sua sessão venceu. Entre de novo no app e aprove outra vez (nada foi enviado à Meta)." : "Não consegui falar com o servidor. O pedido volta sozinho em até 15 min; tente de novo."); }
+        throw new Error(st === 401 ? "Sua sessão venceu. Entre de novo no app e aprove outra vez (nada foi enviado à Meta)." : "Não consegui falar com o servidor. Nada foi enviado à Meta; em 5 min dá para aprovar de novo."); }   // v96 (13/10/2026) M14: mesmo prazo do servidor (o ticket vale 5 min; antes dizia 15)
       if (!d || !d.ok) throw new Error((d && d.erro) || "A Meta não aplicou.");
       toast(d.sem_mudanca ? (d.msg || "Já estava assim.") : "Feito na Meta. Vou acompanhar por 7 dias.");
       setModo(null); setRev(null); setMsg(""); onMudou();
@@ -71694,12 +69105,14 @@ function TCenCartao({ p, eu, onMudou }) {
   };
   const verHist = function () {
     if (modo === "hist") { setModo(null); return; }
-    setModo("hist");
-    _tsegRpc("ads_pedido_hist", { p_id: p.id }).then(function (h) { setHist(h || []); }).catch(function () { setHist([]); });
+    setModo("hist"); lerHist();
+  };
+  const lerHist = function () {   // v96 Q6: erro não vira "Sem histórico"
+    setHist(null); _tsegRpc("ads_pedido_hist", { p_id: p.id }).then(function (h) { setHist(h || []); }).catch(function (e) { setHist({ erro: _tsegMotivo(e) }); });
   };
 
   const corConf = p.confianca === "alta" ? "verde" : p.confianca === "media" ? "amarelo" : "cinza";
-  const borda = p.estado === "aguardando" ? "#7c3aed" : p.estado === "monitorando" ? "#2563eb" : p.prioridade <= 15 ? "#dc2626" : p.prioridade <= 35 ? "#d97706" : "#94a3b8";
+  const borda = p.estado === "monitorando" ? "#2563eb" : p.prioridade <= 15 ? "#dc2626" : p.prioridade <= 35 ? "#d97706" : "#94a3b8";
   const btn = function (txt, fn, tipo, desl) {
     const s = tipo === "pri" ? { bg: "#0f172a", fg: "#fff", bd: "#0f172a" } : tipo === "roxo" ? { bg: "#7c3aed", fg: "#fff", bd: "#7c3aed" } : { bg: "#fff", fg: "#334155", bd: "#cbd5e1" };
     return <button onClick={desl ? undefined : fn} disabled={!!desl} style={{ background: s.bg, color: s.fg, border: "1.5px solid " + s.bd, borderRadius: 9, padding: "6px 11px",
@@ -71712,7 +69125,6 @@ function TCenCartao({ p, eu, onMudou }) {
         {p.confianca && <TCenChip cor={corConf}>Confiança {p.confianca === "media" ? "média" : p.confianca}</TCenChip>}
         <TCenChip cor="cinza">{_TCEN_ORIGEM[p.origem] || p.origem}</TCenChip>
         {(p.selos || []).map(function (s) { return <TCenChip key={s} cor="azul">{s === "dado" ? "📊 dado real" : s === "mercado" ? "📈 mercado" : s === "oficial" ? "📘 Meta oficial" : s === "calendario" ? "📅 calendário" : s === "leitura" ? "🌅 da leitura da manhã" : s === "memoria" ? "🧠 aprendizado" : String(s).indexOf("meta_") === 0 ? "🎯 ajuda na meta: " + ({ leads: "leads", custo_por_lead: "custo por lead", ctr: "CTR", faturamento: "faturamento", vendas: "vendas" }[String(s).slice(5)] || String(s).slice(5)) : s}</TCenChip>; })}
-        {p.precisa_dois && <TCenChip cor="roxo">2 sócios</TCenChip>}
       </div>
       <div style={{ fontWeight: 900, fontSize: 13.5, color: "#0f172a", lineHeight: 1.35 }}>{p.titulo}</div>
       {caminho.length > 0 && (
@@ -71745,12 +69157,10 @@ function TCenCartao({ p, eu, onMudou }) {
         {(a.ideia.fontes || []).length > 0 && <div style={{ marginTop: 3 }}>{a.ideia.fontes.map(function (u, i) { return <a key={i} href={u} target="_blank" rel="noopener noreferrer" style={{ marginRight: 8, fontSize: 11 }}>fonte {i + 1} ↗</a>; })}</div>}
       </div>}
       {p.erro && <div style={{ marginTop: 6, color: "#b91c1c", fontSize: 12, fontWeight: 700 }}>⚠️ Última tentativa: {p.erro}</div>}
-      {p.estado === "aguardando" && <div style={{ marginTop: 6, color: "#5b21b6", fontSize: 12, fontWeight: 700 }}>
-        ✋ {p.aprov1_nome || "Um sócio"} aprovou {_tsegQuando(p.aprov1_em)}. {souPrimeiro ? "Falta o outro sócio." : "Falta a sua aprovação."} Vale 24 h.</div>}
       {p.estado === "aplicando" && <div style={{ marginTop: 6, color: "#92400e", fontSize: 12, fontWeight: 700 }}>⏳ Aprovado, aplicando na Meta. Se travar, em 5 min dá para aprovar de novo.</div>}
       {p.estado === "monitorando" && <div style={{ marginTop: 6, color: "#1e40af", fontSize: 12 }}>
         {p.resultado && p.resultado.aplicado_em ? "✅ Aplicado por " + (p.resultado.aplicado_por || "") + " em " + _tsegQuando(p.resultado.aplicado_em) + ". " : "👀 Sem mexer. "}
-        Acompanhando até {p.monitorar_ate ? p.monitorar_ate.split("-").reverse().slice(0, 2).join("/") : "—"}.{p.motivo ? " Obs.: " + p.motivo : ""}</div>}
+        Acompanhando até {_tiaDM(p.monitorar_ate) || "—"}.{p.motivo ? " Obs.: " + p.motivo : ""}</div>}
       {p.resultado && p.resultado.monitor && ["d3", "d7", "final"].map(function (k) {
         const m = p.resultado.monitor[k]; if (!m) return null;
         const c = m.veredito === "melhorou" ? ["#dcfce7", "#166534", "📈 Melhorou"] : m.veredito === "piorou" ? ["#fee2e2", "#b91c1c", "📉 Piorou"] : m.veredito === "igual" ? ["#f1f5f9", "#334155", "➖ Igual"] : ["#fef9c3", "#854d0e", "⏳ Pouco dado"];
@@ -71762,12 +69172,12 @@ function TCenCartao({ p, eu, onMudou }) {
 
       {/* botões */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>
-        {(p.estado === "novo" || p.estado === "aplicando" || (p.estado === "aguardando" && !souPrimeiro)) && exec &&
-          btn(p.estado === "aguardando" ? "✋ Dar 2ª aprovação" : "✓ Aprovar com PIN", function () { setModo(modo === "aprovar" ? null : "aprovar"); setMsg(""); }, p.estado === "aguardando" ? "roxo" : "pri", ocupado)}
-        {(p.estado === "novo" || p.estado === "aguardando") && !exec && p.ad_account_id && btn("💬 Montar com a IA", function () {   // v82: decisão que não aplica sozinha vira conversa na Sala já preenchida
+        {(p.estado === "novo" || p.estado === "aplicando" || p.estado === "aguardando") && exec &&
+          btn("✓ Aprovar com PIN", function () { setModo(modo === "aprovar" ? null : "aprovar"); setMsg(""); }, "pri", ocupado)}
+        {(p.estado === "novo" || p.estado === "aguardando") && !exec && p.ad_account_id && btn(semIa ? "💬 Montar com a IA · " + _TIA_SEM_TXT : "💬 Montar com a IA", semIa ? _tiaAvisarSemCredito : function () {   // v82: decisão que não aplica sozinha vira conversa na Sala já preenchida · v96 Q14
           const id = a.ideia || {}; const nums = Object.keys(p.numeros || {}).slice(0, 6).map(function (k) { return k + ": " + p.numeros[k]; }).join("; ");
           _tcliAbrir({ painel: "sala", conta: p.ad_account_id, texto: (id.pergunta || ("Quero resolver: " + p.titulo)) + "\n\nPor quê: " + (p.porque || "") + (nums ? "\nNúmeros: " + nums : "") + (id.proximo_passo ? "\nPróximo passo sugerido: " + id.proximo_passo : "") });
-        }, "pri", ocupado)}
+        }, semIa ? null : "pri", ocupado)}
         {(p.estado === "novo" || p.estado === "aguardando") && !exec && btn("✓ Já resolvi", concluir, null, ocupado)}
         {(p.estado === "novo" || p.estado === "aguardando") && btn("👀 Monitorar", function () { setModo(modo === "monitorar" ? null : "monitorar"); }, null, ocupado)}
         {(p.estado === "novo" || p.estado === "aguardando") && btn("✕ Recusar", function () { setModo(modo === "recusar" ? null : "recusar"); }, null, ocupado)}
@@ -71788,12 +69198,19 @@ function TCenCartao({ p, eu, onMudou }) {
       {modo === "revisar" && (
         <div style={{ marginTop: 10, border: "2px solid #7c3aed", borderRadius: 12, padding: "12px 12px 10px", background: "#faf8ff" }}>
           <div style={{ fontWeight: 900, fontSize: 13.5, color: "#5b21b6", marginBottom: 8 }}>🔎 Revise antes de enviar</div>
-          {!rev ? <div style={{ fontSize: 12, color: "#64748b" }}>Lendo a Meta agora…</div> : rev.erro ? <div style={{ fontSize: 12, color: "#b91c1c", fontWeight: 700 }}>{rev.erro}</div> : (
+          {!rev ? <div style={{ fontSize: 12, color: "#64748b" }}>Lendo a Meta agora…</div> : rev.erro ? (
+            /* v96 (13/10/2026) S9: conferência falhou = "Está certo, enviar" desligado + "Ler a Meta de novo" */
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 9, padding: "8px 10px" }}>
+              <div style={{ fontSize: 12.5, color: "#b91c1c", fontWeight: 800 }}>Não consegui conferir na Meta ({rev.erro}).</div>
+              <div style={{ fontSize: 12, color: "#7f1d1d", marginTop: 3, lineHeight: 1.45 }}>Sem essa conferência o envio fica desligado. Tente ler de novo; se a Meta continuar fora, o pedido espera aqui (ou faça direto no Gerenciador da Meta).</div>
+              <div style={{ marginTop: 6 }}>{btn(ocupado ? "Lendo…" : "↻ Ler a Meta de novo", function () { setMsg(""); fazer(lerMeta); }, "pri", ocupado)}</div>
+            </div>
+          ) : (
             <TCenRevisao rev={rev} ad={ad} />
           )}
           <div style={{ fontSize: 12, color: "#475569", margin: "10px 0 6px" }}><b>2º PIN</b> — envia para a Meta. Vale 10 min.</div>
           <TSegCampoPin valor={pin} onChange={setPin} onEnter={enviar} autoFocus />
-          <div style={{ display: "flex", gap: 6 }}>{btn(ocupado ? "Enviando…" : "✓ Está certo, enviar", enviar, "roxo", ocupado || pin.length !== 6 || !rev)}{btn("Cancelar", function () { setModo(null); setPin(""); setRev(null); }, null, ocupado)}</div>
+          <div style={{ display: "flex", gap: 6 }}>{btn(ocupado ? "Enviando…" : "✓ Está certo, enviar", enviar, "roxo", ocupado || pin.length !== 6 || !rev || !!rev.erro || rev.verba_confere === false)}{/* v96 S9 (revisão RA): verba diferente = envio desligado */}{btn("Cancelar", function () { setModo(null); setPin(""); setRev(null); }, null, ocupado)}</div>
         </div>
       )}
       {modo === "recusar" && (
@@ -71816,7 +69233,7 @@ function TCenCartao({ p, eu, onMudou }) {
       )}
       {modo === "hist" && (
         <div style={{ marginTop: 10, borderTop: "1px dashed #e2e8f0", paddingTop: 8 }}>
-          {hist === null ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Carregando…</div> : !hist.length ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Sem histórico.</div> :
+          {hist === null ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Carregando…</div> : hist.erro ? <TSegErroCarga pequeno motivo={hist.erro} tela="decisao_historico" conta={conta} onTentar={lerHist} /> : !hist.length ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Sem histórico.</div> :
             hist.map(function (h) {
               return <div key={h.id} style={{ display: "flex", gap: 8, fontSize: 11.5, padding: "3px 0" }}>
                 <span style={{ color: "#94a3b8", width: 78, flexShrink: 0 }}>{_tsegQuando(h.em)}</span>
@@ -71827,6 +69244,7 @@ function TCenCartao({ p, eu, onMudou }) {
         </div>
       )}
       {msg && <div style={{ marginTop: 8, color: (msg.indexOf("Aplicando") === 0 || msg.indexOf("Enviando") === 0) ? "#92400e" : "#dc2626", fontSize: 12, fontWeight: 700 }}>{msg}</div>}
+      {bloq && <TSegBloqSaida />}{/* v96 (13/10/2026) S11 (revisão RA) */}
     </div>
   );
 }
@@ -71848,38 +69266,46 @@ function TCenMemoria({ itens, conta }) {
   </div>;
 }
 
-/* Faixa DENTRO da campanha (QG Ads › campanha): mostra as decisões abertas daquela campanha, dos conjuntos e dos anúncios dela.
+/* Faixa DENTRO da campanha (QG Ads › campanha): conta as decisões abertas daquela campanha, dos conjuntos e dos anúncios dela
+   e leva para a aba 🧠 Decisões do cliente (v96 R1: decidir só lá).
    Só aparece para quem aprova; para o resto (ex.: Erick) o banco responde "sem permissão" e a faixa não existe. */
 function TCenFaixa({ conta, campId }) {
+  // v96 (13/10/2026) S23: mesma trava das outras peças da IA — só com a porta do PIN aberta, para aprovador, e nunca no "Visualizar como"
+  //   (useTCliPode = window._tcli.ok, que o TSegPortao só liga fora do "Visualizar como"). Sem isso nem pergunta ao servidor.
+  const pode = useTCliPode();
   const [itens, setItens] = useState(null);
-  const [eu, setEu] = useState(null);
-  const [aberto, setAberto] = useState(false);
-  const carregar = useCallback(async function () {
-    try {
-      const r = await _tsegRpc("ads_pedidos_ler", { p_aberto: true });
-      if (!r || !r.ok) { setItens([]); return; }
-      setEu(r.eu || null);
-      setItens((r.itens || []).filter(function (p) {
-        if (conta && p.ad_account_id !== conta) return false;
-        if (p.entidade_id === campId) return true;
-        return (Array.isArray(p.caminho) ? p.caminho : []).some(function (c) { return c.nivel === "campanha" && c.id === campId; });
-      }));
-    } catch (_) { setItens([]); }
+  const [erro, setErro] = useState("");   // v96 Q6
+  const filtrar = useCallback(function (r) {
+    setItens(((r && r.itens) || []).filter(function (p) {
+      if (conta && p.ad_account_id !== conta) return false;
+      if (p.entidade_id === campId) return true;
+      return (Array.isArray(p.caminho) ? p.caminho : []).some(function (c) { return c.nivel === "campanha" && c.id === campId; });
+    }));
   }, [conta, campId]);
-  useEffect(function () { carregar(); }, [carregar]);
-  if (!itens || !itens.length) return null;
+  // v96 (13/10/2026) G7: a faixa não baixa mais a lista inteira a cada campanha aberta — usa a cópia compartilhada (30 s)
+  const carregar = useCallback(async function (forcar) {
+    if (!pode) { setItens(null); return; }
+    try { filtrar(conta ? await _tcenPedidosConta(true, conta, campId, !!forcar) : await _tcenPedidosLer(!!forcar)); setErro(""); }   // v96 G7 rodada 2: só desta campanha
+    catch (e) { setItens([]); setErro(_tsegMotivo(e)); }
+  }, [pode, filtrar, conta, campId]);
+  useEffect(function () { carregar(false); }, [carregar]);
+  useEffect(function () { const h = function () { if (pode) carregar(false); }; window.addEventListener("pixels:tcen-mudou", h); return function () { window.removeEventListener("pixels:tcen-mudou", h); }; }, [pode, carregar]);   // v96 G7: relê só quando alguém decidiu algo
+  if (pode && erro) return <div style={{ margin: "0 0 16px" }}><TSegErroCarga pequeno motivo={"decisões da IA nesta campanha: " + erro} onTentar={function () { carregar(true); }} tela="faixa_campanha" conta={conta} /></div>;   // v96 Q6
+  if (!pode || !itens || !itens.length) return null;
   const novos = itens.filter(function (p) { return p.estado === "novo"; }).length;
   const mon = itens.filter(function (p) { return p.estado === "monitorando"; }).length;
   return (
     <div style={{ margin: "0 0 16px", border: "1.5px solid #c4b5fd", background: "#faf8ff", borderRadius: 14, padding: "10px 14px", fontFamily: "'Inter',system-ui,sans-serif" }}>
-      <div onClick={function () { setAberto(!aberto); }} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flexWrap: "wrap" }}>
+      {/* v96 (13/10/2026) R1: aqui só conta e leva até a aba 🧠 Decisões do cliente — decidir é lá (um lugar só) */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontWeight: 900, fontSize: 13.5, color: "#5b21b6" }}>🧠 Decisões da IA nesta campanha</span>
         {novos > 0 && <TCenChip cor="roxo">{novos} para decidir</TCenChip>}
         {mon > 0 && <TCenChip cor="azul">{mon} monitorando</TCenChip>}
-        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 800, color: "#5b21b6" }}>{aberto ? "Fechar ▲" : "Ver ▼"}</span>
+        <button onClick={function () { window._pxTCliVista = "decidir"; try { window.dispatchEvent(new CustomEvent("pixels:qg-sub", { detail: { sub: "ia" } })); } catch (_) {}
+            setTimeout(function () { try { const el = document.querySelector("[data-tcli-alertas]"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) {} }, 120); }}
+          style={{ marginLeft: "auto", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 9, padding: "6px 11px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Decidir em 🧠 Decisões ›</button>
       </div>
-      {!aberto && <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>{itens.slice(0, 2).map(function (p) { return p.titulo; }).join(" · ")}{itens.length > 2 ? " · +" + (itens.length - 2) : ""}</div>}
-      {aberto && <div style={{ marginTop: 10 }}>{itens.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={carregar} />; })}</div>}
+      <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>{itens.slice(0, 2).map(function (p) { return p.titulo; }).join(" · ")}{itens.length > 2 ? " · +" + (itens.length - 2) : ""}</div>
     </div>
   );
 }
@@ -71889,7 +69315,43 @@ function TCenCasca({ embutido, onFechar, children }) {
   return <TSegJanela titulo="🧠 Decisões do tráfego" onFechar={onFechar} largura={860}>{children}</TSegJanela>;
 }
 
-function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unidade, extra, diagnostico, topo }) {
+/* v96 (13/10/2026) R1: na Central geral (barra › 🧠 Decisões) cada cliente vira uma linha com quantas decisões tem e um botão
+   que abre o cliente direto na aba 🧠 Decisões — decidir é só lá. Decisão sem conta de anúncio continua como cartão aqui.
+   Se o app não conseguir abrir o cliente (versão antiga da Gestão de mídia), os cartões voltam a aparecer aqui, como antes. */
+function TCenPorCliente({ lista, contas, eu, onMudou, onFechar }) {
+  const [semNav, setSemNav] = useState(false);
+  const T = window._tcli || {};
+  if (semNav) return <div style={{ maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
+    <div style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 9, padding: "6px 9px", marginBottom: 8 }}>Não consegui abrir o cliente daqui. Os cartões ficam abaixo, como antes.</div>
+    {lista.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={onMudou} />; })}</div>;
+  const grupos = {}; const ordem = []; const soltos = [];
+  lista.forEach(function (p) {
+    if (!p.ad_account_id) { soltos.push(p); return; }
+    const r = T.resumo && T.resumo[p.ad_account_id];
+    const uni = r && Array.isArray(r.unidades) ? _tcliUniDoPedido(p) : null;
+    const k = p.ad_account_id + ":" + (uni || "");
+    if (!grupos[k]) { grupos[k] = { conta: p.ad_account_id, uni: uni, itens: [] }; ordem.push(k); }
+    grupos[k].itens.push(p);
+  });
+  ordem.sort(function (a, b) { return grupos[b].itens.length - grupos[a].itens.length; });
+  const ir = function (g) { if (_tiaIrCliente(g.conta, g.uni, "ia")) { onFechar && onFechar(); } else setSemNav(true); };
+  return <div style={{ maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
+    {ordem.map(function (k) {
+      const g = grupos[k]; const urg = g.itens.filter(function (p) { return p.prioridade <= 15; }).length;
+      return <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", border: "1px solid #e5e9f0", borderLeft: "4px solid " + (urg ? "#dc2626" : "#7c3aed"), borderRadius: 12, padding: "9px 12px", marginBottom: 8, background: "#fff" }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontWeight: 900, fontSize: 13.5, color: "#0f172a" }}>{contas[g.conta] || g.conta}{g.uni ? " · " + _tcliUniLbl(g.uni) : ""} <span style={{ fontWeight: 800, color: "#5b21b6", fontSize: 12 }}>· {g.itens.length} {g.itens.length > 1 ? "decisões" : "decisão"}{urg ? " · " + urg + " urgente" + (urg > 1 ? "s" : "") : ""}</span></div>
+          <div style={{ fontSize: 12, color: "#475569", marginTop: 2, lineHeight: 1.4 }}>{g.itens.slice(0, 2).map(function (p) { return p.titulo; }).join(" · ")}{g.itens.length > 2 ? " · +" + (g.itens.length - 2) : ""}</div>
+        </div>
+        <button onClick={function () { ir(g); }} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 9, padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Decidir no cliente ›</button>
+      </div>;
+    })}
+    {soltos.length > 0 && <div style={{ marginTop: 8 }}>{soltos.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={onMudou} />; })}</div>}
+  </div>;
+}
+
+function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unidade, extra, diagnostico, topo, clientId }) {
+  useTiaCfg();   // v96 (13/10/2026) Q15/R4/R6 rodada 2: horários e limites do servidor
   const modoCli = !!(embutido && contaFixa);   // v81: dentro do cliente = página enxuta
   const [mais, setMais] = useState(false);
   const [alarmes, setAlarmes] = useState(null);
@@ -71898,27 +69360,49 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
   const [eu, setEu] = useState(null);
   const [aba, setAba] = useState(abaInicial || "decidir");
   const [conta, setConta] = useState(contaFixa || "");
-  const [estrats, setEstrats] = useState(null);
   const [erro, setErro] = useState("");
   const [memoria, setMemoria] = useState(null);
+  const [erroF, setErroF] = useState(""); const [erroAlc, setErroAlc] = useState(""); const [erroMem, setErroMem] = useState("");   // v96 Q6
 
-  const carregar = useCallback(async function () {
+  // v96 (13/10/2026) G7: abertas vêm da lista compartilhada; as FECHADAS só quando alguém abre "Concluídos"
+  const fechadosLidos = useRef(false);
+  const lerFechados = useCallback(async function () {
+    fechadosLidos.current = true;
+    try { const f = contaFixa ? await _tcenPedidosConta(false, contaFixa, null, true) : await _tsegRpc("ads_pedidos_ler", { p_aberto: false }); if (!f || !f.ok) throw new Error((f && f.erro) || "resposta vazia"); setFechados(f.itens || []); setErroF(""); }   // v96 G7 rodada 2
+    catch (e) { setErroF(_tsegMotivo(e)); setFechados([]); }   // v96 Q6
+  }, [contaFixa]);
+  const carregar = useCallback(async function (forcar) {
     try {
-      const r = await _tsegRpc("ads_pedidos_ler", { p_aberto: true });
-      if (!r || !r.ok) throw new Error((r && r.erro) || "Não carregou.");
+      const r = contaFixa ? await _tcenPedidosConta(true, contaFixa, null, forcar !== false) : await _tcenPedidosLer(forcar !== false);   // v96 G7 rodada 2: no cliente, só a conta dele
       setAbertos(r.itens || []); setEu(r.eu || null); setErro("");
-    } catch (e) { setErro(e.message); setAbertos([]); }
-    try { const f = await _tsegRpc("ads_pedidos_ler", { p_aberto: false }); setFechados(f && f.ok ? (f.itens || []) : []); } catch (_) { setFechados([]); }
-  }, []);
-  useEffect(function () { carregar(); }, [carregar]);
+    } catch (e) { setErro(_tsegMotivo(e)); setAbertos([]); }
+    if (fechadosLidos.current) lerFechados();
+  }, [lerFechados, contaFixa]);
+  useEffect(function () { carregar(false); }, [carregar]);
+  useEffect(function () { return _tcenPedidosOuvir(function () { if (contaFixa) return; const r = window._tcenPed.r; if (r && r.ok) { setAbertos(r.itens || []); setEu(r.eu || null); setErro(""); } }); }, [contaFixa]);
+  useEffect(function () { if (aba === "concluidos" && !fechadosLidos.current) lerFechados(); }, [aba, lerFechados]);
   const lerAlarmesConta = useCallback(async function () {
     if (!modoCli) return;
-    try { const r = await _tsegRpc("ads_alarmes_ler", { p_dias: 14 }); setAlarmes(r && r.ok ? (r.itens || []).filter(function (a) { return a.ad_account_id === contaFixa && !a.visto_em; }) : []); }
-    catch (_) { setAlarmes([]); }
-  }, [modoCli, contaFixa]);
+    // v96 (13/10/2026) R2 rodada 2: leitor único de avisos do cliente (ads_avisos_cliente); se falhar, o jeito antigo (todos os alarmes + filtro)
+    if (clientId) {
+      try {
+        const v = await _tsegRpc("ads_avisos_cliente", { p_client: clientId, p_dias: 14 });
+        if (v && v.ok) {
+          // v96 (13/10/2026) RF-1: só os alarmes DESTA conta (na Bioter o cliente tem várias contas; o "Entendi ✓" não pode marcar alarme de outra)
+          setAlarmes((v.alarmes || []).filter(function (a) { return !a.visto_em && (!contaFixa || !a.ad_account_id || a.ad_account_id === contaFixa); })); setErroAlc("");
+          window._tiaAvisosMeta = { alertas_antigos_ate: v.alertas_antigos_ate || null, leitura_ia_ate: v.leitura_ia_ate || null };
+          try { window.dispatchEvent(new CustomEvent("pixels:tia-avisos")); } catch (_) {}
+          return;
+        }
+      } catch (_) {}
+    }
+    try { const r = await _tsegRpc("ads_alarmes_ler", { p_dias: 14 }); if (!r || !r.ok) throw new Error((r && r.erro) || "resposta vazia"); setAlarmes((r.itens || []).filter(function (a) { return a.ad_account_id === contaFixa && !a.visto_em; })); setErroAlc(""); }
+    catch (e) { setAlarmes([]); setErroAlc(_tsegMotivo(e)); }   // v96 Q6
+  }, [modoCli, contaFixa, clientId]);
   useEffect(function () { lerAlarmesConta(); }, [lerAlarmesConta]);
-  const alarmeVisto = async function (id) { try { await _tsegRpc("ads_alarme_visto", { p_id: id }); } catch (_) {} lerAlarmesConta(); _tcliCarregar(true); };
-  const mudou = function () { carregar(); _tcliCarregar(true); onMudou && onMudou(); };
+  const alarmeVisto = async function (id) { try { await _tsegRpc("ads_alarme_visto", { p_id: id }); } catch (_) {} lerAlarmesConta(); _tcliCarregar(true);
+    try { window.dispatchEvent(new CustomEvent("pixels:tseg-alarmes-mudou")); } catch (_) {} };   // v96 (13/10/2026) R14: o número da barra acompanha na hora
+  const mudou = function () { if (contaFixa) _tcenPedidosMudou(); carregar(true); _tcliCarregar(true); onMudou && onMudou(); };
   useEffect(function () { if (abaInicial) setAba(abaInicial); }, [abaInicial]);
   useEffect(function () { if (!modoCli) return; const h = function (e) { const a = e && e.detail && e.detail.aba; if (a) { setAba(a); setMais(false); } }; window.addEventListener("pixels:tcen-aba", h); return function () { window.removeEventListener("pixels:tcen-aba", h); }; }, [modoCli]);
 
@@ -71929,39 +69413,36 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
     .filter(function (p) { return !unidade || _tcliUniDoPedido(p) === unidade; }); };   // v80 M05: na conta de Toledo, só as decisões da unidade do cliente
   const ab = filtro(abertos || []);
   const grupos = {
-    decidir: ab.filter(function (p) { return p.estado === "novo" || p.estado === "aplicando" || (p.estado === "aguardando" && p.aprov1_uid !== eu); }),
-    esperando: ab.filter(function (p) { return p.estado === "aguardando" && p.aprov1_uid === eu; }),
+    decidir: ab.filter(function (p) { return p.estado === "novo" || p.estado === "aplicando" || p.estado === "aguardando"; }),   // v96 M8: sem "Esperando o outro sócio"
     monitorando: ab.filter(function (p) { return p.estado === "monitorando" || p.estado === "aplicado"; }),
     concluidos: filtro(fechados || []),
   };
-  if (modoCli) { grupos.decidir = grupos.decidir.concat(grupos.esperando); grupos.esperando = []; }
-  const ABAS_MAIS = [["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", "🌎 Mercado do nicho"], ["estrategias", "🎙️ Estratégias feitas"]];
+  const ABAS_MAIS = [["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", "🌎 Mercado do nicho"]];   // v96 (13/10/2026) R13: "Estratégias feitas" saiu daqui — a lista mora só na Sala (vira link)
   const ABAS = modoCli ? [["decidir", "Precisa de vocês"], ["monitorando", "Acompanhando"]].concat(diagnostico ? [["diagnostico", "🔬 Diagnóstico"]] : []).concat(mais || ABAS_MAIS.some(function (x) { return x[0] === aba; }) ? ABAS_MAIS : []) :
-    [["decidir", "Para decidir"], ["esperando", "Esperando o outro sócio"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", contaFixa ? "🌎 Mercado do nicho" : "🌎 Mercado"]].concat(contaFixa ? [["estrategias", "🎙️ Estratégias feitas"]] : []);
+    [["decidir", "Para decidir"], ["monitorando", "Monitorando"], ["concluidos", "Concluídos (30 dias)"], ["memoria", "🧠 Aprendizados"], ["mercado", contaFixa ? "🌎 Mercado do nicho" : "🌎 Mercado"]];
   const lista = grupos[aba] || [];
+  const lerMemoria = function () { setErroMem(""); setMemoria(null); _tsegRpc("ads_memoria_ler", { p_conta: null, p_limite: 100 }).then(function (m) { setMemoria(m || []); }).catch(function (e) { setErroMem(_tsegMotivo(e)); }); };
   useEffect(function () {
-    if (aba !== "memoria" || memoria !== null) return;
-    _tsegRpc("ads_memoria_ler", { p_conta: null, p_limite: 100 }).then(function (m) { setMemoria(m || []); }).catch(function () { setMemoria([]); });
+    if (aba !== "memoria" || memoria !== null || erroMem) return;
+    lerMemoria();
   }, [aba]);
-  useEffect(function () {
-    if (aba !== "estrategias" || !contaFixa) return;
-    _tsegRpc("ads_estrategias_ler", { p_conta: contaFixa }).then(function (h) { setEstrats(h || []); }).catch(function () { setEstrats([]); });
-  }, [aba, contaFixa]);
 
 
   return (
     <TCenCasca embutido={embutido} onFechar={onFechar}>
       {!modoCli && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
         A IA só <b>sugere</b>. Toda mudança pede o <b>PIN da agência duas vezes</b>: 1º abre a revisão, 2º envia. Fica registrado quem digitou. Mudança de verba: no máx. 20% e uma vez a cada 72 h.
+        {" "}<b>Para decidir, abra o cliente:</b> cada decisão fica na aba 🧠 Decisões dele (aqui só a lista por cliente).{/* v96 (13/10/2026) R1 */}
       </div>}
       {modoCli && topo}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
         {ABAS.map(function (x) {
           const n = (x[0] === "memoria" || x[0] === "mercado" || x[0] === "diagnostico") ? 0 : (grupos[x[0]] || []).length; const on = aba === x[0];
-          if (x[0] === "esperando" && !n && !on) return null;  // regra dos 2 sócios desligada: aba só aparece se tiver algo
           return <button key={x[0]} onClick={function () { setAba(x[0]); }} style={{ background: on ? "#0f172a" : "#f1f5f9", color: on ? "#fff" : "#334155", border: "none", borderRadius: 999,
             padding: "7px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{x[1]}{n ? " (" + n + ")" : ""}</button>;
         })}
+        {modoCli && (mais || ABAS_MAIS.some(function (x) { return x[0] === aba; })) && <button onClick={function () { _tcliAbrir({ painel: "sala", conta: contaFixa }); }} title="A lista de estratégias fica na Sala de estratégia"
+          style={{ background: "none", border: "none", color: "#5b21b6", fontWeight: 800, fontSize: 12, cursor: "pointer", padding: "6px 4px" }}>🎙️ Estratégias feitas (abrir na Sala) ›</button>}{/* v96 (13/10/2026) R13 */}
         {modoCli && !ABAS_MAIS.some(function (x) { return x[0] === aba; }) && <button onClick={function () { setMais(!mais); }} style={{ background: "none", border: "1px dashed #cbd5e1", color: "#64748b",
           borderRadius: 999, padding: "6px 11px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{mais ? "Menos ▲" : "Mais ▾"}</button>}
         {!contaFixa && <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={{ marginLeft: "auto", fontSize: 12, padding: "6px 8px", borderRadius: 8, border: "1px solid #cbd5e1", maxWidth: 220 }}>
@@ -71969,14 +69450,19 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
           {Object.keys(contas).map(function (k) { return <option key={k} value={k}>{contas[k]}</option>; })}
         </select>}
       </div>
-      {erro && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{erro}</div>}
-      {aba === "diagnostico" && diagnostico ? diagnostico : aba === "mercado" ? <TCenMercado contaFixa={contaFixa} /> : aba === "memoria" ? <TCenMemoria itens={memoria} conta={conta} /> :
-        aba === "estrategias" ? <TCliEstrategias itens={estrats} conta={contaFixa} /> :
-        abertos === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
-        !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às 11h30." : "Nada aqui."}</div> :
+      {/* v96 (13/10/2026) Q6: erro do servidor aparece como erro (com Tentar de novo), nunca como "Nada para decidir" */}
+      {aba === "diagnostico" && diagnostico ? diagnostico : aba === "mercado" ? <TCenMercado contaFixa={contaFixa} /> :
+        aba === "memoria" ? (erroMem ? <TSegErroCarga motivo={erroMem} onTentar={lerMemoria} tela="decisoes_aprendizados" conta={contaFixa} /> : <TCenMemoria itens={memoria} conta={conta} />) :
+        aba === "concluidos" && erroF ? <TSegErroCarga motivo={erroF} onTentar={lerFechados} tela="decisoes_concluidos" conta={contaFixa} /> :
+        aba === "concluidos" && fechados === null ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
+        (erro && aba !== "concluidos") ? <TSegErroCarga motivo={erro} onTentar={function () { carregar(true); }} tela="decisoes" conta={contaFixa} /> :   /* v96 Q6 (revisão RA): em Concluídos só vale o erro das fechadas */
+        (abertos === null && aba !== "concluidos") ? <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div> :
+        !lista.length ? <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>{aba === "decidir" ? "Nada para decidir agora. A IA olha as contas todo dia às " + _TIA_HORARIOS.decisoes + "." : "Nada aqui."}</div> :
+        (!contaFixa && (aba === "decidir" || aba === "monitorando")) ? <TCenPorCliente lista={lista} contas={contas} eu={eu} onMudou={mudou} onFechar={onFechar} />   /* v96 (13/10/2026) R1 */ :
         <div style={embutido ? {} : { maxHeight: "62vh", overflowY: "auto", paddingRight: 4 }}>
           {lista.map(function (p) { return <TCenCartao key={p.id + ":" + p.estado + ":" + (p.atualizado_em || "")} p={p} eu={eu} onMudou={mudou} />; })}
         </div>}
+      {modoCli && aba === "decidir" && erroAlc && <div style={{ marginTop: 14 }}><TSegErroCarga pequeno motivo={"alarmes desta conta: " + erroAlc} onTentar={lerAlarmesConta} tela="decisoes_alarmes" conta={contaFixa} /></div>}
       {modoCli && aba === "decidir" && alarmes && alarmes.length > 0 && <div style={{ marginTop: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 13, color: "#334155", marginBottom: 6 }}>🔔 Alarmes desta conta ({alarmes.length} sem ver)</div>
         {alarmes.map(function (a) {
@@ -72139,6 +69625,11 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
   const [pinModo, setPinModo] = useState(null); const [pin, setPin] = useState("");
   const [resultado, setResultado] = useState(rasc && rasc.estado === "publicado" ? { ok: true, meta: rasc.meta } : (rasc && rasc.estado === "erro" ? { ok: false, erro: rasc.erro, meta: rasc.meta } : null));
   const travado = estado === "publicado" || estado === "publicando";
+  // v96 (13/10/2026) S10: entre o 1º e o 2º PIN nada se edita, e a revisão mostra a versão SALVA no servidor (a que vai ser publicada)
+  const [revSrv, setRevSrv] = useState(null);   // { dados } lido do servidor depois do 1º PIN | { erro }
+  const travaEdicao = travado || !!pinModo;
+  const [bloq, setBloq] = useState(false);   // v96 (13/10/2026) S11 (revisão RA): PIN bloqueado ao publicar → caminho "Esqueci meu PIN"
+  const olhaBloq = function (r) { if (r && !r.ok && (r.motivo === "bloqueado" || /bloquead/i.test(r.erro || ""))) setBloq(true); };
   const contaNome = (contas.find(function (c) { return c.id === conta; }) || {}).nome || conta;
 
   const [licoesMeta, setLicoesMeta] = useState([]);   // v81 item 2: o que a Meta já recusou nesta conta (vira lição sozinho)
@@ -72157,7 +69648,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
     setModelo(null); _tmonFn({ modo: "modelo", campanha_id: cid }).then(setModelo).catch(function (e) { setMsg(e.message); });
   }, [d.modelo && d.modelo.campanha_id]);
 
-  const mudar = function (novo) { if (travado) return; setD(novo); if (estado === "validado") setEstado("rascunho"); setChecklist(null); };
+  const mudar = function (novo) { if (travaEdicao) return; setD(novo); if (estado === "validado") setEstado("rascunho"); setChecklist(null); };
   const setCj = function (cj) {
     // 1ª cidade escolhida preenche o [Cidade] do nome da campanha e do conjunto
     const c0 = (cj.cidades || [])[0] || (cj.regioes || [])[0];
@@ -72195,15 +69686,28 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
       setChecklist(r.checklist || []); setEstado(r.valido ? "validado" : "rascunho");
     } catch (e) { setMsg(e.message); } finally { setOcupado(""); }
   };
+  const lerSalvo = async function () {   // v96 S10: a versão que o servidor vai publicar
+    setRevSrv(null);
+    try {
+      const r = await _tsegRpc("ads_rascunhos_ler", { p_id: id });
+      const it = r && r.ok && (r.itens || []).find(function (x) { return x.id === id; });
+      if (!it || !it.dados) throw new Error((r && r.erro) || "rascunho não encontrado");
+      if (it.estado !== "validado") throw new Error("o rascunho salvo não está validado; cancele e valide de novo");
+      if (JSON.stringify(it.dados) !== JSON.stringify(d)) setD(it.dados);   // a tela passa a mostrar exatamente o que está salvo
+      setRevSrv({ dados: it.dados, conta: it.ad_account_id });
+    } catch (e) { setRevSrv({ erro: e.message || String(e) }); }
+  };
   const pin1 = async function () {
     if (pin.length !== 6) return; setOcupado("pin"); setMsg("");
-    try { const r = await _tsegRpc("ads_rascunho_aprovar", { p_id: id, p_pin: pin, p_etapa: 1 }); setPin(""); if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi."); setPinModo("revisar"); }
+    try { const r = await _tsegRpc("ads_rascunho_aprovar", { p_id: id, p_pin: pin, p_etapa: 1 }); setPin(""); olhaBloq(r); if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi."); setBloq(false); setPinModo("revisar"); await lerSalvo(); }
     catch (e) { setMsg(e.message); } finally { setOcupado(""); }
   };
   const pin2 = async function () {
-    if (pin.length !== 6) return; setOcupado("publicar"); setMsg("");
+    if (pin.length !== 6) return;
+    if (!revSrv || revSrv.erro || !revSrv.dados) { setMsg("Sem a versão salva na revisão não dá para publicar. Clique em \"Ler de novo\"."); return; }   // v96 S10
+    setOcupado("publicar"); setMsg("");
     try {
-      const r = await _tsegRpc("ads_rascunho_aprovar", { p_id: id, p_pin: pin, p_etapa: 2 }); setPin("");
+      const r = await _tsegRpc("ads_rascunho_aprovar", { p_id: id, p_pin: pin, p_etapa: 2 }); setPin(""); olhaBloq(r);
       if (!r || !r.ok) { if (r && r.recomecar) setPinModo("pin1"); throw new Error((r && r.erro) || "Não foi."); }
       setEstado("publicando"); setPinModo(null);
       const p = await window._sb.functions.invoke("ads-montar", { body: { modo: "publicar", rascunho_id: id } });
@@ -72227,7 +69731,9 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
     </div>}
     {preset && !rasc && <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "#14532d" }}>
       🔬 Público vindo do Diagnóstico: <b>{preset.genero === "mulheres" ? "Mulheres" : preset.genero === "homens" ? "Homens" : "Todos"}, {preset.idade_min}–{preset.idade_max}{Number(preset.idade_max) >= 65 ? "+" : ""}</b>. Escolha o modelo e confira o resto; dá para mudar tudo. Sobe pausada, com PIN 2x.</div>}
-    <fieldset disabled={travado} style={{ border: "none", padding: 0, margin: 0 }}>
+    {pinModo && !travado && <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "#5b21b6", fontWeight: 700 }}>
+      🔒 Edição travada enquanto o PIN está em andamento. Para mudar algo, clique em Cancelar lá embaixo, edite e valide de novo.</div>}{/* v96 (13/10/2026) S10 */}
+    <fieldset disabled={travaEdicao} style={{ border: "none", padding: 0, margin: 0 }}>
       <TMonSec n="1" titulo="Conta e modelo" dica="a campanha nova copia as configurações de uma que já funciona">
         <TMonRot t="Conta de anúncio">
           <select value={conta} onChange={function (e) { setConta(e.target.value); mudar(_tmonVazio()); }} style={_tmonInp}>
@@ -72299,10 +69805,16 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
 
     {pinModo === "revisar" && <div style={{ border: "2px solid #7c3aed", borderRadius: 12, padding: "12px", background: "#faf8ff", marginBottom: 12 }}>
       <div style={{ fontWeight: 900, fontSize: 14, color: "#5b21b6", marginBottom: 8 }}>🔎 Revise antes de publicar</div>
-      <TMonRevisao d={d} conta={contaNome} modeloNome={modelo && modelo.campanha ? modelo.campanha.nome : ""} modelo={modelo} />
+      {/* v96 (13/10/2026) S10: revisão = versão salva no servidor (a que a Meta vai receber) */}
+      {!revSrv ? <div style={{ fontSize: 12, color: "#64748b" }}>Lendo a versão salva…</div> : revSrv.erro ? <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 9, padding: "8px 10px" }}>
+          <div style={{ fontSize: 12.5, color: "#b91c1c", fontWeight: 800 }}>Não consegui carregar a versão salva ({revSrv.erro}).</div>
+          <div style={{ fontSize: 12, color: "#7f1d1d", marginTop: 3 }}>Sem ela o botão de publicar fica desligado.</div>
+          <div style={{ marginTop: 6 }}><TSegBotao tipo="secundario" onClick={function () { setMsg(""); lerSalvo(); }} desligado={!!ocupado}>↻ Ler de novo</TSegBotao></div>
+        </div> :
+        <TMonRevisao d={revSrv.dados} conta={(contas.find(function (c) { return c.id === revSrv.conta; }) || {}).nome || revSrv.conta || contaNome} modeloNome={modelo && modelo.campanha ? modelo.campanha.nome : ""} modelo={modelo} />}
       <div style={{ fontSize: 12, color: "#475569", margin: "10px 0 6px" }}><b>2º PIN</b> — publica (pausada). Vale 10 min.</div>
       <TSegCampoPin valor={pin} onChange={setPin} onEnter={pin2} autoFocus />
-      <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={pin2} desligado={!!ocupado || pin.length !== 6}>{ocupado === "publicar" ? "Publicando… (até 2 min com vídeo)" : "✓ Está certo, publicar"}</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setPinModo(null); setPin(""); }}>Cancelar</TSegBotao></div>
+      <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={pin2} desligado={!!ocupado || pin.length !== 6 || !revSrv || !!revSrv.erro}>{ocupado === "publicar" ? "Publicando… (até 2 min com vídeo)" : "✓ Está certo, publicar"}</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setPinModo(null); setPin(""); setRevSrv(null); }}>Cancelar</TSegBotao></div>
     </div>}
     {pinModo === "pin1" && <div style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "12px", marginBottom: 12 }}>
       <div style={{ fontSize: 12, color: "#475569", marginBottom: 6 }}><b>1º PIN</b> — abre a revisão. Nada é criado ainda.</div>
@@ -72315,7 +69827,8 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
       {licoesMeta.map(function (m) { return <div key={m.id} style={{ color: "#334155" }}>• {m.licao}</div>; })}
     </div>}
     {msg && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{msg}</div>}
-    {!travado && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "sticky", bottom: 0, background: "#fff", padding: "8px 0" }}>
+    {bloq && <div style={{ marginBottom: 8 }}><TSegBloqSaida /></div>}{/* v96 (13/10/2026) S11 (revisão RA) */}
+    {!travaEdicao && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "sticky", bottom: 0, background: "#fff", padding: "8px 0" }}>{/* v96 (13/10/2026) S10: Salvar/Validar escondidos durante o PIN */}
       <TSegBotao tipo="secundario" onClick={function () { setOcupado("salvar"); setMsg(""); salvar().then(function () { if (typeof pixelsToast !== "undefined") pixelsToast.success("Rascunho salvo.", 2000); }).catch(function (e) { setMsg(e.message); }).finally(function () { setOcupado(""); }); }} desligado={!!ocupado || !conta}>💾 Salvar rascunho</TSegBotao>
       <TSegBotao onClick={validar} desligado={!!ocupado || !conta || !(d.modelo && d.modelo.conjunto_id)}>{ocupado === "validar" ? "Validando na Meta…" : "🚦 Validar"}</TSegBotao>
       {estado === "validado" && !pinModo && <TSegBotao onClick={function () { setPinModo("pin1"); setMsg(""); }}>🧱 Publicar (PIN 2 vezes)</TSegBotao>}
@@ -72325,13 +69838,14 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
 
 function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo, preset }) {
   const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(novo && !abrirId ? "novo" : null); const [msg, setMsg] = useState("");
+  const [erroL, setErroL] = useState(""); const [erroC, setErroC] = useState("");   // v96 Q6
   useEffect(function () {
     if (!abrirId) return;
     _tsegRpc("ads_rascunhos_ler", { p_id: abrirId }).then(function (r) { const it = r && r.ok && (r.itens || []).find(function (x) { return x.id === abrirId; }); if (it) setAberto(it); }).catch(function () {});
   }, [abrirId]);
   const carregar = useCallback(async function () {
-    try { const r = await _tsegRpc("ads_rascunhos_ler", { p_id: null }); setLista(r && r.ok ? (r.itens || []).filter(function (x) { return x.estado !== "arquivado" && (!contaFixa || x.ad_account_id === contaFixa); }) : []); } catch (e) { setMsg(e.message); setLista([]); }
-    try { setContas((await _tsegRpc("ads_montar_contas")) || []); } catch (_) {}
+    try { const r = await _tsegRpc("ads_rascunhos_ler", { p_id: null }); if (!r || !r.ok) throw new Error((r && r.erro) || "resposta vazia"); setLista((r.itens || []).filter(function (x) { return x.estado !== "arquivado" && (!contaFixa || x.ad_account_id === contaFixa); })); setErroL(""); } catch (e) { setErroL(_tsegMotivo(e)); setLista([]); }
+    try { setContas((await _tsegRpc("ads_montar_contas")) || []); setErroC(""); } catch (e) { setErroC(_tsegMotivo(e)); }   // v96 Q6
   }, [contaFixa]);
   useEffect(function () { carregar(); }, [carregar]);
   const arquivar = async function (r) { try { await _tsegRpc("ads_rascunho_arquivar", { p_id: r.id }); carregar(); } catch (e) { setMsg(e.message); } };
@@ -72344,8 +69858,9 @@ function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo, preset }) {
             o app valida na Meta sem criar nada; publica com o <b>PIN da agência 2 vezes</b> e tudo sobe <b>PAUSADO</b>.
           </div>
           <TSegBotao onClick={function () { setAberto("novo"); }}>+ Nova campanha</TSegBotao>
+          <TSegErroCarga motivo={erroC ? "lista de contas: " + erroC : ""} onTentar={carregar} tela="montador_contas" conta={contaFixa} />
           <div style={{ marginTop: 14 }}>
-            {lista === null ? <div style={{ fontSize: 13, color: "#94a3b8" }}>Carregando…</div> : !lista.length ? <div style={{ fontSize: 13, color: "#64748b" }}>Nenhum rascunho ainda.</div> :
+            {erroL ? <TSegErroCarga motivo={erroL} onTentar={carregar} tela="montador_rascunhos" conta={contaFixa} /> : lista === null ? <div style={{ fontSize: 13, color: "#94a3b8" }}>Carregando…</div> : !lista.length ? <div style={{ fontSize: 13, color: "#64748b" }}>Nenhum rascunho ainda.</div> :
               lista.map(function (r) {
                 const est = _TMON_EST[r.estado] || ["", "cinza"];
                 return <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #f1f5f9", flexWrap: "wrap" }}>
@@ -72456,17 +69971,22 @@ function TSalaResultado({ r, onMontar, montando }) {
   </div>;
 }
 
+const _TSALA_MAX = 20000;   // v96 (13/10/2026) S18: mesmo limite do servidor (ads-cerebro recusa acima disso com a mensagem dele)
 function TSegSala({ onFechar, onAbrirMontador, contaFixa, abrirEstrategia, textoInicial }) {
   const [contas, setContas] = useState([]); const [conta, setConta] = useState(contaFixa || ""); const [texto, setTexto] = useState(textoInicial || ""); const [origem, setOrigem] = useState("texto");
   const [ocupado, setOcupado] = useState(false); const [msg, setMsg] = useState(""); const [res, setRes] = useState(null); const [hist, setHist] = useState([]); const [montando, setMontando] = useState(false);
-  useEffect(function () {
-    _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function () {});
+  const [erroS, setErroS] = useState("");   // v96 Q6
+  const semIa = useIaSemCredito().sem;   // v96 (13/10/2026) Q14: sem crédito, "Montar estratégia" fica cinza (antes falhava depois de 1 min)
+  const lerSala = function () {
+    setErroS("");
+    _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function (e) { setErroS("contas: " + _tsegMotivo(e)); });
     _tsegRpc("ads_estrategias_ler", { p_conta: contaFixa || null }).then(function (h) {
       setHist(h || []);
       const e = abrirEstrategia && (h || []).find(function (x) { return x.id === abrirEstrategia; });
       if (e) { setConta(e.ad_account_id); setTexto(e.pedido); setRes({ id: e.id, r: e.resultado || {}, conta: e.ad_account_id }); }
-    }).catch(function () {});
-  }, []);
+    }).catch(function (e) { setErroS("estratégias anteriores: " + _tsegMotivo(e)); });
+  };
+  useEffect(function () { lerSala(); }, []);
   const gerar = async function () {
     setOcupado(true); setMsg(""); setRes(null);
     try { const r = await _tcerFn({ modo: "estrategia", conta: conta, pedido: texto, origem: origem }); setRes({ id: r.id, r: r.resultado }); }
@@ -72492,16 +70012,22 @@ function TSegSala({ onFechar, onAbrirMontador, contaFixa, abrirEstrategia, texto
     <TMonRot t="O que você quer">
       <textarea value={texto} onChange={function (e) { setTexto(e.target.value); setOrigem("texto"); }} rows={5} style={Object.assign({}, _tmonInp, { resize: "vertical" })}
         placeholder="Ex.: Quero vender biodigestor para suinocultor em Rio Verde e Jataí, verba de uns 30 por dia, foco em WhatsApp, usar o depoimento do Hudson…" />
+      {/* v96 (13/10/2026) S18: contador; acima de 20.000 caracteres o servidor recusa (o texto nunca é cortado) */}
+      <div style={{ fontSize: 11.5, marginTop: 3, textAlign: "right", fontWeight: texto.trim().length > _TSALA_MAX ? 800 : 500, color: texto.trim().length > _TSALA_MAX ? "#b91c1c" : "#94a3b8" }}>
+        {texto.trim().length > _TSALA_MAX ? "Seu texto tem " + texto.trim().length.toLocaleString("pt-BR") + " de " + _TSALA_MAX.toLocaleString("pt-BR") + " caracteres, resuma." : texto.trim().length.toLocaleString("pt-BR") + " / " + _TSALA_MAX.toLocaleString("pt-BR")}</div>
     </TMonRot>
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
       <TSalaGravador desligado={ocupado} onTexto={function (t) { setTexto(function (x) { return (x ? x + "\n" : "") + t; }); setOrigem("audio"); }} />
-      <TSegBotao onClick={gerar} desligado={ocupado || !conta || texto.trim().length < 10}>{ocupado ? "Pensando… (até 1 min)" : "✨ Montar estratégia"}</TSegBotao>
+      <TSegBotao onClick={gerar} desligado={semIa || ocupado || !conta || texto.trim().length < 10 || texto.trim().length > _TSALA_MAX}>{ocupado ? "Pensando… (até 1 min)" : semIa ? "✨ Montar estratégia · " + _TIA_SEM_TXT : "✨ Montar estratégia"}</TSegBotao>
     </div>
+    {semIa && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "7px 10px", marginBottom: 10, fontSize: 12.5, color: "#991b1b", lineHeight: 1.45 }}>
+      A IA está sem crédito. Recarregue no console da Anthropic e informe o saldo novo no <b>💳 Saldo da IA</b> (barra de cima). Dá para abrir as estratégias anteriores e montar a campanha delas normalmente.</div>}{/* v96 (13/10/2026) Q14 */}
     {msg && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{msg}</div>}
+    <TSegErroCarga motivo={erroS} onTentar={lerSala} tela="sala" conta={contaFixa} />
     {res && <TSalaResultado r={res.r} onMontar={montar} montando={montando} />}
     {!res && hist.length > 0 && <div style={{ marginTop: 10 }}>
       <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>Estratégias anteriores</div>
-      {hist.slice(0, 10).map(function (h) {
+      {hist.slice(0, 30).map(function (h) {   /* v96 (13/10/2026) R13: a Sala é o único lugar da lista — mostra mais */
         return <div key={h.id} onClick={function () { setConta(h.ad_account_id); setTexto(h.pedido); setRes({ id: h.id, r: h.resultado || {}, conta: h.ad_account_id }); }}
           style={{ padding: "6px 0", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: 12.5 }}>
           <b>{h.conta_nome}</b> · {String(h.pedido).slice(0, 90)}{String(h.pedido).length > 90 ? "…" : ""} <span style={{ color: "#94a3b8" }}>· {h.criado_por_nome} {_tsegQuando(h.criado_em)}{h.rascunho_id ? " · 🧱 montada" : ""}</span></div>;
@@ -72512,13 +70038,15 @@ function TSegSala({ onFechar, onAbrirMontador, contaFixa, abrirEstrategia, texto
 
 function TCenGoogle() {
   const [st, setSt] = useState(null); const [lin, setLin] = useState(null); const [ocupado, setOcupado] = useState(false); const [msg, setMsg] = useState("");
+  const [erroG, setErroG] = useState("");   // v96 Q6
+  const lerResumo = function () { setErroG(""); _tsegRpc("gads_resumo", { p_dias: 30 }).then(function (l) { setLin(l || []); }).catch(function (e) { setErroG(_tsegMotivo(e)); setLin([]); }); };
   useEffect(function () {
     window._sb.functions.invoke("ads-google", { body: { modo: "status" } }).then(function (r) { setSt((r && r.data) || { ok: false, erro: "Sem resposta." }); }).catch(function () { setSt({ ok: false, erro: "Sem resposta." }); });
-    _tsegRpc("gads_resumo", { p_dias: 30 }).then(function (l) { setLin(l || []); }).catch(function () { setLin([]); });
+    lerResumo();
   }, []);
   const coletar = async function () {
     setOcupado(true); setMsg("");
-    try { const r = await window._sb.functions.invoke("ads-google", { body: { modo: "coletar", dias: 30 } }); const d = r && r.data; if (!d) throw new Error("Sem resposta."); setMsg(d.ok ? d.linhas + " linhas de " + d.contas + " conta(s)." : (d.erro || (d.erros || []).join(" · "))); _tsegRpc("gads_resumo", { p_dias: 30 }).then(function (l) { setLin(l || []); }); }
+    try { const r = await window._sb.functions.invoke("ads-google", { body: { modo: "coletar", dias: 30 } }); const d = r && r.data; if (!d) throw new Error("Sem resposta."); setMsg(d.ok ? d.linhas + " linhas de " + d.contas + " conta(s)." : (d.erro || (d.erros || []).join(" · "))); lerResumo(); }
     catch (e) { setMsg(e.message); } finally { setOcupado(false); }
   };
   return <div style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "10px 12px", marginTop: 12, fontSize: 12.5 }}>
@@ -72528,6 +70056,7 @@ function TCenGoogle() {
     </div>
     {st === null ? <div style={{ color: "#94a3b8" }}>Conferindo acessos…</div> : !st.pronto ? <div style={{ color: "#92400e", marginTop: 4 }}>Ainda não ligado. {st.faltam && st.faltam.length ? "Faltam no Supabase › Secrets: " + st.faltam.join(", ") + "." : (st.erro || "")}</div> : null}
     {msg && <div style={{ marginTop: 4, color: "#334155" }}>{msg}</div>}
+    <TSegErroCarga pequeno motivo={erroG} onTentar={lerResumo} tela="google_resumo" />
     {lin && lin.length > 0 && <div style={{ marginTop: 6 }}>{lin.slice(0, 15).map(function (x, i) {
       return <div key={i} style={{ display: "flex", gap: 8, padding: "3px 0", borderBottom: "1px solid #f8fafc" }}>
         <span style={{ flex: 1 }}><b>{x.conta}</b> · {x.campanha} <span style={{ color: "#94a3b8" }}>({x.canal})</span></span>
@@ -72537,8 +70066,11 @@ function TCenGoogle() {
 }
 
 function TCenMercado({ contaFixa }) {
+  useTiaCfg();   // v96 (13/10/2026) Q15/R4/R6 rodada 2: horários e limites do servidor
   const [itens, setItens] = useState(null); const [contas, setContas] = useState([]); const [conta, setConta] = useState(contaFixa || ""); const [ocupado, setOcupado] = useState(""); const [msg, setMsg] = useState("");
-  const carregar = function () { _tsegRpc("ads_nicho_ler").then(function (l) { setItens(l || []); }).catch(function () { setItens([]); }); };
+  const [erroN, setErroN] = useState("");   // v96 Q6
+  const semIa = useIaSemCredito().sem;   // v96 (13/10/2026) Q14: pesquisa e análise usam IA
+  const carregar = function () { setErroN(""); _tsegRpc("ads_nicho_ler").then(function (l) { setItens(l || []); }).catch(function (e) { setErroN(_tsegMotivo(e)); setItens([]); }); };
   useEffect(function () { carregar(); _tsegRpc("ads_montar_contas").then(function (c) { setContas(c || []); }).catch(function () {}); }, []);
   const rodar = async function (modo) {
     if (!conta) return; setOcupado(modo); setMsg("");
@@ -72548,12 +70080,12 @@ function TCenMercado({ contaFixa }) {
   return <div>
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
       {!contaFixa && <select value={conta} onChange={function (e) { setConta(e.target.value); }} style={Object.assign({}, _tmonInp, { width: "auto", minWidth: 220 })}><option value="">Conta…</option>{contas.map(function (c) { return <option key={c.id} value={c.id}>{c.nome}</option>; })}</select>}
-      <TSegBotao tipo="secundario" onClick={function () { rodar("nicho"); }} desligado={!conta || !!ocupado}>{ocupado === "nicho" ? "Pesquisando na web… (até 2 min)" : "🌎 Pesquisar mercado agora"}</TSegBotao>
-      <TSegBotao onClick={function () { rodar("analisar"); }} desligado={!conta || !!ocupado}>{ocupado === "analisar" ? "Analisando…" : "🧠 Analisar conta agora"}</TSegBotao>
+      <TSegBotao tipo="secundario" onClick={function () { rodar("nicho"); }} desligado={semIa || !conta || !!ocupado}>{ocupado === "nicho" ? "Pesquisando na web… (até 2 min)" : "🌎 Pesquisar mercado agora" + (semIa ? " · " + _TIA_SEM_TXT : "")}</TSegBotao>
+      <TSegBotao onClick={function () { rodar("analisar"); }} desligado={semIa || !conta || !!ocupado}>{ocupado === "analisar" ? "Analisando…" : "🧠 Analisar conta agora" + (semIa ? " · " + _TIA_SEM_TXT : "")}</TSegBotao>
     </div>
-    <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 8 }}>Sozinho: pesquisa de mercado toda segunda; análise segunda e quinta. Sugestão sem número real é descartada.</div>
+    <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 8 }}>Sozinho: pesquisa de mercado toda {_TIA_HORARIOS.mercado}; análise das contas todo dia às {_TIA_HORARIOS.analise}. Sugestão sem número real é descartada.</div>{/* v96 (13/10/2026) M14: horário conferido no servidor (antes dizia "segunda e quinta") */}
     {msg && <div style={{ fontSize: 13, fontWeight: 700, color: /erro|não|falh/i.test(msg) ? "#dc2626" : "#166534", marginBottom: 8 }}>{msg}</div>}
-    {itens === null ? <div style={{ fontSize: 13, color: "#94a3b8" }}>Carregando…</div> : !itens.length ? <div style={{ fontSize: 13, color: "#64748b" }}>Nenhuma pesquisa ainda.</div> :
+    {erroN ? <TSegErroCarga motivo={erroN} onTentar={carregar} tela="mercado" conta={contaFixa} /> : itens === null ? <div style={{ fontSize: 13, color: "#94a3b8" }}>Carregando…</div> : !itens.length ? <div style={{ fontSize: 13, color: "#64748b" }}>Nenhuma pesquisa ainda.</div> :
       <div style={{ maxHeight: "55vh", overflowY: "auto" }}>{itens.filter(function (n) { return !conta || n.conta === conta; }).map(function (n) {
         const r = n.resumo || {};
         return <div key={n.conta} style={{ border: "1px solid #e5e9f0", borderRadius: 12, padding: "10px 12px", marginBottom: 10, fontSize: 12.5, lineHeight: 1.5 }}>
@@ -72580,18 +70112,34 @@ const _tcliCarregar = async function (forcar) {
   if (!T.ok || T.carregando) return;
   if (!forcar && T.resumo && Date.now() - T.t < 60000) return;
   T.carregando = true;
-  try { const r = await _tsegRpc("ads_ia_resumo_contas"); T.resumo = r && r.ok ? (r.contas || {}) : {}; T.ontem = r && r.ontem; T.t = Date.now(); }
-  catch (_) { T.resumo = T.resumo || {}; }
-  finally { T.carregando = false; _tcliAvisar(); }
+  // v96 (13/10/2026) G6 rodada 2: UMA chamada (ads_painel_ia) traz o resumo das contas, as contagens da barra e o saldo da IA.
+  //   Se ela falhar ou não existir, volta para o jeito antigo (ads_ia_resumo_contas + as leituras separadas do portão).
+  let feito = false;
+  if (T.painelOk !== false) {
+    try {
+      const p = await _tsegRpc("ads_painel_ia");
+      if (p && p.ok && p.resumo) {
+        const r = p.resumo; T.resumo = r.ok ? (r.contas || {}) : {}; T.ontem = r.ontem; T.t = Date.now();
+        T.contagem = p.contagem || null; T.painelOk = true; feito = true;
+        if (p.saldo) _tiaSaldoGuardar(p.saldo);
+      } else if (p && p.ok === false) { T.resumo = {}; T.contagem = null; T.t = Date.now(); feito = true; T.painelOk = true; }   // sem permissão: mesmo efeito do jeito antigo
+    } catch (e) { T.contagem = null; if (/could not find|does not exist|PGRST202/i.test(String(e && e.message))) T.painelOk = false; }   // só desiste de vez se a função não existe
+  }
+  if (!feito) {
+    try { const r = await _tsegRpc("ads_ia_resumo_contas"); T.resumo = r && r.ok ? (r.contas || {}) : {}; T.ontem = r && r.ontem; T.t = Date.now(); }
+    catch (_) { T.resumo = T.resumo || {}; }
+  }
+  T.carregando = false; _tcliAvisar();
 };
 const _tcliSetOk = function (ok) {
   const T = window._tcli; ok = !!ok;
   if (T.ok === ok) return;
   T.ok = ok; if (!ok) { T.resumo = null; T.t = 0; }
   if (T.timer) { clearInterval(T.timer); T.timer = null; }
-  if (ok) T.timer = setInterval(function () { _tcliCarregar(true); }, 300000);
+  if (ok) T.timer = setInterval(function () { if (_tiaVisivel()) _tcliCarregar(true); }, 300000);   // v96 (13/10/2026) G6: parado com a aba escondida
   _tcliAvisar(); if (ok) _tcliCarregar(true);
 };
+if (!window._tcliVoltaOuvindo) { window._tcliVoltaOuvindo = true; _tiaAoVoltar(function () { const T = window._tcli; if (T && T.ok && Date.now() - (T.t || 0) > 300000) _tcliCarregar(true); }); }   // v96 G6: ao voltar para a aba
 function useTCli() {
   const [, setN] = useState(0);
   useEffect(function () {
@@ -72618,9 +70166,9 @@ const _tcliSinal = function (r) {
   const n = (r.decidir || 0), a = (r.alarmes || 0);
   const resto = [n ? n + (n > 1 ? " decisões esperando" : " decisão esperando") : null, a ? a + (a > 1 ? " alarmes" : " alarme") : null].filter(Boolean).join(" · ");
   if (r.critico) return { cor: "vermelho", ic: "🔴", titulo: "Alarme grave", frase: String(r.critico).replace(/^[^:]*:\s*/, ""), resto: resto };
-  if (r.ritmo !== null && r.ritmo !== undefined && r.ritmo > 1.15)
+  if (r.ritmo !== null && r.ritmo !== undefined && r.ritmo > _TIA_LIMITES.verba_alto)   // v96 R4/R6: limite do servidor
     return { cor: "amarelo", ic: "🟡", titulo: "Gastando acima da verba", frase: _tcenBrl(r.media_dia) + "/dia contra " + _tcenBrl(r.cabe_dia || 0) + "/dia que cabem até o fim do mês", resto: resto };
-  if (r.ritmo !== null && r.ritmo !== undefined && r.ritmo < 0.8 && r.dia >= 5)
+  if (r.ritmo !== null && r.ritmo !== undefined && r.ritmo < _TIA_LIMITES.verba_baixo && r.dia >= 5)
     return { cor: "amarelo", ic: "🟡", titulo: "Gastando abaixo da verba", frase: _tcenBrl(r.media_dia) + "/dia — dá para usar até " + _tcenBrl(r.cabe_dia || 0) + "/dia até o fim do mês", resto: resto };
   if (!r.verba_mes && !Number(r.gasto_mes) && !n && !a) return null;   // v80 M12: conta parada e sem verba (ex.: Climaves) não mostra cartão
   if (!r.verba_mes) return { cor: "cinza", ic: "⚪", titulo: "Sem verba do mês cadastrada", frase: "Cadastre o orçamento Meta na aba Gestão para a IA saber o ritmo certo", resto: resto };
@@ -72692,6 +70240,7 @@ function TCliPrecisa({ clients, onOpenClient }) {
 
 // 2) cartão no topo do cliente — sinal + 1 frase + botões que já sabem qual é a conta. Fecha e só volta se algo mudar.
 function TCliCartao({ mc, conta, onAbrir, isMob }) {
+  useTiaCfg();   // v96 (13/10/2026) Q15/R4/R6 rodada 2: horários e limites do servidor
   const T = useTCli();
   const contaId = conta && conta.ad_account_id;
   const r = _tcliNaUnidade(T.ok && T.resumo && contaId ? T.resumo[contaId] : null, mc && mc.bioter_unit);   // v80 M02/M05: unidade do cliente
@@ -72712,7 +70261,7 @@ function TCliCartao({ mc, conta, onAbrir, isMob }) {
     <div style={{ flex: 1, minWidth: 240 }}>
       <div style={{ fontWeight: 900, fontSize: 14.5, color: c[2] }}>{s.titulo}{r._uni ? <span style={{ fontWeight: 700, color: "#64748b" }}> · {_tcliUniLbl(r._uni)}</span> : null}</div>
       <div style={{ fontSize: 12.5, color: "#334155", marginTop: 2, lineHeight: 1.45 }}>{s.frase}{s.resto ? <span> · <b>{s.resto}</b></span> : null}</div>
-      {T.ontem && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 2 }}>números até {String(T.ontem).split("-").reverse().slice(0, 2).join("/")} · só vocês dois veem este cartão</div>}
+      {T.ontem && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 2 }}><TiaSeloDados ate={T.ontem} estilo={{ fontSize: 10.5 }} /> · só os sócios veem este cartão</div>}{/* v96 (13/10/2026) P2_13_03 selo de frescor · M14 texto sem nome fixo */}
     </div>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
       {btn("Ver em 🧠 Decisões" + ((r.decidir || 0) + (r.alarmes || 0) ? " (" + ((r.decidir || 0) + (r.alarmes || 0)) + ")" : ""), function () { onAbrir && onAbrir("decidir"); }, true)}
@@ -72721,10 +70270,12 @@ function TCliCartao({ mc, conta, onAbrir, isMob }) {
   </div>;
 }
 
-// 3) aba "🧠 Alertas" do cliente (v81: a aba "Alertas" antiga VIROU esta — nenhuma aba nova). Uma página só:
+// 3) aba "🧠 Decisões" do cliente (v81: a aba "Alertas" antiga VIROU esta; v82: o Diagnóstico entrou nela). Uma página só:
 //    precisa de vocês (sugestões com conserto pronto) → alarmes desta conta → regras automáticas (os alertas antigos, fechados).
+//    v96 (13/10/2026) R1/R14: é o ÚNICO lugar onde se decide e se dá visto em alarme de conta; os outros lugares só contam e trazem para cá.
 function TCliDecisoes({ mc, conta, isMob, canEdit }) {
   const T = useTCli();
+  const semIa = useIaSemCredito().sem;   // v96 (13/10/2026) Q14
   const contaId = conta && conta.ad_account_id;
   const [aba] = useState(function () { const v = window._pxTCliVista; window._pxTCliVista = null; return (v && v !== "alertas") ? v : "decidir"; });
   const rr = T.resumo && contaId ? T.resumo[contaId] : null;
@@ -72735,24 +70286,23 @@ function TCliDecisoes({ mc, conta, isMob, canEdit }) {
   return <div data-tcli-alertas="1" style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "18px 20px", fontFamily: "'Inter',system-ui,sans-serif" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
       <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", marginRight: "auto" }}>🧠 Decisões · {uni ? (mc.name || _tcliUniLbl(uni)) : ((conta && conta.nome) || mc.name)}</div>
-      <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "sala", conta: contaId }); }}>🎙️ Nova estratégia</TSegBotao>
+      <TSegBotao tipo="secundario" onClick={semIa ? _tiaAvisarSemCredito : function () { _tcliAbrir({ painel: "sala", conta: contaId }); }}>{semIa ? <span style={{ opacity: 0.55 }}>🎙️ Nova estratégia · {_TIA_SEM_TXT}</span> : "🎙️ Nova estratégia"}</TSegBotao>{/* v96 (13/10/2026) Q14 */}
       <TSegBotao tipo="secundario" onClick={function () { _tcliAbrir({ painel: "montador", conta: contaId, novo: true }); }}>🧱 Nova campanha</TSegBotao>
     </div>
     {uni && <div style={{ fontSize: 12, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "7px 10px", marginBottom: 10 }}>
       Esta unidade roda na conta de Toledo junto com outras. Aqui aparecem só as decisões das campanhas de <b>{_tcliUniLbl(uni)}</b> e o ritmo pela verba de {_tcliUniLbl(uni)}.</div>}
-    <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} unidade={uni} embutido abaInicial={aba} onMudou={function () { _tcliCarregar(true); }}
+    <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} clientId={mc && mc.client_id} unidade={uni} embutido abaInicial={aba} onMudou={function () { _tcliCarregar(true); }}
       topo={<TMetasNorte clientId={mc && mc.client_id} />}
       diagnostico={<TCliDiag mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}
         detalhe={typeof QGAdsDiagnostico === "function" ? <QGAdsDiagnostico mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false && (typeof _bl !== "function" || _bl("midia.cerebro"))} /> : null} />}
       extra={typeof QGAdsEstrategia === "function" ? <TCliRegras mc={mc} conta={conta} isMob={isMob} canEdit={canEdit} /> : null} />
   </div>;
 }
-// os alertas antigos (calculados na tela) — fechados no fim da página, 1 clique abre
 /* ---------- 🎯 METAS DO MÊS (v82, 10/10/2026) ----------
    Gestão › Metas: faturamento pelo digital e vendas (vocês lançam), leads, custo por lead e CTR (automático da Meta), retorno (calculado).
-   Toda a agência vê (o Erick também); só Vinícius e Gustavo mudam. A meta do mês novo já vem com a do mês anterior. A IA lê as metas. */
-const _tmetaBrl = function (v, casas) { if (v === null || v === undefined || v === "" || !isFinite(Number(v))) return "—"; return "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: casas === 0 ? 0 : 2, maximumFractionDigits: casas === 0 ? 0 : 2 }); };
-const _tmetaNum = function (v, casas) { if (v === null || v === undefined || v === "" || !isFinite(Number(v))) return "—"; return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: casas || 0 }); };
+   Toda a agência vê (o Erick também); só os sócios mudam. A meta do mês novo já vem com a do mês anterior. A IA lê as metas. */
+const _tmetaBrl = _tiaBrl;   // v96 (13/10/2026) E5: formatador único
+const _tmetaNum = _tiaNum;
 const _tmetaLer = function (s) {   // "90.000" = noventa mil; "12,50" = doze e cinquenta; "1.234,5" ok
   const t = String(s === null || s === undefined ? "" : s).replace(/[^0-9,.-]/g, ""); if (!t) return "";
   const n = t.indexOf(",") >= 0 ? Number(t.replace(/\./g, "").replace(",", ".")) : /^-?\d{1,3}(\.\d{3})+$/.test(t) ? Number(t.replace(/\./g, "")) : Number(t);
@@ -72764,7 +70314,7 @@ const _tmetaSinal = function (tipo, real, meta, dia, dias) {
   if (tipo === "soma") {
     const esp = dia > 0 ? meta * dia / dias : 0; if (!(esp > 0)) return null;
     const r = real / esp; const pct = Math.round(real / meta * 100);
-    return r >= 0.95 ? ["no ritmo · " + pct + "%", "verde"] : r >= 0.75 ? ["perto · " + pct + "%", "amarelo"] : ["abaixo · " + pct + "%", "vermelho"];
+    return r >= _TIA_LIMITES.leads_ok ? ["no ritmo · " + pct + "%", "verde"] : r >= _TIA_LIMITES.leads_perto ? ["perto · " + pct + "%", "amarelo"]   /* v96 R4/R6: limites do servidor */ : ["abaixo · " + pct + "%", "vermelho"];
   }
   if (tipo === "max") return real <= meta ? ["dentro", "verde"] : real <= meta * 1.15 ? ["perto", "amarelo"] : ["acima", "vermelho"];
   return real >= meta ? ["dentro", "verde"] : real >= meta * 0.85 ? ["perto", "amarelo"] : ["abaixo", "vermelho"];
@@ -72779,15 +70329,22 @@ const _tmetaCache = {};
 function useTMetas(clientId, mes) {
   const [d, setD] = useState(function () { return _tmetaCache[(clientId || "") + ":" + (mes || "")] || null; });
   const [n, setN] = useState(0);
+  const [erro, setErro] = useState("");   // v96 (13/10/2026) Q6: falha do servidor vira erro na tela (antes o bloco sumia em silêncio)
   useEffect(function () {
     if (!clientId || !window._sb) { setD(null); return; }
     const k = clientId + ":" + (mes || "");
     if (_tmetaCache[k]) setD(_tmetaCache[k]);
+    setErro("");   // v96 (13/10/2026) Q6 (revisão RA): erro do cliente/mês anterior não passa para o novo
     let vivo = true;
-    window._sb.rpc("ads_metas_ler", { p_client: clientId, p_mes: mes || null }).then(function (r) { if (vivo && r && r.data) { _tmetaCache[k] = r.data; setD(r.data); } }).catch(function () {});
+    window._sb.rpc("ads_metas_ler", { p_client: clientId, p_mes: mes || null }).then(function (r) {
+      if (!vivo) return;
+      if (r && r.error) { setErro(_tsegMotivo(r.error)); return; }
+      if (r && r.data && r.data.ok === false) { setErro(_tsegMotivo(r.data.erro || "resposta sem dados")); return; }   // v96 Q6 (revisão RA): {ok:false} não some em silêncio
+      if (r && r.data) { _tmetaCache[k] = r.data; setD(r.data); setErro(""); }
+    }).catch(function (e) { if (vivo) setErro(_tsegMotivo(e)); });
     return function () { vivo = false; };
   }, [clientId, mes, n]);
-  return [d, function () { Object.keys(_tmetaCache).forEach(function (k) { if (k.indexOf(clientId + ":") === 0) delete _tmetaCache[k]; }); setN(function (x) { return x + 1; }); }];
+  return [d, function () { Object.keys(_tmetaCache).forEach(function (k) { if (k.indexOf(clientId + ":") === 0) delete _tmetaCache[k]; }); setN(function (x) { return x + 1; }); }, erro];
 }
 const _tmetaLinhas = function (d) {
   const m = (d && d.meta) || {}; const r = (d && d.realizado) || {}; const dia = (d && d.dia) || 0, dias = (d && d.dias_mes) || 30;
@@ -72803,9 +70360,11 @@ const _tmetaLinhas = function (d) {
 };
 // Gestão › 🎯 Metas do mês (toda a agência vê; só aprovadores editam)
 function TMetasMes({ mc, year, month, isMob }) {
+  useTiaCfg();   // v96 (13/10/2026) Q15/R4/R6 rodada 2: horários e limites do servidor
   const mes = year && month ? year + "-" + String(month).padStart(2, "0") + "-01" : null;
-  const [d, recarregar] = useTMetas(mc && mc.client_id, mes);
+  const [d, recarregar, erroM] = useTMetas(mc && mc.client_id, mes);
   const [ed, setEd] = useState(null); const [salvando, setSalvando] = useState(false); const [msg, setMsg] = useState("");
+  if (erroM && !d) return <div style={{ marginBottom: 16 }}><TSegErroCarga motivo={"metas do mês: " + erroM} onTentar={recarregar} tela="metas" conta={mc && mc.client_id} /></div>;   // v96 Q6
   if (!d || !d.ok) return null;
   const linhas = _tmetaLinhas(d); const m = d.meta || {};
   const nomeMes = new Date(d.mes + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
@@ -72855,7 +70414,7 @@ function TMetasMes({ mc, year, month, isMob }) {
       <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={salvar} desligado={salvando}>{salvando ? "Salvando…" : "✓ Salvar metas"}</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setEd(null); }}>Cancelar</TSegBotao></div>
       {msg && <div style={{ color: "#b91c1c", fontSize: 12.5, fontWeight: 700, marginTop: 6 }}>{msg}</div>}
     </div>}
-    <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 8 }}>Números até {d.ate ? String(d.ate).split("-").reverse().slice(0, 2).join("/") : "—"} · ritmo = quanto já devia ter até hoje{m.atualizado_por ? " · atualizado por " + m.atualizado_por : ""}{m.obs ? " · " + m.obs : ""}</div>
+    <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 8 }}>{d.ate ? <TiaSeloDados ate={d.ate} estilo={{ fontSize: 11.5 }} /> : "Números até —"}{/* v96 (13/10/2026) P2_13_03 */} · ritmo = quanto já devia ter até hoje{m.atualizado_por ? " · atualizado por " + m.atualizado_por : ""}{m.obs ? " · " + m.obs : ""}</div>
     {(d.historico || []).length > 0 && <details style={{ marginTop: 6 }}><summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 800, color: "#475569" }}>Meses anteriores ({d.historico.length})</summary>
       <div style={{ fontSize: 12, color: "#334155", marginTop: 6 }}>{d.historico.map(function (h) {
         return <div key={h.mes} style={{ padding: "3px 0" }}><b>{String(h.mes).slice(5, 7)}/{String(h.mes).slice(0, 4)}</b> · faturamento {_tmetaBrl(h.fat_real, 0)} de {_tmetaBrl(h.fat_meta, 0)} · vendas {_tmetaNum(h.vendas_real)} de {_tmetaNum(h.vendas_meta)} · meta de leads {_tmetaNum(h.leads_meta)}</div>;
@@ -72864,197 +70423,25 @@ function TMetasMes({ mc, year, month, isMob }) {
 }
 // faixa "🎯 Norte do mês" no topo da 🧠 Decisões (só leitura)
 function TMetasNorte({ clientId }) {
-  const [d] = useTMetas(clientId, null);
+  useTiaCfg();   // v96 (13/10/2026) Q15/R4/R6 rodada 2: horários e limites do servidor
+  const [d, recarregar, erroM] = useTMetas(clientId, null);
+  if (erroM && !d) return <div style={{ marginBottom: 12 }}><TSegErroCarga pequeno motivo={"norte do mês: " + erroM} onTentar={recarregar} tela="metas_norte" conta={clientId} /></div>;   // v96 Q6
   if (!d || !d.ok) return null;
   if (!d.meta) return <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: 12, padding: "8px 12px", marginBottom: 12, fontSize: 12.5, color: "#64748b" }}>
     🎯 Sem metas para este mês. Defina em <b>Gestão › Metas</b> — a IA passa a priorizar o que fecha a meta.</div>;
   const ls = _tmetaLinhas(d).filter(function (l) { return l.meta !== null && l.meta !== undefined && l.meta !== ""; });
   return <div style={{ background: "#faf8ff", border: "1.5px solid #c4b5fd", borderRadius: 14, padding: "9px 13px", marginBottom: 12, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
     <b style={{ color: "#5b21b6" }}>🎯 Norte do mês</b>
-    {ls.map(function (l) { return <span key={l.k} style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>{l.curto} <b>{l.fmt(l.real)}</b> <span style={{ color: "#64748b" }}>/ {l.fmt(l.meta)}</span> <TMetaChip s={l.sinal} /></span>; })}
+    {ls.map(function (l) { return <span key={l.k} title={l.nome + " · " + l.origem} style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>{l.curto} <b>{l.fmt(l.real)}</b> <span style={{ color: "#64748b" }}>/ {l.fmt(l.meta)}</span> <TMetaChip s={l.sinal} /></span>; })}
+    {d.ate && <TiaSeloDados ate={d.ate} estilo={{ marginLeft: "auto" }} />}{/* v96 (13/10/2026) P2_13_02 (origem no título) · P2_13_03 (até quando) */}
   </div>;
 }
 
-/* ---------- 🔬 COLINHA DO CLIENTE (v83, 10/10/2026) ----------
-   Dentro de 🧠 Decisões › 🔬 Diagnóstico. 8 frentes calculadas pelo servidor 1x por dia (ads_colinha) — abre na hora, sem pesar o celular.
-   Confiança: cada fato mostra período e origem; "pouco dado" fica cinza; conferência diária com a Meta; placar de acerto da IA;
-   botão "⚑ fato errado" (vira aviso para a IA não usar). O resumo da IA só usa números que já estão nos fatos (o servidor confere).
-   O detalhe completo (o Diagnóstico de antes) só carrega quando vocês clicam. */
-const _TCOL_COR = { verde: ["#16a34a", "#dcfce7", "#166534", "ok"], amarelo: ["#f59e0b", "#fef3c7", "#92400e", "atenção"], vermelho: ["#dc2626", "#fee2e2", "#b91c1c", "problema"], cinza: ["#cbd5e1", "#f1f5f9", "#475569", "informativo"] };
-const _TCOL_TEND = { subiu: ["▲", "#475569", "subiu"], caiu: ["▼", "#475569", "caiu"], melhorou: ["▲", "#16a34a", "melhorou"], piorou: ["▼", "#dc2626", "piorou"], igual: ["=", "#94a3b8", "igual à semana anterior"] };
-const _tcolData = function (d) { return d ? String(d).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : ""; };
-const _tcolHora = function (iso) { try { return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch (_) { return ""; } };
-const _tcolLs = { ler: function (k) { try { return localStorage.getItem(k) || ""; } catch (_) { return ""; } }, gravar: function (k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+/* v96 (13/10/2026) M3: a Colinha antiga (TCliColinha, v83) saiu — não aparecia em tela nenhuma desde o Diagnóstico (v84).
+   Quem gera a colinha que o Diagnóstico ainda lê (saúde, placar e "A IA diz", via ads_colinha_ler) é a rotina do servidor
+   "ads-colinha-diaria" (ads_colinha_gerar_todas, 7h40 de Brasília) — não dependia do botão "refazer" da colinha morta.
+   Ficou só o atalho abaixo, que o Diagnóstico usa ("✅ Já pedido" leva para "Precisa de vocês"). */
 const _tcolIrDecisoes = function () { try { window.dispatchEvent(new CustomEvent("pixels:tcen-aba", { detail: { aba: "decidir" } })); } catch (_) {} };
-
-function TCliColinha({ mc, conta, isMob, canEdit, detalhe }) {
-  const cli = mc && mc.client_id;
-  const contaId = conta && conta.ad_account_id;
-  const chaveVisto = "px_colinha_visto_" + cli;
-  const [desde] = useState(function () { return _tcolLs.ler(chaveVisto); });
-  const [d, setD] = useState(null); const [erro, setErro] = useState("");
-  const [pedidos, setPedidos] = useState([]);
-  const [verDet, setVerDet] = useState(false);
-  const [refazendo, setRefazendo] = useState(false);
-  const [contestando, setContestando] = useState(null); const [motivo, setMotivo] = useState("");
-  const [pergunta, setPergunta] = useState("");
-  const carregar = useCallback(async function () {
-    if (!cli || !window._sb) return;
-    try {
-      const r = await window._sb.rpc("ads_colinha_ler", { p_client: cli, p_desde: desde || null });
-      if (r.error) throw new Error(r.error.message);
-      if (!r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || "Não carregou.");
-      setD(r.data); setErro("");
-      if (r.data.data) _tcolLs.gravar(chaveVisto, r.data.data);
-    } catch (e) { setErro(e.message); }
-    try { const p = await _tsegRpc("ads_pedidos_ler", { p_aberto: true }); setPedidos((p && p.itens) || []); } catch (_) {}
-  }, [cli, desde]);
-  useEffect(function () { carregar(); }, [carregar]);
-
-  // fato → decisão aberta (pelo id da campanha/anúncio que o fato cita)
-  const decisaoDe = function (f) {
-    const ids = (f && f.ids) || []; if (!ids.length) return null;
-    return pedidos.find(function (p) {
-      if (p.ad_account_id !== contaId) return false;
-      if (ids.indexOf(String(p.entidade_id)) >= 0) return true;
-      return (Array.isArray(p.caminho) ? p.caminho : []).some(function (c) { return ids.indexOf(String(c.id)) >= 0; });
-    }) || null;
-  };
-  const textoFatos = function (fr) { return (fr.fatos || []).map(function (f) { return "- " + f.t + " (" + (f.periodo || "") + (f.pouco_dado ? ", pouco dado" : "") + ")"; }).join("\n"); };
-  const abrirSala = function (texto) { _tcliAbrir({ painel: "sala", conta: contaId, texto: texto }); };
-  const perguntarFrente = function (fr) { abrirSala(fr.pergunta + "\n\nColinha (" + fr.titulo + ", " + _tcolData(d.data) + "):\n" + textoFatos(fr)); };
-  const conversar = function () {
-    const q = String(pergunta || "").trim(); if (!q) return;
-    const tudo = (d.frentes || []).map(function (fr) { return fr.icone + " " + fr.titulo + ":\n" + textoFatos(fr); }).join("\n\n");
-    abrirSala(q + "\n\nColinha do cliente (" + _tcolData(d.data) + "):\n" + tudo);
-    setPergunta("");
-  };
-  const refazer = async function () {
-    setRefazendo(true);
-    try {
-      const r = await window._sb.rpc("ads_colinha_gerar", { p_client: cli });
-      if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || (r.error && r.error.message) || "Não refez.");
-      try { window._sb.functions.invoke("ads-cerebro", { body: { modo: "colinha", cliente: cli, conta: contaId } }).then(function () { carregar(); }); } catch (_) {}
-      await carregar();
-    } catch (e) { setErro(e.message); } finally { setRefazendo(false); }
-  };
-  const contestar = async function () {
-    if (!contestando) return;
-    try {
-      const r = await window._sb.rpc("ads_colinha_contestar", { p_client: cli, p_frente: contestando.frente, p_fato: contestando.fato, p_motivo: motivo });
-      if (r.error || !r.data || !r.data.ok) throw new Error((r.data && r.data.erro) || "Não salvou.");
-      setContestando(null); setMotivo(""); carregar();
-      if (typeof pixelsToast !== "undefined") pixelsToast.success("Anotado. A IA não vai usar esse fato e o Claude confere a causa.", 3500);
-    } catch (e) { setErro(e.message); }
-  };
-
-  if (erro && !d) return <div style={{ color: "#b91c1c", fontSize: 13, fontWeight: 700 }}>{erro}</div>;
-  if (!d) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando a colinha…</div>;
-  if (d.vazia) return <div style={{ fontSize: 13, color: "#64748b" }}>A colinha deste cliente ainda não foi gerada. {canEdit !== false && <TSegBotao tipo="secundario" onClick={refazer} desligado={refazendo}>{refazendo ? "Gerando…" : "Gerar agora"}</TSegBotao>}
-    {detalhe && <div style={{ marginTop: 14 }}>{detalhe}</div>}</div>;
-
-  const contestados = d.contestados || [];
-  const contestado = function (t) { return contestados.find(function (k) { return k.fato === t; }); };
-  // o que mudou desde a última vez que vocês abriram
-  const mudancas = [];
-  if (d.anterior && d.anterior.frentes) {
-    (d.frentes || []).forEach(function (fr) {
-      const ant = (d.anterior.frentes || []).find(function (x) { return x.id === fr.id; }); if (!ant) return;
-      if (ant.sinal !== fr.sinal && fr.sinal !== "cinza" && ant.sinal !== "cinza") mudancas.push(fr.icone + " " + fr.titulo + ": " + _TCOL_COR[ant.sinal][3] + " → " + _TCOL_COR[fr.sinal][3]);
-      const velhos = (ant.fatos || []).map(function (f) { return String(f.t).replace(/[\d.,]+/g, "#"); });
-      (fr.fatos || []).forEach(function (f) { if (f.sinal === "vermelho" && velhos.indexOf(String(f.t).replace(/[\d.,]+/g, "#")) < 0) mudancas.push("Novo: " + f.t); });
-    });
-  }
-  const placar = ((d.placar && d.placar.tipos) || []);
-  const medidos = placar.reduce(function (a, t) { return a + Number(t.melhorou || 0) + Number(t.piorou || 0) + Number(t.igual || 0); }, 0);
-  const melhorou = placar.reduce(function (a, t) { return a + Number(t.melhorou || 0); }, 0);
-  const res = d.resumo_ia; const cab = d.cabecalho || {};
-  const pill = function (txt, fn, cor) { return <button onClick={fn} style={{ background: cor === "roxo" ? "#7c3aed" : "#fff", color: cor === "roxo" ? "#fff" : "#5b21b6", border: "1px solid " + (cor === "roxo" ? "#7c3aed" : "#ddd6fe"),
-    borderRadius: 8, padding: "4px 9px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>{txt}</button>; };
-
-  return <div style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8, fontSize: 11.5, color: "#64748b" }}>
-      <span>🔬 Colinha de {_tcolData(d.data)} ({_tcolHora(d.gerada_em)}) · números até {_tcolData(cab.ate)} — o último dia ainda pode subir um pouco · mínimo de {cab.amostra_min || 5} leads para concluir</span>
-      {canEdit !== false && <button onClick={refazer} disabled={refazendo} style={{ marginLeft: "auto", background: "none", border: "none", color: "#2563eb", fontWeight: 800, fontSize: 11.5, cursor: "pointer" }}>{refazendo ? "Refazendo…" : "🔄 refazer agora"}</button>}
-    </div>
-    {erro && <div style={{ color: "#b91c1c", fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{erro}</div>}
-
-    {/* resumo da IA (3 frases + 3 alavancas, números conferidos pelo servidor) */}
-    <div style={{ background: "#0f0d1a", color: "#fff", borderRadius: 16, padding: isMob ? "13px 13px" : "15px 18px", marginBottom: 12 }}>
-      <div style={{ fontWeight: 900, fontSize: 14.5, marginBottom: 5 }}>Em 3 frases</div>
-      {res && (res.frases || []).length ? <div style={{ fontSize: 13, lineHeight: 1.55, color: "rgba(255,255,255,.85)" }}>{res.frases.join(" ")}</div>
-        : <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.5 }}>O resumo da IA aparece aqui depois da próxima rodada (precisa de crédito na Anthropic). Os fatos abaixo são do sistema e não dependem da IA.</div>}
-      {res && (res.alavancas || []).length > 0 && <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 10 }}>
-        {res.alavancas.map(function (a, i) {
-          return <button key={i} onClick={function () { abrirSala("Quero executar esta alavanca: " + a.texto + "\n\nPor quê (fatos da colinha):\n" + (a.fatos || []).map(function (f) { return "- " + f.t; }).join("\n")); }}
-            title={"Base: " + (a.fatos || []).map(function (f) { return f.t; }).join(" | ")}
-            style={{ background: "rgba(167,139,250,.18)", color: "#ddd6fe", border: "none", borderRadius: 9, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>{(i + 1) + ". " + a.texto} ›</button>;
-        })}
-      </div>}
-      {res && res.gerado_em && <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.45)", marginTop: 7 }}>escrito pela IA {_tcolData(res.gerado_em)} · só com números dos fatos abaixo{(res.descartadas || []).length ? " · " + res.descartadas.length + " frase(s) descartada(s) por número sem fonte" : ""}</div>}
-    </div>
-
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: "#334155", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "6px 10px" }}>
-        🎯 Placar da IA (60 dias): {medidos ? <b>{melhorou} de {medidos} decisões medidas melhoraram</b> : "ainda sem decisão aplicada e medida nesta conta"}</div>
-      {mudancas.length > 0 && <div style={{ fontSize: 12, color: "#5b21b6", background: "#faf8ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "6px 10px", flex: 1, minWidth: 240 }}>
-        <b>O que mudou desde {_tcolData(d.anterior.data)}:</b> {mudancas.slice(0, 5).join(" · ")}{mudancas.length > 5 ? " · +" + (mudancas.length - 5) : ""}</div>}
-    </div>
-
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 10 }}>
-      {(d.frentes || []).map(function (fr) {
-        const c = _TCOL_COR[fr.sinal] || _TCOL_COR.cinza;
-        return <div key={fr.id} style={{ border: "1px solid #e5e9f0", borderLeft: "5px solid " + c[0], borderRadius: 14, padding: "11px 13px", background: "#fff", minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-            <div style={{ fontWeight: 900, fontSize: 14, color: "#0f172a", marginRight: "auto" }}>{fr.icone} {fr.titulo}</div>
-            <span style={{ background: c[1], color: c[2], borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 800 }}>{fr.sinal_txt || c[3]}</span>
-          </div>
-          {fr.vazio && !(fr.fatos || []).length && <div style={{ fontSize: 12.5, color: "#64748b" }}>{fr.vazio}</div>}
-          <div>{(fr.fatos || []).map(function (f, i) {
-            const dec = decisaoDe(f); const k = contestado(f.t); const tend = f.tend && _TCOL_TEND[f.tend];
-            return <div key={i} style={{ padding: "4px 0", borderTop: i ? "1px solid #f1f5f9" : "none", fontSize: 12.5, lineHeight: 1.45, color: f.pouco_dado ? "#94a3b8" : "#1e293b" }}>
-              <div>{f.sinal && f.sinal !== "cinza" && <span style={{ color: (_TCOL_COR[f.sinal] || _TCOL_COR.cinza)[0], marginRight: 4 }}>●</span>}{f.t}
-                {tend && <span title={tend[2]} style={{ color: tend[1], fontWeight: 900, marginLeft: 5 }}>{tend[0]}</span>}
-                {f.pouco_dado && <span style={{ marginLeft: 5, fontSize: 10.5, fontWeight: 800, color: "#92400e", background: "#fef3c7", borderRadius: 6, padding: "1px 5px" }}>⏳ pouco dado</span>}</div>
-              <div style={{ fontSize: 10.5, color: "#94a3b8", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <span>{f.periodo} · {f.origem}</span>
-                {f.fonte && <a href={f.fonte} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>fonte ↗</a>}
-                {dec ? <button onClick={_tcolIrDecisoes} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 800, fontSize: 10.5, cursor: "pointer", padding: 0 }}>→ virou decisão: {String(dec.titulo).slice(0, 40)}</button>
-                  : (f.sinal === "vermelho" && <button onClick={function () { abrirSala("Quero resolver isto: " + f.t + " (" + f.periodo + ")\n\n" + fr.pergunta); }} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 800, fontSize: 10.5, cursor: "pointer", padding: 0 }}>→ resolver com a IA</button>)}
-                {k ? <span style={{ color: "#b91c1c", fontWeight: 800 }}>⚑ contestado por {k.por || "—"}</span>
-                  : canEdit !== false && <button onClick={function () { setContestando({ frente: fr.id, fato: f.t }); setMotivo(""); }} title="Este número está errado? Avise — a IA deixa de usar e o Claude confere a causa"
-                    style={{ background: "none", border: "none", color: "#cbd5e1", fontSize: 10.5, cursor: "pointer", padding: 0 }}>⚑ errado?</button>}
-              </div>
-              {contestando && contestando.fato === f.t && <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
-                <input value={motivo} onChange={function (e) { setMotivo(e.target.value); }} autoFocus placeholder="O que está errado? (ex.: no Gerenciador aparece 40 leads)"
-                  style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1.5px solid #cbd5e1", borderRadius: 8, minWidth: 0 }} />
-                {pill("Enviar", contestar, "roxo")}{pill("Cancelar", function () { setContestando(null); })}
-              </div>}
-            </div>;
-          })}</div>
-          <div style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
-            {pill("💬 Perguntar à IA", function () { perguntarFrente(fr); })}
-            {fr.detalhe && detalhe && pill(verDet ? "Fechar detalhe" : "Ver detalhe", function () { setVerDet(!verDet); })}
-          </div>
-        </div>;
-      })}
-    </div>
-
-    <div style={{ marginTop: 12, border: "1.5px solid #c4b5fd", borderRadius: 14, padding: "10px 12px", background: "#faf8ff", display: "flex", gap: 8, alignItems: "center", flexWrap: isMob ? "wrap" : "nowrap" }}>
-      <input value={pergunta} onChange={function (e) { setPergunta(e.target.value); }} onKeyDown={function (e) { if (e.key === "Enter") conversar(); }}
-        placeholder="💬 Pergunte qualquer coisa sobre este cliente — a IA abre com a colinha inteira"
-        style={{ flex: 1, minWidth: 0, width: isMob ? "100%" : "auto", fontSize: 13, padding: "9px 11px", border: "1.5px solid #cbd5e1", borderRadius: 10, background: "#fff" }} />
-      <TSegBotao onClick={conversar} desligado={!String(pergunta).trim()}>Conversar</TSegBotao>
-    </div>
-    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>A conversa abre na Sala de estratégia e fica salva — a IA lembra dela nas próximas decisões. Se virar campanha, segue para o Montador.</div>
-
-    {detalhe && <div style={{ marginTop: 14, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
-      <button onClick={function () { setVerDet(!verDet); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 800, fontSize: 13, color: "#334155" }}>
-        {verDet ? "▲" : "▾"} Detalhe completo <span style={{ fontWeight: 500, color: "#64748b" }}>(idade e gênero, onde aparece, aparelho, hora e as notas do cliente)</span></button>
-      {verDet && <div style={{ marginTop: 10 }}>{detalhe}</div>}
-    </div>}
-  </div>;
-}
 
 /* ---------- 🔬 DIAGNÓSTICO DO CLIENTE (v84, 10/10/2026) ----------
    Dentro de 🧠 Decisões › 🔬 Diagnóstico. Substitui os 8 quadros da colinha por um painel que leva a ação:
@@ -73178,9 +70565,9 @@ const _TDG_CSS = `
 .tdg-m .tdg-new{flex-direction:column;gap:2px}
 .tdg-m .tdg-top h2{font-size:15px}
 `;
-const _tdgBRL = function (v, c) { if (v === null || v === undefined || v === "" || isNaN(Number(v))) return "—"; return "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: c === 0 ? 0 : 2, maximumFractionDigits: c === 0 ? 0 : 2 }); };
-const _tdgNum = function (v, c) { if (v === null || v === undefined || isNaN(Number(v))) return "—"; return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: c || 0 }); };
-const _tdgDM = function (d) { return d ? String(d).slice(0, 10).split("-").reverse().slice(0, 2).join("/") : ""; };
+const _tdgBRL = _tiaBrl;   // v96 (13/10/2026) E5: formatador único
+const _tdgNum = _tiaNum;
+const _tdgDM = _tiaDM;
 const _tdgCz = { alta: ["● certeza alta", "muito dado e a diferença passou no teste estatístico"], indicio: ["◐ indício", "aponta numa direção, mas ainda não dá para ter certeza"], pouco: ["○ pouco dado", "menos que o mínimo de leads para concluir"] };
 const _tdgNomeSeg = function (s) { const t = String(s || ""); if (/^whatsapp › status$/i.test(t)) return "Status do WhatsApp"; return t.replace(/^(\w)/, function (m) { return m.toUpperCase(); }); };
 // cor de uma fatia: forte só com certeza; clara se é só indício; listrada se tem pouco dado
@@ -73192,12 +70579,26 @@ const _tdgCor = function (s) {
   if (s.veredito === "caro_confiavel") return r >= 1.5 ? "c-rr" : "c-r";
   if (r && r <= 0.8) return "c-g"; if (r && r >= 1.25) return "c-r"; return "c-n";
 };
+const _TDG_APARELHO = { android_smartphone: "Android (celular)", iphone: "Apple iPhone", ipad: "Apple iPad", android_tablet: "Android (tablet)", desktop: "Computador", other: "Outros", unknown: "Não informado" };   // v96 R8 rodada 2
 const _tdgLs = { ler: function (k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (_) { return null; } }, gravar: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
 
+// v96 (13/10/2026) P2_13_02: "de onde vem este número" nos indicadores do Diagnóstico (toque no ⓘ). Sem tela nova: abre uma linha embaixo.
+function TdgOrig({ txt }) {
+  const [ab, setAb] = useState(false);
+  return <Fragment><button onClick={function () { setAb(!ab); }} title={txt} aria-label="De onde vem este número"
+    style={{ background: "none", border: "none", padding: "0 0 0 5px", cursor: "pointer", color: ab ? "#5b21b6" : "#94a3b8", fontSize: 11.5, fontWeight: 800, fontFamily: "inherit" }}>ⓘ</button>
+    {ab && <div style={{ fontSize: 11, fontWeight: 500, color: "#475569", background: "#f8fafc", borderRadius: 7, padding: "5px 7px", margin: "4px 0 2px", lineHeight: 1.4 }}>{txt}</div>}</Fragment>;
+}
 function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
-  const cli = mc && mc.client_id;
+  useTiaCfg();   // v96 (13/10/2026) Q15/R4/R6 rodada 2: horários e limites do servidor
+  // v96 (13/10/2026) Q7 rodada 2: com uma unidade escolhida no filtro (cliente Bioter "mãe"), o Diagnóstico é o da unidade
+  //   (ads_diag_cliente('bioter_' + unidade) — o servidor corta tudo pela unidade, inclusive as que rodam na conta de Toledo).
+  const [uniTick, setUniTick] = useState(0);
+  useEffect(function () { const h = function () { setUniTick(function (x) { return x + 1; }); }; window.addEventListener("pixels:ads-unidade", h); return function () { window.removeEventListener("pixels:ads-unidade", h); }; }, []);
+  const uniSel = !(mc && mc.bioter_unit) && typeof _adsUnidadeAtiva === "function" ? _adsUnidadeAtiva() : null;
+  const cli = mc && mc.client_id ? (uniSel ? (mc.parent_client || mc.client_id) + "_" + uniSel : mc.client_id) : null;
   const contaId = conta && conta.ad_account_id;
-  const nomeCli = (mc && mc.name) || (conta && conta.nome) || "";
+  const nomeCli = ((mc && mc.name) || (conta && conta.nome) || "") + (uniSel && typeof _tcliUniLbl === "function" ? " · " + _tcliUniLbl(uniSel) : "");
   const [dias, setDias] = useState(function () { const v = _tdgLs.ler("px_diag_dias"); return v === 7 || v === 0 ? v : 30; });
   const [d, setD] = useState(null); const [erro, setErro] = useState(""); const [carregando, setCarregando] = useState(false);
   const [col, setCol] = useState(null);
@@ -73211,13 +70612,18 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
   const [verDet, setVerDet] = useState(false);
   const [novas, setNovas] = useState(null);
   const refGraf = useRef(null); const refRaio = useRef(null);
+  const semIa = useIaSemCredito().sem;   // v96 (13/10/2026) Q14
   const chaveSnap = "px_diag_snap_" + cli;
 
   const carregar = useCallback(async function (dd) {
     if (!cli || !window._sb) return;
     setCarregando(true);
     try {
-      const r = await _tsegRpc("ads_diag_cliente", { p_client: cli, p_dias: dd });
+      // v96 (13/10/2026) R8 rodada 2: a versão completa traz junto aparelho, o que o cliente falou e o "A IA diz" (antes vinham do Diagnóstico
+      //   antigo e da Colinha). Se ela falhar, usa a simples, como antes.
+      let r = null;
+      try { r = await _tsegRpc("ads_diag_cliente_completo", { p_client: cli, p_dias: dd }); if (!r || !r.ok) r = null; } catch (_) { r = null; }
+      if (!r) r = await _tsegRpc("ads_diag_cliente", { p_client: cli, p_dias: dd });
       if (!r || !r.ok) throw new Error((r && r.erro) || "Não carregou.");
       setD(r); setErro("");
       // novidades desde a última visita (só no período de 30 dias, que é o que fica guardado)
@@ -73243,13 +70649,15 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
     } catch (e) { setErro(e.message); } finally { setCarregando(false); }
   }, [cli]);
   useEffect(function () { carregar(dias); }, [carregar, dias]);
-  useEffect(function () {
+  useEffect(function () {   // saúde e calendário ainda só vêm da colinha do dia (o "A IA diz" e o placar vêm do ia_diz quando houver)
     if (!cli || !window._sb) return;
+    setCol(null);
     window._sb.rpc("ads_colinha_ler", { p_client: cli, p_desde: null }).then(function (r) { if (r && r.data && r.data.ok) setCol(r.data); }).catch(function () {});
   }, [cli]);
 
   const mudarDias = function (v) { setDias(v); _tdgLs.gravar("px_diag_dias", v); };
-  const abrirSala = function (texto) { _tcliAbrir({ painel: "sala", conta: contaId, texto: texto }); };
+  // v96 (13/10/2026) Q14: tudo que abre a Sala daqui (Discutir, Montar plano, Conversar, quadrados de idade/gênero e de horário) avisa na hora se a IA está sem crédito
+  const abrirSala = _tiaComCredito(function (texto) { _tcliAbrir({ painel: "sala", conta: contaId, texto: texto }); });
   const resumoTxt = function () {
     if (!d) return "";
     const v = (d.veredito || []).map(function (p) { return p.t; }).join("");
@@ -73286,7 +70694,7 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
   const conversar = function () { const q = String(pergunta || "").trim(); if (!q) return; abrirSala(q + "\n\n" + resumoTxt()); setPergunta(""); };
   const tog = function (k) { setFech(function (f) { const n = Object.assign({}, f); n[k] = !f[k]; return n; }); };
 
-  if (erro && !d) return <div style={{ color: "#b91c1c", fontSize: 13, fontWeight: 700 }}>{erro} <button className="tdg-b" onClick={function () { carregar(dias); }}>Tentar de novo</button></div>;
+  if (erro && !d) return <TSegErroCarga motivo={erro} onTentar={function () { carregar(dias); }} tela="diagnostico" conta={cli} />;   // v96 (13/10/2026) Q6: mesmo texto/aviso das outras telas
   if (!d) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Montando o diagnóstico…</div>;
   if (d.sem_conta) return <div style={{ fontSize: 13, color: "#64748b" }}>Este cliente não tem conta de anúncio ligada.</div>;
 
@@ -73311,7 +70719,7 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
         if (a.tipo === "montador") return canEdit === false ? null : <button key={ix} className="tdg-b grn" onClick={function () { montador(a); }} title="Abre o Montador já preenchido. A campanha sobe pausada, com PIN 2x.">{a.rotulo}</button>;
         if (a.tipo === "aba") return <button key={ix} className="tdg-b" onClick={function () { irAba(a.aba); }}>{a.rotulo}</button>;
         if (a.tipo === "grafico") return <button key={ix} className="tdg-b" onClick={irGraf}>{a.rotulo}</button>;
-        return <button key={ix} className="tdg-b" onClick={function () { discutir(i); }}>{a.rotulo || "💬 Discutir"}</button>;
+        return <button key={ix} className="tdg-b" style={semIa ? { opacity: 0.6 } : null} onClick={function () { discutir(i); }}>{(a.rotulo || "💬 Discutir") + (semIa ? " · " + _TIA_SEM_TXT : "")}</button>;
       })}
     </div>;
   };
@@ -73435,7 +70843,7 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
       <div className="tdg-note">Ponto verde = abaixo da média da conta ({_tdgBRL(k.cpl)}) · amarelo = até 15% acima · vermelho = bem acima. Abaixo de {_tdgNum(d.amostra_min)} leads não ganha cor.</div></div>;
     if (aba === "cr") {
       const cr = (d.criativos || []).slice(0, 15);
-      const corQ = function (c) { return Number(c.ini) >= 10 ? (Number(c.d5) >= 0.35 * Number(c.ini) ? "#22c55e" : Number(c.d5) < 0.15 * Number(c.ini) ? "#ef4444" : "#f59e0b") : "#94a3b8"; };
+      const corQ = function (c) { return Number(c.ini) >= _TIA_AMOSTRA_MIN ?   /* v96 (13/10/2026) R16: régua única (era 10 escrito aqui) */ (Number(c.d5) >= 0.35 * Number(c.ini) ? "#22c55e" : Number(c.d5) < 0.15 * Number(c.ini) ? "#ef4444" : "#f59e0b") : "#94a3b8"; };
       return <div>
         <div className="tdg-desk" style={{ overflowX: "auto" }}><table className="tdg-tb"><thead><tr><th>Criativo</th><th>Quanto da verba</th><th className="r">Leads</th><th className="r">Custo por lead</th><th className="r" style={{ background: "#faf5ff" }}>Conversas 5+</th><th className="r" style={{ background: "#faf5ff" }}>Custo por conversa de verdade</th><th className="r">Frequência 7d</th></tr></thead>
           <tbody>{cr.map(function (c) { return <tr key={c.nome}><td><b>{c.nome}</b>{c.pouco_dado && <span className="tdg-cz pouco">○ pouco dado</span>}</td>
@@ -73453,6 +70861,9 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
       </div>;
     }
     if (aba === "posicionamento") return listaSeg(segs.posicionamento);
+    if (aba === "aparelho") return <div>{listaSeg((d.dispositivo || []).map(function (x) {   // v96 (13/10/2026) R8 rodada 2: aparelho (antes só no Diagnóstico antigo)
+      return { valor: x.valor, nome: _TDG_APARELHO[x.valor] || x.valor, pct: x.pct_verba, res: x.resultados, custo: x.custo, gasto: x.gasto, media: x.custo_conta, veredito: x.veredito };
+    }))}</div>;
     if (aba === "regiao") return <div>{listaSeg(segs.regiao, "gasto")}<div className="tdg-note">A Meta não informa direito quantos leads vieram de cada estado. Aqui só dá para ver para onde foi a verba.</div></div>;
     if (aba === "hora") {
       const hs = []; for (let h = 0; h < 24; h++) hs.push((segs.hora || []).find(function (x) { return Number(x.valor) === h; }));
@@ -73480,23 +70891,24 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
   const cans = (d.criativos || []).filter(function (c) { return Number(c.freq7) >= 3 && Number(c.ctr7) < Number(c.ctr_ant || 0); });
   const fmax = Math.max.apply(null, [0].concat((d.criativos || []).map(function (c) { return Number(c.freq7 || 0); })));
   if ((d.criativos || []).length) chips.unshift(cans.length ? { ic: "⚠️", cor: "warn", t: "Criativo cansando: " + cans[0].nome + " (frequência " + _tdgNum(cans[0].freq7, 1) + " e CTR caindo)" } : { ic: "✅", t: "Criativos sem cansaço (frequência até " + _tdgNum(fmax, 1) + ")" });
-  const placar = ((col && col.placar && col.placar.tipos) || []);
+  const iaDiz = (d && d.ia_diz) || null;   // v96 R8 rodada 2
+  const placar = ((iaDiz && iaDiz.placar && iaDiz.placar.tipos) || (col && col.placar && col.placar.tipos) || []);
   const medidos = placar.reduce(function (a, t) { return a + Number(t.melhorou || 0) + Number(t.piorou || 0) + Number(t.igual || 0); }, 0);
   if (medidos) chips.push({ ic: "🎯", t: "Placar da IA: " + placar.reduce(function (a, t) { return a + Number(t.melhorou || 0); }, 0) + " de " + medidos + " decisões medidas melhoraram" });
   const nOk = chips.filter(function (c) { return c.ic === "✅"; }).length, nW = chips.filter(function (c) { return c.ic === "⚠️"; }).length, nC = chips.filter(function (c) { return c.ic === "📅"; }).length;
-  const res = col && col.resumo_ia;
+  const res = (iaDiz && iaDiz.resumo_ia) || (col && col.resumo_ia);
 
   const mp = k.meta_leads ? Math.min(100, 100 * Number(k.leads_mes || 0) / Number(k.meta_leads)) : 0;
   const mpe = k.meta_leads ? 100 * Number(k.dia) / Number(k.dias_mes) : 0;
-  const ritmo = k.meta_leads ? (Number(k.leads_mes) >= 0.95 * Number(k.esperado_leads) ? ["ok", "no ritmo"] : Number(k.leads_mes) >= 0.75 * Number(k.esperado_leads) ? ["warn", "um pouco atrás"] : ["bad", "atrás do ritmo"]) : null;
-  const vrit = k.verba_meta ? (Number(k.verba_mes) > Number(k.verba_esperada) * 1.15 ? ["bad", "acima do ritmo · vai passar ~" + _tdgBRL(Number(k.verba_projecao) - Number(k.verba_meta), 0)] : Number(k.verba_mes) < Number(k.verba_esperada) * 0.8 ? ["warn", "abaixo do ritmo · sobra ~" + _tdgBRL(Number(k.verba_meta) - Number(k.verba_projecao), 0)] : ["ok", "no ritmo"]) : null;
+  const ritmo = k.meta_leads ? (Number(k.leads_mes) >= _TIA_LIMITES.leads_ok * Number(k.esperado_leads) ? ["ok", "no ritmo"] : Number(k.leads_mes) >= _TIA_LIMITES.leads_perto * Number(k.esperado_leads) ? ["warn", "um pouco atrás"] : ["bad", "atrás do ritmo"]) : null;
+  const vrit = k.verba_meta ? (Number(k.verba_mes) > Number(k.verba_esperada) * _TIA_LIMITES.verba_alto ?   /* v96 R4/R6 */ ["bad", "acima do ritmo · vai passar ~" + _tdgBRL(Number(k.verba_projecao) - Number(k.verba_meta), 0)] : Number(k.verba_mes) < Number(k.verba_esperada) * _TIA_LIMITES.verba_baixo ? ["warn", "abaixo do ritmo · sobra ~" + _tdgBRL(Number(k.verba_meta) - Number(k.verba_projecao), 0)] : ["ok", "no ritmo"]) : null;
   const cplCart = k.cpl && k.cpl_carteira ? Number(k.cpl) / Number(k.cpl_carteira) : null;
 
   return <div className={"tdg" + (ehCel ? " tdg-m" : "")}>
     <style>{_TDG_CSS}</style>
     <div className="tdg-top">
       <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0 }}>🔬 Diagnóstico</h2>
-      {!ehCel && <span className="tdg-pill">dados até {_tdgDM(d.periodo && d.periodo.ate)} · o último dia ainda pode subir</span>}
+      <TiaSeloDados pill ate={d.periodo && d.periodo.ate} extra={ehCel ? "" : " · o último dia ainda pode subir"} />{/* v96 (13/10/2026) P2_13_03: também no celular, vermelho quando a coleta atrasa */}
       <span className="tdg-seg">{[[7, "7 dias"], [30, "30 dias"], [0, "Mês"]].map(function (o) { return <button key={o[0]} className={dias === o[0] ? "on" : ""} onClick={function () { mudarDias(o[0]); }}>{o[1]}</button>; })}</span>
       <button className="tdg-b" onClick={function () { carregar(dias); }} disabled={carregando} title="Recalcular agora">{carregando ? "…" : "🔄"}</button>
     </div>
@@ -73511,24 +70923,24 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
         {res && (res.frases || []).length > 0 && <div className="tdg-ia">🧠 <b>A IA diz:</b> {res.frases.join(" ")}</div>}
         <div className="tdg-note" style={{ marginTop: 6 }}>Escrito pelo sistema com os números abaixo ({d.periodo && d.periodo.rotulo}). Funciona sem crédito de IA.</div>
       </div>
-      <button className="tdg-b pri" onClick={function () { abrirSala("Monte um plano para " + nomeCli + " a partir deste diagnóstico. Comece pelo que mais pesa no dinheiro e diga o que dá para fazer hoje.\n\n" + resumoTxt()); }}>💬 Montar plano com a IA</button>
+      <button className={"tdg-b" + (semIa ? "" : " pri")} style={semIa ? { opacity: 0.6 } : null} onClick={function () { abrirSala("Monte um plano para " + nomeCli + " a partir deste diagnóstico. Comece pelo que mais pesa no dinheiro e diga o que dá para fazer hoje.\n\n" + resumoTxt()); }}>💬 Montar plano com a IA{semIa ? " · " + _TIA_SEM_TXT : ""}</button>
     </div>}
 
     {novas && novas.itens && novas.itens.length > 0 && <div className="tdg-new">🆕 Desde a sua última visita ({_tdgDM(novas.desde)}): {novas.itens.map(function (t, i) { return <span key={i}>• {t}</span>; })}</div>}
 
     {temDado && <div className="tdg-kpis">
-      {k.meta_leads ? <div className="tdg-kpi"><div className="l">Leads no mês</div><div className="v">{_tdgNum(k.leads_mes)} <small>/ {_tdgNum(k.meta_leads)}</small></div>
+      {k.meta_leads ? <div className="tdg-kpi"><div className="l">Leads no mês<TdgOrig txt={"Leads = formulários + conversas iniciadas no WhatsApp, contados pela Meta, do dia 1º até " + _tdgDM(d.periodo && d.periodo.ate) + ". Meta: Gestão › Metas. O tracinho na barra é quanto já devia ter até hoje (ritmo)."} /></div><div className="v">{_tdgNum(k.leads_mes)} <small>/ {_tdgNum(k.meta_leads)}</small></div>
         <div className="tdg-bar"><span style={{ width: mp + "%", background: ritmo[0] === "ok" ? "#22c55e" : ritmo[0] === "warn" ? "#f59e0b" : "#ef4444" }} /><i style={{ left: mpe + "%" }} /></div>
         <div className={"s " + ritmo[0]} style={{ marginTop: 5 }}>● {ritmo[1]} · projeção {_tdgNum(k.projecao_leads)}</div></div>
-        : <div className="tdg-kpi"><div className="l">Leads ({d.periodo && d.periodo.rotulo})</div><div className="v">{_tdgNum(k.leads)}</div><div className="s mut">sem meta de leads · defina em Gestão › Metas</div></div>}
-      <div className="tdg-kpi"><div className="l">Custo por lead ({dias === 0 ? "mês" : dias + " dias"})</div><div className="v">{_tdgBRL(k.cpl)}</div>
+        : <div className="tdg-kpi"><div className="l">Leads ({d.periodo && d.periodo.rotulo})<TdgOrig txt={"Leads = formulários + conversas iniciadas no WhatsApp, contados pela Meta, no período " + (d.periodo && d.periodo.rotulo) + " (até " + _tdgDM(d.periodo && d.periodo.ate) + ")."} /></div><div className="v">{_tdgNum(k.leads)}</div><div className="s mut">sem meta de leads · defina em Gestão › Metas</div></div>}
+      <div className="tdg-kpi"><div className="l">Custo por lead ({dias === 0 ? "mês" : dias + " dias"})<TdgOrig txt={"Gasto das campanhas de lead (formulário e WhatsApp) ÷ leads dessas campanhas, no período " + (d.periodo && d.periodo.rotulo) + " (até " + _tdgDM(d.periodo && d.periodo.ate) + "), conta " + ((conta && conta.nome) || nomeCli) + ". Fonte: Meta, coleta diária. Campanha de seguidores ou alcance não entra. \"× a carteira\" compara com o custo por lead da carteira da agência."} /></div><div className="v">{_tdgBRL(k.cpl)}</div>
         {cplCart && <div className={"s " + (cplCart > 1.25 ? "bad" : cplCart < 0.8 ? "ok" : "mut")}>● {_tdgNum(cplCart, 1)}× a carteira ({_tdgBRL(k.cpl_carteira)})</div>}
         {k.cpl_sem && <div className="mut" style={{ fontSize: 11.5, marginTop: 3 }}>semana {_tdgBRL(k.cpl_sem)}{k.cpl_sem_ant ? " · anterior " + _tdgBRL(k.cpl_sem_ant) : ""} {k.cpl_sem_ant && <span className={Number(k.cpl_sem) < Number(k.cpl_sem_ant) ? "ok" : "bad"}>{Number(k.cpl_sem) < Number(k.cpl_sem_ant) ? "↓" : "↑"}</span>}</div>}</div>
-      {k.verba_meta ? <div className="tdg-kpi"><div className="l">Verba do mês</div><div className="v">{_tdgBRL(k.verba_mes, 0)} <small>/ {_tdgNum(k.verba_meta)}</small></div>
+      {k.verba_meta ? <div className="tdg-kpi"><div className="l">Verba do mês<TdgOrig txt={"Gasto na Meta do dia 1º até " + _tdgDM(d.periodo && d.periodo.ate) + " contra a verba Meta cadastrada na aba Gestão. O Google não entra nesta conta. O tracinho é quanto já devia ter gasto até hoje."} /></div><div className="v">{_tdgBRL(k.verba_mes, 0)} <small>/ {_tdgNum(k.verba_meta)}</small></div>
         <div className="tdg-bar"><span style={{ width: Math.min(100, 100 * Number(k.verba_mes) / Number(k.verba_meta)) + "%", background: vrit[0] === "ok" ? "#22c55e" : vrit[0] === "warn" ? "#f59e0b" : "#ef4444" }} /><i style={{ left: mpe + "%" }} /></div>
         <div className={"s " + vrit[0]} style={{ marginTop: 5 }}>● {vrit[1]}</div></div>
-        : <div className="tdg-kpi"><div className="l">Gasto ({d.periodo && d.periodo.rotulo})</div><div className="v">{_tdgBRL(k.gasto, 0)}</div><div className="s mut">sem verba do mês cadastrada</div></div>}
-      {Number(k.conv_ini) > 0 && <div className="tdg-kpi q"><div className="l">💬 Conversa de verdade (5+ mensagens)</div><div className="v">{k.custo_d5 ? _tdgBRL(k.custo_d5) : "nenhuma"}</div>
+        : <div className="tdg-kpi"><div className="l">Gasto ({d.periodo && d.periodo.rotulo})<TdgOrig txt={"Gasto na Meta (todas as campanhas da conta) no período " + (d.periodo && d.periodo.rotulo) + ", até " + _tdgDM(d.periodo && d.periodo.ate) + "."} /></div><div className="v">{_tdgBRL(k.gasto, 0)}</div><div className="s mut">sem verba do mês cadastrada</div></div>}
+      {Number(k.conv_ini) > 0 && <div className="tdg-kpi q"><div className="l">💬 Conversa de verdade (5+ mensagens)<TdgOrig txt={"Gasto das campanhas de lead ÷ conversas no WhatsApp em que a pessoa mandou 5 mensagens ou mais (contagem da Meta), no período " + (d.periodo && d.periodo.rotulo) + "."} /></div><div className="v">{k.custo_d5 ? _tdgBRL(k.custo_d5) : "nenhuma"}</div>
         <div className={"s " + (Number(k.conv_d5) >= 0.35 * Number(k.conv_ini) ? "ok" : "warn")}>● {_tdgNum(k.conv_d5)} de {_tdgNum(k.conv_ini)} conversas ({_tdgNum(100 * Number(k.conv_d5) / Number(k.conv_ini))}%)</div>
         <div className="mut" style={{ fontSize: 11.5, marginTop: 3 }}>lead barato que não conversa não vale</div></div>}
     </div>}
@@ -73547,7 +70959,7 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
     {temDado && <div ref={refRaio} className={"tdg-sec" + (ehCel && fech.raio ? " fech" : "")}>
       <div className="tdg-mh" onClick={function () { tog("raio"); }}>📊 Raio-x <span className="cnt">idade × gênero, criativos…</span><span className="tdg-car">▾</span></div>
       <div className="tdg-tabs">{!ehCel && <b style={{ fontSize: 13.5, marginRight: 6 }}>📊 Raio-x</b>}
-        {[["camp", "Campanhas"], ["ig", "Idade × Gênero"], ["cr", "Criativos"], ["posicionamento", "Onde aparece"], ["hora", "Horário"], ["regiao", "Estados"]].map(function (t) {
+        {[["camp", "Campanhas"], ["ig", "Idade × Gênero"], ["cr", "Criativos"], ["posicionamento", "Onde aparece"], ["hora", "Horário"], ["regiao", "Estados"]].concat((d.dispositivo || []).length ? [["aparelho", "Aparelho"]] : []).map(function (t) {
           return <button key={t[0]} className={"tdg-tab" + (aba === t[0] ? " on" : "")} onClick={function () { setAba(t[0]); }}>{t[1]}</button>; })}
         {!ehCel && <span className="mut" style={{ marginLeft: "auto", fontSize: 11.5 }}>● certeza alta · ◐ indício · ○ pouco dado</span>}</div>
       {raio()}
@@ -73558,16 +70970,21 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
       <div className="tdg-chips">{chips.map(function (c, i) { return <span key={i} className={"tdg-chip " + (c.cor || "")} title={c.t}>{c.ic} {c.t.length > 90 ? c.t.slice(0, 90) + "…" : c.t}{c.fonte && <a href={c.fonte} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 5, color: "#2563eb" }}>↗</a>}</span>; })}</div>
     </div>}
 
+    {(d.notas_cliente || []).length > 0 && <div className="tdg-sec">{/* v96 (13/10/2026) R8/R9 rodada 2: o que o cliente falou (antes só no Diagnóstico antigo) */}
+      <h3 className="tdg-h3">📝 O que o cliente falou <span className="mut" style={{ fontSize: 11.5, fontWeight: 700 }}>· a IA nova também lê isto</span></h3>
+      {d.notas_cliente.slice(0, 8).map(function (n, i) { return <div key={i} style={{ fontSize: 12.5, lineHeight: 1.45, padding: "5px 0", borderTop: i ? "1px solid #f1f5f9" : "none" }}>
+        <span className="mut" style={{ fontSize: 11 }}>{_tdgDM(n.em)}{n.fonte === "fato" ? " · fato conferido" : ""} · </span>{n.texto}</div>; })}
+    </div>}
     <div className="tdg-chat">
       <input value={pergunta} onChange={function (e) { setPergunta(e.target.value); }} onKeyDown={function (e) { if (e.key === "Enter") conversar(); }}
         placeholder={ehCel ? "💬 Pergunte sobre este cliente" : "💬 Pergunte qualquer coisa sobre este cliente. A IA já abre com este diagnóstico inteiro."} />
-      <button className="tdg-b pri" onClick={conversar} disabled={!String(pergunta).trim()}>Conversar</button>
+      <button className={"tdg-b" + (semIa ? "" : " pri")} style={semIa ? { opacity: 0.6 } : null} onClick={conversar} disabled={!String(pergunta).trim()}>{semIa ? "Conversar · " + _TIA_SEM_TXT : "Conversar"}</button>
     </div>
     <div className="tdg-note">A conversa abre na Sala de estratégia e fica salva: a IA lembra dela nas próximas decisões. Se virar campanha, segue para o Montador.</div>
 
     {detalhe && <div style={{ marginTop: 14, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
       <button onClick={function () { setVerDet(!verDet); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 800, fontSize: 13, color: "#334155", fontFamily: "inherit" }}>
-        {verDet ? "▲" : "▾"} Detalhe completo <span style={{ fontWeight: 500, color: "#64748b" }}>(o Diagnóstico antigo, com aparelho e as notas do cliente)</span></button>
+        {verDet ? "▲" : "▾"} Anotar o que o cliente falou <span style={{ fontWeight: 500, color: "#64748b" }}>(abre o Diagnóstico antigo — é o único lugar que grava as notas)</span></button>{/* v96 (13/10/2026) R8 rodada 2: aparelho e notas já aparecem acima; o antigo fica só para escrever notas */}
       {verDet && <div style={{ marginTop: 10 }}>{detalhe}</div>}
     </div>}
   </div>;
@@ -73575,14 +70992,27 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
 
 /* ---------- 💳 SALDO DA IA (v83) — chip na barra; só aprovadores ---------- */
 function TIaSaldo() {
-  const [st, setSt] = useState(null); const [aberto, setAberto] = useState(false); const [val, setVal] = useState(""); const [msg, setMsg] = useState(""); const [ocupado, setOcupado] = useState(false);
-  const ler = useCallback(async function () { try { const r = await _tsegRpc("ia_saldo_status"); if (r && r.ok) setSt(r); } catch (_) {} }, []);
-  useEffect(function () { ler(); const t = setInterval(ler, 300000); return function () { clearInterval(t); }; }, [ler]);
+  // v96 (13/10/2026) Q14: o saldo mora em window._tia (um lugar só) — os botões de IA de todo o app leem dali
+  const st = useIaSaldo(); const setSt = _tiaSaldoGuardar;
+  const [aberto, setAberto] = useState(false); const [val, setVal] = useState(""); const [msg, setMsg] = useState(""); const [ocupado, setOcupado] = useState(false);
+  const ler = useCallback(function () { return _tiaSaldoLer(true); }, []);
+  useEffect(function () {   // v96 (13/10/2026) G6: a cada 5 min, mas só com a aba visível; ao voltar, atualiza se passou de 5 min
+    _tiaSaldoLer(false);
+    const pelaPainel = function () { return window._tcli && window._tcli.painelOk === true; };   // v96 G6 rodada 2: o ads_painel_ia já traz o saldo
+    const t = setInterval(function () { if (_tiaVisivel() && !pelaPainel()) ler(); }, 300000);
+    const tira = _tiaAoVoltar(function () { if (!pelaPainel() && Date.now() - (window._tia.t || 0) > 300000) ler(); });
+    return function () { clearInterval(t); tira(); };
+  }, [ler]);
+  useEffect(function () {   // botão de IA sem crédito → abre este balão para informar o saldo novo
+    const h = function () { setAberto(true); };
+    window.addEventListener("pixels:tia-saldo-abrir", h);
+    return function () { window.removeEventListener("pixels:tia-saldo-abrir", h); };
+  }, []);
   if (!st) return null;
   const saldo = st.sem_saldo_informado ? null : Number(st.saldo_usd);
   const zerou = !!st.zerou_em;
   const cor = zerou || (saldo !== null && saldo < 1) ? ["#fee2e2", "#b91c1c"] : saldo !== null && saldo < Number(st.aviso_usd || 5) ? ["#fef3c7", "#92400e"] : ["#f1f5f9", "#334155"];
-  const txt = zerou ? "💳 IA sem crédito" : saldo === null ? "💳 Saldo da IA?" : "💳 IA US$ " + saldo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const txt = zerou ? "💳 IA sem crédito" : saldo === null ? "💳 Saldo da IA?" : "💳 IA US$ " + _tiaUsd(saldo);
   const informar = async function () {
     const n = Number(String(val).replace(/[^0-9,.]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
     if (!isFinite(n) || n < 0) { setMsg("Valor inválido."); return; }
@@ -73601,9 +71031,10 @@ function TIaSaldo() {
     {aberto && <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 50, width: 300, maxWidth: "86vw", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14,
       boxShadow: "0 12px 32px rgba(15,23,42,.18)", padding: "12px 13px", fontSize: 12.5, color: "#334155", lineHeight: 1.5, textAlign: "left" }}>
       <div style={{ fontWeight: 900, fontSize: 13.5, color: "#0f172a", marginBottom: 4 }}>💳 Crédito da IA (Anthropic)</div>
-      {zerou && <div style={{ color: "#b91c1c", fontWeight: 800, marginBottom: 4 }}>A Anthropic recusou por falta de crédito em {_tcolData(st.zerou_em)} {_tcolHora(st.zerou_em)}. Coloque crédito no console (Plans & Billing) e informe o saldo novo aqui.</div>}
-      {saldo !== null ? <div>Saldo estimado: <b>US$ {saldo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b><br />
-          <span style={{ fontSize: 11.5, color: "#64748b" }}>US$ {Number(st.informado_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} informado em {_tcolData(st.informado_em)} − US$ {Number(st.gasto_desde_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} gastos desde então
+      {zerou && <div style={{ color: "#b91c1c", fontWeight: 800, marginBottom: 4 }}>A Anthropic recusou por falta de crédito em {_tiaQuando(st.zerou_em)}. Coloque crédito no console (Plans & Billing) e informe o saldo novo aqui: os botões de IA voltam sozinhos.
+        <div style={{ color: "#475569", fontWeight: 600, fontSize: 11.5, marginTop: 3 }}>Sem IA continuam funcionando: PIN, decisões, alarmes, Montador, Diagnóstico e metas.</div></div>}{/* v96 (13/10/2026) P2_10_13 */}
+      {saldo !== null ? <div>Saldo estimado: <b>US$ {_tiaUsd(saldo)}</b><br />
+          <span style={{ fontSize: 11.5, color: "#64748b" }}>US$ {_tiaUsd(st.informado_usd)} informado em {_tiaDM(st.informado_em)} − US$ {_tiaUsd(st.gasto_desde_usd)} gastos desde então
           {st.fonte === "anthropic" ? " (gasto oficial da Anthropic)" : " (conta parcial — falta a chave de administrador ANTHROPIC_ADMIN_KEY nos Secrets do Supabase)"}. Aviso abaixo de US$ {st.aviso_usd}.</span></div>
         : <div style={{ color: "#64748b" }}>Informe o saldo que aparece no console da Anthropic. A partir daí o app desconta o gasto e avisa abaixo de US$ {st.aviso_usd}.</div>}
       <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
@@ -73620,8 +71051,11 @@ function TIaSaldo() {
   </span>;
 }
 
-// v82: botão "🧠 Resolver" em cada item da "Leitura da IA" (Visão geral) — leva para a 🧠 Alertas do cliente, onde o item já virou decisão com botão.
+// v82: botão "🧠 Resolver" em cada item da "Leitura da IA" (Visão geral) — leva para a 🧠 Decisões do cliente, onde o item já virou decisão com botão.
 // Só aparece para quem vê a IA (aprovadores com o PIN aberto). Para o resto da equipe a leitura fica igual.
+// v96 (13/10/2026) S8 (escolha A): regra nova = "o Erick VÊ a Leitura da IA, mas não usa a IA de tráfego". Este botão continua escondido
+//   para quem não é aprovador com a porta aberta, e também no "Visualizar como" (useTCliPode = window._tcli.ok). O texto da leitura e o
+//   botão "Atualizar leitura" ficam no 17c (AdsLeituraIA) — lá o "Atualizar leitura" precisa usar a mesma trava (useTCliPode).
 function TCliResolver() {
   const ok = (typeof useTCliPode === "function") ? useTCliPode() : false;
   if (!ok) return null;
@@ -73630,27 +71064,26 @@ function TCliResolver() {
     title="Abrir a decisão na 🧠 Decisões (aprovar com PIN ou montar com a IA)"
     style={{ background: "#a78bfa", color: "#1e1b4b", border: "none", borderRadius: 9, padding: "6px 11px", fontWeight: 900, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>🧠 Resolver</button>;
 }
+// os alertas antigos (calculados na tela) — fechados no fim da 🧠 Decisões, 1 clique abre
 function TCliRegras({ mc, conta, isMob, canEdit }) {
   const [aberto, setAberto] = useState(false);
+  // v96 (13/10/2026) R2 rodada 2: a fonte oficial é a IA nova; os alertas antigos têm data para sair (auto.config, vem do ads_avisos_cliente).
+  //   Depois da data some daqui (nada é apagado no banco). Sem a data (função falhou), fica como antes.
+  const [, setAv] = useState(0);
+  useEffect(function () { const h = function () { setAv(function (x) { return x + 1; }); }; window.addEventListener("pixels:tia-avisos", h); return function () { window.removeEventListener("pixels:tia-avisos", h); }; }, []);
+  const ate = window._tiaAvisosMeta && window._tiaAvisosMeta.alertas_antigos_ate;
+  const hoje = (function () { const n = new Date(); return n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0") + "-" + String(n.getDate()).padStart(2, "0"); })();
+  if (ate && String(ate).slice(0, 10) < hoje) return null;
   return <div style={{ marginTop: 16, borderTop: "1px solid #eef2f7", paddingTop: 12 }}>
     <button onClick={function () { setAberto(!aberto); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 800, fontSize: 13, color: "#334155" }}>
       📋 Regras automáticas (os alertas de antes) {aberto ? "▲" : "▼"}</button>
-    {!aberto && <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>Continuam valendo enquanto comparamos com a IA. Clique para ver.</div>}
-    {aberto && <div style={{ marginTop: 10 }}><QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false} /></div>}
+    {!aberto && <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>{ate ? "Saem em " + _tiaDM(ate) + ": a fonte oficial passa a ser a IA nova (acima). " : "Continuam valendo enquanto comparamos com a IA. "}Clique para ver.</div>}
+    {/* v96 (13/10/2026) R3: aqui é só leitura (sem "Feito"/"Ignorar", que davam baixa sem PIN). A baixa é pelas decisões acima. */}
+    {aberto && <div style={{ marginTop: 10 }}><div style={{ fontSize: 11.5, color: "#64748b", marginBottom: 6 }}>Só para consulta: para resolver, use as decisões acima (aprovar com PIN, monitorar ou "Já resolvi").</div><QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={false} /></div>}
   </div>;
 }
 
-function TCliEstrategias({ itens, conta }) {
-  if (itens === null) return <div style={{ color: "#94a3b8", fontSize: 13 }}>Carregando…</div>;
-  if (!itens.length) return <div style={{ color: "#64748b", fontSize: 13, padding: "18px 0" }}>Nenhuma estratégia feita para este cliente ainda. Use 🎙️ Nova estratégia.</div>;
-  return <div>{itens.map(function (h) {
-    return <div key={h.id} onClick={function () { _tcliAbrir({ painel: "sala", conta: conta, estrategia: h.id }); }}
-      style={{ padding: "9px 0", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: 12.5, lineHeight: 1.45 }}>
-      <div style={{ color: "#0f172a", fontWeight: 700 }}>{String(h.pedido).slice(0, 140)}{String(h.pedido).length > 140 ? "…" : ""}</div>
-      <div style={{ color: "#94a3b8", fontSize: 11 }}>{h.criado_por_nome || "—"} · {_tsegQuando(h.criado_em)} · {h.origem === "audio" ? "🎙️ áudio" : "texto"}{h.rascunho_id ? " · 🧱 virou campanha" : ""} · abrir ›</div>
-    </div>;
-  })}</div>;
-}
+// v96 (13/10/2026) R13: TCliEstrategias saiu — a lista de estratégias fica só dentro da 🎙️ Sala de estratégia.
 
 /* ---------- O PORTÃO: vai em volta da PageGestaoMidia ---------- */
 function TSegPortao({ currentUser, viewUser, children }) {
@@ -73659,10 +71092,12 @@ function TSegPortao({ currentUser, viewUser, children }) {
   const [painel, setPainel] = useState(null);    // "alarmes" | "seguranca"
   const [alarmes, setAlarmes] = useState(null);
   const [carregandoAl, setCarregandoAl] = useState(false);
+  const [erroAl, setErroAl] = useState("");        // v96 Q6
   const [pend, setPend] = useState(0);             // pedidos esperando decisão minha
   const [abrirRasc, setAbrirRasc] = useState(null); // rascunho que a Sala de estratégia mandou abrir no montador
   const [ctx, setCtx] = useState({});              // aberto de dentro do cliente: { conta, novo, estrategia }
   const ultimaRenov = useRef(0);
+  const TT = useTCli();   // v96 (13/10/2026) G6 rodada 2: contagens da barra vêm do ads_painel_ia (via window._tcli)
 
   const carregar = useCallback(async function () {
     try { setSt(await _tsegRpc("ads_pin_status")); setFalhou(false); }
@@ -73690,16 +71125,16 @@ function TSegPortao({ currentUser, viewUser, children }) {
 
   const lerAlarmes = useCallback(async function () {
     setCarregandoAl(true);
-    try { const r = await _tsegRpc("ads_alarmes_ler", { p_dias: 14 }); setAlarmes(r && r.ok ? (r.itens || []) : []); }
-    catch (_) { setAlarmes([]); } finally { setCarregandoAl(false); }
+    try { const r = await _tsegRpc("ads_alarmes_ler", { p_dias: 14 }); if (!r || !r.ok) throw new Error((r && r.erro) || "resposta vazia"); setAlarmes(r.itens || []); setErroAl(""); }
+    catch (e) { setErroAl(_tsegMotivo(e)); } finally { setCarregandoAl(false); }   // v96 Q6: erro não vira "nenhum alarme"
   }, []);
-  const lerPend = useCallback(async function () {
-    try {
-      const r = await _tsegRpc("ads_pedidos_ler", { p_aberto: true });
-      const it = r && r.ok ? (r.itens || []) : [];
-      setPend(it.filter(function (p) { return p.estado === "novo" || (p.estado === "aguardando" && p.aprov1_uid !== r.eu); }).length);
-    } catch (_) {}
+  const contarPend = function (r) { const it = r && r.ok ? (r.itens || []) : []; setPend(it.filter(function (p) { return p.estado === "novo" || p.estado === "aguardando"; }).length); };   // v96 M8
+  const lerPend = useCallback(async function (forcar) {   // v96 (13/10/2026) G7: usa a lista compartilhada (uma ida ao servidor para todos)
+    if (window._tcli.painelOk === true) { if (forcar !== false) _tcliCarregar(true); return; }   // v96 G6 rodada 2: a contagem vem do painel
+    try { contarPend(await _tcenPedidosLer(forcar !== false)); } catch (_) {}
   }, []);
+  useEffect(function () { return _tcenPedidosOuvir(function () { if (window._tcenPed.r) contarPend(window._tcenPed.r); }); }, []);   // outra peça baixou a lista: o contador acompanha
+  const semIa = useIaSemCredito();   // v96 (13/10/2026) Q14: faixa vermelha no topo quando o crédito da IA acabou
 
   // aberto: renova com uso (no máximo a cada 2 min), confere a hora de fechar a cada 20 s, lê alarmes a cada 5 min
   useEffect(function () {
@@ -73715,18 +71150,25 @@ function TSegPortao({ currentUser, viewUser, children }) {
     };
     const evs = ["pointerdown", "keydown", "wheel", "touchstart"];
     evs.forEach(function (ev) { window.addEventListener(ev, renovar, { passive: true }); });
-    const t = setInterval(function () {
-      if (st.desbloqueado_ate && new Date(st.desbloqueado_ate) <= new Date()) carregar();
-    }, 20000);
-    return function () { evs.forEach(function (ev) { window.removeEventListener(ev, renovar); }); clearInterval(t); };
+    const confere = function () { if (st.desbloqueado_ate && new Date(st.desbloqueado_ate) <= new Date()) carregar(); };
+    const t = setInterval(function () { if (_tiaVisivel()) confere(); }, 20000);   // v96 (13/10/2026) G6: parado com a aba escondida…
+    const tira = _tiaAoVoltar(confere);                                            // …e confere na hora em que a aba volta
+    return function () { evs.forEach(function (ev) { window.removeEventListener(ev, renovar); }); clearInterval(t); tira(); };
   }, [aberto, st && st.desbloqueado_ate, st && st.obrigatorio, carregar]);
 
-  useEffect(function () {
+  const ultLeitura = useRef(0);
+  useEffect(function () { const h = function () { if (window._tcli.painelOk !== true) lerAlarmes(); else _tcliCarregar(true); }; window.addEventListener("pixels:tseg-alarmes-mudou", h); return function () { window.removeEventListener("pixels:tseg-alarmes-mudou", h); }; }, [lerAlarmes]);   // v96 R14
+  useEffect(function () {   // v96 (13/10/2026) G6: alarmes e decisões a cada 5 min só com a aba visível; ao voltar, atualiza se passou de 5 min
     if (!aberto) return;
-    lerAlarmes(); lerPend();
-    const t = setInterval(function () { lerAlarmes(); lerPend(); }, 300000);
-    return function () { clearInterval(t); };
-  }, [aberto, lerAlarmes, lerPend]);
+    // v96 (13/10/2026) G6 rodada 2: com o ads_painel_ia funcionando, a barra não faz leituras próprias (o _tcli já atualiza a cada 5 min).
+    //   Só se a função não existir (painelOk === false) volta às leituras antigas de alarmes e decisões.
+    if (TT.painelOk !== false) return;
+    const ler = function () { ultLeitura.current = Date.now(); lerAlarmes(); lerPend(false); };
+    ler();
+    const t = setInterval(function () { if (_tiaVisivel()) ler(); }, 300000);
+    const tira = _tiaAoVoltar(function () { if (Date.now() - ultLeitura.current > 300000) ler(); });
+    return function () { clearInterval(t); tira(); };
+  }, [aberto, lerAlarmes, lerPend, TT.painelOk]);
 
   // quem não aprova (ex.: Erick) — e qualquer falha de consulta — vê a Gestão de mídia exatamente como sempre
   if (st === null) return <div style={{ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Carregando…</div>;
@@ -73734,14 +71176,17 @@ function TSegPortao({ currentUser, viewUser, children }) {
   if (!aberto) return <TSegEntrada st={st} onPronto={carregar} />;
 
   const naoVistos = (alarmes || []).filter(function (a) { return !a.visto_em; });
-  const temCritico = naoVistos.some(function (a) { return a.nivel === "critico"; });
+  // v96 (13/10/2026) G6 rodada 2: números da barra pelo painel (uma chamada); sem ele, pelas listas como antes
+  const nAlarmes = TT.contagem ? Number(TT.contagem.alarmes_nao_vistos || 0) : naoVistos.length;
+  const nPend = TT.contagem ? Number(TT.contagem.decidir || 0) : pend;
+  const temCritico = TT.contagem ? Object.keys(TT.resumo || {}).some(function (k) { return TT.resumo[k] && TT.resumo[k].critico; }) : naoVistos.some(function (a) { return a.nivel === "critico"; });
   const trancar = async function () {
     try { await _tsegRpc("ads_bloquear"); } catch (_) {}
     carregar();
   };
   const visto = async function (id) {
     try { await _tsegRpc("ads_alarme_visto", { p_id: id }); } catch (_) {}
-    lerAlarmes();
+    lerAlarmes(); _tcliCarregar(true);   // v96 G6 rodada 2: contagem da barra acompanha
   };
 
   return (
@@ -73751,18 +71196,18 @@ function TSegPortao({ currentUser, viewUser, children }) {
           fontFamily: "'Inter',system-ui,sans-serif" }}>
           {st.obrigatorio && <div style={{ fontSize: 11, color: "#94a3b8", marginRight: "auto" }}>🔓 Aberta — fecha sozinha após {st.minutos || 30} min sem uso</div>}
           <button onClick={function () { setPainel("central"); }}
-            style={{ background: pend ? "#ede9fe" : "#f1f5f9", color: pend ? "#5b21b6" : "#334155",
+            style={{ background: nPend ? "#ede9fe" : "#f1f5f9", color: nPend ? "#5b21b6" : "#334155",
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
-            🧠 Decisões{pend ? " (" + pend + ")" : ""}
+            🧠 Decisões{nPend ? " (" + nPend + ")" : ""}
           </button>
           <button onClick={function () { setPainel("sala"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🎙️ Sala de estratégia</button>
           <button onClick={function () { setAbrirRasc(null); setPainel("montador"); }}
             style={{ background: "#f1f5f9", color: "#334155", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🧱 Montar campanha</button>
           <button onClick={function () { setPainel("alarmes"); lerAlarmes(); }}
-            style={{ background: naoVistos.length ? (temCritico ? "#fee2e2" : "#fef3c7") : "#f1f5f9", color: naoVistos.length ? (temCritico ? "#b91c1c" : "#92400e") : "#334155",
+            style={{ background: nAlarmes ? (temCritico ? "#fee2e2" : "#fef3c7") : "#f1f5f9", color: nAlarmes ? (temCritico ? "#b91c1c" : "#92400e") : "#334155",
               border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
-            🔔 Alarmes{naoVistos.length ? " (" + naoVistos.length + ")" : ""}
+            🔔 Alarmes{nAlarmes ? " (" + nAlarmes + ")" : ""}
           </button>
           {!st.tem_pin && <button onClick={function () { setPainel("criar"); }}
             style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔑 {st.modo === "agencia" ? "Criar o PIN da agência" : "Criar meu PIN"}</button>}
@@ -73773,8 +71218,13 @@ function TSegPortao({ currentUser, viewUser, children }) {
             style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 999, padding: "6px 12px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>🔒 Trancar</button>}
         </div>
       )}
+      {!vendoOutro && semIa.sem && <div style={{ background: "#fef2f2", border: "1.5px solid #fca5a5", borderRadius: 12, padding: "9px 13px", margin: "0 0 10px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontFamily: "'Inter',system-ui,sans-serif" }}>
+        <span style={{ color: "#b91c1c", fontWeight: 900, fontSize: 13 }}>💳 Crédito da IA acabou{semIa.desde ? " em " + _tiaQuando(semIa.desde) : ""}.</span>
+        <span style={{ color: "#7f1d1d", fontSize: 12.5, flex: 1, minWidth: 220 }}>Recarregue no console da Anthropic e informe o saldo novo no 💳 Saldo da IA: os botões de IA voltam sozinhos. Sem IA continuam funcionando PIN, decisões, alarmes, Montador, Diagnóstico e metas.</span>
+        <button onClick={function () { try { window.dispatchEvent(new CustomEvent("pixels:tia-saldo-abrir")); } catch (_) {} }} style={{ background: "#b91c1c", color: "#fff", border: "none", borderRadius: 9, padding: "6px 11px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Informar saldo</button>
+      </div>}{/* v96 (13/10/2026) Q14 faixa vermelha */}
       {children}
-      {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
+      {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes && !erroAl} erro={erroAl} onTentar={lerAlarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
       {painel === "montador" && <TSegMontador abrirId={abrirRasc} contaFixa={ctx.conta} novo={ctx.novo} preset={ctx.preset} onFechar={function () { setPainel(null); setAbrirRasc(null); setCtx({}); _tcliCarregar(true); }} onMudou={lerPend} />}
       {painel === "sala" && <TSegSala contaFixa={ctx.conta} abrirEstrategia={ctx.estrategia} textoInicial={ctx.texto} onFechar={function () { setPainel(null); setCtx({}); }} onAbrirMontador={function (id) { setAbrirRasc(id); setCtx(function (c) { return Object.assign({}, c, { novo: false }); }); setPainel("montador"); }} />}
       {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); _tcliCarregar(true); }} onMudou={lerPend} />}
@@ -73783,6 +71233,11 @@ function TSegPortao({ currentUser, viewUser, children }) {
     </Fragment>
   );
 }
+
+/* v96 (13/10/2026) E4: a IA de tráfego termina aqui. O que vem logo abaixo no App.jsx (Parcerias, Sprint, Relatório, Analítico,
+   Gantt, Avaliação 360, Carreira, Portal…) são OUTROS módulos que estavam colados neste bloco, sem relação com a IA de tráfego.
+   A marca abaixo separa os dois, para quem dividir o App.jsx por módulos não misturar um com o outro. */
+// ======= 19_parcerias_sprint_portal.jsx =======
 
 /* ═══════════════════════════════════════════════════════════════════
  * 19_parcerias.jsx — Parcerias (Influencers + Estratégias locais)
