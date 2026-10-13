@@ -15422,6 +15422,7 @@ function CDrive({cl}){
 
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
 
+const _CP_MOSTRA_LEGENDA=false;   // (13/10/2026) legenda de status no topo do Calendário de publicações — Gustavo pediu pra tirar
 /* (13/10/2026, Gustavo) card de vídeo do 🤖 Agente de IA = etiqueta "Edição pela IA" (a mesma do interruptor do card e do Guvi) */
 function _pxEhCardAgenteIA(t){
   if(!t) return false;
@@ -24079,7 +24080,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário de publicações</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>
-            {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} agendada{tasksThisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
+            {tasksThisMonth.length} {tasksThisMonth.length!==1?"publicações agendadas":"publicação agendada"} em {MONTHS[calMonth.getMonth()].toLowerCase()}
           </div>
         </div>
         <span style={{flex:1}}/>
@@ -24205,12 +24206,14 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         style={{width:"100%",height:40,borderRadius:11,background:"#fff",border:"1px solid "+(filterClient!=="todos"?"#c4b5fd":"#e2e8f0"),
                 display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 13px",cursor:"pointer",
                 fontFamily:"'Inter',system-ui,sans-serif",fontSize:13.5,fontWeight:700,color:"#0f172a"}}>
-        <span>Status e cliente{filterClient!=="todos"?" (filtrado)":""}</span>
-        <span style={{color:"#64748b",fontSize:12.5,fontWeight:600}}>legenda · filtro ›</span>
+        <span>Cliente{filterClient!=="todos"?" (filtrado)":""}</span>
+        <span style={{color:"#64748b",fontSize:12.5,fontWeight:600}}>filtro ›</span>
       </button>}
 
-      {/* ── Legenda dos status — badges identicos aos dos cards ── */}
-      <div style={_cpPainel({display:_cpEsconde?"none":"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontFamily:"'Inter',system-ui,sans-serif"})}>
+      {/* ── Legenda dos status — badges identicos aos dos cards ──
+          (13/10/2026, Gustavo: "tira a explicação dos status ali no topo do calendário") → escondida; o bloco fica
+          no código (nada apagado) e só volta trocando _CP_MOSTRA_LEGENDA pra true. */}
+      <div style={_cpPainel({display:(_cpEsconde||!_CP_MOSTRA_LEGENDA)?"none":"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontFamily:"'Inter',system-ui,sans-serif"})}>
         <span style={{color:"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Status</span>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#06b6d4",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
@@ -114443,11 +114446,9 @@ function PageRoteiros({isMob, perms, viewingAs}){
       <div style={{display:isMob?"flex":"inline-flex",width:isMob?"100%":undefined,background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
         {[{id:"roteiros",l:isMob?"Roteiros":"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:isMob?"Ideias":"Ideias pro cliente"},{id:"solicitacoes",l:isMob?"WhatsApp":"Solicitações por WhatsApp"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"8px 6px":"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:pxFonte(10,isMob),fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
       </div>
-    </div>
-
-    {aba==="roteiros"&&<>
-      {/* Cliente + unidade + gerar */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"12px":"14px 16px",display:"flex",alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,gap:isMob?10:12,flexWrap:"wrap"}}>
+      {/* (13/10/2026, Gustavo: "essas abas do Conteúdos tão me irritando… ter só uma seção, não duas") — a barra de
+          cliente + filtro + botões entrou AQUI, na mesma caixa do título, separada por uma linha fina. */}
+      {aba==="roteiros"&&<div style={{width:"100%",borderTop:"1px solid #f1f5f9",paddingTop:isMob?10:12,marginTop:isMob?2:4,display:"flex",alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,gap:isMob?10:12,flexWrap:"wrap"}}>
 
         {/* ══ CELULAR: o campo CLIENTE (fechado) ══════════════════════════════
             Mostra quem está escolhido em letra grande. Toca e abre a lista. */}
@@ -114541,9 +114542,12 @@ function PageRoteiros({isMob, perms, viewingAs}){
         </div>}
         <div style={{display:"flex",gap:isMob?9:10,alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,marginLeft:isMob?undefined:"auto",width:isMob?"100%":undefined,flexWrap:"wrap"}}>
         {/* Celular: o filtro ocupa a largura */}
-        <div style={{display:isMob?"flex":"inline-flex",background:"#f1f5f9",borderRadius:12,padding:3,gap:2,height:40,boxSizing:"border-box",alignItems:"center"}}>
-          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"},{id:"gravado",l:"Gravados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{flex:isMob?1:undefined,height:34,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"0 6px":"0 13px",fontSize:12.5,fontWeight:on?800:600,letterSpacing:-.1,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none",transition:"all .12s"}}>{v.l}</button>; })}
-        </div>
+        {/* (13/10/2026, Gustavo) "pra que aba Sugestões? pra que Enviados? só Gravados faria sentido" → um interruptor só */}
+        {(function(){ const on=filtro==="gravado"; return <button type="button" onClick={function(){ setFiltro(on?"todos":"gravado"); }} title={on?"Mostrando só os que o cliente marcou como gravados — clique pra ver todos":"Mostrar só os roteiros já gravados pelo cliente"}
+          style={{display:"inline-flex",alignItems:"center",gap:7,height:40,boxSizing:"border-box",background:on?"#ecfdf5":"#fff",color:on?"#047857":"#475569",border:"1.5px solid "+(on?"#6ee7b7":"#e2e8f0"),borderRadius:12,padding:"0 13px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,width:isMob?"100%":undefined,justifyContent:"center"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          {on?"Só gravados":"Gravados"}
+        </button>; })()}
         {/* (22/09/2026, Rodrigo: "não vai ser um tiro no pé?") Bioter · Grupo tem 20
             roteiros = ~22 mil letras numa mensagem só. No computador dá pra reler antes
             de enviar; no celular, não. Some no celular — lá se copia um por um, no card. */}
@@ -114562,7 +114566,10 @@ function PageRoteiros({isMob, perms, viewingAs}){
           {gerando==="ia"?<><Spin/> Escrevendo 5 roteiros…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar 5 roteiros</>}
         </button>}
         </div>
-      </div>
+      </div>}
+    </div>
+
+    {aba==="roteiros"&&<>
       {pedidoForm&&<div style={{background:"#fff",border:"1px solid "+_cor+"3d",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:13,boxShadow:"0 8px 24px rgba(15,23,42,.06)"}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Roteiro específico pra {_nomeCl(clId,isBioter?unit:"")}</div>
         <div>
