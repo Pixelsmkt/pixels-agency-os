@@ -47131,6 +47131,91 @@ function PxEnviarEdicaoIA({task,tags,setTags,setTasks,canEdit,temVideo}){
   </div>;
 }
 
+
+/* ═══ (13/10/2026, Gustavo) ARQUIVO EDITÁVEL VAI DIRETO PRO GOOGLE DRIVE ═══
+   "precisamos que seja linkado automaticamente na pasta J:\Meu Drive\Elementos gráficos\Templates Construschorr… de cada
+   cliente… numa subpasta com nome do designer… depois de enviado pro drive não precisa ficar salvo nos cards pra não
+   ficar pesando… só deixa no histórico". O PSD/.prproj NÃO passa pelo Supabase: a edge function drive-editavel acha/cria
+   as pastas e abre uma sessão de upload no Drive (conta pixels@); o navegador manda os bytes direto pro Google em pedaços
+   de 32 MB. No card fica só um item leve com o link. Se o Drive não estiver conectado, cai no upload normal (Supabase)
+   e avisa. */
+const pxDriveEditavel = {
+  _status: null, _statusEm: 0,
+  async status(force){
+    const sb = window._sb; if(!sb) return { autorizado:false, erro:"sem Supabase" };
+    if(!force && pxDriveEditavel._status && Date.now() - pxDriveEditavel._statusEm < 10*60*1000) return pxDriveEditavel._status;
+    try{
+      const { data, error } = await sb.functions.invoke("drive-editavel", { body:{ acao:"status" } });
+      const st = error ? { autorizado:false, erro:(error.message||"erro") } : (data||{ autorizado:false });
+      pxDriveEditavel._status = st; pxDriveEditavel._statusEm = Date.now(); return st;
+    }catch(e){ return { autorizado:false, erro:(e&&e.message)||String(e) }; }
+  },
+  async _iniciar(args){
+    const sb = window._sb;
+    const { data, error } = await sb.functions.invoke("drive-editavel", { body:Object.assign({ acao:"iniciar" }, args) });
+    if(error){
+      let msg = error.message||"erro";
+      try{ if(error.context && typeof error.context.json==="function"){ const j = await error.context.json(); if(j&&j.error) msg = j.error; } }catch(_){}
+      throw new Error(msg);
+    }
+    if(!data || data.error || !data.uploadUrl) throw new Error((data&&data.error)||"Drive não devolveu a URL de upload");
+    return data;
+  },
+  _put(url, chunk, start, end, total){
+    return new Promise(function(res, rej){
+      const x = new XMLHttpRequest(); x.open("PUT", url, true);
+      x.setRequestHeader("Content-Range", "bytes " + start + "-" + (end-1) + "/" + total);
+      x.onload = function(){ res({ status:x.status, text:x.responseText||"", range:x.getResponseHeader("Range")||"" }); };
+      x.onerror = function(){ rej(new Error("rede caiu no envio pro Drive")); };
+      x.send(chunk);
+    });
+  },
+  async _ondeParou(url, total){
+    const x = await new Promise(function(res, rej){ const r = new XMLHttpRequest(); r.open("PUT", url, true); r.setRequestHeader("Content-Range", "bytes */" + total); r.onload=function(){ res(r); }; r.onerror=function(){ rej(new Error("rede")); }; r.send(); });
+    if(x.status===308){ const m = String(x.getResponseHeader("Range")||"").match(/bytes=0-(\d+)/); return m ? Number(m[1])+1 : 0; }
+    if(x.status===200||x.status===201) return -1;   // já terminou
+    return 0;
+  },
+  /* sobe o arquivo; devolve { id, url, caminho, pasta_url, criadas } */
+  async enviar(file, opts, onProgress){
+    opts = opts||{};
+    const mime = file.type || "application/octet-stream";
+    const ini = await pxDriveEditavel._iniciar({ task_id:String(opts.taskId||""), cliente:opts.cliente||"", designer:opts.designer||"", nome:file.name, tamanho:file.size, mime:mime });
+    const url = ini.uploadUrl, total = file.size, CH = 32*1024*1024;   // múltiplo de 256 KiB
+    let pos = 0, tent = 0, fim = null;
+    while(pos < total){
+      const end = Math.min(total, pos+CH);
+      let r;
+      try{ r = await pxDriveEditavel._put(url, file.slice(pos, end), pos, end, total); }
+      catch(e){ if(++tent > 4) throw e; await new Promise(function(z){ setTimeout(z, 1500*tent); }); const p = await pxDriveEditavel._ondeParou(url, total); if(p<0) break; pos = p; continue; }
+      if(r.status===308){ const m = r.range.match(/bytes=0-(\d+)/); pos = m ? Number(m[1])+1 : end; tent = 0; if(onProgress) onProgress(Math.round(pos/total*100)); continue; }
+      if(r.status===200||r.status===201){ try{ fim = JSON.parse(r.text); }catch(_){ fim = null; } pos = total; if(onProgress) onProgress(100); break; }
+      if(r.status>=500 || r.status===429){ if(++tent > 4) throw new Error("Drive respondeu "+r.status); await new Promise(function(z){ setTimeout(z, 1500*tent); }); const p = await pxDriveEditavel._ondeParou(url, total); if(p<0) break; pos = p; continue; }
+      throw new Error("Drive recusou o envio ("+r.status+"): "+String(r.text||"").slice(0,160));
+    }
+    if(!fim || !fim.id){
+      // não recebeu o JSON final (raro) — pede o link pela função
+      const sb = window._sb; const { data } = await sb.functions.invoke("drive-editavel", { body:{ acao:"link", file_id:(fim&&fim.id)||"" } }).catch(function(){ return { data:null }; });
+      if(data && data.id) fim = { id:data.id, name:data.nome, size:data.tamanho, webViewLink:data.url };
+    }
+    if(!fim || !fim.id) throw new Error("o Drive não confirmou o arquivo");
+    return { id:fim.id, url:fim.webViewLink||("https://drive.google.com/file/d/"+fim.id+"/view"), nome:fim.name||file.name, tamanho:Number(fim.size)||file.size, caminho:ini.caminho, pasta_url:ini.pasta_url, criadas:ini.criadas||[] };
+  }
+};
+if(typeof window!=="undefined"){ window.pxDriveEditavel = pxDriveEditavel; }
+
+/* chip "Drive conectado" / botão "Conectar Drive" (sócios) na seção Arquivo editável */
+function PxDriveStatusChip({user}){
+  const [st,setSt]=useState(pxDriveEditavel._status);
+  useEffect(function(){ let vivo=true; pxDriveEditavel.status().then(function(x){ if(vivo) setSt(x); }); return function(){ vivo=false; }; },[]);
+  if(!st) return null;
+  const socio=!!(user&&user.level===1);
+  if(st.autorizado) return <span title={"Conta "+(st.email||"")+" · os editáveis vão direto pro Drive"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#e8f0fe",color:"#1a73e8",border:"1px solid #c6dafc",borderRadius:99,padding:"4px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>● Drive conectado</span>;
+  if(!socio) return <span title={st.erro||"o Drive ainda não foi conectado por um sócio"} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#fef3c7",color:"#b45309",border:"1px solid #fde68a",borderRadius:99,padding:"4px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>Drive não conectado</span>;
+  if(!st.configurado) return <span title="Falta GOOGLE_OAUTH_CLIENT_ID / SECRET nos segredos do Supabase" style={{display:"inline-flex",alignItems:"center",gap:5,background:"#fef3c7",color:"#b45309",border:"1px solid #fde68a",borderRadius:99,padding:"4px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>Drive: falta configurar o OAuth</span>;
+  return <a href={st.url_autorizar} target="_blank" rel="noopener noreferrer" onClick={function(){ setTimeout(function(){ pxDriveEditavel.status(true).then(setSt); },15000); }} title="Abre o Google pra autorizar a conta pixels@ (uma vez só)"
+    style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,#1a73e8,#4285f4)",color:"#fff",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",textDecoration:"none"}}>Conectar Drive</a>;
+}
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
   // ═══ Detecção de viewport mobile ═══
   const [isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
@@ -48847,6 +48932,36 @@ function _cardPodeSerResp(u){
         ...((extra&&typeof extra==="object")?extra:{}),
       }]);
 
+      // ── (13/10/2026) ARQUIVO EDITÁVEL → DIRETO PRO DRIVE (Elementos gráficos › Templates <Cliente> › <Designer>) ──
+      if(_ehEdt && typeof pxDriveEditavel!=="undefined"){
+        const _cl=CLIENTS.find(function(c){ return c.id===task.client; });
+        const _cliNome=(_cl&&_cl.name)||String(task.client||"");
+        const _designer=String((user&&user.name)||"").trim();
+        let _drv=null, _erroDrv=null;
+        try{
+          _drv=await pxDriveEditavel.enviar(file,{ taskId:task.id, cliente:_cliNome, designer:_designer },function(pct){
+            setAttachments(p=>p.map(a=>a.id===tempId?{...a,progress:pct,noDrive:true}:a));
+          });
+        }catch(e){ _erroDrv=e; }
+        if(_drv){
+          const _item={ id:tempId,name:file.name,type:mime,size:file.size,url:_drv.url,uploading:false,progress:100,tipo:"editavel",
+            drive:{ id:_drv.id, url:_drv.url, pasta:_drv.caminho, pasta_url:_drv.pasta_url },
+            addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name };
+          setAttachments(p=>{ const next=p.map(a=>a.id===tempId?_item:a); setTimeout(function(){ _persistFilesNow(next); },0); return next; });
+          try{
+            const _agora=new Date().toISOString();
+            const _e1={type:"file_upload",label:"Subiu arquivo editável: "+file.name,at:_agora,atFmt:nowFmt(),user:pxAutorNome(user)};
+            const _e2={type:"drive",label:"Arquivo editável enviado ao Drive: "+_drv.caminho+(_drv.criadas&&_drv.criadas.length?" (pasta criada: "+_drv.criadas.join(", ")+")":""),at:_agora,atFmt:nowFmt(),user:"sistema",url:_drv.url};
+            setTasks&&setTasks(prev=>prev.map(t=>t.id===task.id?{...t,timeline:[...(t.timeline||[]),_e1,_e2]}:t));
+          }catch(e){ console.warn("[drive] timeline:",e&&e.message||e); }
+          pixelsToast.success(file.name+" foi pro Drive: "+_drv.caminho,6000);
+          return;
+        }
+        // Drive não disponível → segue no Supabase como antes, avisando o motivo
+        const _m=String((_erroDrv&&_erroDrv.message)||"");
+        pixelsToast.warning("Drive indisponível ("+_m.slice(0,140)+") — subindo no app como antes.",8000);
+        setAttachments(p=>p.map(a=>a.id===tempId?{...a,progress:0,noDrive:false}:a));
+      }
       try{
         const sb=window._sb;
         // Upload com progress callback
@@ -51797,9 +51912,10 @@ function _cardPodeSerResp(u){
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Arquivo editável {_ok.length>0&&<span style={{background:"#ffedd5",color:"#c2410c",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700}}>{_ok.length}</span>}</div>
-                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivo aberto pra editar depois — designer sobe o .psd, edição de vídeo sobe o .prproj</div>
+                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivo aberto pra editar depois — designer sobe o .psd, edição de vídeo sobe o .prproj · vai direto pro Drive (Elementos gráficos › Templates do cliente › seu nome)</div>
                     </div>
-                    {_ok.length>1&&<button onClick={function(){downloadAll(_ok,"Arquivos editáveis");}} title="Baixa todos os arquivos editáveis"
+                    {typeof PxDriveStatusChip==="function"&&<PxDriveStatusChip user={user}/>}
+                    {_ok.filter(function(a){ return !a.drive; }).length>1&&<button onClick={function(){downloadAll(_ok.filter(function(a){ return !a.drive; }),"Arquivos editáveis");}} title="Baixa todos os arquivos editáveis que estão no app"
                       style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Baixar tudo</button>}
                     {_edtCanEdit&&<label htmlFor={"pixels-pick-edt-"+task.id}
                       style={{background:"#ea580c",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,boxShadow:"0 1px 2px rgba(234,88,12,0.15)"}}
@@ -51823,9 +51939,15 @@ function _cardPodeSerResp(u){
                         <span style={{minWidth:44,height:30,borderRadius:7,background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,letterSpacing:.3,padding:"0 6px"}}>{_ext(a.name)||"ARQ"}</span>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{color:"#334155",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
-                          <div style={{color:"#94a3b8",fontSize:10.5}}>{a.uploading?("Enviando… "+(a.progress||0)+"%"):[_mb(a.size),a.addedBy,a.addedAt].filter(Boolean).join(" · ")}</div>
+                          <div style={{color:"#94a3b8",fontSize:10.5}}>{a.uploading?((a.noDrive?"Enviando pro Drive… ":"Enviando… ")+(a.progress||0)+"%"):[_mb(a.size),a.addedBy,a.addedAt].filter(Boolean).join(" · ")}</div>
+                          {!a.uploading&&a.drive&&a.drive.pasta&&<div style={{color:"#1a73e8",fontSize:10.5,fontWeight:600,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.drive.pasta}>no Drive · {a.drive.pasta}</div>}
                         </div>
-                        {!a.uploading&&a.url&&<button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar"
+                        {!a.uploading&&a.drive&&a.drive.url&&<a href={a.drive.url} target="_blank" rel="noopener noreferrer" onClick={function(e){e.stopPropagation();}} title="Abrir no Google Drive"
+                          style={{background:"linear-gradient(135deg,#1a73e8,#4285f4)",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11.5,fontWeight:700,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,textDecoration:"none"}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                          Abrir no Drive
+                        </a>}
+                        {!a.uploading&&a.url&&!a.drive&&<button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar"
                           style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:11.5,fontWeight:700,color:"#475569",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5}}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                           Baixar
