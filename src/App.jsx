@@ -151639,7 +151639,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v20: IA por janelas só onde não tem foto + céu determinístico + emenda de baixo com pluma na grama e cor casada + juiz GPT (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push("motor da foto v21: foto pronta não é movida + IA por janelas só onde não tem foto + céu determinístico + pluma na grama + juiz GPT (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
