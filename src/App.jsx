@@ -8860,9 +8860,13 @@ function pxImageDims(file){
 // ═══ "Pronto pra postar" (rosinha no calendário) ═══
 // (09/10/2026, Gustavo) "aprovado internamente NÃO fica rosa no calendário — só aprovado pelo
 // cliente". Vale pra TODOS os clientes agora; a lista da Acreforte deixou de ser exceção.
+// (13/10/2026, Gustavo) "Foto de obra não precisa aprovar com o cliente: aprovado internamente já está aprovado" →
+// rosa (pronto pra publicar) já no "aprovado", e sem alerta pra Hellen (o gatilho do banco pula pelo título).
+// pxEhFotoDeObra vem do 10_radar_entrega (título "foto de obra" ou tipo "foto") — função hoisted, mesma regra 37 do banco.
 function pxProntoPraPostar(t){
   if(!t)return false;
   var st=String(t.status||"");
+  if(st==="aprovado"&&typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(t))return true;
   return st==="agendado"||st==="aprovacao_final";
 }
 
@@ -26522,7 +26526,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                                  pra Hellen bater o olho e ir aprovar com o cliente. Antes saía ciano com triângulo — igual "Em produção".
                                  (11:03) Gustavo: "grafite não ficou bom, talvez um vermelho vivo" → VERMELHO VIVO (#ff1a1a). Reprovada/Pausada
                                  usam um vermelho mais fechado (#dc2626) e outro ícone (círculo com !); aqui o ícone é pessoa + visto. */
-                              const isAprovInterno = t.status==="aprovado";
+                              const isAprovInterno = t.status==="aprovado"&&!(typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(t));   // Foto de obra: aprovado internamente = aprovado (rosa)
                               const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : (isAprovInterno ? "#ff1a1a" : pubColor.bg));
                               const _title = isReprovada ? "Reprovada" : (isPausada ? "Pausada" : (isShortFromDrive ? "Vídeo short (do Drive)" : (isAprovInterno ? "Aprovado internamente — falta aprovar com o cliente" : (pubColor.label||t.status))));
                               return <span title={_title} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:_bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
