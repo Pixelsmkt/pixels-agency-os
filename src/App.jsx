@@ -71477,6 +71477,7 @@ function MidiaPlanejamento({store, isMob, currentUser}){
   const [msg,setMsg]=useState("");             // progresso (transcrevendo…)
   const [ocupado,setOcupado]=useState("");
   const [edit,setEdit]=useState(null);         // entendimento em edição {titulo,resumo,pedidos,duvidas}
+  const [trEdit,setTrEdit]=useState(null);     // transcrição em correção {id, anexos:[...], texto}
   // contas de mídia (a Bioter entra por unidade — campanha é por conta)
   const clientes=(store&&store.clients||[]).slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
   const carregar=async function(){ if(!sb){ setLista([]); return; } const r=await sb.from("midia_feedbacks").select("*").neq("status","arquivado").order("created_at",{ascending:false}).limit(300); setLista(r.error?[]:(r.data||[])); };
@@ -71545,6 +71546,20 @@ function MidiaPlanejamento({store, isMob, currentUser}){
     if(!edit) return;
     try{ await _upd(fb.id,{entendimento:edit,titulo:edit.titulo||fb.titulo,entendimento_ok:true,status:fb.status==="novo"?"entendido":fb.status}); setEdit(null); _toast("success","Entendimento salvo.",2500); }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
   };
+  const salvarTranscricao=async function(fb,eEntender){
+    if(!trEdit||trEdit.id!==fb.id) return;
+    const anexos=trEdit.anexos;
+    const transcricao=anexos.map(function(a){ return a.transcricao||""; }).filter(Boolean).join("\n\n");
+    setOcupado("transcricao");
+    try{
+      const row=await _upd(fb.id,{anexos:anexos,transcricao:transcricao||null,texto:String(trEdit.texto||"").trim()||null,entendimento_ok:false});
+      setTrEdit(null); _toast("success","Transcrição corrigida.",2500);
+      setOcupado("");
+      if(eEntender) entender(row);
+      return;
+    }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+    setOcupado("");
+  };
   const arquivar=async function(fb){ try{ await _upd(fb.id,{status:"arquivado"}); setLista(function(l){ return (l||[]).filter(function(x){ return x.id!==fb.id; }); }); setSel(null); _toast("info","Arquivado (fica guardado no banco).",2500); }catch(e){ _toast("error","Não arquivou: "+((e&&e.message)||e)); } };
 
   /* ── estilos ── */
@@ -71609,20 +71624,29 @@ function MidiaPlanejamento({store, isMob, currentUser}){
         <span style={{width:36,height:36,borderRadius:10,background:"#fff",border:"1px solid #e9e7f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:_MP_AC,flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
         <div style={{flex:1,minWidth:0}}>
           <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{msg||"Solte aqui o áudio do WhatsApp (.ogg, .opus, .mp3) ou um print"}</div>
-          <div style={{color:"#8b86a0",fontSize:11.5}}>{msg?"aguarde…":"o áudio é transcrito na hora; texto vai pro campo acima"}</div>
+          <div style={{color:"#8b86a0",fontSize:11.5}}>{msg?"aguarde…":"o áudio é transcrito na hora; você confere e corrige o texto antes de mandar pra IA"}</div>
         </div>
         <label style={Object.assign({},btn(false),{cursor:"pointer"})}>Escolher arquivo<input type="file" multiple onChange={function(e){ anexar(e.target.files); e.target.value=""; }} style={{display:"none"}}/></label>
       </div>
       {novo.anexos.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginTop:10}}>
-        {novo.anexos.map(function(a,i){ return <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"#faf9fd",borderRadius:10,padding:"8px 10px",fontSize:12.5}}>
-          <span style={{color:_MP_AC}}>{/^audio/.test(a.type)?"🎙":"📎"}</span><span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:600}}>{a.name}</span>
-          {a.transcricao&&<span style={{color:"#047857",fontWeight:700,fontSize:11}}>transcrito</span>}
-          <button onClick={function(){ setNovo(Object.assign({},novo,{anexos:novo.anexos.filter(function(_,j){ return j!==i; })})); }} style={{background:"none",border:"none",color:"#b91c1c",fontWeight:700,fontSize:12,cursor:"pointer",minHeight:0}}>tirar</button>
+        {novo.anexos.map(function(a,i){ const ehAudio=/^audio/.test(a.type); return <div key={i} style={{background:"#faf9fd",borderRadius:10,padding:"8px 10px",fontSize:12.5}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{color:_MP_AC}}>{ehAudio?"🎙":"📎"}</span><span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:600}}>{a.name}</span>
+            {a.transcricao&&<span style={{color:"#b45309",fontWeight:700,fontSize:11}}>confira a transcrição ↓</span>}
+            <button onClick={function(){ setNovo(Object.assign({},novo,{anexos:novo.anexos.filter(function(_,j){ return j!==i; })})); }} style={{background:"none",border:"none",color:"#b91c1c",fontWeight:700,fontSize:12,cursor:"pointer",minHeight:0}}>tirar</button>
+          </div>
+          {ehAudio&&a.transcricao!==undefined&&<div style={{marginTop:8}}>
+            <textarea value={a.transcricao||""} rows={Math.min(12,Math.max(4,Math.ceil(String(a.transcricao||"").length/110)))}
+              onChange={function(ev){ const v=ev.target.value; setNovo(function(n){ return Object.assign({},n,{anexos:n.anexos.map(function(x,j){ return j===i?Object.assign({},x,{transcricao:v}):x; })}); }); }}
+              style={Object.assign({},inp,{resize:"vertical",lineHeight:1.55,background:"#fff",borderColor:"#f3d9a4"})}/>
+            <div style={{color:"#8b86a0",fontSize:11.5,marginTop:4}}>A transcrição automática erra nomes e termos (ex.: “alcance” virando outra palavra). Corrija aqui antes de mandar entender — a IA vai ler exatamente este texto.</div>
+          </div>}
         </div>; })}
       </div>}
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14,alignItems:"center",flexWrap:"wrap"}}>
+        {novo.anexos.some(function(a){ return a.transcricao; })&&<span style={{color:"#8b86a0",fontSize:12,marginRight:"auto"}}>Nada é mandado pra IA até você clicar no botão.</span>}
         <button onClick={function(){ if(!msg) setNovo(null); }} style={btn(false)}>Cancelar</button>
-        <button disabled={!!msg||!!ocupado} onClick={salvarNovo} style={Object.assign({},btn(true),{opacity:(msg||ocupado)?.6:1})}>{ocupado==="salvando"?"Salvando…":"Salvar e entender com a IA"}</button>
+        <button disabled={!!msg||!!ocupado} onClick={salvarNovo} style={Object.assign({},btn(true),{opacity:(msg||ocupado)?.6:1})}>{ocupado==="salvando"?"Salvando…":(novo.anexos.some(function(a){ return a.transcricao; })?"Transcrição confere · Salvar e entender":"Salvar e entender com a IA")}</button>
       </div>
     </div>}
 
@@ -71670,13 +71694,31 @@ function MidiaPlanejamento({store, isMob, currentUser}){
           </div>
 
           {/* o que o cliente mandou */}
-          <div style={Object.assign({},card,{padding:isMob?16:20})}>
-            <div style={Object.assign({},lbl,{marginBottom:8})}>O que o cliente mandou</div>
-            {f.texto&&<div style={{color:"#0f172a",fontSize:13.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{f.texto}</div>}
-            {(f.anexos||[]).filter(function(a){ return /^audio/.test(a.type); }).map(function(a,i){ return <div key={i} style={{marginTop:f.texto?12:0,background:"#faf9fd",borderRadius:12,padding:"10px 12px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span>🎙</span><span style={{color:"#3d3853",fontSize:12,fontWeight:700,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span><a href={a.url} target="_blank" rel="noreferrer" style={{color:_MP_AC,fontSize:12,fontWeight:700,textDecoration:"none"}}>ouvir</a></div>
-              {a.transcricao&&<div style={{color:"#3d3853",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.transcricao}</div>}
-            </div>; })}
+          <div style={Object.assign({},card,{padding:isMob?16:20,borderColor:(trEdit&&trEdit.id===f.id)?"#f3d9a4":"#e9e7f0"})}>
+            {(function(){
+              const te=(trEdit&&trEdit.id===f.id)?trEdit:null;
+              const temAudio=(f.anexos||[]).some(function(a){ return /^audio/.test(a.type); });
+              const setTeAnexo=function(idx,v){ setTrEdit(function(t){ return Object.assign({},t,{anexos:t.anexos.map(function(x,j){ return j===idx?Object.assign({},x,{transcricao:v}):x; })}); }); };
+              return <>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+                  <div style={lbl}>O que o cliente mandou</div>
+                  <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                    {!te&&(temAudio||f.texto)&&<button onClick={function(){ setTrEdit({id:f.id,anexos:JSON.parse(JSON.stringify(f.anexos||[])),texto:f.texto||""}); }} style={btn(false)}>Corrigir transcrição</button>}
+                    {te&&<button onClick={function(){ setTrEdit(null); }} style={btn(false)}>Cancelar</button>}
+                    {te&&<button disabled={ocupado==="transcricao"} onClick={function(){ salvarTranscricao(f,false); }} style={btn(false)}>Só salvar</button>}
+                    {te&&<button disabled={ocupado==="transcricao"} onClick={function(){ salvarTranscricao(f,true); }} style={btn(true)}>{ocupado==="transcricao"?"Salvando…":"Salvar e entender de novo"}</button>}
+                  </div>
+                </div>
+                {te&&<div style={{color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"8px 12px",fontSize:12,marginBottom:10}}>Corrija o que a transcrição errou (nomes, cidades, termos como “alcance”). Ao salvar e entender de novo, a IA lê só o texto corrigido.</div>}
+                {!te&&f.texto&&<div style={{color:"#0f172a",fontSize:13.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{f.texto}</div>}
+                {te&&<div style={{marginBottom:10}}><div style={Object.assign({},lbl,{marginBottom:5})}>Mensagem / anotação</div><textarea value={te.texto} rows={3} onChange={function(ev){ const v=ev.target.value; setTrEdit(function(t){ return Object.assign({},t,{texto:v}); }); }} style={Object.assign({},inp,{resize:"vertical",lineHeight:1.55})}/></div>}
+                {(te?te.anexos:(f.anexos||[])).map(function(a,i){ if(!/^audio/.test(a.type)) return null; return <div key={i} style={{marginTop:(f.texto||te)?12:0,background:"#faf9fd",borderRadius:12,padding:"10px 12px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span>🎙</span><span style={{color:"#3d3853",fontSize:12,fontWeight:700,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span><a href={a.url} target="_blank" rel="noreferrer" style={{color:_MP_AC,fontSize:12,fontWeight:700,textDecoration:"none"}}>ouvir</a></div>
+                  {te?<textarea value={a.transcricao||""} rows={Math.min(14,Math.max(4,Math.ceil(String(a.transcricao||"").length/110)))} onChange={function(ev){ setTeAnexo(i,ev.target.value); }} style={Object.assign({},inp,{resize:"vertical",lineHeight:1.55,borderColor:"#f3d9a4"})}/>
+                    :(a.transcricao&&<div style={{color:"#3d3853",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.transcricao}</div>)}
+                </div>; })}
+              </>;
+            })()}
             {(f.anexos||[]).filter(function(a){ return !/^audio/.test(a.type); }).length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{(f.anexos||[]).filter(function(a){ return !/^audio/.test(a.type); }).map(function(a,i){ return <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{background:"#faf9fd",border:"1px solid #e9e7f0",borderRadius:99,padding:"4px 10px",fontSize:11.5,color:"#3d3853",textDecoration:"none",fontWeight:600}}>📎 {a.name}</a>; })}</div>}
             {!f.texto&&!(f.anexos||[]).length&&<div style={{color:"#8b86a0",fontSize:13}}>—</div>}
           </div>
