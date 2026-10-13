@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 51/51 | Nao editar diretamente
+// Modulos: 52/52 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -56658,7 +56658,7 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
      Fica AQUI (e não junto de TABS_TOP) porque abaixo há return antecipado:
      hook depois de return quebra a regra dos hooks do React. */
   useEffect(function(){
-    const _ok=["visao","clientes","demandas","relatorios"].filter(function(id){ return _bl("midia.top."+id); });
+    const _ok=["visao","clientes","demandas","relatorios","planejamento"].filter(function(id){ return _bl("midia.top."+id); });   // (13/10) + planejamento
     if(_ok.length&&_ok.indexOf(topTab)<0) setTopTab(_ok[0]);
   },[topTab]);
   /* MODO APRESENTAÇÃO ("olhinho"): borra nomes e números da carteira (classe .px-sens) pra mostrar o sistema a um cliente
@@ -56781,6 +56781,7 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
     {id:"clientes",  label:"Clientes",    icon:"users"},
     {id:"demandas",  label:"Demandas",    icon:"zap",      badge:demAbertas},
     {id:"relatorios",label:"Relatórios",  icon:"file-text"},
+    {id:"planejamento",label:"Planejamento",icon:"target"},   // (13/10/2026, Gustavo) Feedbacks de tráfego (17f)
   ].filter(function(t){ return _bl("midia.top."+t.id); });
   const _emCliente=!!openClient&&(topTab==="visao"||topTab==="clientes");
 
@@ -56838,6 +56839,8 @@ function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, 
         canEditProp={podeEditarDemandasMidia}/>}
 
     {/* ───── ABA RELATÓRIOS: renderizada pelo QGMidiaRoot (modo="relatorios") ───── */}
+    {/* ───── ABA PLANEJAMENTO (13/10/2026): Feedbacks de tráfego — 17f_midia_planejamento.jsx ───── */}
+    {topTab==="planejamento"&&typeof MidiaPlanejamento==="function"&&<MidiaPlanejamento store={store} isMob={isMob} currentUser={currentUser}/>}
 
     {/* ── Modais ── */}
     {showNovoCliente&&<MediaNovoClienteModal
@@ -71407,6 +71410,326 @@ function TSegPortao({ currentUser, viewUser, children }) {
    A marca abaixo separa os dois, para quem dividir o App.jsx por módulos não misturar um com o outro. */
 // ======= 19_parcerias_sprint_portal.jsx =======
 
+// ======= 17f_midia_planejamento.jsx =======
+/* ═══════════════════════════════════════════════════════════════════════
+   GESTÃO DE MÍDIA › PLANEJAMENTO › FEEDBACKS  (13/10/2026, Gustavo)
+   "temos que ter uma área de feedbacks tal qual a do Playbooks, só que no Gestão de mídia (áudio do cliente,
+   mensagem em texto no WhatsApp, tipo solicitando tráfego pago de tal produto em tal região, gastar tanto por dia…
+   caso de áudio você transcreve e entende) — conforme o pedido do cliente e a análise de IA, já ajustar
+   automaticamente campanhas de tráfego pago (sugerir)… sem bugar nada que o Vinicius já fez."
+   "quero um layout realmente moderno… clean, visualmente agradável e que faça sentido para um fluxo fluido".
+
+   Fluxo:  Recebido (áudio/texto) → Entendido (a IA estrutura: produto, região, verba, período, objetivo; o sócio
+           confere/edita) → Sugestões (etapa seguinte: a IA cruza com as campanhas e propõe ajustes) → Na Central
+           (cada ajuste vira um pedido na Central de decisões, com PIN — nada é aplicado sozinho).
+   Tabela nova: midia_feedbacks (RLS agência). Transcrição = mesmo caminho do Playbook (áudio → mp3 → edge
+   "transcrever"). Entendimento = askClaude (ask-claude). Nada das telas atuais da Gestão de mídia foi tocado.
+   ═══════════════════════════════════════════════════════════════════════ */
+const _MP_AC="#7c3aed";
+const _MP_FF="'Inter',system-ui,sans-serif";
+const _MP_STATUS={
+  novo:      {l:"Recebido",   c:"#475569", b:"#f1f5f9"},
+  entendido: {l:"Entendido",  c:"#6d28d9", b:"#f3effd"},
+  sugerido:  {l:"Sugestões",  c:"#0369a1", b:"#e0f2fe"},
+  na_central:{l:"Na Central", c:"#047857", b:"#ecfdf5"},
+  concluido: {l:"Concluído",  c:"#047857", b:"#ecfdf5"},
+  arquivado: {l:"Arquivado",  c:"#94a3b8", b:"#f8fafc"},
+};
+const _MP_ETAPAS=["novo","entendido","sugerido","na_central"];
+const _MP_CAMPOS=[
+  {k:"produto",   l:"Produto / serviço"},
+  {k:"regiao",    l:"Região"},
+  {k:"plataforma",l:"Plataforma"},
+  {k:"verba_dia", l:"Verba por dia"},
+  {k:"periodo",   l:"Período"},
+  {k:"objetivo",  l:"Objetivo"},
+  {k:"publico",   l:"Público"},
+  {k:"obs",       l:"Observações"},
+];
+function _mpQuando(iso){ try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})+" · "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } }
+function _mpHojeIso(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function _mpNomeCliente(store, cid){ const c=(store&&store.clients||[]).find(function(x){ return x.client_id===cid; }); return (c&&c.name)||cid||""; }
+function _mpLogo(cid){ const base=String(cid||"").replace(/^bioter_.*/,"bioter"); return (typeof CLIENT_LOGOS!=="undefined"&&(CLIENT_LOGOS[cid]||CLIENT_LOGOS[base]))||null; }
+
+/* ── a IA estrutura o pedido ── */
+async function _mpEntender(fb, nomeCliente){
+  if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível");
+  const conteudo=["CLIENTE: "+nomeCliente+(fb.unidade?(" · unidade "+fb.unidade):""), fb.origem?("QUEM MANDOU: "+fb.origem):"", fb.texto?("MENSAGEM/ANOTAÇÃO:\n"+fb.texto):"", fb.transcricao?("ÁUDIOS TRANSCRITOS:\n"+fb.transcricao):""].filter(Boolean).join("\n\n");
+  const r=await askClaude({ max_tokens:1400, origem:"midia_feedback_entender",
+    system:"Você é o gestor de tráfego pago da Pixels (assessoria de marketing, clientes do agro B2B no Brasil e Paraguai). Recebe um pedido do cliente (mensagem do WhatsApp e/ou transcrição de áudio) sobre anúncios e devolve SÓ um JSON, sem texto fora dele, no formato: {\"titulo\": \"uma linha curta dizendo o que o cliente pediu\", \"resumo\": \"2 a 4 frases fiéis ao pedido, sem opinião\", \"pedidos\": [ {\"acao\": \"o que fazer (ex.: criar campanha, subir verba, pausar, mudar região)\", \"produto\": \"\", \"regiao\": \"\", \"plataforma\": \"Meta | Google | ambas | não disse\", \"verba_dia\": \"valor por dia se foi dito (ex.: R$ 80/dia), senão vazio\", \"periodo\": \"\", \"objetivo\": \"leads | vendas | alcance | não disse\", \"publico\": \"\", \"obs\": \"\"} ], \"duvidas\": [\"o que faltou e vale perguntar pro cliente\"]}. Regras: nunca invente valor, região ou produto que o cliente não disse — deixe vazio; corrija grafia óbvia de nomes de produtos e cidades que a transcrição errou; se o pedido não é sobre tráfego pago, diga isso em obs.",
+    messages:[{role:"user",content:conteudo.slice(0,14000)}] });
+  // o ask-claude pode devolver um bloco "thinking" antes do texto — pega o primeiro bloco de texto
+  const blocoTxt=((r&&r.content)||[]).find(function(b){ return b&&b.type==="text"&&b.text; })||{};
+  const txt=String(blocoTxt.text||"").replace(/```json|```/g,"").trim();
+  const m=txt.match(/\{[\s\S]*\}/); if(!m) throw new Error("a IA não devolveu o entendimento");
+  const j=JSON.parse(m[0]);
+  return { titulo:String(j.titulo||"").slice(0,140), resumo:String(j.resumo||"").slice(0,1500),
+    pedidos:(Array.isArray(j.pedidos)?j.pedidos:[]).slice(0,6).map(function(p){ const o={acao:String((p&&p.acao)||"").slice(0,200)}; _MP_CAMPOS.forEach(function(c){ o[c.k]=String((p&&p[c.k])||"").slice(0,300); }); return o; }),
+    duvidas:(Array.isArray(j.duvidas)?j.duvidas:[]).map(function(d){ return String(d||"").slice(0,200); }).filter(Boolean).slice(0,6) };
+}
+
+function MidiaPlanejamento({store, isMob, currentUser}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const [lista,setLista]=useState(null);
+  const [sel,setSel]=useState(null);
+  const [fCli,setFCli]=useState("");
+  const [novo,setNovo]=useState(null);         // {client_id, unidade, origem, data_orig, canal, texto, anexos:[]}
+  const [msg,setMsg]=useState("");             // progresso (transcrevendo…)
+  const [ocupado,setOcupado]=useState("");
+  const [edit,setEdit]=useState(null);         // entendimento em edição {titulo,resumo,pedidos,duvidas}
+  // contas de mídia (a Bioter entra por unidade — campanha é por conta)
+  const clientes=(store&&store.clients||[]).slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+  const carregar=async function(){ if(!sb){ setLista([]); return; } const r=await sb.from("midia_feedbacks").select("*").neq("status","arquivado").order("created_at",{ascending:false}).limit(300); setLista(r.error?[]:(r.data||[])); };
+  useEffect(function(){ carregar(); },[]);
+  const vis=(lista||[]).filter(function(f){ return !fCli||f.client_id===fCli; });
+  const atual=vis.find(function(f){ return f.id===sel; })||(lista||[]).find(function(f){ return f.id===sel; })||null;
+  const _toast=function(t,m,ms){ if(typeof pixelsToast!=="undefined") pixelsToast[t](m,ms||4000); };
+  const _upd=async function(id,patch){ const r=await sb.from("midia_feedbacks").update(patch).eq("id",id).select("*").single(); if(r.error) throw r.error; setLista(function(l){ return (l||[]).map(function(x){ return x.id===id?r.data:x; }); }); return r.data; };
+
+  /* ── novo feedback ── */
+  const _unidadeDe=function(cid){ const c=clientes.find(function(x){ return x.client_id===cid; }); return (c&&c.bioter_unit)||""; };
+  const abrirNovo=function(){ const cid=fCli||(clientes[0]&&clientes[0].client_id)||""; setNovo({client_id:cid,unidade:_unidadeDe(cid),origem:"",data_orig:_mpHojeIso(),canal:"whatsapp",texto:"",anexos:[]}); };
+  const anexar=async function(files){
+    if(!novo||msg) return;
+    for(const f of Array.from(files||[])){
+      try{
+        if(/^(audio|video)\//.test(String(f.type||""))||/\.(mp3|m4a|wav|ogg|oga|opus|aac|amr|mp4|mkv|mov|webm)$/i.test(String(f.name||""))){
+          if(typeof _pbAudioDoVideo!=="function"||typeof _pbTranscrever!=="function"||typeof _eaSubir!=="function") throw new Error("transcrição indisponível nesta tela");
+          const out=await _pbAudioDoVideo(f,function(m){ setMsg(m+" — "+f.name); });
+          setMsg("guardando o áudio — "+f.name);
+          const up=await _eaSubir(out.mp3,"midia/feedbacks/"+(novo.client_id||"geral"),(String(f.name||"audio").replace(/\.[^.]+$/,"")||"audio")+".mp3");
+          const tr=await _pbTranscrever(out.partes,function(m){ setMsg(m+" — "+f.name); });
+          setNovo(function(n){ return Object.assign({},n,{anexos:n.anexos.concat([{url:up.url,path:up.path,name:f.name,type:"audio/mpeg",size:out.mp3.size,transcricao:String(tr||"").slice(0,6000)}])}); });
+        } else if(/^text\//.test(String(f.type||""))||/\.(txt|md)$/i.test(String(f.name||""))){
+          const tx=await f.text();
+          setNovo(function(n){ return Object.assign({},n,{texto:(n.texto?n.texto+"\n\n":"")+String(tx||"").slice(0,8000)}); });
+        } else {
+          if(typeof _eaSubir!=="function") throw new Error("upload indisponível");
+          const up=await _eaSubir(f,"midia/feedbacks/"+(novo.client_id||"geral"),f.name);
+          setNovo(function(n){ return Object.assign({},n,{anexos:n.anexos.concat([{url:up.url,path:up.path,name:f.name,type:String(f.type||""),size:f.size}])}); });
+        }
+        setMsg("");
+      }catch(e){ setMsg(""); _toast("error","“"+f.name+"”: "+((e&&e.message)||e),6000); }
+    }
+  };
+  const salvarNovo=async function(){
+    if(!novo||ocupado) return;
+    if(!novo.client_id){ _toast("warning","Escolha o cliente."); return; }
+    const transcricao=novo.anexos.map(function(a){ return a.transcricao||""; }).filter(Boolean).join("\n\n");
+    if(!String(novo.texto||"").trim()&&!transcricao){ _toast("warning","Cole a mensagem ou solte o áudio do cliente."); return; }
+    setOcupado("salvando");
+    try{
+      const row={client_id:novo.client_id,unidade:novo.unidade||null,canal:novo.canal,origem:String(novo.origem||"").trim()||null,data_orig:novo.data_orig||null,
+        texto:String(novo.texto||"").trim()||null,transcricao:transcricao||null,anexos:novo.anexos,status:"novo",criado_por:(currentUser&&currentUser.name)||null,
+        titulo:(String(novo.texto||"").trim().split("\n")[0]||"Pedido do cliente").slice(0,120)};
+      const ins=await sb.from("midia_feedbacks").insert(row).select("*").single(); if(ins.error) throw ins.error;
+      setLista(function(l){ return [ins.data].concat(l||[]); }); setSel(ins.data.id); setNovo(null);
+      // entender na sequência (não bloqueia o salvar)
+      entender(ins.data);
+    }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e),6000); }
+    setOcupado("");
+  };
+  const entender=async function(fb){
+    setOcupado("entendendo:"+fb.id);
+    try{
+      const ent=await _mpEntender(fb,_mpNomeCliente(store,fb.client_id));
+      await _upd(fb.id,{entendimento:ent,titulo:ent.titulo||fb.titulo,status:fb.status==="novo"?"novo":fb.status});
+      _toast("success","Entendi o pedido — confere se está certo e confirma.",3500);
+    }catch(e){ _toast("warning","Não consegui estruturar agora ("+((e&&e.message)||e)+"). O pedido ficou salvo; tenta de novo em \"Entender com a IA\".",6500); }
+    setOcupado("");
+  };
+  const confirmar=async function(fb){
+    try{ await _upd(fb.id,{entendimento_ok:true,status:fb.status==="novo"?"entendido":fb.status}); _toast("success","Entendimento confirmado.",2500); }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+  };
+  const salvarEdicao=async function(fb){
+    if(!edit) return;
+    try{ await _upd(fb.id,{entendimento:edit,titulo:edit.titulo||fb.titulo,entendimento_ok:true,status:fb.status==="novo"?"entendido":fb.status}); setEdit(null); _toast("success","Entendimento salvo.",2500); }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+  };
+  const arquivar=async function(fb){ try{ await _upd(fb.id,{status:"arquivado"}); setLista(function(l){ return (l||[]).filter(function(x){ return x.id!==fb.id; }); }); setSel(null); _toast("info","Arquivado (fica guardado no banco).",2500); }catch(e){ _toast("error","Não arquivou: "+((e&&e.message)||e)); } };
+
+  /* ── estilos ── */
+  const card={background:"#fff",border:"1px solid #e9e7f0",borderRadius:16};
+  const lbl={color:"#8b86a0",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"};
+  const inp={width:"100%",boxSizing:"border-box",border:"1px solid #e5e3ee",borderRadius:11,padding:"10px 12px",fontSize:13,fontFamily:_MP_FF,outline:"none",color:"#0f172a",background:"#fff"};
+  const btn=function(cheio,cor){ cor=cor||_MP_AC; return {font:"inherit",height:36,padding:"0 14px",borderRadius:10,border:cheio?"none":"1px solid #e5e3ee",background:cheio?cor:"#fff",color:cheio?"#fff":"#3d3853",fontWeight:700,fontSize:12.5,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",minHeight:0}; };
+  const pill=function(st){ const s=_MP_STATUS[st]||_MP_STATUS.novo; return <span style={{background:s.b,color:s.c,borderRadius:99,padding:"3px 9px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>{s.l}</span>; };
+  const Logo=function({cid,size}){ const lg=_mpLogo(cid); const n=_mpNomeCliente(store,cid); size=size||28; return <span style={{width:size,height:size,borderRadius:8,background:"#fff",border:"1px solid #eceaf2",display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>{lg?<img src={lg} alt="" style={{width:"78%",height:"78%",objectFit:"contain"}}/>:<span style={{color:_MP_AC,fontSize:10,fontWeight:900}}>{String(n||"?").slice(0,2).toUpperCase()}</span>}</span>; };
+  const icoCanal=function(c){ return c==="whatsapp"?<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.3A8.4 8.4 0 1 1 21 11.5z"/></svg>:c==="reuniao"?<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>; };
+
+  const Stepper=function({st}){
+    const idx=Math.max(0,_MP_ETAPAS.indexOf(st==="concluido"?"na_central":st));
+    return <div style={{display:"flex",alignItems:"center",gap:0}}>
+      {_MP_ETAPAS.map(function(e,i){ const on=i<=idx, cur=i===idx; return <Fragment key={e}>
+        <div style={{display:"flex",alignItems:"center",gap:7}}>
+          <span style={{width:22,height:22,borderRadius:99,background:on?_MP_AC:"#fff",border:"2px solid "+(on?_MP_AC:"#e5e3ee"),color:on?"#fff":"#b4b0c4",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,boxShadow:cur?"0 0 0 4px "+_MP_AC+"22":"none"}}>{on&&!cur?"✓":i+1}</span>
+          <span style={{color:on?"#0f172a":"#b4b0c4",fontSize:12,fontWeight:cur?800:600,whiteSpace:"nowrap"}}>{_MP_STATUS[e].l}</span>
+        </div>
+        {i<_MP_ETAPAS.length-1&&<span style={{flex:1,height:2,minWidth:18,margin:"0 10px",background:i<idx?_MP_AC:"#ece9f3",borderRadius:2}}/>}
+      </Fragment>; })}
+    </div>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_MP_FF}}>
+    {/* ── cabeçalho da seção ── */}
+    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:220}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4}}>Feedbacks de tráfego</div>
+        <div style={{color:"#8b86a0",fontSize:12.5,marginTop:2}}>O pedido do cliente (áudio ou mensagem) vira um entendimento estruturado — e, na próxima etapa, sugestões de ajuste nas campanhas.</div>
+      </div>
+      <button onClick={abrirNovo} style={btn(true)}><Ico n="plus" size={13} color="#fff"/> Novo feedback</button>
+    </div>
+
+    {/* ── filtro por cliente ── */}
+    {clientes.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      <button onClick={function(){ setFCli(""); }} style={{font:"inherit",height:30,padding:"0 12px",borderRadius:99,border:"1px solid "+(fCli?"#e5e3ee":"#0f172a"),background:fCli?"#fff":"#0f172a",color:fCli?"#3d3853":"#fff",fontSize:12,fontWeight:700,cursor:"pointer",minHeight:0}}>Todos</button>
+      {clientes.map(function(c){ const on=fCli===c.client_id; return <button key={c.client_id} onClick={function(){ setFCli(on?"":c.client_id); }}
+        style={{font:"inherit",height:30,padding:"0 10px 0 4px",borderRadius:99,border:"1px solid "+(on?_MP_AC:"#e5e3ee"),background:on?_MP_AC+"10":"#fff",color:on?_MP_AC:"#3d3853",fontSize:12,fontWeight:on?800:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
+        <Logo cid={c.client_id} size={22}/>{c.name}</button>; })}
+    </div>}
+
+    {/* ── novo feedback ── */}
+    {novo&&<div style={Object.assign({},card,{padding:isMob?16:20,borderColor:_MP_AC+"55",boxShadow:"0 10px 30px rgba(124,58,237,.08)"})}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Novo feedback</div>
+        <div style={{color:"#8b86a0",fontSize:12}}>cole a mensagem ou solte o áudio do WhatsApp</div>
+        <button onClick={function(){ if(!msg) setNovo(null); }} style={{marginLeft:"auto",background:"none",border:"none",color:"#8b86a0",fontSize:18,cursor:"pointer",minHeight:0}}>×</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.3fr 1fr 1fr 1fr",gap:10,marginBottom:10}}>
+        <div><div style={Object.assign({},lbl,{marginBottom:5})}>Cliente</div>
+          <select value={novo.client_id} onChange={function(e){ setNovo(Object.assign({},novo,{client_id:e.target.value,unidade:_unidadeDe(e.target.value)})); }} style={inp}>{clientes.map(function(c){ return <option key={c.client_id} value={c.client_id}>{c.name}</option>; })}</select></div>
+        <div><div style={Object.assign({},lbl,{marginBottom:5})}>Quem mandou</div><input value={novo.origem} placeholder="nome no cliente" onChange={function(e){ setNovo(Object.assign({},novo,{origem:e.target.value})); }} style={inp}/></div>
+        <div><div style={Object.assign({},lbl,{marginBottom:5})}>Data</div><input type="date" value={novo.data_orig} onChange={function(e){ setNovo(Object.assign({},novo,{data_orig:e.target.value})); }} style={inp}/></div>
+        <div><div style={Object.assign({},lbl,{marginBottom:5})}>Canal</div>
+          <select value={novo.canal} onChange={function(e){ setNovo(Object.assign({},novo,{canal:e.target.value})); }} style={inp}><option value="whatsapp">WhatsApp</option><option value="reuniao">Reunião</option><option value="email">E-mail</option><option value="outro">Outro</option></select></div>
+      </div>
+      <div style={Object.assign({},lbl,{marginBottom:5})}>Mensagem do cliente / anotação</div>
+      <textarea value={novo.texto} onChange={function(e){ setNovo(Object.assign({},novo,{texto:e.target.value})); }} rows={4} placeholder="Ex.: “Quero anunciar o piso vazado só no oeste do Paraná, uns 80 reais por dia, por 3 semanas.”" style={Object.assign({},inp,{resize:"vertical",lineHeight:1.5})}/>
+      <div onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ e.preventDefault(); anexar(e.dataTransfer.files); }}
+        style={{marginTop:10,border:"1.5px dashed #d9d4e8",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,background:"#faf9fd"}}>
+        <span style={{width:36,height:36,borderRadius:10,background:"#fff",border:"1px solid #e9e7f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:_MP_AC,flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{msg||"Solte aqui o áudio do WhatsApp (.ogg, .opus, .mp3) ou um print"}</div>
+          <div style={{color:"#8b86a0",fontSize:11.5}}>{msg?"aguarde…":"o áudio é transcrito na hora; texto vai pro campo acima"}</div>
+        </div>
+        <label style={Object.assign({},btn(false),{cursor:"pointer"})}>Escolher arquivo<input type="file" multiple onChange={function(e){ anexar(e.target.files); e.target.value=""; }} style={{display:"none"}}/></label>
+      </div>
+      {novo.anexos.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginTop:10}}>
+        {novo.anexos.map(function(a,i){ return <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"#faf9fd",borderRadius:10,padding:"8px 10px",fontSize:12.5}}>
+          <span style={{color:_MP_AC}}>{/^audio/.test(a.type)?"🎙":"📎"}</span><span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:600}}>{a.name}</span>
+          {a.transcricao&&<span style={{color:"#047857",fontWeight:700,fontSize:11}}>transcrito</span>}
+          <button onClick={function(){ setNovo(Object.assign({},novo,{anexos:novo.anexos.filter(function(_,j){ return j!==i; })})); }} style={{background:"none",border:"none",color:"#b91c1c",fontWeight:700,fontSize:12,cursor:"pointer",minHeight:0}}>tirar</button>
+        </div>; })}
+      </div>}
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+        <button onClick={function(){ if(!msg) setNovo(null); }} style={btn(false)}>Cancelar</button>
+        <button disabled={!!msg||!!ocupado} onClick={salvarNovo} style={Object.assign({},btn(true),{opacity:(msg||ocupado)?.6:1})}>{ocupado==="salvando"?"Salvando…":"Salvar e entender com a IA"}</button>
+      </div>
+    </div>}
+
+    {/* ── lista + detalhe ── */}
+    {lista===null&&<div style={{color:"#8b86a0",fontSize:13,padding:"30px 0",textAlign:"center"}}>Carregando…</div>}
+    {lista!==null&&vis.length===0&&!novo&&<div style={Object.assign({},card,{padding:"44px 24px",textAlign:"center",borderStyle:"dashed"})}>
+      <div style={{width:48,height:48,borderRadius:14,background:_MP_AC+"12",color:_MP_AC,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:10}}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.3A8.4 8.4 0 1 1 21 11.5z"/></svg></div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Nenhum feedback ainda</div>
+      <div style={{color:"#8b86a0",fontSize:12.5,marginTop:4}}>Quando o cliente mandar um áudio ou mensagem pedindo tráfego, cadastra aqui — a IA estrutura o pedido.</div>
+    </div>}
+    {lista!==null&&vis.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(260px,340px) 1fr",gap:14,alignItems:"start"}}>
+      {/* lista */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {vis.map(function(f){ const on=f.id===sel; return <button key={f.id} onClick={function(){ setSel(f.id); setEdit(null); }}
+          style={Object.assign({},card,{textAlign:"left",padding:"12px 14px",cursor:"pointer",font:"inherit",borderColor:on?_MP_AC:"#e9e7f0",boxShadow:on?"0 0 0 3px "+_MP_AC+"18":"none",display:"flex",flexDirection:"column",gap:7,minHeight:0})}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <Logo cid={f.client_id} size={26}/>
+            <span style={{flex:1,minWidth:0,color:"#3d3853",fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_mpNomeCliente(store,f.client_id)}{f.unidade?(" · "+f.unidade):""}</span>
+            {pill(f.status)}
+          </div>
+          <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{f.titulo||"Pedido do cliente"}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,color:"#8b86a0",fontSize:11.5}}><span style={{display:"inline-flex",alignItems:"center",gap:4}}>{icoCanal(f.canal)}{f.origem||"cliente"}</span><span>·</span><span>{_mpQuando(f.created_at)}</span>{(f.anexos||[]).some(function(a){ return /^audio/.test(a.type); })&&<span title="tem áudio">🎙</span>}</div>
+        </button>; })}
+      </div>
+
+      {/* detalhe */}
+      {!atual&&<div style={Object.assign({},card,{padding:"44px 24px",textAlign:"center",color:"#8b86a0",fontSize:13,borderStyle:"dashed"})}>Escolha um feedback ao lado.</div>}
+      {atual&&(function(){
+        const f=atual, ent=f.entendimento||null, e=edit;
+        const entendendo=ocupado==="entendendo:"+f.id;
+        return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div style={Object.assign({},card,{padding:isMob?16:20})}>
+            <div style={{display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+              <Logo cid={f.client_id} size={40}/>
+              <div style={{flex:1,minWidth:200}}>
+                <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,lineHeight:1.25}}>{f.titulo||"Pedido do cliente"}</div>
+                <div style={{color:"#8b86a0",fontSize:12.5,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><span>{_mpNomeCliente(store,f.client_id)}{f.unidade?(" · "+f.unidade):""}</span><span>·</span><span style={{display:"inline-flex",alignItems:"center",gap:4}}>{icoCanal(f.canal)}{f.origem||"cliente"}</span>{f.data_orig&&<><span>·</span><span>{String(f.data_orig).split("-").reverse().join("/")}</span></>}<span>·</span><span>cadastrado por {f.criado_por||"—"}</span></div>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={function(){ entender(f); }} disabled={entendendo} style={btn(false)}>{entendendo?"Entendendo…":(ent?"Entender de novo":"Entender com a IA")}</button>
+                <button onClick={function(){ arquivar(f); }} title="Arquivar (fica guardado)" style={Object.assign({},btn(false),{color:"#8b86a0"})}>Arquivar</button>
+              </div>
+            </div>
+            <div style={{marginTop:16,overflowX:"auto"}}><Stepper st={f.status}/></div>
+          </div>
+
+          {/* o que o cliente mandou */}
+          <div style={Object.assign({},card,{padding:isMob?16:20})}>
+            <div style={Object.assign({},lbl,{marginBottom:8})}>O que o cliente mandou</div>
+            {f.texto&&<div style={{color:"#0f172a",fontSize:13.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{f.texto}</div>}
+            {(f.anexos||[]).filter(function(a){ return /^audio/.test(a.type); }).map(function(a,i){ return <div key={i} style={{marginTop:f.texto?12:0,background:"#faf9fd",borderRadius:12,padding:"10px 12px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span>🎙</span><span style={{color:"#3d3853",fontSize:12,fontWeight:700,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span><a href={a.url} target="_blank" rel="noreferrer" style={{color:_MP_AC,fontSize:12,fontWeight:700,textDecoration:"none"}}>ouvir</a></div>
+              {a.transcricao&&<div style={{color:"#3d3853",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.transcricao}</div>}
+            </div>; })}
+            {(f.anexos||[]).filter(function(a){ return !/^audio/.test(a.type); }).length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{(f.anexos||[]).filter(function(a){ return !/^audio/.test(a.type); }).map(function(a,i){ return <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{background:"#faf9fd",border:"1px solid #e9e7f0",borderRadius:99,padding:"4px 10px",fontSize:11.5,color:"#3d3853",textDecoration:"none",fontWeight:600}}>📎 {a.name}</a>; })}</div>}
+            {!f.texto&&!(f.anexos||[]).length&&<div style={{color:"#8b86a0",fontSize:13}}>—</div>}
+          </div>
+
+          {/* o que entendemos */}
+          <div style={Object.assign({},card,{padding:isMob?16:20,borderColor:f.entendimento_ok?"#a7f3d0":"#e9e7f0"})}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
+              <div style={lbl}>O que entendemos</div>
+              {f.entendimento_ok&&<span style={{background:"#ecfdf5",color:"#047857",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>✓ confirmado</span>}
+              <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                {ent&&!e&&<button onClick={function(){ setEdit(JSON.parse(JSON.stringify(ent))); }} style={btn(false)}>Editar</button>}
+                {ent&&!e&&!f.entendimento_ok&&<button onClick={function(){ confirmar(f); }} style={btn(true,"#047857")}>Está certo</button>}
+                {e&&<button onClick={function(){ setEdit(null); }} style={btn(false)}>Cancelar</button>}
+                {e&&<button onClick={function(){ salvarEdicao(f); }} style={btn(true)}>Salvar</button>}
+              </div>
+            </div>
+            {!ent&&<div style={{color:"#8b86a0",fontSize:13}}>{entendendo?"A IA está lendo o pedido…":"Ainda não estruturado — clique em \"Entender com a IA\"."}</div>}
+            {ent&&!e&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {ent.resumo&&<div style={{color:"#0f172a",fontSize:13.5,lineHeight:1.6}}>{ent.resumo}</div>}
+              {(ent.pedidos||[]).map(function(p,i){ return <div key={i} style={{border:"1px solid #ece9f3",borderRadius:12,padding:"12px 14px"}}>
+                <div style={{color:_MP_AC,fontWeight:800,fontSize:13,marginBottom:8}}>{(ent.pedidos.length>1?(i+1)+". ":"")+(p.acao||"Pedido")}</div>
+                <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:"8px 14px"}}>
+                  {_MP_CAMPOS.map(function(c){ const v=String(p[c.k]||"").trim(); if(!v) return null; return <div key={c.k} style={{gridColumn:c.k==="obs"?"1 / -1":undefined}}><div style={Object.assign({},lbl,{fontSize:9.5})}>{c.l}</div><div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:2}}>{v}</div></div>; })}
+                </div>
+              </div>; })}
+              {(ent.duvidas||[]).length>0&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 12px"}}><div style={{color:"#92400e",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Vale perguntar pro cliente</div>{ent.duvidas.map(function(d,i){ return <div key={i} style={{color:"#78350f",fontSize:12.5,lineHeight:1.5}}>• {d}</div>; })}</div>}
+            </div>}
+            {ent&&e&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div><div style={Object.assign({},lbl,{marginBottom:4})}>Título</div><input value={e.titulo||""} onChange={function(ev){ setEdit(Object.assign({},e,{titulo:ev.target.value})); }} style={inp}/></div>
+              <div><div style={Object.assign({},lbl,{marginBottom:4})}>Resumo</div><textarea value={e.resumo||""} rows={3} onChange={function(ev){ setEdit(Object.assign({},e,{resumo:ev.target.value})); }} style={Object.assign({},inp,{resize:"vertical",lineHeight:1.5})}/></div>
+              {(e.pedidos||[]).map(function(p,i){ return <div key={i} style={{border:"1px solid #ece9f3",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{flex:1}}><div style={Object.assign({},lbl,{marginBottom:4})}>Ação</div><input value={p.acao||""} onChange={function(ev){ const ps=e.pedidos.slice(); ps[i]=Object.assign({},p,{acao:ev.target.value}); setEdit(Object.assign({},e,{pedidos:ps})); }} style={inp}/></div>
+                  <button onClick={function(){ setEdit(Object.assign({},e,{pedidos:e.pedidos.filter(function(_,j){ return j!==i; })})); }} style={{background:"none",border:"none",color:"#b91c1c",fontWeight:700,fontSize:12,cursor:"pointer",minHeight:0,marginTop:16}}>tirar</button></div>
+                <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:8}}>
+                  {_MP_CAMPOS.map(function(c){ return <div key={c.k} style={{gridColumn:c.k==="obs"?"1 / -1":undefined}}><div style={Object.assign({},lbl,{fontSize:9.5,marginBottom:3})}>{c.l}</div><input value={p[c.k]||""} onChange={function(ev){ const ps=e.pedidos.slice(); ps[i]=Object.assign({},p); ps[i][c.k]=ev.target.value; setEdit(Object.assign({},e,{pedidos:ps})); }} style={Object.assign({},inp,{padding:"7px 10px",fontSize:12.5})}/></div>; })}
+                </div>
+              </div>; })}
+              <button onClick={function(){ const p={acao:""}; _MP_CAMPOS.forEach(function(c){ p[c.k]=""; }); setEdit(Object.assign({},e,{pedidos:(e.pedidos||[]).concat([p])})); }} style={Object.assign({},btn(false),{alignSelf:"flex-start"})}>+ Pedido</button>
+            </div>}
+          </div>
+
+          {/* próxima etapa */}
+          <div style={Object.assign({},card,{padding:isMob?16:20,background:"#faf9fd",borderStyle:"dashed"})}>
+            <div style={Object.assign({},lbl,{marginBottom:6})}>Próxima etapa</div>
+            <div style={{color:"#3d3853",fontSize:13,lineHeight:1.55}}>Com o entendimento confirmado, a IA cruza o pedido com as campanhas vivas da conta e propõe os ajustes (subir verba, criar campanha, pausar) — cada um entra como pedido na <b>Central de decisões</b>, com PIN. Esta parte está sendo ligada em seguida; os feedbacks cadastrados agora já entram nela.</div>
+          </div>
+        </div>;
+      })()}
+    </div>}
+  </div>;
+}
+if(typeof window!=="undefined"){ window.MidiaPlanejamento=MidiaPlanejamento; }
+
 /* ═══════════════════════════════════════════════════════════════════
  * 19_parcerias.jsx — Parcerias (Influencers + Estratégias locais)
  * ═══════════════════════════════════════════════════════════════════
@@ -79160,6 +79483,8 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
         const _dur=_starter?90:31;
         const grupos={};
         marcosOrd.forEach(function(m,i){ const mes=_mesDe(_diaDe(m)); if(!grupos[mes]) grupos[mes]={mes:mes,itens:[]}; grupos[mes].itens.push({m:m,i:i}); });
+        /* (13/10/2026, Gustavo) Starter = 3 meses: os três aparecem sempre, mesmo sem marco marcado ainda */
+        if(_starter) [1,2,3].forEach(function(k){ if(!grupos[k]) grupos[k]={mes:k,itens:[]}; });
         const lista=Object.keys(grupos).map(Number).sort(function(a,b){return a-b;}).map(function(k){return grupos[k];});
         return <div style={{display:"flex",flexDirection:"column",gap:14,marginTop:12}}>
           {lista.map(function(g){
@@ -79180,7 +79505,8 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
                 {aqui&&<span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#0f172a",color:"#fff",fontSize:10,fontWeight:900,letterSpacing:.5,textTransform:"uppercase",padding:"4px 10px",borderRadius:99}}><span style={{width:6,height:6,borderRadius:"50%",background:"#4ade80",boxShadow:"0 0 0 3px rgba(74,222,128,.25)"}}/>Estamos aqui{_diaHoje?" · dia "+_diaHoje:""}</span>}
               </div>
               <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:isMob?0:"0 26px"}}>
-                {_cols.map(function(_col,ci){
+                {g.itens.length===0&&<div style={{gridColumn:"1 / -1",color:"#94a3b8",fontSize:12,padding:"6px 0 10px"}}>Os marcos deste mês entram aqui conforme a equipe for marcando as entregas.</div>}
+                {g.itens.length>0&&_cols.map(function(_col,ci){
                   return <div key={ci} style={{position:"relative"}}>
                     <div style={{position:"absolute",left:13,top:10,bottom:10,width:2,background:"#eef0f5",borderRadius:2}}/>
                     {_col.map(function(x){ return _marcoRow(x.m,x.i); })}
@@ -89765,15 +90091,21 @@ function pxPortalMarcosLoad(force){
     }).catch(function(){ window.__pxPortalMarcos=window.__pxPortalMarcos||{}; });
   }catch(_){}
 }
+/* (13/10/2026, Gustavo: "CADÊ O MÊS 3 na linha do tempo do portal? se o plano starter é 3 meses") marcos que o Starter
+   SEMPRE mostra no portal, mesmo que o sócio não tenha marcado nada do mês 2/3 — senão a linha do tempo parava no mês 2. */
+var _PX_STARTER_MARCOS_FIXOS=["s_m2_ativar","d14_relatorio_ads","s_d60_reuniao","s_d60_relatorio","s_d75_proposta","s_d90_reuniao","s_d90_relatorio"];
 function pxPortalMarcosGet(presetId){
   var m=(typeof window!=="undefined"&&window.__pxPortalMarcos)||null;
   if(!m) return null;                       // ainda não carregou
   var l=m[presetId||"completo"];
-  return Array.isArray(l)?l:null;           // null = sem escolha salva → padrão
+  if(!Array.isArray(l)) return null;        // null = sem escolha salva → padrão
+  if((presetId||"completo")==="starter"){ var out=l.slice(); _PX_STARTER_MARCOS_FIXOS.forEach(function(id){ if(out.indexOf(id)<0) out.push(id); }); return out; }
+  return l;
 }
 function _pxPortalMarcosPadrao(presetId){
-  // lista padrão = ids do _PJ_MARCOS (13_novidades) que existem nesse preset
+  // lista padrão = ids do _PJ_MARCOS (13_novidades) que existem nesse preset (+ os fixos do Starter: meses 2 e 3)
   var ids=[]; try{ (_PJ_MARCOS||[]).forEach(function(m){ (m.ids||[]).forEach(function(id){ if(ids.indexOf(id)<0) ids.push(id); }); }); }catch(_){}
+  if((presetId||"completo")==="starter") _PX_STARTER_MARCOS_FIXOS.forEach(function(id){ if(ids.indexOf(id)<0) ids.push(id); });
   var ok={}; try{ (_onbPreset(presetId).blocks||[]).forEach(function(b){ (b.items||[]).forEach(function(it){ ok[it.id]=1; (it.sub||[]).forEach(function(sb){ ok[sb.id]=1; }); }); }); }catch(_){}
   return ids.filter(function(id){ return ok[id]; });
 }
@@ -116004,7 +116336,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
              :<div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>}
           {/* (06/10/2026, Gustavo) "tira esse subtítulo de onde foi tirado o contexto" — fica guardado, só não aparece.
                Resta só a marquinha quando a proposta é do caso específico (obra/visita citada). */}
-          {!ed&&String(p.de_onde_veio||"").indexOf("📍")===0&&<div style={{marginTop:5}}><span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f5efff",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>📍 Caso específico</span></div>}
+          {/* (13/10/2026, Gustavo: "tira essa merda de Caso específico") — etiqueta removida; de_onde_veio continua guardado */}
         </div>
       </div>
       {ed?<>
@@ -148244,7 +148576,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:4000, reasoning_effort:"medium", origem:"arte_foto_obra", card:card || undefined,
     system:_EA_FO_CADERNO + "\n\nSEU PAPEL AGORA: você é o ANALISADOR. Olha a foto original da obra e devolve as medidas pro motor encaixar e limpar — aplicando as regras acima (em especial a REGRA 4: inclinação é do HORIZONTE, não da borda da obra).",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável; "diagnostico": UMA frase curta (até 140 caracteres) dizendo o que a foto precisa — ex.: "horizonte reto, obra ocupa quase tudo, só completar céu em cima" ou "foto 2° torta, entulho à direita"}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável; "diagnostico": UMA frase curta (até 140 caracteres) dizendo o que a foto precisa — ex.: "horizonte reto, obra ocupa quase tudo, só completar céu em cima" ou "foto 2° torta, entulho à direita"; "estilo_chao": descrição PRECISA (até 220 caracteres) do chão que aparece na BORDA DE BAIXO da foto, pra outra IA pintar a continuação igual: cor exata, textura, relevo, luz (ex.: "terra vermelho-alaranjada revolvida, torrões e montes soltos, seca, luz de fim de tarde vindo da esquerda, sem grama"); "estilo_ceu": descrição PRECISA (até 220 caracteres) do céu da foto pra continuar igual (ex.: "azul médio no alto clareando até o horizonte, nuvens brancas esparsas tipo cúmulos pequenos espalhadas, sem névoa"); "estilo_lados": o que há nas bordas esquerda e direita da foto abaixo do horizonte (até 160 caracteres)}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -148260,7 +148592,8 @@ async function _eaAnalisarFotoObra(url, card){
     const aObra = Math.max(1e-6, (ob.x1 - ob.x0) * (ob.y1 - ob.y0));
     return ((c.x1 - c.x0) * (c.y1 - c.y0)) / aObra <= 0.15;
   }).slice(0, 6);
-  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent, diagnostico:String(j.diagnostico || "").replace(/\s+/g, " ").trim().slice(0, 160) };
+  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent, diagnostico:String(j.diagnostico || "").replace(/\s+/g, " ").trim().slice(0, 160),
+    estiloChao:String(j.estilo_chao || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloCeu:String(j.estilo_ceu || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloLados:String(j.estilo_lados || "").replace(/\s+/g, " ").trim().slice(0, 200) };
 }
 /* ═══ (12/10, Gustavo: "é mais vantagem botar uma etapa do GPT avaliar e se autocorrigir do que me mandar 200
    artes erradas") JUIZ da Foto de obra: o GPT olha a arte (só a foto, sem template) ao lado da foto original e
@@ -149269,6 +149602,12 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           if(nL){ ex2.putImageData(dE, 0, 0); FL.getContext("2d").putImageData(dFL, 0, 0); faixaLona = FL; avisos.push("a obra encostava na borda da foto — a IA foi instruída a NÃO continuar a lona pra fora (só terreno/céu em volta)"); }
         }
       }catch(_){ }
+      /* ═══ (13/10 17:53, Gustavo: "NÃO É PRA FAZER COLAGEM… É PRA FAZER UMA TERRA QUE SIGA O MESMO ESTILO DA FOTO E UM CÉU QUE
+         SIGA O MESMO ESTILO DO CÉU ORIGINAL… COLOCA O GPT PRA ANALISAR DECENTEMENTE") → v24: o céu volta a ser PINTADO pela IA
+         (o degradê liso meu saía chapado/branco) e o chão nunca é copiado — o GPT de visão DESCREVE o céu e a terra da borda
+         (estilo_ceu / estilo_chao) e a IA de imagem pinta seguindo essa descrição. Os blocos antigos ficam desligados
+         pelas chaves abaixo (nada apagado). ═══ */
+      const _EA_CEU_DET = false, _EA_CHAO_DET = false;
       /* ═══ (12/10) CÉU DETERMINÍSTICO: o céu em volta da foto não precisa de IA — é um degradê liso tirado do
          próprio céu da foto (média por linha dos pixels de céu reais). Fica PROTEGIDO na máscara: a IA só completa
          o que está abaixo da crista (terreno dos lados e de baixo). Com a máscara de 70% pra 30% o gpt-image
@@ -149353,7 +149692,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
             const sr = corE[y * 3] * (1 - t) + corD[y * 3] * t, sg = corE[y * 3 + 1] * (1 - t) + corD[y * 3 + 1] * t, sb = corE[y * 3 + 2] * (1 - t) + corD[y * 3 + 2] * t;
             dd[i] = dd[i] * wr + sr * (1 - wr); dd[i + 1] = dd[i + 1] * wr + sg * (1 - wr); dd[i + 2] = dd[i + 2] * wr + sb * (1 - wr); nX++; }
         }catch(_){ }
-        if(nC > 1000){ ex2.putImageData(dw2, 0, 0); mx.putImageData(dm2, 0, 0); avisos.push("céu em volta da foto feito do próprio céu da foto (degradê liso, sem IA) — a IA só completa o terreno" + (nX > 500 ? "; borda da foto no céu cruzada em degradê de 80px (sem linha diagonal)" : "")); }
+        if(_EA_CEU_DET && nC > 1000){ ex2.putImageData(dw2, 0, 0); mx.putImageData(dm2, 0, 0); avisos.push("céu em volta da foto feito do próprio céu da foto (degradê liso, sem IA) — a IA só completa o terreno" + (nX > 500 ? "; borda da foto no céu cruzada em degradê de 80px (sem linha diagonal)" : "")); }
       }catch(_){ }
       /* ═══ (13/10 17:05, Gustavo: "você deveria ter continuado a terra pra baixo… não é pra inventar coisa, é sempre
          pra continuar a imagem faltante com base na original, completar de terra embaixo no mesmo estilo da original")
@@ -149416,10 +149755,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       };
       try{
         const giroPeq = Math.abs(ang) < 6 * Math.PI / 180;
-        if(_chaoInfo && giroPeq && _chaoInfo.uniforme){
+        if(_EA_CHAO_DET && _chaoInfo && giroPeq && _chaoInfo.uniforme){
           chaoDet = _preencherChao(EW, MW, true);
           if(chaoDet > 300) avisos.push("chão de baixo continuado com a própria " + chaoDesc + " da borda da foto (sem IA, " + Math.round(chaoDet / (W2 * h) * 100) + "% do quadro)");
-        } else if(_chaoInfo){ avisos.push("chão de baixo fica pra IA (" + (giroPeq ? "faixa da borda tem estrutura — repetir ficaria listrado" : "foto girada " + Math.abs(ang * 180 / Math.PI).toFixed(0) + "°") + "); a borda é " + chaoDesc + " e a IA foi mandada continuar só isso"); }
+        } else if(_chaoInfo){ avisos.push("chão e céu pintados pela IA seguindo a descrição do GPT (chão: " + (an.estiloChao || chaoDesc) + "; céu: " + (an.estiloCeu || "igual ao da foto") + ")"); }
       }catch(e){ avisos.push("chão determinístico falhou (" + ((e && e.message) || e) + ") — a IA completa"); }
       // versões no quadro 9:16 (pra alinhamento e colagem)
       const recorta = function(c){ if(pad <= 0) return c; const o = document.createElement("canvas"); o.width = w; o.height = h; o.getContext("2d").drawImage(c, pad, 0, w, h, 0, 0, w, h); return o; };
@@ -149428,7 +149767,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
       /* (09/10 20:59, Gustavo: "não precisa forçar pra botar nuvem no céu, faz o simples" + névoa perto das
          montanhas) prompt validado no harness (p45): céu LISO igual ao da foto, proibido nuvem nova/neblina. */
-      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade. CÉU: continue EXATAMENTE o céu que já existe na foto — mesmo azul, mesmo degradê, LISO; NÃO adicione nuvens novas e NÃO invente neblina, fumaça nem montanhas (mantenha só o que a foto já tem). TERRENO embaixo e dos lados: continue EXATAMENTE o chão que está na borda da foto" + (chaoDesc ? " (a borda de baixo é " + chaoDesc + " — continue só " + chaoDesc + ")" : "") + " — mesma cor e mesma textura; NÃO troque por grama, estrada, pedras, plantas ou qualquer coisa que não esteja na borda. Nítido, mesma luz e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
+      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade, NO MESMO ESTILO da foto. CÉU: continue o céu da foto no mesmo estilo — " + (an.estiloCeu || "mesmo azul, mesmo degradê, mesmo tipo de nuvem que a foto já tem") + ". Nada de neblina, fumaça, montanhas ou nuvens de outro tipo. TERRENO embaixo e dos lados: continue o chão da borda da foto no mesmo estilo — " + (an.estiloChao || chaoDesc || "a mesma terra ou grama da borda") + (an.estiloLados ? ". Nos lados: " + an.estiloLados : "") + ". Mesma cor, mesma textura, mesma luz e perspectiva; NÃO troque por grama, estrada, pedras ou plantas que não existam na borda. Nítido, fotográfico. Proibido qualquer região borrada, nebulosa ou desfocada.");
       if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
       partes.push("A OBRA (lona/estrutura) é UMA SÓ e é a que já aparece nítida na foto: NÃO desenhe uma segunda lona, tanque, cúpula ou reflexo dela nas áreas provisórias — fora da obra só existe terreno, vegetação e céu. A lona NÃO existe fora da foto original: onde a foto termina, fora dela há só terreno, grama e céu — nunca continue a lona, nunca desenhe borda, sombra ou reflexo dela nas áreas provisórias. Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
@@ -149466,7 +149805,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           if(typeof ctx.passo === "function"){ try{ ctx.passo("completando o terreno com IA (janela de " + J.nome + ")…"); }catch(_){ } }
           const Rec = document.createElement("canvas"); Rec.width = lado; Rec.height = lado; Rec.getContext("2d").drawImage(EJ, 0, J.y, Wj, lado, 0, 0, lado, lado);
           const Mk = document.createElement("canvas"); Mk.width = lado; Mk.height = lado; Mk.getContext("2d").drawImage(MJ, 0, J.y, Wj, lado, 0, 0, lado, lado);
-          const promptJ = partes.join(" ") + (J.nome === "cima" ? " Nesta parte, as ÁRVORES e o MORRO continuam até a borda da imagem na mesma altura em que aparecem na foto — não deixe céu nem vazio abaixo da linha das copas." : " Nesta parte, continue o CHÃO que já existe na borda da foto (a mesma terra ou grama, mesma cor), com textura real e sem faixas retas nem repetições — não invente grama onde a borda é terra.");
+          const promptJ = partes.join(" ") + (J.nome === "cima" ? " Nesta parte, o CÉU continua no mesmo estilo (" + (an.estiloCeu || "igual ao da foto") + ") e as ÁRVORES, galpões e o horizonte continuam até a borda da imagem na mesma altura em que aparecem na foto — não deixe céu nem vazio abaixo da linha do horizonte." : " Nesta parte, continue o CHÃO da borda de baixo no mesmo estilo (" + (an.estiloChao || chaoDesc || "a mesma terra ou grama") + "), com textura real, sem faixas retas nem repetições — não invente grama onde a borda é terra.");
           /* (12/10, medido em 4 artes) com fidelidade "high" a IA COPIA o provisório que está embaixo da máscara
              (até a lona das linhas copiadas, faixa reta); SEM fidelidade (janela pequena, área a pintar pequena) ela
              não reenquadra e pinta terreno de verdade — foi o resultado mais limpo (real30). */
@@ -149530,7 +149869,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
                 let rj3 = null; try{ rj3 = await _eaFotoIA(Rec, Mk, prompt2, ctx.client, ctx.projeto, { fidelidade:null }); }catch(_){ rj3 = null; }
                 if(rj3 && !_geracaoPreta(rj3)){ custoT += Number(rj3.__custo) || 0; nJ++; J.__rj = rj3; }
               }
-              else if(dd > 45){ J.__descartar = true; avisos.push("janela de baixo: a IA insistiu em outro chão — descartada; o chão continua da própria foto"); }
+              else if(dd > 45){ avisos.push("janela de baixo: mesmo repetindo, a IA pintou um chão de cor diferente (" + Math.round(dd) + ") — confira; se estiver errado, gere de novo"); }
               else avisos.push("emenda de baixo: a IA pintou um terreno de cor diferente da grama/terra real na borda — sem pluma (ficaria borrado); se incomodar, gere de novo ou use o Ajuste fino"); } } }
           if(J.__rj && !J.__colouRetry){ J.__colouRetry = true; rj = J.__rj; px2.clearRect(0, 0, lado, lado); px2.drawImage(rj, 0, 0); colado = false; }
           if(J.__descartar){ /* nada da IA entra; preenche com a própria foto e segue */ }
@@ -149689,7 +150028,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v23: chão de baixo continuado da própria foto (sem IA) + céu segue a tendência do céu real (sem nuvem na média) + analisador/juiz com caderno de regras (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push("motor da foto v24: céu e chão pintados pela IA no estilo que o GPT descreveu da foto (sem colagem, sem degradê meu) + juiz confere (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
