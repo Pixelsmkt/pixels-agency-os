@@ -47210,7 +47210,7 @@ const pxDriveEditavel = {
   async enviar(file, opts, onProgress){
     opts = opts||{};
     const mime = file.type || "application/octet-stream";
-    const ini = await pxDriveEditavel._iniciar({ task_id:String(opts.taskId||""), cliente:opts.cliente||"", designer:opts.designer||"", nome:file.name, tamanho:file.size, mime:mime });
+    const ini = await pxDriveEditavel._iniciar({ task_id:String(opts.taskId||""), cliente:opts.cliente||"", designer:opts.designer||"", nome:file.name, tamanho:file.size, mime:mime, drive_id:opts.driveId||"", caminho_anterior:opts.caminhoAnterior||"" });
     const url = ini.uploadUrl, total = file.size, CH = 32*1024*1024;   // múltiplo de 256 KiB
     let pos = 0, tent = 0, fim = null;
     while(pos < total){
@@ -47229,7 +47229,7 @@ const pxDriveEditavel = {
       if(data && data.id) fim = { id:data.id, name:data.nome, size:data.tamanho, webViewLink:data.url };
     }
     if(!fim || !fim.id) throw new Error("o Drive não confirmou o arquivo");
-    return { id:fim.id, url:fim.webViewLink||("https://drive.google.com/file/d/"+fim.id+"/view"), nome:fim.name||file.name, tamanho:Number(fim.size)||file.size, caminho:ini.caminho, pasta_url:ini.pasta_url, criadas:ini.criadas||[] };
+    return { id:fim.id, url:fim.webViewLink||("https://drive.google.com/file/d/"+fim.id+"/view"), nome:fim.name||file.name, tamanho:Number(fim.size)||file.size, caminho:ini.caminho, pasta_url:ini.pasta_url, criadas:ini.criadas||[], versao:!!ini.versao };
   }
 };
 if(typeof window!=="undefined"){ window.pxDriveEditavel = pxDriveEditavel; }
@@ -48967,24 +48967,28 @@ function _cardPodeSerResp(u){
         const _cl=CLIENTS.find(function(c){ return c.id===task.client; });
         const _cliNome=(_cl&&_cl.name)||String(task.client||"");
         const _designer=String((user&&user.name)||"").trim();
+        /* (13/10 16:47, Gustavo) mesmo nome já no Drive por este card → nova VERSÃO do mesmo arquivo (substitui na pasta) */
+        const _anterior=(attachments||[]).find(function(a){ return a&&a.tipo==="editavel"&&a.drive&&a.drive.id&&String(a.name||"").trim().toLowerCase()===String(file.name||"").trim().toLowerCase(); })||null;
         let _drv=null, _erroDrv=null;
         try{
-          _drv=await pxDriveEditavel.enviar(file,{ taskId:task.id, cliente:_cliNome, designer:_designer },function(pct){
+          _drv=await pxDriveEditavel.enviar(file,{ taskId:task.id, cliente:_cliNome, designer:_designer, driveId:_anterior?_anterior.drive.id:"", caminhoAnterior:_anterior?(_anterior.drive.pasta||""):"" },function(pct){
             setAttachments(p=>p.map(a=>a.id===tempId?{...a,progress:pct,noDrive:true}:a));
           });
         }catch(e){ _erroDrv=e; }
         if(_drv){
+          const _ehVersao=!!(_drv.versao&&_anterior);
+          const _nVersao=_ehVersao?((Number(_anterior.drive.versao)||1)+1):1;
           const _item={ id:tempId,name:file.name,type:mime,size:file.size,url:_drv.url,uploading:false,progress:100,tipo:"editavel",
-            drive:{ id:_drv.id, url:_drv.url, pasta:_drv.caminho, pasta_url:_drv.pasta_url },
+            drive:{ id:_drv.id, url:_drv.url, pasta:_drv.caminho||(_anterior&&_anterior.drive.pasta)||"", pasta_url:_drv.pasta_url||(_anterior&&_anterior.drive.pasta_url)||"", versao:_nVersao },
             addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name };
-          setAttachments(p=>{ const next=p.map(a=>a.id===tempId?_item:a); setTimeout(function(){ _persistFilesNow(next); },0); return next; });
+          setAttachments(p=>{ const next=p.filter(a=>!(_ehVersao&&a.id===_anterior.id)).map(a=>a.id===tempId?_item:a); setTimeout(function(){ _persistFilesNow(next); },0); return next; });
           try{
             const _agora=new Date().toISOString();
-            const _e1={type:"file_upload",label:"Subiu arquivo editável: "+file.name,at:_agora,atFmt:nowFmt(),user:pxAutorNome(user)};
-            const _e2={type:"drive",label:"Arquivo editável enviado ao Drive: "+_drv.caminho+(_drv.criadas&&_drv.criadas.length?" (pasta criada: "+_drv.criadas.join(", ")+")":""),at:_agora,atFmt:nowFmt(),user:"sistema",url:_drv.url};
+            const _e1={type:"file_upload",label:"Subiu arquivo editável: "+file.name+(_ehVersao?" (versão "+_nVersao+")":""),at:_agora,atFmt:nowFmt(),user:pxAutorNome(user)};
+            const _e2={type:"drive",label:_ehVersao?("Arquivo editável substituído no Drive (versão "+_nVersao+"): "+_item.drive.pasta+" — a versão anterior fica em Gerenciar versões do Drive"):("Arquivo editável enviado ao Drive: "+_drv.caminho+(_drv.criadas&&_drv.criadas.length?" (pasta criada: "+_drv.criadas.join(", ")+")":"")),at:_agora,atFmt:nowFmt(),user:"sistema",url:_drv.url};
             setTasks&&setTasks(prev=>prev.map(t=>t.id===task.id?{...t,timeline:[...(t.timeline||[]),_e1,_e2]}:t));
           }catch(e){ console.warn("[drive] timeline:",e&&e.message||e); }
-          pixelsToast.success(file.name+" foi pro Drive: "+_drv.caminho,6000);
+          pixelsToast.success(_ehVersao?(file.name+" substituído no Drive (versão "+_nVersao+") — a anterior fica no histórico de versões"):(file.name+" foi pro Drive: "+_drv.caminho),6000);
           return;
         }
         // Drive não disponível → segue no Supabase como antes, avisando o motivo
@@ -51970,7 +51974,7 @@ function _cardPodeSerResp(u){
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{color:"#334155",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                           <div style={{color:"#94a3b8",fontSize:10.5}}>{a.uploading?((a.noDrive?"Enviando pro Drive… ":"Enviando… ")+(a.progress||0)+"%"):[_mb(a.size),a.addedBy,a.addedAt].filter(Boolean).join(" · ")}</div>
-                          {!a.uploading&&a.drive&&a.drive.pasta&&<div style={{color:"#1a73e8",fontSize:10.5,fontWeight:600,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.drive.pasta}>no Drive · {a.drive.pasta}</div>}
+                          {!a.uploading&&a.drive&&a.drive.pasta&&<div style={{color:"#1a73e8",fontSize:10.5,fontWeight:600,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.drive.pasta}>no Drive · {a.drive.pasta}{Number(a.drive.versao)>1?(" · versão "+a.drive.versao):""}</div>}
                         </div>
                         {!a.uploading&&a.drive&&a.drive.url&&<a href={a.drive.url} target="_blank" rel="noopener noreferrer" onClick={function(e){e.stopPropagation();}} title="Abrir no Google Drive"
                           style={{background:"linear-gradient(135deg,#1a73e8,#4285f4)",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11.5,fontWeight:700,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,textDecoration:"none"}}>
