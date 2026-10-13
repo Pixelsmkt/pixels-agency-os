@@ -152294,7 +152294,15 @@ function PxFotoObraAjusteModal({ task, arteUrl, onClose, onSaved }){
     setBusy("");
   }
   const bt = function(cor, cheio){ return { font:"inherit", width:"100%", padding:"10px 12px", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:12.5, border:cheio ? 0 : "1px solid " + cor + "55", background:cheio ? cor : cor + "12", color:cheio ? "#fff" : cor, opacity:busy ? .55 : 1 }; };
-  return (<div style={{position:"fixed",inset:0,background:"rgba(10,12,24,.86)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:18}} onClick={function(){ if(!busy && typeof onClose === "function") onClose(); }}>
+  /* (13/10, Gustavo: "eu tinha pedido um ajuste fino, pra onde foi a arte? faltou eu clicar em salvar?") o ajuste
+     corrigido fica só na janela até "Salvar como nova versão"; um clique fora da janela fechava e jogava fora o
+     trabalho (e o R$ 1 da IA). Agora: com ajuste feito, clicar fora NÃO fecha, e "Fechar sem salvar" pergunta antes. */
+  const fecharSeguro = function(){
+    if(busy || typeof onClose !== "function") return;
+    if(mexidas > 0 && !window.confirm(mexidas + " ajuste(s) feito(s)" + (custo > 0 ? " (R$ " + custo.toFixed(2) + " gastos com IA)" : "") + " ainda NÃO foram salvos e vão se perder.\n\nFechar mesmo assim? (Cancelar = voltar e clicar em \"Salvar como nova versão\")")) return;
+    onClose();
+  };
+  return (<div style={{position:"fixed",inset:0,background:"rgba(10,12,24,.86)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:18}} onClick={function(){ if(mexidas > 0) return; fecharSeguro(); }}>
     <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:18,maxWidth:1060,width:"100%",maxHeight:"94vh",display:"flex",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.5)"}}>
       {/* ── arte com seleção ── */}
       <div style={{flex:1,minWidth:0,background:"#0b1020",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",padding:14}}>
@@ -152342,7 +152350,8 @@ function PxFotoObraAjusteModal({ task, arteUrl, onClose, onSaved }){
           {(mexidas > 0 || custo > 0) && <div style={{fontSize:12,color:"#334155",fontWeight:600}}>{mexidas} ajuste(s) feito(s){custo > 0 ? " · gasto com IA: R$ " + custo.toFixed(2) : " · sem custo"}</div>}
           <button disabled={!histRef.current.length || !!busy} onClick={desfazer} style={Object.assign(bt("#64748b", false), { opacity:(!histRef.current.length || busy) ? .45 : 1 })}>↶ Desfazer último ajuste</button>
           <button disabled={!mexidas || !!busy} onClick={salvar} style={Object.assign(bt("#16a34a", true), { opacity:(!mexidas || busy) ? .45 : 1 })}>Salvar como nova versão</button>
-          <button disabled={!!busy} onClick={function(){ if(typeof onClose === "function") onClose(); }} style={bt("#94a3b8", false)}>Fechar sem salvar</button>
+          {mexidas > 0 && <div style={{fontSize:11.5,color:"#9a3412",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"7px 10px",lineHeight:1.5,fontWeight:600}}>O ajuste só vai pro card depois de <b>Salvar como nova versão</b>.</div>}
+          <button disabled={!!busy} onClick={fecharSeguro} style={bt("#94a3b8", false)}>Fechar sem salvar</button>
         </div>
       </div>
     </div>
