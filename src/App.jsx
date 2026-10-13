@@ -26520,10 +26520,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               const isPausada = t.status==="pausado";
                               /* (13/10/2026, Gustavo) "Aprovado internamente" (a Pixels aprovou, o cliente ainda não) ganha selo PRÓPRIO,
                                  pra Hellen bater o olho e ir aprovar com o cliente. Antes saía ciano com triângulo — igual "Em produção".
-                                 GRAFITE (#1f2937): não é cor de nenhum cliente (verdes, vermelho, azul, laranja, cinza-claro, roxo) nem de
-                                 nenhum status (ciano, rosa, roxo, vermelho, amarelo). Ícone: pessoa + visto = "falta o OK do cliente". */
+                                 (11:03) Gustavo: "grafite não ficou bom, talvez um vermelho vivo" → VERMELHO VIVO (#ff1a1a). Reprovada/Pausada
+                                 usam um vermelho mais fechado (#dc2626) e outro ícone (círculo com !); aqui o ícone é pessoa + visto. */
                               const isAprovInterno = t.status==="aprovado";
-                              const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : (isAprovInterno ? "#1f2937" : pubColor.bg));
+                              const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : (isAprovInterno ? "#ff1a1a" : pubColor.bg));
                               const _title = isReprovada ? "Reprovada" : (isPausada ? "Pausada" : (isShortFromDrive ? "Vídeo short (do Drive)" : (isAprovInterno ? "Aprovado internamente — falta aprovar com o cliente" : (pubColor.label||t.status))));
                               return <span title={_title} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:_bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
                                 {isReprovada
