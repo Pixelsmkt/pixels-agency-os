@@ -38350,7 +38350,11 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const _ehImg=(f)=>/^image\//.test(String(f.type||""))||/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(String(f.name||f.url||""));
   const _unidade=(t)=>{ const u=String(t.bioterUnit||t.bioter_unit||"").split(",")[0].trim(); if(!u) return ""; const m={chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay",grupo:"Grupo",brasil:"Brasil"}; return m[u]||u; };
   const _nomeArq=(t,f,i,n)=>{ const base=String(t.title||"arte").replace(/[\\/:*?"<>|]+/g," ").trim().slice(0,60); const ext=(String(f.name||"").match(/\.[a-z0-9]{2,5}$/i)||[".png"])[0]; const u=_unidade(t); return (u?u+" - ":"")+base+" - "+_fmtData(_dataPub(t)).replace("/","-")+(n>1?" ("+(i+1)+")":"")+ext; };
-  const lista=(tasks||[]).filter(function(t){ return t&&!t.deletedAt&&t.status==="aprovado"&&!_ehFO(t); })
+  /* (13/10 12:02, Gustavo) "as com data de publicação já passada não precisam ser aprovadas, já foram postadas" */
+  const _hojeIso=(typeof pxHojeISO==="function")?pxHojeISO():new Date().toISOString().slice(0,10);
+  const _candidatos=(tasks||[]).filter(function(t){ return t&&!t.deletedAt&&t.status==="aprovado"&&!_ehFO(t); });
+  const jaPostados=_candidatos.filter(function(t){ const d=_dataPub(t); return d&&d<_hojeIso; });
+  const lista=_candidatos.filter(function(t){ const d=_dataPub(t); return !(d&&d<_hojeIso); })
     .sort(function(a,b){ return (String(a.client||"")+_dataPub(a)).localeCompare(String(b.client||"")+_dataPub(b)); });
   const porCliente={}; lista.forEach(function(t){ const k=String(t.client||"outros"); (porCliente[k]=porCliente[k]||[]).push(t); });
   const clientes=Object.keys(porCliente).sort(function(a,b){ const ca=CLIENTS.find(function(c){return c.id===a;}), cb=CLIENTS.find(function(c){return c.id===b;}); return String((ca&&ca.name)||a).localeCompare(String((cb&&cb.name)||b)); });
@@ -38412,7 +38416,7 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
     <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
         <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1}}>Aprovar com o cliente</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {clientes.length} cliente{clientes.length===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {clientes.length} cliente{clientes.length===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).{jaPostados.length>0&&<span> · {jaPostados.length} com data já passada ficaram de fora (já foram postados).</span>}</div>
       </div>
       {lista.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         {baixando&&<span style={{color:"#7c3aed",fontSize:12,fontWeight:700}}>{baixando}</span>}
@@ -38431,38 +38435,65 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
     {clientes.map(function(cid){
       const cl=CLIENTS.find(function(c){return c.id===cid;}); const cor=(cl&&cl.color)||"#475569"; const ts=porCliente[cid];
       const todosSel=ts.every(function(t){ return sel[String(t.id)]; });
-      return <div key={cid} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc",flexWrap:"wrap"}}>
-          <input type="checkbox" checked={todosSel} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); ts.forEach(function(t){ n[String(t.id)]=v; }); return n; }); }} title="Selecionar todos deste cliente" style={{width:16,height:16,cursor:"pointer",accentColor:"#7c3aed"}}/>
-          <span style={{width:10,height:10,borderRadius:3,background:cor,flexShrink:0}}/>
-          <div style={{fontWeight:800,color:"#0f172a",fontSize:14,letterSpacing:-.2}}>{(cl&&cl.name)||cid}</div>
-          <span style={{background:cor+"18",color:cor,borderRadius:99,padding:"2px 9px",fontSize:11,fontWeight:800}}>{ts.length}</span>
+      /* (13/10 12:06, Gustavo) "faltou a logo dos clientes, as seções serem mais visíveis de que cliente são,
+         talvez uma cor sólida no fundo do título da seção" → faixa sólida na cor do cliente + logo em caixa branca. */
+      // Cor clara (ex.: verde-limão) → texto escuro em cima, senão branco
+      const _rgb=(function(){ const m=String(cor).replace("#","").match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i); if(!m) return [71,85,105]; let h=m[1]; if(h.length===3) h=h.split("").map(function(c){return c+c;}).join(""); return [0,2,4].map(function(i){ return parseInt(h.slice(i,i+2),16); }); })();
+      const _claro=(0.299*_rgb[0]+0.587*_rgb[1]+0.114*_rgb[2])>165;
+      const txt=_claro?"#0f172a":"#fff", txtSub=_claro?"rgba(15,23,42,0.75)":"rgba(255,255,255,0.88)", borda=_claro?"rgba(15,23,42,0.45)":"rgba(255,255,255,0.75)", fundoBtn=_claro?"rgba(15,23,42,0.08)":"rgba(255,255,255,0.14)";
+      const btnBranco=function(cheio){ return {font:"inherit",height:34,boxSizing:"border-box",padding:"0 13px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:12.5,border:cheio?"none":"1.5px solid "+borda,background:cheio?(_claro?"#0f172a":"#fff"):fundoBtn,color:cheio?(_claro?"#fff":cor):txt,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",opacity:baixando?.6:1,boxShadow:cheio?"0 1px 3px rgba(0,0,0,0.18)":"none"}; };
+      return <div key={cid} style={{background:"#fff",border:"1px solid "+cor+"55",borderRadius:16,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:cor,color:txt,flexWrap:"wrap"}}>
+          <input type="checkbox" checked={todosSel} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); ts.forEach(function(t){ n[String(t.id)]=v; }); return n; }); }} title="Selecionar todos deste cliente" style={{width:17,height:17,cursor:"pointer",accentColor:_claro?"#0f172a":"#fff"}}/>
+          <div style={{background:"#fff",borderRadius:10,padding:"5px 10px",display:"flex",alignItems:"center",justifyContent:"center",minWidth:44,height:44,boxSizing:"border-box",boxShadow:"0 1px 3px rgba(0,0,0,0.18)",flexShrink:0}}>
+            <ClientLogo clientId={cid} size="md"/>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
+            <div style={{fontWeight:900,color:txt,fontSize:isMob?16:19,letterSpacing:-.3,textShadow:_claro?"none":"0 1px 2px rgba(0,0,0,0.18)"}}>{(cl&&cl.name)||cid}</div>
+            <div style={{color:txtSub,fontSize:11.5,fontWeight:600,marginTop:3}}>{ts.length} card{ts.length===1?"":"s"} esperando o OK do cliente</div>
+          </div>
           <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
-            <button disabled={!!baixando} onClick={function(){ baixar(ts,(cl&&cl.name)||cid); }} style={btn("#64748b",false)}>{icoDown} Baixar do cliente</button>
-            {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou(ts); }} style={btn("#ec4899",false)}>{icoOk} Cliente aprovou todos</button>}
+            <button disabled={!!baixando} onClick={function(){ baixar(ts,(cl&&cl.name)||cid); }} style={btnBranco(false)}>{icoDown} Baixar do cliente</button>
+            {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou(ts); }} style={btnBranco(true)}>{icoOk} Cliente aprovou todos</button>}
           </div>
         </div>
+        {/* (13/10 12:02, Gustavo) "tem espaço sobrando no meio — melhor uma visão em que as artes já são abertas e os vídeos
+            também, como na Avaliação de design". Grade de cartões: arte inteira (ou player do vídeo), título, data, botões. */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill, minmax(300px, 1fr))",gap:14,padding:14}}>
         {ts.map(function(t){
-          const fs=_finais(t); const capa=fs.find(_ehImg); const u=_unidade(t);
+          const fs=_finais(t); const capa=fs.find(_ehImg); const vid=fs.find(function(f){ return !_ehImg(f); }); const u=_unidade(t);
           const resps=((Array.isArray(t.assignees)&&t.assignees.length)?t.assignees:(t.assignee?[t.assignee]:[])).map(function(id){ return TEAM.find(function(x){return x.id===id;}); }).filter(Boolean);
-          return <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:"1px solid #f1f5f9"}}>
-            <input type="checkbox" checked={!!sel[String(t.id)]} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); n[String(t.id)]=v; return n; }); }} style={{width:16,height:16,cursor:"pointer",accentColor:"#7c3aed",flexShrink:0}}/>
-            <div onClick={function(){ setOpenCard(t); }} title="Abrir o card" style={{width:isMob?44:56,height:isMob?44:56,borderRadius:10,background:"#f1f5f9",overflow:"hidden",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:10,fontWeight:700}}>
-              {capa?<img src={capa.url} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>:(fs.length?"vídeo":"sem arte")}
+          const marcado=!!sel[String(t.id)];
+          const _vidSrc=vid?(vid.previewUrl||vid.url):"";
+          return <div key={t.id} style={{border:"1px solid "+(marcado?"#7c3aed":"#e2e8f0"),borderRadius:14,overflow:"hidden",background:"#fff",boxShadow:marcado?"0 0 0 3px #7c3aed22":"0 1px 3px rgba(15,23,42,0.05)",display:"flex",flexDirection:"column"}}>
+            <div style={{position:"relative",background:"#0f172a",aspectRatio:"4 / 5",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+              {capa
+                ? <img src={capa.url} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){ setOpenCard(t); }} title="Abrir o card" style={{width:"100%",height:"100%",objectFit:"contain",display:"block",cursor:"zoom-in"}}/>
+                : _vidSrc
+                  ? <video src={_vidSrc} controls preload="metadata" playsInline style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#000"}}/>
+                  : <div onClick={function(){ setOpenCard(t); }} style={{color:"#94a3b8",fontSize:12,fontWeight:700,cursor:"pointer"}}>sem arquivo final — abrir o card</div>}
+              <label style={{position:"absolute",top:10,left:10,width:26,height:26,borderRadius:8,background:"rgba(255,255,255,0.92)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.25)"}} title="Selecionar">
+                <input type="checkbox" checked={marcado} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); n[String(t.id)]=v; return n; }); }} style={{width:15,height:15,cursor:"pointer",accentColor:"#7c3aed",margin:0}}/>
+              </label>
+              {fs.length>1&&<span style={{position:"absolute",top:10,right:10,background:"rgba(15,23,42,0.78)",color:"#fff",borderRadius:99,padding:"3px 9px",fontSize:11,fontWeight:800}} title="Mais arquivos — abre o card pra ver todos">{fs.length} arquivos</span>}
+              {u&&<span style={{position:"absolute",bottom:10,left:10,background:"#fff",color:cor,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:800,boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}}>{u}</span>}
             </div>
-            <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={function(){ setOpenCard(t); }}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title||"(sem título)"}</div>
-              <div style={{color:"#64748b",fontSize:11.5,marginTop:3,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                {u&&<span style={{background:cor+"18",color:cor,borderRadius:6,padding:"1px 7px",fontWeight:700}}>{u}</span>}
-                <span>publica {_fmtData(_dataPub(t))}</span>
-                <span>· {fs.length} arquivo{fs.length===1?"":"s"} final{fs.length===1?"":"is"}</span>
-                {resps.length>0&&<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{resps.slice(0,3).map(function(r){ return <UserAvatar key={r.id} user={r} size={18}/>; })}</span>}
+            <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+              <div onClick={function(){ setOpenCard(t); }} style={{cursor:"pointer"}}>
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t.title||"(sem título)"}</div>
+                <div style={{color:"#64748b",fontSize:11.5,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                  <span>publica <b style={{color:"#334155"}}>{_fmtData(_dataPub(t))}</b></span>
+                  {resps.length>0&&<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{resps.slice(0,3).map(function(r){ return <UserAvatar key={r.id} user={r} size={18}/>; })}</span>}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button disabled={!!baixando||!fs.length} onClick={function(){ baixar([t],String(t.title||"card").slice(0,30)); }} style={Object.assign(btn("#64748b",false),{flex:"0 0 auto",opacity:(!fs.length||baixando)?.45:1})}>{icoDown}</button>
+                {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou([t]); }} style={Object.assign(btn("#ec4899",true),{flex:1,justifyContent:"center"})}>{icoOk} Cliente aprovou</button>}
               </div>
             </div>
-            {!isMob&&<button disabled={!!baixando||!fs.length} onClick={function(){ baixar([t],String(t.title||"card").slice(0,30)); }} style={Object.assign(btn("#64748b",false),{opacity:(!fs.length||baixando)?.45:1})}>{icoDown} Baixar</button>}
-            {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou([t]); }} style={btn("#ec4899",true)}>{icoOk}{isMob?"":" Cliente aprovou"}</button>}
           </div>;
         })}
+        </div>
       </div>;
     })}
   </div>);
