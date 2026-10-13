@@ -38350,11 +38350,13 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const _ehImg=(f)=>/^image\//.test(String(f.type||""))||/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(String(f.name||f.url||""));
   const _unidade=(t)=>{ const u=String(t.bioterUnit||t.bioter_unit||"").split(",")[0].trim(); if(!u) return ""; const m={chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay",grupo:"Grupo",brasil:"Brasil"}; return m[u]||u; };
   const _nomeArq=(t,f,i,n)=>{ const base=String(t.title||"arte").replace(/[\\/:*?"<>|]+/g," ").trim().slice(0,60); const ext=(String(f.name||"").match(/\.[a-z0-9]{2,5}$/i)||[".png"])[0]; const u=_unidade(t); return (u?u+" - ":"")+base+" - "+_fmtData(_dataPub(t)).replace("/","-")+(n>1?" ("+(i+1)+")":"")+ext; };
-  /* (13/10 12:02, Gustavo) "as com data de publicação já passada não precisam ser aprovadas, já foram postadas" */
+  /* (13/10 12:19, Gustavo) "tava com data ultrapassada mas não tava em Publicados, então deveria estar na aba" →
+     quem está em Aprovado internamente entra SEMPRE, mesmo com data passada (status Publicado já fica de fora). Data passada só ganha aviso. */
   const _hojeIso=(typeof pxHojeISO==="function")?pxHojeISO():new Date().toISOString().slice(0,10);
+  const _atrasado=(t)=>{ const d=_dataPub(t); return !!(d&&d<_hojeIso); };
   const _candidatos=(tasks||[]).filter(function(t){ return t&&!t.deletedAt&&t.status==="aprovado"&&!_ehFO(t); });
-  const jaPostados=_candidatos.filter(function(t){ const d=_dataPub(t); return d&&d<_hojeIso; });
-  const lista=_candidatos.filter(function(t){ const d=_dataPub(t); return !(d&&d<_hojeIso); })
+  const atrasados=_candidatos.filter(_atrasado);
+  const lista=_candidatos.slice()
     .sort(function(a,b){ return (String(a.client||"")+_dataPub(a)).localeCompare(String(b.client||"")+_dataPub(b)); });
   /* (13/10 12:09, Gustavo) "as bioter devem ser separadas por unidade" → chave da seção = cliente + unidade (só Bioter) */
   const _chave=(t)=>{ const c=String(t.client||"outros"); return c==="bioter"?c+"|"+(_unidade(t)||"Sem unidade"):c; };
@@ -38421,7 +38423,7 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
     <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
         <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1}}>Aprovar com o cliente</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {nClientes} cliente{nClientes===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).{jaPostados.length>0&&<span> · {jaPostados.length} com data já passada ficaram de fora (já foram postados).</span>}</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>Tudo que a Pixels já aprovou e ainda falta o OK do cliente — {lista.length} card{lista.length===1?"":"s"} em {nClientes} cliente{nClientes===1?"":"s"}. Foto de obra não entra (aprovado internamente já é aprovado).{atrasados.length>0&&<span style={{color:"#b91c1c",fontWeight:700}}> · {atrasados.length} com a data de publicação já passada e ainda sem OK — atrasado{atrasados.length===1?"":"s"}.</span>}</div>
       </div>
       {lista.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         {baixando&&<span style={{color:"#7c3aed",fontSize:12,fontWeight:700}}>{baixando}</span>}
@@ -38483,12 +38485,13 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
               </label>
               {fs.length>1&&<span style={{position:"absolute",top:10,right:10,background:"rgba(15,23,42,0.78)",color:"#fff",borderRadius:99,padding:"3px 9px",fontSize:11,fontWeight:800}} title="Mais arquivos — abre o card pra ver todos">{fs.length} arquivos</span>}
               {u&&<span style={{position:"absolute",bottom:10,left:10,background:"#fff",color:cor,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:800,boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}}>{u}</span>}
+              {_atrasado(t)&&<span style={{position:"absolute",bottom:10,right:10,background:"#dc2626",color:"#fff",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:800,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}} title="A data de publicação já passou e o cliente ainda não aprovou">⚠ data já passou</span>}
             </div>
             <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
               <div onClick={function(){ setOpenCard(t); }} style={{cursor:"pointer"}}>
                 <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t.title||"(sem título)"}</div>
                 <div style={{color:"#64748b",fontSize:11.5,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                  <span>publica <b style={{color:"#334155"}}>{_fmtData(_dataPub(t))}</b></span>
+                  <span>publica <b style={{color:_atrasado(t)?"#dc2626":"#334155"}}>{_fmtData(_dataPub(t))}</b>{_atrasado(t)&&<span style={{color:"#dc2626",fontWeight:700}}> · atrasado</span>}</span>
                   {resps.length>0&&<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{resps.slice(0,3).map(function(r){ return <UserAvatar key={r.id} user={r} size={18}/>; })}</span>}
                 </div>
               </div>
