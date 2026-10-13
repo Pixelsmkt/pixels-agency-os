@@ -149831,7 +149831,143 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
          enviado com a máscara só do que falta (provisório); o que volta é colado SÓ onde não tinha foto (a foto
          real nunca é substituída — acabou a colagem/erosão/2ª passada). O céu já é determinístico. ═══ */
       let r = null;
-      {
+      /* ═══ (13/10 18:54, Gustavo: "jamais toque na obra e faça colagens ridículas, é só pra completar de terra embaixo,
+         de céu em cima… tentou fazer um poste… simplifica") v25 SIMPLES: medido na Katuete (v24, 18:52): mesmo com o
+         GPT descrevendo o estilo, a IA de imagem por INPAINTING continua o que encosta na borda (poste pra cima, lona
+         pra baixo) — não tem prompt que resolva. Então a IA de imagem NÃO VÊ MAIS A BORDA DA FOTO: ela gera, à parte,
+         uma textura de CÉU e uma de TERRA (tendo como referência só uma faixa de céu / de chão da própria foto) e o
+         app cola: céu em tudo que está acima da crista, terra em tudo que está abaixo, cor casada com a borda da foto
+         e pluma curta na emenda. Sem inpainting, sem janelas, sem correção por área (o juiz só avisa).
+         Efeito colateral assumido: objeto que encosta na borda da foto (poste, árvore) termina onde a foto termina. ═══ */
+      const _EA_V25_SIMPLES = true;
+      if(_EA_V25_SIMPLES){
+        try{
+          if(typeof ctx.passo === "function"){ try{ ctx.passo("gerando céu e terra no estilo da foto (a IA não vê a borda)…"); }catch(_){ } }
+          const dcv = cvW.getContext("2d").getImageData(0, 0, W2, h).data;
+          const ehCeuPx = function(d, i){ const r0 = d[i], g = d[i + 1], b = d[i + 2]; const mx0 = Math.max(r0, g, b), mn = Math.min(r0, g, b); return b >= r0 && b >= g - 4 && mx0 > 90 && (mx0 - mn) / Math.max(1, mx0) < 0.75; };
+          const ehNuvem = function(d, i){ const mx0 = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]); return mx0 > 225 && (mx0 - mn) / Math.max(1, mx0) < 0.12; };
+          // crista por coluna (1º pixel da foto que não é céu); colunas sem foto ou que já começam em árvore herdam a vizinha
+          const crista = new Int32Array(W2).fill(-1), topoF = new Int32Array(W2).fill(-1), baseF = new Int32Array(W2).fill(-1);
+          for(let x = 0; x < W2; x++){ let topo = -1, y0 = -1; for(let y = 0; y < h; y++){ const i = (y * W2 + x) * 4; if(dcv[i + 3] < 200) continue; if(topo < 0) topo = y; baseF[x] = y; if(y0 < 0 && !ehCeuPx(dcv, i)) y0 = y; }
+            topoF[x] = topo; if(topo >= 0 && (y0 < 0 || y0 > topo + 4)) crista[x] = y0 >= 0 ? y0 : h; }
+          let ult = -1; for(let x = 0; x < W2; x++){ if(crista[x] >= 0) ult = crista[x]; else if(ult >= 0) crista[x] = ult; }
+          ult = -1; for(let x = W2 - 1; x >= 0; x--){ if(crista[x] >= 0) ult = crista[x]; else if(ult >= 0) crista[x] = ult; }
+          for(let x = 0; x < W2; x++) if(crista[x] < 0) crista[x] = Math.round(h * (an.horizonte != null ? (mW.oy + an.horizonte * mW.dh) / h : 0.45));
+          const cS = new Int32Array(W2); for(let x = 0; x < W2; x++){ const v = []; for(let k = -10; k <= 10; k++) v.push(crista[Math.max(0, Math.min(W2 - 1, x + k))]); v.sort(function(a, b){ return a - b; }); cS[x] = v[10]; }
+          /* (v25b) a divisão céu/terra FORA da foto segue a crista NO QUADRO DA FOTO (girada junto): a crista por coluna do
+             quadro final errava em foto girada (o canto ficava "terra" acima do horizonte → buraco preto). Cada pixel de fora
+             é desgirado pra foto, cai na coluna mais perto e compara com a crista dessa coluna. */
+          const NWn = Math.min(1600, nova.width), NHn = Math.round(nova.height * NWn / nova.width);
+          const cristaN = (function(){ const c = document.createElement("canvas"); c.width = NWn; c.height = NHn; c.getContext("2d").drawImage(nova, 0, 0, NWn, NHn); const d = c.getContext("2d").getImageData(0, 0, NWn, NHn).data;
+            const cr = new Int32Array(NWn).fill(-1);
+            for(let x = 0; x < NWn; x++){ let y0 = -1; for(let y = 0; y < NHn; y++){ const i = (y * NWn + x) * 4; if(!ehCeuPx(d, i)){ y0 = y; break; } } if(y0 < 0) cr[x] = NHn; else if(y0 > 4) cr[x] = y0; }
+            let u = -1; for(let x = 0; x < NWn; x++){ if(cr[x] >= 0) u = cr[x]; else if(u >= 0) cr[x] = u; }
+            u = -1; for(let x = NWn - 1; x >= 0; x--){ if(cr[x] >= 0) u = cr[x]; else if(u >= 0) cr[x] = u; }
+            for(let x = 0; x < NWn; x++) if(cr[x] < 0) cr[x] = Math.round(NHn * (an.horizonte != null ? an.horizonte : 0.45));
+            const sm = new Int32Array(NWn); for(let x = 0; x < NWn; x++){ const v = []; for(let k = -12; k <= 12; k++) v.push(cr[Math.max(0, Math.min(NWn - 1, x + k))]); v.sort(function(p, q){ return p - q; }); sm[x] = v[12]; } return sm; })();
+          const cxW = W2 / 2, cyW = h / 2, csA = Math.cos(ang), snA = Math.sin(ang);
+          const cls = new Uint8Array(W2 * h);   // 0 = foto · 1 = céu · 2 = terra
+          let nCeu = 0, nChao = 0, ceuY1 = 0, chaoY0 = h;
+          for(let y = 0; y < h; y++) for(let x = 0; x < W2; x++){ const i = (y * W2 + x) * 4; if(dcv[i + 3] >= 200) continue;
+            const u = cxW + (x - cxW) * csA + (y - cyW) * snA, v = cyW - (x - cxW) * snA + (y - cyW) * csA;   // desgira
+            const xN = Math.max(0, Math.min(NWn - 1, Math.round((u - mW.ox) / mW.dw * NWn))), vN = (v - mW.oy) / mW.dh * NHn;
+            if(vN < cristaN[xN]){ cls[y * W2 + x] = 1; nCeu++; if(y > ceuY1) ceuY1 = y; } else { cls[y * W2 + x] = 2; nChao++; if(y < chaoY0) chaoY0 = y; } }
+          const precisaCeu = nCeu > 400, precisaChao = nChao > 400;
+          if(!precisaCeu && !precisaChao) throw new Error("nada a completar (sem faixa de céu nem de chão fora da foto)");
+          // referências: só uma FAIXA da própria foto (céu de cima / chão de baixo) — a IA nunca vê a obra nem a borda
+          const faixaRef = function(deCima){
+            const NW = nova.width, NH = nova.height; let y0, y1;
+            if(deCima){ y0 = 0; y1 = Math.max(24, Math.round(NH * Math.max(0.06, Math.min(0.3, (an.horizonte != null ? an.horizonte : 0.45) * 0.6)))); }
+            else { y1 = NH; y0 = Math.max(0, NH - Math.max(24, Math.round(NH * 0.12))); if(an.obra && an.obra.y1 != null) y0 = Math.max(y0, Math.round(Math.min(NH - 16, an.obra.y1 * NH + 4))); }
+            const c = document.createElement("canvas"); const k = Math.min(1, 1024 / NW); c.width = Math.max(16, Math.round(NW * k)); c.height = Math.max(16, Math.round((y1 - y0) * k));
+            c.getContext("2d").drawImage(nova, 0, y0, NW, y1 - y0, 0, 0, c.width, c.height); return c.toDataURL("image/png").split(",")[1]; };
+          const pCeu = "Fotografia real: SOMENTE CÉU preenchendo a imagem inteira, continuação do céu que aparece na faixa de referência (" + (an.estiloCeu || "mesmo azul, mesmo degradê, mesmo tipo e quantidade de nuvens") + "): mesma cor, mesma luz, mesma hora do dia, mesmo grão. Embaixo da imagem = céu perto do horizonte (mais claro); em cima = céu alto (mais azul). PROIBIDO: horizonte, chão, árvores, postes, fios, prédios, pássaros, avião, rastro de avião, sol estourado, texto ou qualquer objeto. Só céu, liso, fotográfico.";
+          const pChao = "Fotografia real: SOMENTE CHÃO preenchendo a imagem inteira, continuação do chão que aparece na faixa de referência (" + (an.estiloChao || chaoDesc || "a mesma terra") + "): mesma cor exata, mesma textura, mesma luz e direção de sombra, mesma perspectiva (câmera na altura de uma pessoa olhando o chão à frente: em cima da imagem o chão mais longe, embaixo o mais perto). PROIBIDO: lona, geomembrana, tanque, estrutura, horizonte, céu, objetos, pessoas, texto; nada de grama ou pedra que não exista na referência. Só chão, nítido, fotográfico.";
+          const gerar = async function(prompt, ref, qual){ const resp = await _eaFn({ acao:"foto", referencias:[ref], prompt:prompt, tamanho:"1536x1024", qualidade:qual || "medium", client_id:ctx.client || null, projeto_id:ctx.projeto || null }); if(!resp || !resp.imagem) throw new Error("a IA não devolveu a textura"); const img = await _eaCarregarImg("data:image/png;base64," + resp.imagem); img.__custo = Number(resp.custo_brl) || 0; img.__modelo = resp.modelo || "gpt-image-1"; return img; };
+          // confere se a textura é só céu / só chão (se vier cena, repete 1x)
+          const fracao = function(img, teste){ const t = document.createElement("canvas"); t.width = 96; t.height = 64; t.getContext("2d").drawImage(img, 0, 0, 96, 64); const d = t.getContext("2d").getImageData(0, 0, 96, 64).data; let ok = 0, n = 0; for(let i = 0; i < d.length; i += 4){ if(teste(d, i)) ok++; n++; } return ok / n; };
+          const soCeu = function(d, i){ const mx0 = Math.max(d[i], d[i + 1], d[i + 2]); return (d[i + 2] >= d[i] && d[i + 2] >= d[i + 1] - 4 && mx0 > 60) || ehNuvem(d, i); };
+          const soChao = function(d, i){ const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; return !ehCeuPx(d, i) && l >= 45; };
+          const comConfere = async function(prompt, ref, teste, nome, qual){ let img = await gerar(prompt, ref, qual); let f = fracao(img, teste); if(f < 0.85){ avisos.push("textura de " + nome + " veio com outra coisa (" + Math.round(f * 100) + "% " + nome + ") — repetida"); const img2 = await gerar(prompt, ref, qual); img2.__custo += img.__custo; const f2 = fracao(img2, teste); if(f2 >= f) img = img2; else img.__custo = img2.__custo; } return img; };
+          const refCeu = precisaCeu ? faixaRef(true) : null, refChao = precisaChao ? faixaRef(false) : null;
+          const pares = await Promise.all([precisaCeu ? comConfere(pCeu, refCeu, soCeu, "céu") : Promise.resolve(null), precisaChao ? comConfere(pChao, refChao, soChao, "chão", "high") : Promise.resolve(null)]);
+          const imgCeu = pares[0], imgChao = pares[1];
+          if(typeof ctx.passo === "function"){ try{ ctx.passo("colando céu em cima e terra embaixo…"); }catch(_){ } }
+          const EJ = document.createElement("canvas"); EJ.width = W2; EJ.height = h; const ej = EJ.getContext("2d"); ej.drawImage(EW, 0, 0);
+          /* (13/10 v25b, medido no card de teste de Chapecó: foto girada 30° + textura reta + ganho global = emenda em
+             diagonal visível e "faixa" de céu) 1) a textura GIRA junto com a foto, ancorada na linha do horizonte (céu:
+             a parte de baixo da textura = horizonte; terra: a parte de cima = longe); 2) a cor é casada LOCALMENTE ao
+             longo da borda: a baixa frequência (borrão de 90px) da textura é trocada pela da foto perto da emenda,
+             mantendo o grão/nuvens da textura; 3) pluma curta por cima. */
+          const Hx = mW.ox + mW.dw / 2, Hy = mW.oy + (an.horizonte != null ? an.horizonte : 0.5) * mW.dh;   // ponto do horizonte na foto reta
+          const HR = { x:cxW + (Hx - cxW) * csA - (Hy - cyW) * snA, y:cyW + (Hx - cxW) * snA + (Hy - cyW) * csA };   // o mesmo ponto na foto girada
+          const desenharTex = function(img, deCima){ const L = document.createElement("canvas"); L.width = W2; L.height = h; const lx = L.getContext("2d");
+            // cobre o quadro inteiro mesmo girada: raio até o canto mais longe do ponto do horizonte
+            const R = Math.sqrt(Math.pow(Math.max(HR.x, W2 - HR.x), 2) + Math.pow(Math.max(HR.y, h - HR.y), 2)) * 1.04 + Math.round(h * 0.22);
+            const s = Math.max(2 * R / img.width, R / img.height); const dw = img.width * s, dh = img.height * s;
+            const folga = Math.round(h * 0.22);   // a crista (copas) fica acima do horizonte e a terra de fora pode começar acima dele: cada textura passa do horizonte
+            // (v25b, medido: a emenda do céu que sobrava era GRÃO — a textura do gpt-image tem ruído fino e o céu da foto é liso) o céu entra suavizado
+            lx.save(); lx.translate(HR.x, HR.y); lx.rotate(ang); if(deCima) lx.filter = "blur(4px)"; lx.drawImage(img, -dw / 2, deCima ? (folga - dh) : -folga, dw, dh); lx.restore();
+            return { d:lx.getImageData(0, 0, W2, h).data, cv:L }; };
+          // casa a cor: média da textura na faixa encostada na foto × média da foto na faixa encostada na borda (por canal, ganho limitado)
+          const ganho = function(dT, deCima){ const sT = [0, 0, 0], sF = [0, 0, 0]; let nT = 0, nF = 0; const K = 40;
+            for(let x = 0; x < W2; x++){ if(topoF[x] < 0) continue;
+              if(deCima){ for(let y = Math.max(0, topoF[x] - K); y < topoF[x]; y++){ const i = (y * W2 + x) * 4; if(y >= cS[x] || dT[i + 3] < 200) continue; if(ehNuvem(dT, i)) continue; sT[0] += dT[i]; sT[1] += dT[i + 1]; sT[2] += dT[i + 2]; nT++; }
+                for(let y = topoF[x]; y < Math.min(cS[x], topoF[x] + K); y++){ const i = (y * W2 + x) * 4; if(!ehCeuPx(dcv, i) || ehNuvem(dcv, i)) continue; sF[0] += dcv[i]; sF[1] += dcv[i + 1]; sF[2] += dcv[i + 2]; nF++; } }
+              else { for(let y = baseF[x] + 1; y < Math.min(h, baseF[x] + 1 + K); y++){ const i = (y * W2 + x) * 4; if(dT[i + 3] < 200) continue; sT[0] += dT[i]; sT[1] += dT[i + 1]; sT[2] += dT[i + 2]; nT++; }
+                for(let y = Math.max(cS[x], baseF[x] - K); y <= baseF[x]; y++){ const i = (y * W2 + x) * 4; const l = 0.299 * dcv[i] + 0.587 * dcv[i + 1] + 0.114 * dcv[i + 2]; if(l < 60 || ehCeuPx(dcv, i)) continue; sF[0] += dcv[i]; sF[1] += dcv[i + 1]; sF[2] += dcv[i + 2]; nF++; } } }
+            if(nT < 50 || nF < 50) return [1, 1, 1];
+            return [0, 1, 2].map(function(c){ return Math.max(0.6, Math.min(1.5, (sF[c] / nF) / Math.max(1, sT[c] / nT))); }); };
+          let custoT = 0, gC = [1, 1, 1], gG = [1, 1, 1];
+          /* (v25b) ganho GLOBAL desligado: a faixa de baixo da foto tinha grama + terra e o ganho (0.91/1.30/1.34) deixou a
+             terra inteira amarelada. A cor é casada só LOCALMENTE (abaixo), que já resolve e respeita grama perto de grama. */
+          const _EA_V25_GANHO = false;
+          // camadas de textura (céu e terra separadas) já com o ganho global, só fora da foto, por classe
+          const novaCamada = function(){ const c = document.createElement("canvas"); c.width = W2; c.height = h; const x = c.getContext("2d"); const im = x.createImageData(W2, h); return { cv:c, ctx:x, im:im, d:im.data }; };
+          const LC = novaCamada(), LG = novaCamada();
+          if(imgCeu){ const T = desenharTex(imgCeu, true), dT = T.d; gC = ganho(dT, true); custoT += imgCeu.__custo;   // céu: ganho global fica (classe uniforme; o triângulo da foto sumia só com o local)
+            for(let i = 0, p = 0; i < dT.length; i += 4, p++){ if(cls[p] !== 1) continue; LC.d[i] = Math.min(255, dT[i] * gC[0]); LC.d[i + 1] = Math.min(255, dT[i + 1] * gC[1]); LC.d[i + 2] = Math.min(255, dT[i + 2] * gC[2]); LC.d[i + 3] = dT[i + 3] >= 200 ? 255 : 0; } LC.ctx.putImageData(LC.im, 0, 0); }
+          if(imgChao){ const T = desenharTex(imgChao, false), dT = T.d; gG = _EA_V25_GANHO ? ganho(dT, false) : [1, 1, 1]; custoT += imgChao.__custo;
+            for(let i = 0, p = 0; i < dT.length; i += 4, p++){ if(cls[p] !== 2) continue; LG.d[i] = Math.min(255, dT[i] * gG[0]); LG.d[i + 1] = Math.min(255, dT[i + 1] * gG[1]); LG.d[i + 2] = Math.min(255, dT[i + 2] * gG[2]); LG.d[i + 3] = dT[i + 3] >= 200 ? 255 : 0; } LG.ctx.putImageData(LG.im, 0, 0); }
+          /* transferência de baixa frequência POR CLASSE: perto da borda, a cor média (90px) da textura de céu vira a cor média
+             do CÉU da foto (só pixels de céu), e a da terra vira a da TERRA da foto (só chão claro, sem lona) — assim as copas
+             não escurecem o céu pintado nem a lona suja a terra. */
+          let nLF = 0;
+          try{
+            const campo = function(src, raio){ const B = document.createElement("canvas"); B.width = W2; B.height = h; const b = B.getContext("2d"); b.filter = "blur(" + raio + "px)"; b.drawImage(src, 0, 0); return b.getImageData(0, 0, W2, h).data; };
+            const soClasse = function(teste){ const c = document.createElement("canvas"); c.width = W2; c.height = h; const x = c.getContext("2d"); const im = x.createImageData(W2, h); const d = im.data;
+              for(let i = 0; i < dcv.length; i += 4){ if(dcv[i + 3] < 200 || !teste(i)) continue; d[i] = dcv[i]; d[i + 1] = dcv[i + 1]; d[i + 2] = dcv[i + 2]; d[i + 3] = 255; } x.putImageData(im, 0, 0); return c; };
+            const transferir = function(L, fotoClasse, classe){ const d = L.d;
+              // duas escalas: larga (150px) casa o tom geral até ~350px da foto; fina (40px) acerta a emenda em si
+              [[150, 2.4], [40, 2.2]].forEach(function(esc){ const pF = campo(fotoClasse, esc[0]), pT = campo(L.cv, esc[0]);
+              for(let i = 0, p = 0; i < d.length; i += 4, p++){ if(cls[p] !== classe || d[i + 3] === 0) continue;
+                const aF = pF[i + 3] / 255, aT = pT[i + 3] / 255; if(aF < 0.015 || aT < 0.05) continue;
+                const wB = Math.min(1, aF * esc[1]);   // ≈1 na borda da foto, some longe dela
+                // getImageData devolve cor NÃO pré-multiplicada: a cor do borrão já é a média real
+                for(let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, d[i + c] + (pF[i + c] - pT[i + c]) * wB));
+                nLF++; }
+              L.ctx.putImageData(L.im, 0, 0); }); };
+            if(imgCeu) transferir(LC, soClasse(function(i){ return ehCeuPx(dcv, i); }), 1);
+            if(imgChao) transferir(LG, soClasse(function(i){ const l = 0.299 * dcv[i] + 0.587 * dcv[i + 1] + 0.114 * dcv[i + 2]; return !ehCeuPx(dcv, i) && l >= 70; }), 2);
+          }catch(_){ }
+          const TX = document.createElement("canvas"); TX.width = W2; TX.height = h; { const t2 = TX.getContext("2d"); t2.drawImage(LG.cv, 0, 0); t2.drawImage(LC.cv, 0, 0); }
+          const dt = TX.getContext("2d").getImageData(0, 0, W2, h).data;
+          // aplica a textura na composição e pluma curta (6px) com a borda da foto
+          const dE = ej.getImageData(0, 0, W2, h), de = dE.data;
+          for(let i = 0; i < de.length; i += 4){ if(dt[i + 3] < 200) continue; de[i] = dt[i]; de[i + 1] = dt[i + 1]; de[i + 2] = dt[i + 2]; de[i + 3] = 255; }
+          try{ const B = document.createElement("canvas"); B.width = W2; B.height = h; { const bx = B.getContext("2d"); bx.filter = "blur(6px)"; bx.drawImage(cvW, 0, 0); }
+            const dB = B.getContext("2d").getImageData(0, 0, W2, h).data;
+            for(let i = 0; i < de.length; i += 4){ if(dcv[i + 3] >= 200 || dt[i + 3] < 200) continue; const a = Math.min(1, dB[i + 3] / 255 * 1.4); if(a <= 0.01) continue; de[i] = de[i] * (1 - a) + dB[i] * a; de[i + 1] = de[i + 1] * (1 - a) + dB[i + 1] * a; de[i + 2] = de[i + 2] * (1 - a) + dB[i + 2] * a; } }catch(_){ }
+          ej.putImageData(dE, 0, 0);
+          ej.drawImage(cvW, 0, 0);   // a foto real, intacta, por cima
+          if(window.__eaDbg){ try{ window.__eaDbgV25 = EJ.toDataURL("image/png"); window.__eaDbgV25tx = TX.toDataURL("image/png"); }catch(_){ } }
+          r = recorta(EJ); r.__custo = custoT; r.__fid = null; r.__modelo = (imgCeu && imgCeu.__modelo) || (imgChao && imgChao.__modelo) || "gpt-image-1"; r.__janelas = true; r.__simples = true;
+          const gTxt = function(g){ return g.map(function(v){ return v.toFixed(2); }).join("/"); };
+          avisos.push("v25 simples: " + (imgCeu ? "céu" : "") + (imgCeu && imgChao ? " e " : "") + (imgChao ? "terra" : "") + " gerados à parte pela IA (ela só vê uma faixa de céu/chão da foto — não tem como puxar poste, fio ou lona), girados junto com a foto (" + (ang * 180 / Math.PI).toFixed(1) + "°) e colados céu acima da crista e terra abaixo; cor casada com a borda (ganho céu " + gTxt(gC) + ", chão " + gTxt(gG) + "; baixa frequência casada localmente em " + nLF + " px), pluma curta, foto intacta" + (custoT ? " · R$ " + custoT.toFixed(2) : ""));
+          if(temEntulho) avisos.push("entulho NÃO removido no motor simples (sem inpainting) — use o Ajuste fino de IA se precisar");
+        }catch(e){ avisos.push("motor simples (v25) falhou: " + _eaErro(e) + " — caiu pro motor por janelas"); r = null; }
+      }
+      if(!r){
         const Wj = W2, lado = Math.min(Wj, h);                                   // janela quadrada de largura cheia
         const EJ = document.createElement("canvas"); EJ.width = Wj; EJ.height = h; EJ.getContext("2d").drawImage(EW, 0, 0);
         const MJ = document.createElement("canvas"); MJ.width = Wj; MJ.height = h; MJ.getContext("2d").drawImage(MW, 0, 0);
@@ -150070,7 +150206,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v24: céu e chão pintados pela IA no estilo que o GPT descreveu da foto (sem colagem, sem degradê meu) + juiz confere (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push("motor da foto v25: céu e terra gerados à parte pela IA (sem ver a borda da foto — nada de poste/lona continuados), colados céu em cima e terra embaixo, foto intacta; juiz só avisa (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
@@ -150101,6 +150237,8 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         const jz = await _eaJuizFotoObra(cv, url, ctx.task); ultimo = jz;
         if(!jz){ avisos.push("juiz: não respondeu — arte segue sem conferência"); break; }
         if(jz.aprovado || !jz.problemas.length){ avisos.push("juiz (GPT): aprovou a arte" + (rodada > 1 ? " depois da correção" : "")); break; }
+        /* (13/10 v25) no motor simples o juiz SÓ AVISA: corrigir por área é inpainting de novo (voltaria a puxar poste/lona) */
+        if(cv && cv.__simples){ jz.problemas.forEach(function(pr){ avisos.push("juiz (só aviso, v25): " + pr.tipo + " — " + pr.oQue); }); break; }
         /* "emenda" NÃO é corrigida por área (medido em 2 artes: repintar uma faixa cria outra emenda) — só é avisada;
            "produto" idem (a foto real já está colada). Caixa maior que 45% da largura também só avisa. */
         const corrigiveis = jz.problemas.filter(function(pr){ return pr.tipo !== "produto" && pr.tipo !== "emenda" && (pr.x1 - pr.x0) <= 0.45 && (pr.y1 - pr.y0) <= 0.45; });
@@ -150785,7 +150923,12 @@ if(typeof window !== "undefined"){ window.PxFotoObraAjusteModal = PxFotoObraAjus
 
 /* Janela do card "Gerar arte": (07/10, Gustavo) NÃO PERGUNTA — pega o template PADRÃO do tipo do card
    (Foto de obra · Arte · Carrossel · Story) e da unidade, e já gera. Só mostra escolha se não houver padrão. */
-function PxGerarArteModal({ task, setTasks, onClose }){
+function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
+  /* (13/10 18:54, Gustavo: "tava gerando a arte de Katuete, entrou uma pra avaliação, mudou a ordem e mudou a geração
+     aqui pra Campos Novos") a janela TRAVA no card em que foi aberta: a fila da Avaliação desliza quando entra/sai card
+     e o `current` do pai vira outro card por um render — a janela não pode seguir isso. */
+  const taskRef = useRef(taskProp);
+  const task = taskRef.current;
   const [modelos, setModelos] = useState(null);
   const [sel, setSel] = useState("");
   const [auto, setAuto] = useState(null);
@@ -150799,6 +150942,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
   const _pctDoPasso = function(m){ m = String(m || "");
     if(/abrindo/.test(m)) return 6; if(/traduzindo/.test(m)) return 12; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
     if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
+    if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
     if(/completando|limpando/.test(m)) return 56; if(/conferindo/.test(m)) return 72; if(/corrigindo/.test(m)) return 78; if(/salvando/.test(m)) return 86; return null; };
   const setPassoPct = function(m){ setPasso(m);
     const t = _pctDoPasso(m);
@@ -150850,11 +150994,11 @@ function PxGerarArteModal({ task, setTasks, onClose }){
   const lin = function(ok, rotulo, valor){ return <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 12px"}}>
     <span style={{width:7,height:7,borderRadius:999,flex:"0 0 auto",marginTop:4,background:ok?"#22c55e":"#f59e0b",boxShadow:"0 0 0 3px "+(ok?"rgba(34,197,94,.14)":"rgba(245,158,11,.14)")}}/>
     <span style={{fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",color:_EA.fraco,flex:"0 0 86px",marginTop:1.5}}>{rotulo}</span>
-    <span style={{fontSize:12.5,color:ok?_EA.texto:_EA.amarelo,fontWeight:ok?600:500,lineHeight:1.45,minWidth:0,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{valor}</span>
+    <span style={{fontSize:13,color:ok?_EA.texto:_EA.amarelo,fontWeight:ok?600:500,lineHeight:1.45,minWidth:0,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{valor}</span>
   </div>; };
   const divisor = <div style={{height:1,background:_EA.linha2,margin:"0 12px"}}/>;
   return <div onClick={function(){ if(!passo) onClose(false); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",backdropFilter:"blur(3px)",WebkitBackdropFilter:"blur(3px)",zIndex:10050,display:"flex",alignItems:"center",justifyContent:"center",padding:16,animation:"fadeIn .15s ease"}}>
-    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(560px,100%)",maxHeight:"88vh",overflow:"auto",boxShadow:"0 20px 50px rgba(15,23,42,.25)",border:"1px solid "+_EA.linha,fontFamily:"'Inter',system-ui,sans-serif",animation:"slideInUp .22s ease"}}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(720px,100%)",maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 50px rgba(15,23,42,.25)",border:"1px solid "+_EA.linha,fontFamily:"'Inter',system-ui,sans-serif",animation:"slideInUp .22s ease"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"16px 18px 12px"}}>
         <div style={{width:38,height:38,borderRadius:12,flex:"0 0 auto",background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:17,boxShadow:"0 6px 14px rgba(124,58,237,.3)"}}>✦</div>
         <div style={{flex:1,minWidth:0}}>
@@ -150870,7 +151014,7 @@ function PxGerarArteModal({ task, setTasks, onClose }){
         {fotoObra ? <>
           {lin(!!copy.cidade, "Pin no mapa", copy.cidade || "não achei a cidade no briefing")}
           {divisor}
-          {lin(!!copy.frase, "Frase", copy.frase ? copy.frase.slice(0,180) : "o briefing não tem • FRASE NA ARTE")}
+          {lin(!!copy.frase, "Frase", copy.frase ? copy.frase : "o briefing não tem • FRASE NA ARTE")}
         </> : <>
           {lin(!!copy.titulo, "Título", copy.titulo ? copy.titulo.slice(0,180) : "o briefing não tem • TÍTULO")}
           {divisor}
@@ -150900,8 +151044,14 @@ function PxGerarArteModal({ task, setTasks, onClose }){
       <div style={{padding:"14px 18px 16px"}}>
         {passo ? <div style={{display:"flex",flexDirection:"column",gap:8}}>
           <div style={{display:"flex",alignItems:"center",gap:9}}>
-            <span style={{width:14,height:14,flex:"0 0 auto",borderRadius:999,border:"2px solid "+_EA.roxoBorda,borderTopColor:_EA.roxo,animation:"spin .8s linear infinite"}}/>
-            <span style={{flex:1,fontSize:12,color:_EA.roxo,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{passo}</span>
+            {/* (13/10, Gustavo: "esse ícone do progresso não completa o giro") spinner em SVG com giro próprio (SMIL), não depende do CSS */}
+            <svg width="16" height="16" viewBox="0 0 24 24" style={{flex:"0 0 auto",display:"block"}} aria-hidden="true">
+              <circle cx="12" cy="12" r="9" fill="none" stroke={_EA.roxoBorda} strokeWidth="3"/>
+              <path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke={_EA.roxo} strokeWidth="3" strokeLinecap="round">
+                <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
+              </path>
+            </svg>
+            <span style={{flex:1,minWidth:0,fontSize:12.5,color:_EA.roxo,fontWeight:600,lineHeight:1.4,whiteSpace:"normal",wordBreak:"break-word"}}>{passo}</span>
             <span style={{flex:"0 0 auto",fontSize:12,fontWeight:800,color:_EA.roxo,fontFeatureSettings:"'tnum'"}}>{Math.round(pct)}%</span>
           </div>
           <div style={{height:6,borderRadius:999,background:_EA.linha2,overflow:"hidden"}}>
