@@ -149277,6 +149277,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         const dw2 = ex2.getImageData(0, 0, W2, h), dd = dw2.data;
         const dcv = cvW.getContext("2d").getImageData(0, 0, W2, h).data;
         const ehCeuPx = function(d, i){ const r = d[i], g = d[i + 1], b = d[i + 2]; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return b >= r && b >= g - 4 && mx > 90 && (mx - mn) / Math.max(1, mx) < 0.6; };
+        /* (13/10 17:05, Gustavo: "o céu tava tão fácil de fazer algo contínuo… continuar o céu no mesmo estilo do original")
+           a cor por linha NÃO conta nuvem (pixel quase branco): nuvem na borda de cima fazia o céu pintado sair branco. */
+        const ehCeuAzul = function(d, i){ if(!ehCeuPx(d, i)) return false; const r = d[i], g = d[i + 1], b = d[i + 2]; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return !(mx > 225 && (mx - mn) / Math.max(1, mx) < 0.12); };
         // crista por coluna na foto real (1º pixel que não é céu); colunas sem foto herdam a vizinha mais perto
         const crista = new Int32Array(W2).fill(-1);
         for(let x = 0; x < W2; x++){ let topo = -1, y0 = -1; for(let y = 0; y < h; y++){ const i = (y * W2 + x) * 4; if(dcv[i + 3] < 200) continue; if(topo < 0) topo = y; if(!ehCeuPx(dcv, i)){ y0 = y; break; } }
@@ -149292,15 +149295,36 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         // foto (pro lado esquerdo) e da borda direita (pro lado direito) — assim a cor continua a da própria linha
         // na emenda (o juiz via um "triângulo" quando era a média da linha inteira). Linha sem céu real herda a vizinha.
         const corE = new Float32Array(h * 3), corD = new Float32Array(h * 3), temL = new Uint8Array(h);
-        for(let y = 0; y < h; y++){ let xa = -1, xb = -1; for(let x = 0; x < W2; x++){ const i = (y * W2 + x) * 4; if(dcv[i + 3] < 200 || y >= cS[x] - 1 || !ehCeuPx(dcv, i)) continue; if(xa < 0) xa = x; xb = x; }
+        for(let y = 0; y < h; y++){ let xa = -1, xb = -1; for(let x = 0; x < W2; x++){ const i = (y * W2 + x) * 4; if(dcv[i + 3] < 200 || y >= cS[x] - 1 || !ehCeuAzul(dcv, i)) continue; if(xa < 0) xa = x; xb = x; }
           if(xa < 0 || xb - xa < 6) continue;
-          let r = 0, g = 0, b = 0, n = 0; for(let x = xa; x <= Math.min(xb, xa + 28); x++){ const i = (y * W2 + x) * 4; if(!ehCeuPx(dcv, i)) continue; r += dcv[i]; g += dcv[i + 1]; b += dcv[i + 2]; n++; }
-          if(!n) continue; corE[y * 3] = r / n; corE[y * 3 + 1] = g / n; corE[y * 3 + 2] = b / n;
-          r = 0; g = 0; b = 0; n = 0; for(let x = Math.max(xa, xb - 28); x <= xb; x++){ const i = (y * W2 + x) * 4; if(!ehCeuPx(dcv, i)) continue; r += dcv[i]; g += dcv[i + 1]; b += dcv[i + 2]; n++; }
-          if(!n) continue; corD[y * 3] = r / n; corD[y * 3 + 1] = g / n; corD[y * 3 + 2] = b / n; temL[y] = 1; }
+          let r = 0, g = 0, b = 0, n = 0; for(let x = xa; x <= Math.min(xb, xa + 40); x++){ const i = (y * W2 + x) * 4; if(!ehCeuAzul(dcv, i)) continue; r += dcv[i]; g += dcv[i + 1]; b += dcv[i + 2]; n++; }
+          if(n < 4) continue; corE[y * 3] = r / n; corE[y * 3 + 1] = g / n; corE[y * 3 + 2] = b / n;
+          r = 0; g = 0; b = 0; n = 0; for(let x = Math.max(xa, xb - 40); x <= xb; x++){ const i = (y * W2 + x) * 4; if(!ehCeuAzul(dcv, i)) continue; r += dcv[i]; g += dcv[i + 1]; b += dcv[i + 2]; n++; }
+          if(n < 4) continue; corD[y * 3] = r / n; corD[y * 3 + 1] = g / n; corD[y * 3 + 2] = b / n; temL[y] = 1; }
         const herda = function(cor){ let yA = -1; for(let y = 0; y < h; y++){ if(temL[y] === 1) yA = y; else if(yA >= 0 && !temL[y]){ cor[y * 3] = cor[yA * 3]; cor[y * 3 + 1] = cor[yA * 3 + 1]; cor[y * 3 + 2] = cor[yA * 3 + 2]; } }
           yA = -1; for(let y = h - 1; y >= 0; y--){ if(temL[y] === 1) yA = y; else if(yA >= 0 && !temL[y]){ cor[y * 3] = cor[yA * 3]; cor[y * 3 + 1] = cor[yA * 3 + 1]; cor[y * 3 + 2] = cor[yA * 3 + 2]; } } };
         herda(corE); herda(corD);
+        /* (13/10 v23) ACIMA da foto o céu segue a TENDÊNCIA do céu real (céu de verdade fica mais azul subindo), em vez
+           de repetir a cor da última linha: mede o degradê nas primeiras linhas de céu real e extrapola pra cima, com
+           limite (até 22 por canal) e nunca mais claro. */
+        try{
+          let yTop = -1; for(let y = 0; y < h; y++){ if(temL[y] === 1){ yTop = y; break; } }
+          if(yTop > 8){
+            const K = Math.min(140, Math.round(h * 0.08)); let yEnd = yTop; while(yEnd < h && temL[yEnd] === 1 && yEnd - yTop < K) yEnd++;
+            const K2 = yEnd - yTop;
+            if(K2 >= 30){
+              const tend = function(cor){ const half = Math.floor(K2 / 2); const a = [0, 0, 0], b = [0, 0, 0];
+                for(let y = yTop; y < yTop + half; y++) for(let c = 0; c < 3; c++) a[c] += cor[y * 3 + c] / half;
+                for(let y = yTop + half; y < yEnd; y++) for(let c = 0; c < 3; c++) b[c] += cor[y * 3 + c] / (yEnd - yTop - half);
+                // por linha: indo pra CIMA a cor muda de b→a; slope = (a-b)/half  (negativo = escurece subindo)
+                const sl = [0, 1, 2].map(function(c){ return (a[c] - b[c]) / half; });
+                const lum = 0.299 * sl[0] + 0.587 * sl[1] + 0.114 * sl[2];
+                if(lum > 0) return;   // céu ficaria mais claro subindo — não extrapola (fica a cor da borda)
+                for(let y = 0; y < yTop; y++){ const d = yTop - y; for(let c = 0; c < 3; c++){ const delta = Math.max(-22, Math.min(0, sl[c] * d)); cor[y * 3 + c] = Math.max(0, Math.min(255, cor[yTop * 3 + c] + delta)); } } };
+              tend(corE); tend(corD);
+            }
+          }
+        }catch(_){ }
         for(let y = 0; y < h; y++) if(!temL[y]) temL[y] = 2;
         // suaviza na vertical (±14 linhas) — sem degraus entre linhas
         const suaviza = function(cor){ const sm = new Float32Array(h * 3); for(let y = 0; y < h; y++){ let r = 0, g = 0, b = 0, n = 0; for(let k = -14; k <= 14; k++){ const yy = y + k; if(yy < 0 || yy >= h) continue; r += cor[yy * 3]; g += cor[yy * 3 + 1]; b += cor[yy * 3 + 2]; n++; } sm[y * 3] = r / n; sm[y * 3 + 1] = g / n; sm[y * 3 + 2] = b / n; } cor.set(sm); };
@@ -149331,6 +149355,72 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         }catch(_){ }
         if(nC > 1000){ ex2.putImageData(dw2, 0, 0); mx.putImageData(dm2, 0, 0); avisos.push("céu em volta da foto feito do próprio céu da foto (degradê liso, sem IA) — a IA só completa o terreno" + (nX > 500 ? "; borda da foto no céu cruzada em degradê de 80px (sem linha diagonal)" : "")); }
       }catch(_){ }
+      /* ═══ (13/10 17:05, Gustavo: "você deveria ter continuado a terra pra baixo… não é pra inventar coisa, é sempre
+         pra continuar a imagem faltante com base na original, completar de terra embaixo no mesmo estilo da original")
+         CHÃO CONTINUADO DA PRÓPRIA FOTO (sem IA): abaixo da borda de baixo da foto, no espaço da foto reta, repete a
+         faixa de chão da borda em bandas com deslocamento, pluma entre bandas. Usado de cara quando a foto está
+         (quase) reta e a faixa é uniforme (terra/grama lisa — testado: foto torta 32° ou faixa com estrutura vira
+         listras, aí fica pra IA); e como ÚLTIMA SAÍDA se a IA pintar outra coisa (grama em cima de terra). ═══ */
+      let chaoDet = 0, chaoDesc = "";
+      const _chaoInfo = (function(){ try{
+        const dCV = cvW.getContext("2d").getImageData(0, 0, W2, h).data;
+        let obraIn = null;
+        if(an && an.obra){ const cxW = W2 / 2, cyW = h / 2, cs2 = Math.cos(ang), sn2 = Math.sin(ang);
+          const gq = function(x, y){ return { x:cxW + (x - cxW) * cs2 - (y - cyW) * sn2, y:cyW + (x - cxW) * sn2 + (y - cyW) * cs2 }; };
+          const o = { x0:an.obra.x0 - 0.06, x1:an.obra.x1 + 0.06, y0:an.obra.y0 - 0.04, y1:an.obra.y1 + 0.06 };
+          const q = [[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]].map(function(p){ return gq(mW.ox + p[0] * mW.dw, mW.oy + p[1] * mW.dh); });
+          const OBc = document.createElement("canvas"); OBc.width = W2; OBc.height = h; const oc = OBc.getContext("2d"); oc.fillStyle = "#fff"; oc.beginPath(); oc.moveTo(q[0].x, q[0].y); for(let k = 1; k < 4; k++) oc.lineTo(q[k].x, q[k].y); oc.closePath(); oc.fill();
+          obraIn = oc.getImageData(0, 0, W2, h).data; }
+        const cxW = W2 / 2, cyW = h / 2, csA = Math.cos(ang), snA = Math.sin(ang);
+        const rot = function(x, y){ return { x:cxW + (x - cxW) * csA - (y - cyW) * snA, y:cyW + (x - cxW) * snA + (y - cyW) * csA }; };
+        const unrot = function(x, y){ return { x:cxW + (x - cxW) * csA + (y - cyW) * snA, y:cyW - (x - cxW) * snA + (y - cyW) * csA }; };
+        const u0 = mW.ox, u1 = mW.ox + mW.dw, vb = mW.oy + mW.dh - 1;
+        const S = Math.max(50, Math.min(220, Math.round(mW.dh * 0.12)));
+        const amostra = function(u, v){ if(u < u0 || u > u1 || v < mW.oy || v > vb) return null; const p = rot(u, v); const xs = Math.round(p.x), ys = Math.round(p.y); if(xs < 0 || ys < 0 || xs >= W2 || ys >= h) return null; const i = (ys * W2 + xs) * 4; if(dCV[i + 3] < 200) return null; if(obraIn && obraIn[i + 3] > 128) return null; return i; };
+        // a faixa da borda de baixo: cor média, uniformidade (linhas parecidas entre si) e descrição em palavras
+        const med = []; let R = 0, G = 0, Bc = 0, N = 0;
+        for(let v = vb - S + 1; v <= vb; v += 2){ let r = 0, g = 0, b = 0, n = 0; for(let u = u0 + mW.dw * 0.1; u <= u1 - mW.dw * 0.1; u += 3){ const i = amostra(u, v); if(i == null) continue; r += dCV[i]; g += dCV[i + 1]; b += dCV[i + 2]; n++; } if(n > 10){ med.push([r / n, g / n, b / n]); R += r; G += g; Bc += b; N += n; } }
+        if(N < 200) return null;
+        R /= N; G /= N; Bc /= N;
+        let varL = 0, varH = 0; med.forEach(function(m){ varL += Math.pow(0.299 * (m[0] - R) + 0.587 * (m[1] - G) + 0.114 * (m[2] - Bc), 2); varH += Math.pow((m[0] - m[1]) - (R - G), 2) + Math.pow((m[1] - m[2]) - (G - Bc), 2); });
+        const sdL = Math.sqrt(varL / med.length), sdH = Math.sqrt(varH / med.length);
+        const desc = (R > G + 14 && R > Bc + 14) ? "terra avermelhada/alaranjada" : (G > R + 8 && G > Bc + 8) ? "grama verde" : (Bc > R + 15) ? "chão escuro/azulado" : (R + G + Bc > 540) ? "areia/terra clara" : "terra";
+        const uniforme = sdL < 12 && sdH < 9;
+        return { dCV:dCV, obraIn:obraIn, rot:rot, unrot:unrot, u0:u0, u1:u1, vb:vb, S:S, amostra:amostra, cor:[R, G, Bc], desc:desc, uniforme:uniforme, sdL:sdL, sdH:sdH };
+      }catch(_){ return null; } })();
+      if(_chaoInfo) chaoDesc = _chaoInfo.desc;
+      /* preenche o que falta ABAIXO da foto (no espaço da foto) em Ecv/Mcv; devolve quantos pixels pintou */
+      const _preencherChao = function(Ecv, Mcv, soAbaixo){
+        const I = _chaoInfo; if(!I) return 0;
+        const ec = Ecv.getContext("2d"), mc = Mcv.getContext("2d");
+        const dEW = ec.getImageData(0, 0, W2, h), dE2 = dEW.data, dMW = mc.getImageData(0, 0, W2, h), dM2 = dMW.data, dCV = I.dCV;
+        const S = I.S, B = Math.max(16, Math.round(S * 0.6)), pluma = Math.min(14, Math.round(B * 0.3));
+        const rnd = function(seed){ const t = Math.sin(seed * 12.9898) * 43758.5453; return t - Math.floor(t); };
+        const yH = (provisorioW.__bordaLona && provisorioW.__bordaLona.yH != null) ? provisorioW.__bordaLona.yH : Math.round(h * 0.5);
+        let nFill = 0;
+        for(let y = Math.max(0, yH - 10); y < h; y++) for(let x = 0; x < W2; x++){
+          const i = (y * W2 + x) * 4; if(dM2[i + 3] >= 128) continue;
+          const q = I.unrot(x, y); const u = q.x, v = q.y;
+          if(v <= I.vb) continue;                                                   // só ABAIXO da borda de baixo da foto
+          if(soAbaixo && (u < I.u0 || u > I.u1)) continue;                           // lateral fica pra IA
+          const dv = v - I.vb, k = Math.floor(dv / B), j = dv - k * B;
+          const off = Math.floor(rnd(k * 7.1 + 1.3) * Math.max(1, S - B)), dx = (rnd(k * 3.7 + 9.1) - 0.5) * 80;
+          let us = Math.max(I.u0 + 3, Math.min(I.u1 - 3, u + dx)), vs = I.vb - S + 1 + off + j;
+          let is = I.amostra(us, vs); if(is == null){ us = Math.max(I.u0 + 3, Math.min(I.u1 - 3, u)); is = I.amostra(us, vs); } if(is == null){ is = I.amostra(us, I.vb - 2 - (j % 6)); } if(is == null) continue;
+          let r = dCV[is], g = dCV[is + 1], b = dCV[is + 2];
+          if(k > 0 && j < pluma){ const offP = Math.floor(rnd((k - 1) * 7.1 + 1.3) * Math.max(1, S - B)), dxP = (rnd((k - 1) * 3.7 + 9.1) - 0.5) * 80; const ip = I.amostra(Math.max(I.u0 + 3, Math.min(I.u1 - 3, u + dxP)), Math.min(I.vb, I.vb - S + 1 + offP + B + j)); if(ip != null){ const t = (j + 1) / (pluma + 1); r = dCV[ip] * (1 - t) + r * t; g = dCV[ip + 1] * (1 - t) + g * t; b = dCV[ip + 2] * (1 - t) + b * t; } }
+          dE2[i] = r; dE2[i + 1] = g; dE2[i + 2] = b; dE2[i + 3] = 255; dM2[i] = 0; dM2[i + 1] = 0; dM2[i + 2] = 0; dM2[i + 3] = 255; nFill++;
+        }
+        if(nFill > 300){ ec.putImageData(dEW, 0, 0); mc.putImageData(dMW, 0, 0); }
+        return nFill;
+      };
+      try{
+        const giroPeq = Math.abs(ang) < 6 * Math.PI / 180;
+        if(_chaoInfo && giroPeq && _chaoInfo.uniforme){
+          chaoDet = _preencherChao(EW, MW, true);
+          if(chaoDet > 300) avisos.push("chão de baixo continuado com a própria " + chaoDesc + " da borda da foto (sem IA, " + Math.round(chaoDet / (W2 * h) * 100) + "% do quadro)");
+        } else if(_chaoInfo){ avisos.push("chão de baixo fica pra IA (" + (giroPeq ? "faixa da borda tem estrutura — repetir ficaria listrado" : "foto girada " + Math.abs(ang * 180 / Math.PI).toFixed(0) + "°") + "); a borda é " + chaoDesc + " e a IA foi mandada continuar só isso"); }
+      }catch(e){ avisos.push("chão determinístico falhou (" + ((e && e.message) || e) + ") — a IA completa"); }
       // versões no quadro 9:16 (pra alinhamento e colagem)
       const recorta = function(c){ if(pad <= 0) return c; const o = document.createElement("canvas"); o.width = w; o.height = h; o.getContext("2d").drawImage(c, pad, 0, w, h, 0, 0, w, h); return o; };
       const E = recorta(EW), M = recorta(MW), provisorio = recorta(provisorioW);
@@ -149338,7 +149428,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       const partes = ["Fotografia real de obra rural" + (an.obraTipo ? " (" + an.obraTipo + ")" : "") + "."];
       /* (09/10 20:59, Gustavo: "não precisa forçar pra botar nuvem no céu, faz o simples" + névoa perto das
          montanhas) prompt validado no harness (p45): céu LISO igual ao da foto, proibido nuvem nova/neblina. */
-      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade. CÉU: continue EXATAMENTE o céu que já existe na foto — mesmo azul, mesmo degradê, LISO; NÃO adicione nuvens novas e NÃO invente neblina, fumaça nem montanhas (mantenha só o que a foto já tem). TERRENO embaixo: continue grama/terra/vegetação reais, nítidas, mesma luz, cor e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
+      if(precisaCompletar) partes.push("As faixas de cima e de baixo da imagem estão preenchidas com um reflexo provisório: REDESENHE essas faixas continuando a cena de verdade. CÉU: continue EXATAMENTE o céu que já existe na foto — mesmo azul, mesmo degradê, LISO; NÃO adicione nuvens novas e NÃO invente neblina, fumaça nem montanhas (mantenha só o que a foto já tem). TERRENO embaixo e dos lados: continue EXATAMENTE o chão que está na borda da foto" + (chaoDesc ? " (a borda de baixo é " + chaoDesc + " — continue só " + chaoDesc + ")" : "") + " — mesma cor e mesma textura; NÃO troque por grama, estrada, pedras, plantas ou qualquer coisa que não esteja na borda. Nítido, mesma luz e perspectiva. Proibido deixar qualquer região borrada, nebulosa, esfumaçada ou desfocada.");
       if(temEntulho) partes.push("Nas áreas marcadas, apague o objeto marcado (entulho, sujeira, materiais soltos, carimbo/marca d'água do celular) e preencha com o MESMO fundo que existe ao redor (areia, grama, céu), nítido e com textura real — nunca com mancha lisa ou neblina. Se a marca estiver sobre a obra, remova só a sujeira solta, mantendo a estrutura por baixo.");
       partes.push("A OBRA (lona/estrutura) é UMA SÓ e é a que já aparece nítida na foto: NÃO desenhe uma segunda lona, tanque, cúpula ou reflexo dela nas áreas provisórias — fora da obra só existe terreno, vegetação e céu. A lona NÃO existe fora da foto original: onde a foto termina, fora dela há só terreno, grama e céu — nunca continue a lona, nunca desenhe borda, sombra ou reflexo dela nas áreas provisórias. Todo o resto permanece idêntico, mesma textura e mesmo brilho — não escureça nada, não suavize a lona/estrutura da obra, não borre a vegetação. Não acrescente texto, pessoas, placas ou objetos novos. Resultado: uma fotografia real contínua, mesma câmera.");
       if(typeof ctx.passo === "function"){ try{ ctx.passo(precisaCompletar && temEntulho ? "completando céu/terreno e limpando a foto com IA…" : precisaCompletar ? "completando céu/terreno com IA…" : "limpando a foto com IA…"); }catch(_){ } }
@@ -149376,7 +149466,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           if(typeof ctx.passo === "function"){ try{ ctx.passo("completando o terreno com IA (janela de " + J.nome + ")…"); }catch(_){ } }
           const Rec = document.createElement("canvas"); Rec.width = lado; Rec.height = lado; Rec.getContext("2d").drawImage(EJ, 0, J.y, Wj, lado, 0, 0, lado, lado);
           const Mk = document.createElement("canvas"); Mk.width = lado; Mk.height = lado; Mk.getContext("2d").drawImage(MJ, 0, J.y, Wj, lado, 0, 0, lado, lado);
-          const promptJ = partes.join(" ") + (J.nome === "cima" ? " Nesta parte, as ÁRVORES e o MORRO continuam até a borda da imagem na mesma altura em que aparecem na foto — não deixe céu nem vazio abaixo da linha das copas." : " Nesta parte, continue o TERRENO (terra, grama, areia) com textura real e sem faixas retas nem repetições.");
+          const promptJ = partes.join(" ") + (J.nome === "cima" ? " Nesta parte, as ÁRVORES e o MORRO continuam até a borda da imagem na mesma altura em que aparecem na foto — não deixe céu nem vazio abaixo da linha das copas." : " Nesta parte, continue o CHÃO que já existe na borda da foto (a mesma terra ou grama, mesma cor), com textura real e sem faixas retas nem repetições — não invente grama onde a borda é terra.");
           /* (12/10, medido em 4 artes) com fidelidade "high" a IA COPIA o provisório que está embaixo da máscara
              (até a lona das linhas copiadas, faixa reta); SEM fidelidade (janela pequena, área a pintar pequena) ela
              não reenquadra e pinta terreno de verdade — foi o resultado mais limpo (real30). */
@@ -149431,9 +149521,24 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
                 dP[i + 3] = miss ? dF[i + 3] : ((!ob && tw > 0) ? Math.min(255, Math.round(prox * 1.6 * 255 * tw)) : 0); } }
             px2.putImageData(imP, 0, 0); colado = true;
             avisos.push("emenda de baixo: grama/terra da IA com pluma de 60px pra dentro da foto (fora da obra) e cor casada com a foto (ganho " + g.map(function(v){ return v.toFixed(2); }).join("/") + ")");
-          }catch(e){ colado = false; if(/conteúdo diferente/.test(String(e && e.message))) avisos.push("emenda de baixo: a IA pintou um terreno de cor diferente da grama/terra real na borda — sem pluma (ficaria borrado); se incomodar, gere de novo ou use o Ajuste fino"); } }
+          }catch(e){ colado = false; if(/conteúdo diferente/.test(String(e && e.message))){ const dd = Number(String(e.message).replace(/\D/g, "")) || 0;
+              /* (13/10 v23, Katuete: grama verde em cima de terra vermelha) diferença GRANDE = a IA inventou outro chão.
+                 Primeira vez: repete a chamada com o pedido ainda mais explícito. Segunda: joga fora a IA nessa área e
+                 continua a própria terra da foto (chão determinístico), que é o que o Gustavo pede. */
+              if(dd > 45 && !J.__retentou){ J.__retentou = true; avisos.push("janela de baixo: a IA pintou " + (chaoDesc ? "algo diferente de " + chaoDesc : "um chão de cor diferente") + " — repetindo com o pedido mais explícito"); 
+                const prompt2 = promptJ + " ATENÇÃO: a faixa de baixo da foto é " + (chaoDesc || "o chão da borda") + ". Continue SOMENTE " + (chaoDesc || "esse chão") + ", mesma cor exata, nada de grama ou outra cobertura.";
+                let rj3 = null; try{ rj3 = await _eaFotoIA(Rec, Mk, prompt2, ctx.client, ctx.projeto, { fidelidade:null }); }catch(_){ rj3 = null; }
+                if(rj3 && !_geracaoPreta(rj3)){ custoT += Number(rj3.__custo) || 0; nJ++; J.__rj = rj3; }
+              }
+              else if(dd > 45){ J.__descartar = true; avisos.push("janela de baixo: a IA insistiu em outro chão — descartada; o chão continua da própria foto"); }
+              else avisos.push("emenda de baixo: a IA pintou um terreno de cor diferente da grama/terra real na borda — sem pluma (ficaria borrado); se incomodar, gere de novo ou use o Ajuste fino"); } } }
+          if(J.__rj && !J.__colouRetry){ J.__colouRetry = true; rj = J.__rj; px2.clearRect(0, 0, lado, lado); px2.drawImage(rj, 0, 0); colado = false; }
+          if(J.__descartar){ /* nada da IA entra; preenche com a própria foto e segue */ }
+          else {
           if(!colado){ px2.globalCompositeOperation = "destination-in"; px2.drawImage(InvF, 0, 0); }
           EJ.getContext("2d").drawImage(P, 0, J.y);
+          }
+          if(J.__descartar){ try{ const nf = _preencherChao(EJ, MJ, false); avisos.push("chão de baixo continuado da própria foto no lugar da IA (" + Math.round(nf / (W2 * h) * 100) + "% do quadro)"); }catch(_){ } }
           // o que foi pintado vira "conteúdo" pra próxima janela
           { const mj = MJ.getContext("2d"); mj.globalCompositeOperation = "source-over"; mj.fillStyle = "#000"; mj.save(); mj.beginPath(); mj.rect(0, J.y, Wj, lado); mj.clip(); mj.fillRect(0, J.y, Wj, lado); mj.restore(); }
         }
@@ -149584,7 +149689,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v22: analisador e juiz com o caderno de regras + esforço medium; foto pronta não é movida + IA por janelas só onde não tem foto + céu determinístico + pluma na grama (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push("motor da foto v23: chão de baixo continuado da própria foto (sem IA) + céu segue a tendência do céu real (sem nuvem na média) + analisador/juiz com caderno de regras (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
