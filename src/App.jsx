@@ -58054,6 +58054,15 @@ export default function AgencyOS(){
   // (som + destaque) com o Dashboard aberto. Agora o aviso é global: em QUALQUER tela, alerta novo pra mim toca o
   // som e mostra um toast. O Dashboard continua fazendo o destaque dele; o aviso global se cala quando ele está na tela.
   useEffect(()=>{ try{ if(typeof pxAlertasGlobalLigar==="function") pxAlertasGlobalLigar(); }catch(_){} },[]);
+  /* (13/10/2026) volta do "Conectar Drive": a função drive-editavel redireciona pra cá com ?drive=conectado|erro&msg=… */
+  useEffect(()=>{ try{
+    const q=new URLSearchParams(window.location.search||""); const d=q.get("drive"); if(!d) return;
+    const msg=q.get("msg")||"";
+    setTimeout(function(){ if(typeof pixelsToast!=="undefined"){ if(d==="conectado") pixelsToast.success("✅ "+(msg||"Google Drive conectado."),9000); else pixelsToast.error("Google Drive: "+(msg||"não conectou."),12000); } },1200);
+    try{ if(window.pxDriveEditavel){ window.pxDriveEditavel._status=null; } }catch(_){}
+    q.delete("drive"); q.delete("msg"); const resto=q.toString();
+    window.history.replaceState(window.history.state, "", window.location.pathname+(resto?"?"+resto:"")+(window.location.hash||""));
+  }catch(_){} },[]);
   useEffect(()=>{
     const sb=window._sb;
     if(!sb||!CURRENT_USER?.id)return;
