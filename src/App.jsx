@@ -151166,7 +151166,14 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   const _iVis = (an.inclinacao != null && isFinite(an.inclinacao)) ? an.inclinacao : 0;
   let _iMed = null; try{ _iMed = _eaMedirInclinacaoCeu(nova); }catch(_){ }
   const _iOk = (_iMed != null) ? _iMed : _iVis;                       // horizonte MEDIDO manda; visão é reserva
-  const giro = Math.max(-30, Math.min(30, (_bOk != null && Math.abs(_bOk) >= Math.abs(_iOk)) ? _bOk : _iOk));
+  let giro = Math.max(-30, Math.min(30, (_bOk != null && Math.abs(_bOk) >= Math.abs(_iOk)) ? _bOk : _iOk));
+  /* (13/10, Gustavo, Paula Freitas: "ela tava alinhada, a linha horizontal da obra retinha, e você rotacionou deixando
+     torto") a foto estava reta (horizonte MEDIDO ≈ 0°), mas a visão deu uns graus pra "borda da obra" — que numa
+     lagoa vista de frente é PERSPECTIVA, não inclinação — e o motor girou a foto inteira. Regra: se o horizonte medido
+     na própria foto diz que ela está reta (< 1,5°), a borda da obra não manda e a foto NÃO gira. A borda só vale
+     quando a foto está torta de verdade (horizonte ≥ 1,5°) ou quando não deu pra medir o horizonte. */
+  if(_iMed != null && Math.abs(_iMed) < 1.5 && _bOk != null && Math.abs(giro) >= 0.8){ avisos.push("horizonte medido reto (" + _iMed.toFixed(1) + "°) — a foto não foi girada (a borda da obra inclinada é perspectiva)"); giro = 0; }
+  if(Math.abs(giro) < 0.8) giro = 0;
   if(_iMed != null && Math.abs(_iMed) >= 2) avisos.push("horizonte medido na própria foto: " + _iMed.toFixed(1) + "° — endireitado");
   const ang = -giro * Math.PI / 180;
   const podeIA = typeof _eaFn === "function" && !(ctx.semIA);
