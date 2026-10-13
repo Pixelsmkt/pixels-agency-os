@@ -150531,13 +150531,32 @@ function _eaTextoComHierarquia(o, texto, produtos){
   o.set({ text:novo, styles:styles }); try{ o.initDimensions(); }catch(_){ }
 }
 
+/* ═══ (13/10 14:35, Gustavo: "não tem um mais avançado que conseguiria ler melhor nossas necessidades?… faz isso, vamos
+   testar") CADERNO DE REGRAS da Foto de obra — vai como system prompt pro analisador e pro juiz, pra eles avaliarem a
+   foto com os MESMOS critérios que o Gustavo usa. É o resumo do doc "FOTO-DE-OBRA-MOTOR-APROVADO-regras-fixas-NAO-MEXER".
+   Prefixo estável de propósito (a OpenAI reaproveita o cache quando o começo do prompt não muda). ═══ */
+const _EA_FO_CADERNO = [
+"CADERNO DE REGRAS — arte 'Foto de obra' da Pixels (assessoria de marketing, clientes do agro: lagoas e cisternas com lona, galpões, ETAs, biodigestores).",
+"O QUE É A ARTE: a foto real tirada na obra entra num layout vertical (feed 4:5 ou story 9:16) com mapa/cidade em cima e ícone/frase embaixo. A foto é endireitada e, SÓ onde não existe foto (os cantos vazios), a IA completa com terra, grama, vegetação e céu. Depois limpa entulho.",
+"REGRA 1 — O PRODUTO É INTOCÁVEL: a obra (lona, lagoa, cisterna, galpão, estrutura) nunca muda de forma, tamanho, cor, textura, posição ou perspectiva. Nada é acrescentado nem removido nela, exceto sujeira ÓBVIA jogada por cima (mancha pequena).",
+"REGRA 2 — EM VOLTA DA OBRA SÓ TERRA E CÉU: nos arredores completados só pode existir terra, grama, vegetação baixa, montes de terra limpos e céu. Proibido: segunda obra, pedaço/faixa/reflexo de lona fora da obra, estradas, cercas, construções, máquinas, pessoas, texto, objetos inventados.",
+"REGRA 3 — NUNCA ZOOM: a foto nunca é ampliada nem recortada pra 'caber'; se falta espaço, a IA completa os cantos. A foto que já preenche o layout e já está reta NÃO é mexida — gerar de novo aí é desperdício (o Gustavo reclama de gastar R$2 à toa).",
+"REGRA 4 — GIRO SÓ QUANDO O HORIZONTE ESTÁ TORTO: mede-se o horizonte REAL (linha céu/terra ao fundo). A borda superior da obra inclinada costuma ser PERSPECTIVA (a lagoa vista de ângulo), não foto torta. Se o horizonte está reto (menos de 1,5°), inclinação = 0 — mesmo que a borda da obra pareça inclinada. Girar uma foto reta é o erro mais grave depois de mexer no produto.",
+"REGRA 5 — CÉU: o céu da foto continua no céu completado sem degrau, sem névoa, sem faixa esbranquiçada e sem segunda crista de morro. Copas de árvores e morros não ganham céu pintado por cima (triângulos de céu sobre árvores são erro).",
+"REGRA 6 — TERRENO: a terra completada tem a MESMA cor e textura da terra da foto (não vira estrada, asfalto, grama de jardim ou terra de outra cor). Emendas retas, regiões borradas/lisas e mudanças bruscas de cor são erro.",
+"REGRA 7 — ENTULHO: lixo, restos de material, lonas/plásticos soltos, cordas, canos, ferramentas, máquinas/tratores estacionados, sacos, tábuas, carimbo/marca d'água do celular (ex.: 'POCO X6 5G', data/hora) devem ser marcados pra limpeza. NÃO são entulho: a obra, montes de terra limpos, pessoas trabalhando.",
+"REGRA 8 — CONSERVADOR: na dúvida sobre a OBRA, não mexer. Na dúvida sobre entulho FORA da obra, marcar. Preferir 'não precisa mexer' a 'melhorar' — a foto original aprovada pelo cliente é a referência de verdade.",
+"REGRA 9 — RESPONDA SÓ O JSON PEDIDO, sem texto fora dele. Frações sempre entre 0 e 1 relativas à imagem em questão."
+].join("\n");
 /* ── FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação, a caixa da obra e as caixas de entulho (frações 0–1) ── */
 async function _eaAnalisarFotoObra(url, card){
   if(typeof askGPTBlocos !== "function") return null;
-  const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra", card:card || undefined,
-    system:"Você analisa fotos de obras rurais (lagoas, cisternas, galpões, ETAs, biodigestores) para encaixar num layout e limpar a cena. Responda SÓ um JSON, sem texto fora dele.",
+  // (13/10) "medium" = pensa antes de medir (pega perspectiva x foto torta, foto já pronta); +~R$0,15 por geração. max_tokens
+  // maior porque o pensamento conta no teto (08/10).
+  const r = await askGPTBlocos({ max_tokens:4000, reasoning_effort:"medium", origem:"arte_foto_obra", card:card || undefined,
+    system:_EA_FO_CADERNO + "\n\nSEU PAPEL AGORA: você é o ANALISADOR. Olha a foto original da obra e devolve as medidas pro motor encaixar e limpar — aplicando as regras acima (em especial a REGRA 4: inclinação é do HORIZONTE, não da borda da obra).",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável; "diagnostico": UMA frase curta (até 140 caracteres) dizendo o que a foto precisa — ex.: "horizonte reto, obra ocupa quase tudo, só completar céu em cima" ou "foto 2° torta, entulho à direita"}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -150553,7 +150572,7 @@ async function _eaAnalisarFotoObra(url, card){
     const aObra = Math.max(1e-6, (ob.x1 - ob.x0) * (ob.y1 - ob.y0));
     return ((c.x1 - c.x0) * (c.y1 - c.y0)) / aObra <= 0.15;
   }).slice(0, 6);
-  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent };
+  return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent, diagnostico:String(j.diagnostico || "").replace(/\s+/g, " ").trim().slice(0, 160) };
 }
 /* ═══ (12/10, Gustavo: "é mais vantagem botar uma etapa do GPT avaliar e se autocorrigir do que me mandar 200
    artes erradas") JUIZ da Foto de obra: o GPT olha a arte (só a foto, sem template) ao lado da foto original e
@@ -150565,8 +150584,8 @@ async function _eaJuizFotoObra(cv, urlOriginal, card){
   const J = document.createElement("canvas"); const k = Math.min(1, 1024 / Math.max(cv.width, cv.height));
   J.width = Math.round(cv.width * k); J.height = Math.round(cv.height * k); J.getContext("2d").drawImage(cv, 0, 0, J.width, J.height);
   const b64 = J.toDataURL("image/jpeg", 0.86).split(",")[1];
-  const r = await askGPTBlocos({ max_tokens:1500, reasoning_effort:"low", origem:"arte_foto_obra_juiz", card:card || undefined,
-    system:"Você é o diretor de arte que confere artes de 'Foto de obra' (obra rural real — lona, lagoa, cisterna, galpão — com céu e terreno completados por IA em volta). Responda SÓ um JSON, sem texto fora dele.",
+  const r = await askGPTBlocos({ max_tokens:4000, reasoning_effort:"medium", origem:"arte_foto_obra_juiz", card:card || undefined,
+    system:_EA_FO_CADERNO + "\n\nSEU PAPEL AGORA: você é o JUIZ (diretor de arte). Confere a arte gerada contra a foto original usando as regras acima — REGRA 1 (produto intocável), 2 (só terra e céu em volta), 5 (céu sem névoa/degrau), 6 (terreno da mesma cor, sem emenda nem borrão). Reprova o que fere regra; aprova o que está dentro delas.",
     messages:[{ role:"user", content:[
       { type:"text", text:"IMAGEM 1 = a arte gerada (a foto da obra endireitada, com céu/terreno completados por IA em volta). IMAGEM 2 = a foto original tirada na obra." },
       { type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64 } },
@@ -151371,6 +151390,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
     const e2 = new Error("não consegui analisar a foto (" + motivo + ") — sem isso a foto entraria só centralizada, então NÃO gerei" + (/credit|quota|no credits|sem_credito|insufficient/i.test(motivo) ? " · a OpenAI está sem crédito: adicione em platform.openai.com › Billing e gere de novo" : ""));
     e2.__fotoObra = true; throw e2;
   }
+  if(an.diagnostico) avisos.push("leitura da foto (GPT): " + an.diagnostico);
   const w = cfg.w, h = cfg.h, pular = cfg.pular || [];
   const B = cfg.B, kx = w / Math.max(1, B.width), ky = h / Math.max(1, B.height);   // página → pixels do canvas da foto
   const paraCanvas = function(c){ return { x0:(c.left - B.left) * kx, y0:(c.top - B.top) * ky, x1:(c.left + c.width - B.left) * kx, y1:(c.top + c.height - B.top) * ky }; };
@@ -151876,7 +151896,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push("motor da foto v21: foto pronta não é movida + IA por janelas só onde não tem foto + céu determinístico + pluma na grama + juiz GPT (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push("motor da foto v22: analisador e juiz com o caderno de regras + esforço medium; foto pronta não é movida + IA por janelas só onde não tem foto + céu determinístico + pluma na grama (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
