@@ -149731,7 +149731,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         const d1 = Math.round(base.height * 0.45);
         const c1 = await passoBaixo(base, Object.assign({}, ext, { down:d1 }), yBorda, "1º passo"); const dv1 = corrigeDeriva(c1, yBorda, "1º passo"); if(dv1) derivas.push(dv1);
         if(typeof ctx.passo === "function"){ try{ ctx.passo("estendendo a terra de baixo (2º passo)…"); }catch(_){ } }
-        const y0 = Math.max(0, yBorda - 150);
+        // (23:00, erro real do Gustavo: "unsupported aspect ratio — must be between 1:2.5 and 2.5:1, received 2520x626") o recorte
+        // do 2º passo tem que ter altura ≥ largura/2,4 (foto girada e estendida pros lados fica larga); se precisar, sobe mais
+        const y0 = Math.max(0, Math.min(yBorda - 150, c1.height - Math.ceil(c1.width / 2.4)));
         const rec = document.createElement("canvas"); rec.width = c1.width; rec.height = c1.height - y0; rec.getContext("2d").drawImage(c1, 0, y0, c1.width, c1.height - y0, 0, 0, rec.width, rec.height);
         const r2 = await passoBaixo(rec, { left:0, right:0, up:0, down:ext.down - d1, creativity:ext.creativity }, yBorda - y0, "2º passo");
         const c2 = document.createElement("canvas"); c2.width = c1.width; c2.height = c1.height + (ext.down - d1); const x2 = c2.getContext("2d"); x2.drawImage(c1, 0, 0); x2.drawImage(r2, 0, rec.height, r2.width, r2.height - rec.height, 0, c1.height, r2.width, r2.height - rec.height);
@@ -149780,7 +149782,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
          gpt-image sem ninguém pedir) — a geração PARA com o motivo na tela, como o Gustavo pediu em 09/10. */
       const msg = _eaErro(e);
       if(/402|credits|crédito|payment_required|Limite do mês/i.test(msg)) throw new Error(/Limite do mês/i.test(msg) ? msg : "A Stability está sem crédito (" + msg.slice(0, 80) + "). Compra créditos em platform.stability.ai › Billing (US$ 10 = 1.000 créditos ≈ 250 fotos) e clica em Gerar arte de novo.");
-      avisos.push("outpaint (v26) falhou: " + msg + " — caiu pro motor v25"); v26ok = false; }
+      /* (23:00, Gustavo: "continua com aquele negócio bugado no céu e na terra") cair pro v25 entregava a arte com o triângulo
+         no céu como se fosse normal. Agora QUALQUER falha do outpaint para a geração com o motivo na tela. */
+      throw new Error("A extensão da foto (Stability) falhou: " + msg.slice(0, 220) + " — a arte não foi gerada. Clica em Gerar arte de novo; se repetir, me manda esse erro."); }
   }
   if(!v26ok && podeIA && (precisaCompletar || temEntulho)){
     try{
