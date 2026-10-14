@@ -148747,7 +148747,8 @@ async function _eaCorrigirAreaIA(cv, sel, txt, client, prot){
   const prompt = "Fotografia real de obra rural. Edite SOMENTE a área marcada: " + txt + ". Fora da área marcada tudo permanece IDÊNTICO, pixel a pixel — mesma luz, mesma cor, mesma textura, mesma perspectiva. Nítido, com textura fotográfica real; proibido deixar qualquer região borrada ou nebulosa. Não acrescente texto, pessoas, lona, estruturas ou objetos novos.";
   // (13/10 v26) primeiro pela Stability (erase pra "apagar/remover", inpaint pro resto); gpt-image só se ela falhar
   let r = null;
-  try{ r = await _eaStabilityArea(_eaPedidoEhRemover(txt) ? "erase" : "inpaint", Rec, Mk, txt, { client:client }); }catch(_){ r = null; }
+  const forcaInpaint = /^INPAINT /.test(txt); if(forcaInpaint) txt = txt.replace(/^INPAINT /, "");   // (14/10) juiz: sempre inpaint com ordem de chão (erase puxava lona)
+  try{ r = await _eaStabilityArea((!forcaInpaint && _eaPedidoEhRemover(txt)) ? "erase" : "inpaint", Rec, Mk, txt, { client:client }); }catch(_){ r = null; }
   if(!r) r = await _eaFotoIA(Rec, Mk, prompt, client, null);
   if(!r) throw new Error("a IA não devolveu imagem");
   const rA = r.__via ? r : ((typeof _eaAlinharIA === "function") ? _eaAlinharIA(Rec, r) : r);
@@ -149626,7 +149627,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
     const jaCabe = obY0 >= fT - tolF && obY1 <= fB + tolF && m.vazio <= w * h * 0.005;
     if(jaCabe) avisos.push("obra já estava entre o mapa/cidade e o ícone/frase — foto não foi movida");
     if(!jaCabe && fB - fT > h * 0.08){
-      let alvoY0 = fT + Math.max(0, (fB - fT - obH) / 2);          // obra maior que a faixa → encosta no teto (mapa ganha)
+      if(obH > fB - fT) avisos.push("obra maior que a faixa útil — encostada no ícone/frase (texto ganha), subindo pra faixa do mapa");
+      /* (14/10 10:16, Gustavo: "deveria ter colocado a obra mais pra cima pra não ficar atrás do texto, como eu já tinha
+         passado") obra maior que a faixa → encosta no PISO (o texto/ícone ganha; a obra pode subir pra faixa do mapa) */
+      let alvoY0 = fT + Math.max(0, (fB - fT - obH) / 2);
+      if(obH > fB - fT) alvoY0 = Math.max(0, fB - obH);
       if(alvoY0 + obH > h) alvoY0 = Math.max(0, h - obH);          // mas nunca corta a obra no rodapé
       const oyN = alvoY0 - an.obra.y0 * m.dh;
       if(Math.abs(oyN - m.oy) > 4){
@@ -149733,6 +149738,29 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       /* (21:52, Gustavo: "parte da terra ficou toda estranha") DERIVA corrigida DEPOIS DE CADA PASSO, em coordenadas da foto:
          terra real = 120 linhas acima da borda de baixo da foto (sem lona escura, sem céu); terra pintada = 120–400 linhas
          abaixo; ganho por canal (até 1,6×) que vai de 1 na borda até cheio a 180 px. O 2º passo parte da cor certa. */
+      /* (14/10 10:16, Gustavo, Katuete em pé girada 28°: "a terra a transição ficou dura") a terra que falta numa foto EM PÉ
+         girada vai pras LATERAIS, não pra baixo — e a correção só olhava a faixa de baixo. Agora corrige esquerda e direita
+         também (abaixo do horizonte), cada faixa casada com a borda da foto que encosta nela. */
+      const corrigeDerivaLados = function(cvI, rect, yHoriz, rotulo){ try{
+        const Wd = cvI.width, Hd = cvI.height; const ic = cvI.getContext("2d").getImageData(0, 0, Wd, Hd), dd = ic.data; const out = [];
+        const ceu = function(i){ const r0 = dd[i], g0 = dd[i + 1], b0 = dd[i + 2]; const mx0 = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0); return b0 >= r0 && b0 >= g0 - 4 && mx0 > 90 && (mx0 - mn) / Math.max(1, mx0) < 0.75; };
+        const lum = function(i){ return 0.299 * dd[i] + 0.587 * dd[i + 1] + 0.114 * dd[i + 2]; };
+        [["esquerda", rect.x, -1], ["direita", rect.x + rect.w - 1, 1]].forEach(function(L){ const nome = L[0], xB = L[1], dir = L[2];
+          const temFaixa = dir < 0 ? rect.x > 40 : (Wd - rect.x - rect.w) > 40; if(!temFaixa) return;
+          const sF = [0, 0, 0], sN = [0, 0, 0], sG = [0, 0, 0]; let nF = 0, nN = 0, nG = 0;
+          for(let y = Math.max(yHoriz, rect.y); y < rect.y + rect.h; y++){
+            for(let k = 0; k < 120; k++){ const x = xB - dir * k; if(x < rect.x || x >= rect.x + rect.w) break; const i = (y * Wd + x) * 4; if(lum(i) < 60 || ceu(i)) continue; sF[0] += dd[i]; sF[1] += dd[i + 1]; sF[2] += dd[i + 2]; nF++; }
+            for(let k = 1; k <= 400; k++){ const x = xB + dir * k; if(x < 0 || x >= Wd) break; const i = (y * Wd + x) * 4; if(lum(i) < 25 || ceu(i)) continue; if(k <= 120){ sN[0] += dd[i]; sN[1] += dd[i + 1]; sN[2] += dd[i + 2]; nN++; } else { sG[0] += dd[i]; sG[1] += dd[i + 1]; sG[2] += dd[i + 2]; nG++; } } }
+          if(nF < 400 || nN < 400) return;
+          const gnN = [0, 1, 2].map(function(c){ return Math.max(0.7, Math.min(1.8, (sF[c] / nF) / Math.max(1, sN[c] / nN))); });
+          const gnG = nG >= 400 ? [0, 1, 2].map(function(c){ return Math.max(0.7, Math.min(1.8, (sF[c] / nF) / Math.max(1, sG[c] / nG))); }) : gnN;
+          const lF = 0.299 * sF[0] / nF + 0.587 * sF[1] / nF + 0.114 * sF[2] / nF, lN = 0.299 * sN[0] / nN + 0.587 * sN[1] / nN + 0.114 * sN[2] / nN;
+          if(Math.abs(lF / Math.max(1, lN) - 1) <= 0.06 && (nG < 400 || Math.abs(lF / Math.max(1, 0.299 * sG[0] / nG + 0.587 * sG[1] / nG + 0.114 * sG[2] / nG) - 1) <= 0.06)) return;
+          for(let y = Math.max(0, yHoriz); y < Hd; y++) for(let k = 1; k <= Wd; k++){ const x = xB + dir * k; if(x < 0 || x >= Wd) break; const i = (y * Wd + x) * 4; if(ceu(i)) continue; const t = Math.min(1, Math.max(0, (k - 60) / 200)); for(let c = 0; c < 3; c++){ const g = gnN[c] * (1 - t) + gnG[c] * t; const v = dd[i + c] * g; dd[i + c] = v > 235 ? 235 + (v - 235) * 0.4 : v; } }
+          out.push(rotulo + " " + nome + ": brilho " + Math.round(lN) + " → " + Math.round(lF) + " (ganho " + gnN.map(function(v){ return v.toFixed(2); }).join("/") + ")"); });
+        if(out.length) cvI.getContext("2d").putImageData(ic, 0, 0);
+        return out.length ? out.join("; ") : null;
+      }catch(_){ return null; } };
       const corrigeDeriva = function(cvI, yBorda, rotulo){ try{
         const Wd = cvI.width, Hd = cvI.height; const ic = cvI.getContext("2d").getImageData(0, 0, Wd, Hd), dd = ic.data;
         const ceu = function(i){ const r0 = dd[i], g0 = dd[i + 1], b0 = dd[i + 2]; const mx0 = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0); return b0 >= r0 && b0 >= g0 - 4 && mx0 > 90 && (mx0 - mn) / Math.max(1, mx0) < 0.75; };
@@ -149776,6 +149804,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         const dvJ = corrigeDeriva(c2, c1.height, "junção do 2º passo"); if(dvJ) derivas.push(dvJ);   // (22:25) tom da junção casado com a terra logo acima
         img = c2; img.__custo = (Number(c1.__custo) || 0) + (Number(r2.__custo) || 0); img.__segundos = (Number(c1.__segundos) || 0) + (Number(r2.__segundos) || 0); passos = 2;
       } else { img = await passoBaixo(base, ext, yBorda, "extensão"); if(ext.down > 40){ const dv = corrigeDeriva(img, yBorda, "terra"); if(dv) derivas.push(dv); } }
+      if(ext.left > 40 || ext.right > 40){ const yHz = ext.up + Math.round((an.horizonte != null ? an.horizonte : 0.5) * base.height); const dvL = corrigeDerivaLados(img, { x:ext.left, y:ext.up, w:base.width, h:base.height }, yHz, "lateral"); if(dvL) derivas.push(dvL); }
       if(derivas.length) avisos.push("cor da terra pintada corrigida de volta pra cor da borda — " + derivas.join("; "));
       if(passos === 2) avisos.push("terra de baixo estendida em 2 passos (faixa de " + ext.down + "px > metade da foto): num passo só a cor derivava");
       if(nLimpo) avisos.push("limpeza antes de estender (Stability Inpaint, obra fora da máscara e recolada da original): " + nLimpo + " área(s) preenchidas com chão/fundo — entulho/sobras de lona" + (an.carimbo ? " + carimbo de data do celular" : "") + (custoLimpa ? " · R$ " + custoLimpa.toFixed(2) : ""));
@@ -150524,7 +150553,28 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         if(!jz){ avisos.push("juiz: não respondeu — arte segue sem conferência"); break; }
         if(jz.aprovado || !jz.problemas.length){ avisos.push("juiz (GPT): aprovou a arte" + (rodada > 1 ? " depois da correção" : "")); break; }
         /* (13/10 v25) no motor simples o juiz SÓ AVISA: corrigir por área é inpainting de novo (voltaria a puxar poste/lona) */
-        if(cv && cv.__simples){ jz.problemas.forEach(function(pr){ avisos.push("juiz (só aviso, " + (cv.__outpaint ? "v26" : "v25") + "): " + pr.tipo + " — " + pr.oQue); }); break; }
+        if(cv && cv.__simples){
+          /* (14/10 10:16, Gustavo: "não tirou essa madeira do arredor da obra") o juiz passa a mandar numa 2ª LIMPEZA: objeto,
+             lona fora e mancha FORA da obra → Stability Inpaint só nessa caixa, com a OBRA protegida (máscara da caixa da obra
+             girada junto com a foto) — nunca inpainting genérico, nunca na obra. Até 2 caixas, 1 rodada. */
+          const protObra = document.createElement("canvas"); protObra.width = w; protObra.height = h;
+          try{ if(an.obra){ const po = protObra.getContext("2d"); po.save(); po.translate(w / 2, h / 2); po.rotate(ang); po.translate(-w / 2, -h / 2); po.fillStyle = "#fff"; const g = 0.012;
+            po.fillRect(m.ox + (an.obra.x0 - g) * m.dw, m.oy + (an.obra.y0 - g) * m.dh, (an.obra.x1 - an.obra.x0 + 2 * g) * m.dw, (an.obra.y1 - an.obra.y0 + 2 * g) * m.dh); po.restore(); } }catch(_){ }
+          const limpaveis = jz.problemas.filter(function(pr){ return (pr.tipo === "objeto" || pr.tipo === "lona_fora" || pr.tipo === "mancha") && (pr.x1 - pr.x0) <= 0.35 && (pr.y1 - pr.y0) <= 0.35; }).slice(0, 2);
+          const soAviso = jz.problemas.filter(function(pr){ return limpaveis.indexOf(pr) < 0; });
+          soAviso.forEach(function(pr){ avisos.push("juiz (só aviso, " + (cv.__outpaint ? "v26" : "v25") + "): " + pr.tipo + " — " + pr.oQue); });
+          for(const pr of limpaveis){
+            const minL = Math.round(w * 0.18);
+            const sel = { x:Math.round(pr.x0 * w), y:Math.round(pr.y0 * h), w:Math.max(minL, Math.round((pr.x1 - pr.x0) * w)), h:Math.max(minL, Math.round((pr.y1 - pr.y0) * h)) };
+            sel.x = Math.max(0, Math.min(w - sel.w, Math.round((pr.x0 + pr.x1) / 2 * w - sel.w / 2))); sel.y = Math.max(0, Math.min(h - sel.h, Math.round((pr.y0 + pr.y1) / 2 * h - sel.h / 2)));
+            let livre = 0; { const t = protObra.getContext("2d").getImageData(sel.x, sel.y, sel.w, sel.h).data; for(let i = 3; i < t.length; i += 4) if(t[i] < 128) livre++; }
+            if(livre < sel.w * sel.h * 0.3){ avisos.push("juiz: " + pr.tipo + " em cima da obra (" + pr.oQue + ") — não mexido"); continue; }
+            if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando o que o juiz apontou: " + pr.oQue.slice(0, 50) + "…"); }catch(_){ } }
+            try{ const c = await _eaCorrigirAreaIA(cv, sel, "INPAINT Fill the marked area with the same bare ground, grass or sky that surrounds it, continuous and natural; the following must disappear: " + pr.oQue + ". No tarp, no liner, no objects, nothing new.", ctx.client, protObra); custoJ += c; correcoes++;
+              avisos.push("juiz apontou " + pr.tipo + " (" + pr.oQue + ") → 2ª limpeza só nessa área, obra protegida" + (c ? " · R$ " + c.toFixed(2) : "")); }
+            catch(e){ avisos.push("juiz: 2ª limpeza de " + pr.tipo + " falhou (" + _eaErro(e) + ")"); }
+          }
+          break; }
         /* "emenda" NÃO é corrigida por área (medido em 2 artes: repintar uma faixa cria outra emenda) — só é avisada;
            "produto" idem (a foto real já está colada). Caixa maior que 45% da largura também só avisa. */
         const corrigiveis = jz.problemas.filter(function(pr){ return pr.tipo !== "produto" && pr.tipo !== "emenda" && (pr.x1 - pr.x0) <= 0.45 && (pr.y1 - pr.y0) <= 0.45; });
