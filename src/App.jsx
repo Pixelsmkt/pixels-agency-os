@@ -144971,6 +144971,21 @@ async function _eaOutpaint(b64, ext, prompt, ctx){
    fundo (3–5 créditos ≈ R$ 0,15–0,25); Inpaint = repinta seguindo o pedido. */
 // (14/10 12:40) negativo: o que NÃO pode aparecer vai em negative_prompt — citar "no pipe, no wood" no prompt positivo fazia a
 // Stability PINTAR cano/galhos no lugar do entulho (visto em 3 testes seguidos)
+/* (14/10 13:40) LONA DE VERDADE, pixel a pixel: escuro e sem cor (preto/cinza), ou azulado ESCURO (reflexo da lona; l < 120 — céu
+   no horizonte é azulado claro e entrava como lona). Sombra de terra vermelha é escura mas tem cor → fora. */
+function _eaEhLona(r0, g0, b0){ const mx0 = Math.max(r0, g0, b0), mn0 = Math.min(r0, g0, b0); const l = 0.299 * r0 + 0.587 * g0 + 0.114 * b0; const cr = (mx0 - mn0) / Math.max(1, mx0); return (l < 80 && cr < 0.45) || (b0 >= r0 && b0 >= g0 && l < 120 && cr < 0.6); }
+/* só os blocos CONECTADOS grandes (≥ frac do maior) de uma máscara 0/1 ws×hs — cano, tábua, galho e sombra solta são blocos pequenos */
+function _eaBlocosGrandes(occ, ws, hs, frac){
+  const lab = new Int32Array(ws * hs), fila = new Int32Array(ws * hs); const areas = [0]; let nLab = 0;
+  for(let p0 = 0; p0 < ws * hs; p0++){ if(!occ[p0] || lab[p0]) continue; nLab++; let qi = 0, qf = 0; fila[qf++] = p0; lab[p0] = nLab; let area = 0;
+    while(qi < qf){ const q = fila[qi++]; area++; const qx = q % ws, qy = (q / ws) | 0;
+      if(qx > 0 && occ[q - 1] && !lab[q - 1]){ lab[q - 1] = nLab; fila[qf++] = q - 1; } if(qx < ws - 1 && occ[q + 1] && !lab[q + 1]){ lab[q + 1] = nLab; fila[qf++] = q + 1; }
+      if(qy > 0 && occ[q - ws] && !lab[q - ws]){ lab[q - ws] = nLab; fila[qf++] = q - ws; } if(qy < hs - 1 && occ[q + ws] && !lab[q + ws]){ lab[q + ws] = nLab; fila[qf++] = q + ws; } }
+    areas.push(area); }
+  const maior = Math.max.apply(null, areas); const out = new Uint8Array(ws * hs);
+  for(let p0 = 0; p0 < ws * hs; p0++) if(occ[p0] && areas[lab[p0]] >= maior * frac) out[p0] = 1;
+  return out;
+}
 async function _eaStabilityArea(acao, Rec, Mk, prompt, ctx, negativo){
   const L = Rec.width, H = Rec.height;
   const M = document.createElement("canvas"); M.width = L; M.height = H; const mx = M.getContext("2d");
@@ -149635,8 +149650,10 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         x.save(); x.scale(1 / S, 1 / S); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2); x.drawImage(nova, pl.ox, pl.oy, pl.dw, pl.dh); x.restore();
         const pc = document.createElement("canvas"); pc.width = ws; pc.height = hs; const px2 = pc.getContext("2d"); px2.fillStyle = "#fff"; px2.beginPath(); px2.moveTo(q[0].x / S, q[0].y / S); for(let k = 1; k < 4; k++) px2.lineTo(q[k].x / S, q[k].y / S); px2.closePath(); px2.fill();
         const d = x.getImageData(0, 0, ws, hs).data, dp = px2.getImageData(0, 0, ws, hs).data;
-        let ya = -1, yb = -1, xa = -1, xb = -1, n = 0, nPoly = 0;
-        for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ const i = (yy * ws + xx) * 4; if(dp[i + 3] < 128 || d[i + 3] < 200) continue; nPoly++; const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; const mx0 = Math.max(d[i], d[i + 1], d[i + 2]), mn0 = Math.min(d[i], d[i + 1], d[i + 2]); if(!((l < 80 && (mx0 - mn0) / Math.max(1, mx0) < 0.45) || (d[i + 2] >= d[i] && d[i + 2] >= d[i + 1] && l < 175 && (mx0 - mn0) / Math.max(1, mx0) < 0.6))) continue; n++; if(ya < 0 || yy < ya) ya = yy; if(yy > yb) yb = yy; if(xa < 0 || xx < xa) xa = xx; if(xx > xb) xb = xx; }
+        let ya = -1, yb = -1, xa = -1, xb = -1, n = 0, nPoly = 0; const occ = new Uint8Array(ws * hs);
+        for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ const i = (yy * ws + xx) * 4; if(dp[i + 3] < 128 || d[i + 3] < 200) continue; nPoly++; if(_eaEhLona(d[i], d[i + 1], d[i + 2])) occ[yy * ws + xx] = 1; }
+        const occG = _eaBlocosGrandes(occ, ws, hs, 0.15);   // (13:40) só os blocos grandes: céu no canto do losango e sombra solta ficam de fora
+        for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ if(!occG[yy * ws + xx]) continue; n++; if(ya < 0 || yy < ya) ya = yy; if(yy > yb) yb = yy; if(xa < 0 || xx < xa) xa = xx; if(xx > xb) xb = xx; }
         if(n > nPoly * 0.03 && ya >= 0){ y0 = ya * S; y1 = (yb + 1) * S; x0 = xa * S; x1 = (xb + 1) * S; }
       }
     }catch(_){ }
@@ -149651,6 +149668,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
        faixa vazia embaixo e ligava a IA (R$ 1–2 + juiz) numa foto que estava pronta. Só centraliza quando a obra
        invade o mapa/cidade ou o ícone/frase. */
     const obY0 = obQ.y0, obY1 = obQ.y1, tolF = h * 0.025;
+    avisos.push("posição: obra medida de " + Math.round(obY0 / h * 100) + "% a " + Math.round(obY1 / h * 100) + "% da altura; faixa útil de " + Math.round(fT / h * 100) + "% (base do mapa/cidade) a " + Math.round(fB / h * 100) + "% (topo do ícone/frase)");
     const jaCabe = obY0 >= fT - tolF && obY1 <= fB + tolF && m.vazio <= w * h * 0.005;
     if(jaCabe) avisos.push("obra já estava entre o mapa/cidade e o ícone/frase — foto não foi movida");
     if(!jaCabe && fB - fT > h * 0.08){
@@ -149728,21 +149746,14 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       const Prot = document.createElement("canvas"); Prot.width = base.width; Prot.height = base.height; let temLona = false;
       try{ if(an.obra){ const bx = Math.max(0, Math.round((an.obra.x0 - 0.01) * base.width)), by = Math.max(0, Math.round((an.obra.y0 - 0.01) * base.height)); const bw = Math.min(base.width - bx, Math.round((an.obra.x1 - an.obra.x0 + 0.02) * base.width)), bh = Math.min(base.height - by, Math.round((an.obra.y1 - an.obra.y0 + 0.02) * base.height));
         if(bw > 2 && bh > 2){ const dB = base.getContext("2d").getImageData(bx, by, bw, bh).data; const T = document.createElement("canvas"); T.width = bw; T.height = bh; const tx = T.getContext("2d"); const idT = tx.createImageData(bw, bh); let nL = 0;
-          for(let q = 0, i = 0; q < bw * bh; q++, i += 4){ const r0 = dB[i], g0 = dB[i + 1], b0 = dB[i + 2]; const mx0 = Math.max(r0, g0, b0), mn0 = Math.min(r0, g0, b0); const l = 0.299 * r0 + 0.587 * g0 + 0.114 * b0; const cr = (mx0 - mn0) / Math.max(1, mx0);
-            if((l < 80 && cr < 0.45) || (b0 >= r0 && b0 >= g0 && l < 175 && cr < 0.6)){ idT.data[i + 3] = 255; nL++; } }
+          for(let q = 0, i = 0; q < bw * bh; q++, i += 4){ if(_eaEhLona(dB[i], dB[i + 1], dB[i + 2])){ idT.data[i + 3] = 255; nL++; } }
           /* (12:00, visto na simulação: o CANO preto é escuro e sem cor igual à lona) só fica protegido o que é a LONA de verdade =
              os blocos CONECTADOS grandes (≥ 15% do maior bloco); cano, tábua, sombra solta são blocos pequenos → ficam de fora. */
           if(nL > bw * bh * 0.02){
-            const S = 2, ws = Math.ceil(bw / S), hs = Math.ceil(bh / S); const lab = new Int32Array(ws * hs); const occ = new Uint8Array(ws * hs);
+            const S = 2, ws = Math.ceil(bw / S), hs = Math.ceil(bh / S); const occ = new Uint8Array(ws * hs);
             for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ const i = ((Math.min(bh - 1, yy * S)) * bw + Math.min(bw - 1, xx * S)) * 4; occ[yy * ws + xx] = idT.data[i + 3] ? 1 : 0; }
-            const areas = [0]; const fila = new Int32Array(ws * hs); let nLab = 0;
-            for(let p0 = 0; p0 < ws * hs; p0++){ if(!occ[p0] || lab[p0]) continue; nLab++; let qi = 0, qf = 0; fila[qf++] = p0; lab[p0] = nLab; let area = 0;
-              while(qi < qf){ const q = fila[qi++]; area++; const qx = q % ws, qy = (q / ws) | 0;
-                if(qx > 0 && occ[q - 1] && !lab[q - 1]){ lab[q - 1] = nLab; fila[qf++] = q - 1; } if(qx < ws - 1 && occ[q + 1] && !lab[q + 1]){ lab[q + 1] = nLab; fila[qf++] = q + 1; }
-                if(qy > 0 && occ[q - ws] && !lab[q - ws]){ lab[q - ws] = nLab; fila[qf++] = q - ws; } if(qy < hs - 1 && occ[q + ws] && !lab[q + ws]){ lab[q + ws] = nLab; fila[qf++] = q + ws; } }
-              areas.push(area); }
-            const maior = Math.max.apply(null, areas); const fica = areas.map(function(ar){ return ar >= maior * 0.15; });
-            for(let yy = 0; yy < bh; yy++) for(let xx = 0; xx < bw; xx++){ const L0 = lab[((yy / S) | 0) * ws + ((xx / S) | 0)]; if(!fica[L0]) idT.data[(yy * bw + xx) * 4 + 3] = 0; }
+            const occG = _eaBlocosGrandes(occ, ws, hs, 0.15);
+            for(let yy = 0; yy < bh; yy++) for(let xx = 0; xx < bw; xx++){ if(!occG[((yy / S) | 0) * ws + ((xx / S) | 0)]) idT.data[(yy * bw + xx) * 4 + 3] = 0; }
             tx.putImageData(idT, 0, 0); const pr = Prot.getContext("2d"); pr.filter = "blur(3px)"; pr.drawImage(T, bx, by); pr.filter = "none";
             const dP = pr.getImageData(0, 0, Prot.width, Prot.height); for(let i = 3; i < dP.data.length; i += 4){ dP.data[i] = dP.data[i] > 10 ? 255 : 0; dP.data[i - 3] = 0; dP.data[i - 2] = 0; dP.data[i - 1] = 0; } pr.putImageData(dP, 0, 0); temLona = true;
             // o carimbo de data costuma cair em cima da lona (canto de baixo): fica FORA da proteção pra ser apagado
