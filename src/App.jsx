@@ -149611,7 +149611,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      lagoa vista de frente é PERSPECTIVA, não inclinação — e o motor girou a foto inteira. Regra: se o horizonte medido
      na própria foto diz que ela está reta (< 1,5°), a borda da obra não manda e a foto NÃO gira. A borda só vale
      quando a foto está torta de verdade (horizonte ≥ 1,5°) ou quando não deu pra medir o horizonte. */
-  if(_iMed != null && Math.abs(_iMed) < 1.5 && _bOk != null && Math.abs(giro) >= 0.8){ avisos.push("horizonte medido reto (" + _iMed.toFixed(1) + "°) — a foto não foi girada (a borda da obra inclinada é perspectiva)"); giro = 0; }
+  /* (14/10 15:40, Gustavo, Taió: "ela já tava retinha e você entortou") céu nublado não deixou medir o horizonte na foto, o GPT
+     disse "horizonte reto, não girar", e mesmo assim a borda da obra (1,9°) girou a foto. Agora: horizonte reto — medido OU
+     pela leitura do GPT quando não deu pra medir — e a borda da obra NÃO manda. */
+  const _hzReto = (_iMed != null) ? Math.abs(_iMed) < 1.5 : Math.abs(_iVis) < 1.5;
+  if(_hzReto && _bOk != null && Math.abs(giro) >= 0.8 && Math.abs(_iOk) < 1.5){ avisos.push("horizonte " + (_iMed != null ? "medido" : "lido pelo GPT") + " reto (" + _iOk.toFixed(1) + "°) — a foto não foi girada (a borda da obra inclinada é perspectiva)"); giro = 0; }
   if(Math.abs(giro) < 0.8) giro = 0;
   if(_iMed != null && Math.abs(_iMed) >= 2) avisos.push("horizonte medido na própria foto: " + _iMed.toFixed(1) + "° — endireitado");
   const ang = -giro * Math.PI / 180;
@@ -149791,6 +149795,25 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
             const S = 2, ws = Math.ceil(bw / S), hs = Math.ceil(bh / S); const occ = new Uint8Array(ws * hs);
             for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ const i = ((Math.min(bh - 1, yy * S)) * bw + Math.min(bw - 1, xx * S)) * 4; occ[yy * ws + xx] = idT.data[i + 3] ? 1 : 0; }
             const occG = _eaBlocosGrandes(occ, ws, hs, 0.15);
+            /* (14/10 16:40, visto em Taió: o FUNDO da lagoa — lona com lama/água, que não tem cor de lona — foi repintado como terra na
+               limpeza) tudo que está CERCADO pela lona é obra: buraco dentro do bloco da lona entra na proteção. Preenchimento
+               a partir da borda da caixa: o que o fundo não alcança é buraco. */
+            /* (16:55, Taió de novo: a poça do fundo foi repintada mesmo com o preenchimento de buracos — a lona da parede do fundo
+               tem falhas na máscara e o "fundo" vazou pra dentro) → CASCO CONVEXO do bloco da lona: tudo dentro do contorno é obra. */
+            try{ const pts = []; for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ const q = yy * ws + xx; if(!occG[q]) continue; if(xx === 0 || yy === 0 || xx === ws - 1 || yy === hs - 1 || !occG[q - 1] || !occG[q + 1] || !occG[q - ws] || !occG[q + ws]) pts.push([xx, yy]); }
+              if(pts.length > 3){ pts.sort(function(a, b){ return a[0] - b[0] || a[1] - b[1]; }); const cross = function(o, a, b){ return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); };
+                const lower = []; for(const pt of pts){ while(lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pt) <= 0) lower.pop(); lower.push(pt); }
+                const upper = []; for(let i = pts.length - 1; i >= 0; i--){ const pt = pts[i]; while(upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pt) <= 0) upper.pop(); upper.push(pt); }
+                const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+                const Hc = document.createElement("canvas"); Hc.width = ws; Hc.height = hs; const hx = Hc.getContext("2d"); hx.fillStyle = "#fff"; hx.beginPath(); hx.moveTo(hull[0][0], hull[0][1]); for(let i = 1; i < hull.length; i++) hx.lineTo(hull[i][0], hull[i][1]); hx.closePath(); hx.fill();
+                const dh = hx.getImageData(0, 0, ws, hs).data; let nH = 0; for(let q = 0; q < ws * hs; q++) if(!occG[q] && dh[q * 4 + 3] > 128){ occG[q] = 1; nH++; }
+                if(nH > 0) avisos.push("proteção da obra: contorno convexo da lona (" + Math.round(nH * S * S / (base.width * base.height) * 100) + "% da foto a mais — fundo, lama e água dentro da lagoa)"); } }catch(_){ }
+            { const fora = new Uint8Array(ws * hs); const fila = new Int32Array(ws * hs); let qi = 0, qf = 0;
+              const push = function(q){ if(!occG[q] && !fora[q]){ fora[q] = 1; fila[qf++] = q; } };
+              for(let xx = 0; xx < ws; xx++){ push(xx); push((hs - 1) * ws + xx); } for(let yy = 0; yy < hs; yy++){ push(yy * ws); push(yy * ws + ws - 1); }
+              while(qi < qf){ const q = fila[qi++]; const qx = q % ws, qy = (q / ws) | 0; if(qx > 0) push(q - 1); if(qx < ws - 1) push(q + 1); if(qy > 0) push(q - ws); if(qy < hs - 1) push(q + ws); }
+              let nBur = 0; for(let q = 0; q < ws * hs; q++) if(!occG[q] && !fora[q]){ occG[q] = 1; nBur++; }
+              if(nBur > 0) avisos.push("proteção da obra: " + Math.round(nBur * S * S / (base.width * base.height) * 100) + "% da foto é fundo cercado pela lona (lama/água) — protegido junto"); }
             for(let yy = 0; yy < bh; yy++) for(let xx = 0; xx < bw; xx++){ if(!occG[((yy / S) | 0) * ws + ((xx / S) | 0)]) idT.data[(yy * bw + xx) * 4 + 3] = 0; }
             tx.putImageData(idT, 0, 0); const pr = Prot.getContext("2d"); pr.filter = "blur(" + Math.max(4, Math.round(base.width * 0.009)) + "px)"; pr.drawImage(T, bx, by); pr.filter = "none";   // (14/10 14:05, Gustavo: "ao tirar a camionete deformou de leve a lagoa") anel de ~1,5% da largura em volta da lona: a borda da obra nunca entra na máscara
             const dP = pr.getImageData(0, 0, Prot.width, Prot.height); for(let i = 3; i < dP.data.length; i += 4){ dP.data[i] = dP.data[i] > 6 ? 255 : 0; dP.data[i - 3] = 0; dP.data[i - 2] = 0; dP.data[i - 1] = 0; } pr.putImageData(dP, 0, 0); temLona = true;
@@ -149969,6 +149992,12 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           const ds = [], es = []; for(let y = yIni; y < yFim; y += 2){ const dentro = dir > 0 ? faixa(xB, xB + 6, y) : faixa(xB - 5, xB + 1, y); const fora = dir > 0 ? faixa(xB - 7, xB - 1, y) : faixa(xB + 1, xB + 7, y); const dentro2 = dir > 0 ? faixa(xB + 8, xB + 14, y) : faixa(xB - 14, xB - 8, y); ds.push(Math.abs(dentro - fora)); es.push(Math.abs(dentro - dentro2)); }
           if(ds.length < 20) return; ds.sort(function(a, b){ return a - b; }); es.sort(function(a, b){ return a - b; }); const d = ds[ds.length >> 1], e = es[es.length >> 1]; const razao = d / (e + 1);
           if(razao > pior.razao) pior = { razao:razao, degrau:d, lado:nome }; });
+        /* (14/10 16:10, visto em Taió: linha reta na junção do 2º passo) a borda de BAIXO da entrada também é conferida — por coluna,
+           6 px acima × 6 px abaixo da linha onde a pintura começa, contra a variação natural logo acima. */
+        if(extP.down > 20){ const yB2 = extP.up + cvB.height; if(yB2 + 8 < Hd && yB2 - 15 >= 0){
+          const colF = function(x, ya, yb){ let s0 = 0; for(let y = ya; y < yb; y++) s0 += lum(x, y); return s0 / Math.max(1, yb - ya); };
+          const ds = [], es = []; for(let x = extP.left + 4; x < extP.left + cvB.width - 4; x += 2){ const dentro = colF(x, yB2 - 6, yB2), fora = colF(x, yB2, yB2 + 6), dentro2 = colF(x, yB2 - 14, yB2 - 8); ds.push(Math.abs(dentro - fora)); es.push(Math.abs(dentro - dentro2)); }
+          if(ds.length >= 20){ ds.sort(function(a, b){ return a - b; }); es.sort(function(a, b){ return a - b; }); const d = ds[ds.length >> 1], e = es[es.length >> 1]; const razao = d / (e + 1); if(razao > pior.razao) pior = { razao:razao, degrau:d, lado:"de baixo" }; } } }
         return pior; }catch(_){ return { razao:0, degrau:0, lado:"" }; } };
       const passoBaixo = async function(cvBase, extP, yB, rotulo){
         let r = paraCanvas(await _eaOutpaint(cvBase.toDataURL("image/png").split(",")[1], extP, prompt, ctx)); let custo = Number(r.__custo) || 0, seg = Number(r.__segundos) || 0;
@@ -149986,6 +150015,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       const yBorda = ext.up + base.height;
       /* (14/10 12:10, medido no v26n: faixa de 125 px no 2º passo saiu AZUL-ACINZENTADA (a Stability pinta "céu/água" numa tira
          fininha) → 2 passos só quando falta MAIS de 65% da altura; até aí vai num passo só. */
+      /* (14/10 16:45, Taió, testado 4 jeitos: passo único de 101% da foto virou "ravina" lisa; 2º passo por inpaint com semente saiu
+         laranja uniforme; 2º passo com degradê de 140 px criou transição diagonal escura. O que menos erra é o 2º passo simples
+         (recorte só de terra), que deixa no máximo uma linha fina na junção — fica esse.) */
       if(ext.down > base.height * 0.65){
         const d1 = Math.round(base.height * 0.45);
         const c1 = await passoBaixo(base, Object.assign({}, ext, { down:d1 }), yBorda, "1º passo");   // (14/10 11:30) sem corrigeDeriva por passo: o ganho "perto" começava na linha da borda = DEGRAU (a emenda dura que o Gustavo viu); a cor é casada no fim pelo campo contínuo
@@ -149998,6 +150030,51 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         const c2 = document.createElement("canvas"); c2.width = c1.width; c2.height = c1.height + (ext.down - d1); const x2 = c2.getContext("2d"); x2.drawImage(c1, 0, 0); x2.drawImage(r2, 0, rec.height, r2.width, r2.height - rec.height, 0, c1.height, r2.width, r2.height - rec.height);
         img = c2; img.__custo = (Number(c1.__custo) || 0) + (Number(r2.__custo) || 0); img.__segundos = (Number(c1.__segundos) || 0) + (Number(r2.__segundos) || 0); passos = 2;
       } else { img = await passoBaixo(base, ext, yBorda, "extensão"); }
+      /* ═══ (14/10 15:40, Gustavo, Taió: "não pode esticar o produto assim… na parte central você gerou muito pra baixo a lona, sendo que
+         já tinha a referência de qual era a espessura nas laterais") TETO DA LONA INVENTADA: quando a foto termina em cima da lona
+         (parede da frente), o outpaint continua a lona pra baixo sem saber onde ela acaba. Regra: abaixo da borda da foto a lona
+         pode descer no máximo 12% da altura da foto; o que passa disso vira terra — Stability Inpaint SÓ nessa área (fora dela
+         fica tudo como estava), com prompt de chão e negative_prompt de lona. É área inventada, a obra real não é tocada. ═══ */
+      if(ext.down > 40 && temLona) try{
+        const Wd = img.width, Hd = img.height, yB = ext.up + base.height; const dd0 = img.getContext("2d").getImageData(0, 0, Wd, Hd).data;
+        const tetoL = Math.round(base.height * 0.12);
+        const A = document.createElement("canvas"); A.width = Wd; A.height = Hd; const ax = A.getContext("2d"); const ia = ax.createImageData(Wd, Hd); const da = ia.data;
+        let nCol = 0, maisFundo = 0;
+        for(let x = 0; x < Wd; x++){
+          let quebra = 0, fim = yB - 1;
+          for(let y = yB; y < Hd; y++){ const i = (y * Wd + x) * 4; if(_eaEhLona(dd0[i], dd0[i + 1], dd0[i + 2])){ fim = y; quebra = 0; } else { quebra++; if(quebra > 5) break; } }
+          const prof = fim - yB + 1; if(prof <= tetoL) continue;
+          nCol++; if(prof > maisFundo) maisFundo = prof;
+          for(let y = yB + tetoL; y <= fim; y++){ const i = (y * Wd + x) * 4; if(_eaEhLona(dd0[i], dd0[i + 1], dd0[i + 2])){ da[i] = 255; da[i + 1] = 255; da[i + 2] = 255; da[i + 3] = 255; } }
+        }
+        if(nCol >= base.width * 0.04){
+          ax.putImageData(ia, 0, 0);
+          // engorda ~8 px e vira máscara (alpha 255 = manter, 0 = mexer)
+          const Bc = document.createElement("canvas"); Bc.width = Wd; Bc.height = Hd; const bx = Bc.getContext("2d"); bx.filter = "blur(5px)"; bx.drawImage(A, 0, 0); bx.filter = "none";
+          const Mk = document.createElement("canvas"); Mk.width = Wd; Mk.height = Hd; const mk = Mk.getContext("2d"); const im2 = mk.createImageData(Wd, Hd); const db = bx.getImageData(0, 0, Wd, Hd).data;
+          for(let i = 3; i < db.length; i += 4){ im2.data[i] = db[i] > 20 ? 0 : 255; }
+          mk.putImageData(im2, 0, 0);
+          if(typeof ctx.passo === "function"){ try{ ctx.passo("lona inventada embaixo passou do limite — virando terra…"); }catch(_){ } }
+          const pI = "Bare " + (corTxt0 || "brown") + " soil ground with small natural clods, exactly like the soil around it, continuous, same light, same texture, photographic.";
+          const nI = "tarp, liner, geomembrane, black plastic, pond, water, wall, edge, line, object, text, pattern, artifact, blurry";
+          // (16:10) a foto estendida inteira (8,8 MB) estourou a edge function (HTTP 546) → vai só o RECORTE de largura cheia, da
+          // borda da foto (−160 px de contexto) até embaixo, com altura ≥ largura/2,4 (limite de proporção da Stability)
+          const yR = Math.max(0, Math.min(yB - 160, Hd - Math.ceil(Wd / 2.4))); const hR = Hd - yR;
+          const Rc = document.createElement("canvas"); Rc.width = Wd; Rc.height = hR; Rc.getContext("2d").drawImage(img, 0, yR, Wd, hR, 0, 0, Wd, hR);
+          const MkR = document.createElement("canvas"); MkR.width = Wd; MkR.height = hR; MkR.getContext("2d").drawImage(Mk, 0, yR, Wd, hR, 0, 0, Wd, hR);
+          const limR = await _eaStabilityArea("inpaint", Rc, MkR, pI, ctx, nI, 4);
+          const lim = limR ? (function(){ const c = document.createElement("canvas"); c.width = Wd; c.height = Hd; const x = c.getContext("2d"); x.drawImage(img, 0, 0); x.drawImage(limR, 0, yR); c.__custo = limR.__custo; return c; })() : null;
+          if(lim){
+            // só dentro da máscara (+ borda suave); fora, a imagem fica igual
+            const Af = document.createElement("canvas"); Af.width = Wd; Af.height = Hd; const af = Af.getContext("2d"); af.fillStyle = "#fff"; af.fillRect(0, 0, Wd, Hd); af.globalCompositeOperation = "destination-out"; af.drawImage(Mk, 0, 0);
+            const Bf = document.createElement("canvas"); Bf.width = Wd; Bf.height = Hd; const bf = Bf.getContext("2d"); bf.filter = "blur(4px)"; bf.drawImage(Af, 0, 0); bf.filter = "none";
+            const Lm = document.createElement("canvas"); Lm.width = Wd; Lm.height = Hd; const lm = Lm.getContext("2d"); lm.drawImage(lim, 0, 0); lm.globalCompositeOperation = "destination-in"; lm.drawImage(Bf, 0, 0);
+            img.getContext("2d").drawImage(Lm, 0, 0);
+            img.__custo = (Number(img.__custo) || 0) + (Number(lim.__custo) || 0);
+            avisos.push("lona inventada embaixo da foto passou do limite (" + Math.round(maisFundo / base.height * 100) + "% da altura da foto em " + Math.round(nCol / base.width * 100) + "% das colunas; limite 12%) — o excesso virou terra (Stability Inpaint só nessa área)" + (lim.__custo ? " · R$ " + Number(lim.__custo).toFixed(2) : ""));
+          }
+        }
+      }catch(e){ avisos.push("teto da lona inventada falhou: " + _eaErro(e)); }
       /* (14/10 11:00, Gustavo: "É PRA NÃO TER ESSA EMENDA DURA, É PRA DEIXAR SUAVE") a correção por FAIXAS (esquerda/direita/baixo
          com ganhos diferentes) criava linha em cada fronteira. Agora é um CAMPO contínuo: a cor média da terra real (borrão
          de 140 px só dos pixels de terra da foto) dividida pela cor média da terra pintada (mesmo borrão) = ganho suave por
@@ -150034,7 +150111,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         }
       }catch(e){ avisos.push("campo de cor contínuo falhou: " + _eaErro(e)); }
       if(derivas.length) avisos.push("cor da terra pintada corrigida de volta pra cor da borda — " + derivas.join("; "));
-      if(passos === 2) avisos.push("terra de baixo estendida em 2 passos (faixa de " + ext.down + "px > metade da foto): num passo só a cor derivava");
+      if(passos === 2) avisos.push("terra de baixo estendida em 2 passos (faixa de " + ext.down + "px > 65% da foto): num passo só a cor derivava e virava ravina");
       if(nLimpo) avisos.push("limpeza antes de estender (Stability Inpaint, obra fora da máscara e recolada da original): " + nLimpo + " área(s) preenchidas com chão/fundo — entulho/sobras de lona" + (an.carimbo ? " + carimbo de data do celular" : "") + (custoLimpa ? " · R$ " + custoLimpa.toFixed(2) : ""));
       /* ═══ (14/10, Gustavo: "vai ter um botão Foto editorial? que vai deixar perfeitinha") MODO EDITORIAL — a única liberdade
          criativa do motor, e só quando pedida: 1) o CÉU (só pixels de céu, acima da crista, foto e extensão) vira um golden
