@@ -33861,14 +33861,18 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   };
 
   // ── PUBLICATION ACTIONS ──
-  const approvePub=(task)=>{
+  /* (14/10/2026, Gustavo: "coloca um botão Aprovado pelo cliente — aí já vai direto pro status Aprovado pelo cliente")
+     opts.cliente=true → o card pula "Aprovadas" e vai direto pra aprovacao_final, com as duas aprovações no histórico. */
+  const approvePub=(task,opts)=>{
     if(!isApprover)return;
+    opts=opts||{};
     const isInterna=task.status==="interno_avaliacao";
-    const toStatus=isInterna?"interno_aprovado":"aprovado";
+    const direto=!isInterna&&!!opts.cliente;
+    const toStatus=isInterna?"interno_aprovado":(direto?"aprovacao_final":"aprovado");
     const fromLabel=isInterna?"Concluído para avaliação (Interna)":"Avaliação";
-    const toLabel=isInterna?"Aprovadas (Interna)":"Aprovadas";
+    const toLabel=isInterna?"Aprovadas (Interna)":(direto?"Aprovado pelo cliente":"Aprovadas");
     const actor=pxAutorNome(effectiveUser);   // (06/10/2026 · A-27) autor real, não o "Ver como"
-    const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
+    const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor,note:direto?"Aprovação interna + aprovação do cliente registradas de uma vez (botão \"Aprovado pelo cliente\" na Avaliação de design)":undefined}];
     // FIX 8: usa apenas setTasks (wrapper sincroniza com Supabase via syncTasks).
     // O update direto no _sb era redundante e podia gerar race condition.
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:pxHojeISO(),timeline:newTl}:t));
@@ -33920,8 +33924,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     } else {
       pushNotif({
         type:"aprovacao",icon:"🏆",
-        title:"✅ Material aprovado — Agende a publicação!",
-        body:'"'+task.title+'" foi aprovado. '+(targetNames?targetNames+", organize":"Organize")+' o agendamento no Calendário de Publicações.',
+        title:direto?"✅ Aprovado pelo cliente — Agende a publicação!":"✅ Material aprovado — Agende a publicação!",
+        body:'"'+task.title+'" foi aprovado'+(direto?" pelo cliente":"")+'. '+(targetNames?targetNames+", organize":"Organize")+' o agendamento no Calendário de Publicações.',
         user:actor,at:"Agora",taskId:task.id,category:"agendamento"
       });
       setLastApproved(task);
@@ -35020,7 +35024,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
           {/* Gerar arte direto na Avaliação (09/10, Gustavo): o mesmo modal do card */}
           {gerarArteAval&&current&&(typeof PxGerarArteModal!=="undefined")&&(
-            <PxGerarArteModal task={current} setTasks={setTasks} onClose={()=>{setGerarArteAval(false);setImgIdx(0);}}/>
+            <PxGerarArteModal task={current} setTasks={setTasks} editorial={gerarArteAval==="editorial"} onClose={()=>{setGerarArteAval(false);setImgIdx(0);}}/>
           )}
           {/* Ajuste fino (Foto de obra): IA em área marcada / puxar da foto original (09/10, Gustavo) */}
           {ajusteFino&&current&&allImgs.length>0&&(typeof PxFotoObraAjusteModal!=="undefined")&&(
@@ -35968,11 +35972,19 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               {(function(){
                 const _BTNS=[
                   {chave:"pub.aprovar", label:"Aprovar publicação", color:"#16a34a", colorDark:"#15803d", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, onClick:()=>approvePub(current), kbd:"Enter"},
+                  /* (14/10, Gustavo) "Aprovado pelo cliente": aprova e já manda pra aprovacao_final (só cards de cliente) */
+                  ...((tab==="publicacao"&&current&&current.status!=="interno_avaliacao")?[
+                    {chave:"pub.aprovar", label:"Aprovado pelo cliente", color:"#059669", colorDark:"#047857", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>, onClick:()=>approvePub(current,{cliente:true}), title:"O cliente já aprovou: pula \"Aprovadas\" e vai direto pra Aprovado pelo cliente (pronto pra agendar)"}
+                  ]:[]),
                   {chave:"pub.reprovar", label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ const _m=await _pedirMotivoReprovacao("este material (a produção foi feita, então ainda conta no pagamento do mês)","Reprovar"); if(_m===null) return; rejectPub(current,_m); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
                   {chave:"pub.ajuste", label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
                   /* (09/10, Gustavo) Gerar arte direto na Avaliação — o mesmo botão que existe dentro do card */
                   ...((tab==="publicacao"&&current&&["arte","foto",""].indexOf(String(current.contentType||current.tipo||""))>=0&&(typeof PxGerarArteModal!=="undefined"))?[
-                    {chave:"pub.ajuste", label:"Gerar arte", color:"#9333ea", colorDark:"#7e22ce", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>, onClick:()=>setGerarArteAval(true), title:"Usa o template padrão do cliente pro tipo deste card: entra a copy e as fotos do material, e a arte nova vira a 1ª lâmina"}
+                    {chave:"pub.ajuste", label:"Gerar arte", color:"#9333ea", colorDark:"#7e22ce", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>, onClick:()=>setGerarArteAval(true), title:"Usa o template padrão do cliente pro tipo deste card: entra a copy e as fotos do material, e a arte nova vira a 1ª lâmina"},
+                    /* (14/10, Gustavo: "vai ter um botão Foto editorial? e outro mais barato que é o de agora") só Foto de obra */
+                    ...(((typeof _eaTipoCardDoTask==="function")&&(function(){try{return _eaTipoCardDoTask(current)==="foto_obra";}catch(_){return false;}})())?[
+                      {chave:"pub.ajuste", label:"Foto editorial", color:"#d97706", colorDark:"#b45309", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>, onClick:()=>setGerarArteAval("editorial"), title:"Gerar arte + céu golden hour + tratamento de cor (~R$ 2). Use quando a foto está feia (céu lavado, contraluz, dedo na lente)"}
+                    ]:[])
                   ]:[]),
                   /* (09/10, Gustavo) Foto de obra: ajuste fino direto na Avaliação — marca uma área da arte e
                      corrige SÓ ela (IA ~R$1) ou devolve a área à foto original do material (sem custo). */
@@ -148654,7 +148666,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:4000, reasoning_effort:"medium", origem:"arte_foto_obra", card:card || undefined,
     system:_EA_FO_CADERNO + "\n\nSEU PAPEL AGORA: você é o ANALISADOR. Olha a foto original da obra e devolve as medidas pro motor encaixar e limpar — aplicando as regras acima (em especial a REGRA 4: inclinação é do HORIZONTE, não da borda da obra).",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos (ATENÇÃO: sobras/retalhos de geomembrana ou lona preta/azul no CHÃO em volta da obra, inclusive encostadas na borda da lagoa e nas beiradas esquerda/direita da foto — marque CADA uma, caixa justa, sem incluir a obra), cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável; "diagnostico": UMA frase curta (até 140 caracteres) dizendo o que a foto precisa — ex.: "horizonte reto, obra ocupa quase tudo, só completar céu em cima" ou "foto 2° torta, entulho à direita"; "estilo_chao": descrição PRECISA (até 220 caracteres) do chão que aparece na BORDA DE BAIXO da foto, pra outra IA pintar a continuação igual: cor exata, textura, relevo, luz (ex.: "terra vermelho-alaranjada revolvida, torrões e montes soltos, seca, luz de fim de tarde vindo da esquerda, sem grama"); "estilo_ceu": descrição PRECISA (até 220 caracteres) do céu da foto pra continuar igual (ex.: "azul médio no alto clareando até o horizonte, nuvens brancas esparsas tipo cúmulos pequenos espalhadas, sem névoa"); "estilo_lados": o que há nas bordas esquerda e direita da foto abaixo do horizonte (até 160 caracteres); "carimbo": caixa {"x0","y0","x1","y1"} da marca d\'água/carimbo de data-hora ou modelo do celular impresso na foto (ex.: "30/01/2026 18:03", "POCO X6 5G"), ou null se não tem — procure com atenção nos 4 cantos, costuma ser texto branco/amarelo pequeno; "cor_chao": cor média em hexadecimal (#rrggbb) da terra/chão da borda de baixo da foto}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos (ATENÇÃO: sobras/retalhos de geomembrana ou lona preta/azul no CHÃO em volta da obra, inclusive encostadas na borda da lagoa e nas beiradas esquerda/direita da foto — marque CADA uma, caixa justa, sem incluir a obra), cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável; "diagnostico": UMA frase curta (até 140 caracteres) dizendo o que a foto precisa — ex.: "horizonte reto, obra ocupa quase tudo, só completar céu em cima" ou "foto 2° torta, entulho à direita"; "estilo_chao": descrição PRECISA (até 220 caracteres) do chão que aparece na BORDA DE BAIXO da foto, pra outra IA pintar a continuação igual: cor exata, textura, relevo, luz (ex.: "terra vermelho-alaranjada revolvida, torrões e montes soltos, seca, luz de fim de tarde vindo da esquerda, sem grama"); "estilo_ceu": descrição PRECISA (até 220 caracteres) do céu da foto pra continuar igual (ex.: "azul médio no alto clareando até o horizonte, nuvens brancas esparsas tipo cúmulos pequenos espalhadas, sem névoa"); "estilo_lados": o que há nas bordas esquerda e direita da foto abaixo do horizonte (até 160 caracteres); "carimbo": caixa {"x0","y0","x1","y1"} da marca d\'água/carimbo de data-hora ou modelo do celular impresso na foto (ex.: "30/01/2026 18:03", "POCO X6 5G"), ou null se não tem — procure com atenção nos 4 cantos, costuma ser texto branco/amarelo pequeno; "cor_chao": cor média em hexadecimal (#rrggbb) da terra/chão da borda de baixo da foto; "obstrucao": caixa {"x0","y0","x1","y1"} de dedo na lente, borrão/mancha da lente, gota, alça ou qualquer coisa tapando parte da cena (costuma ser um borrão escuro/colorido num canto ou numa borda), ou null; "luz_lado": "esquerda" | "direita" | "centro" — de que lado da foto vem a luz do sol (olhe as sombras e o lado mais claro do céu)}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -148672,7 +148684,8 @@ async function _eaAnalisarFotoObra(url, card){
   }).slice(0, 6);
   return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent, diagnostico:String(j.diagnostico || "").replace(/\s+/g, " ").trim().slice(0, 160),
     estiloChao:String(j.estilo_chao || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloCeu:String(j.estilo_ceu || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloLados:String(j.estilo_lados || "").replace(/\s+/g, " ").trim().slice(0, 200),
-    carimbo:caixa(j.carimbo), corChao:(/^#[0-9a-f]{6}$/i.test(String(j.cor_chao || "")) ? String(j.cor_chao).toLowerCase() : null) };
+    carimbo:caixa(j.carimbo), corChao:(/^#[0-9a-f]{6}$/i.test(String(j.cor_chao || "")) ? String(j.cor_chao).toLowerCase() : null),
+    obstrucao:caixa(j.obstrucao), luzLado:(/esq/i.test(String(j.luz_lado || "")) ? "esquerda" : /dir/i.test(String(j.luz_lado || "")) ? "direita" : "centro") };
 }
 /* ═══ (12/10, Gustavo: "é mais vantagem botar uma etapa do GPT avaliar e se autocorrigir do que me mandar 200
    artes erradas") JUIZ da Foto de obra: o GPT olha a arte (só a foto, sem template) ao lado da foto original e
@@ -149658,7 +149671,11 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         return tom + " (" + hx + ")" + (lum > 95 ? ", dry, not wet, not dark" : ""); }catch(_){ return ""; } })();
       let nLimpo = 0, custoLimpa = 0;
       try{
-        const caixas = (an.entulho || []).slice(0, 6).concat(an.carimbo ? [an.carimbo] : []);
+        /* (14/10 09:59, Gustavo, foto de Palma Sola com o dedo na lente: "vai ter um botão Foto editorial?") a obstrução
+           (dedo, borrão da lente) entra na limpeza nos dois modos — é defeito da foto, não decisão criativa. */
+        const obst = (an.obstrucao && (an.obstrucao.x1 - an.obstrucao.x0) * (an.obstrucao.y1 - an.obstrucao.y0) < 0.45) ? [an.obstrucao] : [];
+        const caixas = (an.entulho || []).slice(0, 6).concat(an.carimbo ? [an.carimbo] : []).concat(obst);
+        if(obst.length) avisos.push("obstrução na lente (dedo/borrão) detectada — repintada com a cena em volta (" + Math.round((an.obstrucao.x1 - an.obstrucao.x0) * 100) + "% da largura)");
         if(caixas.length){
           if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho, sobras de lona e carimbo do celular (Stability)…"); }catch(_){ } }
           /* (13/10 21:52, Gustavo: "a parte direita da lagoa ele aumentou, jamais é pra alterar a obra") 1) a máscara NUNCA inclui
@@ -149674,7 +149691,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
             mk.globalCompositeOperation = "source-over"; mk.fillStyle = "#000"; mk.fillRect(obraPx.x, obraPx.y, obraPx.w, obraPx.h);   // obra fora da máscara
             // (22:05) o carimbo de data costuma cair DENTRO da caixa da obra (canto de baixo) — ele volta pra máscara e fica fora da recolagem
             if(an.carimbo){ mk.globalCompositeOperation = "destination-out"; mk.fillRect(an.carimbo.x0 * base.width - f, an.carimbo.y0 * base.height - f, (an.carimbo.x1 - an.carimbo.x0) * base.width + 2 * f, (an.carimbo.y1 - an.carimbo.y0) * base.height + 2 * f); } }
-          const pLimpa = "Remove the marked objects (leftover tarp, plastic, debris, text stamp) and fill the area with the same background that surrounds it: bare " + (corTxt0 || "brown") + " soil ground, or grass or sky if that is what surrounds the area. Continuous, natural, same light. No tarp, no liner, no plastic, no text, no objects.";
+          const pLimpa = "Remove the marked objects (leftover tarp, plastic, debris, text stamp" + (obst.length ? ", finger/lens blur" : "") + ") and fill each area with the same scene that surrounds it: bare " + (corTxt0 || "brown") + " soil ground, or grass, trees, buildings or sky if that is what surrounds the area. Continuous, natural, same light, same perspective. No tarp, no liner, no plastic, no text, no new objects.";
           const limpa = await _eaStabilityArea("inpaint", base, Mk, pLimpa, ctx);
           if(limpa){
             if(obraPx && obraPx.w > 2 && obraPx.h > 2){
@@ -149744,6 +149761,47 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       if(derivas.length) avisos.push("cor da terra pintada corrigida de volta pra cor da borda — " + derivas.join("; "));
       if(passos === 2) avisos.push("terra de baixo estendida em 2 passos (faixa de " + ext.down + "px > metade da foto): num passo só a cor derivava");
       if(nLimpo) avisos.push("limpeza antes de estender (Stability Inpaint, obra fora da máscara e recolada da original): " + nLimpo + " área(s) preenchidas com chão/fundo — entulho/sobras de lona" + (an.carimbo ? " + carimbo de data do celular" : "") + (custoLimpa ? " · R$ " + custoLimpa.toFixed(2) : ""));
+      /* ═══ (14/10, Gustavo: "vai ter um botão Foto editorial? que vai deixar perfeitinha") MODO EDITORIAL — a única liberdade
+         criativa do motor, e só quando pedida: 1) o CÉU (só pixels de céu, acima da crista, foto e extensão) vira um golden
+         hour pintado pela Stability (Inpaint), com o sol do lado de onde vem a luz; 2) RELIGHT determinístico: brilho quente
+         vindo do horizonte (screen alaranjado que some pra baixo), balanço de branco mais quente, vibrance e contraste
+         mais fortes — é o que dá a luz nas copas e no galpão. A obra continua intacta na forma; só a luz/cor muda. ═══ */
+      let editorialTxt = "";
+      if(ctx.editorial){
+        try{
+          if(typeof ctx.passo === "function"){ try{ ctx.passo("editorial: pintando o céu de golden hour (Stability)…"); }catch(_){ } }
+          const Wi = img.width, Hi = img.height; const d = img.getContext("2d").getImageData(0, 0, Wi, Hi).data;
+          const ehCeuE = function(i){ const r0 = d[i], g0 = d[i + 1], b0 = d[i + 2]; const mx0 = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0); return (b0 >= r0 && b0 >= g0 - 4 && mx0 > 90 && (mx0 - mn) / Math.max(1, mx0) < 0.8) || (mx0 > 200 && (mx0 - mn) / Math.max(1, mx0) < 0.18); };
+          const MkE = document.createElement("canvas"); MkE.width = Wi; MkE.height = Hi; const me = MkE.getContext("2d"); me.fillStyle = "#000"; me.fillRect(0, 0, Wi, Hi);
+          const imE = me.getImageData(0, 0, Wi, Hi); const dm = imE.data; let nSky = 0, yCristaMax = 0;
+          for(let x = 0; x < Wi; x++){ let y0 = Hi; for(let y = 0; y < Hi; y++){ const i = (y * Wi + x) * 4; if(!ehCeuE(i)){ y0 = y; break; } }
+            if(y0 > yCristaMax) yCristaMax = y0;
+            for(let y = 0; y < y0; y++){ const i = (y * Wi + x) * 4; dm[i + 3] = 0; nSky++; } }   // alpha 0 = mexer (convenção do _eaStabilityArea)
+          me.putImageData(imE, 0, 0);
+          if(nSky > Wi * Hi * 0.08){
+            const lado = an.luzLado === "esquerda" ? "left" : an.luzLado === "direita" ? "right" : "center";
+            const pCeu = "Replace only the masked sky with a golden hour sky: warm orange and gold near the horizon on the " + lado + " where the low sun is, fading to soft blue higher up, a few thin backlit clouds, soft natural haze near the horizon. Photographic, realistic, same camera. Keep the treeline and every object exactly as they are; nothing else changes.";
+            const ceu = await _eaStabilityArea("inpaint", img, MkE, pCeu, ctx);
+            if(ceu){ img.getContext("2d").drawImage(ceu, 0, 0); img.__custo = (Number(img.__custo) || 0) + (Number(ceu.__custo) || 0); editorialTxt = "céu golden hour (sol à " + (an.luzLado || "centro") + ", " + Math.round(nSky / (Wi * Hi) * 100) + "% do quadro)"; }
+          } else editorialTxt = "céu pequeno demais pra trocar (" + Math.round(nSky / (Wi * Hi) * 100) + "%)";
+          const ic = img.getContext("2d").getImageData(0, 0, Wi, Hi), dd = ic.data;
+          const yH = Math.min(Hi - 1, Math.max(0, yCristaMax || Math.round(Hi * 0.45)));
+          const sx = an.luzLado === "esquerda" ? 0.2 : an.luzLado === "direita" ? 0.8 : 0.5;
+          const curvaS = function(v){ v = v / 255; v = v < 0.5 ? 0.5 * Math.pow(2 * v, 1.12) : 1 - 0.5 * Math.pow(2 * (1 - v), 1.12); return Math.max(0, Math.min(255, v * 255)); };
+          for(let y = 0; y < Hi; y++) for(let x = 0; x < Wi; x++){ const i = (y * Wi + x) * 4;
+            const dy = (y - yH) / (Hi * 0.55), dx = (x / Wi - sx) / 0.9;
+            const g = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy * 1.6)) * 0.42;
+            let r0 = dd[i] * 1.06 + 4, g0 = dd[i + 1] * 1.0, b0 = dd[i + 2] * 0.94;
+            r0 = 255 - (255 - r0) * (1 - g * 0.9); g0 = 255 - (255 - g0) * (1 - g * 0.55); b0 = 255 - (255 - b0) * (1 - g * 0.15);
+            const l = 0.299 * r0 + 0.587 * g0 + 0.114 * b0, sat = Math.max(r0, g0, b0) - Math.min(r0, g0, b0);
+            const vb = 1 + 0.35 * (1 - Math.min(1, sat / 160));
+            r0 = l + (r0 - l) * vb; g0 = l + (g0 - l) * vb; b0 = l + (b0 - l) * vb;
+            dd[i] = curvaS(r0); dd[i + 1] = curvaS(g0); dd[i + 2] = curvaS(b0); }
+          img.getContext("2d").putImageData(ic, 0, 0);
+          editorialTxt += (editorialTxt ? "; " : "") + "relight: luz quente do horizonte à " + (an.luzLado || "centro") + ", balanço quente, vibrance e contraste";
+        }catch(e){ avisos.push("modo editorial falhou em parte: " + _eaErro(e) + " — seguiu sem a troca de céu"); }
+        avisos.push("MODO EDITORIAL: " + (editorialTxt || "sem alterações"));
+      }
       const s2 = m.dw / Math.max(1, img.width - ext.left - ext.right);                        // escala da foto estendida pro quadro (a original continua com m.dw)
       const m2 = Object.assign({}, m, { ox:m.ox - ext.left * s2, oy:m.oy - ext.up * s2, dw:img.width * s2, dh:img.height * s2 });
       cv = desenhar(m2, img);
@@ -150416,7 +150474,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
   if(Math.abs(giro) >= 0.8) avisos.push("foto girada " + Math.abs(giro).toFixed(1) + "° pra deixar " + ((an.borda != null && isFinite(an.borda)) ? "a borda da obra reta" : "o horizonte reto"));
   if(m.viol) avisos.push("não achei encaixe em que a obra fique totalmente livre do texto/mapa — confira a foto na Avaliação");
   // carimbo de versão do motor (09/10): aparece no histórico do card — confere se o navegador rodou o código novo
-  avisos.push((cv && cv.__outpaint) ? "motor da foto v26: outpainting (Stability) — a foto original fica intacta e o modelo continua céu em cima e terra embaixo a partir da borda, sem emenda; GPT lê a foto e o juiz só avisa (canvas " : "motor da foto v25: céu e terra gerados à parte pela IA (sem ver a borda da foto — nada de poste/lona continuados), colados céu em cima e terra embaixo, foto intacta; juiz só avisa (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
+  avisos.push((cv && cv.__outpaint) ? "motor da foto v26" + (ctx.editorial ? " EDITORIAL" : "") + ": outpainting (Stability) — a foto original fica intacta e o modelo continua céu em cima e terra embaixo a partir da borda, sem emenda; GPT lê a foto e o juiz só avisa (canvas " : "motor da foto v25: céu e terra gerados à parte pela IA (sem ver a borda da foto — nada de poste/lona continuados), colados céu em cima e terra embaixo, foto intacta; juiz só avisa (canvas " + w + "×" + h + ", foto " + Math.round(m.dw) + "×" + Math.round(m.dh) + " em " + Math.round(m.ox) + "," + Math.round(m.oy) + ")");
   /* (09/10, Gustavo: "se eu não gostei de algo específico, quero que ele puxe da imagem original do material")
      BASE = a foto ORIGINAL desenhada no MESMO encaixe, sem nenhuma IA — vai pro armazenamento junto da arte,
      e o "Ajuste fino" da Avaliação usa ela pra devolver qualquer área marcada ao estado original, sem custo. */
@@ -150665,7 +150723,8 @@ async function _eaEscreverCidade(fc, cidade, ident, W, H, ctx){
   }
   return avisos;
 }
-async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
+async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso, opts){
+  opts = opts || {};
   const passo = function(m){ try{ if(onPasso) onPasso(m); }catch(_){ } };
   if(!task || !modelo || !modelo.doc || !Array.isArray(modelo.doc.paginas) || !modelo.doc.paginas.length) throw new Error("Modelo sem página");
   passo("abrindo o modelo…");
@@ -150779,7 +150838,7 @@ async function pxGerarArteDoModelo(task, modelo, setTasks, onPasso){
     if(!f0) avisos.push("faltou a foto da obra no material do card — Foto de obra não gera foto, ficou a imagem do template");
     else{
       passo("olhando a foto da obra (horizonte, obra, entulho)…");
-      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id, passo:passo }); rFO = r; (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
+      try{ const r = await _eaEncaixarFotoObraGrupo(fc, espacosFoto.slice(), f0.url, { client:task.client, task:task.id, projeto:p.id, passo:passo, editorial:!!opts.editorial }); rFO = r; (r.avisos || []).forEach(function(x){ avisos.push(x); }); }
       catch(e){
         /* (12/10, Gustavo: "terceira vez que gero e fica sempre a mesma merda") antes o erro da foto virava só um
            aviso no histórico e a arte saía ASSIM MESMO — com zoom, sem céu/terra — e ainda apagava a versão anterior.
@@ -151139,7 +151198,7 @@ if(typeof window !== "undefined"){ window.PxFotoObraAjusteModal = PxFotoObraAjus
 
 /* Janela do card "Gerar arte": (07/10, Gustavo) NÃO PERGUNTA — pega o template PADRÃO do tipo do card
    (Foto de obra · Arte · Carrossel · Story) e da unidade, e já gera. Só mostra escolha se não houver padrão. */
-function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
+function PxGerarArteModal({ task:taskProp, setTasks, onClose, editorial }){
   /* (13/10 18:54, Gustavo: "tava gerando a arte de Katuete, entrou uma pra avaliação, mudou a ordem e mudou a geração
      aqui pra Campos Novos") a janela TRAVA no card em que foi aberta: a fila da Avaliação desliza quando entra/sai card
      e o `current` do pai vira outro card por um render — a janela não pode seguir isso. */
@@ -151158,7 +151217,7 @@ function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
   const _pctDoPasso = function(m){ m = String(m || "");
     if(/abrindo/.test(m)) return 6; if(/traduzindo/.test(m)) return 12; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
     if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
-    if(/limpando entulho/.test(m)) return 46; if(/estendendo a foto/.test(m)) return 52; if(/2º passo/.test(m)) return 62; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
+    if(/editorial:/.test(m)) return 66; if(/limpando entulho/.test(m)) return 46; if(/estendendo a foto/.test(m)) return 52; if(/2º passo/.test(m)) return 62; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
     if(/completando|limpando/.test(m)) return 56; if(/conferindo/.test(m)) return 72; if(/corrigindo/.test(m)) return 78; if(/salvando/.test(m)) return 86; return null; };
   const setPassoPct = function(m){ setPasso(m);
     const t = _pctDoPasso(m);
@@ -151195,7 +151254,7 @@ function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
     if(faltandoGerar.length){ setErro("Não gero sem briefing: falta " + faltandoGerar.join(" e ") + ". Preenche no card e clica em Gerar arte de novo."); return; }
     setErro("");
     try{
-      const r = await pxGerarArteDoModelo(task, m, setTasks, setPassoPct);
+      const r = await pxGerarArteDoModelo(task, m, setTasks, setPassoPct, { editorial:!!editorial });
       setPct(100);
       _eaToast("success", "Arte gerada e enviada pra Avaliação de design" + (r.avisos.length ? " (veja o aviso no histórico)" : ""));
       onClose(true);
@@ -151218,14 +151277,14 @@ function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
       <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"16px 18px 12px"}}>
         <div style={{width:38,height:38,borderRadius:12,flex:"0 0 auto",background:"linear-gradient(135deg,"+_EA.roxo+","+_EA.rosa+")",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:17,boxShadow:"0 6px 14px rgba(124,58,237,.3)"}}>✦</div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:14.5,fontWeight:800,letterSpacing:-.2,color:_EA.texto}}>Gerar arte</div>
+          <div style={{fontSize:14.5,fontWeight:800,letterSpacing:-.2,color:_EA.texto}}>{editorial ? "Foto editorial" : "Gerar arte"}</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:5}}>
             {chip(_eaRotuloTipoCard(tipo))}{unid ? chip(_eaNomeCliente(task.client) + " · " + (typeof _eaRotuloUnidade === "function" ? _eaRotuloUnidade(unid) : unid)) : chip(_eaNomeCliente(task.client))}{auto ? chip(auto.nome, true) : null}
           </div>
         </div>
         <button disabled={!!passo} onClick={function(){ onClose(false); }} title="Fechar" style={{font:"inherit",width:28,height:28,borderRadius:999,border:0,background:_EA.linha2,color:_EA.sub,cursor:passo?"default":"pointer",fontSize:13,lineHeight:"28px",opacity:passo?.4:1,flex:"0 0 auto"}}>✕</button>
       </div>
-      <div style={{fontSize:11.5,color:_EA.sub,lineHeight:1.5,padding:"0 18px 12px"}}>A copy e as fotos do material entram no template{auto ? " padrão" : ""}; a arte fica editável na Edição de arte e o card vai direto pra <b style={{color:_EA.texto,fontWeight:600}}>Avaliação de design</b>.</div>
+      <div style={{fontSize:11.5,color:_EA.sub,lineHeight:1.5,padding:"0 18px 12px"}}>{editorial ? <>Além do normal (limpeza, extensão de céu e terra), o modo editorial <b style={{color:_EA.texto,fontWeight:600}}>troca o céu por um golden hour</b> do lado de onde vem a luz e aplica tratamento de cor (luz quente, vibrance, contraste). A obra não muda de forma. ~R$ 2.</> : <>A copy e as fotos do material entram no template{auto ? " padrão" : ""}; a arte fica editável na Edição de arte e o card vai direto pra <b style={{color:_EA.texto,fontWeight:600}}>Avaliação de design</b>.</>}</div>
       <div style={{margin:"0 14px",background:_EA.fundo,border:"1px solid "+_EA.linha2,borderRadius:14,overflow:"hidden"}}>
         {fotoObra ? <>
           {lin(!!copy.cidade, "Pin no mapa", copy.cidade || "não achei a cidade no briefing")}
