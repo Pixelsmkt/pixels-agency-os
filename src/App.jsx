@@ -19140,9 +19140,9 @@ function _getClientBdaysDM(clientId){
 
 /* ═══ Cards automáticos ↔ evento (09/09/2026) ═══════════════════════════════
    Apagar/editar uma data no Planejamento/calendário interno limpa os cards
-   automáticos ("autocom-<evento>-…") que ficaram sem sentido — só os VAZIOS em
-   Rascunhos (sem arquivo, legenda, descrição ou comentário). Card que já teve
-   trabalho fica. Vai pra lixeira (deleted_at), e o gerador não recria: ele
+   automáticos ("autocom-<evento>-…") que ficaram sem sentido — só os VAZIOS
+   (sem arquivo e sem comentário) em Rascunhos, Copys ou Demanda. Card que já
+   está em execução ou adiante fica. Vai pra lixeira (deleted_at), e o gerador não recria: ele
    confere o id no Supabase inclusive apagado.
    `manter(row)` → true = o card continua válido (usado na edição).           */
 function pxAutoComLimparDoEvento(eventId, manter, descsEvento){
@@ -19162,9 +19162,14 @@ function pxAutoLimparDoEvento(prefixo, eventId, manter, descsEvento){
          escritos pelo proprio Claude. Caso real: Climaves tirou "Dia das Aves" e "Dia do Ovo" do
          Planejamento e os dois cards ficaram no calendario so porque ja tinham legenda gerada.
          Trabalho de gente = arquivo, comentario ou card que ja saiu de Rascunhos. */
+      /* (14/10/2026, Gustavo: "excluí o Dia Nacional da Pecuária do planejamento, por que não apagou os cards?") os 5 cards
+         estavam em Demanda (recebida): o Claude escreveu a copy, mandou pra Copys e a copy foi aprovada — sem arquivo e sem
+         comentário. Isso não é trabalho de designer. Agora sai card vazio em Rascunhos, Copys (demanda) e Demanda (recebida);
+         a partir de Em execução fica (alguém já pegou). */
       const _vazio=function(t){
         const nf=Array.isArray(t.files)?t.files.length:0, nc=Array.isArray(t.comments)?t.comments.length:0;
-        return String(t.status||"")==="rascunhos" && !nf && !nc;
+        const st=String(t.status||"");
+        return (st==="rascunhos"||st==="demanda"||st==="recebida") && !nf && !nc;
       };
       const rem=r.data.filter(function(t){ return _vazio(t) && !(typeof manter==="function" && manter(t)); });
       const ids=rem.map(function(t){ return t.id; });
