@@ -144969,13 +144969,15 @@ async function _eaOutpaint(b64, ext, prompt, ctx){
    Function "outpaint", acao erase|inpaint): a máscara do app (alpha transparente = mexer) vira máscara branco/preto;
    a imagem volta pixel a pixel no mesmo tamanho (sem realinhar). Erase = apaga o que está na área e preenche com o
    fundo (3–5 créditos ≈ R$ 0,15–0,25); Inpaint = repinta seguindo o pedido. */
-async function _eaStabilityArea(acao, Rec, Mk, prompt, ctx){
+// (14/10 12:40) negativo: o que NÃO pode aparecer vai em negative_prompt — citar "no pipe, no wood" no prompt positivo fazia a
+// Stability PINTAR cano/galhos no lugar do entulho (visto em 3 testes seguidos)
+async function _eaStabilityArea(acao, Rec, Mk, prompt, ctx, negativo){
   const L = Rec.width, H = Rec.height;
   const M = document.createElement("canvas"); M.width = L; M.height = H; const mx = M.getContext("2d");
   const dm = Mk.getContext("2d").getImageData(0, 0, L, H).data; const im = mx.createImageData(L, H); const d = im.data;
   for(let i = 0; i < d.length; i += 4){ const v = dm[i + 3] < 128 ? 255 : 0; d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255; }
   mx.putImageData(im, 0, 0);
-  const r = await window._sb.functions.invoke("outpaint", { body:{ acao:acao, imagem:Rec.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt || "", grow_mask:acao === "erase" ? 10 : 6, client_id:(ctx && ctx.client) || null, projeto_id:(ctx && ctx.projeto) || null } });
+  const r = await window._sb.functions.invoke("outpaint", { body:{ acao:acao, imagem:Rec.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt || "", negative_prompt:negativo || "", grow_mask:acao === "erase" ? 10 : 6, client_id:(ctx && ctx.client) || null, projeto_id:(ctx && ctx.projeto) || null } });
   let msg = null;
   if(r.error){ try{ const c = r.error.context; if(c && typeof c.json==="function"){ const j = await c.json(); msg = j && j.erro; } }catch(_){} throw new Error(msg || r.error.message || "a Stability não respondeu"); }
   if(r.data && r.data.erro) throw new Error(r.data.erro);
@@ -149616,14 +149618,39 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
      DETERMINÍSTICA: com o zoom já escolhido, a posição vertical deixa de ser disputa de pesos — a OBRA é
      CENTRALIZADA na faixa útil (da base do bloco mapa/cidade até o topo do ícone/frase). A IA completa o
      céu/terreno que faltar em cima ou embaixo. */
+  /* (14/10 11:00, Gustavo: "agora ficou muito pra cima a obra") a posição da obra era calculada SEM o giro da foto: com 28° a
+     caixa da lagoa cai em outro lugar do quadro. Agora: cantos da caixa girados como o desenhar gira, e a caixa apertada
+     pelos pixels escuros da lona/estrutura dentro dela (a caixa do GPT numa lagoa diagonal é folgada). */
+  const obraNoQuadro = function(pl){
+    if(!an.obra) return null;
+    const cA = Math.cos(ang), sA = Math.sin(ang), cx = w / 2, cy = h / 2;
+    const gira = function(px, py){ const x0 = pl.ox + px * pl.dw, y0 = pl.oy + py * pl.dh; return { x:cx + (x0 - cx) * cA - (y0 - cy) * sA, y:cy + (x0 - cx) * sA + (y0 - cy) * cA }; };
+    const q = [gira(an.obra.x0, an.obra.y0), gira(an.obra.x1, an.obra.y0), gira(an.obra.x1, an.obra.y1), gira(an.obra.x0, an.obra.y1)];
+    let y0 = Math.min.apply(null, q.map(function(p){ return p.y; })), y1 = Math.max.apply(null, q.map(function(p){ return p.y; }));
+    let x0 = Math.min.apply(null, q.map(function(p){ return p.x; })), x1 = Math.max.apply(null, q.map(function(p){ return p.x; }));
+    try{
+      if(Math.abs(ang) > 0.03){   // foto girada: aperta pela LONA (escuro E sem cor, ou azulado) dentro do losango — (12:30) só "escuro" pegava a sombra da terra vermelha e a obra "crescia" até o rodapé
+        const S = 4, ws = Math.ceil(w / S), hs = Math.ceil(h / S);
+        const c = document.createElement("canvas"); c.width = ws; c.height = hs; const x = c.getContext("2d");
+        x.save(); x.scale(1 / S, 1 / S); x.translate(w / 2, h / 2); x.rotate(ang); x.translate(-w / 2, -h / 2); x.drawImage(nova, pl.ox, pl.oy, pl.dw, pl.dh); x.restore();
+        const pc = document.createElement("canvas"); pc.width = ws; pc.height = hs; const px2 = pc.getContext("2d"); px2.fillStyle = "#fff"; px2.beginPath(); px2.moveTo(q[0].x / S, q[0].y / S); for(let k = 1; k < 4; k++) px2.lineTo(q[k].x / S, q[k].y / S); px2.closePath(); px2.fill();
+        const d = x.getImageData(0, 0, ws, hs).data, dp = px2.getImageData(0, 0, ws, hs).data;
+        let ya = -1, yb = -1, xa = -1, xb = -1, n = 0, nPoly = 0;
+        for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ const i = (yy * ws + xx) * 4; if(dp[i + 3] < 128 || d[i + 3] < 200) continue; nPoly++; const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; const mx0 = Math.max(d[i], d[i + 1], d[i + 2]), mn0 = Math.min(d[i], d[i + 1], d[i + 2]); if(!((l < 80 && (mx0 - mn0) / Math.max(1, mx0) < 0.45) || (d[i + 2] >= d[i] && d[i + 2] >= d[i + 1] && l < 175 && (mx0 - mn0) / Math.max(1, mx0) < 0.6))) continue; n++; if(ya < 0 || yy < ya) ya = yy; if(yy > yb) yb = yy; if(xa < 0 || xx < xa) xa = xx; if(xx > xb) xb = xx; }
+        if(n > nPoly * 0.03 && ya >= 0){ y0 = ya * S; y1 = (yb + 1) * S; x0 = xa * S; x1 = (xb + 1) * S; }
+      }
+    }catch(_){ }
+    return { y0:y0, y1:y1, x0:x0, x1:x1 };
+  };
   if(podeIA && an.obra && (teto != null || piso != null)){
-    const obH = (an.obra.y1 - an.obra.y0) * m.dh;
+    const obQ = obraNoQuadro(m) || { y0:m.oy + an.obra.y0 * m.dh, y1:m.oy + (an.obra.y1) * m.dh };
+    const obH = obQ.y1 - obQ.y0;
     const fT = (teto != null ? teto : 0) + h * 0.015, fB = (piso != null ? piso : h) - h * 0.015;
     /* (13/10, Gustavo, Paula Freitas: "olha a original, não precisava mudar nada… aí ele me gasta 2 reais") se a obra
        JÁ está dentro da faixa útil (folga de 2,5% da altura) e a foto já preenche o quadro, NÃO move: mover abria
        faixa vazia embaixo e ligava a IA (R$ 1–2 + juiz) numa foto que estava pronta. Só centraliza quando a obra
        invade o mapa/cidade ou o ícone/frase. */
-    const obY0 = m.oy + an.obra.y0 * m.dh, obY1 = obY0 + obH, tolF = h * 0.025;
+    const obY0 = obQ.y0, obY1 = obQ.y1, tolF = h * 0.025;
     const jaCabe = obY0 >= fT - tolF && obY1 <= fB + tolF && m.vazio <= w * h * 0.005;
     if(jaCabe) avisos.push("obra já estava entre o mapa/cidade e o ícone/frase — foto não foi movida");
     if(!jaCabe && fB - fT > h * 0.08){
@@ -149633,7 +149660,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       let alvoY0 = fT + Math.max(0, (fB - fT - obH) / 2);
       if(obH > fB - fT) alvoY0 = Math.max(0, fB - obH);
       if(alvoY0 + obH > h) alvoY0 = Math.max(0, h - obH);          // mas nunca corta a obra no rodapé
-      const oyN = alvoY0 - an.obra.y0 * m.dh;
+      const oyN = m.oy + (alvoY0 - obY0) / Math.max(0.5, Math.cos(ang));   // desloca a foto pelo que a obra (já girada) precisa subir/descer (com giro, 1 px de oy vira cos(ang) px na tela)
       if(Math.abs(oyN - m.oy) > 4){
         m = Object.assign({}, m, { oy:oyN });
         m.vazio = (Math.max(0, m.oy) + Math.max(0, h - (m.oy + m.dh))) * w + Math.max(0, w - m.dw) * h;
@@ -149693,40 +149720,97 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         const tom = (r0 > g0 + 25 && g0 > b0 + 10) ? "reddish-orange" : (r0 > g0 + 10) ? "warm brown" : (Math.abs(r0 - g0) < 12 && Math.abs(g0 - b0) < 12) ? "grey" : "brown";
         return tom + " (" + hx + ")" + (lum > 95 ? ", dry, not wet, not dark" : ""); }catch(_){ return ""; } })();
       let nLimpo = 0, custoLimpa = 0;
+      /* ═══ (14/10 11:50, medido nos testes v26l/v26m: a máscara da 1ª limpeza saía 0% branca — a caixa da obra do GPT cobria a
+         foto quase inteira e "protegia" o cano e o veículo; e proteger "pixel escuro" pegava a SOMBRA da terra vermelha)
+         PROTEÇÃO DA OBRA = a LONA de verdade, pixel a pixel: escuro E sem cor (cinza/preto/azulado) — ou azulado médio
+         (reflexo da lona). Terra vermelha na sombra é escura mas tem cor → NÃO é protegida → o cano em cima dela sai.
+         Engordada 5 px. Usada nas duas limpezas e nas duas recolagens (lona volta byte a byte da original). ═══ */
+      const Prot = document.createElement("canvas"); Prot.width = base.width; Prot.height = base.height; let temLona = false;
+      try{ if(an.obra){ const bx = Math.max(0, Math.round((an.obra.x0 - 0.01) * base.width)), by = Math.max(0, Math.round((an.obra.y0 - 0.01) * base.height)); const bw = Math.min(base.width - bx, Math.round((an.obra.x1 - an.obra.x0 + 0.02) * base.width)), bh = Math.min(base.height - by, Math.round((an.obra.y1 - an.obra.y0 + 0.02) * base.height));
+        if(bw > 2 && bh > 2){ const dB = base.getContext("2d").getImageData(bx, by, bw, bh).data; const T = document.createElement("canvas"); T.width = bw; T.height = bh; const tx = T.getContext("2d"); const idT = tx.createImageData(bw, bh); let nL = 0;
+          for(let q = 0, i = 0; q < bw * bh; q++, i += 4){ const r0 = dB[i], g0 = dB[i + 1], b0 = dB[i + 2]; const mx0 = Math.max(r0, g0, b0), mn0 = Math.min(r0, g0, b0); const l = 0.299 * r0 + 0.587 * g0 + 0.114 * b0; const cr = (mx0 - mn0) / Math.max(1, mx0);
+            if((l < 80 && cr < 0.45) || (b0 >= r0 && b0 >= g0 && l < 175 && cr < 0.6)){ idT.data[i + 3] = 255; nL++; } }
+          /* (12:00, visto na simulação: o CANO preto é escuro e sem cor igual à lona) só fica protegido o que é a LONA de verdade =
+             os blocos CONECTADOS grandes (≥ 15% do maior bloco); cano, tábua, sombra solta são blocos pequenos → ficam de fora. */
+          if(nL > bw * bh * 0.02){
+            const S = 2, ws = Math.ceil(bw / S), hs = Math.ceil(bh / S); const lab = new Int32Array(ws * hs); const occ = new Uint8Array(ws * hs);
+            for(let yy = 0; yy < hs; yy++) for(let xx = 0; xx < ws; xx++){ const i = ((Math.min(bh - 1, yy * S)) * bw + Math.min(bw - 1, xx * S)) * 4; occ[yy * ws + xx] = idT.data[i + 3] ? 1 : 0; }
+            const areas = [0]; const fila = new Int32Array(ws * hs); let nLab = 0;
+            for(let p0 = 0; p0 < ws * hs; p0++){ if(!occ[p0] || lab[p0]) continue; nLab++; let qi = 0, qf = 0; fila[qf++] = p0; lab[p0] = nLab; let area = 0;
+              while(qi < qf){ const q = fila[qi++]; area++; const qx = q % ws, qy = (q / ws) | 0;
+                if(qx > 0 && occ[q - 1] && !lab[q - 1]){ lab[q - 1] = nLab; fila[qf++] = q - 1; } if(qx < ws - 1 && occ[q + 1] && !lab[q + 1]){ lab[q + 1] = nLab; fila[qf++] = q + 1; }
+                if(qy > 0 && occ[q - ws] && !lab[q - ws]){ lab[q - ws] = nLab; fila[qf++] = q - ws; } if(qy < hs - 1 && occ[q + ws] && !lab[q + ws]){ lab[q + ws] = nLab; fila[qf++] = q + ws; } }
+              areas.push(area); }
+            const maior = Math.max.apply(null, areas); const fica = areas.map(function(ar){ return ar >= maior * 0.15; });
+            for(let yy = 0; yy < bh; yy++) for(let xx = 0; xx < bw; xx++){ const L0 = lab[((yy / S) | 0) * ws + ((xx / S) | 0)]; if(!fica[L0]) idT.data[(yy * bw + xx) * 4 + 3] = 0; }
+            tx.putImageData(idT, 0, 0); const pr = Prot.getContext("2d"); pr.filter = "blur(3px)"; pr.drawImage(T, bx, by); pr.filter = "none";
+            const dP = pr.getImageData(0, 0, Prot.width, Prot.height); for(let i = 3; i < dP.data.length; i += 4){ dP.data[i] = dP.data[i] > 10 ? 255 : 0; dP.data[i - 3] = 0; dP.data[i - 2] = 0; dP.data[i - 1] = 0; } pr.putImageData(dP, 0, 0); temLona = true;
+            // o carimbo de data costuma cair em cima da lona (canto de baixo): fica FORA da proteção pra ser apagado
+            if(an.carimbo){ const f0 = Math.round(base.width * 0.02); pr.clearRect(an.carimbo.x0 * base.width - f0, an.carimbo.y0 * base.height - f0, (an.carimbo.x1 - an.carimbo.x0) * base.width + 2 * f0, (an.carimbo.y1 - an.carimbo.y0) * base.height + 2 * f0); } } } } }catch(_){ }
+      const brancoFrac = function(Mk){ try{ const d = Mk.getContext("2d").getImageData(0, 0, Mk.width, Mk.height).data; let n = 0; for(let i = 3; i < d.length; i += 4) if(d[i] < 128) n++; return n / (Mk.width * Mk.height); }catch(_){ return 1; } };
+      const limparCaixas = async function(caixas, folga, promptL, rotulo, negativoL){
+        const Mk = document.createElement("canvas"); Mk.width = base.width; Mk.height = base.height; const mk = Mk.getContext("2d");
+        mk.fillStyle = "#000"; mk.fillRect(0, 0, Mk.width, Mk.height); mk.globalCompositeOperation = "destination-out";
+        const f = Math.round(base.width * folga);
+        caixas.forEach(function(c){ mk.fillRect(c.x0 * base.width - f, c.y0 * base.height - f, (c.x1 - c.x0) * base.width + 2 * f, (c.y1 - c.y0) * base.height + 2 * f); });
+        if(temLona){ mk.globalCompositeOperation = "source-over"; mk.drawImage(Prot, 0, 0); }   // lona fora da máscara (alpha 255 = manter)
+        const fr = brancoFrac(Mk);
+        if(fr < 0.0005){ avisos.push(rotulo + ": as caixas caíam todas em cima da lona — nada a limpar (chamada poupada)"); return null; }
+        const limpa = await _eaStabilityArea("inpaint", base, Mk, promptL, ctx, negativoL);
+        if(!limpa) return null;
+        /* (14/10 12:20, visto no v26o: caixa "madeira e galhos" de 36%×30% → a Stability pintou uma MASSA PRETA colada na lagoa, como se
+           a obra crescesse) se dentro da máscara a foto limpa tem bem mais "lona" (escuro sem cor) que a original → DESCARTA. */
+        try{ const dM = Mk.getContext("2d").getImageData(0, 0, Mk.width, Mk.height).data; const d0 = base.getContext("2d").getImageData(0, 0, base.width, base.height).data, d1 = limpa.getContext("2d").getImageData(0, 0, base.width, base.height).data;
+          const lona = function(d, i){ const mx0 = Math.max(d[i], d[i + 1], d[i + 2]), mn0 = Math.min(d[i], d[i + 1], d[i + 2]); return (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) < 70 && (mx0 - mn0) / Math.max(1, mx0) < 0.45; };
+          let n0 = 0, n1 = 0, nM = 0; for(let i = 0; i < dM.length; i += 4){ if(dM[i + 3] >= 128) continue; nM++; if(lona(d0, i)) n0++; if(lona(d1, i)) n1++; }
+          if(nM > 0 && (n1 - n0) / nM > 0.10){ avisos.push(rotulo + ": a IA pintou lona/massa escura no lugar do entulho (" + Math.round(n1 / nM * 100) + "% vs " + Math.round(n0 / nM * 100) + "%) — DESCARTADA, foto seguiu como estava (R$ " + (Number(limpa.__custo) || 0).toFixed(2) + " perdidos)"); custoLimpa += Number(limpa.__custo) || 0; return null; } }catch(_){ }
+        if(temLona){ const O = document.createElement("canvas"); O.width = base.width; O.height = base.height; const o = O.getContext("2d"); o.drawImage(base, 0, 0); o.globalCompositeOperation = "destination-in"; o.drawImage(Prot, 0, 0); limpa.getContext("2d").drawImage(O, 0, 0); }   // lona volta byte a byte da original
+        limpa.__frac = fr; return limpa; };
       try{
         /* (14/10 09:59, Gustavo, foto de Palma Sola com o dedo na lente: "vai ter um botão Foto editorial?") a obstrução
            (dedo, borrão da lente) entra na limpeza nos dois modos — é defeito da foto, não decisão criativa. */
         const obst = (an.obstrucao && (an.obstrucao.x1 - an.obstrucao.x0) * (an.obstrucao.y1 - an.obstrucao.y0) < 0.45) ? [an.obstrucao] : [];
-        const caixas = (an.entulho || []).slice(0, 6).concat(an.carimbo ? [an.carimbo] : []).concat(obst);
+        const caixas = (an.entulho || []).filter(function(c){ return (c.x1 - c.x0) * (c.y1 - c.y0) <= 0.08; }).slice(0, 6).concat(an.carimbo ? [an.carimbo] : []).concat(obst);
         if(obst.length) avisos.push("obstrução na lente (dedo/borrão) detectada — repintada com a cena em volta (" + Math.round((an.obstrucao.x1 - an.obstrucao.x0) * 100) + "% da largura)");
         if(caixas.length){
           if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho, sobras de lona e carimbo do celular (Stability)…"); }catch(_){ } }
-          /* (13/10 21:52, Gustavo: "a parte direita da lagoa ele aumentou, jamais é pra alterar a obra") 1) a máscara NUNCA inclui
-             a caixa da obra (com 1% de folga); 2) em vez de Erase (que preenche com "o que tem em volta" — e em volta tinha
-             lona) vai INPAINT com ordem explícita de chão; 3) depois, os pixels da obra voltam da foto original — garantia. */
-          const Mk = document.createElement("canvas"); Mk.width = base.width; Mk.height = base.height; const mk = Mk.getContext("2d");
-          mk.fillStyle = "#000"; mk.fillRect(0, 0, Mk.width, Mk.height); mk.globalCompositeOperation = "destination-out";
-          const f = Math.round(base.width * 0.02);
-          caixas.forEach(function(c){ mk.fillRect(c.x0 * base.width - f, c.y0 * base.height - f, (c.x1 - c.x0) * base.width + 2 * f, (c.y1 - c.y0) * base.height + 2 * f); });
-          let obraPx = null;
-          if(an.obra){ const g = 0.01; obraPx = { x:Math.max(0, Math.round((an.obra.x0 - g) * base.width)), y:Math.max(0, Math.round((an.obra.y0 - g) * base.height)) };
-            obraPx.w = Math.min(base.width - obraPx.x, Math.round((an.obra.x1 - an.obra.x0 + 2 * g) * base.width)); obraPx.h = Math.min(base.height - obraPx.y, Math.round((an.obra.y1 - an.obra.y0 + 2 * g) * base.height));
-            mk.globalCompositeOperation = "source-over"; mk.fillStyle = "#000"; mk.fillRect(obraPx.x, obraPx.y, obraPx.w, obraPx.h);   // obra fora da máscara
-            // (22:05) o carimbo de data costuma cair DENTRO da caixa da obra (canto de baixo) — ele volta pra máscara e fica fora da recolagem
-            if(an.carimbo){ mk.globalCompositeOperation = "destination-out"; mk.fillRect(an.carimbo.x0 * base.width - f, an.carimbo.y0 * base.height - f, (an.carimbo.x1 - an.carimbo.x0) * base.width + 2 * f, (an.carimbo.y1 - an.carimbo.y0) * base.height + 2 * f); } }
-          const pLimpa = "Remove the marked objects (leftover tarp, plastic, debris, text stamp" + (obst.length ? ", finger/lens blur" : "") + ") and fill each area with the same scene that surrounds it: bare " + (corTxt0 || "brown") + " soil ground, or grass, trees, buildings or sky if that is what surrounds the area. Continuous, natural, same light, same perspective. No tarp, no liner, no plastic, no text, no new objects.";
-          const limpa = await _eaStabilityArea("inpaint", base, Mk, pLimpa, ctx);
-          if(limpa){
-            if(obraPx && obraPx.w > 2 && obraPx.h > 2){
-              // obra = original, byte a byte — menos a caixa do carimbo (que precisa ficar apagada)
-              const O = document.createElement("canvas"); O.width = base.width; O.height = base.height; const ox2 = O.getContext("2d");
-              ox2.drawImage(base, obraPx.x, obraPx.y, obraPx.w, obraPx.h, obraPx.x, obraPx.y, obraPx.w, obraPx.h);
-              if(an.carimbo) ox2.clearRect(an.carimbo.x0 * base.width - f, an.carimbo.y0 * base.height - f, (an.carimbo.x1 - an.carimbo.x0) * base.width + 2 * f, (an.carimbo.y1 - an.carimbo.y0) * base.height + 2 * f);
-              limpa.getContext("2d").drawImage(O, 0, 0); }
-            base = limpa; nLimpo = caixas.length; custoLimpa = Number(limpa.__custo) || 0;
-          }
+          /* (13/10 21:52, Gustavo: "a parte direita da lagoa ele aumentou, jamais é pra alterar a obra") INPAINT com ordem explícita
+             de chão (Erase preenchia com "o que tem em volta" — lona), lona fora da máscara e recolada da original. */
+          const pLimpa = "Empty, clean ground exactly like the surroundings: bare " + (corTxt0 || "brown") + " soil with small natural clods, flat and plain — or grass, trees, buildings or sky if that is what surrounds the area. Continuous, natural, same light, same perspective, same texture, photographic.";
+          const nLimpa = "pipe, tube, hose, cable, rope, wood, log, stick, branch, root, plank, board, tarp, plastic, liner, geomembrane, debris, trash, vehicle, machine, tool, text, watermark, date stamp, person, object, pattern, artifact, blurry";
+          const limpa = await limparCaixas(caixas, 0.02, pLimpa, "limpeza", nLimpa);
+          if(limpa){ base = limpa; nLimpo = caixas.length; custoLimpa = Number(limpa.__custo) || 0; }
         }
       }catch(e){ avisos.push("limpeza (Stability) falhou: " + _eaErro(e) + " — foto seguiu sem limpar"); }
+      /* (14/10 11:00, Gustavo: "NÃO TIROU A PORRA DA MADEIRA") depois da limpeza, o GPT olha a foto limpa e marca o que SOBROU
+         (cano, tábua, madeira, lona, veículo) fora da obra → 2ª limpeza com a mesma proteção da lona. 1 rodada. Roda SEMPRE (mesmo
+         quando o analisador não marcou nada) e ANTES de estender — senão a sobra é continuada pra fora. */
+      try{
+        if(typeof askGPTBlocos === "function"){
+          if(typeof ctx.passo === "function"){ try{ ctx.passo("conferindo se sobrou entulho (GPT)…"); }catch(_){ } }
+          const J2 = document.createElement("canvas"); const k2 = Math.min(1, 1024 / Math.max(base.width, base.height)); J2.width = Math.round(base.width * k2); J2.height = Math.round(base.height * k2); J2.getContext("2d").drawImage(base, 0, 0, J2.width, J2.height);
+          const rr = await askGPTBlocos({ max_tokens:1200, origem:"arte_foto_obra_limpeza2", card:ctx.task || undefined,
+            system:"Você confere a limpeza de uma foto de obra rural (agro). A OBRA (lagoa/cisterna/galpão/estrutura) nunca é marcada.",
+            messages:[{ role:"user", content:[{ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:J2.toDataURL("image/jpeg", 0.86).split(",")[1] } },
+              { type:"text", text:'Esta foto já passou por uma limpeza automática. Liste o que AINDA sobrou no CHÃO EM VOLTA da obra que um cliente não deveria ver: canos, tubos, tábuas, madeira, mangueiras, cordas, sobras de lona/plástico, ferramentas, veículos, máquinas, lixo, carimbo de data. Devolva {"sobrou":[{"x0","y0","x1","y1","o_que"}]} com frações 0–1 da imagem, caixas JUSTAS (até 4), sem incluir a obra. Se não sobrou nada: {"sobrou":[]}.' }] }] });
+          const tx2 = ((rr && rr.content && rr.content[0] && rr.content[0].text) || "").replace(/```json|```/g, "").trim(); const mm2 = tx2.match(/\{[\s\S]*\}/);
+          const sob = mm2 ? (JSON.parse(mm2[0]).sobrou || []) : [];
+          const cxF = sob.map(function(c){ const o = { x0:Number(c.x0), y0:Number(c.y0), x1:Number(c.x1), y1:Number(c.y1), oQue:String(c.o_que || "") }; return (isFinite(o.x0) && isFinite(o.y0) && o.x1 > o.x0 && o.y1 > o.y0 && (o.x1 - o.x0) < 0.6) ? o : null; }).filter(Boolean).slice(0, 4);
+          /* (12:10, visto no v26n: "tubo" na borda da lagoa era o cano de entrada da própria obra → inpaint pintou um BLOCO VERDE)
+             caixa com mais de 35% em cima da lona = parte da obra → só aviso. */
+          const emCimaDaLona = function(c){ if(!temLona) return false; try{ const x = Math.max(0, Math.round(c.x0 * base.width)), y = Math.max(0, Math.round(c.y0 * base.height)); const ww = Math.max(1, Math.min(base.width - x, Math.round((c.x1 - c.x0) * base.width))), hh = Math.max(1, Math.min(base.height - y, Math.round((c.y1 - c.y0) * base.height))); const d = Prot.getContext("2d").getImageData(x, y, ww, hh).data; let np = 0; for(let i = 3; i < d.length; i += 4) if(d[i] > 128) np++; return np > ww * hh * 0.35; }catch(_){ return false; } };
+          const grandes = cxF.filter(function(c){ return (c.x1 - c.x0) * (c.y1 - c.y0) > 0.06; }); grandes.forEach(function(c){ avisos.push("2ª limpeza: \"" + c.oQue + "\" é uma área grande demais (" + Math.round((c.x1 - c.x0) * (c.y1 - c.y0) * 100) + "% da foto) pra limpar sem inventar — não mexido"); });
+          const naLona = cxF.filter(function(c){ return grandes.indexOf(c) < 0 && emCimaDaLona(c); }); naLona.forEach(function(c){ avisos.push("2ª limpeza: \"" + c.oQue + "\" está em cima da lona (parte da obra) — não mexido"); });
+          const cxL = cxF.filter(function(c){ return naLona.indexOf(c) < 0 && grandes.indexOf(c) < 0; });
+          if(cxL.length){
+            cxF.length = 0; cxL.forEach(function(c){ cxF.push(c); });
+            if(typeof ctx.passo === "function"){ try{ ctx.passo("2ª limpeza: " + cxF.map(function(c){ return c.oQue; }).join(", ").slice(0, 60) + "…"); }catch(_){ } }
+            const limpa2 = await limparCaixas(cxF, 0.025, "Empty, clean, flat bare " + (corTxt0 || "brown") + " soil with small natural clods, exactly like the soil around it, continuous, same light, same texture, photographic, nothing on it.", "2ª limpeza",
+              "pipe, tube, hose, cable, rope, wood, log, stick, branch, root, plank, board, tarp, plastic, liner, geomembrane, debris, trash, vehicle, machine, tool, grass, text, person, object, pattern, artifact, blurry");
+            if(limpa2){ base = limpa2; custoLimpa += Number(limpa2.__custo) || 0; nLimpo += cxF.length; avisos.push("2ª limpeza (GPT conferiu a foto limpa): " + cxF.map(function(c){ return c.oQue; }).join(", ") + (limpa2.__custo ? " · R$ " + Number(limpa2.__custo).toFixed(2) : "")); }
+          } else avisos.push("GPT conferiu a foto limpa: não sobrou entulho" + (naLona.length ? " fora da obra" : ""));
+        }
+      }catch(e){ avisos.push("conferência de entulho restante falhou: " + _eaErro(e)); }
       const ext = { left:Math.round(left * k), right:Math.round(right * k), up:Math.round(up * k), down:Math.round(down * k), creativity:0.15 };
       const corTxt = corTxt0;
       /* (21:35, medido: prompt longo com "tidy and even" fez a terra sair enrugada/padronizada) prompt CURTO, igual ao do
@@ -149741,6 +149825,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       /* (14/10 10:16, Gustavo, Katuete em pé girada 28°: "a terra a transição ficou dura") a terra que falta numa foto EM PÉ
          girada vai pras LATERAIS, não pra baixo — e a correção só olhava a faixa de baixo. Agora corrige esquerda e direita
          também (abaixo do horizonte), cada faixa casada com a borda da foto que encosta nela. */
+      const _EA_CAMPO_COR = false;
       const corrigeDerivaLados = function(cvI, rect, yHoriz, rotulo){ try{
         const Wd = cvI.width, Hd = cvI.height; const ic = cvI.getContext("2d").getImageData(0, 0, Wd, Hd), dd = ic.data; const out = [];
         const ceu = function(i){ const r0 = dd[i], g0 = dd[i + 1], b0 = dd[i + 2]; const mx0 = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0); return b0 >= r0 && b0 >= g0 - 4 && mx0 > 90 && (mx0 - mn) / Math.max(1, mx0) < 0.75; };
@@ -149783,16 +149868,18 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       /* (22:15, visto no teste: o 2º passo via a lagoa inteira e "repetia a cena" — lona nova embaixo) checagem de LONA
          INVENTADA: na terra pintada, mais de 12% de pixels bem escuros = repete o passo (1×). E o 2º passo recebe SÓ o
          recorte de baixo (150 px de terra real + o 1º passo), sem a lagoa — não tem o que repetir. */
-      const lonaInventada = function(cvI, y0){ try{ const Wd = cvI.width, Hd = cvI.height; if(Hd - y0 < 60) return 0; const d = cvI.getContext("2d").getImageData(0, y0 + 40, Wd, Hd - y0 - 40).data; let esc = 0, n = 0; for(let i = 0; i < d.length; i += 4){ if(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 45) esc++; n++; } return esc / Math.max(1, n); }catch(_){ return 0; } };
+      const lonaInventada = function(cvI, y0){ try{ const Wd = cvI.width, Hd = cvI.height; if(Hd - y0 < 60) return 0; const d = cvI.getContext("2d").getImageData(0, y0 + 40, Wd, Hd - y0 - 40).data; let esc = 0, n = 0; for(let i = 0; i < d.length; i += 4){ const mx0 = Math.max(d[i], d[i + 1], d[i + 2]), mn0 = Math.min(d[i], d[i + 1], d[i + 2]); if(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 45 && (mx0 - mn0) / Math.max(1, mx0) < 0.45) esc++; n++; } return esc / Math.max(1, n); }catch(_){ return 0; } };   // (14/10 12:10) lona = escuro E sem cor; sombra de terra vermelha é escura mas tem cor (repetia os passos à toa, +8 créditos)
       const passoBaixo = async function(cvBase, extP, yB, rotulo){
         let r = paraCanvas(await _eaOutpaint(cvBase.toDataURL("image/png").split(",")[1], extP, prompt, ctx)); let custo = Number(r.__custo) || 0, seg = Number(r.__segundos) || 0;
         if(extP.down > 40){ const fr = lonaInventada(r, yB); if(fr > 0.12){ avisos.push(rotulo + ": a IA inventou lona/área escura na terra (" + Math.round(fr * 100) + "%) — repetido"); const r2 = paraCanvas(await _eaOutpaint(cvBase.toDataURL("image/png").split(",")[1], extP, prompt, ctx)); custo += Number(r2.__custo) || 0; seg += Number(r2.__segundos) || 0; if(lonaInventada(r2, yB) < fr) r = r2; } }
         r.__custo = custo; r.__segundos = seg; return r; };
       let img, passos = 1; const derivas = [];
       const yBorda = ext.up + base.height;
-      if(ext.down > base.height * 0.5){
+      /* (14/10 12:10, medido no v26n: faixa de 125 px no 2º passo saiu AZUL-ACINZENTADA (a Stability pinta "céu/água" numa tira
+         fininha) → 2 passos só quando falta MAIS de 65% da altura; até aí vai num passo só. */
+      if(ext.down > base.height * 0.65){
         const d1 = Math.round(base.height * 0.45);
-        const c1 = await passoBaixo(base, Object.assign({}, ext, { down:d1 }), yBorda, "1º passo"); const dv1 = corrigeDeriva(c1, yBorda, "1º passo"); if(dv1) derivas.push(dv1);
+        const c1 = await passoBaixo(base, Object.assign({}, ext, { down:d1 }), yBorda, "1º passo");   // (14/10 11:30) sem corrigeDeriva por passo: o ganho "perto" começava na linha da borda = DEGRAU (a emenda dura que o Gustavo viu); a cor é casada no fim pelo campo contínuo
         if(typeof ctx.passo === "function"){ try{ ctx.passo("estendendo a terra de baixo (2º passo)…"); }catch(_){ } }
         // (23:00, erro real do Gustavo: "unsupported aspect ratio — must be between 1:2.5 and 2.5:1, received 2520x626") o recorte
         // do 2º passo tem que ter altura ≥ largura/2,4 (foto girada e estendida pros lados fica larga); se precisar, sobe mais
@@ -149800,11 +149887,43 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
         const rec = document.createElement("canvas"); rec.width = c1.width; rec.height = c1.height - y0; rec.getContext("2d").drawImage(c1, 0, y0, c1.width, c1.height - y0, 0, 0, rec.width, rec.height);
         const r2 = await passoBaixo(rec, { left:0, right:0, up:0, down:ext.down - d1, creativity:ext.creativity }, yBorda - y0, "2º passo");
         const c2 = document.createElement("canvas"); c2.width = c1.width; c2.height = c1.height + (ext.down - d1); const x2 = c2.getContext("2d"); x2.drawImage(c1, 0, 0); x2.drawImage(r2, 0, rec.height, r2.width, r2.height - rec.height, 0, c1.height, r2.width, r2.height - rec.height);
-        const dv2 = corrigeDeriva(c2, yBorda, "2º passo"); if(dv2) derivas.push(dv2);
-        const dvJ = corrigeDeriva(c2, c1.height, "junção do 2º passo"); if(dvJ) derivas.push(dvJ);   // (22:25) tom da junção casado com a terra logo acima
         img = c2; img.__custo = (Number(c1.__custo) || 0) + (Number(r2.__custo) || 0); img.__segundos = (Number(c1.__segundos) || 0) + (Number(r2.__segundos) || 0); passos = 2;
-      } else { img = await passoBaixo(base, ext, yBorda, "extensão"); if(ext.down > 40){ const dv = corrigeDeriva(img, yBorda, "terra"); if(dv) derivas.push(dv); } }
-      if(ext.left > 40 || ext.right > 40){ const yHz = ext.up + Math.round((an.horizonte != null ? an.horizonte : 0.5) * base.height); const dvL = corrigeDerivaLados(img, { x:ext.left, y:ext.up, w:base.width, h:base.height }, yHz, "lateral"); if(dvL) derivas.push(dvL); }
+      } else { img = await passoBaixo(base, ext, yBorda, "extensão"); }
+      /* (14/10 11:00, Gustavo: "É PRA NÃO TER ESSA EMENDA DURA, É PRA DEIXAR SUAVE") a correção por FAIXAS (esquerda/direita/baixo
+         com ganhos diferentes) criava linha em cada fronteira. Agora é um CAMPO contínuo: a cor média da terra real (borrão
+         de 140 px só dos pixels de terra da foto) dividida pela cor média da terra pintada (mesmo borrão) = ganho suave por
+         pixel, sem faixa, sem linha. Longe da foto usa um borrão maior (400 px) pra não perder referência. */
+      /* (14/10 11:45, medido no teste v26l: a saída crua da Stability já vem CASADA — sem emenda nenhuma; quem criava o trapézio
+         escuro e as linhas era a correção de cor em cima dela) → NENHUMA correção de cor. Fica o código desligado. */
+      if(_EA_CAMPO_COR) try{
+        const yHz = ext.up + Math.round((an.horizonte != null ? an.horizonte : 0.5) * base.height);
+        const rect = { x:ext.left, y:ext.up, w:base.width, h:base.height };
+        const Wi = img.width, Hi = img.height; const ic = img.getContext("2d").getImageData(0, 0, Wi, Hi), dd = ic.data;
+        const ceuP = function(i){ const r0 = dd[i], g0 = dd[i + 1], b0 = dd[i + 2]; const mx0 = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0); return b0 >= r0 && b0 >= g0 - 4 && mx0 > 90 && (mx0 - mn) / Math.max(1, mx0) < 0.75; };
+        const P = document.createElement("canvas"); P.width = Wi; P.height = Hi; const G = document.createElement("canvas"); G.width = Wi; G.height = Hi;
+        const ip = P.getContext("2d").createImageData(Wi, Hi), ig = G.getContext("2d").createImageData(Wi, Hi); const dpP = ip.data, dgG = ig.data;
+        const dentro = new Uint8Array(Wi * Hi); let nP = 0, nG = 0;
+        for(let y = 0; y < Hi; y++) for(let x = 0; x < Wi; x++){ const i = (y * Wi + x) * 4, p = y * Wi + x; const inR = x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h; dentro[p] = inR ? 1 : 0;
+          const l = 0.299 * dd[i] + 0.587 * dd[i + 1] + 0.114 * dd[i + 2];
+          if(inR){ if(y >= yHz && l >= 60 && !ceuP(i)){ dpP[i] = dd[i]; dpP[i + 1] = dd[i + 1]; dpP[i + 2] = dd[i + 2]; dpP[i + 3] = 255; nP++; } }
+          else if(y >= yHz - 40 && l >= 25 && !ceuP(i)){ dgG[i] = dd[i]; dgG[i + 1] = dd[i + 1]; dgG[i + 2] = dd[i + 2]; dgG[i + 3] = 255; nG++; } }
+        if(nP > 2000 && nG > 2000){
+          P.getContext("2d").putImageData(ip, 0, 0); G.getContext("2d").putImageData(ig, 0, 0);
+          const borra = function(src, r){ const B = document.createElement("canvas"); B.width = Wi; B.height = Hi; const b = B.getContext("2d"); b.filter = "blur(" + r + "px)"; b.drawImage(src, 0, 0); return b.getImageData(0, 0, Wi, Hi).data; };
+          const P1 = borra(P, 140), P2 = borra(P, 400), G1 = borra(G, 140), G2 = borra(G, 400);
+          let nCor = 0, sG = 0;
+          for(let p = 0, i = 0; p < Wi * Hi; p++, i += 4){ if(dentro[p] || dgG[i + 3] === 0) continue;
+            const aP1 = P1[i + 3] / 255, aP2 = P2[i + 3] / 255, aG1 = G1[i + 3] / 255;
+            const usa1 = aP1 > 0.03; if(!usa1 && aP2 < 0.004) continue;
+            const Pc = usa1 ? P1 : P2, Gc = usa1 ? G1 : G2; if((usa1 ? aG1 : G2[i + 3] / 255) < 0.02) continue;
+            const lP = 0.299 * Pc[i] + 0.587 * Pc[i + 1] + 0.114 * Pc[i + 2], lG = 0.299 * Gc[i] + 0.587 * Gc[i + 1] + 0.114 * Gc[i + 2]; const gL = Math.max(0.7, Math.min(1.5, lP / Math.max(1, lG)));
+            // (14/10 11:30, visto: ganho por canal solto virou faixa ROSA/ROXA na terra) cada canal fica a ±18% do ganho de luminância
+            for(let c = 0; c < 3; c++){ const g = Math.max(gL * 0.82, Math.min(gL * 1.18, Pc[i + c] / Math.max(1, Gc[i + c]))); const v = dd[i + c] * g; dd[i + c] = v > 235 ? 235 + (v - 235) * 0.4 : v; if(c === 0) sG += g; }
+            nCor++; }
+          img.getContext("2d").putImageData(ic, 0, 0);
+          if(nCor) derivas.push("campo contínuo de cor na terra pintada (" + Math.round(nCor / (Wi * Hi) * 100) + "% do quadro, ganho médio " + (sG / nCor).toFixed(2) + ", sem faixas)");
+        }
+      }catch(e){ avisos.push("campo de cor contínuo falhou: " + _eaErro(e)); }
       if(derivas.length) avisos.push("cor da terra pintada corrigida de volta pra cor da borda — " + derivas.join("; "));
       if(passos === 2) avisos.push("terra de baixo estendida em 2 passos (faixa de " + ext.down + "px > metade da foto): num passo só a cor derivava");
       if(nLimpo) avisos.push("limpeza antes de estender (Stability Inpaint, obra fora da máscara e recolada da original): " + nLimpo + " área(s) preenchidas com chão/fundo — entulho/sobras de lona" + (an.carimbo ? " + carimbo de data do celular" : "") + (custoLimpa ? " · R$ " + custoLimpa.toFixed(2) : ""));
@@ -150560,7 +150679,9 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           const protObra = document.createElement("canvas"); protObra.width = w; protObra.height = h;
           try{ if(an.obra){ const po = protObra.getContext("2d"); po.save(); po.translate(w / 2, h / 2); po.rotate(ang); po.translate(-w / 2, -h / 2); po.fillStyle = "#fff"; const g = 0.012;
             po.fillRect(m.ox + (an.obra.x0 - g) * m.dw, m.oy + (an.obra.y0 - g) * m.dh, (an.obra.x1 - an.obra.x0 + 2 * g) * m.dw, (an.obra.y1 - an.obra.y0 + 2 * g) * m.dh); po.restore(); } }catch(_){ }
-          const limpaveis = jz.problemas.filter(function(pr){ return (pr.tipo === "objeto" || pr.tipo === "lona_fora" || pr.tipo === "mancha") && (pr.x1 - pr.x0) <= 0.35 && (pr.y1 - pr.y0) <= 0.35; }).slice(0, 2);
+          /* (14/10 11:45, medido no v26l: a limpeza guiada pelo juiz pintou lagoa azul + grama num canto e um retângulo claro no céu)
+             no v26 o juiz SÓ AVISA — o entulho já foi conferido e limpo ANTES de estender (2ª limpeza). */
+          const limpaveis = cv.__outpaint ? [] : jz.problemas.filter(function(pr){ return (pr.tipo === "objeto" || pr.tipo === "lona_fora" || pr.tipo === "mancha") && (pr.x1 - pr.x0) <= 0.35 && (pr.y1 - pr.y0) <= 0.35; }).slice(0, 2);
           const soAviso = jz.problemas.filter(function(pr){ return limpaveis.indexOf(pr) < 0; });
           soAviso.forEach(function(pr){ avisos.push("juiz (só aviso, " + (cv.__outpaint ? "v26" : "v25") + "): " + pr.tipo + " — " + pr.oQue); });
           for(const pr of limpaveis){
@@ -151285,7 +151406,7 @@ function PxGerarArteModal({ task:taskProp, setTasks, onClose, editorial }){
   const _pctDoPasso = function(m){ m = String(m || "");
     if(/abrindo/.test(m)) return 6; if(/traduzindo/.test(m)) return 12; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
     if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
-    if(/editorial:/.test(m)) return 66; if(/limpando entulho/.test(m)) return 46; if(/estendendo a foto/.test(m)) return 52; if(/2º passo/.test(m)) return 62; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
+    if(/editorial:/.test(m)) return 66; if(/conferindo se sobrou|2ª limpeza/.test(m)) return 49; if(/limpando entulho/.test(m)) return 46; if(/estendendo a foto/.test(m)) return 52; if(/2º passo/.test(m)) return 62; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
     if(/completando|limpando/.test(m)) return 56; if(/conferindo/.test(m)) return 72; if(/corrigindo/.test(m)) return 78; if(/salvando/.test(m)) return 86; return null; };
   const setPassoPct = function(m){ setPasso(m);
     const t = _pctDoPasso(m);
