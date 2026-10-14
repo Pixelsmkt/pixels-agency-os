@@ -144935,6 +144935,27 @@ async function _eaOutpaint(b64, ext, prompt, ctx){
   img.__custo = Number(r.data.custo_brl) || 0; img.__segundos = r.data.segundos || null;
   return img;
 }
+/* (13/10 21:11, Gustavo: "o ajuste também fica com o Stability?") ERASE / INPAINT por área pela Stability (mesma Edge
+   Function "outpaint", acao erase|inpaint): a máscara do app (alpha transparente = mexer) vira máscara branco/preto;
+   a imagem volta pixel a pixel no mesmo tamanho (sem realinhar). Erase = apaga o que está na área e preenche com o
+   fundo (3–5 créditos ≈ R$ 0,15–0,25); Inpaint = repinta seguindo o pedido. */
+async function _eaStabilityArea(acao, Rec, Mk, prompt, ctx){
+  const L = Rec.width, H = Rec.height;
+  const M = document.createElement("canvas"); M.width = L; M.height = H; const mx = M.getContext("2d");
+  const dm = Mk.getContext("2d").getImageData(0, 0, L, H).data; const im = mx.createImageData(L, H); const d = im.data;
+  for(let i = 0; i < d.length; i += 4){ const v = dm[i + 3] < 128 ? 255 : 0; d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255; }
+  mx.putImageData(im, 0, 0);
+  const r = await window._sb.functions.invoke("outpaint", { body:{ acao:acao, imagem:Rec.toDataURL("image/png").split(",")[1], mascara:M.toDataURL("image/png").split(",")[1], prompt:prompt || "", grow_mask:acao === "erase" ? 10 : 6, client_id:(ctx && ctx.client) || null, projeto_id:(ctx && ctx.projeto) || null } });
+  let msg = null;
+  if(r.error){ try{ const c = r.error.context; if(c && typeof c.json==="function"){ const j = await c.json(); msg = j && j.erro; } }catch(_){} throw new Error(msg || r.error.message || "a Stability não respondeu"); }
+  if(r.data && r.data.erro) throw new Error(r.data.erro);
+  if(!r.data || !r.data.imagem) throw new Error("a Stability não devolveu imagem");
+  const img = await _eaCarregarImg("data:image/png;base64," + r.data.imagem);
+  const out = document.createElement("canvas"); out.width = L; out.height = H; out.getContext("2d").drawImage(img, 0, 0, L, H);
+  out.__custo = Number(r.data.custo_brl) || 0; out.__via = "Stability " + (acao === "erase" ? "Erase" : "Inpaint");
+  return out;
+}
+function _eaPedidoEhRemover(txt){ return /remov|apag|tir[ae]|limp|sobra|entulho|sujeira|elimin|delet|some|risc|mancha|lixo|marca|carimbo|data/i.test(String(txt || "")); }
 function _eaEhArte(t){ try{ return !(typeof pxIsVideoTask==="function" && pxIsVideoTask(t)); }catch(_){ return true; } }
 function _eaSemHtml(s){ return String(s||"").replace(/<\/p>\s*<p>/gi,"\n").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").trim(); }
 
@@ -148692,9 +148713,12 @@ async function _eaCorrigirAreaIA(cv, sel, txt, client, prot){
   mk.globalCompositeOperation = "destination-out"; mk.fillRect(sel.x - rx, sel.y - ry, sel.w, sel.h);
   if(prot){ mk.globalCompositeOperation = "source-over"; mk.drawImage(prot, -rx, -ry); }   // o protegido volta a ser opaco (= não mexer)
   const prompt = "Fotografia real de obra rural. Edite SOMENTE a área marcada: " + txt + ". Fora da área marcada tudo permanece IDÊNTICO, pixel a pixel — mesma luz, mesma cor, mesma textura, mesma perspectiva. Nítido, com textura fotográfica real; proibido deixar qualquer região borrada ou nebulosa. Não acrescente texto, pessoas, lona, estruturas ou objetos novos.";
-  const r = await _eaFotoIA(Rec, Mk, prompt, client, null);
+  // (13/10 v26) primeiro pela Stability (erase pra "apagar/remover", inpaint pro resto); gpt-image só se ela falhar
+  let r = null;
+  try{ r = await _eaStabilityArea(_eaPedidoEhRemover(txt) ? "erase" : "inpaint", Rec, Mk, txt, { client:client }); }catch(_){ r = null; }
+  if(!r) r = await _eaFotoIA(Rec, Mk, prompt, client, null);
   if(!r) throw new Error("a IA não devolveu imagem");
-  const rA = (typeof _eaAlinharIA === "function") ? _eaAlinharIA(Rec, r) : r;
+  const rA = r.__via ? r : ((typeof _eaAlinharIA === "function") ? _eaAlinharIA(Rec, r) : r);
   const f = Math.max(8, Math.min(30, Math.round(Math.min(sel.w, sel.h) / 6)));
   const P = document.createElement("canvas"); P.width = L; P.height = L;
   const p2 = P.getContext("2d"); p2.drawImage(rA, 0, 0);
@@ -150875,9 +150899,15 @@ function PxFotoObraAjusteModal({ task, arteUrl, onClose, onSaved }){
       mk.globalCompositeOperation = "destination-out";
       mk.fillRect(sel.x - rx, sel.y - ry, sel.w, sel.h);
       const prompt = "Fotografia real. Edite SOMENTE a área marcada: " + txt + ". Fora da área marcada tudo permanece IDÊNTICO, pixel a pixel — mesma luz, mesma cor, mesma textura, mesma perspectiva. Nítido, com textura fotográfica real; proibido deixar qualquer região borrada ou nebulosa. Não acrescente texto, logos, pessoas ou objetos novos.";
-      const r = await _eaFotoIA(Rec, Mk, prompt, task && task.client, null);
+      /* (13/10 21:11, Gustavo: "o ajuste também fica com o Stability?") sim: "remover/apagar/tirar…" → Stability Erase
+         (apaga e preenche com o fundo); outro pedido → Stability Inpaint. O gpt-image só entra se a Stability falhar. */
+      const ehRemover = _eaPedidoEhRemover(txt);
+      setBusy((ehRemover ? "apagando a área marcada (Stability Erase)…" : "repintando a área marcada (Stability Inpaint)…"));
+      let r = null, falhaSt = "";
+      try{ r = await _eaStabilityArea(ehRemover ? "erase" : "inpaint", Rec, Mk, txt, { client:task && task.client }); }catch(e){ falhaSt = _eaErro(e); r = null; }
+      if(!r){ setBusy("Stability falhou (" + falhaSt + ") — tentando com o gpt-image…"); r = await _eaFotoIA(Rec, Mk, prompt, task && task.client, null); }
       if(!r) throw new Error("a IA não devolveu imagem");
-      const rA = (typeof _eaAlinharIA === "function") ? _eaAlinharIA(Rec, r) : r;
+      const rA = r.__via ? r : ((typeof _eaAlinharIA === "function") ? _eaAlinharIA(Rec, r) : r);
       _snap();
       const f = Math.max(8, Math.min(30, Math.round(Math.min(sel.w, sel.h) / 6)));
       const P = document.createElement("canvas"); P.width = L; P.height = L;
@@ -150889,7 +150919,7 @@ function PxFotoObraAjusteModal({ task, arteUrl, onClose, onSaved }){
       cv.getContext("2d").drawImage(P, rx, ry);
       if(r.__custo) setCusto(function(c){ return c + (Number(r.__custo) || 0); });
       setMexidas(function(n){ return n + 1; }); setVers(function(v){ return v + 1; }); setSel(null);
-      _eaToast("success", "Área corrigida pela IA" + (r.__custo ? " · R$ " + Number(r.__custo).toFixed(2) : "") + ".");
+      _eaToast("success", "Área corrigida (" + (r.__via || "gpt-image") + ")" + (r.__custo ? " · R$ " + Number(r.__custo).toFixed(2) : "") + ".");
     }catch(e){ _eaToast("error", "IA: " + _eaErro(e)); }
     setBusy("");
   }
@@ -150961,11 +150991,11 @@ function PxFotoObraAjusteModal({ task, arteUrl, onClose, onSaved }){
         <div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
           <div style={{fontSize:11,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Ou corrigir com IA</div>
           <textarea value={instr} onChange={function(e){ setInstr(e.target.value); }} rows={3}
-            placeholder="O que corrigir na área marcada? Ex.: tirar a sombra do chão e preencher com grama"
+            placeholder="O que corrigir na área marcada? “remover/apagar/tirar…” apaga e preenche com o fundo (Stability Erase); outro pedido repinta a área (Stability Inpaint). Ex.: remove as sobras de lona"
             style={{font:"inherit",fontSize:12.5,padding:"9px 11px",borderRadius:10,border:"1px solid #e2e8f0",resize:"vertical",outline:"none",lineHeight:1.5}}/>
           <button disabled={!sel || !!busy} onClick={corrigirIA}
             style={Object.assign(bt("#7c3aed", true), { opacity:(!sel || busy) ? .45 : 1, cursor:(!sel || busy) ? "not-allowed" : "pointer" })}>
-            ✦ Corrigir só essa área com IA <span style={{fontWeight:600,opacity:.85}}>· ~R$ 1</span>
+            ✦ Corrigir só essa área com IA <span style={{fontWeight:600,opacity:.85}}>· ~R$ 0,25</span>
           </button>
         </div>
         <div style={{marginTop:"auto",display:"flex",flexDirection:"column",gap:8,borderTop:"1px solid #e2e8f0",paddingTop:12}}>
