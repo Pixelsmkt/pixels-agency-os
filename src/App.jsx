@@ -148654,7 +148654,7 @@ async function _eaAnalisarFotoObra(url, card){
   const r = await askGPTBlocos({ max_tokens:4000, reasoning_effort:"medium", origem:"arte_foto_obra", card:card || undefined,
     system:_EA_FO_CADERNO + "\n\nSEU PAPEL AGORA: você é o ANALISADOR. Olha a foto original da obra e devolve as medidas pro motor encaixar e limpar — aplicando as regras acima (em especial a REGRA 4: inclinação é do HORIZONTE, não da borda da obra).",
     messages:[{ role:"user", content:[{ type:"image", source:{ type:"url", url:url } },
-      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável; "diagnostico": UMA frase curta (até 140 caracteres) dizendo o que a foto precisa — ex.: "horizonte reto, obra ocupa quase tudo, só completar céu em cima" ou "foto 2° torta, entulho à direita"; "estilo_chao": descrição PRECISA (até 220 caracteres) do chão que aparece na BORDA DE BAIXO da foto, pra outra IA pintar a continuação igual: cor exata, textura, relevo, luz (ex.: "terra vermelho-alaranjada revolvida, torrões e montes soltos, seca, luz de fim de tarde vindo da esquerda, sem grama"); "estilo_ceu": descrição PRECISA (até 220 caracteres) do céu da foto pra continuar igual (ex.: "azul médio no alto clareando até o horizonte, nuvens brancas esparsas tipo cúmulos pequenos espalhadas, sem névoa"); "estilo_lados": o que há nas bordas esquerda e direita da foto abaixo do horizonte (até 160 caracteres)}' }] }] });
+      { type:"text", text:'Devolva {"horizonte": fração da ALTURA (0 = topo, 1 = base) onde está a linha do horizonte, ou null se não aparece; "inclinacao": graus que o horizonte está torto (positivo = lado direito mais baixo; 0 se reto; uma casa decimal); "borda_graus": graus que a BORDA SUPERIOR da obra (a linha de cima da estrutura — ex.: a borda de trás da lagoa) está inclinada em relação à horizontal (positivo = lado direito mais baixo; 0 se reta; uma casa decimal; null se não dá pra ver); "obra": {"x0","y0","x1","y1"} frações da caixa que envolve a obra principal (a lagoa, cisterna, galpão, estrutura); "obra_tipo": nome curto da obra; "ceu": fração da altura ocupada por céu (0 se não tem); "entulho": lista (até 6) de caixas {"x0","y0","x1","y1"} com coisas que um cliente não deveria ver numa foto de entrega: entulho, lixo, restos de material, lonas e plásticos soltos, cordas/fitas/amarras jogadas, canos e ferramentas largados, máquinas/tratores/implementos estacionados na cena, sacos, tábuas, sobras de escavação com detritos em cima dos montes de terra/areia, a marca d\'água/carimbo do celular se aparecer (ex.: "POCO X6 5G", data/hora) — e também sujeira ÓBVIA jogada SOBRE a obra (aí marque só a mancha, a menor caixa possível). Na dúvida fora da obra, MARQUE (é melhor limpar do que deixar). NÃO marque a própria obra inteira, os montes de terra limpos em si, nem pessoas trabalhando; [] só se a cena está realmente impecável; "diagnostico": UMA frase curta (até 140 caracteres) dizendo o que a foto precisa — ex.: "horizonte reto, obra ocupa quase tudo, só completar céu em cima" ou "foto 2° torta, entulho à direita"; "estilo_chao": descrição PRECISA (até 220 caracteres) do chão que aparece na BORDA DE BAIXO da foto, pra outra IA pintar a continuação igual: cor exata, textura, relevo, luz (ex.: "terra vermelho-alaranjada revolvida, torrões e montes soltos, seca, luz de fim de tarde vindo da esquerda, sem grama"); "estilo_ceu": descrição PRECISA (até 220 caracteres) do céu da foto pra continuar igual (ex.: "azul médio no alto clareando até o horizonte, nuvens brancas esparsas tipo cúmulos pequenos espalhadas, sem névoa"); "estilo_lados": o que há nas bordas esquerda e direita da foto abaixo do horizonte (até 160 caracteres); "carimbo": caixa {"x0","y0","x1","y1"} da marca d\'água/carimbo de data-hora ou modelo do celular impresso na foto (ex.: "30/01/2026 18:03", "POCO X6 5G"), ou null se não tem — procure com atenção nos 4 cantos, costuma ser texto branco/amarelo pequeno; "cor_chao": cor média em hexadecimal (#rrggbb) da terra/chão da borda de baixo da foto}' }] }] });
   const txt = ((r && r.content && r.content[0] && r.content[0].text) || "").replace(/```json|```/g, "").trim();
   const m = txt.match(/\{[\s\S]*\}/); if(!m) return null;
   const j = JSON.parse(m[0]);
@@ -148671,7 +148671,8 @@ async function _eaAnalisarFotoObra(url, card){
     return ((c.x1 - c.x0) * (c.y1 - c.y0)) / aObra <= 0.15;
   }).slice(0, 6);
   return { horizonte:n(j.horizonte, 0, 1), inclinacao:n(j.inclinacao, -8, 8) || 0, borda:n(j.borda_graus, -8, 8), obra:ob, obraTipo:String(j.obra_tipo || "").slice(0, 40), ceu:n(j.ceu, 0, 1), entulho:ent, diagnostico:String(j.diagnostico || "").replace(/\s+/g, " ").trim().slice(0, 160),
-    estiloChao:String(j.estilo_chao || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloCeu:String(j.estilo_ceu || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloLados:String(j.estilo_lados || "").replace(/\s+/g, " ").trim().slice(0, 200) };
+    estiloChao:String(j.estilo_chao || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloCeu:String(j.estilo_ceu || "").replace(/\s+/g, " ").trim().slice(0, 260), estiloLados:String(j.estilo_lados || "").replace(/\s+/g, " ").trim().slice(0, 200),
+    carimbo:caixa(j.carimbo), corChao:(/^#[0-9a-f]{6}$/i.test(String(j.cor_chao || "")) ? String(j.cor_chao).toLowerCase() : null) };
 }
 /* ═══ (12/10, Gustavo: "é mais vantagem botar uma etapa do GPT avaliar e se autocorrigir do que me mandar 200
    artes erradas") JUIZ da Foto de obra: o GPT olha a arte (só a foto, sem template) ao lado da foto original e
@@ -149644,21 +149645,74 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
       const maxExt = Math.max(left, right, up, down); if(maxExt * k > 2000) k = 2000 / maxExt;
       const outW = nova.width + left + right, outH = nova.height + up + down;
       if(outW * outH * k * k > 9.0e6) k = Math.sqrt(9.0e6 / (outW * outH));
-      const base = document.createElement("canvas"); base.width = Math.max(64, Math.round(nova.width * k)); base.height = Math.max(64, Math.round(nova.height * k));
+      let base = document.createElement("canvas"); base.width = Math.max(64, Math.round(nova.width * k)); base.height = Math.max(64, Math.round(nova.height * k));
       base.getContext("2d").drawImage(nova, 0, 0, base.width, base.height);
+      /* ═══ (13/10 21:18, Gustavo: "será que o Stability tem capacidade de remover essas sobras de lona ao redor da lagoa?…
+         tem data na foto… essas datas de celular tem que tirar") LIMPEZA ANTES DE ESTENDER: as caixas de entulho do
+         analisador (lonas soltas, restos, carimbo de data/modelo do celular) viram UMA máscara e a Stability Erase
+         apaga tudo numa chamada só (R$ 0,25), preenchendo com o fundo. Como vem ANTES do outpaint, a sobra de lona
+         na borda não é continuada pra fora. Caixa em cima da obra já foi filtrada pelo analisador (produto intocável). ═══ */
+      let nLimpo = 0, custoLimpa = 0;
+      try{
+        const caixas = (an.entulho || []).slice(0, 6).concat(an.carimbo ? [an.carimbo] : []);
+        if(caixas.length){
+          if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho, sobras de lona e carimbo do celular (Stability Erase)…"); }catch(_){ } }
+          const Mk = document.createElement("canvas"); Mk.width = base.width; Mk.height = base.height; const mk = Mk.getContext("2d");
+          mk.fillStyle = "#000"; mk.fillRect(0, 0, Mk.width, Mk.height); mk.globalCompositeOperation = "destination-out";
+          const f = Math.round(base.width * 0.012);
+          caixas.forEach(function(c){ mk.fillRect(c.x0 * base.width - f, c.y0 * base.height - f, (c.x1 - c.x0) * base.width + 2 * f, (c.y1 - c.y0) * base.height + 2 * f); });
+          const limpa = await _eaStabilityArea("erase", base, Mk, "", ctx);
+          if(limpa){ base = limpa; nLimpo = caixas.length; custoLimpa = Number(limpa.__custo) || 0; }
+        }
+      }catch(e){ avisos.push("limpeza (Stability Erase) falhou: " + _eaErro(e) + " — foto seguiu sem limpar"); }
       const ext = { left:Math.round(left * k), right:Math.round(right * k), up:Math.round(up * k), down:Math.round(down * k), creativity:0.15 };
-      const prompt = "Continue the same photograph seamlessly, same camera, same light. Top: only the same sky as in the photo (" + (an.estiloCeu || "same blue, same kind of clouds") + "). Bottom: only the same ground as at the bottom edge of the photo (" + (an.estiloChao || "same soil, same color and texture") + ")." + (an.estiloLados ? " Sides: " + an.estiloLados + "." : "") + " Nothing else: no new objects, no text, no people, no buildings, no vehicles, no second structure.";
+      /* (21:18, Gustavo: "a terra inferior era marrom, ele criou uma terra escura, tipo molhada… tem que manter a cor") a cor
+         medida da borda de baixo entra no prompt em palavras + hex, com "dry, not wet, not dark" quando a terra é clara */
+      const corTxt = (function(){ try{ const hx = an.corChao; if(!hx) return ""; const r0 = parseInt(hx.slice(1, 3), 16), g0 = parseInt(hx.slice(3, 5), 16), b0 = parseInt(hx.slice(5, 7), 16); const lum = 0.299 * r0 + 0.587 * g0 + 0.114 * b0;
+        const tom = (r0 > g0 + 25 && g0 > b0 + 10) ? "reddish-orange" : (r0 > g0 + 10) ? "warm brown" : (Math.abs(r0 - g0) < 12 && Math.abs(g0 - b0) < 12) ? "grey" : "brown";
+        return " The soil must keep exactly this color: " + tom + " (" + hx + ")" + (lum > 95 ? ", DRY and light — not wet, not dark, not muddy" : "") + ", tidy and even, same clods and texture as the bottom edge."; }catch(_){ return ""; } })();
+      const prompt = "Continue the same photograph seamlessly, same camera, same light. Top: only the same sky as in the photo (" + (an.estiloCeu || "same blue, same kind of clouds") + "). Bottom: only the same ground as at the bottom edge of the photo (" + (an.estiloChao || "same soil, same color and texture") + ")." + corTxt + (an.estiloLados ? " Sides: " + an.estiloLados + "." : "") + " Nothing else: no new objects, no text, no people, no buildings, no vehicles, no second structure, no tarp.";
       const img = await _eaOutpaint(base.toDataURL("image/png").split(",")[1], ext, prompt, ctx);
+      if(nLimpo) avisos.push("limpeza antes de estender (Stability Erase): " + nLimpo + " área(s) apagadas e preenchidas com o fundo — entulho/sobras de lona" + (an.carimbo ? " + carimbo de data do celular" : "") + (custoLimpa ? " · R$ " + custoLimpa.toFixed(2) : ""));
       const s2 = m.dw / Math.max(1, img.width - ext.left - ext.right);                        // escala da foto estendida pro quadro (a original continua com m.dw)
       const m2 = Object.assign({}, m, { ox:m.ox - ext.left * s2, oy:m.oy - ext.up * s2, dw:img.width * s2, dh:img.height * s2 });
       cv = desenhar(m2, img);
-      cv.__custo = img.__custo; cv.__simples = true; cv.__outpaint = true;
+      /* (21:18) DERIVA DE COR da terra: o outpaint casa na borda mas vai escurecendo conforme desce. Mede a terra real nos
+         120px acima da borda de baixo × a terra pintada 150–450px abaixo, e aplica um ganho por canal que vai de 1 (na
+         borda, pra não criar emenda) até o ganho cheio a 220px — a textura fica, só a cor volta. Limitado a ±70%. */
+      try{
+        const dO = desenhar(m).getContext("2d").getImageData(0, 0, w, h).data;
+        const ic = cv.getContext("2d").getImageData(0, 0, w, h), dd = ic.data;
+        const yb = m.oy + m.dh, sF = [0, 0, 0], sG = [0, 0, 0]; let nF = 0, nG = 0;
+        const ehCeuP = function(i){ const r0 = dd[i], g0 = dd[i + 1], b0 = dd[i + 2]; const mx0 = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0); return b0 >= r0 && b0 >= g0 - 4 && mx0 > 90 && (mx0 - mn) / Math.max(1, mx0) < 0.75; };
+        const vDe = new Float32Array(w * h);
+        for(let y = 0; y < h; y++) for(let x = 0; x < w; x++){ const i = (y * w + x) * 4, p = y * w + x;
+          const u = w / 2 + (x - w / 2) * cA + (y - h / 2) * sA, v = h / 2 - (x - w / 2) * sA + (y - h / 2) * cA; vDe[p] = v - yb;
+          if(u < m.ox - 40 || u > m.ox + m.dw + 40) continue;
+          const lum = 0.299 * dd[i] + 0.587 * dd[i + 1] + 0.114 * dd[i + 2];
+          if(dO[i + 3] >= 200){ if(v > yb - 120 && v <= yb && lum >= 60 && !ehCeuP(i)){ sF[0] += dd[i]; sF[1] += dd[i + 1]; sF[2] += dd[i + 2]; nF++; } }
+          else if(v - yb >= 150 && v - yb <= 450 && lum >= 25){ sG[0] += dd[i]; sG[1] += dd[i + 1]; sG[2] += dd[i + 2]; nG++; } }
+        if(nF > 400 && nG > 400){
+          const gn = [0, 1, 2].map(function(c){ return Math.max(0.75, Math.min(1.7, (sF[c] / nF) / Math.max(1, sG[c] / nG))); });
+          const lF = 0.299 * sF[0] / nF + 0.587 * sF[1] / nF + 0.114 * sF[2] / nF, lG = 0.299 * sG[0] / nG + 0.587 * sG[1] / nG + 0.114 * sG[2] / nG;
+          if(Math.abs(lF / Math.max(1, lG) - 1) > 0.08){
+            for(let p = 0, i = 0; p < w * h; p++, i += 4){ if(dO[i + 3] >= 200 || vDe[p] <= 0) continue; const t = Math.min(1, vDe[p] / 220); for(let c = 0; c < 3; c++) dd[i + c] = Math.min(255, dd[i + c] * (1 + (gn[c] - 1) * t)); }
+            cv.getContext("2d").putImageData(ic, 0, 0);
+            avisos.push("terra de baixo: a cor pintada tinha derivado (brilho " + Math.round(lG) + " vs " + Math.round(lF) + " da terra real) — corrigida de volta pra cor da borda (ganho " + gn.map(function(v){ return v.toFixed(2); }).join("/") + ", sem mexer na textura)");
+          }
+        }
+      }catch(_){ }
+      cv.__custo = (img.__custo || 0) + custoLimpa; cv.__simples = true; cv.__outpaint = true;
       // protegido pro juiz = a área da foto original (o resto é o que o outpaint pintou)
       protReal = document.createElement("canvas"); protReal.width = w; protReal.height = h; protReal.getContext("2d").drawImage(desenhar(m), 0, 0);
       iaRodou = true; v26ok = true;
       avisos.push("outpaint (Stability): foto estendida " + (ext.up ? "↑" + ext.up + "px " : "") + (ext.down ? "↓" + ext.down + "px " : "") + (ext.left ? "←" + ext.left + "px " : "") + (ext.right ? "→" + ext.right + "px " : "") + "continuando o padrão da borda — foto original intacta no meio (" + base.width + "×" + base.height + " → " + img.width + "×" + img.height + (img.__segundos ? ", " + img.__segundos + " s" : "") + ")" + (img.__custo ? " · R$ " + img.__custo.toFixed(2) : ""));
-      if(temEntulho) avisos.push("entulho não removido no motor v26 (sem inpainting) — use o Ajuste fino de IA se precisar");
-    }catch(e){ avisos.push("outpaint (v26) falhou: " + _eaErro(e) + " — caiu pro motor v25"); v26ok = false; }
+    }catch(e){
+      /* (21:25) Stability SEM CRÉDITO (402) ou teto do mês (409): NÃO cai pro v25 (sairia arte pior e ainda gastaria R$ 1–2 de
+         gpt-image sem ninguém pedir) — a geração PARA com o motivo na tela, como o Gustavo pediu em 09/10. */
+      const msg = _eaErro(e);
+      if(/402|credits|crédito|payment_required|Limite do mês/i.test(msg)) throw new Error(/Limite do mês/i.test(msg) ? msg : "A Stability está sem crédito (" + msg.slice(0, 80) + "). Compra créditos em platform.stability.ai › Billing (US$ 10 = 1.000 créditos ≈ 250 fotos) e clica em Gerar arte de novo.");
+      avisos.push("outpaint (v26) falhou: " + msg + " — caiu pro motor v25"); v26ok = false; }
   }
   if(!v26ok && podeIA && (precisaCompletar || temEntulho)){
     try{
@@ -151032,7 +151086,7 @@ function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
   const _pctDoPasso = function(m){ m = String(m || "");
     if(/abrindo/.test(m)) return 6; if(/traduzindo/.test(m)) return 12; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
     if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
-    if(/estendendo a foto/.test(m)) return 52; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
+    if(/limpando entulho/.test(m)) return 46; if(/estendendo a foto/.test(m)) return 52; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
     if(/completando|limpando/.test(m)) return 56; if(/conferindo/.test(m)) return 72; if(/corrigindo/.test(m)) return 78; if(/salvando/.test(m)) return 86; return null; };
   const setPassoPct = function(m){ setPasso(m);
     const t = _pctDoPasso(m);
