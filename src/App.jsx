@@ -158158,8 +158158,21 @@ function PxFotoObraAjusteModal({ task, arteUrl, onClose, onSaved }){
          (apaga e preenche com o fundo); outro pedido → Stability Inpaint. O gpt-image só entra se a Stability falhar. */
       const ehRemover = _eaPedidoEhRemover(txt);
       setBusy((ehRemover ? "apagando a área marcada (Stability Erase)…" : "repintando a área marcada (Stability Inpaint)…"));
+      /* (14/10 19:49, Gustavo, Taió: "deixa essa terra mais arrumadinha e uniforme" → Stability HTTP 403 content_moderation) o pedido
+         ia em PORTUGUÊS, cru, pro inpaint — a moderação da Stability derruba o que não entende. Agora o GPT traduz pra um prompt
+         POSITIVO em inglês (só o que deve aparecer), com negative_prompt fixo; se mesmo assim der 403, repete 1× com prompt
+         genérico; o gpt-image só entra se a Stability falhar por outro motivo. */
+      let txtEn = "";
+      if(!ehRemover){ try{ const rT = await askGPTBlocos({ max_tokens:200, reasoning_effort:"low", origem:"arte_ajuste_traducao", card:task && task.id,
+          system:"Traduza o pedido de edição de uma foto de obra rural para inglês, como prompt POSITIVO de inpainting: descreva só o que deve aparecer na área marcada (ex.: 'smooth, even, tidy bare soil ground, same color, same light, photographic'). Sem negações, sem 'remove', sem comentários. Até 30 palavras. Responda só o prompt.",
+          messages:[{ role:"user", content:txt }] }); txtEn = String((rT && rT.content && rT.content[0] && rT.content[0].text) || "").replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 300); }catch(_){ txtEn = ""; } }
+      const promptSt = (txtEn || "the same scene continued naturally, same color, same light, same texture, photographic") + ", seamless with the surroundings";
+      const negSt = "text, watermark, logo, person, people, new objects, tarp, plastic, blurry, artifact, pattern, cartoon";
       let r = null, falhaSt = "";
-      try{ r = await _eaStabilityArea(ehRemover ? "erase" : "inpaint", Rec, Mk, txt, { client:task && task.client }); }catch(e){ falhaSt = _eaErro(e); r = null; }
+      try{ r = await _eaStabilityArea(ehRemover ? "erase" : "inpaint", Rec, Mk, promptSt, { client:task && task.client }, negSt); }catch(e){ falhaSt = _eaErro(e); r = null; }
+      if(!r && /403|moderation|flagged/i.test(falhaSt)){
+        setBusy("a moderação da Stability barrou o pedido — repetindo com prompt genérico…");
+        try{ r = await _eaStabilityArea(ehRemover ? "erase" : "inpaint", Rec, Mk, "the same ground continued naturally, smooth and even, same color, same light, photographic", { client:task && task.client }, negSt); }catch(e){ falhaSt = _eaErro(e); r = null; } }
       if(!r){ setBusy("Stability falhou (" + falhaSt + ") — tentando com o gpt-image…"); r = await _eaFotoIA(Rec, Mk, prompt, task && task.client, null); }
       if(!r) throw new Error("a IA não devolveu imagem");
       const rA = r.__via ? r : ((typeof _eaAlinharIA === "function") ? _eaAlinharIA(Rec, r) : r);
