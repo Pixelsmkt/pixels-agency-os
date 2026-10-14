@@ -149659,7 +149659,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           if(typeof ctx.passo === "function"){ try{ ctx.passo("limpando entulho, sobras de lona e carimbo do celular (Stability Erase)…"); }catch(_){ } }
           const Mk = document.createElement("canvas"); Mk.width = base.width; Mk.height = base.height; const mk = Mk.getContext("2d");
           mk.fillStyle = "#000"; mk.fillRect(0, 0, Mk.width, Mk.height); mk.globalCompositeOperation = "destination-out";
-          const f = Math.round(base.width * 0.012);
+          const f = Math.round(base.width * 0.02);   // (21:50) folga maior: sobrava um fiapo de lona na borda das caixas
           caixas.forEach(function(c){ mk.fillRect(c.x0 * base.width - f, c.y0 * base.height - f, (c.x1 - c.x0) * base.width + 2 * f, (c.y1 - c.y0) * base.height + 2 * f); });
           const limpa = await _eaStabilityArea("erase", base, Mk, "", ctx);
           if(limpa){ base = limpa; nLimpo = caixas.length; custoLimpa = Number(limpa.__custo) || 0; }
@@ -149670,9 +149670,23 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
          medida da borda de baixo entra no prompt em palavras + hex, com "dry, not wet, not dark" quando a terra é clara */
       const corTxt = (function(){ try{ const hx = an.corChao; if(!hx) return ""; const r0 = parseInt(hx.slice(1, 3), 16), g0 = parseInt(hx.slice(3, 5), 16), b0 = parseInt(hx.slice(5, 7), 16); const lum = 0.299 * r0 + 0.587 * g0 + 0.114 * b0;
         const tom = (r0 > g0 + 25 && g0 > b0 + 10) ? "reddish-orange" : (r0 > g0 + 10) ? "warm brown" : (Math.abs(r0 - g0) < 12 && Math.abs(g0 - b0) < 12) ? "grey" : "brown";
-        return " The soil must keep exactly this color: " + tom + " (" + hx + ")" + (lum > 95 ? ", DRY and light — not wet, not dark, not muddy" : "") + ", tidy and even, same clods and texture as the bottom edge."; }catch(_){ return ""; } })();
-      const prompt = "Continue the same photograph seamlessly, same camera, same light. Top: only the same sky as in the photo (" + (an.estiloCeu || "same blue, same kind of clouds") + "). Bottom: only the same ground as at the bottom edge of the photo (" + (an.estiloChao || "same soil, same color and texture") + ")." + corTxt + (an.estiloLados ? " Sides: " + an.estiloLados + "." : "") + " Nothing else: no new objects, no text, no people, no buildings, no vehicles, no second structure, no tarp.";
-      const img = await _eaOutpaint(base.toDataURL("image/png").split(",")[1], ext, prompt, ctx);
+        return tom + " (" + hx + ")" + (lum > 95 ? ", dry, not wet, not dark" : ""); }catch(_){ return ""; } })();
+      /* (21:35, medido: prompt longo com "tidy and even" fez a terra sair enrugada/padronizada) prompt CURTO, igual ao do
+         teste k2 que saiu natural: mesma terra solta com torrões, mesma cor, nada mais. */
+      const prompt = "Continue the same photograph seamlessly, same camera, same light. Top: the same blue sky with the same kind of clouds as in the photo. Bottom: the same loose " + (corTxt || "brown") + " soil with small natural clods, exactly like the soil at the bottom edge of the photo, same color and texture. Nothing else: no objects, no text, no people, no buildings, no tarp.";
+      /* (21:45, medido em 6 testes: 974 px de terra pra inventar a partir de 100 px de terra real → a Stability deriva pra
+         terra escura/estriada em qualquer prompt/criatividade; em DOIS passos (45% da altura, depois o resto) sai
+         contínua e na cor) faixa de baixo maior que metade da altura da foto → estende em 2 etapas (+4 créditos). */
+      let img, passos = 1;
+      if(ext.down > base.height * 0.5){
+        const d1 = Math.round(base.height * 0.45);
+        const img1 = await _eaOutpaint(base.toDataURL("image/png").split(",")[1], Object.assign({}, ext, { down:d1 }), prompt, ctx);
+        if(typeof ctx.passo === "function"){ try{ ctx.passo("estendendo a terra de baixo (2º passo)…"); }catch(_){ } }
+        const c1 = document.createElement("canvas"); c1.width = img1.width; c1.height = img1.height; c1.getContext("2d").drawImage(img1, 0, 0);
+        img = await _eaOutpaint(c1.toDataURL("image/png").split(",")[1], { left:0, right:0, up:0, down:ext.down - d1, creativity:ext.creativity }, prompt, ctx);
+        img.__custo = (Number(img.__custo) || 0) + (Number(img1.__custo) || 0); img.__segundos = (Number(img.__segundos) || 0) + (Number(img1.__segundos) || 0); passos = 2;
+      } else img = await _eaOutpaint(base.toDataURL("image/png").split(",")[1], ext, prompt, ctx);
+      if(passos === 2) avisos.push("terra de baixo estendida em 2 passos (faixa de " + ext.down + "px > metade da foto): num passo só a cor derivava");
       if(nLimpo) avisos.push("limpeza antes de estender (Stability Erase): " + nLimpo + " área(s) apagadas e preenchidas com o fundo — entulho/sobras de lona" + (an.carimbo ? " + carimbo de data do celular" : "") + (custoLimpa ? " · R$ " + custoLimpa.toFixed(2) : ""));
       const s2 = m.dw / Math.max(1, img.width - ext.left - ext.right);                        // escala da foto estendida pro quadro (a original continua com m.dw)
       const m2 = Object.assign({}, m, { ox:m.ox - ext.left * s2, oy:m.oy - ext.up * s2, dw:img.width * s2, dh:img.height * s2 });
@@ -149693,7 +149707,7 @@ async function _eaEncaixarFotoObraNucleo(fc, cfg, url, ctx){
           if(dO[i + 3] >= 200){ if(v > yb - 120 && v <= yb && lum >= 60 && !ehCeuP(i)){ sF[0] += dd[i]; sF[1] += dd[i + 1]; sF[2] += dd[i + 2]; nF++; } }
           else if(v - yb >= 150 && v - yb <= 450 && lum >= 25){ sG[0] += dd[i]; sG[1] += dd[i + 1]; sG[2] += dd[i + 2]; nG++; } }
         if(nF > 400 && nG > 400){
-          const gn = [0, 1, 2].map(function(c){ return Math.max(0.75, Math.min(1.7, (sF[c] / nF) / Math.max(1, sG[c] / nG))); });
+          const gn = [0, 1, 2].map(function(c){ return Math.max(0.85, Math.min(1.2, (sF[c] / nF) / Math.max(1, sG[c] / nG))); });   // (21:35) limitado a ±15–20%: 1,33 clareou demais
           const lF = 0.299 * sF[0] / nF + 0.587 * sF[1] / nF + 0.114 * sF[2] / nF, lG = 0.299 * sG[0] / nG + 0.587 * sG[1] / nG + 0.114 * sG[2] / nG;
           if(Math.abs(lF / Math.max(1, lG) - 1) > 0.08){
             for(let p = 0, i = 0; p < w * h; p++, i += 4){ if(dO[i + 3] >= 200 || vDe[p] <= 0) continue; const t = Math.min(1, vDe[p] / 220); for(let c = 0; c < 3; c++) dd[i + c] = Math.min(255, dd[i + c] * (1 + (gn[c] - 1) * t)); }
@@ -151086,7 +151100,7 @@ function PxGerarArteModal({ task:taskProp, setTasks, onClose }){
   const _pctDoPasso = function(m){ m = String(m || "");
     if(/abrindo/.test(m)) return 6; if(/traduzindo/.test(m)) return 12; if(/preenchendo/.test(m)) return 18; if(/olhando a foto/.test(m)) return 30;
     if(/procurando fotos/.test(m)) return 36; if(/criando uma foto nova/.test(m)) return 44;
-    if(/limpando entulho/.test(m)) return 46; if(/estendendo a foto/.test(m)) return 52; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
+    if(/limpando entulho/.test(m)) return 46; if(/estendendo a foto/.test(m)) return 52; if(/2º passo/.test(m)) return 62; if(/gerando céu/.test(m)) return 50; if(/colando céu/.test(m)) return 64;
     if(/completando|limpando/.test(m)) return 56; if(/conferindo/.test(m)) return 72; if(/corrigindo/.test(m)) return 78; if(/salvando/.test(m)) return 86; return null; };
   const setPassoPct = function(m){ setPasso(m);
     const t = _pctDoPasso(m);
