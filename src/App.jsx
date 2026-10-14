@@ -47453,7 +47453,8 @@ function _cardPodeSerResp(u){
   const [client,setClient]=useState(task.client||"");
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
   const [contentType,setContentType]=useState(task.contentType||"");
-  const [gerarArteAberto,setGerarArteAberto]=useState(false);   // (07/10/2026) arte automática pelo modelo (PSD do designer)
+  const [gerarArteAberto,setGerarArteAberto]=useState(false);
+  const [gerarArteTask,setGerarArteTask]=useState(null);   // (14/10) card com o briefing DA TELA pro Gerar arte   // (07/10/2026) arte automática pelo modelo (PSD do designer)
   // (06/10/2026, Gustavo) Material gráfico: valor do freela digitado no card (varia por material).
   const [valorPers,setValorPers]=useState((task.valorPersonalizado!=null&&task.valorPersonalizado!=="")?String(task.valorPersonalizado):"");
   // (14/09/2026) Somente story: o post vai pro story e nao tem arte de feed pra produzir.
@@ -50290,11 +50291,28 @@ function _cardPodeSerResp(u){
               {/* (07/10/2026, Gustavo) GERAR ARTE DO MODELO — copy + fotos do material entram no PSD-modelo do
                   designer; a arte vai pro card e o card vai direto pra Avaliação de design. */}
               {canEdit&&!task._isDraft&&["recebida","execucao","ajustes","avaliacao"].indexOf(String(task.status||""))>=0&&["arte","foto",""].indexOf(String(contentType||task.contentType||""))>=0&&typeof PxGerarArteModal==="function"&&(
-                <button onClick={function(){ setGerarArteAberto(true); }} title="Usa o template padrão do cliente pro tipo deste card (Foto de obra, Arte, Story…): entra a copy e as fotos do material, e a arte vai pra Avaliação de design"
+                <button onClick={function(){
+                    /* (14/10/2026, Gustavo: "troquei o briefing, cliquei em gerar arte, ele produziu com o briefing antigo") o Gerar
+                       arte usa o que está NA TELA (briefing/legenda/título/cliente/unidade/tipo), e grava isso no card antes — sem
+                       precisar do Salvar (que fecha o card). */
+                    try{
+                      const dF=descRef.current?autoLinkifyHTML(sanitizeRichText(descRef.current.innerHTML||desc)):autoLinkifyHTML(sanitizeRichText(desc));
+                      const cF=captionRef.current?autoLinkifyHTML(sanitizeRichText(captionRef.current.innerHTML||caption)):autoLinkifyHTML(sanitizeRichText(caption));
+                      const patch={desc:dF,caption:cF,title:title||task.title,client:client||task.client,bioterUnit:client==="bioter"?bioterUnit:(task.bioterUnit||null),contentType:contentType||task.contentType||""};
+                      const atual=(tasks||[]).find(function(t){ return t.id===task.id; })||task;
+                      const mudou=["desc","caption","title","client","bioterUnit","contentType"].filter(function(k){ return String(patch[k]||"")!==String(atual[k]||""); });
+                      if(mudou.length&&setTasks){
+                        const tl=[].concat(atual.timeline||[],[{type:"edit",label:"Editado antes de gerar arte: "+mudou.map(function(k){ return ({desc:"briefing",caption:"legenda",title:"título",client:"cliente",bioterUnit:"unidade",contentType:"tipo"})[k]; }).join(", "),at:new Date().toISOString(),atFmt:nowFmt(),user:pxAutorNome(user)}]);
+                        setTasks(function(p){ return (p||[]).map(function(t){ return t.id===task.id?Object.assign({},t,patch,{timeline:tl}):t; }); });
+                        if(typeof pixelsToast!=="undefined") pixelsToast.info("Briefing da tela gravado no card antes de gerar ("+mudou.length+" campo(s)).",3500);
+                      }
+                      setGerarArteTask(Object.assign({},atual,patch));
+                    }catch(e){ setGerarArteTask(null); }
+                    setGerarArteAberto(true); }} title="Usa o template padrão do cliente pro tipo deste card (Foto de obra, Arte, Story…): entra a copy e as fotos do material, e a arte vai pra Avaliação de design"
                   style={_pxBtnAcaoSt("#7c3aed","124,58,237",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>
                   <span style={{display:"block",lineHeight:1}}>Gerar arte</span>
                 </button>)}
-              {gerarArteAberto&&typeof PxGerarArteModal==="function"&&<PxGerarArteModal task={Object.assign({},((tasks||[]).find(function(t){ return t.id===task.id; }))||task)} setTasks={setTasks}
+              {gerarArteAberto&&typeof PxGerarArteModal==="function"&&<PxGerarArteModal task={gerarArteTask||Object.assign({},((tasks||[]).find(function(t){ return t.id===task.id; }))||task)} setTasks={setTasks}
                 onClose={function(ok){ setGerarArteAberto(false); if(ok) onClose(); }}/>}
               {/* Drive folder — shown when approved */}
               {task.status==="aprovado"&&_bl("acao.drive")&&(()=>{
