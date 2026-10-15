@@ -98814,28 +98814,72 @@ function _prodPropostaHtml(j, cliNome, produtoNome){
 function _prodPropostaPromptLovable(j, cliNome, produtoNome){
   const cli=j.cliente||cliNome||"[CLIENTE]"; const slug=String(cli).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"cliente";
   const q=function(t){ return "“"+String(t==null?"":t)+"”"; };
-  const L=[];
-  L.push("Duplica o deck do relatório (o da Bioter) numa página nova em /proposta-"+slug+" e só troca o conteúdo pelo que está abaixo. Design, componentes, cores, animações e ordem das seções ficam iguais. Cliente no cabeçalho e no rodapé: "+q(cli)+". Gráfico de pizza e abas WhatsApp/Formulários: remove.");
-  L.push("");
+  const L=[]; const sec=function(t){ L.push(""); L.push(t); }; const li=function(t){ L.push("- "+t); }; const sub=function(t){ L.push("   · "+t); };
+  L.push("Duplica o deck do relatório (o da Bioter) numa página nova em /proposta-"+slug+" e só troca o conteúdo pelo que está abaixo.");
+  L.push("Design, componentes, cores, animações e ordem das seções ficam iguais. Cliente no cabeçalho e no rodapé: "+q(cli)+". Gráfico de pizza e abas WhatsApp/Formulários: remove.");
   const h=j.titulo_hero||{}, ch=j.card_hero||{};
-  L.push("HERO → pílula "+q("PROPOSTA · PIXELS + "+String(cli).toUpperCase())+" · título "+q(h.linha1||"")+" / "+q(h.linha2||"")+" / verde "+q(h.destaque||"")+" · subtítulo "+q(j.subtitulo_hero||"")+" · chips "+(j.chips||[]).map(q).join(", ")+" · botão "+q("Ver proposta completa ↓"));
-  L.push("CARD DO HERO → "+q(ch.rotulo||"")+" · número "+q(ch.numero||"")+" · legenda "+q(ch.sub||"")+" · mini-cards "+(ch.mini||[]).map(function(m){return m.rotulo+" = "+m.valor;}).join(" | ")+(ch.bolha&&ch.bolha.valor?" · bolha "+q(ch.bolha.valor)+" / "+q(ch.bolha.rotulo||""):""));
-  const d=j.desafio||{}; L.push("02 DESAFIO → título "+q((d.titulo||"")+" "+(d.destaque||""))+" (verde: "+q(d.destaque||"")+") · cards: "+(d.cards||[]).map(function(c){return q(c.titulo)+" — "+c.texto;}).join(" | ")+(d.insight?" · insight "+q(d.insight):""));
-  const f=j.como_funciona||{}; L.push("03 COMO FUNCIONA (os cards com barra do comparativo) → título "+q((f.titulo||"")+" "+(f.destaque||""))+" · "+(f.fases||[]).map(function(x){return q(x.nome)+" ("+(x.prazo||"")+") — "+x.texto;}).join(" | ")+(f.insight?" · insight "+q(f.insight):""));
+  sec("HERO");
+  li("pílula: "+q("PROPOSTA · PIXELS + "+String(cli).toUpperCase()));
+  li("título (3 linhas): "+q(h.linha1||"")+" / "+q(h.linha2||"")+" / em verde "+q(h.destaque||""));
+  li("subtítulo: "+q(j.subtitulo_hero||""));
+  li("chips: "+(j.chips||[]).map(q).join(", "));
+  li("botão: "+q("Ver proposta completa ↓"));
+  li("card lateral escuro: rótulo "+q(ch.rotulo||"")+" · número "+q(ch.numero||"")+" · legenda "+q(ch.sub||""));
+  (ch.mini||[]).forEach(function(m){ sub("mini-card "+m.rotulo+": "+q(m.valor)); });
+  if(ch.bolha&&ch.bolha.valor) sub("bolha branca: "+q(ch.bolha.valor)+" / "+q(ch.bolha.rotulo||""));
+  const d=j.desafio||{};
+  sec("02 DESAFIO");
+  li("título: "+q((d.titulo||"")+" "+(d.destaque||""))+" (verde: "+q(d.destaque||"")+")");
+  (d.cards||[]).forEach(function(c,i){ li("card "+(i+1)+": "+q(c.titulo)+" — "+c.texto); });
+  if(d.insight) li("insight: "+q(d.insight));
+  const f=j.como_funciona||{};
+  sec("03 COMO FUNCIONA (os cards com barra, do comparativo)");
+  li("título: "+q((f.titulo||"")+" "+(f.destaque||"")));
+  (f.fases||[]).forEach(function(x){ li(q(x.nome)+(x.prazo?(" ("+x.prazo+")"):"")+" — "+x.texto); });
+  if(f.insight) li("insight: "+q(f.insight));
   const hs=j.historia||{};
-  if(hs.usar&&(hs.passos||[]).length){ L.push("SEÇÃO ANIMADA DO LEAD (Um lead. Uma história.) → mantém, logo depois da 03, com estes slides (sobrou slide, apaga): "+(hs.passos||[]).map(function(x,i){ const mk=x.mock||{}; return (x.n||String(i+1).padStart(2,"0"))+" "+(x.nome||"")+" — "+q(x.titulo||"")+" — "+(x.texto||"")+" — mockup "+(mk.tipo||"whatsapp")+(mk.titulo?" "+q(mk.titulo):"")+": "+(mk.linhas||[]).map(q).join(", "); }).join(" || ")+(hs.intro?" · intro "+q(hs.intro):"")); }
-  else { L.push("SEÇÃO ANIMADA DO LEAD (Um lead. Uma história.) → remove inteira."); }
-  const en=j.entregaveis||{}; L.push("04 ENTREGÁVEIS → título "+q((en.titulo||"")+" "+(en.destaque||""))+" · cards: "+(en.itens||[]).map(function(x){return q(x.nome)+" — "+x.texto;}).join(" | ")+(en.insight?" · insight "+q(en.insight):""));
-  const rs=j.resultado||{}; L.push("05 RESULTADO → título "+q((rs.titulo||"")+" "+(rs.destaque||""))+" · bloco verde: CERCA DE "+q(rs.numero_grande||"")+" + "+q(rs.numero_texto||"")+" · bloco escuro: "+q((rs.card_escuro||{}).rotulo||"")+" "+q((rs.card_escuro||{}).valor||"")+" — "+((rs.card_escuro||{}).texto||"")+" · linhas: "+(rs.indicadores||[]).map(function(x){return x.rotulo+" = "+x.valor;}).join(" | ")+(rs.frase?" · frase "+q(rs.frase):""));
+  sec("SEÇÃO ANIMADA DO LEAD (“Um lead. Uma história. Um ciclo completo.”)");
+  if(hs.usar&&(hs.passos||[]).length){
+    li("mantém, logo depois da 03. Sobrou slide, apaga."+(hs.intro?(" Intro: "+q(hs.intro)):""));
+    (hs.passos||[]).forEach(function(x,i){ const mk=x.mock||{}; li("slide "+(x.n||String(i+1).padStart(2,"0"))+" "+(x.nome||"")+": "+q(x.titulo||"")+" — "+(x.texto||"")); sub("mockup "+(mk.tipo||"whatsapp")+(mk.titulo?(" "+q(mk.titulo)):"")+": "+(mk.linhas||[]).map(q).join(", ")); });
+  } else { li("remove a seção inteira."); }
+  const en=j.entregaveis||{};
+  sec("04 ENTREGÁVEIS");
+  li("título: "+q((en.titulo||"")+" "+(en.destaque||"")));
+  (en.itens||[]).forEach(function(x){ li(q(x.nome)+" — "+x.texto); });
+  if(en.insight) li("insight: "+q(en.insight));
+  const rs=j.resultado||{};
+  sec("05 RESULTADO");
+  li("título: "+q((rs.titulo||"")+" "+(rs.destaque||"")));
+  li("bloco verde: CERCA DE "+q(rs.numero_grande||"")+" — "+(rs.numero_texto||""));
+  li("bloco escuro: "+q((rs.card_escuro||{}).rotulo||"")+" "+q((rs.card_escuro||{}).valor||"")+" — "+((rs.card_escuro||{}).texto||""));
+  (rs.indicadores||[]).forEach(function(x){ sub(x.rotulo+": "+q(x.valor)); });
+  if(rs.frase) li("frase de impacto: "+q(rs.frase));
   const pt=j.partes||{}, inv=j.investimento||{};
   if(pt.usar&&(pt.itens||[]).length){
-    L.push("06 INVESTIMENTO → vira "+(pt.itens||[]).length+" blocos, um por unidade (repete o layout dos cards de investimento pra cada um, com o nome da unidade como título do bloco). Título da seção "+q((pt.titulo||"")+" "+(pt.destaque||""))+". "+(pt.itens||[]).map(function(x){ return "BLOCO "+q(x.nome)+": "+(x.resumo||"")+" · cards: "+(x.condicoes||[]).map(function(c){return c.rotulo+" = "+q(c.valor)+" ("+(c.sub||"")+")";}).join(" | ")+((x.passos||[]).length?" · passos: "+(x.passos||[]).map(function(t,i){return (i+1)+") "+t;}).join(" "):""); }).join(" || ")+((inv.cards||[]).some(function(c){return c&&c.valor;})?" · condições comuns: "+(inv.cards||[]).map(function(c){return c.rotulo+" = "+q(c.valor);}).join(" | "):"")+(inv.insight?" · insight "+q(inv.insight):""));
+    sec("06 INVESTIMENTO → vira "+(pt.itens||[]).length+" blocos, um por unidade (mesmo layout dos cards de investimento, com o nome da unidade como título do bloco)");
+    li("título da seção: "+q((pt.titulo||"")+" "+(pt.destaque||"")));
+    (pt.itens||[]).forEach(function(x){ li("bloco "+q(x.nome)+": "+(x.resumo||"")); (x.condicoes||[]).forEach(function(c){ sub(c.rotulo+": "+q(c.valor)+(c.sub?(" — "+c.sub):"")); }); if((x.passos||[]).length) sub("passos: "+(x.passos||[]).map(function(t,i){return (i+1)+") "+t;}).join(" ")); });
+    if((inv.cards||[]).some(function(c){return c&&c.valor;})) li("condições comuns: "+(inv.cards||[]).map(function(c){return c.rotulo+" = "+q(c.valor);}).join(" | "));
+    if(inv.insight) li("insight: "+q(inv.insight));
   } else {
-    L.push("06 INVESTIMENTO → título "+q((inv.titulo||"")+" "+(inv.destaque||""))+" · cards: "+(inv.cards||[]).map(function(c){return c.rotulo+" = "+q(c.valor)+" ("+(c.sub||"")+")";}).join(" | ")+(inv.insight?" · insight "+q(inv.insight):""));
+    sec("06 INVESTIMENTO");
+    li("título: "+q((inv.titulo||"")+" "+(inv.destaque||"")));
+    (inv.cards||[]).forEach(function(c){ li(c.rotulo+": "+q(c.valor)+(c.sub?(" — "+c.sub):"")); });
+    if(inv.insight) li("insight: "+q(inv.insight));
   }
-  const px=j.pixels||{}; L.push("07 POR QUE A PIXELS (os blocos numerados) → título "+q((px.titulo||"")+" "+(px.destaque||""))+" · "+(px.blocos||[]).map(function(b,i){return String(i+1).padStart(2,"0")+" "+q(b.titulo)+" — "+b.texto;}).join(" | "));
-  const pr=j.proximos||{}; L.push("08 PRÓXIMOS PASSOS → título "+q((pr.titulo||"")+" "+(pr.destaque||""))+" · "+(pr.passos||[]).map(function(t,i){return (i+1)+") "+t;}).join(" · ")+(pr.frase?" · frase "+q(pr.frase):""));
-  L.push("FECHAMENTO → "+(j.fechamento||[]).map(q).join(" / ")+" · rodapé "+q(cli)+" + “PROPOSTA PRODUZIDA POR pixels” · © "+new Date().getFullYear()+" "+cli+" · Pixels Marketing Digital");
+  const px=j.pixels||{};
+  sec("07 POR QUE A PIXELS (os blocos numerados)");
+  li("título: "+q((px.titulo||"")+" "+(px.destaque||"")));
+  (px.blocos||[]).forEach(function(b,i){ li(String(i+1).padStart(2,"0")+" "+q(b.titulo)+" — "+b.texto); });
+  const pr=j.proximos||{};
+  sec("08 PRÓXIMOS PASSOS");
+  li("título: "+q((pr.titulo||"")+" "+(pr.destaque||"")));
+  (pr.passos||[]).forEach(function(t,i){ li((i+1)+") "+t); });
+  if(pr.frase) li("frase: "+q(pr.frase));
+  sec("FECHAMENTO");
+  li("3 linhas: "+(j.fechamento||[]).map(q).join(" / "));
+  li("rodapé: "+q(cli)+" à esquerda, “PROPOSTA PRODUZIDA POR pixels” à direita · © "+new Date().getFullYear()+" "+cli+" · Pixels Marketing Digital");
   L.push("");
   L.push("Usa os textos exatamente como estão. Não cria seção nova, não resume.");
   return L.join("\n");
@@ -98847,6 +98891,8 @@ function _propostaTextoPlano(g){ const d=document.createElement("div"); d.innerH
 function _PropostaGeradaCard({g,aberto,onToggle,canEdit,isMob,nomeBase,onExcluir}){
   const [aba,setAba]=useState("preview");
   const ab=!!aberto;
+  // o prompt é remontado do JSON na hora — proposta antiga ganha o formato novo sem gerar de novo
+  if(g&&g.json){ try{ g=Object.assign({},g,{prompt:_prodPropostaPromptLovable(g.json, g.clienteNome, g.produtoNome||"")}); }catch(_){ } }
   return <div style={{border:"1px solid "+_PRD.BORD,borderRadius:14,background:"#fff",overflow:"hidden"}}>
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer"}} onClick={onToggle}>
       {typeof _PxIco==="function"&&<_PxIco n="sparkles" size={16} color={_PRD.PX_DK}/>}
