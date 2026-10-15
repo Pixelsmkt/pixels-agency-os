@@ -125909,6 +125909,12 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
 
 /* ══════════════════════════════════════════════════════════════════
    CRIAÇÃO › EDIÇÃO DE VÍDEO
+   vid27 (14/10/2026): GIRAR VÍDEO GRAVADO DEITADO (card Lero Fibras · Starken, câmera Canon deitada) — botão "↻ Girar vídeos" no Estúdio,
+     no "Preparar a edição" e "↻ Girar" na barra de cima do editor: ↺/↻ 90° por vídeo, "Girar todos" e "🔎 Achar deitados" (IA barata olha 1
+     quadro de cada vídeo numa grade com os 4 giros e já marca; a pessoa confere e salva; só Vinicius, Gustavo e Hellen — edge video-orientacao).
+     O original no Drive/Storage NÃO muda: o giro fica em video_giros (rpc criacao_video_girar) e vai no clipe (clipes[].rot). O motor de giro
+     (_evGiroInstalar) faz o <video> desse arquivo já sair girado em todo desenho: player, miniaturas, folhas da IA, cor, rastreio e a gravação
+     (navegador e PC). O PC v27 tira as folhas do "preparar" já giradas.
    v94 (10/10/2026): consertos aprovados + 3 travas do áudio —
      C01 "Editar com IA" travado enquanto o card já está com o PC ou com a IA (e `ja_em_andamento` do servidor abre a que já existe, sem cobrar);
      o "montar" não repete sozinho · C08 vídeo sem cópia leve: o app pede ao PC (.MOV/HEVC de qualquer tamanho vai para o PC) ·
@@ -127809,10 +127815,10 @@ async function _evBaixar(url, prog){
     if(prog && Date.now() - ult > 300){ ult = Date.now(); prog(Math.round(n*100/tot)); } }
   return new Blob(partes, { type:r.headers.get("content-type") || "video/mp4" });
 }
-async function _evDesmontar(blob, quadroSeg, prog){
+async function _evDesmontar(blob, quadroSeg, prog, rot){       // vid27: rot = giro do arquivo (as folhas da IA saem em pé)
   const url = URL.createObjectURL(blob);
   try{
-    const video = document.createElement("video"); video.muted = true; video.preload = "auto"; video.playsInline = true; video.src = url;
+    const video = document.createElement("video"); video.muted = true; video.preload = "auto"; video.playsInline = true; video._pxGiro = _evGiroOk(rot); video.src = url;
     await _evEsperar(video, "loadedmetadata", 30000);
     const dur = video.duration;
     if(!isFinite(dur) || dur <= 0) throw new Error("não consegui ler a duração do vídeo");
@@ -127865,6 +127871,7 @@ async function _evPrepararMontar(t, setPasso, extra){
   const foraLim = Math.max(0, todosB.length - _EV_LIMITE_VIDEOS);
   if(foraLim) _evToast("warning", "O card tem " + todosB.length + " vídeos: a edição usa os " + _EV_LIMITE_VIDEOS + " primeiros e " + foraLim + " ficam de fora.");
   if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
+  try{ await _evGiroCarregar(t.id); }catch(_){}                 // vid27: vídeos gravados deitados → as folhas da IA saem giradas (o original não muda)
   setPasso("Medindo os vídeos…");
   const durs = []; for(let i=0;i<brutos.length;i++){ setPasso("Medindo os vídeos… " + (i + 1) + " de " + brutos.length + " (cada vídeo baixa 1 vez por computador)"); durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url)); }   // v94 (10/10/2026) C44
   const total = durs.reduce(function(s,x){ return s+x; }, 0);
@@ -127880,7 +127887,8 @@ async function _evPrepararMontar(t, setPasso, extra){
     if(!f.previewUrl && Number(f.size||0) > _EV_NAV_MAX) throw new Error("\"" + (f.name||"vídeo") + "\" é pesado demais para abrir no navegador (mais de 150 MB): clique em Editar com IA de novo — vai para o PC do escritório.");   // v32 (antes 700 MB)
     setPasso("Baixando o " + nome + "…");
     const blob = await _evBaixar(src, function(p){ setPasso("Baixando o " + nome + "… " + p + "%"); });
-    const r = await _evDesmontar(blob, quadroSeg, function(m){ setPasso(nome.charAt(0).toUpperCase() + nome.slice(1) + ": " + m); });
+    const rotF = _evGiroDe(f.url);                                  // vid27
+    const r = await _evDesmontar(blob, quadroSeg, function(m){ setPasso(nome.charAt(0).toUpperCase() + nome.slice(1) + ": " + m); }, rotF);
     const folhas = [], audio = [];
     for(let k=0;k<r.folhas.length;k++){
       setPasso("Enviando os quadros do " + nome + "… " + (k+1) + " de " + r.folhas.length);
@@ -127896,7 +127904,7 @@ async function _evPrepararMontar(t, setPasso, extra){
       if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message||"") + ")");
       audio.push({ path:p, ini:r.pedacos[k].ini, fim:r.pedacos[k].fim });
     }
-    clipes.push({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg });
+    clipes.push(Object.assign({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg }, rotF ? { rot:rotF } : {}));   // vid27
   }
   setPasso(narrado ? "A IA está gerando a narração e montando os vídeos em cima dela… leva de 1 a 3 minutos. Pode continuar usando o app."
                    : "A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
@@ -128175,6 +128183,7 @@ function _EvPasso({ n, titulo, estado, cor, isMob }){
 function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, narrLigado, setNarrLigado, pcRec, onPcPronto, checando }){
   const [pcW, setPcW] = useState(null);                  // v94 (10/10/2026) C01: trabalho do PC deste card (fila/processando trava o botão)
   const [abrirLista, setAbrirLista] = useState(false);
+  const [girarAberto, setGirarAberto] = useState(false);    // vid27: painel "Girar vídeos"
   const [nc, setNc] = useState(null);                     // só para o passo 1 (o painel tem o estado completo)
   const [pc, setPc] = useState(null);
   useEffect(function(){ if(!window._sb || !t) return; let vivo = true;
@@ -128215,6 +128224,8 @@ function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, nar
         <div style={Object.assign({}, card, {minWidth:0})} aria-label="Material do card">
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
             <span style={rot}>Material</span>
+            {brutos.length > 0 && !soVer && <button data-abrir-girar="preparo" onClick={function(){ setGirarAberto(true); }} title="Vídeo gravado com a câmera deitada? Gire aqui antes da IA editar"
+              style={{font:"inherit",fontSize:_evF(12, isMob),fontWeight:700,color:_EVT.roxo,background:"none",border:0,cursor:"pointer",padding:0,marginLeft:"auto",marginRight:10}}>↻ Girar vídeos</button>}
             {brutos.length > 0 && <button onClick={function(){ setAbrirLista(!abrirLista); }} style={{font:"inherit",fontSize:_evF(12, isMob),fontWeight:700,color:_EVT.roxo,background:"none",border:0,cursor:"pointer",padding:0}}>
               {abrirLista ? "Esconder lista" : (brutos.length === 1 ? "Ver o arquivo" : "Ver os " + brutos.length + " arquivos")}</button>}
           </div>
@@ -128242,6 +128253,8 @@ function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, nar
           <_EvPcTrabalho t={t} isMob={isMob} rec={pcRec} onPronto={onPcPronto} onEstado={setPcW}/>
         </div>
       </div>
+      {girarAberto && <_EvGirarPainel t={t} isMob={isMob} onFechar={function(){ setGirarAberto(false); }}
+        itens={brutos.map(function(f){ return { id:f.id, nome:f.name, url:f.url, preview_url:f.previewUrl || null }; })}/>}
 
       <div style={{position:"sticky",bottom:0,zIndex:5,marginTop:12,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",justifyContent:"space-between",
                    background:_EVT.painel,border:"1px solid " + _EVT.linha,borderRadius:14,padding:isMob ? "10px 12px" : "12px 16px",boxShadow:"0 -6px 20px -12px rgba(15,23,42,.25)"}}>
@@ -128257,6 +128270,150 @@ function _EvPreparo({ t, ed, isMob, kit, musicas, soVer, montar, mandandoPc, nar
                       fontSize:_evF(14, isMob),cursor:podeEditar && !pcOcupado && !iaOcupada ? "pointer" : "not-allowed",boxShadow:podeEditar && !pcOcupado && !iaOcupada ? "0 8px 20px -10px rgba(124,58,237,.7)" : "none"}}>
               {checando ? "Conferindo…" : mandandoPc ? "Mandando para o PC…" : pcOcupado ? (pcW.status === "fila" ? "⏳ Na fila do PC do escritório" : "🖥️ O PC está preparando…") : iaOcupada ? "A IA está editando…"
                 : pesados.length ? "✨ Editar com IA · pelo PC do escritório" : "✨ Editar com IA"}</button>}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ vid27 (14/10/2026) — PAINEL "GIRAR VÍDEOS" (Estúdio, Preparar a edição e barra de cima do editor)
+   Cada vídeo do card com 1 quadro de amostra já girado do jeito que vai ficar; ↺ / ↻ giram 90° por clique; "Girar todos" no topo.
+   "🔎 Achar deitados": a IA olha 1 quadro de cada vídeo (grade com os 4 giros) e já marca quanto girar — a pessoa confere e clica em
+   Salvar (nada é gravado sem confirmar). Só Vinicius, Gustavo e Hellen (video_orientacao_pode / edge video-orientacao, conferido no servidor).
+   Salvar = criacao_video_girar: o original no Drive e no card NÃO muda; vale no Estúdio, na IA, nas cópias e no vídeo final. */
+function _EvGiroMini({ q, rot, tam, erro }){
+  const T = tam || 120;
+  if(!q) return <div style={{width:T,height:T,borderRadius:10,background:_EVT.linha2,display:"grid",placeItems:"center",fontSize:11,color:_EVT.fraco,textAlign:"center",padding:6,boxSizing:"border-box"}}>{erro ? "sem prévia" : "carregando…"}</div>;
+  const r = rot || 0, rw = r % 180 ? q.h : q.w, rh = r % 180 ? q.w : q.h, e = Math.min(T / rw, T / rh);
+  const w = Math.round(q.w * e), h = Math.round(q.h * e);            // tamanho da imagem antes de girar (girada ela cabe na caixa, sem esticar)
+  return <div style={{width:T,height:T,borderRadius:10,background:"#111",position:"relative",overflow:"hidden",flexShrink:0}}>
+    <img src={q.url} alt="" draggable={false} style={{position:"absolute",left:"50%",top:"50%",width:w,height:h,maxWidth:"none",
+      transform:"translate(-50%,-50%) rotate(" + r + "deg)",transition:"transform .25s ease"}}/>
+  </div>;
+}
+/* os vídeos do card para o painel: os clipes da edição (com a máscara/cópia leve deles) + os brutos que ainda não entraram */
+function _evGiroItens(t, ed){
+  const out = [], visto = {};
+  ((ed && ed.existe && Array.isArray(ed.clipes)) ? ed.clipes : []).forEach(function(c){ if(c && c.url && !visto[c.url]){ visto[c.url] = 1; out.push(c); } });
+  _evBrutos(t || {}).forEach(function(f){ if(f && f.url && !visto[f.url]){ visto[f.url] = 1; out.push({ id:f.id, nome:f.name, url:f.url, preview_url:f.previewUrl || null }); } });
+  return out;
+}
+function _evGiroTxt(r){ return r === 90 ? "90° →" : r === 180 ? "180°" : r === 270 ? "90° ←" : "como gravou"; }
+function _EvGirarPainel({ t, itens, isMob, onFechar, onSalvou }){
+  _evUsarGiro();
+  const lista = useMemo(function(){ return (itens || []).filter(function(c){ return c && c.url; }); }, [itens]);
+  const [quadros, setQuadros] = useState({});                  // url → {cv,w,h,url} | "erro"
+  const [rasc, setRasc] = useState({});                        // url → rot pendente
+  const [ia, setIa] = useState({});                            // url → {giro, certeza, pista}
+  const [pode, setPode] = useState(null);
+  const [ocup, setOcup] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [carregados, setCarregados] = useState(0);
+  useEffect(function(){
+    let vivo = true;
+    _evGiroCarregar(t && t.id, true);
+    if(window._sb) window._sb.rpc("video_orientacao_pode").then(function(r){ if(vivo) setPode(r.error ? { pode:false } : (r.data || { pode:false })); }).catch(function(){ if(vivo) setPode({ pode:false }); });
+    (async function(){                                           // miniaturas: 2 de cada vez, pelo cache do Estúdio
+      let i = 0;
+      const um = async function(){ while(vivo && i < lista.length){ const c = lista[i++];
+        try{ const q = await _evGiroQuadro(c); if(vivo) setQuadros(function(m){ return Object.assign({}, m, { [c.url]:q }); }); }
+        catch(_){ if(vivo) setQuadros(function(m){ return Object.assign({}, m, { [c.url]:"erro" }); }); }
+        if(vivo) setCarregados(function(n){ return n + 1; }); } };
+      await Promise.all([um(), um()]);
+    })();
+    return function(){ vivo = false; };
+  }, [t && t.id, lista.length]);
+  useEffect(function(){ const f = function(e){ if(e.key === "Escape" && !salvando) onFechar(); }; window.addEventListener("keydown", f); return function(){ window.removeEventListener("keydown", f); }; }, [salvando]);
+  const salvo = function(c){ return _evGiroDe(c.url); };
+  const atual = function(c){ return rasc[c.url] != null ? rasc[c.url] : salvo(c); };
+  const girar = function(c, d){ setRasc(function(m){ return Object.assign({}, m, { [c.url]:_evGiroOk(atual(c) + d) }); }); };
+  const girarTodos = function(d){ setRasc(function(m){ const n = Object.assign({}, m); lista.forEach(function(c){ n[c.url] = _evGiroOk((m[c.url] != null ? m[c.url] : salvo(c)) + d); }); return n; }); };
+  const todosOriginal = function(){ setRasc(function(){ const n = {}; lista.forEach(function(c){ n[c.url] = 0; }); return n; }); setIa({}); };
+  const mudancas = lista.filter(function(c){ return rasc[c.url] != null && rasc[c.url] !== salvo(c); });
+  const girados = lista.filter(function(c){ return atual(c) !== 0; }).length;
+  const custoEst = Math.max(0.01, lista.length * 0.0007);
+  const acharDeitados = async function(){
+    setErro(null); setOcup("Tirando 1 quadro de cada vídeo…");
+    try{
+      const env = [];
+      for(let i = 0; i < lista.length; i++){
+        const c = lista[i]; setOcup("Tirando 1 quadro de cada vídeo… " + (i + 1) + " de " + lista.length);
+        try{ const q = await _evGiroQuadro(c); env.push({ id:c.url, img:_evGiroGrade(q) }); }catch(_){}
+      }
+      if(!env.length) throw new Error("não consegui abrir nenhum vídeo neste computador");
+      const res = {}; let custo = 0;
+      for(let k = 0; k < env.length; k += 30){
+        setOcup("A IA está olhando os quadros… " + Math.min(env.length, k + 30) + " de " + env.length);
+        const r = await window._sb.functions.invoke("video-orientacao", { body:{ task_id:t && t.id, quadros:env.slice(k, k + 30) } });
+        if(r.error){ let m = r.error.message || "erro"; try{ const j = await r.error.context.json(); if(j && j.erro) m = j.erro; }catch(_){} throw new Error(m); }
+        const d = r.data || {}; if(d.ok === false) throw new Error(d.erro || "a IA não respondeu");
+        custo += Number(d.custo_usd) || 0;
+        (d.giros || []).forEach(function(g){ res[g.id] = g; });
+      }
+      setIa(res);
+      setRasc(function(m){ const n = Object.assign({}, m); Object.keys(res).forEach(function(u){ n[u] = _evGiroOk(res[u].giro); }); return n; });
+      const nd = Object.keys(res).filter(function(u){ return res[u].giro; }).length, dv = Object.keys(res).filter(function(u){ return res[u].certeza !== "alta"; }).length;
+      _evToast("success", "A IA marcou " + nd + " vídeo" + (nd === 1 ? "" : "s") + " para girar" + (dv ? " (" + dv + " com dúvida: confira)" : "") + ". Confira e clique em Salvar. Custou US$ " + custo.toFixed(4).replace(".", ",") + ".");
+    }catch(e){ setErro("Achar deitados: " + String((e && e.message) || e)); }
+    setOcup(null);
+  };
+  const salvar = async function(){
+    if(!mudancas.length || salvando) return;
+    setSalvando(true); setErro(null);
+    try{
+      await _evGiroSalvar(t.id, mudancas.map(function(c){ return { url:c.url, rot:rasc[c.url], origem:ia[c.url] && _evGiroOk(ia[c.url].giro) === rasc[c.url] ? "ia" : "manual" }; }), lista);
+      _evToast("success", mudancas.length + (mudancas.length === 1 ? " vídeo girado" : " vídeos girados") + ". O original no Drive e no card não mudou.");
+      setRasc({});
+      if(onSalvou) onSalvou();
+    }catch(e){ setErro("Não salvou: " + String((e && e.message) || e)); }
+    setSalvando(false);
+  };
+  const B = function(tipo){ return Object.assign(_evpBtn(tipo), { fontSize:12.5 }); };
+  return (
+    <div role="dialog" aria-label="Girar vídeos" data-girar-painel="1" onPointerDown={function(e){ if(e.target === e.currentTarget && !salvando && !mudancas.length) onFechar(); }}
+      style={{position:"fixed",inset:0,zIndex:1500,background:"rgba(5,8,18,.55)",display:"flex",alignItems:isMob ? "stretch" : "center",justifyContent:"center",padding:isMob ? 0 : 20}}>
+      <div style={{background:_EVT.painel,color:_EVT.texto,width:isMob ? "100%" : "min(1100px, 96vw)",maxHeight:isMob ? "100dvh" : "92vh",borderRadius:isMob ? 0 : 18,
+        display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 40px 90px -20px rgba(0,0,0,.5)"}}>
+        <div style={{padding:isMob ? "12px 14px" : "16px 20px",borderBottom:"1px solid " + _EVT.linha,display:"flex",gap:10,alignItems:"flex-start"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:800,fontSize:_evF(17, isMob)}}>↻ Girar vídeos gravados deitados</div>
+            <div style={{fontSize:_evF(12.5, isMob),color:_EVT.sub,marginTop:3,lineHeight:1.45}}>Gravou com a câmera deitada e o vídeo ficou de lado? Gire aqui. O arquivo original (Drive e card) não muda: o giro vale no Estúdio, no que a IA vê e no vídeo final.</div>
+          </div>
+          <button onClick={function(){ if(!salvando) onFechar(); }} aria-label="Fechar" style={_evpBtn("icone")}><_EvpIco n="fechar" s={15}/></button>
+        </div>
+        <div style={{padding:isMob ? "10px 14px" : "12px 20px",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",borderBottom:"1px solid " + _EVT.linha2}}>
+          <button data-girar-todos="1" onClick={function(){ girarTodos(90); }} disabled={!!ocup} style={B("suave")}>↻ Girar todos</button>
+          <button onClick={function(){ girarTodos(-90); }} disabled={!!ocup} style={B()}>↺ Todos para o outro lado</button>
+          <button onClick={todosOriginal} disabled={!!ocup} style={B()}>Voltar todos para como gravou</button>
+          {pode && pode.pode && <button data-achar-deitados="1" onClick={acharDeitados} disabled={!!ocup || !lista.length} style={B("primario")}
+            title={"A IA olha 1 quadro de cada vídeo e marca quanto girar. Custa centavos (uns US$ " + custoEst.toFixed(2).replace(".", ",") + " para " + lista.length + " vídeos). Você confere antes de salvar."}>🔎 Achar deitados (IA)</button>}
+          <span style={{marginLeft:"auto",fontSize:_evF(12, isMob),color:_EVT.sub}}>{lista.length} vídeo{lista.length === 1 ? "" : "s"} · {girados} girado{girados === 1 ? "" : "s"}{carregados < lista.length ? " · prévias " + carregados + "/" + lista.length : ""}</span>
+        </div>
+        {(ocup || erro) && <div style={{margin:isMob ? "8px 14px 0" : "10px 20px 0",padding:"9px 12px",borderRadius:10,fontSize:_evF(12.5, isMob),fontWeight:600,
+          background:erro ? _EVT.vermClaro : _EVT.roxoClaro,color:erro ? _EVT.verm : _EVT.roxo}}>{erro || ("⏳ " + ocup)}</div>}
+        <div style={{flex:1,overflow:"auto",padding:isMob ? "10px 14px" : "14px 20px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(" + (isMob ? 150 : 172) + "px,1fr))",gap:10,alignContent:"start"}}>
+          {lista.map(function(c, i){
+            const r = atual(c), q = quadros[c.url], mudou = rasc[c.url] != null && rasc[c.url] !== salvo(c), g = ia[c.url];
+            return <div key={c.id || c.url} data-girar-item={c.id || i} style={{border:"1px solid " + (mudou ? _EVT.roxo : _EVT.linha),borderRadius:12,padding:8,background:mudou ? _EVT.roxoClaro : _EVT.campo,display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+              <_EvGiroMini q={q && q !== "erro" ? q : null} erro={q === "erro"} rot={r} tam={isMob ? 128 : 150}/>
+              <div title={c.nome || ""} style={{fontSize:11.5,fontWeight:700,width:"100%",textAlign:"center",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.nome || ("Vídeo " + (i + 1))}</div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <button onClick={function(){ girar(c, -90); }} aria-label={"Girar " + (c.nome || "") + " para a esquerda"} title="Girar 90° para a esquerda" style={Object.assign(_evpBtn("icone"), {padding:"5px 9px",fontSize:15})}>↺</button>
+                <span style={{fontSize:11,minWidth:66,textAlign:"center",color:r ? _EVT.roxo : _EVT.sub,fontWeight:700}}>{_evGiroTxt(r)}</span>
+                <button data-girar-um="1" onClick={function(){ girar(c, 90); }} aria-label={"Girar " + (c.nome || "") + " para a direita"} title="Girar 90° para a direita" style={Object.assign(_evpBtn("icone"), {padding:"5px 9px",fontSize:15})}>↻</button>
+              </div>
+              {g && <div title={g.pista || ""} style={{fontSize:10.5,fontWeight:700,padding:"2px 7px",borderRadius:99,
+                background:g.certeza === "alta" ? _EVT.verdeClaro : _EVT.amareloClaro,color:g.certeza === "alta" ? _EVT.verde : _EVT.amarelo}}>
+                IA: {g.giro ? _evGiroTxt(g.giro) : "já está em pé"}{g.certeza !== "alta" ? " · confira" : ""}</div>}
+            </div>; })}
+          {!lista.length && <div style={{color:_EVT.sub,fontSize:13}}>Nenhum vídeo neste card.</div>}
+        </div>
+        <div style={{padding:isMob ? "10px 14px" : "12px 20px",borderTop:"1px solid " + _EVT.linha,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:_evF(12.5, isMob),color:_EVT.sub,flex:1,minWidth:200}}>{mudancas.length ? mudancas.length + (mudancas.length === 1 ? " mudança para salvar." : " mudanças para salvar.") + " Depois, a edição aberta recarrega já girada."
+            : "Gire o que estiver de lado e clique em Salvar."}</span>
+          {mudancas.length > 0 && <button onClick={function(){ setRasc({}); setIa({}); }} disabled={salvando} style={B()}>Desfazer</button>}
+          <button data-girar-salvar="1" onClick={salvar} disabled={!mudancas.length || salvando} style={B(mudancas.length ? "primario" : null)}>{salvando ? "Salvando…" : "Salvar giros"}</button>
+        </div>
       </div>
     </div>
   );
@@ -128282,7 +128439,9 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
   const [ajustando, setAjustando] = useState(false);
   const [erroAjuste, setErroAjuste] = useState(null);   // v48 (06/10/2026): E2-3 — o erro do "Ajustar com IA" aparece DENTRO do assistente (o editor em tela cheia cobria o de fora)
   const [exp, setExp] = useState(null);       // { fase, pct, msg, url }
+  const [girarAberto, setGirarAberto] = useState(false);   // vid27: painel "Girar vídeos"
   const soVer = !!isMob;
+  useEffect(function(){ if(t && t.id) _evGiroCarregar(t.id); }, [t && t.id]);   // vid27: giros do card (vídeos gravados deitados)
 
   useEffect(function(){ setEd(null); setErro(null); setPedido(""); setExp(null); setErroAjuste(null); }, [taskId]);
   useEffect(function(){
@@ -128290,7 +128449,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     window._sb.rpc("criacao_edicao", { p_task:t.id }).then(function(r){
       if(!vivo) return;
       if(r.error){ setErro(/permiss/i.test(r.error.message||"") ? "Você não tem acesso ao Estúdio." : "Não consegui carregar a edição agora."); return; }
-      const e1 = _evComLeve(r.data || { existe:false }, t); setEd(e1);          // v32: cópia leve mais nova do card
+      const e1 = _evComLeve(r.data || { existe:false }, t); _evGiroRegistrarClipes(e1.clipes); setEd(e1);          // v32: cópia leve mais nova do card · vid27: giro dos clipes
       _evAcharLeve(e1).then(function(e2){ if(vivo && e2 !== e1) setEd(e2); });   // v41: sem preview_url → acha pelo nome
     }).catch(function(){ if(vivo) setErro("Não consegui carregar a edição agora."); });
     return function(){ vivo = false; };
@@ -128411,8 +128570,11 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
             {cards.map(function(c){ return <option key={c.id} value={c.id}>{_evNomeCliente(c.client) + (c.bioterUnit ? " (" + _evNomeUnidade(c.bioterUnit) + ")" : "") + " · " + (c.title||"(sem título)") + " · " + _evBrutos(c).length + " bruto" + (_evBrutos(c).length>1?"s":"")}</option>; })}
           </select>
         </div>
+        {t && _evBrutos(t).length > 0 && <button data-abrir-girar="estudio" onClick={function(){ setGirarAberto(true); }} title="Vídeo gravado com a câmera deitada? Gire aqui (o original não muda)" style={btn2}>↻ Girar vídeos</button>}
         {t && typeof onAbrirCard==="function" && <button onClick={function(){ onAbrirCard(t); }} style={btn2}>Abrir card</button>}
       </div>
+      {t && girarAberto && <_EvGirarPainel t={t} isMob={isMob} onFechar={function(){ setGirarAberto(false); }} onSalvou={function(){ setRec(function(n){ return n+1; }); }}
+        itens={_evGiroItens(t, ed)}/>}
       {!soVer && <_EvTravaVideo isMob={isMob}/>}
 
       {!t && (
@@ -132059,7 +132221,201 @@ async function _evUrlRapida(url){                 // v41: cópia guardada para a
 async function _evUrlLocal(url){                 // <video> com a cópia guardada no computador (no PC: o arquivo local)
   if((typeof window !== "undefined" && window.__CFG) || !url || /^(blob:|data:)/.test(url)) return url;
   if(_evObjUrls[url]) return _evObjUrls[url];
-  try{ const b = await _evBuscar(url); return (_evObjUrls[url] = URL.createObjectURL(b)); }catch(e){ if(/pesado/.test(String(e && e.message))) throw e; return url; }
+  try{ const b = await _evBuscar(url); const ob = (_evObjUrls[url] = URL.createObjectURL(b)); _evGiroAlias(ob, url); return ob; }catch(e){ if(/pesado/.test(String(e && e.message))) throw e; return url; }   // vid27: a cópia guardada gira junto com o arquivo
+}
+
+/* ═══ vid27 (14/10/2026) — GIRAR VÍDEO GRAVADO DEITADO (pedido do Vini, card Lero Fibras · Starken: "os vídeos estão todos na horizontal, mas é
+   vertical — gravei com a câmera, aí ele grava deitado… preciso que você crie algo para ver isso e ajustar").
+   • O ORIGINAL NÃO MUDA (Drive e Storage): o giro é uma informação por arquivo (tabela video_giros, rpc criacao_video_girar) que o banco copia
+     para o clipe (clipes[].rot = 0/90/180/270, sentido do relógio) e que o Estúdio aplica NA HORA DE DESENHAR.
+   • UM lugar só para "todo lugar": o motor abaixo ensina o navegador a girar o <video> desse arquivo — videoWidth/videoHeight já vêm trocados
+     (90/270) e o drawImage / texImage2D (cor WebGL) desenham o quadro girado. Assim valem do mesmo jeito: miniaturas e player do Estúdio,
+     quadros que a IA olha (folhas do "Editar com IA"), rastreio/rosto/máscara, cor, e a GRAVAÇÃO (navegador e PC do escritório, que roda este
+     mesmo módulo sem janela). Vídeo sem giro passa direto (nenhum custo).
+   • Quem gira: o próprio <video> (v._pxGiro = número, quando quem cria sabe o giro) ou o endereço dele (registro abaixo: arquivo do card,
+     cópia leve, máscara, cópia guardada no computador (blob) e a versão de gravação do PC (/orig/N.mp4) apontam para o mesmo arquivo). */
+const _EV_GIRO = { rot:{}, alias:{}, local:{}, ver:0, algum:false, quadros:{}, ouvintes:new Set() };
+function _evGiroNorm(u){
+  u = String(u || ""); if(!u) return "";
+  if(/^blob:/.test(u)) return u;
+  if(/^data:/.test(u)) return "";
+  try{ const loc = (typeof location !== "undefined" && location.href) ? location : null;
+    const x = new URL(u, loc ? loc.href : "http://local/");
+    if(loc && x.origin === loc.origin) return x.pathname;
+    return x.origin + x.pathname; }catch(_){ return u.split(/[?#]/)[0]; }
+}
+function _evGiroCaminho(u){ const m = /\/agency-files\/([^?#]+)/.exec(String(u || "")); if(!m) return ""; try{ return decodeURIComponent(m[1]); }catch(_){ return m[1]; } }
+function _evGiroChave(u){ const c = _evGiroCaminho(u); return c ? "c:" + c : (u ? (function(n){ return n ? "u:" + n : ""; })(_evGiroNorm(u)) : ""); }
+function _evGiroOk(r){ r = ((Math.round(Number(r) / 90) * 90) % 360 + 360) % 360; return r === 90 || r === 180 || r === 270 ? r : 0; }
+function _evGiroFinal(k){ let n = 0; while(k && _EV_GIRO.alias[k] && n++ < 5) k = _EV_GIRO.alias[k]; return k; }
+function _evGiroDe(u){ const k = _evGiroFinal(_evGiroChave(u)); return (k && _EV_GIRO.rot[k]) || 0; }
+function _evGiroAlias(de, para){
+  const a = _evGiroChave(de), b = _evGiroChave(para); if(!a || !b || a === b) return;
+  if(_evGiroFinal(b) === a || _EV_GIRO.alias[a] === b) return;               // sem volta (nada de ciclo)
+  _EV_GIRO.alias[a] = b; _EV_GIRO.ver++;
+}
+function _evGiroPor(u, rot, local){
+  const k = _evGiroFinal(_evGiroChave(u)); if(!k) return false;
+  const r = _evGiroOk(rot);
+  if(!local && _EV_GIRO.local[k] && Date.now() - _EV_GIRO.local[k] < 120000) return false;   // acabou de girar aqui: o dado velho não desfaz
+  if(local) _EV_GIRO.local[k] = Date.now();
+  if((_EV_GIRO.rot[k] || 0) === r) return false;
+  _EV_GIRO.rot[k] = r; _EV_GIRO.ver++; if(r) _EV_GIRO.algum = true;
+  return true;
+}
+/* clipes da edição (ou arquivos do card): o giro do arquivo vale para a cópia leve, a máscara e a versão de gravação do PC */
+function _evGiroRegistrarClipes(lista){
+  let mudou = false;
+  (Array.isArray(lista) ? lista : []).forEach(function(c){
+    if(!c) return;
+    const url = c.url, prev = c.preview_url || c.previewUrl, masc = c.mascara && c.mascara.url;
+    if(!url) return;
+    [prev, masc].forEach(function(x){ if(x) _evGiroAlias(x, url); });
+    try{ [url, prev].forEach(function(x){ if(x){ const tr = _evTroca(x); if(tr && tr !== x) _evGiroAlias(tr, url); } }); }catch(_){}
+    if(c.rot != null || _EV_GIRO.rot[_evGiroFinal(_evGiroChave(url))]) mudou = _evGiroPor(url, c.rot || 0) || mudou;
+  });
+  if(mudou) _evGiroAvisar();
+}
+function _evGiroAvisar(){ _EV_GIRO.ouvintes.forEach(function(f){ try{ f(_EV_GIRO.ver); }catch(_){} }); try{ if(typeof _evpAvisar === "function") _evpAvisar(); }catch(_){} }
+function _evUsarGiro(){ const [, setN] = useState(0); useEffect(function(){ const f = function(){ setN(function(n){ return n + 1; }); }; _EV_GIRO.ouvintes.add(f); return function(){ _EV_GIRO.ouvintes.delete(f); }; }, []); return _EV_GIRO.ver; }
+/* giro de um <video>: v._pxGiro (quem criou sabe) ou pelo endereço (com memória por elemento) */
+function _evGiroEl(v){
+  if(!v) return 0;
+  if(typeof v._pxGiro === "number") return v._pxGiro;
+  if(!_EV_GIRO.algum) return 0;
+  let s = ""; try{ s = v.currentSrc || v.getAttribute("src") || ""; }catch(_){ s = ""; }
+  if(!s) return 0;
+  if(v.__pxGK === s && v.__pxGV === _EV_GIRO.ver) return v.__pxGR;
+  const r = _evGiroDe(s); v.__pxGK = s; v.__pxGV = _EV_GIRO.ver; v.__pxGR = r; return r;
+}
+/* o motor: instalado 1 vez por página (app e PC). Sem giro registrado = caminho de sempre. */
+(function _evGiroInstalar(){
+  if(typeof window === "undefined" || window.__pxGiroOk) return;
+  const HV = window.HTMLVideoElement && window.HTMLVideoElement.prototype; if(!HV) return;
+  const dW = Object.getOwnPropertyDescriptor(HV, "videoWidth"), dH = Object.getOwnPropertyDescriptor(HV, "videoHeight");
+  if(!dW || !dH || !dW.get || !dH.get) return;
+  window.__pxGiroOk = true;
+  const gW = dW.get, gH = dH.get;
+  Object.defineProperty(HV, "videoWidth", { configurable:true, enumerable:dW.enumerable, get:function(){ const r = _evGiroEl(this); return (r === 90 || r === 270) ? gH.call(this) : gW.call(this); } });
+  Object.defineProperty(HV, "videoHeight", { configurable:true, enumerable:dH.enumerable, get:function(){ const r = _evGiroEl(this); return (r === 90 || r === 270) ? gW.call(this) : gH.call(this); } });
+  window.__pxVideoBruto = function(v){ return { w:gW.call(v), h:gH.call(v), rot:_evGiroEl(v) }; };
+  const ehVideo = function(x){ return !!x && typeof x === "object" && x instanceof window.HTMLVideoElement; };
+  [window.CanvasRenderingContext2D, window.OffscreenCanvasRenderingContext2D].forEach(function(C){
+    if(!C || !C.prototype || !C.prototype.drawImage) return;
+    const dI = C.prototype.drawImage;
+    C.prototype.drawImage = function(img){
+      if(!ehVideo(img)) return dI.apply(this, arguments);
+      const r = _evGiroEl(img); if(!r) return dI.apply(this, arguments);
+      const ow = gW.call(img), oh = gH.call(img); if(!ow || !oh) return dI.apply(this, arguments);
+      const a = arguments, VW = r % 180 ? oh : ow, VH = r % 180 ? ow : oh;
+      let sx = 0, sy = 0, sw = VW, sh = VH, dx, dy, dw, dh;
+      if(a.length >= 9){ sx = +a[1]; sy = +a[2]; sw = +a[3]; sh = +a[4]; dx = +a[5]; dy = +a[6]; dw = +a[7]; dh = +a[8]; }
+      else if(a.length >= 5){ dx = +a[1]; dy = +a[2]; dw = +a[3]; dh = +a[4]; }
+      else { dx = +a[1]; dy = +a[2]; dw = VW; dh = VH; }
+      if(sw < 0){ sx += sw; sw = -sw; } if(sh < 0){ sy += sh; sh = -sh; }       // o canvas normaliza os retângulos (não espelha)
+      if(dw < 0){ dx += dw; dw = -dw; } if(dh < 0){ dy += dh; dh = -dh; }
+      if(!sw || !sh || !dw || !dh) return;
+      let osx, osy, osw, osh;                                                   // recorte no quadro "em pé" → recorte no arquivo
+      if(r === 90){ osx = sy; osy = oh - sx - sw; osw = sh; osh = sw; }
+      else if(r === 180){ osx = ow - sx - sw; osy = oh - sy - sh; osw = sw; osh = sh; }
+      else { osx = ow - sy - sh; osy = sx; osw = sh; osh = sw; }
+      this.save();
+      try{
+        this.translate(dx + dw / 2, dy + dh / 2); this.rotate(r * Math.PI / 180);
+        if(r === 180) dI.call(this, img, osx, osy, osw, osh, -dw / 2, -dh / 2, dw, dh);
+        else dI.call(this, img, osx, osy, osw, osh, -dh / 2, -dw / 2, dh, dw);
+      } finally { this.restore(); }
+    };
+  });
+  /* cor no WebGL (e qualquer textura de vídeo): sobe o quadro já girado */
+  const quadroGirado = function(v, r){
+    const ow = gW.call(v), oh = gH.call(v); if(!ow || !oh) return null;
+    const W = r % 180 ? oh : ow, H = r % 180 ? ow : oh;
+    let cv = v.__pxGcv; if(!cv){ cv = v.__pxGcv = document.createElement("canvas"); }
+    if(cv.width !== W) cv.width = W; if(cv.height !== H) cv.height = H;
+    const cx = cv.getContext("2d"); cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, W, H); cx.drawImage(v, 0, 0, W, H);   // o drawImage acima já gira
+    return cv;
+  };
+  [window.WebGLRenderingContext, window.WebGL2RenderingContext].forEach(function(G){
+    if(!G || !G.prototype || !G.prototype.texImage2D) return;
+    const t2 = G.prototype.texImage2D;
+    G.prototype.texImage2D = function(){
+      const a = arguments, src = a[a.length - 1];
+      if(ehVideo(src)){ const r = _evGiroEl(src); if(r){ const cv = quadroGirado(src, r); if(cv){ const b = Array.prototype.slice.call(a); b[b.length - 1] = cv; return t2.apply(this, b); } } }
+      return t2.apply(this, a);
+    };
+  });
+})();
+/* banco: giros do card (arquivos + clipes) */
+const _evGiroCarregando = {};
+function _evGiroCarregar(taskId, forcar){
+  if(!taskId || typeof window === "undefined" || !window._sb) return Promise.resolve(null);
+  if(window.__CFG) return Promise.resolve(null);                         // PC do escritório: o giro vem nos clipes da edição
+  const k = String(taskId);
+  if(!forcar && _evGiroCarregando[k] && Date.now() - _evGiroCarregando[k].em < 30000) return _evGiroCarregando[k].p;
+  const p = window._sb.rpc("criacao_video_giros", { p_task:k }).then(function(r){
+    if(r.error) return null;
+    let mudou = false;
+    ((r.data && r.data.giros) || []).forEach(function(g){ if(g && g.caminho){ const kk = "c:" + g.caminho; if(!(_EV_GIRO.local[kk] && Date.now() - _EV_GIRO.local[kk] < 120000) && (_EV_GIRO.rot[kk] || 0) !== _evGiroOk(g.rot)){ _EV_GIRO.rot[kk] = _evGiroOk(g.rot); _EV_GIRO.ver++; mudou = true; if(g.rot) _EV_GIRO.algum = true; } } });
+    if(mudou) _evGiroAvisar();
+    return (r.data && r.data.giros) || [];
+  }).catch(function(){ return null; });
+  _evGiroCarregando[k] = { em:Date.now(), p:p };
+  return p;
+}
+/* depois de girar: miniaturas, medidas e análises de imagem do clipe são refeitas (o áudio continua) */
+function _evGiroRefazerMidia(ids){
+  (ids || []).forEach(function(id){ const m = (typeof _evpMidia !== "undefined") && _evpMidia[id]; if(!m) return;
+    m.thumbs = []; delete m.thumbsProm; delete m.w; delete m.h; delete m._anal; m._anais = {}; });
+}
+/* grava (a pessoa confirmou): [{url, rot, origem}] → banco + registro + miniaturas */
+async function _evGiroSalvar(taskId, lista, itens){
+  const ok = (lista || []).filter(function(x){ return x && x.url; }).map(function(x){ return { url:x.url, rot:_evGiroOk(x.rot), origem:x.origem === "ia" ? "ia" : "manual" }; });
+  if(!ok.length) return { ok:true, gravados:0 };
+  const r = await window._sb.rpc("criacao_video_girar", { p_task:String(taskId), p_giros:ok });
+  if(r.error) throw new Error(r.error.message || "não gravou o giro");
+  ok.forEach(function(x){ _evGiroPor(x.url, x.rot, true); });
+  const ids = (itens || []).filter(function(c){ return ok.some(function(x){ return x.url === c.url; }); }).map(function(c){ return c.id; });
+  _evGiroRefazerMidia(ids);
+  _evGiroAvisar();
+  return r.data || { ok:true };
+}
+/* 1 quadro do arquivo como foi gravado (sem giro), ~320 px — miniatura do painel e base da grade da IA. Pelo MESMO cache do Estúdio. */
+function _evGiroQuadro(it){
+  const k = _evGiroChave(it && it.url); if(!k) return Promise.reject(new Error("vídeo sem endereço"));
+  if(_EV_GIRO.quadros[k]) return _EV_GIRO.quadros[k];
+  const p = (async function(){
+    const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.crossOrigin = "anonymous"; v.playsInline = true; v._pxGiro = 0;
+    try{
+      v.src = await _evUrlRapida(_evLeve(it));
+      await _evEsperar(v, "loadedmetadata", 30000);
+      const d = isFinite(v.duration) ? v.duration : 0;
+      const alvo = d > 6 ? Math.min(d * 0.3, 4) : d * 0.5;
+      try{ v.currentTime = Math.max(0, Math.min(alvo, Math.max(0, d - 0.1))); await _evEsperar(v, "seeked", 15000); }catch(_){ await _evEsperar(v, "loadeddata", 15000); }
+      const w0 = v.videoWidth, h0 = v.videoHeight; if(!w0 || !h0) throw new Error("o navegador não mostra este vídeo");
+      const e = Math.min(1, 320 / Math.max(w0, h0)), w = Math.max(2, Math.round(w0 * e)), h = Math.max(2, Math.round(h0 * e));
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h; cv.getContext("2d").drawImage(v, 0, 0, w, h);
+      return { cv:cv, w:w, h:h, url:cv.toDataURL("image/jpeg", 0.78) };
+    } finally { try{ v.removeAttribute("src"); v.load(); }catch(_){} }
+  })();
+  _EV_GIRO.quadros[k] = p; p.catch(function(){ delete _EV_GIRO.quadros[k]; });
+  return p;
+}
+/* GRADE 2×2 da IA (o mesmo quadro em 4 giros): A = como foi gravado · B = 90° · C = 180° · D = 270° (teste de 14/10: com 1 quadro só a IA
+   achou a pessoa de lado "deitada"; comparando os 4 lado a lado ela acertou). Mesma conta do testes/grade_quadro.py. */
+function _evGiroGrade(q){
+  const S = 192, G = 4, W = 2 * S + 3 * G;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = W; const cx = cv.getContext("2d");
+  cx.fillStyle = "#202024"; cx.fillRect(0, 0, W, W);
+  [["A", 0], ["B", 90], ["C", 180], ["D", 270]].forEach(function(L, k){
+    const r = L[1], rw = r % 180 ? q.h : q.w, rh = r % 180 ? q.w : q.h, e = Math.min(S / rw, S / rh), w = rw * e, h = rh * e;
+    const x0 = G + (k % 2) * (S + G), y0 = G + Math.floor(k / 2) * (S + G);
+    cx.save(); cx.translate(x0 + S / 2, y0 + S / 2); cx.rotate(r * Math.PI / 180);
+    if(r % 180) cx.drawImage(q.cv, -h / 2, -w / 2, h, w); else cx.drawImage(q.cv, -w / 2, -h / 2, w, h);
+    cx.restore();
+    cx.fillStyle = "#000"; cx.fillRect(x0, y0, 30, 30); cx.fillStyle = "#fff"; cx.font = "bold 22px sans-serif"; cx.fillText(L[0], x0 + 7, y0 + 23);
+  });
+  return cv.toDataURL("image/jpeg", 0.8);
 }
 
 /* aviso do disjuntor + painel do sócio (uso do dia, liberar, limites) — banco: video_porteiro_meu / _painel / _liberar / _limites */
@@ -137620,6 +137976,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   /* v81: a guarda de vídeo do app (00b: gasta 1 vez + trava de 3 voltas) fica de fora do Estúdio — ele tem o próprio cache e o "repetir trecho" é de propósito */
   useEffect(function(){ window.__PXVG_PAUSA = (window.__PXVG_PAUSA || 0) + 1; return function(){ window.__PXVG_PAUSA = Math.max(0, (window.__PXVG_PAUSA || 1) - 1); }; }, []);
   const clipes = ed.clipes || [];
+  useMemo(function(){ _evGiroRegistrarClipes(clipes); }, [ed.id, clipes.map(function(c){ return (c && c.rot) || 0; }).join(",")]);   // vid27: vídeo gravado deitado gira no player, nas miniaturas e na gravação
+  const giroVer = _evUsarGiro();
+  const [girarAberto, setGirarAberto] = useState(false);
   const infoClipe = useMemo(function(){ const m = {}; clipes.forEach(function(c, i){ m[c.id] = Object.assign({ n:i+1, cor:_EV_CORES_CLIPE[i%12] }, c); }); return m; }, [ed.id]);
   /* versão salva × rascunho salvo sozinho (se o rascunho for mais novo que a última versão, continua dele)
      v48 (06/10/2026): E2-1 + contrato C2 — "mais novo" é rascunho_em > (receita_em || atualizado_em). receita_em = quando a RECEITA mudou de verdade;
@@ -137871,6 +138230,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       try{ await _evpMiniaturas(c.id, u); }catch(_){} if(!vivo) return; try{ await _evpAudio(c.id, _evAudioDe(c)); }catch(_){} } })();
     return function(){ vivo = false; };
   }, [ed.id, midiaPronta]);
+  useEffect(function(){                                   // vid27: depois de girar, as miniaturas do clipe são refeitas já em pé
+    if(!midiaPronta || !giroVer) return; let vivo = true;
+    (async function(){ for(const c of clipes){ if(!vivo) return; const m = _evpMidia[c.id]; if(m && !m.thumbsProm){ try{ await _evpMiniaturas(c.id, _evLeve(c)); }catch(_){} } } })();
+    return function(){ vivo = false; };
+  }, [giroVer, midiaPronta]);
   const trKey = trechosAu.length ? JSON.stringify(trechosAu.map(function(r){ return [r.t0, r.t1, r.forca, !!r.pc, r.ruido, r.eco, r.voz, r.vol, r.graves, r.agudos, !!r.igualar, !!r.mudo]; })) + "|" + (calc.clips || []).map(function(c){ return c.clipe + "@" + c.t0 + ":" + c.ini + ":" + (c.vel || 1); }).join(",") + "|" + Object.keys(vozesPC).sort().map(function(k){ return k + "=" + vozesPC[k]; }).join(",") : "";   // v75 · v78: + painel do trecho
   const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + _evpChaveExtra(p.audio) + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().map(function(k){ return k + "=" + vozesPC[k]; }).join(",") : "");
   const [tratandoAudio, setTratandoAudio] = useState(true);   // v10b (30/09): começa "tratando" — o PC não pode gravar antes de carregar a fala (saía sem som)
@@ -139660,6 +140024,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   return (
     <div style={raiz} data-tema={tema} onDragEnter={function(e){ if(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0){ e.preventDefault(); setSoltando(true); } }}>
       <style>{_EVP_CSS}</style>{/* v71: régua, blocos de ação e entrada suave dos painéis */}
+      {girarAberto && <_EvGirarPainel t={t} isMob={isMob} itens={_evGiroItens(t, ed)} onFechar={function(){ setGirarAberto(false); }} onSalvou={function(){ try{ onRecarregar(); }catch(_){} }}/>}
       {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
       {/* ── barra de cima ── */}
       <div style={Object.assign({}, _EVP_PAINEL, {display:"flex",gap:8,alignItems:"center",padding:"7px 10px",flexShrink:0,position:"relative"})}>
@@ -139670,6 +140035,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <div style={{fontSize:11.5,color:_EVP_COR.sub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_evNomeCliente(t.client)} · {clipes.length} bruto{clipes.length === 1 ? "" : "s"} · versão {(ed.versoes || []).length || 1}</div>
         </div>
         {/* v68: o formato saiu do topo — botão "Formato" (Alt+R) na barra embaixo do vídeo */}
+        <button data-abrir-girar="editor" onClick={function(){ setGirarAberto(true); }} title="Vídeo gravado com a câmera deitada? Gire aqui (o original não muda)" style={Object.assign(_evpBtn(), {fontSize:12})}>↻ Girar</button>
         <button onClick={function(){ setPaleta(true); }} title="Buscar comando ou ferramenta (Ctrl+K)" aria-label="Comandos" style={Object.assign(_evpBtn(), {fontSize:12})}><_EvpIco n="comandos" s={15}/>Comandos {!avisoRasc && <span style={{fontFamily:_EVP_MONO,fontSize:10.5,color:_EVP_COR.fraco}}>Ctrl+K</span>}</button>
         <button onClick={function(){ setBasico(!basico); }} aria-pressed={basico} title={basico ? "Modo básico: só o essencial. Clique para ver todas as ferramentas." : "Modo avançado: todas as ferramentas. Clique para o modo básico."}
           style={Object.assign(_evpBtn(basico ? "suave" : null), {fontSize:12})}>{basico ? "Básico" : "Avançado"}</button>
