@@ -36367,7 +36367,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             }catch(_){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar. Selecione o texto e copie na mão."); }
           };
           // Histórico de ajustes
-          const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
+          const allAnn=(current.files||[]).filter(f=>f.isAnnotation||(f.isRef&&f.tipo!=="referencia"&&f.tipo!=="material"));   // (15/10/2026, Gustavo: "no histórico de ajustes não tem as fotos que eu anexei nos pedidos") anexos do Solicitar ajuste (isRef) entram no round
           const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
           const _ts=(s)=>{
             if(!s)return 0;
@@ -36382,7 +36382,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           const _key2=(item)=>item.batchId||"_orphan-"+(item.id||Math.random());
           const map2=new Map();
           fbCmts.forEach(cc=>{const ts=_cTs2(cc),k=_key2(cc);if(!map2.has(k))map2.set(k,{key:k,ts,comments:[],audio:null,images:[],user:cc.user});const r=map2.get(k);if(cc.type==="audio")r.audio=cc;else r.comments.push(cc);if(ts>r.ts)r.ts=ts;if(!r.user&&cc.user)r.user=cc.user;});
-          allAnn.forEach(f=>{const ts=_fTs2(f),k=_key2(f);if(!map2.has(k))map2.set(k,{key:k,ts,comments:[],audio:null,images:[],user:f.addedBy});const r=map2.get(k);r.images.push(f);if(ts>r.ts)r.ts=ts;if(!r.user&&f.addedBy)r.user=f.addedBy;});
+          allAnn.forEach(f=>{const ts=_fTs2(f);let k=_key2(f);if(f.isRef&&!f.batchId){let best=null,bd=15*60*1000;map2.forEach(rr=>{const d=Math.abs(rr.ts-ts);if(d<bd){bd=d;best=rr.key;}});if(best)k=best;}if(!map2.has(k))map2.set(k,{key:k,ts,comments:[],audio:null,images:[],user:f.addedBy});const r=map2.get(k);r.images.push(f);if(ts>r.ts)r.ts=ts;if(!r.user&&f.addedBy)r.user=f.addedBy;});
           const rounds2=Array.from(map2.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0).sort((a,b)=>b.ts-a.ts);
           const _fmt2=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
 
@@ -37248,7 +37248,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
                 {/* Histórico de ajustes — vem ANTES do briefing porque é mais relevante na aprovação */}
                 {(()=>{
-                  const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
+                  const allAnn=(current.files||[]).filter(f=>f.isAnnotation||(f.isRef&&f.tipo!=="referencia"&&f.tipo!=="material"));   // (15/10/2026, Gustavo: "no histórico de ajustes não tem as fotos que eu anexei nos pedidos") anexos do Solicitar ajuste (isRef) entram no round
                   const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
                   if(allAnn.length===0&&fbCmts.length===0)return null;
                   // Parse timestamps (ISO + BR DD/MM/YYYY HH:MM)
@@ -37274,7 +37274,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     if(!r.user&&cc.user)r.user=cc.user;
                   });
                   allAnn.forEach(f=>{
-                    const ts=_fTs(f),k=_key(f);
+                    const ts=_fTs(f);let k=_key(f);
+                    if(f.isRef&&!f.batchId){ let best=null,bd=15*60*1000; map.forEach(rr=>{ const d=Math.abs(rr.ts-ts); if(d<bd){ bd=d; best=rr.key; } }); if(best)k=best; }   // anexo antigo sem batchId: round mais perto (15 min)
                     if(!map.has(k))map.set(k,{key:k,ts,comments:[],audio:null,images:[],user:f.addedBy});
                     const r=map.get(k);
                     r.images.push(f);
@@ -37377,7 +37378,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                               </div>);
                             })}
                             {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:r.comments.length>0?2:0}}>
-                              {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
+                              {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" title={f.isRef?"Foto anexada no pedido de ajuste":"Lâmina marcada"} onClick={()=>{ if(f.isRef){ try{ window.open(f.url,"_blank","noopener"); }catch(_){ } } else setOpenCard(current); }}
                                 title="Abrir cartão pra ver em tamanho grande"
                                 style={{width:52,height:52,objectFit:"cover",borderRadius:8,cursor:"pointer",border:"1px solid #e2e8f0",transition:"all .15s"}}
                                 onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.06)";e.currentTarget.style.borderColor=accent;e.currentTarget.style.boxShadow="0 4px 12px "+accent+"33";}}
@@ -37392,7 +37393,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
                 {/* Histórico de ajustes — ANTES do briefing */}
                 {(()=>{
-                  const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
+                  const allAnn=(current.files||[]).filter(f=>f.isAnnotation||(f.isRef&&f.tipo!=="referencia"&&f.tipo!=="material"));   // (15/10/2026, Gustavo: "no histórico de ajustes não tem as fotos que eu anexei nos pedidos") anexos do Solicitar ajuste (isRef) entram no round
                   const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
                   if(allAnn.length===0&&fbCmts.length===0)return null;
                   const _ts=(s)=>{
@@ -37416,7 +37417,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     if(!r.user&&cc.user)r.user=cc.user;
                   });
                   allAnn.forEach(f=>{
-                    const ts=_fTs(f),k=_key(f);
+                    const ts=_fTs(f);let k=_key(f);
+                    if(f.isRef&&!f.batchId){ let best=null,bd=15*60*1000; map.forEach(rr=>{ const d=Math.abs(rr.ts-ts); if(d<bd){ bd=d; best=rr.key; } }); if(best)k=best; }   // anexo antigo sem batchId: round mais perto (15 min)
                     if(!map.has(k))map.set(k,{key:k,ts,comments:[],audio:null,images:[],user:f.addedBy});
                     const r=map.get(k);
                     r.images.push(f);
@@ -37479,8 +37481,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             </div>);
                           })}
                           {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
-                            {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" referrerPolicy="no-referrer" onClick={()=>setOpenCard(current)}
-                              title="Abrir cartão pra ver em tamanho grande"
+                            {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" referrerPolicy="no-referrer" onClick={()=>{ if(f.isRef){ try{ window.open(f.url,"_blank","noopener"); }catch(_){ } } else setOpenCard(current); }}
+                              title={f.isRef?"Foto anexada no pedido de ajuste — abrir em tamanho grande":"Lâmina marcada — abrir cartão"}
                               style={{width:54,height:54,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"1px solid "+C.b1}}/>))}
                           </div>}
                         </div>);
