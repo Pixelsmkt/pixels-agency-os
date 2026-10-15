@@ -37859,7 +37859,7 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const icoOk=<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>;
   const selecionados=lista.filter(function(t){ return sel[String(t.id)]; });
 
-  return (<div style={{display:"flex",flexDirection:"column",gap:34,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return (<div style={{display:"flex",flexDirection:"column",gap:56,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(function(){})} onClose={function(){ setOpenCard(null); }} currentUser={effectiveUser} canDelete={false} cardPerms={perms}/>)}
     <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
@@ -37906,10 +37906,16 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
             <ClientLogo clientId={cid} size="md"/>
           </div>
           <div style={{display:"flex",flexDirection:"column",lineHeight:1.15,gap:6,minWidth:0}}>
-            <div style={{fontWeight:900,color:txt,fontSize:isMob?17:21,letterSpacing:-.4,textShadow:"0 1px 3px rgba(0,0,0,0.35)",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{_nomeSecao(chave)}</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-              {pill("rgba(255,255,255,0.18)",txt,ts.length+" card"+(ts.length===1?"":"s")+" · "+_nArq+" arquivo"+(_nArq===1?"":"s"),"Cards esperando o OK do cliente")}
-              {_prox&&pill("rgba(255,255,255,0.18)",txt,"próxima publicação "+_fmtData(_prox),"Data de publicação mais próxima")}
+            <div style={{fontWeight:650,color:txt,fontSize:isMob?17:20,letterSpacing:-.2,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{_nomeSecao(chave)}</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+              {/* (15/10 07:17, Gustavo: "tira o próxima publicação e moderniza esse 1 card · 5 arquivos") ícone + número, sem pílula */}
+              <span title="Cards esperando o OK do cliente" style={{display:"inline-flex",alignItems:"center",gap:5,color:txtSub,fontSize:12,fontWeight:600}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+                {ts.length} {ts.length===1?"card":"cards"}</span>
+              <span style={{width:3,height:3,borderRadius:99,background:txtSub,opacity:.6}}/>
+              <span title="Arquivos finais desses cards" style={{display:"inline-flex",alignItems:"center",gap:5,color:txtSub,fontSize:12,fontWeight:600}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                {_nArq} {_nArq===1?"arquivo":"arquivos"}</span>
               {_nAtr>0&&pill("#dc2626","#fff","⚠ "+_nAtr+" atrasado"+(_nAtr===1?"":"s"),"Data de publicação já passou e ainda sem OK")}
             </div>
           </div>
@@ -37940,15 +37946,15 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
               {u&&<span style={{position:"absolute",bottom:10,left:10,background:"#fff",color:cor,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:800,boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}}>{u}</span>}
               {_atrasado(t)&&<span style={{position:"absolute",bottom:10,right:10,background:"#dc2626",color:"#fff",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:800,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}} title="A data de publicação já passou e o cliente ainda não aprovou">⚠ data já passou</span>}
             </div>
-            <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:8,flex:1}}>
               <div onClick={function(){ setOpenCard(t); }} style={{cursor:"pointer"}}>
-                <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t.title||"(sem título)"}</div>
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,lineHeight:1.3,minHeight:"2.6em",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t.title||"(sem título)"}</div>
                 <div style={{color:"#64748b",fontSize:11.5,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                   <span>publica <b style={{color:_atrasado(t)?"#dc2626":"#334155"}}>{_fmtData(_dataPub(t))}</b>{_atrasado(t)&&<span style={{color:"#dc2626",fontWeight:700}}> · atrasado</span>}</span>
                   {resps.length>0&&<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{resps.slice(0,3).map(function(r){ return <UserAvatar key={r.id} user={r} size={18}/>; })}</span>}
                 </div>
               </div>
-              <div style={{display:"flex",gap:8}}>
+              <div style={{display:"flex",gap:8,marginTop:"auto"}}>   {/* (15/10 07:17) "Cliente aprovou" sempre na mesma altura entre os cards */}
                 <button disabled={!!baixando||!fs.length} onClick={function(){ baixar([t],String(t.title||"card").slice(0,30)); }} style={Object.assign(btn("#64748b",false),{flex:"0 0 auto",opacity:(!fs.length||baixando)?.45:1})}>{icoDown}</button>
                 {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou([t]); }} style={Object.assign(btn("#ec4899",true),{flex:1,justifyContent:"center"})}>{icoOk} Cliente aprovou</button>}
               </div>
