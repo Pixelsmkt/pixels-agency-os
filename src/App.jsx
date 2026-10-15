@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 52/52 | Nao editar diretamente
+// Modulos: 53/53 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -2069,6 +2069,7 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"gestao.creditos_ia",   label:"Gastos e créditos IA", desc:"Quanto a IA gastou (hoje, mês, por tela, pessoa e cartão), saldo estimado e teto diário. Padrão: só sócios", padrao:_pxSocio}, // 05/10/2026
     {key:"gestao.crescimento_materiais", label:"Plano de Crescimento › Materiais do negócio", desc:"Ver e mexer nos materiais do negócio (metas, DRE, planejamento) e nos arquivos deles. Padrão: só sócios", padrao:_pxSocio}, // 05/10/2026
     {key:"gestao.crescimento",   label:"Plano de Crescimento", desc:"Materiais do negócio + diagnóstico da IA (gargalos, melhorias, plano 30/60/90). Padrão: só sócios", padrao:_pxSocio}, // 01/10/2026
+    {key:"gestao.reunioes",      label:"Reuniões",             desc:"Gravação ou transcrição do Meet vira ata editável. Padrão: só sócios", padrao:_pxSocio}, // (15/10/2026)
     {key:"gestao.eficiencia",    label:"Eficiência e Resultados", desc:"Placar da IA: copy e arte aprovadas de primeira, resultados e vídeos lidos pela IA de cada cliente. Padrão: fechado (só sócios)", padrao:false}, // 27/09/2026 (v2 à noite: placar)
     {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.administrativo",label:"Administrativo",       desc:"Ver e mexer nos dados da empresa (CNPJ, NF, bancos). Padrão: só sócios", padrao:_pxSocio},
@@ -4025,6 +4026,7 @@ function NavIcon({id,size=18,color}){
   if(id==="edicao_arte")        return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.8"/></svg>; // 29/09/2026
   if(id==="edicao_video")       return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 9.5h18M7.5 5l2 4.5M12.5 5l2 4.5M17.5 5l2 4.5"/><path d="M10.5 12.5v4l3.5-2z"/></svg>; // 28/09/2026
   if(id==="gestao_creditos_ia") return <svg {...p}><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h3"/></svg>; // 05/10/2026
+  if(id==="gestao_reunioes")    return <svg {...p}><rect x="3" y="5" width="18" height="15" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14h5"/></svg>; // 15/10/2026
   if(id==="gestao_crescimento") return <svg {...p}><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>; // 01/10/2026
   if(id==="gestao_eficiencia")  return <svg {...p}><path d="M4 20h16"/><rect x="5" y="12" width="3.5" height="6" rx="1"/><rect x="10.25" y="7" width="3.5" height="11" rx="1"/><rect x="15.5" y="10" width="3.5" height="8" rx="1"/></svg>; // 27/09/2026 (v2: placar)
   if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
@@ -4101,7 +4103,8 @@ const NAV=[
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_eficiencia",    icon:"▥", label:"Eficiência e Resultados"}, // (27/09/2026) v2: placar da IA + vídeos lidos por cliente
     {id:"gestao_creditos_ia",   icon:"$", label:"Gastos e créditos IA"}, // (05/10/2026) gasto da IA, saldo e teto — só sócios
-    {id:"gestao_crescimento",   icon:"◆", label:"Plano de Crescimento"}, // (01/10/2026) materiais do negócio + diagnóstico da IA — só sócios
+    {id:"gestao_crescimento",   icon:"◆", label:"Plano de Crescimento"},
+    {id:"gestao_reunioes",      icon:"◉", label:"Reuniões"}, // (15/10/2026) gravação/Meet → transcrição → ata editável — só sócios // (01/10/2026) materiais do negócio + diagnóstico da IA — só sócios
     {id:"gestao_time",          icon:"◉", label:"Time"},
     {id:"gestao_administrativo", icon:"▤", label:"Administrativo"},
     {id:"gestao_whatsapp",      icon:"◎", label:"WhatsApp Pixels"}, // (24/09/2026) caixa de entrada do Guvi
@@ -62251,7 +62254,8 @@ export default function AgencyOS(){
       case "gestao_operacional":   return _menuBloco("gestao.operacao",p);       // era só sócio
       case "gestao_eficiencia":    return _menuBloco("gestao.eficiencia",p);     // (27/09/2026) nasce fechada
       case "gestao_creditos_ia":   return _menuBloco("gestao.creditos_ia",p);    // (05/10/2026) Gastos e créditos IA — só sócios
-      case "gestao_crescimento":   return _menuBloco("gestao.crescimento",p);    // (01/10/2026) Plano de Crescimento — só sócios
+      case "gestao_crescimento":   return _menuBloco("gestao.crescimento",p);
+      case "gestao_reunioes":      return _menuBloco("gestao.reunioes",p);       // (15/10/2026) Reuniões — só sócios    // (01/10/2026) Plano de Crescimento — só sócios
       case "edicao_arte":          return _menuBloco("criacao.edicao_arte",p);   // (29/09/2026) Criação › Edição de arte — nasce fechada
       case "edicao_video":         return _menuBloco("criacao.edicao_video",p);  // (28/09/2026) Criação › Edição de vídeo — nasce fechada
       case "gestao_portfolio":     return _menuBloco("gestao.portfolio",p);      // era só sócio
@@ -62371,7 +62375,8 @@ export default function AgencyOS(){
       case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks} nav={nav}/>:<NoPerm/>;   // v100 (14/10/2026) M13: a PageOperacional já lia props.nav, mas ninguém passava; agora "Ver aprovações" abre Avaliações
       case "gestao_eficiencia":     return _menuBloco("gestao.eficiencia",effectivePerms)?<PageEficiencia isMob={isMob}/>:<NoPerm/>; // (27/09/2026)
       case "gestao_creditos_ia":    return _menuBloco("gestao.creditos_ia",effectivePerms)?<PageGastosCreditosIA isMob={isMob}/>:<NoPerm/>; // (05/10/2026)
-      case "gestao_crescimento":    return _menuBloco("gestao.crescimento",effectivePerms)?<PagePlanoCrescimento isMob={isMob}/>:<NoPerm/>; // (01/10/2026)
+      case "gestao_crescimento":    return _menuBloco("gestao.crescimento",effectivePerms)?<PagePlanoCrescimento isMob={isMob}/>:<NoPerm/>;
+      case "gestao_reunioes":       return _menuBloco("gestao.reunioes",effectivePerms)?(typeof PageReunioes==="function"?<PageReunioes isMob={isMob}/>:<NoPerm/>):<NoPerm/>; // (15/10/2026) // (01/10/2026)
       case "edicao_arte":           return _menuBloco("criacao.edicao_arte",effectivePerms)?(typeof PageEdicaoArte==="function"?<PageEdicaoArte isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>):<NoPerm/>; // (29/09/2026)
       case "edicao_video":          return _menuBloco("criacao.edicao_video",effectivePerms)?<PageEdicaoVideo isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>; // (28/09/2026)
       case "gestao_portfolio":      return _menuBloco("gestao.portfolio",effectivePerms)?<PagePortfolio {...p}/>:<NoPerm/>;
@@ -164196,6 +164201,341 @@ function PagePlanoCrescimento({isMob}){
           <b style={{color:"#92400e"}}>Pra análise ficar mais certeira, faltam:</b> {R.faltam_dados.filter(Boolean).join(" · ")}
         </div>}
         <div style={{color:"#94a3b8",fontSize:11}}>Feita com {sel.nMateriais||0} material(is) do negócio + o retrato da operação daquele dia.</div>
+      </div>}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   56_reunioes.jsx — Gestão › Reuniões (15/10/2026, Gustavo)
+   "quero ter um desses de poder enviar reuniões em mkv e vc transcrever.. uma aba Reuniões.. talvez em
+   gestão, pra só os sócios.. e que seja editável a Ata da reunião porque as vezes você entende coisas
+   erradas" + "deixar a transcrição editável, e um resumo de IA que a gente possa editar também.. ata moderna,
+   organizada" + "o Meet tem algo de transcrição… linkado aqui dentro? aí a gente teria quem tá falando".
+
+   Como funciona:
+   1) Fonte: gravação (mkv/mp4/mp3…) transcrita no navegador (Whisper num Web Worker — _prodTranscrever, de graça,
+      o arquivo NÃO fica salvo), OU transcrição do Google Meet (Docs "Transcrição – …" no Drive da pixels@, com
+      quem falou o quê — via drive-editavel acao meet_listar/meet_texto), OU texto colado.
+   2) O GPT monta a ATA (JSON: resumo, decisões, ações com responsável/prazo, pendências, pontos de atenção,
+      próximos passos) — askGPTBlocos origem "reuniao_ata", uns R$ 0,50 por reunião longa.
+   3) Tudo editável: transcrição (textarea) e cada seção da ata. "Regerar ata" reescreve a partir da transcrição
+      editada. Salvo na tabela `reunioes` (RLS: só quem tem o bloco gestao.reunioes = sócios).
+═══════════════════════════════════════════════════════════════════════════════ */
+const RE_TABELA="reunioes";
+const RE_ATA_VAZIA={resumo:"",decisoes:[],acoes:[],pendencias:[],atencao:[],proximos:[]};
+const RE_COR="#7c3aed", RE_INK="#0f172a", RE_MUTE="#64748b", RE_SOFT="#94a3b8", RE_BORD="#e2e8f0";
+const RE_FF="'Inter',system-ui,sans-serif";
+const _RE_INP={width:"100%",background:"#f8fafc",border:"1px solid "+RE_BORD,borderRadius:9,padding:"8px 12px",color:RE_INK,fontSize:13,fontWeight:500,outline:"none",fontFamily:RE_FF,boxSizing:"border-box"};
+const _RE_LBL={color:RE_SOFT,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
+
+function _reHoje(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function _reDataBR(iso){ const s=String(iso||"").slice(0,10); const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?(m[3]+"/"+m[2]+"/"+m[1]):s; }
+function _reQuem(){ return (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.name||CURRENT_USER.id))||""; }
+function _reAtaParse(t){ if(!t) return Object.assign({},RE_ATA_VAZIA); if(typeof t==="object") return Object.assign({},RE_ATA_VAZIA,t); try{ return Object.assign({},RE_ATA_VAZIA,JSON.parse(t)); }catch(_){ return Object.assign({},RE_ATA_VAZIA,{resumo:String(t)}); } }
+function _reLinhas(arr){ return (arr||[]).map(function(x){ return typeof x==="string"?x:[x.o_que,x.quem?("— "+x.quem):"",x.prazo?("· "+x.prazo):""].filter(Boolean).join(" "); }).join("\n"); }
+function _reDeLinhas(txt){ return String(txt||"").split("\n").map(function(l){return l.trim();}).filter(Boolean); }
+function _reAcoesDeLinhas(txt){ return _reDeLinhas(txt).map(function(l){ const m=l.match(/^(.*?)(?:\s+[—-]\s+([^·]+?))?(?:\s*·\s*(.+))?$/); return m?{o_que:(m[1]||l).trim(),quem:(m[2]||"").trim(),prazo:(m[3]||"").trim()}:{o_que:l,quem:"",prazo:""}; }); }
+function _reToast(tipo,msg){ if(typeof pixelsToast!=="undefined"&&pixelsToast[tipo]) pixelsToast[tipo](msg); }
+
+/* Ata em texto (copiar / baixar) */
+function _reAtaTexto(r){
+  const a=_reAtaParse(r.ata); const L=[];
+  L.push("ATA — "+(r.titulo||"Reunião")); L.push(_reDataBR(r.data_reuniao)+(r.cliente?(" · "+r.cliente):"")+(r.participantes?(" · "+r.participantes):"")); L.push("");
+  if(a.resumo){ L.push("RESUMO"); L.push(a.resumo); L.push(""); }
+  const bloco=function(t,arr){ if(!(arr||[]).length) return; L.push(t); (arr||[]).forEach(function(x){ L.push("• "+(typeof x==="string"?x:[x.o_que,x.quem?("— "+x.quem):"",x.prazo?("· "+x.prazo):""].filter(Boolean).join(" "))); }); L.push(""); };
+  bloco("DECISÕES",a.decisoes); bloco("AÇÕES",a.acoes); bloco("PENDÊNCIAS",a.pendencias); bloco("PONTOS DE ATENÇÃO",a.atencao); bloco("PRÓXIMOS PASSOS",a.proximos);
+  return L.join("\n").trim();
+}
+
+/* GPT monta a ata a partir da transcrição (editada ou não) */
+async function _reGerarAta(r){
+  if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
+  const txt=String(r.transcricao||"").trim(); if(!txt) throw new Error("sem transcrição");
+  const esqueleto='{"titulo_sugerido":"4 a 8 palavras","resumo":"3 a 6 frases: o que foi a reunião, contexto e o que ficou combinado","decisoes":["uma decisão por item, frase curta"],"acoes":[{"o_que":"tarefa concreta","quem":"nome de quem ficou responsável (ou vazio)","prazo":"data/prazo citado (ou vazio)"}],"pendencias":["o que ficou em aberto, sem dono ou sem resposta"],"atencao":["riscos, insatisfações, coisas que podem dar problema"],"proximos":["próximos passos combinados, em ordem"]}';
+  const r2=await askGPTBlocos({ max_tokens:3500, reasoning_effort:"medium", origem:"reuniao_ata",
+    system:"Você é a secretária executiva da Pixels Marketing Digital (assessoria de marketing e growth, Chapecó/SC). Recebe a transcrição de uma reunião (gravação transcrita automaticamente — pode ter erros de reconhecimento de voz, nomes trocados, frases cortadas) e escreve a ATA: moderna, organizada, direta. Regras: 1) responda SÓ o JSON do esqueleto, com as mesmas chaves, sem ``` nem comentários; 2) não invente: se algo não está na transcrição, não entra; se um nome parecer erro de transcrição, use o que fizer mais sentido pelo contexto e mantenha curto; 3) decisões ≠ ideias discutidas — decisão é o que ficou combinado; 4) ações sempre com verbo no infinitivo e, quando dito, quem e prazo; 5) escreva em português do Brasil, frases curtas, sem enrolação; 6) quando a transcrição tiver quem falou (Nome: fala), use isso pra atribuir decisões e responsáveis.",
+    messages:[{role:"user",content:[
+      {type:"text",text:"ESQUELETO (preencha e devolva este JSON):\n"+esqueleto},
+      {type:"text",text:"REUNIÃO: "+(r.titulo||"(sem título)")+" · "+_reDataBR(r.data_reuniao)+(r.cliente?(" · cliente: "+r.cliente):" · interna")+(r.participantes?(" · participantes: "+r.participantes):"")},
+      {type:"text",text:"TRANSCRIÇÃO:\n"+txt.slice(0,90000)},
+    ]}] });
+  const t=String(((r2&&r2.content&&r2.content[0])||{}).text||"").replace(/```json|```/g,"").trim();
+  const m=t.match(/\{[\s\S]*\}/); if(!m) throw new Error("o GPT não devolveu a ata");
+  const j=JSON.parse(m[0]);
+  return { ata:Object.assign({},RE_ATA_VAZIA,{resumo:j.resumo||"",decisoes:j.decisoes||[],acoes:j.acoes||[],pendencias:j.pendencias||[],atencao:j.atencao||[],proximos:j.proximos||[]}), titulo_sugerido:j.titulo_sugerido||"" };
+}
+
+/* Google Meet: lista as transcrições (Docs) do Drive da pixels@ e puxa o texto */
+async function _reMeetListar(){
+  const sb=window._sb; if(!sb) throw new Error("sem conexão");
+  const r=await sb.functions.invoke("drive-editavel",{body:{acao:"meet_listar"}});
+  if(r.error) throw new Error((r.error&&r.error.message)||"falha ao listar");
+  if(r.data&&r.data.error) throw new Error(r.data.error);
+  return (r.data&&r.data.docs)||[];
+}
+async function _reMeetTexto(fileId){
+  const sb=window._sb; if(!sb) throw new Error("sem conexão");
+  const r=await sb.functions.invoke("drive-editavel",{body:{acao:"meet_texto",file_id:fileId}});
+  if(r.error) throw new Error((r.error&&r.error.message)||"falha ao ler");
+  if(r.data&&r.data.error) throw new Error(r.data.error);
+  return r.data||{};
+}
+
+function _ReBtn({children,onClick,tone,small,disabled,title}){
+  const prim=tone==="primary", dang=tone==="danger";
+  return <button type="button" onClick={onClick} disabled={disabled} title={title} style={{font:"inherit",fontFamily:RE_FF,fontSize:small?11.5:12.5,fontWeight:800,padding:small?"6px 11px":"9px 16px",borderRadius:10,cursor:disabled?"wait":"pointer",border:"1.5px solid "+(prim?RE_COR:dang?"#fecaca":RE_BORD),background:prim?(disabled?"#a78bfa":RE_COR):dang?"#fff":"#fff",color:prim?"#fff":dang?"#dc2626":RE_INK,whiteSpace:"nowrap"}}>{children}</button>;
+}
+function _ReSecao({titulo,cor,children,vazio}){
+  return <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,padding:"14px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{width:8,height:8,borderRadius:99,background:cor||RE_COR}}/><span style={{color:RE_INK,fontWeight:800,fontSize:12.5,letterSpacing:.3,textTransform:"uppercase"}}>{titulo}</span></div>
+    {vazio?<div style={{color:RE_SOFT,fontSize:12.5}}>—</div>:children}
+  </div>;
+}
+
+function PageReunioes({isMob}){
+  const [lista,setLista]=useState(null);
+  const [erro,setErro]=useState("");
+  const [selId,setSelId]=useState("");
+  const [novo,setNovo]=useState(false);
+  const [busca,setBusca]=useState("");
+  const recarregar=useCallback(function(){
+    const sb=window._sb; if(!sb){ setErro("sem conexão"); return; }
+    sb.from(RE_TABELA).select("id,criado_em,quem,titulo,data_reuniao,participantes,cliente,arquivo_nome,duracao_min,ata,ata_editada_em,ata_editada_por").is("deleted_at",null).order("data_reuniao",{ascending:false}).order("criado_em",{ascending:false}).limit(300)
+      .then(function(r){ if(r.error){ setErro(/does not exist|relation/i.test(r.error.message)?"A tabela de reuniões ainda não foi criada no Supabase (precisa rodar a migração reunioes_socios).":r.error.message); setLista([]); } else { setErro(""); setLista(r.data||[]); } });
+  },[]);
+  useEffect(function(){ recarregar(); },[recarregar]);
+  const sel=(lista||[]).find(function(x){return x.id===selId;})||null;
+  const filtrada=(lista||[]).filter(function(r){ const b=busca.trim().toLowerCase(); if(!b) return true; return [r.titulo,r.cliente,r.participantes,_reDataBR(r.data_reuniao)].join(" ").toLowerCase().indexOf(b)>=0; });
+  return <div style={{fontFamily:RE_FF,display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:14,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:RE_INK,fontWeight:800,fontSize:24,letterSpacing:-.5}}>Reuniões</div>
+        <div style={{color:RE_MUTE,fontSize:12,marginTop:3}}>Joga a gravação (mkv, mp4, áudio) ou puxa a transcrição do Google Meet — sai a ata organizada, tudo editável. Só sócios.</div>
+      </div>
+      <_ReBtn tone="primary" onClick={function(){ setNovo(true); setSelId(""); }}>+ Nova reunião</_ReBtn>
+    </div>
+    {erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:10,padding:"10px 14px",fontSize:12.5}}>{erro}</div>}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"300px 1fr",gap:14,alignItems:"start"}}>
+      <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,overflow:"hidden"}}>
+        <div style={{padding:"10px 12px",borderBottom:"1px solid "+RE_BORD}}><input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar reunião…" style={_RE_INP}/></div>
+        {lista===null&&<div style={{padding:20,color:RE_SOFT,fontSize:12.5}}>carregando…</div>}
+        {lista&&!filtrada.length&&<div style={{padding:20,color:RE_SOFT,fontSize:12.5,textAlign:"center"}}>Nenhuma reunião ainda.</div>}
+        <div style={{maxHeight:isMob?280:"70vh",overflowY:"auto"}}>
+          {filtrada.map(function(r){ const on=r.id===selId; const a=_reAtaParse(r.ata); return <div key={r.id} onClick={function(){ setSelId(r.id); setNovo(false); }} style={{padding:"11px 14px",borderBottom:"1px solid #f1f5f9",cursor:"pointer",background:on?"#f5f3ff":"transparent",borderLeft:"3px solid "+(on?RE_COR:"transparent")}}>
+            <div style={{color:RE_INK,fontWeight:700,fontSize:13,lineHeight:1.3}}>{r.titulo||"(sem título)"}</div>
+            <div style={{color:RE_MUTE,fontSize:11,marginTop:3}}>{_reDataBR(r.data_reuniao)}{r.cliente?(" · "+r.cliente):""}{r.duracao_min?(" · "+r.duracao_min+" min"):""}</div>
+            {a.resumo&&<div style={{color:RE_SOFT,fontSize:11,marginTop:4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{a.resumo}</div>}
+          </div>; })}
+        </div>
+      </div>
+      <div>
+        {novo&&<_ReNova isMob={isMob} onCancel={function(){ setNovo(false); }} onSalvo={function(id){ setNovo(false); recarregar(); setSelId(id); }}/>}
+        {!novo&&sel&&<_ReDetalhe key={sel.id} id={sel.id} isMob={isMob} onMudou={recarregar} onExcluiu={function(){ setSelId(""); recarregar(); }}/>}
+        {!novo&&!sel&&<div style={{background:"#fff",border:"1px dashed "+RE_BORD,borderRadius:14,padding:40,textAlign:"center",color:RE_SOFT,fontSize:13}}>Escolhe uma reunião ao lado ou clica em <b>+ Nova reunião</b>.</div>}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ── Nova reunião: fonte (gravação / Meet / texto) → transcrição → ata ── */
+function _ReNova({isMob,onCancel,onSalvo}){
+  const [titulo,setTitulo]=useState("");
+  const [data,setData]=useState(_reHoje());
+  const [cliente,setCliente]=useState("");
+  const [participantes,setParticipantes]=useState("");
+  const [fonte,setFonte]=useState("gravacao");   // gravacao | meet | texto
+  const [grav,setGrav]=useState(null);           // {name,status,msg,pct}
+  const [transcricao,setTranscricao]=useState("");
+  const [arquivoNome,setArquivoNome]=useState("");
+  const [duracao,setDuracao]=useState(0);
+  const [meetDocs,setMeetDocs]=useState(null);
+  const [meetErro,setMeetErro]=useState("");
+  const [meetBusy,setMeetBusy]=useState(false);
+  const [gerando,setGerando]=useState(false);
+  const [salvando,setSalvando]=useState(false);
+  const inRef=useRef(null);
+  const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
+
+  const pegarArquivo=function(file){
+    if(!file) return;
+    const ehMidia=(typeof _prodEhAudio==="function"&&_prodEhAudio(file.name,file.type))||(typeof _prodEhVideo==="function"&&_prodEhVideo(file.name,file.type));
+    if(!ehMidia){ _reToast("warning","Manda a gravação: mkv, mp4, mov, mp3, m4a, wav…"); return; }
+    if(typeof _prodTranscrever!=="function"){ _reToast("error","Transcrição indisponível nesta versão."); return; }
+    setArquivoNome(file.name); if(!titulo) setTitulo(String(file.name).replace(/\.[^.]+$/,"").replace(/[-_]+/g," "));
+    setGrav({name:file.name,status:"transcrevendo",msg:"preparando…",pct:0});
+    const t0=Date.now();
+    _prodTranscrever(file,function(m,pct){ setGrav(function(g){ return Object.assign({},g||{},{msg:m,pct:pct}); }); const mm=String(m||"").match(/de (\d+) min/); if(mm) setDuracao(Number(mm[1])); })
+      .then(function(texto){ setTranscricao(String(texto||"")); setGrav({name:file.name,status:"ok",msg:"",pct:100}); _reToast("success","Transcrita em "+Math.round((Date.now()-t0)/60000)+" min. Confere o texto e manda gerar a ata."); })
+      .catch(function(e){ setGrav({name:file.name,status:"erro",msg:(e&&e.message)||String(e),pct:0}); _reToast("error","Transcrição: "+((e&&e.message)||e)); });
+  };
+  const listarMeet=function(){ setMeetBusy(true); setMeetErro(""); _reMeetListar().then(function(d){ setMeetDocs(d); if(!d.length) setMeetErro("Nenhuma transcrição do Meet encontrada no Drive da pixels@. A transcrição precisa estar ligada na reunião (Meet › Atividades › Transcrição) e a reunião criada pela conta pixels@."); }).catch(function(e){ setMeetErro((e&&e.message)||String(e)); }).finally(function(){ setMeetBusy(false); }); };
+  const usarMeet=function(doc){ setMeetBusy(true); _reMeetTexto(doc.id).then(function(d){ setTranscricao(String(d.texto||"")); setArquivoNome(doc.name||""); if(!titulo) setTitulo(String(doc.name||"").replace(/^(Transcri[çc][ãa]o|Transcript|Notas|Notes)\s*[-–—:]?\s*/i,"").trim()); if(d.data&&!data) setData(d.data); _reToast("success","Transcrição do Meet importada ("+String(d.texto||"").length.toLocaleString("pt-BR")+" caracteres)."); }).catch(function(e){ _reToast("error","Meet: "+((e&&e.message)||e)); }).finally(function(){ setMeetBusy(false); }); };
+
+  const salvar=function(comAta){
+    if(!transcricao.trim()){ _reToast("warning","Precisa da transcrição (gravação, Meet ou texto colado)."); return; }
+    if(grav&&grav.status==="transcrevendo"){ _reToast("warning","Espera a transcrição terminar."); return; }
+    const sb=window._sb; if(!sb){ _reToast("error","sem conexão"); return; }
+    const base={ id:"re-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), criado_em:new Date().toISOString(), quem:_reQuem(), titulo:titulo.trim()||("Reunião "+_reDataBR(data)), data_reuniao:data||_reHoje(), participantes:participantes.trim(), cliente:cliente, arquivo_nome:arquivoNome, duracao_min:duracao||null, transcricao:transcricao, ata:null };
+    const fim=function(reg){ setSalvando(true); sb.from(RE_TABELA).insert(reg).then(function(r){ setSalvando(false); if(r.error){ _reToast("error","Não salvou: "+r.error.message); return; } _reToast("success",reg.ata?"Reunião salva com a ata.":"Reunião salva — gera a ata quando quiser."); onSalvo(reg.id); }); };
+    if(!comAta){ fim(base); return; }
+    setGerando(true);
+    _reGerarAta(base).then(function(g){ const reg=Object.assign({},base,{ata:JSON.stringify(g.ata)}); if(!titulo.trim()&&g.titulo_sugerido) reg.titulo=g.titulo_sugerido; fim(reg); })
+      .catch(function(e){ _reToast("error","Ata: "+((e&&e.message)||e)+" — salvei sem ata."); fim(base); })
+      .finally(function(){ setGerando(false); });
+  };
+  const tab=function(id,label){ const on=fonte===id; return <button key={id} type="button" onClick={function(){ setFonte(id); }} style={{font:"inherit",fontSize:12,fontWeight:800,padding:"7px 13px",borderRadius:99,border:"1.5px solid "+(on?RE_COR:RE_BORD),background:on?"#f5f3ff":"#fff",color:on?RE_COR:RE_MUTE,cursor:"pointer"}}>{label}</button>; };
+  return <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,padding:16,display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{color:RE_INK,fontWeight:800,fontSize:16}}>Nova reunião</div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"2fr 1fr 1fr",gap:10}}>
+      <div><div style={_RE_LBL}>Título</div><input value={titulo} onChange={function(e){setTitulo(e.target.value);}} placeholder="Ex.: Alinhamento Bioter — comissão do digital" style={_RE_INP}/></div>
+      <div><div style={_RE_LBL}>Data</div><input type="date" value={data} onChange={function(e){setData(e.target.value);}} style={_RE_INP}/></div>
+      <div><div style={_RE_LBL}>Cliente</div><select value={cliente} onChange={function(e){setCliente(e.target.value);}} style={_RE_INP}><option value="">Interna / nenhum</option>{clientes.map(function(c){ return <option key={c.id} value={c.name}>{c.name}</option>; })}</select></div>
+    </div>
+    <div><div style={_RE_LBL}>Participantes (opcional)</div><input value={participantes} onChange={function(e){setParticipantes(e.target.value);}} placeholder="Gustavo, Vinicius, Sid (Bioter)…" style={_RE_INP}/></div>
+    <div>
+      <div style={_RE_LBL}>De onde vem a transcrição</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{tab("gravacao","Gravação (mkv, mp4, áudio)")}{tab("meet","Transcrição do Google Meet")}{tab("texto","Colar texto")}</div>
+      {fonte==="gravacao"&&<div>
+        <input ref={inRef} type="file" accept="audio/*,video/*,.mkv,.mp4,.mov,.m4a,.mp3,.wav,.webm" style={{display:"none"}} onChange={function(e){ pegarArquivo(e.target.files&&e.target.files[0]); e.target.value=""; }}/>
+        {!grav&&<div onClick={function(){ inRef.current&&inRef.current.click(); }} onDragOver={function(e){e.preventDefault();}} onDrop={function(e){ e.preventDefault(); pegarArquivo(e.dataTransfer.files&&e.dataTransfer.files[0]); }}
+          style={{border:"1.5px dashed #c4b5fd",background:"#faf5ff",borderRadius:12,padding:"22px",textAlign:"center",color:"#6d28d9",fontSize:13,fontWeight:700,cursor:"pointer"}}>⤓ Arrasta a gravação aqui ou clica pra escolher<div style={{color:RE_SOFT,fontSize:11,fontWeight:500,marginTop:4}}>transcrevo no seu navegador, de graça · o arquivo não fica salvo, só o texto</div></div>}
+        {grav&&<div style={{border:"1px solid "+RE_BORD,borderRadius:12,padding:"12px 14px",fontSize:12.5,display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}><b style={{color:RE_INK,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{grav.name}</b>{grav.status!=="transcrevendo"&&<button type="button" onClick={function(){ setGrav(null); }} style={{font:"inherit",fontSize:11,fontWeight:700,border:"none",background:"transparent",color:RE_SOFT,cursor:"pointer"}}>trocar</button>}</div>
+          {grav.status==="transcrevendo"&&<><div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"baseline"}}><span style={{color:"#6d28d9"}}>{grav.msg}</span><b style={{color:"#4c1d95",fontSize:15}}>{Math.round(grav.pct||0)}%</b></div><div style={{height:7,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}><div style={{width:(grav.pct||0)+"%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",transition:"width .4s"}}/></div><div style={{color:RE_SOFT,fontSize:11}}>pode seguir mexendo no app — a transcrição roda em segundo plano</div></>}
+          {grav.status==="ok"&&<div style={{color:"#16a34a",fontWeight:700}}>✓ transcrita · {transcricao.length.toLocaleString("pt-BR")} caracteres{duracao?(" · ~"+duracao+" min"):""}</div>}
+          {grav.status==="erro"&&<div style={{color:"#dc2626"}}>{grav.msg}</div>}
+        </div>}
+      </div>}
+      {fonte==="meet"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{color:RE_MUTE,fontSize:12.5}}>Lê os Docs “Transcrição – …” que o Meet salva no Drive da pixels@ (vem com quem falou o quê). Precisa da transcrição ligada na reunião e da reunião criada pela conta pixels@.</div>
+        <div><_ReBtn onClick={listarMeet} disabled={meetBusy}>{meetBusy?"buscando…":"Buscar transcrições no Drive"}</_ReBtn></div>
+        {meetErro&&<div style={{color:"#b45309",fontSize:12.5,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"8px 12px"}}>{meetErro}</div>}
+        {meetDocs&&meetDocs.length>0&&<div style={{border:"1px solid "+RE_BORD,borderRadius:12,overflow:"hidden",maxHeight:260,overflowY:"auto"}}>
+          {meetDocs.map(function(d){ return <div key={d.id} style={{display:"flex",gap:10,alignItems:"center",padding:"9px 12px",borderBottom:"1px solid #f1f5f9"}}>
+            <div style={{flex:1,minWidth:0}}><div style={{color:RE_INK,fontWeight:700,fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div><div style={{color:RE_SOFT,fontSize:11}}>{_reDataBR(String(d.modifiedTime||"").slice(0,10))}</div></div>
+            <_ReBtn small onClick={function(){ usarMeet(d); }} disabled={meetBusy}>Usar</_ReBtn>
+          </div>; })}
+        </div>}
+      </div>}
+      {fonte==="texto"&&<div style={{color:RE_MUTE,fontSize:12.5}}>Cola a transcrição na caixa abaixo (de qualquer lugar — Meet, Teams, Zoom, anotações).</div>}
+    </div>
+    <div>
+      <div style={_RE_LBL}>Transcrição (editável — corrige o que o reconhecimento errou antes de gerar a ata)</div>
+      <textarea rows={8} value={transcricao} onChange={function(e){setTranscricao(e.target.value);}} placeholder="A transcrição aparece aqui…" style={Object.assign({},_RE_INP,{resize:"vertical",minHeight:140,lineHeight:1.55,fontFamily:RE_FF})}/>
+      {transcricao&&<div style={{color:RE_SOFT,fontSize:11,marginTop:4}}>{transcricao.length.toLocaleString("pt-BR")} caracteres</div>}
+    </div>
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      <_ReBtn tone="primary" onClick={function(){ salvar(true); }} disabled={gerando||salvando}>{gerando?"O GPT está escrevendo a ata…":"✦ Gerar ata e salvar"}</_ReBtn>
+      <_ReBtn onClick={function(){ salvar(false); }} disabled={gerando||salvando}>Salvar sem ata</_ReBtn>
+      <_ReBtn onClick={onCancel} disabled={gerando||salvando}>Cancelar</_ReBtn>
+      <span style={{color:RE_SOFT,fontSize:11.5}}>ata: GPT, uns R$ 0,20 a R$ 0,60 conforme o tamanho da reunião</span>
+    </div>
+  </div>;
+}
+
+/* ── Detalhe: ata moderna + edição de cada seção + transcrição editável ── */
+function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
+  const [r,setR]=useState(null);
+  const [erro,setErro]=useState("");
+  const [editAta,setEditAta]=useState(false);
+  const [f,setF]=useState(null);               // campos da ata em edição (texto por linha)
+  const [verTrans,setVerTrans]=useState(false);
+  const [trans,setTrans]=useState("");
+  const [transDirty,setTransDirty]=useState(false);
+  const [meta,setMeta]=useState(null);         // {titulo,data_reuniao,cliente,participantes}
+  const [busy,setBusy]=useState(false);
+  const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
+  useEffect(function(){
+    const sb=window._sb; if(!sb) return;
+    sb.from(RE_TABELA).select("*").eq("id",id).maybeSingle().then(function(x){ if(x.error){ setErro(x.error.message); return; } setR(x.data); setTrans(String((x.data&&x.data.transcricao)||"")); setMeta({titulo:x.data.titulo||"",data_reuniao:String(x.data.data_reuniao||"").slice(0,10),cliente:x.data.cliente||"",participantes:x.data.participantes||""}); });
+  },[id]);
+  if(erro) return <div style={{color:"#991b1b",fontSize:12.5}}>{erro}</div>;
+  if(!r) return <div style={{color:RE_SOFT,fontSize:12.5,padding:20}}>carregando…</div>;
+  const a=_reAtaParse(r.ata);
+  const salvarCampos=function(patch,msg){
+    const sb=window._sb; if(!sb) return Promise.resolve();
+    setBusy(true);
+    return sb.from(RE_TABELA).update(patch).eq("id",id).then(function(x){ setBusy(false); if(x.error){ _reToast("error","Não salvou: "+x.error.message); return false; } setR(function(cur){ return Object.assign({},cur,patch); }); if(msg) _reToast("success",msg); onMudou&&onMudou(); return true; });
+  };
+  const comecarEdicao=function(){ setF({resumo:a.resumo||"",decisoes:_reLinhas(a.decisoes),acoes:_reLinhas(a.acoes),pendencias:_reLinhas(a.pendencias),atencao:_reLinhas(a.atencao),proximos:_reLinhas(a.proximos)}); setEditAta(true); };
+  const salvarAta=function(){ const nova={resumo:f.resumo.trim(),decisoes:_reDeLinhas(f.decisoes),acoes:_reAcoesDeLinhas(f.acoes),pendencias:_reDeLinhas(f.pendencias),atencao:_reDeLinhas(f.atencao),proximos:_reDeLinhas(f.proximos)}; salvarCampos({ata:JSON.stringify(nova),ata_editada_em:new Date().toISOString(),ata_editada_por:_reQuem()},"Ata salva.").then(function(ok){ if(ok) setEditAta(false); }); };
+  const regerar=function(){
+    const vai=function(){ setBusy(true); _reGerarAta(Object.assign({},r,{transcricao:trans})).then(function(g){ const patch={ata:JSON.stringify(g.ata),ata_editada_em:null,ata_editada_por:null}; if(transDirty) patch.transcricao=trans; return salvarCampos(patch,"Ata regerada a partir da transcrição."+(transDirty?" Transcrição salva.":"")).then(function(){ setTransDirty(false); setEditAta(false); }); }).catch(function(e){ _reToast("error","Ata: "+((e&&e.message)||e)); }).finally(function(){ setBusy(false); }); };
+    if(typeof pixelsConfirm==="function") pixelsConfirm("Regerar a ata a partir da transcrição"+(transDirty?" (com as suas correções)":"")+"? O que você editou na ata atual é substituído. Custa uns R$ 0,20 a R$ 0,60 de GPT.",{title:"Regerar ata",okText:"Regerar",cancelText:"Cancelar"}).then(function(ok){ if(ok) vai(); }); else if(window.confirm("Regerar a ata?")) vai();
+  };
+  const salvarTrans=function(){ salvarCampos({transcricao:trans},"Transcrição salva.").then(function(ok){ if(ok) setTransDirty(false); }); };
+  const salvarMeta=function(){ salvarCampos({titulo:meta.titulo.trim()||r.titulo,data_reuniao:meta.data_reuniao||r.data_reuniao,cliente:meta.cliente,participantes:meta.participantes.trim()},"Dados da reunião salvos."); };
+  const excluir=function(){ const vai=function(){ salvarCampos({deleted_at:new Date().toISOString()},"Reunião movida pra lixeira.").then(function(ok){ if(ok) onExcluiu&&onExcluiu(); }); }; if(typeof pixelsConfirm==="function") pixelsConfirm("Mover a reunião “"+(r.titulo||"")+"” pra lixeira? Nada é apagado do banco.",{title:"Excluir reunião",okText:"Mover pra lixeira",cancelText:"Cancelar",danger:true}).then(function(ok){ if(ok) vai(); }); else if(window.confirm("Excluir?")) vai(); };
+  const copiar=function(){ try{ navigator.clipboard.writeText(_reAtaTexto(r)); _reToast("success","Ata copiada."); }catch(_){ } };
+  const baixar=function(){ const blob=new Blob([_reAtaTexto(r)+"\n\n— TRANSCRIÇÃO —\n"+String(r.transcricao||"")],{type:"text/plain;charset=utf-8"}); const nome="ata-"+String(r.titulo||"reuniao").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-"+String(r.data_reuniao||"").slice(0,10)+".txt"; if(typeof _eaBaixarArquivo==="function") return _eaBaixarArquivo(blob,nome); const el=document.createElement("a"); el.href=URL.createObjectURL(blob); el.download=nome; document.body.appendChild(el); el.click(); setTimeout(function(){ URL.revokeObjectURL(el.href); el.remove(); },800); };
+  const lista=function(arr,cor){ return <ul style={{margin:0,paddingLeft:18,display:"flex",flexDirection:"column",gap:5}}>{(arr||[]).map(function(x,i){ return <li key={i} style={{color:RE_INK,fontSize:13,lineHeight:1.5}}>{typeof x==="string"?x:<span><span>{x.o_que}</span>{x.quem&&<span style={{marginLeft:6,background:"#f5f3ff",color:"#5b21b6",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700}}>{x.quem}</span>}{x.prazo&&<span style={{marginLeft:6,color:RE_MUTE,fontSize:11.5}}>· {x.prazo}</span>}</span>}</li>; })}</ul>; };
+  const temAta=!!(a.resumo||(a.decisoes||[]).length||(a.acoes||[]).length);
+  const area=function(k,rows,ph){ return <textarea rows={rows||3} value={f[k]} onChange={function(e){ const v=e.target.value; setF(function(c){ return Object.assign({},c,{[k]:v}); }); }} placeholder={ph} style={Object.assign({},_RE_INP,{resize:"vertical",lineHeight:1.5,fontFamily:RE_FF})}/>; };
+  return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,padding:16}}>
+      <div style={{display:"flex",gap:10,alignItems:"flex-start",flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:240}}>
+          <div style={{color:RE_INK,fontWeight:800,fontSize:19,letterSpacing:-.3,lineHeight:1.25}}>{r.titulo||"(sem título)"}</div>
+          <div style={{color:RE_MUTE,fontSize:12.5,marginTop:4}}>{_reDataBR(r.data_reuniao)}{r.cliente?(" · "+r.cliente):" · interna"}{r.participantes?(" · "+r.participantes):""}{r.duracao_min?(" · "+r.duracao_min+" min"):""}</div>
+          <div style={{color:RE_SOFT,fontSize:11,marginTop:3}}>{r.arquivo_nome?("origem: "+r.arquivo_nome+" · "):""}salva por {r.quem||"—"}{r.ata_editada_em?(" · ata editada por "+(r.ata_editada_por||"—")+" em "+_reDataBR(String(r.ata_editada_em).slice(0,10))):""}</div>
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {temAta&&!editAta&&<_ReBtn small onClick={comecarEdicao}>✎ Editar ata</_ReBtn>}
+          <_ReBtn small onClick={regerar} disabled={busy}>{temAta?"↻ Regerar ata":"✦ Gerar ata"}</_ReBtn>
+          {temAta&&<_ReBtn small onClick={copiar}>Copiar</_ReBtn>}
+          <_ReBtn small onClick={baixar}>Baixar .txt</_ReBtn>
+          <_ReBtn small tone="danger" onClick={excluir} disabled={busy}>Excluir</_ReBtn>
+        </div>
+      </div>
+      {meta&&<details style={{marginTop:10}}><summary style={{color:RE_COR,fontSize:12,fontWeight:700,cursor:"pointer"}}>editar título, data, cliente, participantes</summary>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"2fr 1fr 1fr",gap:10,marginTop:10}}>
+          <input value={meta.titulo} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{titulo:v});}); }} style={_RE_INP} placeholder="Título"/>
+          <input type="date" value={meta.data_reuniao} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{data_reuniao:v});}); }} style={_RE_INP}/>
+          <select value={meta.cliente} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{cliente:v});}); }} style={_RE_INP}><option value="">Interna / nenhum</option>{clientes.map(function(c){ return <option key={c.id} value={c.name}>{c.name}</option>; })}{meta.cliente&&!clientes.some(function(c){return c.name===meta.cliente;})&&<option value={meta.cliente}>{meta.cliente}</option>}</select>
+          <input value={meta.participantes} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{participantes:v});}); }} style={Object.assign({},_RE_INP,{gridColumn:isMob?"auto":"span 2"})} placeholder="Participantes"/>
+          <div><_ReBtn small tone="primary" onClick={salvarMeta} disabled={busy}>Salvar dados</_ReBtn></div>
+        </div></details>}
+    </div>
+
+    {!temAta&&!editAta&&<div style={{background:"#faf5ff",border:"1px dashed #c4b5fd",borderRadius:14,padding:20,color:"#6d28d9",fontSize:13,textAlign:"center"}}>Essa reunião ainda não tem ata. Confere a transcrição abaixo e clica em <b>Gerar ata</b>.</div>}
+
+    {temAta&&!editAta&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {a.resumo&&<div style={{background:"linear-gradient(135deg,#f5f3ff,#fff)",border:"1px solid #ddd6fe",borderRadius:14,padding:"16px 18px"}}><div style={{color:"#5b21b6",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:6}}>Resumo</div><div style={{color:RE_INK,fontSize:13.5,lineHeight:1.6}}>{a.resumo}</div></div>}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+        <_ReSecao titulo="Decisões" cor="#16a34a" vazio={!(a.decisoes||[]).length}>{lista(a.decisoes)}</_ReSecao>
+        <_ReSecao titulo="Ações" cor={RE_COR} vazio={!(a.acoes||[]).length}>{lista(a.acoes)}</_ReSecao>
+        <_ReSecao titulo="Pendências" cor="#f59e0b" vazio={!(a.pendencias||[]).length}>{lista(a.pendencias)}</_ReSecao>
+        <_ReSecao titulo="Pontos de atenção" cor="#dc2626" vazio={!(a.atencao||[]).length}>{lista(a.atencao)}</_ReSecao>
+      </div>
+      {(a.proximos||[]).length>0&&<_ReSecao titulo="Próximos passos" cor="#0ea5e9">{lista(a.proximos)}</_ReSecao>}
+    </div>}
+
+    {editAta&&f&&<div style={{background:"#fff",border:"1.5px solid "+RE_COR,borderRadius:14,padding:16,display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{color:RE_INK,fontWeight:800,fontSize:14}}>Editar ata <span style={{color:RE_SOFT,fontWeight:500,fontSize:12}}>— um item por linha · nas ações: “o que — quem · prazo”</span></div>
+      <div><div style={_RE_LBL}>Resumo</div>{area("resumo",4)}</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+        <div><div style={_RE_LBL}>Decisões</div>{area("decisoes",4,"uma por linha")}</div>
+        <div><div style={_RE_LBL}>Ações</div>{area("acoes",4,"Enviar proposta — Gustavo · sexta")}</div>
+        <div><div style={_RE_LBL}>Pendências</div>{area("pendencias",3)}</div>
+        <div><div style={_RE_LBL}>Pontos de atenção</div>{area("atencao",3)}</div>
+      </div>
+      <div><div style={_RE_LBL}>Próximos passos</div>{area("proximos",3)}</div>
+      <div style={{display:"flex",gap:8}}><_ReBtn tone="primary" onClick={salvarAta} disabled={busy}>Salvar ata</_ReBtn><_ReBtn onClick={function(){ setEditAta(false); }}>Cancelar</_ReBtn></div>
+    </div>}
+
+    <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,overflow:"hidden"}}>
+      <div onClick={function(){ setVerTrans(!verTrans); }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",cursor:"pointer"}}>
+        <span style={{color:RE_INK,fontWeight:800,fontSize:12.5,letterSpacing:.3,textTransform:"uppercase"}}>Transcrição <span style={{color:RE_SOFT,fontWeight:500,textTransform:"none",letterSpacing:0}}>· {String(r.transcricao||"").length.toLocaleString("pt-BR")} caracteres · editável</span></span>
+        <span style={{color:RE_COR,fontSize:12,fontWeight:800}}>{verTrans?"fechar ▲":"abrir ▼"}</span>
+      </div>
+      {verTrans&&<div style={{borderTop:"1px solid "+RE_BORD,padding:"12px 16px",display:"flex",flexDirection:"column",gap:8}}>
+        <textarea rows={14} value={trans} onChange={function(e){ setTrans(e.target.value); setTransDirty(true); }} style={Object.assign({},_RE_INP,{resize:"vertical",lineHeight:1.6,fontFamily:RE_FF,minHeight:220})}/>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <_ReBtn small tone="primary" onClick={salvarTrans} disabled={!transDirty||busy}>Salvar transcrição</_ReBtn>
+          <_ReBtn small onClick={regerar} disabled={busy}>↻ Regerar ata com essa transcrição</_ReBtn>
+          {transDirty&&<span style={{color:"#b45309",fontSize:11.5}}>alterações não salvas</span>}
+        </div>
       </div>}
     </div>
   </div>;
