@@ -626,7 +626,7 @@ function fetchMarcosFromSupabase(clientId){
       const localStr=JSON.stringify(remote);
       if(local!==localStr){
         localStorage.setItem("pixels-marcos-"+clientId,localStr);
-        window.dispatchEvent(new CustomEvent("pixels:marcos-updated",{detail:{clientId:clientId}}));
+        // v100 (15/10/2026) M13: aviso "pixels:marcos-updated" apagado (nenhum addEventListener no App).
       }
     }catch(e){}
   });
@@ -639,7 +639,7 @@ function saveMarcos(clientId, marcos){
   // Cache local (resposta instantânea)
   try{
     localStorage.setItem("pixels-marcos-"+clientId,JSON.stringify(arr));
-    window.dispatchEvent(new CustomEvent("pixels:marcos-updated",{detail:{clientId:clientId}}));
+    // v100 (15/10/2026) M13: aviso "pixels:marcos-updated" apagado (nenhum addEventListener no App).
   }catch(e){console.warn("[marcos] cache:",e&&e.message||e);}
   // Sincroniza com Supabase — full replace (simples e seguro pra tabelas pequenas)
   if(!window._sb)return;
@@ -12502,11 +12502,21 @@ function _mopPad(n){ return String(n).padStart(2,"0"); }
 function _mopIso(d){ return d.getFullYear()+"-"+_mopPad(d.getMonth()+1)+"-"+_mopPad(d.getDate()); }
 function _mopHoje(){ return _mopIso(new Date()); }
 function _mopSegunda(d0,semanas){ const d=d0?new Date(d0.getTime()):new Date(); d.setHours(12,0,0,0); const w=(d.getDay()+6)%7; d.setDate(d.getDate()-w+7*(semanas||0)); return d; }
-function _mopDM(iso){ if(!iso) return "—"; const s=String(iso); return s.slice(8,10)+"/"+s.slice(5,7); }
+function _mopDM(iso){ if(!iso) return "—"; const s=String(iso);
+  // v100 (15/10/2026) E5: data dd/mm pelo formatador ÚNICO (_tiaDM, 17e) quando vem AAAA-MM-DD; senão, igual a antes
+  try{ if(typeof _tiaDM==="function"&&/^\d{4}-\d{2}-\d{2}/.test(s)) return _tiaDM(s); }catch(_){ }
+  return s.slice(8,10)+"/"+s.slice(5,7); }
 function _mopHM(iso){ try{ const d=new Date(iso); return _mopPad(d.getHours())+":"+_mopPad(d.getMinutes()); }catch(_){ return ""; } }
 function _mopNome(id){ if(!id) return "—"; const t=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){ return u.id===id; }); return t?t.name:String(id); }
 function _mopTempo(min){ const m=Math.max(0,Math.round(Number(min)||0)); const h=Math.floor(m/60), r=m%60; return h>0?(h+"h"+(r?" "+_mopPad(r)+"min":"")):(r+"min"); }
-function _mopBRL(v){ try{ return Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0}); }catch(_){ return "R$ "+Math.round(v||0); } }
+// v100 (14/10/2026) E5: formatador único de R$ deste módulo, no MESMO formato do _tiaBrl do 17e ("R$ 1.234" / "R$ 6,25").
+// 2º parâmetro opcional (lido por arguments[1], sem mudar a assinatura): 2 = com centavos. Sem ele, igual a antes (sem centavos; vazio = R$ 0).
+function _mopBRL(v){ const c=arguments[1]===2?2:0; const n=Number(v||0); if(!isFinite(n)) return "—";
+  // v100 (15/10/2026) E5 (revisor): negativo com o sinal antes do "R$" ("-R$ 1.234"), como era antes
+  const sg=n<0&&Math.abs(n)>=(c?0.005:0.5)?"-":""; const a=Math.abs(n);
+  // v100 (15/10/2026) E5: chama o formatador ÚNICO (_tiaBrl, 17e) com o número já sem sinal; sem o 17e, formata aqui como antes
+  try{ if(typeof _tiaBrl==="function") return sg+_tiaBrl(a,c); }catch(_){ }
+  try{ return sg+"R$ "+a.toLocaleString("pt-BR",{minimumFractionDigits:c,maximumFractionDigits:c}); }catch(_){ return sg+"R$ "+(c?a.toFixed(2).replace(".",","):Math.round(a)); } }
 const _MOP_DIAS=["","Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
 const _MOP_MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 function _mopEquipe(){ return (typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){ return u&&u.id&&u.status!=="inativo"; }).map(function(u){ return [u.id,u.name]; }); }
@@ -12543,6 +12553,8 @@ function MOpBloco({icone,titulo,sub,chip,acoes,isMob,abertoMob,children,id}){
   const [aberto,setAberto]=useState(function(){ return isMob?!!abertoMob:true; });
   const mexeu=useRef(false);   // se a pessoa abriu/fechou, respeita; senão abre sozinho quando chegar algo urgente (abertoMob)
   useEffect(function(){ if(isMob&&abertoMob&&!mexeu.current) setAberto(true); },[abertoMob,isMob]);
+  // v100 (15/10/2026) CAC duplicado: o 💳 Financeiro da conta (17b) pede para abrir este bloco ("ver 6, 12 ou 18 meses ›")
+  useEffect(function(){ if(!id) return; const h=function(e){ if(e&&e.detail&&e.detail.id===id) setAberto(true); }; window.addEventListener("pixels:mop-abrir",h); return function(){ window.removeEventListener("pixels:mop-abrir",h); }; },[id]);
   return <div data-mop={id||undefined} style={{background:"#fff",border:"1px solid "+MOPC.line,borderRadius:16,fontFamily:MOPC.font,minWidth:0,overflow:"hidden"}}>
     <div onClick={function(){ mexeu.current=true; setAberto(!aberto); }} style={{display:"flex",alignItems:"center",gap:10,padding:isMob?"11px 12px":"13px 16px",cursor:"pointer",flexWrap:"wrap",userSelect:"none"}}>
       <span style={{width:30,height:30,borderRadius:9,background:MOPC.roxoBg,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{icone}</span>
@@ -12671,6 +12683,8 @@ function MidiaOpCliente({mc,isMob,canEdit,currentUser,viewUser,perms}){
       <MOpTempo mc={mc} isMob={isMob} vu={vu}/>
       <MOpFechamento mc={mc} isMob={isMob}/>
     </div>
+    {/* v100 (14/10/2026) P2_12_07/P2_6_12: visita, orçamento e venda da semana + custo por cliente em ciclo longo */}
+    <MOpEtapasVenda mc={mc} isMob={isMob} canEdit={canEdit} vu={vu}/>
   </div>;
 }
 
@@ -12964,7 +12978,7 @@ function MOpFechamento({mc,isMob}){
   const temUlt=rows.some(function(w){ return String(w.week_start)===ultSeg; });
   return <MOpBloco id="fechamento" icone="📅" titulo="Fechamento da semana" isMob={isMob}
     chip={!st.carregando&&!st.erro?(temUlt?_mopChip("semana "+_mopDM(ultSeg)+" fechada",MOPC.ok,MOPC.okBg):_mopChip("semana "+_mopDM(ultSeg)+" sem fechamento",MOPC.warn,MOPC.warnBg)):null}
-    sub="Fecha sozinho toda segunda às 9h com os números da Meta. Falta só o que a Meta não traz: leads bons, gasto do Google e observação (botão “Editar fechamento” no placar acima).">
+    sub="Fecha sozinho toda segunda às 9h com os números da Meta. Falta só o que a Meta não traz: leads bons, gasto do Google e observação (botão “Editar fechamento” no placar acima). Visitas, orçamentos e vendas: no bloco 💰 logo abaixo.">
     {st.carregando&&_mopVazio("Lendo…")}
     {st.erro&&_mopErro(st)}
     {!st.carregando&&!st.erro&&!rows.length&&_mopVazio("Nenhuma semana fechada ainda.")}
@@ -12976,6 +12990,198 @@ function MOpFechamento({mc,isMob}){
         <span style={{color:MOPC.mut,fontSize:11,textAlign:isMob?"left":"right",gridColumn:isMob?"1 / -1":"auto"}}>{auto?"🤖 fechado sozinho":"✍️ "+(w.updated_by||"equipe")}{isMob&&auto?" · falta leads bons":""}</span>
       </div>; })}
       {soSistema>0&&<div style={{fontSize:11.5,color:MOPC.warn,marginTop:4}}>{soSistema} de {rows.length} semanas só com o fechamento automático — ninguém lançou os leads bons.</div>}
+    </div>}
+  </MOpBloco>;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   v100 (14/10/2026) P2_12_07 + P2_6_12: 💰 Visita, orçamento e venda (Cliente › Gestão, logo abaixo do 📅 Fechamento da semana).
+   Sem aba nova. Duas partes:
+     1) P2_12_07 jeito simples aprovado: os números da semana digitados (visitas, orçamentos, vendas e valor das vendas)
+        e o app divide o gasto por etapa (custo por visita, por orçamento, por venda e o retorno).
+        Servidor (C5b): midia_fechamento_funil_ler(p_client, p_semanas) e midia_fechamento_funil_salvar(p_client, p_week_start,
+        p_visitas, p_orcamentos, p_vendas, p_valor_vendas). Se não existirem, mostra "ainda não ligado".
+     2) P2_6_12 ciclo longo: CAC e tempo para se pagar olhando 6, 12 ou 18 meses (ads_roi_cliente já existe; antes a
+        tela só olhava 1 mês). Margem do cliente: ads_cac_margem_salvar (C4b, só sócio).
+   Lê 1 vez ao abrir (e no clique de Atualizar / depois de salvar). Nada grava sem clique. Sem IA. Nada vai para o Portal.
+   ───────────────────────────────────────────────────────────────────────────── */
+function _mopNumIn(s){ const t=String(s==null?"":s).replace(/[^0-9,.-]/g,""); if(!t) return null; const n=t.indexOf(",")>=0?Number(t.replace(/\./g,"").replace(",",".")):/^-?\d{1,3}(\.\d{3})+$/.test(t)?Number(t.replace(/\./g,"")):Number(t); return isFinite(n)?n:null; }
+function _mopPl(n,um,varios){ const x=Number(n)||0; return String(x).replace(".",",")+" "+(x===1?um:varios); }
+function _mopBRLc(v){ return _mopBRL(v,Math.abs(Number(v))<100?2:0); }   // v100 (14/10/2026) E5: custo pequeno (por lead) com centavos
+// v100 (15/10/2026) CAC duplicado: UMA leitura do ads_roi_cliente por cliente e janela, usada por este bloco (03) e pelo
+// 💳 Financeiro da conta (17b). Guarda a resposta por 60 s (erro não fica guardado), então os dois mostram o MESMO número.
+// Só leitura, sem IA. A janela escolhida aqui (6/12/18 meses) fica em window._pxCacMeses[cliente] e avisa o 17b ("pixels:cac-meses").
+function _pxRoiCliLer(cid,meses){
+  const c=(window._pxRoiCache=window._pxRoiCache||{}); const k=String(cid)+"|"+Number(meses); const x=c[k];
+  if(x&&Date.now()-x.t<60000) return x.p;
+  const p=_bibRpc("ads_roi_cliente",{p_client:cid,p_meses:Number(meses)}); c[k]={t:Date.now(),p:p};
+  p.then(function(r){ if(!r||!r.ok){ if(c[k]&&c[k].p===p) delete c[k]; } }); return p;
+}
+function _pxRoiCliLimpar(cid){ try{ const c=window._pxRoiCache||{}; Object.keys(c).forEach(function(k){ if(k.indexOf(String(cid)+"|")===0) delete c[k]; }); window.dispatchEvent(new CustomEvent("pixels:cac-meses",{detail:{cid:cid,recarregar:true}})); }catch(_){ } }
+function useMOpRoi(cid,meses,ligado){
+  const [st,setSt]=useState({carregando:!!ligado}); const [v,setV]=useState(0);
+  useEffect(function(){ let vivo=true;
+    if(!ligado||!cid){ setSt({carregando:false,ok:false,falta:true}); return; }
+    setSt(function(s){ return Object.assign({},s,{carregando:true}); });
+    _pxRoiCliLer(cid,meses).then(function(r){ if(vivo) setSt(Object.assign({carregando:false},r)); });
+    return function(){ vivo=false; }; },[cid,meses,ligado,v]);
+  return [st,function(){ _pxRoiCliLimpar(cid); setV(function(x){ return x+1; }); }];
+}
+function _mopCusto(gasto,qtd){ const g=Number(gasto), q=Number(qtd); return (g>0&&q>0)?g/q:null; }
+function _mopCartao(rot,val,sub,cor){ return <div style={{border:"1px solid "+MOPC.line,borderRadius:12,padding:"9px 11px",minWidth:0,background:"#fff"}}>
+  <div style={{fontSize:10.5,fontWeight:800,color:MOPC.mut,textTransform:"uppercase",letterSpacing:.3}}>{rot}</div>
+  <div style={{fontSize:17,fontWeight:900,color:cor||MOPC.ink,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
+  {sub&&<div style={{fontSize:11,color:MOPC.mut,marginTop:1,lineHeight:1.35}}>{sub}</div>}
+</div>; }
+function MOpEtapasVenda({mc,isMob,canEdit,vu}){
+  const cid=mc.client_id;
+  const socio=_mopSocio(vu);
+  // 1) números da semana (P2_12_07)
+  // servidor C5b: midia_fechamento_funil_ler(p_client, p_semanas) / midia_fechamento_funil_salvar(p_client, p_week_start, p_visitas, p_orcamentos, p_vendas, p_valor_vendas)
+  const [et,recEt]=useMOpRpc("midia_fechamento_funil_ler",{p_client:cid,p_semanas:13},[cid]);
+  const [sem,setSem]=useState("");
+  const [form,setForm]=useState({visitas:"",orcamentos:"",vendas:"",valor:""});
+  const [gravando,setGravando]=useState(false);
+  const ligado=!!et.ok;
+  const d=ligado?(et.data||{}):{};
+  const linhas=Array.isArray(d.semanas)?d.semanas.slice().sort(function(a,b){ return String(b.week_start).localeCompare(String(a.week_start)); }):[];
+  // só semanas que JÁ têm fechamento: lançar numa semana ainda aberta criaria a linha antes do fechamento automático de segunda
+  // (ele pula semana que já tem linha de alguém da equipe) e a semana ficaria sem gasto e sem leads
+  const semanasOp=linhas.map(function(w){ return String(w.week_start).slice(0,10); });
+  const semAt=sem||semanasOp[0]||"";
+  const tot0=d.total||{};
+  const tot={gasto:tot0.investimento,leads:tot0.leads,visitas:tot0.visitas,orcamentos:tot0.orcamentos,vendas:tot0.vendas,valor_vendas:tot0.valor_vendas,custo_lead:tot0.custo_lead,custo_visita:tot0.custo_visita,custo_orcamento:tot0.custo_orcamento,custo_venda:tot0.custo_venda,retorno:tot0.retorno_vezes,semanas:tot0.semanas_com_funil};
+  // v100 (15/10/2026) P2_12_07 (revisor): o _ler não devolve pode_editar; sem ele, a tela pergunta ao servidor a MESMA regra do salvar
+  // (_px_pode_midia_editar, só leitura, 1x ao abrir). Ex.: a Hellen lê o bloco mas não lança. Erro na pergunta = vale o canEdit (o salvar recusa de qualquer jeito).
+  const _pergPerm=ligado&&canEdit&&d.pode_editar===undefined;
+  const [pmE]=useMOpRpc(_pergPerm?"_px_pode_midia_editar":null,{},[cid,_pergPerm]);
+  const [semPerm,setSemPerm]=useState(false);   // o salvar respondeu "Sem permissão."
+  const podeSrv=d.pode_editar!==undefined?d.pode_editar!==false:(pmE.ok?pmE.data!==false:!pmE.carregando);
+  const pode=ligado&&canEdit&&podeSrv&&!semPerm&&!!semAt;
+  useEffect(function(){   // ao trocar a semana (ou chegar a leitura), preenche com o que já foi lançado
+    const w=linhas.find(function(x){ return String(x.week_start).slice(0,10)===semAt; })||{};
+    const f=function(v){ return v==null?"":String(v); };
+    setForm({visitas:f(w.visitas),orcamentos:f(w.orcamentos),vendas:f(w.vendas),valor:w.valor_vendas==null?"":String(w.valor_vendas).replace(".",",")});
+  },[semAt,et.data]);
+  const salvar=async function(){
+    if(gravando||!pode) return;
+    const args={p_client:cid,p_week_start:semAt,p_visitas:_mopNumIn(form.visitas),p_orcamentos:_mopNumIn(form.orcamentos),p_vendas:_mopNumIn(form.vendas),p_valor_vendas:_mopNumIn(form.valor)};
+    if([args.p_visitas,args.p_orcamentos,args.p_vendas].some(function(x){ return x!=null&&(x<0||Math.round(x)!==x); })){ _mopToast("error","Visitas, orçamentos e vendas são números inteiros (0 ou mais)."); return; }
+    if(args.p_valor_vendas!=null&&args.p_valor_vendas<0){ _mopToast("error","Valor das vendas não pode ser negativo."); return; }
+    if(args.p_vendas>0&&args.p_valor_vendas==null){ _mopToast("error","Informe o valor das vendas (pode ser aproximado)."); return; }
+    setGravando(true);
+    const r=await _mopRpc("midia_fechamento_funil_salvar",args);
+    setGravando(false);
+    if(!r.ok){ if(/sem permiss/i.test(String(r.erro||""))) setSemPerm(true); _mopToast("error",r.falta?"Ainda não ligado no servidor.":"Não salvou: "+String(r.erro||"").slice(0,120)); return; }
+    _mopToast("success","Semana "+_mopDM(semAt)+" salva."); recEt();
+  };
+  // 2) ciclo longo (P2_6_12) — só quem pode editar a mídia (igual ao 💳 Financeiro da conta)
+  const [meses,setMeses0]=useState(function(){ const m=window._pxCacMeses&&window._pxCacMeses[cid]; return m===6||m===18?m:12; });
+  // v100 (15/10/2026) CAC duplicado: a janela escolhida aqui vale também para o 💳 Financeiro da conta (17b), que mostra o mesmo CAC
+  const setMeses=function(m){ try{ (window._pxCacMeses=window._pxCacMeses||{})[cid]=m; window.dispatchEvent(new CustomEvent("pixels:cac-meses",{detail:{cid:cid,meses:m}})); }catch(_){ } setMeses0(m); };
+  const [roi,recRoi]=useMOpRoi(cid,meses,!!canEdit);   // v100 (15/10/2026) CAC duplicado: leitura única (_pxRoiCliLer)
+  const R=roi.ok?(roi.data||{}):null;
+  const [mg,setMg]=useState(null);   // edição da margem (sócio)
+  const salvarMargem=async function(){
+    const v=_mopNumIn(mg); if(v==null||v<=0||v>100){ _mopToast("error","Margem entre 1 e 100%."); return; }
+    setGravando(true); const r=await _mopRpc("ads_cac_margem_salvar",{p_client:cid,p_margem_pct:v}); setGravando(false);
+    if(!r.ok){ _mopToast("error",r.falta?"Margem por cliente ainda não ligada no servidor.":"Não salvou: "+String(r.erro||"").slice(0,120)); return; }
+    _mopToast("success","Margem salva."); setMg(null); recRoi();
+  };
+  const vendasJan=R?(Number(R.vendas_funil)||0)+(Number(R.vendas_portal)||0):0;
+  const ciclo=R&&R.ciclo_medio_dias!=null?Number(R.ciclo_medio_dias):null;
+  const cicloTxt=ciclo==null?"—":(ciclo>=60?(Math.round(ciclo/30*10)/10).toString().replace(".",",")+" meses":Math.round(ciclo)+" dias");
+  // v100 (14/10/2026) P2_6_12: o servidor conta o payback_meses do 1º mês da JANELA; se os primeiros meses não tiveram anúncio,
+  // a tela conta do 1º mês COM gasto (por_mes), para não dizer "8 meses" de um anúncio que se pagou no 1º mês.
+  const _pm=R&&Array.isArray(R.por_mes)?R.por_mes:[];
+  const _pm0=_pm.findIndex(function(x){ return Number(x.gasto)>0; });
+  const pbM=R&&R.payback_meses!=null?Math.max(1,Number(R.payback_meses)-(_pm0>0?_pm0:0)):null;
+  const pbDesde=_pm0>=0&&_pm[_pm0]?String(_pm[_pm0].mes||""):"";
+  const chip=ligado?(tot.custo_venda!=null?_mopChip(_mopBRLc(tot.custo_venda)+" por venda",MOPC.ok,MOPC.okBg):(tot.semanas>0?_mopChip("sem venda lançada",MOPC.warn,MOPC.warnBg):_mopChip("falta lançar",MOPC.warn,MOPC.warnBg))):null;
+  const lin={display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(6,minmax(0,1fr))",gap:8};
+  const cmp=function(k,rot,ph){ return <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,fontWeight:800,color:MOPC.mut,minWidth:0}}>{rot}
+    <input inputMode="decimal" value={form[k]} disabled={!pode} placeholder={ph} onChange={function(e){ const o={}; o[k]=e.target.value; setForm(Object.assign({},form,o)); }} style={Object.assign({},_MOP_IN,{width:"100%",background:pode?"#fff":"#fafafa"})}/></label>; };
+  return <MOpBloco id="etapas-venda" icone="💰" titulo="Visita, orçamento e venda" isMob={isMob} chip={chip}
+    sub="O gasto o app já sabe. Quantos leads viraram visita, orçamento e venda só o cliente sabe: pergunte no fechamento da semana e lance aqui. O app divide o gasto por etapa."
+    acoes={<button onClick={function(){ recEt(); if(canEdit) recRoi(); }} style={_mopBtn("gh")}>Atualizar</button>}>
+    {/* parte 1 · números da semana */}
+    <div style={{fontWeight:900,fontSize:13,color:MOPC.ink,marginBottom:6}}>Números da semana</div>
+    {et.carregando&&_mopVazio("Lendo do servidor…")}
+    {!et.carregando&&!ligado&&(et.falta?_mopFalta("midia_fechamento_funil_ler","Exemplo: semana 06/10 · 3 visitas, 1 orçamento, 0 vendas. Em 3 meses: R$ 9.000 de gasto, 12 visitas, 4 orçamentos e 1 venda de R$ 180 mil = R$ 750 por visita e o investimento pago 20 vezes."):_mopErro(et,recEt))}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end",marginTop:8}}>
+      <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,fontWeight:800,color:MOPC.mut}}>Semana
+        <select value={semAt} disabled={!semanasOp.length} onChange={function(e){ setSem(e.target.value); }} style={_MOP_IN}>{semanasOp.length?semanasOp.map(function(s){ return <option key={s} value={s}>{"seg "+_mopDM(s)+(s===_mopIso(_mopSegunda(null,-1))?" (passada)":"")}</option>; }):<option value="">nenhuma semana fechada</option>}</select></label>
+      <div style={{flex:"1 1 320px",display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8}}>
+        {cmp("visitas","Visitas","0")}{cmp("orcamentos","Orçamentos","0")}{cmp("vendas","Vendas","0")}{cmp("valor","Valor das vendas (R$)","0,00")}
+      </div>
+      {pode?<button onClick={salvar} disabled={gravando} style={_mopBtn("pri")}>{gravando?"Salvando…":"Salvar semana"}</button>
+        :<span style={{fontSize:11.5,color:MOPC.mut,paddingBottom:8}}>{ligado?(!semAt?"A semana aparece aqui depois do fechamento de segunda.":canEdit?(_pergPerm&&pmE.carregando?"Conferindo permissão…":"Você vê os números, mas não tem permissão para lançar."):"Só quem edita a mídia lança."):"Salvar fica disponível quando o servidor ligar."}</span>}
+    </div>
+    {ligado&&<div style={{marginTop:12}}>
+      <div style={{fontSize:11.5,color:MOPC.mut,marginBottom:6}}>Últimos 3 meses{d.desde?" (desde "+_mopDM(d.desde)+")":""} · {tot.semanas?("conta só as "+tot.semanas+" semana"+(tot.semanas>1?"s":"")+" com números lançados"):"nenhuma semana lançada ainda"}. Venda de agro demora: olhe 8 a 12 semanas.</div>
+      <div style={lin}>
+        {_mopCartao("Gasto",tot.semanas>0&&tot.gasto!=null?_mopBRLc(tot.gasto):"—",tot.semanas>0?(tot.leads!=null?_mopPl(tot.leads,"lead","leads")+" nas semanas lançadas":null):"nas semanas lançadas")}
+        {_mopCartao("Por lead",tot.custo_lead!=null?_mopBRLc(tot.custo_lead):"—")}
+        {_mopCartao("Por visita",tot.custo_visita!=null?_mopBRLc(tot.custo_visita):"—",tot.visitas!=null?_mopPl(tot.visitas,"visita","visitas"):"falta lançar")}
+        {_mopCartao("Por orçamento",tot.custo_orcamento!=null?_mopBRLc(tot.custo_orcamento):"—",tot.orcamentos!=null?_mopPl(tot.orcamentos,"orçamento","orçamentos"):"falta lançar")}
+        {_mopCartao("Por venda",tot.custo_venda!=null?_mopBRLc(tot.custo_venda):"—",tot.vendas!=null?_mopPl(tot.vendas,"venda","vendas"):"falta lançar")}
+        {_mopCartao("Retorno",tot.retorno!=null?(String(Math.round(Number(tot.retorno)*10)/10).replace(".",",")+"×"):"—",tot.valor_vendas>0?_mopBRLc(tot.valor_vendas)+" vendidos":"falta lançar venda",tot.retorno>=1?MOPC.ok:null)}
+      </div>
+      {linhas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:4,marginTop:10}}>
+        {linhas.slice(0,isMob?4:8).map(function(w){ const ws=String(w.week_start).slice(0,10); const lanc=w.visitas!=null||w.orcamentos!=null||w.vendas!=null; return <div key={ws} onClick={function(){ setSem(ws); }} style={{display:"grid",gridTemplateColumns:isMob?"52px minmax(0,1fr)":"62px 130px minmax(0,1fr) 160px",gap:8,alignItems:"center",fontSize:12,border:"1px solid "+(ws===semAt?MOPC.roxoL:MOPC.line2),background:ws===semAt?MOPC.roxoBg:"#fff",borderRadius:9,padding:"5px 9px",cursor:"pointer"}}>
+          <b>{_mopDM(w.week_start)}</b>
+          {isMob?null:<span style={{color:MOPC.ink2}}>{_mopBRLc(w.investimento)} · {Number(w.leads)||0} leads</span>}
+          <span style={{color:lanc?MOPC.ink:MOPC.warn}}>{lanc?(_mopPl(w.visitas,"visita","visitas")+" · "+_mopPl(w.orcamentos,"orçamento","orçamentos")+" · "+_mopPl(w.vendas,"venda","vendas")):"falta lançar"}</span>
+          {isMob?null:<span style={{color:MOPC.mut,fontSize:11,textAlign:"right"}}>{[w.valor_vendas>0?_mopBRLc(w.valor_vendas):"",w.digitado_por?"✍️ "+w.digitado_por:""].filter(Boolean).join(" · ")}</span>}
+        </div>; })}
+      </div>}
+    </div>}
+    {/* parte 2 · ciclo longo (P2_6_12) */}
+    {canEdit&&<div data-mop="ciclo-longo" style={{marginTop:14,paddingTop:12,borderTop:"1px dashed "+MOPC.line}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+        <span style={{fontWeight:900,fontSize:13,color:MOPC.ink}}>Custo para conquistar um cliente (ciclo longo)</span>
+        <span style={{display:"inline-flex",background:MOPC.line2,borderRadius:9,padding:2,gap:2}}>{[6,12,18].map(function(m){ const on=meses===m; return <button key={m} onClick={function(){ setMeses(m); }} style={{border:0,background:on?"#fff":"transparent",boxShadow:on?"0 1px 3px rgba(15,13,26,.10)":"none",borderRadius:7,padding:"4px 10px",fontSize:12,fontWeight:on?800:600,color:on?MOPC.ink:MOPC.ink2,cursor:"pointer",fontFamily:MOPC.font,minHeight:0}}>{m} meses</button>; })}</span>
+      </div>
+      <div style={{fontSize:11.5,color:MOPC.mut,marginBottom:8,lineHeight:1.45}}>No agro a venda leva de 6 a 18 meses. Olhar só o mês faz o anúncio parecer que não dá retorno.</div>
+      {roi.carregando&&_mopVazio("Lendo do servidor…")}
+      {!roi.carregando&&!roi.ok&&(roi.falta?_mopFalta("ads_roi_cliente"):_mopErro(roi,recRoi))}
+      {R&&<div>
+        <div style={lin}>
+          {_mopCartao("Gasto em "+meses+" meses",_mopBRLc(R.gasto),R.leads!=null?(Number(R.leads)||0)+" leads":null)}
+          {_mopCartao("Vendas marcadas",String(vendasJan),[R.vendas_portal>0?"funil "+(Number(R.vendas_funil)||0)+" · "+(R.fontes_vendas!=null?"portal e planilha ":"portal ")+(Number(R.vendas_portal)||0):(R.fontes_vendas?String(R.fontes_vendas):"pelo funil de leads"),   // v100 (15/10/2026) P2_6_12 (revisor): C4b agora soma a planilha nos totais (fontes_vendas)
+            // v100 (14/10/2026) P2_6_12: vendas_do_periodo (C4b) = vendas dos leads que ENTRARAM nesta janela (venda ligada ao mês do anúncio)
+            R.vendas_do_periodo!=null?(Number(R.vendas_do_periodo)||0)+" de leads desta janela":null].filter(Boolean).join(" · "))}
+          {_mopCartao("Custo por cliente (CAC)",R.cac!=null?_mopBRLc(R.cac):"—",R.ticket_medio!=null?"ticket médio "+_mopBRLc(R.ticket_medio):null)}
+          {_mopCartao("Lead até a venda",cicloTxt,"tempo médio")}
+          {_mopCartao("Retorno",R.retorno!=null?String(Math.round(Number(R.retorno)*10)/10).replace(".",",")+"×":"—",R.receita_funil>0||R.receita_portal>0?_mopBRLc((Number(R.receita_funil)||0)+(Number(R.receita_portal)||0))+" vendidos":null,R.retorno>=1?MOPC.ok:null)}
+          {pbM!=null?_mopCartao("Se paga em",_mopPl(Math.round(pbM*10)/10,"mês","meses"),(pbDesde?"contando de "+pbDesde.slice(5,7)+"/"+pbDesde.slice(2,4)+" (1º mês com anúncio)":"contando do 1º mês da janela")+", com a margem "+(R.margem_origem==="cliente"?"do cliente":"geral")+(R.margem_pct!=null?" ("+String(R.margem_pct).replace(".",",")+"%)":""),MOPC.ok)
+            :_mopCartao("Se paga com",R.payback_vendas!=null?String(Math.round(Number(R.payback_vendas)*10)/10).replace(".",",")+" venda":"—",R.payback_vendas!=null?(Number(R.payback_vendas)<=1?"a margem de 1 venda já paga o CAC":"vendas com margem "+String(R.margem_pct).replace(".",",")+"% para pagar 1 cliente"):(R.margem_pct==null?"precisa da margem do cliente":"precisa de venda marcada"))}
+        </div>
+        {(R.obs||!R.suficiente)&&<div style={{fontSize:11.5,color:MOPC.warn,marginTop:8,lineHeight:1.45}}>{R.obs||"Menos de 3 vendas no período: o número ainda oscila muito."}{R.obs&&!R.suficiente&&vendasJan>0?" Menos de 3 vendas: o número ainda oscila muito.":""}</div>}
+        {/* v100 (14/10/2026) P2_6_12: mês a mês (por_mes do C4b): gasto acumulado × margem acumulada das vendas. Retraído; abre no clique. */}
+        {Array.isArray(R.por_mes)&&R.por_mes.length>0&&<details style={{marginTop:8}}>
+          <summary style={{cursor:"pointer",fontSize:12,fontWeight:800,color:MOPC.ink2}}>Ver mês a mês</summary>
+          {(function(){ const pm=_pm0>0?R.por_mes.slice(_pm0):R.por_mes; const mx=Math.max.apply(null,pm.map(function(x){ return Math.max(Number(x.gasto_acumulado)||0,Number(x.margem_acumulada)||0); }).concat([1]));
+            return <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:6}}>
+              <div style={{fontSize:11,color:MOPC.mut,lineHeight:1.4}}>Barra cinza = gasto acumulado. Barra verde = margem acumulada das vendas{R.margem_pct==null?" (aparece quando a margem for informada)":""}. Quando a verde passa a cinza, o anúncio se pagou.{_pm0>0&&pbDesde?" Antes de "+pbDesde.slice(5,7)+"/"+pbDesde.slice(2,4)+" não teve anúncio.":""}</div>
+              {pm.map(function(x){ const g=Number(x.gasto_acumulado)||0, m=x.margem_acumulada==null?null:Number(x.margem_acumulada)||0; const nm=String(x.mes||"");
+                return <div key={nm} style={{display:"grid",gridTemplateColumns:isMob?"46px minmax(0,1fr)":"52px minmax(0,1fr) 230px",gap:8,alignItems:"center",fontSize:11.5}}>
+                  <b style={{color:MOPC.ink2}}>{nm.slice(5,7)+"/"+nm.slice(2,4)}</b>
+                  <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                    <div style={{height:6,borderRadius:3,background:"#a8b0c2",width:Math.max(1,g/mx*100)+"%"}}/>
+                    {m!=null&&<div style={{height:6,borderRadius:3,background:MOPC.ok,width:Math.max(m>0?1:0,m/mx*100)+"%"}}/>}
+                  </div>
+                  {isMob?null:<span style={{color:MOPC.mut,textAlign:"right"}}>{_mopBRL(x.gasto)} gasto · {_mopPl(Number(x.vendas)||0,"venda","vendas")}{Number(x.receita)>0?" · "+_mopBRL(x.receita):""}</span>}
+                </div>; })}
+              <div style={{fontSize:11,color:MOPC.mut}}>Aqui a venda entra no mês em que foi marcada (funil, Portal e planilha de vendas).</div>
+            </div>; })()}
+        </details>}
+        {socio&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8,fontSize:12,color:MOPC.ink2}}>
+          {mg===null?<button onClick={function(){ setMg(R.margem_pct!=null?String(R.margem_pct).replace(".",","):""); }} style={_mopBtn("sm")}>{R.margem_pct!=null?"Mudar a margem do cliente":"Informar a margem do cliente"}</button>
+            :<span style={{display:"inline-flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>Margem do cliente <input value={mg} inputMode="decimal" onChange={function(e){ setMg(e.target.value); }} placeholder="ex.: 25" style={Object.assign({},_MOP_IN,{width:70})}/>% <button onClick={salvarMargem} disabled={gravando} style={_mopBtn("pri")}>Salvar</button><button onClick={function(){ setMg(null); }} style={_mopBtn("gh")}>Cancelar</button></span>}
+          <span style={{fontSize:11,color:MOPC.mut}}>{R.margem_pct!=null?(R.margem_origem==="cliente"?"margem deste cliente: ":"margem geral da agência (este cliente não tem a dele): ")+String(R.margem_pct).replace(".",",")+"% · ":""}só sócio · usada para dizer em quanto tempo o anúncio se paga</span>{/* v100 (14/10/2026) P2_6_12: margem_origem do C4b */}
+        </div>}
+      </div>}
     </div>}
   </MOpBloco>;
 }
@@ -44737,7 +44943,21 @@ function _f4vRpc(fn,args){
 function _f4vEdge(nome,body){
   const sb=window._sb; if(!sb||!sb.functions||!sb.functions.invoke) return Promise.resolve({_erro:"Sem conexão com o servidor."});
   return Promise.resolve(sb.functions.invoke(nome,{body:body||{}})).then(function(r){
-    if(r&&r.error){ const m=String(r.error.message||r.error); if(/not found|404/i.test(m)) return {_naoLigado:true,fn:nome}; return {_erro:m}; }
+    if(r&&r.error){
+      const m=String(r.error.message||r.error);
+      // v100 (14/10/2026) etapa 2: as edges novas (google-coleta, ia-conector-testar) respondem 401/403 com {ok:false, erro}; lê a frase do servidor em vez de "non-2xx"
+      const cx=r.error.context;
+      const st=cx&&cx.status;
+      if(cx&&typeof cx.json==="function"){
+        return Promise.resolve(cx.clone?cx.clone().json():cx.json()).then(function(j){
+          if(j&&typeof j==="object"&&j.erro) return {data:Object.assign({ok:false},j)};
+          if(st===404) return {_naoLigado:true,fn:nome};
+          return {_erro:m};
+        }).catch(function(){ return st===404?{_naoLigado:true,fn:nome}:{_erro:m}; });
+      }
+      if(st===404||/not found|404/i.test(m)) return {_naoLigado:true,fn:nome};
+      return {_erro:m};
+    }
     return {data:r?r.data:null};
   }).catch(function(e){ return {_erro:(e&&e.message)||String(e)}; });
 }
@@ -45032,6 +45252,16 @@ function F4V2fa({ativo,mob}){
   };
   // sócio: quem é obrigado
   const [est,recEst]=_useF4Carga("seg_2fa_estado",{},ativo&&socio);
+  // v100 (14/10/2026) P2_11_06: estado da trava aal2 do servidor (C4a: seg_2fa_trava_estado); lê 1 vez quando o bloco abre
+  const [trv,recTrv]=_useF4Carga("seg_2fa_trava_estado",{},ativo);
+  const ligarTrava=function(v,p){
+    setOc(true); setMsg("");
+    return _f4vRpc("gov_chave_definir",{p_chave:"mfa_trava_servidor",p_valor:v,p_pin:p}).then(function(o){
+      setOc(false);
+      if(o.data&&o.data.ok){ recTrv(); _f4vToast("success",v==="sim"?"Trava do servidor ligada.":"Trava do servidor desligada."); return true; }
+      setMsg((o.data&&o.data.erro)||o._erro||(o._naoLigado?"Ainda não ligado no servidor.":"O servidor recusou.")); return false;
+    });
+  };
   const [mudar,setMudar]=useState(null); // {uid,nome,exigir}
   const [pin,setPin]=useState(""); const [aviso,setAviso]=useState("");
   const salvarExigir=function(){
@@ -45048,10 +45278,31 @@ function F4V2fa({ativo,mob}){
     {/* v99 (14/10/2026) F4 revisor: a tela não promete proteção que ainda não vale */}
     {(function(){
       const porta=!!(typeof window!=="undefined"&&window._pxMfaPortaLigada);
-      const trava=!!(est&&est.st==="ok"&&est.data&&est.data.trava_aal2===true);
+      // v100 (14/10/2026) P2_11_06: a trava aal2 do servidor vem de seg_2fa_trava_estado (C4a) ou de seg_2fa_estado.trava_aal2
+      const trava=!!((est&&est.st==="ok"&&est.data&&est.data.trava_aal2===true)||(trv&&trv.st==="ok"&&trv.data&&trv.data.ligada===true));
       if(porta&&trava) return <div data-v99="2fa-situacao" style={{fontSize:11.5,color:"#166534",background:_F4V.okC,border:"1px solid "+_F4V.okB,borderRadius:9,padding:"6px 9px"}}>✓ Protegendo: o login pede o código e o servidor recusa quem entrou só com a senha.</div>;
       return <div data-v99="2fa-situacao" style={{fontSize:11.5,color:"#92400e",background:_F4V.amC,border:"1px solid "+_F4V.amB,borderRadius:9,padding:"7px 9px",lineHeight:1.45}}>
-        <b>⚠️ Pronto, mas ainda não protege.</b> Hoje quem tem só a senha ainda entra. Falta: {porta?"✓":"1."} ligar a porta no login do app{porta?" (ligada)":""} e {trava?"✓":"2."} o servidor exigir o código (pedido ao servidor).
+        <b>⚠️ Pronto, mas ainda não protege.</b> Hoje quem tem só a senha ainda entra. Falta: {porta?"✓":"1."} ligar a porta no login do app{porta?" (ligada)":""} e {trava?"✓":"2."} o servidor exigir o código{trava?" (ligado)":" (trava do servidor, abaixo)"}.
+      </div>;
+    })()}
+    {/* v100 (14/10/2026) P2_11_06: trava do servidor (seg_2fa_trava_estado + chave mfa_trava_servidor, sócio + PIN) */}
+    {(function(){
+      if(trv&&trv.st==="naoligado") return <_F4VNaoLigado fn="seg_2fa_trava_estado" texto="A trava do servidor aparece aqui quando existir. Vale só para quem já cadastrou o código; quem não tem código entra como hoje."/>;
+      if(!trv||trv.st!=="ok") return null;
+      const td=trv.data||{};
+      const porta=!!(typeof window!=="undefined"&&window._pxMfaPortaLigada);
+      const nomes=Array.isArray(td.com_codigo)?td.com_codigo.map(function(x){return x&&x.nome;}).filter(Boolean):[];
+      return <div data-v100="2fa-trava" style={{border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 10px",display:"flex",flexDirection:"column",gap:6,fontSize:11.5,color:_F4V.ts,lineHeight:1.45}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontWeight:800,color:_F4V.tx}}>Trava no servidor</span>
+          {td.ligada?<_F4VChip cor="ok">ligada</_F4VChip>:<_F4VChip cor="am">desligada</_F4VChip>}
+          {td.pode_mudar&&<span style={{color:_F4V.td}}>· {nomes.length?("com código: "+nomes.join(", ")):"ninguém cadastrou o código ainda"}</span>}
+        </div>
+        {td.explica&&<div>{td.explica}</div>}
+        {td.pode_mudar&&(td.ligada||porta
+          ? <_F4WLigar ligada={!!td.ligada} pode={true} oc={oc} dataId="2fa-trava-ligar" onConfirmar={ligarTrava}
+              rotulos={{ligar:"Ligar a trava",desligar:"Desligar a trava",perguntaLigar:"Ligar a trava? Quem já cadastrou o código só vê os dados de mídia se entrar com o código. Quem não cadastrou entra como hoje.",perguntaDesligar:"Desligar a trava? Volta a valer só a senha no servidor."}}/>
+          : <div data-v100="2fa-trava-espera" style={{color:"#92400e"}}>Ligar a trava só depois que a porta do login estiver no ar. Antes disso, quem cadastrou o código entraria sem ele e ficaria sem ver os dados.</div>)}
       </div>;
     })()}
     <div style={{border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 11px",display:"flex",flexDirection:"column",gap:8}}>
@@ -45424,13 +45675,32 @@ function F4VRetencao({ativo,mob}){
     if(!esc||pin.length!==6||oc) return; setOc(true); setMsg("");
     _f4vRpc("gov_retencao_salvar",{p_modo:esc,p_pin:pin}).then(function(o){
       setOc(false); setPin("");
-      if(o.data&&o.data.ok){ setEsc(""); recarregar(); _f4vToast("success","Regra de guarda salva."); }
+      if(o.data&&o.data.ok){ setEsc(""); setSim(null); recarregar(); _f4vToast("success","Regra de guarda salva."); }
       else setMsg((o.data&&o.data.erro)||o._erro||"O servidor recusou.");
+    });
+  };
+  // v100 (14/10/2026) P2_1_18: simular (gov_retencao_simular, só conta) e ligar/desligar a rotina (gov_chave_definir 'retencao_rotina_ligada', sócio + PIN). Só no clique.
+  const [sim,setSim]=useState(null); const [rot,setRot]=useState(null); const [pinR,setPinR]=useState("");
+  const simular=function(){
+    setSim({st:"carregando"});
+    _f4vRpc("gov_retencao_simular",{}).then(function(o){
+      if(o._naoLigado) setSim({st:"naoligado"});
+      else if(o._erro) setSim({st:"erro",erro:o._erro});
+      else if(o.data&&o.data.ok===false) setSim({st:"erro",erro:o.data.erro||"O servidor recusou."});
+      else setSim({st:"ok",data:o.data||{}});
+    });
+  };
+  const mudarRotina=function(){
+    if(!rot||pinR.length!==6||oc) return; setOc(true); setMsg("");
+    _f4vRpc("gov_chave_definir",{p_chave:"retencao_rotina_ligada",p_valor:rot,p_pin:pinR}).then(function(o){
+      setOc(false); setPinR("");
+      if(o.data&&o.data.ok){ const v=rot; setRot(null); recarregar(); _f4vToast("success",v==="sim"?"Rotina ligada.":"Rotina desligada."); }
+      else setMsg((o.data&&o.data.erro)||o._erro||(o._naoLigado?"Ainda não ligado no servidor.":"O servidor recusou."));
     });
   };
   const tabs=d.tabelas||[];
   return <>
-    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>O banco guarda tudo sem prazo e cresce todo dia. Escolha a regra; a rotina que resume/apaga <b>fica desligada</b> até um sócio ligar.</div>
+    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>O banco guarda tudo sem prazo e cresce todo dia. Escolha a regra; a rotina que faz o resumo do mês <b>fica desligada</b> até um sócio ligar. Ela não apaga nada.</div>
     {r.st==="carregando"&&<_F4VCarregando/>}
     {r.st==="erro"&&<_F4VErro msg={r.erro} onTentar={recarregar}/>}
     {r.st==="naoligado"&&<_F4VNaoLigado fn="gov_retencao_ler"/>}
@@ -45455,6 +45725,36 @@ function F4VRetencao({ativo,mob}){
         <button type="button" data-v99="ret-salvar" disabled={pin.length!==6||oc} onClick={salvar} style={Object.assign({},_f4vBtn("roxo"),{opacity:pin.length!==6?.5:1})}>Salvar</button>
       </div>}
       <div style={{fontSize:11.5,color:_F4V.td}}>Rotina que aplica a regra: {d.rotina_ligada?<b style={{color:_F4V.ok}}>ligada</b>:<b>desligada</b>}{d.explica?" · "+d.explica:""}</div>
+      {/* v100 (14/10/2026) P2_1_18: decisão do Vini (A ou B), simulação sem apagar e ligar a rotina com PIN */}
+      {!d.modo&&<div data-v100="ret-decisao" style={{fontSize:11.5,color:"#4c1d95",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:9,padding:"7px 9px",lineHeight:1.45}}>
+        <b>Decisão do Vini:</b> escolha A ou B acima. Sem escolha, a rotina não liga e nada é resumido nem apagado.
+      </div>}
+      {d.ultima_rodada&&<div data-v100="ret-ultima" style={{fontSize:11.5,color:_F4V.ts}}>Última rodada da rotina: {_f4vQuando(d.ultima_rodada.em)} · {Number(d.ultima_rodada.resumidas||0).toLocaleString("pt-BR")} linhas resumidas · {Number(d.ultima_rodada.apagadas||0).toLocaleString("pt-BR")} apagadas</div>}
+      {d.pode_mudar!==false&&d.modo&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <button type="button" data-v100="ret-simular" onClick={simular} disabled={sim&&sim.st==="carregando"} title="Só conta; não apaga nada" style={Object.assign({},_f4vBtn(),{padding:"5px 10px",fontSize:12})}>{sim&&sim.st==="carregando"?"Contando…":"🧮 Ver quanto sairia (sem apagar)"}</button>
+        {(d.rotina_ligada||(sim&&sim.st==="ok"))&&!rot&&<button type="button" data-v100="ret-rotina" onClick={function(){ setRot(d.rotina_ligada?"nao":"sim"); setPinR(""); setMsg(""); }} style={Object.assign({},_f4vBtn(d.rotina_ligada?"":"roxo"),{padding:"5px 10px",fontSize:12})}>{d.rotina_ligada?"Desligar a rotina":"Ligar a rotina (só resume)"}</button>}
+      </div>}
+      {sim&&sim.st==="naoligado"&&<_F4VNaoLigado fn="gov_retencao_simular" texto="A simulação (só conta, não apaga) e a rotina ficam prontas quando o servidor existir."/>}
+      {sim&&sim.st==="erro"&&<_F4VErro msg={sim.erro} onTentar={simular}/>}
+      {sim&&sim.st==="ok"&&<div data-v100="ret-sim" style={{border:"1px solid "+_F4V.roxoB,borderRadius:10,background:"#fff"}}>
+        <div style={{padding:"6px 10px",fontSize:11,fontWeight:800,color:_F4V.roxo,borderBottom:"1px solid #f1f5f9"}}>Simulação da regra {sim.data.modo||d.modo} · nada foi apagado · a rotina só faz o resumo do mês</div>
+        {(sim.data.tabelas||[]).length===0&&<div style={{padding:"6px 10px",fontSize:12,color:_F4V.td}}>Nada passaria do prazo hoje.</div>}
+        {(sim.data.tabelas||[]).map(function(t){ return <div key={t.nome} style={{display:"flex",gap:8,fontSize:12,padding:"5px 10px",borderBottom:"1px solid #f8fafc",flexWrap:"wrap"}}>
+          <span style={{flex:"1 1 150px",fontWeight:700,color:_F4V.tx}}>{t.rotulo||t.nome}</span>
+          <span style={{color:_F4V.ts}}>{Number(t.linhas_resumir||0).toLocaleString("pt-BR")} viram resumo</span>
+          <span style={{color:Number(t.linhas_apagar||0)>0?_F4V.am:_F4V.td}} title="A rotina não apaga: isto é só o que passaria do prazo">{Number(t.linhas_apagar||0).toLocaleString("pt-BR")} passariam do prazo</span>
+          {t.antes_de&&<span style={{color:_F4V.td}}>antes de {String(t.antes_de).slice(0,10).split("-").reverse().join("/")}</span>}
+          {Number(t.mb_liberar||0)>0&&<span style={{color:_F4V.td}}>liberaria {Number(t.mb_liberar).toLocaleString("pt-BR",{maximumFractionDigits:1})} MB se o Vini apagar</span>}
+        </div>; })}
+        {sim.data.explica&&<div style={{padding:"6px 10px",fontSize:11.5,color:_F4V.td}}>{sim.data.explica}</div>}
+      </div>}
+      {rot&&<div data-v100="ret-rotina-conf" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:10,padding:"8px 10px"}}>
+        {/* v100 (14/10/2026) P2_1_18 etapa 2: a rotina do C4a (v100a-retencao-mensal, dia 3) SÓ faz o resumo do mês em ads_daily_mensal; não apaga nada (tirar o dia a dia antigo fica com o Vini, regra M12/Q16) */}
+        <span style={{fontSize:12,fontWeight:700,color:"#4c1d95",width:"100%"}}>{rot==="sim"?"Ligar a rotina? Todo dia 3 ela guarda o resumo do mês (regra "+d.modo+"). Não apaga nada: tirar o dia a dia antigo continua sendo decisão do Vini. Dados de lead seguem o prazo da LGPD.":"Desligar a rotina? O resumo do mês para de ser feito. Nada é apagado."}</span>
+        <_F4VPin valor={pinR} onChange={setPinR} onEnter={mudarRotina}/>
+        <button type="button" data-v100="ret-rotina-ok" disabled={pinR.length!==6||oc} onClick={mudarRotina} style={Object.assign({},_f4vBtn("roxo"),{opacity:pinR.length!==6?.5:1})}>Confirmar</button>
+        <button type="button" onClick={function(){setRot(null);setPinR("");}} style={_f4vBtn()}>Cancelar</button>
+      </div>}
       {tabs.length>0&&<div style={{border:"1px solid #f1f5f9",borderRadius:10}}>
         {tabs.map(function(t){ return <div key={t.nome} style={{display:"flex",gap:8,fontSize:12,padding:"5px 10px",borderBottom:"1px solid #f8fafc",flexWrap:"wrap"}}>
           <span style={{flex:"1 1 150px",fontWeight:700,color:_F4V.tx}}>{t.rotulo||t.nome}</span>
@@ -45468,6 +45768,495 @@ function F4VRetencao({ativo,mob}){
   </>;
 }
 
+/* ══ v100 (14/10/2026) F4 · blocos novos do painel 🛡️ Segurança e LGPD (sem aba nova) ══════════════
+   - P2_11_03 Quem grava no banco (só sócio) ............ gov_permissoes_ler (C4a)
+   - P2_1_13  Porta de entrada de outros sistemas ......... entrada_ler / entrada_chave_criar / entrada_chave_revogar + gov_chave_definir 'entrada_webhook_ligado' (C4a)
+   - P2_1_10/P2_1_11 Google: página e busca sem anúncio .... midia_google_coleta_estado + edge google-coleta {modo:"teste"} (C4a) · reserva: gov_chaves_ler
+   - P2_10_09 Conector oficial de IA (só sócio) ............ ia_conectores_estado + ia_v99b_chave_definir (PIN 2x) + edge ia-conector-testar (C5a)
+   - P2_11_10 Versão da API (Meta e Google) ................ ads_api_versoes_ler / ads_api_versao_google_salvar (C4a)
+   - P2_11_06 (no bloco 📱 que já existe) trava do servidor .. seg_2fa_trava_estado + gov_chave_definir 'mfa_trava_servidor' (C4a)
+   - P2_1_18  (no bloco 🗄️ que já existe) simular e ligar ... gov_retencao_simular + gov_chave_definir 'retencao_rotina_ligada' (C4a)
+   Cada bloco lê 1 vez quando abre; ligar, testar e salvar só com clique. Nada escreve na Meta nem no Google. */
+function _f4wClientes(){ return (typeof CLIENTS!=="undefined"&&Array.isArray(CLIENTS))?CLIENTS.filter(function(c){return c&&c.id;}):[]; }
+function _f4wMsg(o){ return (o&&o.data&&o.data.erro)||(o&&o._erro)||(o&&o._naoLigado?"Ainda não ligado no servidor.":"O servidor recusou."); }
+function _f4wCopiar(t,ok){ try{ navigator.clipboard.writeText(t); _f4vToast("success",ok||"Copiado."); }catch(_){ } }
+function _F4WLigar({ligada,pode,rotulos,onConfirmar,oc,dataId}){
+  // botão Ligar/Desligar + caixa de PIN (1x). rotulos: {ligar, desligar, perguntaLigar, perguntaDesligar}
+  const [q,setQ]=useState(null); const [pin,setPin]=useState("");
+  if(!pode) return null;
+  const ir=function(){ if(!q||pin.length!==6||oc) return; const v=q; Promise.resolve(onConfirmar(v,pin)).then(function(ok){ setPin(""); if(ok) setQ(null); }); };
+  if(!q) return <button type="button" data-v100={dataId} onClick={function(){ setQ(ligada?"nao":"sim"); setPin(""); }} style={Object.assign({},_f4vBtn(ligada?"perigo":""),{padding:"4px 10px",fontSize:11.5})}>{ligada?rotulos.desligar:rotulos.ligar}</button>;
+  return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:10,padding:"8px 10px",width:"100%",boxSizing:"border-box"}}>
+    <span style={{fontSize:12,fontWeight:700,color:"#4c1d95",width:"100%"}}>{q==="sim"?rotulos.perguntaLigar:rotulos.perguntaDesligar}</span>
+    <_F4VPin valor={pin} onChange={setPin} onEnter={ir}/>
+    <button type="button" data-v100={dataId+"-ok"} disabled={pin.length!==6||oc} onClick={ir} style={Object.assign({},_f4vBtn("roxo"),{opacity:pin.length!==6?.5:1})}>Confirmar</button>
+    <button type="button" onClick={function(){setQ(null);setPin("");}} style={_f4vBtn()}>Cancelar</button>
+  </div>;
+}
+
+/* ── P2_11_03 Quem grava no banco (só sócio) ── */
+function F4WPermissoes({ativo,mob}){
+  const [r,recarregar]=_useF4Carga("gov_permissoes_ler",{},ativo);
+  const d=(r.st==="ok"&&r.data)||{};
+  const tabs=Array.isArray(d.tabelas)?d.tabelas:[];
+  const abertas=tabs.filter(function(t){return t.travada===false;});
+  return <>
+    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>A trava fica <b>no próprio banco</b>, não só no botão: quem não tem permissão recebe "sem permissão" mesmo tentando gravar direto no servidor. Aqui é só para conferir.</div>
+    {r.st==="carregando"&&<_F4VCarregando/>}
+    {r.st==="erro"&&<_F4VErro msg={r.erro} onTentar={recarregar}/>}
+    {r.st==="naoligado"&&<>
+      {/* v100 (14/10/2026) P2_11_03: sem o mapa do servidor, mostra o que a v100a do servidor (C4a) travou */}
+      <div data-v100="perm-resumo" style={{border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 10px",fontSize:12,color:_F4V.ts,lineHeight:1.5,display:"flex",flexDirection:"column",gap:4}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}><_F4VChip cor="ok">✓ travado no banco (v100)</_F4VChip></div>
+        <div>• <b>Contas, números do dia, criativos, campanhas, cortes por anúncio e anexos:</b> só grava quem tem "editar mídia" (ou sócio), e só do cliente liberado para a pessoa.</div>
+        <div>• <b>Histórico do cliente:</b> quem é da agência anota (só do cliente que vê); mudar ou apagar, só com "editar mídia".</div>
+        <div>• <b>Metas, verba, ações e fechamento:</b> já eram travados desde a v96.</div>
+        <div style={{color:_F4V.td}}>Ler continua igual. O cliente do Portal não lê nada disso.</div>
+      </div>
+      <_F4VNaoLigado fn="gov_permissoes_ler" texto="O mapa tabela por tabela aparece aqui quando o servidor tiver a função de leitura."/>
+    </>}
+    {r.st==="ok"&&<>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        {abertas.length===0?<_F4VChip cor="ok">✓ {tabs.length} cadastros travados por papel</_F4VChip>:<_F4VChip cor="am">{abertas.length} de {tabs.length} ainda abertos</_F4VChip>}
+        {d.testado_em&&<span style={{fontSize:11.5,color:_F4V.td}}>testado em {/* v100 (14/10/2026) revisor F4: só a data (AAAA-MM-DD) não vira meia-noite UTC (aparecia um dia antes no fuso de SP) */}{String(d.testado_em).length===10?String(d.testado_em).split("-").reverse().join("/"):_f4vQuando(d.testado_em)}</span>}
+        <button type="button" onClick={recarregar} style={Object.assign({},_f4vBtn(),{padding:"4px 10px",fontSize:11.5,marginLeft:"auto"})}>↻ Atualizar</button>
+      </div>
+      {tabs.length>0&&<div data-v100="perm-lista" style={{border:"1px solid #f1f5f9",borderRadius:10,maxHeight:mob?340:260,overflowY:"auto"}}>
+        {!mob&&<div style={{display:"grid",gridTemplateColumns:"1fr 120px 150px 86px",gap:8,padding:"6px 10px",fontSize:10.5,fontWeight:800,color:_F4V.td,textTransform:"uppercase",letterSpacing:.3,borderBottom:"1px solid #f1f5f9"}}><span>Cadastro</span><span>Quem lê</span><span>Quem grava</span><span></span></div>}
+        {tabs.map(function(t){
+          const ab=t.travada===false;
+          return <div key={t.tabela} data-v100={"perm-"+t.tabela} style={{display:mob?"flex":"grid",flexWrap:"wrap",gridTemplateColumns:"1fr 120px 150px 86px",gap:mob?6:8,padding:"6px 10px",borderBottom:"1px solid #f8fafc",fontSize:12,alignItems:"center",background:ab?_F4V.amC:"#fff"}}>
+            <span style={{minWidth:0,flex:mob?"1 1 100%":"auto"}}><b style={{color:_F4V.tx}}>{t.rotulo||t.tabela}</b> <span style={{fontFamily:"monospace",fontSize:10.5,color:_F4V.td}}>{t.tabela}</span></span>
+            <span style={{color:_F4V.ts}}>{mob?"lê: ":""}{t.quem_le||"—"}</span>
+            <span style={{color:ab?_F4V.am:_F4V.ts,fontWeight:ab?800:400}}>{mob?"grava: ":""}{t.quem_grava||"—"}</span>
+            {/* v100 (14/10/2026) P2_11_03 etapa 2: gov_permissoes_ler real traz aal2 (a tabela entra na trava do 2º código quando ela for ligada) */}
+            <span style={{display:"inline-flex",gap:4,flexWrap:"wrap"}}>{ab?<_F4VChip cor="am">aberto</_F4VChip>:<_F4VChip cor="ok">travado</_F4VChip>}{t.aal2===true&&<_F4VChip cor="roxo" title="Entra na trava do 2º código (bloco 📱) quando ela for ligada">🔐</_F4VChip>}</span>
+          </div>;
+        })}
+      </div>}
+      {d.explica&&<div style={{fontSize:11.5,color:_F4V.td}}>{d.explica}{tabs.some(function(t){return t.aal2===true;})?" 🔐 = entra na trava do 2º código (bloco 📱) quando ela estiver ligada.":""}</div>}
+    </>}
+  </>;
+}
+
+/* ── P2_1_13 Porta de entrada de outros sistemas (webhook com senha por cliente) ── */
+function F4WEntrada({ativo,mob}){
+  // v100 (14/10/2026) P2_1_13: formato do C4a — entrada_ler {ligado, pode_criar, endereco, exemplo, chaves[], eventos[]}; entrada_chave_criar / entrada_chave_revogar; chave entrada_webhook_ligado
+  const socio=_f4vSocio();
+  const [r,recarregar]=_useF4Carga("entrada_ler",{p_client:null},ativo);
+  const d=(r.st==="ok"&&r.data)||{};
+  const ligado=!!(d.ligado||d.ligada);
+  const pode=d.pode_criar!==undefined?!!d.pode_criar:(d.pode_mudar!==undefined?!!d.pode_mudar:socio);
+  const [oc,setOc]=useState(false); const [msg,setMsg]=useState("");
+  const [novo,setNovo]=useState(null); const [pin,setPin]=useState("");
+  const [criado,setCriado]=useState(null); const [revog,setRevog]=useState(null); const [verEx,setVerEx]=useState(false);
+  const clientes=_f4wClientes();
+  const nomeCli=function(id,nm){ if(nm) return nm; const c=clientes.find(function(x){return x.id===id;}); return c?(c.name||id):(id||"—"); };
+  const ligar=function(v,p){
+    setOc(true); setMsg("");
+    return _f4vRpc("gov_chave_definir",{p_chave:"entrada_webhook_ligado",p_valor:v,p_pin:p}).then(function(o){
+      setOc(false);
+      if(o.data&&o.data.ok){ recarregar(); _f4vToast("success",v==="sim"?"Porta de entrada ligada.":"Porta de entrada desligada: nada mais é recebido."); return true; }
+      setMsg(_f4wMsg(o)); return false;
+    });
+  };
+  const criar=function(){
+    if(!novo||!novo.client||!String(novo.nome||"").trim()||pin.length!==6||oc) return; setOc(true); setMsg("");
+    _f4vRpc("entrada_chave_criar",{p_client:novo.client,p_nome:String(novo.nome).trim(),p_pin:pin}).then(function(o){
+      setOc(false); setPin("");
+      // v100 (14/10/2026) P2_1_13 etapa 2: o C4a devolve chave_uma_vez (aceita senha_uma_vez também)
+      if(o.data&&o.data.ok){ setNovo(null); setCriado({url:o.data.url_uma_vez||"",senha:o.data.chave_uma_vez||o.data.senha_uma_vez||"",aviso:o.data.aviso||""}); recarregar(); }
+      else setMsg(_f4wMsg(o));
+    });
+  };
+  const revogar=function(id){
+    if(oc) return; setOc(true); setMsg("");
+    _f4vRpc("entrada_chave_revogar",{p_id:id}).then(function(o){
+      setOc(false); setRevog(null);
+      if(o.data&&o.data.ok){ recarregar(); _f4vToast("success","Porta cortada na hora."); }
+      else setMsg(_f4wMsg(o));
+    });
+  };
+  const portas=Array.isArray(d.chaves)?d.chaves:(Array.isArray(d.portas)?d.portas:[]);
+  const ativas=portas.filter(function(p){return !p.revogado_em;});
+  const ev=Array.isArray(d.eventos)?d.eventos:(Array.isArray(d.ultimos)?d.ultimos:[]);
+  const tipoRot={lead:"🧲 lead",etapa:"➡️ etapa",venda:"💰 venda",outro:"• outro"};
+  const exemplo=d.exemplo||null;
+  // v100 (14/10/2026) P2_1_13 etapa 2: exemplo do C4a = {metodo, cabecalho, corpo}; mostra como um pedido HTTP legível
+  const exTxt=exemplo?(typeof exemplo==="string"?exemplo:((exemplo.metodo||exemplo.corpo)?((exemplo.metodo||"POST")+" "+(d.endereco||"")+"\n"+(exemplo.cabecalho?exemplo.cabecalho+"\n":"")+"Content-Type: application/json\n\n"+JSON.stringify(exemplo.corpo||{},null,2)):JSON.stringify(exemplo,null,2))):"";
+  const caixaPre={margin:0,background:"#fff",border:"1px solid "+_F4V.b,borderRadius:8,padding:"6px 8px",fontSize:11,color:_F4V.tx,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:180,overflow:"auto"};
+  return <>
+    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>Um endereço <b>por cliente, com senha</b>, para o sistema de vendas dele (RD Station, Kommo, planilha do Google, Zapier) avisar "chegou lead" ou "virou venda". Entra no funil do cliente sem ninguém digitar. Dá para cortar a qualquer hora.</div>
+    {r.st==="carregando"&&<_F4VCarregando/>}
+    {r.st==="erro"&&<_F4VErro msg={r.erro} onTentar={recarregar}/>}
+    {r.st==="naoligado"&&<_F4VNaoLigado fn="entrada_ler" texto="A tela da porta de entrada está pronta; liga quando o servidor criar o endereço com senha."/>}
+    {r.st==="ok"&&<>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        {ligado?<_F4VChip cor="ok">LIGADA</_F4VChip>:<_F4VChip cor="am">DESLIGADA</_F4VChip>}
+        <span style={{fontSize:12,color:_F4V.td}}>{ativas.length} porta(s) ativa(s)</span>
+        <span style={{marginLeft:"auto"}}/>
+        <_F4WLigar ligada={ligado} pode={socio} oc={oc} dataId="ent-ligar" onConfirmar={ligar}
+          rotulos={{ligar:"Ligar a porta",desligar:"Desligar a porta",perguntaLigar:"Ligar a porta de entrada? Só recebe quem tiver um endereço criado aqui; nada sai do app.",perguntaDesligar:"Desligar? Todas as portas param de receber na hora."}}/>
+      </div>
+      {d.explica&&<div style={{fontSize:11.5,color:_F4V.td}}>{d.explica}</div>}
+      {portas.length>0&&<div data-v100="ent-portas" style={{border:"1px solid #f1f5f9",borderRadius:10}}>
+        {portas.map(function(p){
+          const n=p.usos!=null?p.usos:p.recebidos;
+          return <div key={p.id} style={{display:"flex",gap:8,alignItems:"center",fontSize:12,padding:"6px 10px",borderBottom:"1px solid #f8fafc",flexWrap:"wrap"}}>
+            <span style={{flex:"1 1 150px",minWidth:0}}><b style={{color:p.revogado_em?_F4V.td:_F4V.tx,textDecoration:p.revogado_em?"line-through":"none"}}>{p.nome}</b> <span style={{color:_F4V.td}}>· {nomeCli(p.client_id,p.cliente)}</span></span>
+            <span style={{color:_F4V.td}}>{Number(n||0).toLocaleString("pt-BR")} recebido(s) · último {p.ultimo_uso?_f4vQuando(p.ultimo_uso):"nunca"}</span>
+            {p.revogado_em?<_F4VChip>cortada {_f4vQuando(p.revogado_em)}</_F4VChip>:(!pode?null:(revog===p.id?
+              <span style={{display:"inline-flex",gap:6}}><button type="button" data-v100="ent-revogar-ok" onClick={function(){revogar(p.id);}} style={Object.assign({},_f4vBtn("perigo"),{padding:"3px 9px",fontSize:11.5})}>Cortar agora</button><button type="button" onClick={function(){setRevog(null);}} style={Object.assign({},_f4vBtn(),{padding:"3px 9px",fontSize:11.5})}>Não</button></span>:
+              <button type="button" data-v100={"ent-revogar-"+p.id} onClick={function(){setRevog(p.id);}} style={Object.assign({},_f4vBtn("perigo"),{padding:"3px 9px",fontSize:11.5})}>Cortar</button>))}
+          </div>;
+        })}
+      </div>}
+      {criado&&<div data-v100="ent-senha" style={{background:_F4V.okC,border:"1px solid "+_F4V.okB,borderRadius:10,padding:"9px 11px",fontSize:12,color:"#166534",display:"flex",flexDirection:"column",gap:6}}>
+        <b>Copie agora: o endereço com a chave aparece só uma vez.</b> Passe para quem configura o sistema do cliente.
+        {criado.url&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}><span style={{fontWeight:700}}>Endereço:</span><span style={{fontFamily:"monospace",wordBreak:"break-all",background:"#fff",border:"1px solid "+_F4V.okB,borderRadius:8,padding:"5px 8px",flex:"1 1 200px"}}>{criado.url}</span><button type="button" onClick={function(){_f4wCopiar(criado.url,"Endereço copiado.");}} style={_f4vBtn()}>Copiar</button></div>}
+        {criado.senha&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}><span style={{fontWeight:700}}>Chave:</span><span style={{fontFamily:"monospace",wordBreak:"break-all",background:"#fff",border:"1px solid "+_F4V.okB,borderRadius:8,padding:"5px 8px",flex:"1 1 200px"}}>{criado.senha}</span><button type="button" onClick={function(){_f4wCopiar(criado.senha,"Senha copiada.");}} style={_f4vBtn()}>Copiar</button></div>}
+        {exTxt&&<div><div style={{fontWeight:700,marginBottom:3}}>Exemplo do que o sistema manda:</div><pre style={Object.assign({},caixaPre,{borderColor:_F4V.okB})}>{exTxt}</pre></div>}
+        {criado.aviso&&<div style={{fontSize:11.5,color:"#92400e"}}>{criado.aviso}</div>}
+        <div><button type="button" onClick={function(){setCriado(null);}} style={_f4vBtn()}>Já guardei</button></div>
+      </div>}
+      {pode&&(!novo?<div><button type="button" data-v100="ent-nova" disabled={!ligado} onClick={function(){ setNovo({client:"",nome:""}); setMsg(""); }} style={Object.assign({},_f4vBtn(),{opacity:ligado?1:.55,cursor:ligado?"pointer":"not-allowed"})}>+ Nova porta para um cliente</button>
+          {!ligado&&<div style={{fontSize:11.5,color:_F4V.td,marginTop:4}}>Desligada: para criar uma porta, primeiro um sócio toca em "Ligar a porta" (PIN).</div>}</div>:
+        <div data-v100="ent-form" style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",border:"1px solid "+_F4V.roxoB,borderRadius:10,padding:"8px 10px",background:_F4V.roxoC}}>
+          <select value={novo.client} onChange={function(e){ setNovo(Object.assign({},novo,{client:e.target.value})); }} aria-label="Cliente" style={Object.assign({},_f4vInp,{padding:"5px 8px",fontSize:12,flex:"1 1 150px"})}>
+            <option value="">Cliente…</option>
+            {clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name||c.id}</option>; })}
+          </select>
+          <input value={novo.nome} onChange={function(e){ setNovo(Object.assign({},novo,{nome:e.target.value})); }} placeholder="De onde vem (ex.: Kommo do cliente)" style={Object.assign({},_f4vInp,{padding:"5px 8px",fontSize:12,flex:"1 1 180px"})}/>
+          <_F4VPin valor={pin} onChange={setPin} onEnter={criar}/>
+          <button type="button" data-v100="ent-criar" disabled={oc||!novo.client||!String(novo.nome||"").trim()||pin.length!==6} onClick={criar} style={Object.assign({},_f4vBtn("roxo"),{opacity:(!novo.client||!String(novo.nome||"").trim()||pin.length!==6)?.5:1})}>Criar porta</button>
+          <button type="button" onClick={function(){setNovo(null);setPin("");}} style={_f4vBtn()}>Cancelar</button>
+        </div>)}
+      {ev.length>0&&<div>
+        <div style={{fontSize:11,fontWeight:800,color:_F4V.td,textTransform:"uppercase",letterSpacing:.4,marginBottom:4}}>Últimos recebidos</div>
+        <div data-v100="ent-ultimos" style={{border:"1px solid #f1f5f9",borderRadius:10,maxHeight:mob?260:200,overflowY:"auto"}}>
+          {ev.slice(0,30).map(function(u,k){
+            const casou=u.casou_lead;
+            return <div key={u.id||k} style={{display:"flex",gap:8,alignItems:"center",fontSize:12,padding:"5px 10px",borderBottom:"1px solid #f8fafc",flexWrap:"wrap"}}>
+              <span style={{color:_F4V.td,fontWeight:700,minWidth:74}}>{_f4vQuando(u.em)}</span>
+              <span style={{color:_F4V.tx,fontWeight:700}}>{tipoRot[u.tipo]||u.tipo||"—"}</span>
+              <span style={{color:_F4V.ts,flex:"1 1 120px",minWidth:0}}>{nomeCli(u.client_id,u.cliente)}{u.etapa?" · "+u.etapa:""}{u.contato_mascarado?<span style={{color:_F4V.td}}> · {u.contato_mascarado}</span>:null}{socio&&u.valor!=null&&u.valor!==""?<span style={{color:_F4V.td}}> · {Number(u.valor).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</span>:null}{u.explica?<span style={{color:_F4V.td}}> · {u.explica}</span>:null}</span>
+              {u.status?<_F4VChip cor={{ok:"ok",recusado:"am",erro:"er"}[u.status]||"cinza"}>{u.status}</_F4VChip>:(casou===true?<_F4VChip cor="ok">achou o lead</_F4VChip>:(casou===false?<_F4VChip cor="am">lead não achado</_F4VChip>:null))}
+            </div>;
+          })}
+        </div>
+      </div>}
+      {exTxt&&!criado&&<div><button type="button" data-v100="ent-ver-exemplo" onClick={function(){setVerEx(!verEx);}} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",fontSize:11.5,color:_F4V.roxo,fontWeight:700}}>{verEx?"▾":"▸"} Formato que o sistema do cliente manda</button>
+        {verEx&&<pre style={Object.assign({},caixaPre,{marginTop:4})}>{exTxt}</pre>}</div>}
+      {d.endereco&&<div style={{fontSize:11,color:_F4V.td,wordBreak:"break-all"}}>Endereço base: <span style={{fontFamily:"monospace",color:_F4V.ts}}>{d.endereco}</span></div>}
+    </>}
+    {msg&&<div style={{fontSize:12,color:_F4V.er,fontWeight:700}}>{msg}</div>}
+  </>;
+}
+
+/* ── P2_1_10 / P2_1_11 Google: o que a pessoa faz na página e quem chega pelo Google sem anúncio ── */
+const _F4W_GOOGLE=[
+  {codigo:"ga4",nome:"GA4 · o que a pessoa faz na página",chave:"ga4_coleta_ligada",item:"P2_1_10"},
+  {codigo:"search_console",nome:"Search Console · buscas no Google que levam ao site",chave:"search_console_coleta_ligada",item:"P2_1_11"},
+  {codigo:"gmn",nome:"Perfil da Empresa (Google Meu Negócio) · ligações e rotas",chave:"gmn_coleta_ligada",item:"P2_1_11"},
+];
+function _f4wSim(v){ if(v&&typeof v==="object"&&("valor" in v)) v=v.valor; return v===true||v==="sim"; }
+function F4WGoogle({ativo,mob}){
+  // v100 (14/10/2026) P2_1_10/P2_1_11: formato do C4a — midia_google_coleta_estado {conta_servico:{pronta,email,lida_em}, chaves, ultima, clientes[], passos[]}; teste = edge google-coleta {modo:"teste"}
+  const socio=_f4vSocio();
+  const [r,recarregar]=_useF4Carga("midia_google_coleta_estado",{},ativo);
+  const [ch,recCh]=_useF4Carga("gov_chaves_ler",{},ativo&&r.st==="naoligado");
+  const d=(r.st==="ok"&&r.data)||{};
+  const reserva=r.st==="naoligado";
+  const chavesR=(ch.st==="ok"&&ch.data&&ch.data.chaves)||{};
+  const [oc,setOc]=useState(false); const [msg,setMsg]=useState("");
+  const [teste,setTeste]=useState({}); // codigo -> {st, data|erro}
+  const [cliT,setCliT]=useState("");
+  const clientes=_f4wClientes();
+  const cs=d.conta_servico||null;
+  const contaPronta=!!(cs&&(cs.pronta===true||cs.configurada===true));
+  const cliS=Array.isArray(d.clientes)?d.clientes:[];
+  const lista=_F4W_GOOGLE.map(function(g){
+    if(reserva) return Object.assign({},g,{ligado:_f4wSim(chavesR[g.chave]),falta:["o coletor no servidor"]});
+    const u=(d.ultima&&d.ultima[g.codigo])||{};
+    const comId=cliS.filter(function(c){ return !!c[g.codigo]; }).length;
+    const falta=[]; if(!contaPronta) falta.push("conta de serviço do Google"); if(cliS.length&&!comId) falta.push("ID anotado em algum cliente");
+    return Object.assign({},g,{ligado:_f4wSim(d.chaves&&d.chaves[g.chave]),clientes_com_id:cliS.length?comId:null,ultima_coleta:u.em||null,linhas:u.linhas!=null?u.linhas:null,ultimo_erro:u.erro||null,falta:falta});
+  });
+  // no teste, os clientes que têm algum ID anotado vêm primeiro
+  const cliTeste=cliS.length?cliS.map(function(c){ return {id:c.client_id,name:c.nome||c.client_id}; }):clientes;
+  const podeMudar=socio&&(reserva?(ch.st==="ok"&&ch.data&&ch.data.pode_mudar!==false):(d.pode_mudar!==false));
+  const ligar=function(chave){ return function(v,p){
+    setOc(true); setMsg("");
+    return _f4vRpc("gov_chave_definir",{p_chave:chave,p_valor:v,p_pin:p}).then(function(o){
+      setOc(false);
+      if(o.data&&o.data.ok){ if(reserva) recCh(); else recarregar(); _f4vToast("success",v==="sim"?"Coleta ligada (só leitura no Google).":"Coleta desligada."); return true; }
+      setMsg(_f4wMsg(o)); return false;
+    });
+  }; };
+  const testar=function(codigo){
+    if(!cliT) { setMsg("Escolha um cliente para testar."); return; }
+    setMsg(""); setTeste(function(t){ const n=Object.assign({},t); n[codigo]={st:"carregando"}; return n; });
+    _f4vEdge("google-coleta",{modo:"teste",fonte:codigo,client_id:cliT}).then(function(o){
+      const v=o._naoLigado?{st:"naoligado"}:(o._erro?{st:"erro",erro:o._erro}:((o.data&&o.data.ok===false)?{st:"erro",erro:o.data.erro||"O Google recusou."}:{st:"ok",data:o.data||{}}));
+      setTeste(function(t){ const n=Object.assign({},t); n[codigo]=v; return n; });
+    });
+  };
+  const resumoLido=function(x){
+    if(!x) return "";
+    if(typeof x!=="object") return String(x);
+    return Object.keys(x).slice(0,6).map(function(k){ const v=x[k]; return k+": "+(v!==null&&typeof v==="object"?(Array.isArray(v)?v.length+" item(ns)":"…"):String(v)); }).join(" · ");
+  };
+  const passos=Array.isArray(d.passos)?d.passos.filter(Boolean):[];
+  return <>
+    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>Coletores <b>só de leitura</b> do Google: o que a pessoa faz na página depois do clique (GA4) e quem chega pelo Google sem anúncio (Search Console e Perfil da Empresa). Os números aparecem no cliente, em <b>Campanhas › 🧰 Ferramentas</b>.</div>
+    {r.st==="carregando"&&<_F4VCarregando/>}
+    {r.st==="erro"&&<_F4VErro msg={r.erro} onTentar={recarregar}/>}
+    {reserva&&<_F4VNaoLigado fn="midia_google_coleta_estado" texto="Os coletores ainda não existem no servidor. Abaixo, só as chaves (todas começam desligadas)."/>}
+    {(r.st==="ok"||reserva)&&<>
+      {!reserva&&<div data-v100="g-conta" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12,border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 10px"}}>
+        <span style={{fontWeight:800,color:_F4V.tx}}>Conta de serviço do Google</span>
+        {contaPronta?<_F4VChip cor="ok">✓ pronta</_F4VChip>:<_F4VChip cor="am">falta criar</_F4VChip>}
+        {cs&&cs.lida_em&&<span style={{fontSize:11.5,color:_F4V.td}}>conferida {_f4vQuando(cs.lida_em)}</span>}
+        {cs&&cs.email&&<><span style={{fontFamily:"monospace",fontSize:11,color:_F4V.ts,wordBreak:"break-all"}}>{cs.email}</span><button type="button" onClick={function(){_f4wCopiar(cs.email,"E-mail copiado.");}} style={Object.assign({},_f4vBtn(),{padding:"3px 9px",fontSize:11.5})}>Copiar</button></>}
+        {cs&&cs.email&&<div style={{fontSize:11.5,color:_F4V.td,width:"100%"}}>Em cada cliente: adicionar este e-mail como <b>Leitor</b> no GA4, no Search Console e no Perfil da Empresa.</div>}
+      </div>}
+      {!reserva&&socio&&cliTeste.length>0&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",fontSize:12,color:_F4V.ts}}>
+        Testar com o cliente:
+        <select value={cliT} onChange={function(e){setCliT(e.target.value);}} aria-label="Cliente do teste" style={Object.assign({},_f4vInp,{padding:"5px 8px",fontSize:12,maxWidth:mob?170:220})}>
+          <option value="">Escolha…</option>
+          {cliTeste.map(function(c){ return <option key={c.id} value={c.id}>{c.name||c.id}</option>; })}
+        </select>
+      </div>}
+      <div data-v100="g-coletores" style={{display:"flex",flexDirection:"column",gap:8}}>
+        {lista.map(function(c){
+          const t=teste[c.codigo];
+          const semConta=!reserva&&!contaPronta;
+          return <div key={c.codigo} data-v100={"g-"+c.codigo} style={{border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 10px",display:"flex",flexDirection:"column",gap:5}}>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontWeight:800,fontSize:12.5,color:_F4V.tx,flex:"1 1 180px"}}>{c.nome}</span>
+              {c.ligado?<_F4VChip cor="ok">ligado</_F4VChip>:<_F4VChip cor="am">desligado</_F4VChip>}
+            </div>
+            {!reserva&&<div style={{fontSize:11.5,color:_F4V.td}}>{c.clientes_com_id!=null?c.clientes_com_id+" cliente(s) com o ID anotado · ":""}{c.ultima_coleta?"última coleta "+_f4vQuando(c.ultima_coleta):"nunca coletou"}{c.linhas!=null?" · "+Number(c.linhas).toLocaleString("pt-BR")+" linhas":""}</div>}
+            {c.ultimo_erro&&<div style={{fontSize:11.5,color:_F4V.er}}>Último erro: {c.ultimo_erro}</div>}
+            {Array.isArray(c.falta)&&c.falta.length>0&&<div style={{fontSize:11.5,color:"#92400e"}}>Falta: {c.falta.join(" · ")}</div>}
+            {socio&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {!reserva&&<button type="button" data-v100={"g-testar-"+c.codigo} onClick={function(){testar(c.codigo);}} disabled={!!(t&&t.st==="carregando")||semConta} title="Só lê no Google; não grava nada" style={Object.assign({},_f4vBtn(),{padding:"4px 10px",fontSize:11.5,opacity:semConta?.5:1})}>{t&&t.st==="carregando"?"Lendo no Google…":"🔎 Testar leitura"}</button>}
+              {(reserva||semConta)&&!c.ligado?<span style={{fontSize:11.5,color:_F4V.td}}>{reserva?"Liga quando o coletor existir.":"Liga depois da conta de serviço."}</span>:
+                <_F4WLigar ligada={!!c.ligado} pode={podeMudar} oc={oc} dataId={"g-ligar-"+c.codigo} onConfirmar={ligar(c.chave)}
+                  rotulos={{ligar:"Ligar coleta",desligar:"Desligar coleta",perguntaLigar:"Ligar a coleta diária de "+c.nome.split(" · ")[0]+"? Só lê no Google.",perguntaDesligar:"Desligar a coleta? Os números param de atualizar."}}/>}
+            </div>}
+            {t&&t.st==="naoligado"&&<_F4VNaoLigado fn="google-coleta" texto="O teste de leitura liga quando a edge existir."/>}
+            {t&&t.st==="erro"&&<div style={{fontSize:11.5,color:_F4V.er}}>Teste: {t.erro}</div>}
+            {t&&t.st==="ok"&&<div data-v100={"g-teste-ok-"+c.codigo} style={{fontSize:11.5,color:"#166534",background:_F4V.okC,border:"1px solid "+_F4V.okB,borderRadius:9,padding:"6px 9px"}}>✓ Leu no Google (só leitura){t.data.lido?": "+resumoLido(t.data.lido):""}.{t.data.explica?" "+t.data.explica:""}</div>}
+          </div>;
+        })}
+      </div>
+      {(passos.length>0||reserva)&&<div data-v100="g-vini" style={{fontSize:11.5,color:"#4c1d95",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:9,padding:"7px 9px",lineHeight:1.45}}>
+        <b>O que o Vini faz:</b> {/* v100 (14/10/2026) revisor F4: o servidor já manda "1. ..." no passo; tira o número dele para o <ol> não mostrar "1. 1." */}{passos.length?(passos.length===1?String(passos[0]).replace(/^\d+\.\s*/,""):<ol style={{margin:"4px 0 0",paddingLeft:18}}>{passos.map(function(x,i){ return <li key={i}>{String(x).replace(/^\d+\.\s*/,"")}</li>; })}</ol>):"criar 1 conta de serviço no Google Cloud (só leitura) e, em cada cliente, dar acesso de Leitor no GA4, no Search Console e no Perfil da Empresa."}
+      </div>}
+    </>}
+    {msg&&<div style={{fontSize:12,color:_F4V.er,fontWeight:700}}>{msg}</div>}
+  </>;
+}
+
+/* ── P2_10_09 Conector oficial de IA da Meta e do Google (só sócio) ── */
+function F4WConector({ativo,mob}){
+  const [r,recarregar]=_useF4Carga("ia_conectores_estado",{},ativo);
+  // v100 (14/10/2026) P2_10_09 etapa 2: histórico dos testes da ponte (C5a: ia_conector_testes_ler, só sócio)
+  const [hist,recHist]=_useF4Carga("ia_conector_testes_ler",{},ativo);
+  const testesH=(hist.st==="ok"&&hist.data&&Array.isArray(hist.data.testes))?hist.data.testes:[];
+  const d=(r.st==="ok"&&r.data)||{};
+  const m=d.meta||{}, g=d.google||{};
+  const [oc,setOc]=useState(false); const [msg,setMsg]=useState("");
+  const [acao,setAcao]=useState(null); // {chave, valor, titulo, confirmar:bool}
+  const [pin,setPin]=useState(""); const [url,setUrl]=useState("");
+  const [cliT,setCliT]=useState(""); const [teste,setTeste]=useState(null);
+  const clientes=_f4wClientes();
+  const enviar=function(){
+    if(!acao||pin.length!==6||oc) return; setOc(true); setMsg("");
+    _f4vRpc("ia_v99b_chave_definir",{p_chave:acao.chave,p_valor:acao.valor,p_pin:pin}).then(function(o){
+      setOc(false); setPin("");
+      if(o.data&&o.data.ok){ setAcao(null); setUrl(""); recarregar(); _f4vToast("success","Salvo."); return; }
+      // ligar o conector pede o PIN 2 vezes (ia_v99b_chave_definir devolve precisa_confirmar na 1ª)
+      if(o.data&&o.data.precisa_confirmar){ setAcao(Object.assign({},acao,{confirmar:true})); setMsg(""); return; }
+      setMsg(_f4wMsg(o));
+    });
+  };
+  const testar=function(){
+    if(!cliT){ setMsg("Escolha uma conta para testar."); return; }
+    setMsg(""); setTeste({st:"carregando"});
+    _f4vEdge("ia-conector-testar",{plataforma:"meta",client_id:cliT}).then(function(o){
+      setTeste(o._naoLigado?{st:"naoligado"}:(o._erro?{st:"erro",erro:o._erro}:((o.data&&o.data.ok===false)?{st:"erro",erro:o.data.erro||"Recusado."}:{st:"ok",data:o.data||{}})));
+      recHist();
+    });
+  };
+  const faltaM=Array.isArray(m.falta)?m.falta:[];
+  const linhaPlat=function(nome,x,extra){
+    const fl=Array.isArray(x.falta)?x.falta:[];
+    return <div style={{border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 10px",display:"flex",flexDirection:"column",gap:5}}>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontWeight:800,fontSize:12.5,color:_F4V.tx,flex:"1 1 120px"}}>{nome}</span>
+        {x.ligado?<_F4VChip cor="ok">ligado · só leitura</_F4VChip>:<_F4VChip cor="am">desligado</_F4VChip>}
+        <_F4VChip cor={x.endereco_configurado?"ok":"cinza"}>{x.endereco_configurado?"✓ endereço":"sem endereço"}</_F4VChip>
+        <_F4VChip cor={x.acesso_no_cofre?"ok":"cinza"}>{x.acesso_no_cofre?"✓ acesso no cofre":"sem acesso no cofre"}</_F4VChip>
+      </div>
+      {fl.length>0&&<div style={{fontSize:11.5,color:"#92400e"}}>Falta: {fl.join(" · ")}</div>}
+      {extra}
+    </div>;
+  };
+  return <>
+    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>A porta oficial de IA da Meta (MCP, ainda em teste). Usamos <b>só para ler</b>: pausar, mudar verba ou publicar continua no pedido + PIN 2x do app.</div>
+    {r.st==="carregando"&&<_F4VCarregando/>}
+    {r.st==="erro"&&<_F4VErro msg={r.erro} onTentar={recarregar}/>}
+    {r.st==="naoligado"&&<_F4VNaoLigado fn="ia_conectores_estado"/>}
+    {r.st==="ok"&&<>
+      {linhaPlat("📘 Meta",m,<>
+        {!acao&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+          <input value={url} onChange={function(e){setUrl(e.target.value);}} placeholder={m.endereco_configurado?"Trocar o endereço (https://…)":"Endereço do conector (https://…)"} style={Object.assign({},_f4vInp,{padding:"5px 8px",fontSize:12,flex:"1 1 180px"})}/>
+          <button type="button" data-v100="con-url" disabled={!/^https:\/\/\S+$/.test(url.trim())} onClick={function(){ setAcao({chave:"v99b_mcp_meta_url",valor:url.trim(),titulo:"Salvar o endereço do conector da Meta?"}); setPin(""); setMsg(""); }} style={Object.assign({},_f4vBtn(),{padding:"4px 10px",fontSize:11.5,opacity:/^https:\/\/\S+$/.test(url.trim())?1:.5})}>Salvar endereço</button>
+          {m.ligado?<button type="button" data-v100="con-desligar" onClick={function(){ setAcao({chave:"v99b_mcp_meta_ligado",valor:"nao",titulo:"Desligar o conector da Meta?"}); setPin(""); setMsg(""); }} style={Object.assign({},_f4vBtn("perigo"),{padding:"4px 10px",fontSize:11.5})}>Desligar</button>:
+            <button type="button" data-v100="con-ligar" disabled={faltaM.length>0} title={faltaM.length?"Falta: "+faltaM.join(", "):"Pede o PIN 2 vezes"} onClick={function(){ setAcao({chave:"v99b_mcp_meta_ligado",valor:"sim",titulo:"Ligar o conector da Meta (só leitura)?"}); setPin(""); setMsg(""); }} style={Object.assign({},_f4vBtn(),{padding:"4px 10px",fontSize:11.5,opacity:faltaM.length?.5:1,cursor:faltaM.length?"not-allowed":"pointer"})}>Ligar (PIN 2x)</button>}
+        </div>}
+        {acao&&<div data-v100="con-pin" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:10,padding:"8px 10px"}}>
+          <span style={{fontSize:12,fontWeight:700,color:"#4c1d95",width:"100%"}}>{acao.confirmar?"Confirme: digite o PIN de novo (2ª vez, em até 5 minutos).":acao.titulo}</span>
+          <_F4VPin valor={pin} onChange={setPin} onEnter={enviar} rotulo={acao.confirmar?"PIN de novo":"PIN do sócio"}/>
+          <button type="button" data-v100="con-pin-ok" disabled={pin.length!==6||oc} onClick={enviar} style={Object.assign({},_f4vBtn("roxo"),{opacity:pin.length!==6?.5:1})}>Confirmar</button>
+          <button type="button" onClick={function(){setAcao(null);setPin("");}} style={_f4vBtn()}>Cancelar</button>
+        </div>}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",fontSize:12,color:_F4V.ts}}>
+          Testar leitura numa conta:
+          <select value={cliT} onChange={function(e){setCliT(e.target.value);}} aria-label="Conta do teste" style={Object.assign({},_f4vInp,{padding:"5px 8px",fontSize:12,maxWidth:mob?160:200})}>
+            <option value="">Escolha…</option>
+            {clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.name||c.id}</option>; })}
+          </select>
+          <button type="button" data-v100="con-testar" onClick={testar} disabled={!!(teste&&teste.st==="carregando")||faltaM.length>0} title={faltaM.length?"Falta: "+faltaM.join(", "):"Só lê; não muda nada"} style={Object.assign({},_f4vBtn(),{padding:"4px 10px",fontSize:11.5,opacity:faltaM.length?.5:1})}>{teste&&teste.st==="carregando"?"Lendo…":"🔎 Testar (só leitura)"}</button>
+        </div>
+        {teste&&teste.st==="naoligado"&&<_F4VNaoLigado fn="ia-conector-testar" texto="O teste de leitura liga quando a ponte existir no servidor."/>}
+        {teste&&teste.st==="erro"&&<div style={{fontSize:11.5,color:_F4V.er}}>Teste: {teste.erro}</div>}
+        {teste&&teste.st==="ok"&&<div data-v100="con-teste-ok" style={{fontSize:11.5,color:"#166534",background:_F4V.okC,border:"1px solid "+_F4V.okB,borderRadius:9,padding:"6px 9px",display:"flex",flexDirection:"column",gap:3}}>
+          <span>✓ Leu pelo conector oficial{teste.data.estado==="teste"?" (modo teste: o conector ainda está desligado)":""}{teste.data.lido?": "+(teste.data.lido.contas!=null?teste.data.lido.contas+" conta(s)":"")+(teste.data.lido.campanhas!=null?" · "+teste.data.lido.campanhas+" campanha(s)":""):""}.</span>
+          {teste.data.lido&&(teste.data.lido.usada||Array.isArray(teste.data.lido.ferramentas_leitura))&&<span style={{color:_F4V.ts}}>Ferramenta usada: {teste.data.lido.usada||"—"}{Array.isArray(teste.data.lido.ferramentas_leitura)?" · "+teste.data.lido.ferramentas_leitura.length+" de leitura disponíveis":""}</span>}
+          {teste.data.lido&&Array.isArray(teste.data.lido.amostra)&&teste.data.lido.amostra.length>0&&<span style={{color:_F4V.ts}}>Amostra: {teste.data.lido.amostra.slice(0,3).map(function(a){ return a.nome+(a.status?" ("+a.status+")":""); }).join(" · ")}</span>}
+          {teste.data.lido&&teste.data.lido.erro&&<span style={{color:"#92400e"}}>{String(teste.data.lido.erro)}</span>}
+          {teste.data.comparado_com_app&&<span style={{color:teste.data.comparado_com_app.bate?"#166534":"#92400e"}}>{teste.data.comparado_com_app.bate?"Bate com os números do app.":"Não bate com o app."}{teste.data.comparado_com_app.explica?" "+teste.data.comparado_com_app.explica:""}</span>}
+          {teste.data.explica&&<span style={{color:_F4V.ts}}>{teste.data.explica}</span>}
+        </div>}
+      </>)}
+      {testesH.length>0&&<div data-v100="con-hist" style={{border:"1px solid #f1f5f9",borderRadius:10}}>
+        <div style={{padding:"5px 10px",fontSize:10.5,fontWeight:800,color:_F4V.td,textTransform:"uppercase",letterSpacing:.3,borderBottom:"1px solid #f1f5f9"}}>Últimos testes</div>
+        {testesH.slice(0,5).map(function(t,k){ return <div key={k} style={{display:"flex",gap:8,fontSize:11.5,padding:"4px 10px",borderBottom:"1px solid #f8fafc",flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{color:_F4V.td,fontWeight:700,minWidth:74}}>{_f4vQuando(t.em)}</span>
+          <span style={{color:_F4V.ts,flex:"1 1 120px"}}>{t.quem||""}{t.client_id?" · "+t.client_id:""}{t.resumo&&typeof t.resumo==="string"?" · "+_f4vCorta(t.resumo,80):""}</span>
+          {t.ok?<_F4VChip cor="ok">leu</_F4VChip>:<_F4VChip cor="am">{({sem_endereco:"sem endereço",sem_token:"sem acesso",erro_inicio:"erro"})[t.estado]||t.estado||"não leu"}</_F4VChip>}
+        </div>; })}
+      </div>}
+      {linhaPlat("🔍 Google",g,<div style={{fontSize:11.5,color:_F4V.td}}>Google fica para a próxima conversa com o Vini (o conector do Google só lê).</div>)}
+      {d.regra&&<div style={{fontSize:11.5,color:_F4V.td}}>{d.regra}</div>}
+      {d.o_que_o_vini_faz&&<div data-v100="con-vini" style={{fontSize:11.5,color:"#4c1d95",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:9,padding:"7px 9px",lineHeight:1.45}}><b>O que o Vini faz:</b> {d.o_que_o_vini_faz}</div>}
+    </>}
+    {msg&&<div style={{fontSize:12,color:_F4V.er,fontWeight:700}}>{msg}</div>}
+  </>;
+}
+
+/* ── P2_11_10 Versão da API (Meta e Google) ── */
+function F4WApiVersao({ativo,mob}){
+  // v100 (14/10/2026) P2_11_10: formato do C4a — ads_api_versoes_ler {meta:{usada, mais_nova, expira, dias}, google:{usada, mais_nova, expira, dias, ligado}, lido_em, explica}
+  const socio=_f4vSocio();
+  const [r,recarregar]=_useF4Carga("ads_api_versoes_ler",{},ativo);
+  const d=(r.st==="ok"&&r.data)||{};
+  const [ed,setEd]=useState(null); const [pin,setPin]=useState(""); const [oc,setOc]=useState(false); const [msg,setMsg]=useState("");
+  const salvar=function(){
+    if(!ed||!String(ed.versao||"").trim()||pin.length!==6||oc) return; setOc(true); setMsg("");
+    _f4vRpc("ads_api_versao_google_salvar",{p_versao:String(ed.versao).trim(),p_expira:ed.expira||null,p_pin:pin}).then(function(o){
+      setOc(false); setPin("");
+      if(o.data&&o.data.ok){ setEd(null); recarregar(); _f4vToast("success","Versão do Google anotada. O aviso de 90/30 dias passa a valer."); }
+      else setMsg(o._naoLigado?"Anotar à mão ainda não está ligado no servidor (ads_api_versao_google_salvar).":_f4wMsg(o));
+    });
+  };
+  const nivel=function(x){
+    if(x&&x.nivel) return x.nivel;
+    const n=x&&x.dias!=null&&x.dias!==""?Number(x.dias):null;
+    if(n===null||isNaN(n)) return "sem_data";
+    return n<=30?"critico":(n<=90?"atencao":"ok");
+  };
+  const nivelChip=function(x){
+    const n=nivel(x);
+    if(n==="critico") return <_F4VChip cor="er">vermelho · {x.dias} dias</_F4VChip>;
+    if(n==="atencao") return <_F4VChip cor="am">amarelo · {x.dias} dias</_F4VChip>;
+    if(n==="ok") return <_F4VChip cor="ok">ok · {x.dias} dias</_F4VChip>;
+    return <_F4VChip cor="cinza">sem data</_F4VChip>;
+  };
+  const dt=function(s){ return s?String(s).slice(0,10).split("-").reverse().join("/"):"—"; };
+  const usada=function(x){ return (x&&(x.usada||x.versao))||""; };
+  const linha=function(nome,x,extra){
+    return <div style={{border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 10px",display:"flex",flexDirection:"column",gap:5}}>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontWeight:800,fontSize:12.5,color:_F4V.tx,flex:"1 1 110px"}}>{nome}</span>
+        {nivelChip(x)}
+      </div>
+      <div style={{fontSize:11.5,color:_F4V.ts}}>Em uso: <b>{usada(x)||"—"}</b>{x&&x.mais_nova?" · mais nova: "+x.mais_nova:""} · desliga em: <b>{dt(x&&x.expira)}</b></div>
+      {extra}
+    </div>;
+  };
+  const g=d.google||{};
+  const gSem=!usada(g)||!g.expira;
+  return <>
+    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>A "porta" que o app usa para falar com a Meta e o Google tem prazo. Com <b>90 dias</b> antes de desligar vira tarefa com prazo em 🧠 Decisões (amarelo); com <b>30 dias</b>, vermelho.</div>
+    {r.st==="carregando"&&<_F4VCarregando/>}
+    {r.st==="erro"&&<_F4VErro msg={r.erro} onTentar={recarregar}/>}
+    {r.st==="naoligado"&&<_F4VNaoLigado fn="ads_api_versoes_ler" texto="Hoje o radar semanal já avisa a Meta. O quadro com Meta e Google aparece quando o servidor existir."/>}
+    {r.st==="ok"&&<>
+      {linha("📘 Meta",d.meta||{})}
+      {linha("🔍 Google Ads",g,<>
+        {gSem&&<div data-v100="api-g-falta" style={{fontSize:11.5,color:"#92400e"}}>Sem {!usada(g)?"versão":"data"}: o aviso do Google não dispara.</div>}
+        {g.ligado===false&&<div style={{fontSize:11.5,color:_F4V.td}}>O Google Ads ainda não está ligado no app (só a Bioter Chapecó vai usar).{socio?" Dá para anotar a versão e a data para o aviso já valer.":""}</div>}
+        {socio&&!ed&&<div><button type="button" data-v100="api-g-editar" onClick={function(){ setEd({versao:usada(g),expira:g.expira?String(g.expira).slice(0,10):""}); setPin(""); setMsg(""); }} style={Object.assign({},_f4vBtn(),{padding:"4px 10px",fontSize:11.5})}>Anotar versão e data do Google</button></div>}
+        {ed&&<div data-v100="api-g-form" style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:10,padding:"8px 10px"}}>
+          <input value={ed.versao} onChange={function(e){ setEd(Object.assign({},ed,{versao:e.target.value.slice(0,20)})); }} placeholder="Versão (ex.: v22)" style={Object.assign({},_f4vInp,{padding:"5px 8px",fontSize:12,width:120})}/>
+          <label style={{fontSize:12,color:_F4V.ts,fontWeight:700,display:"inline-flex",gap:6,alignItems:"center"}}>desliga em <input type="date" value={ed.expira} onChange={function(e){ setEd(Object.assign({},ed,{expira:e.target.value})); }} style={Object.assign({},_f4vInp,{padding:"4px 8px",fontSize:12})}/></label>
+          <_F4VPin valor={pin} onChange={setPin} onEnter={salvar}/>
+          <button type="button" data-v100="api-g-salvar" disabled={oc||!String(ed.versao||"").trim()||pin.length!==6} onClick={salvar} style={Object.assign({},_f4vBtn("roxo"),{opacity:(!String(ed.versao||"").trim()||pin.length!==6)?.5:1})}>Salvar</button>
+          <button type="button" onClick={function(){setEd(null);setPin("");}} style={_f4vBtn()}>Cancelar</button>
+        </div>}
+      </>)}
+      <div style={{fontSize:11.5,color:_F4V.td}}>{d.lido_em?"Conferido "+_f4vQuando(d.lido_em)+". ":""}{d.explica||""}</div>
+    </>}
+    {msg&&<div style={{fontSize:12,color:_F4V.er,fontWeight:700}}>{msg}</div>}
+  </>;
+}
+/* ── P2_8_07 (proposta extra) Revisar a chave antiga "Performance › Tráfego pago" do Portal (só sócio, só leitura) ── */
+function F4WPortalTrafego({ativo,mob}){
+  // v100 (14/10/2026) P2_8_07 etapa 2: portal_trafego_chave_lista (C5b) — só lista; mudar continua em Acessos › Clientes › Abas do portal de cada cliente
+  const [r,recarregar]=_useF4Carga("portal_trafego_chave_lista",{},ativo);
+  const d=(r.st==="ok"&&r.data)||{};
+  const itens=Array.isArray(d.itens)?d.itens:[];
+  const ligados=itens.filter(function(x){return x.trafego_pago_no_portal;});
+  const comLogin=ligados.filter(function(x){return x.tem_login_portal;});
+  return <>
+    <div style={{fontSize:12,color:_F4V.ts,lineHeight:1.45}}>Hoje o cliente vê "Mídia / anúncios" e o custo por lead na aba <b>Performance</b> do Portal sempre que a chave antiga <b>Performance › Tráfego pago</b> está ligada (sem nada gravado = ligada). Aqui é só para revisar; para mudar, abra <b>Acessos › Clientes › Abas do portal</b> do cliente. A área nova de mídia ao vivo segue a chave "Visível para o cliente" (desligada).</div>
+    {r.st==="carregando"&&<_F4VCarregando/>}
+    {r.st==="erro"&&<_F4VErro msg={r.erro} onTentar={recarregar}/>}
+    {r.st==="naoligado"&&<_F4VNaoLigado fn="portal_trafego_chave_lista"/>}
+    {r.st==="ok"&&<>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <_F4VChip cor={ligados.length?"am":"ok"}>{ligados.length} de {itens.length} com "Tráfego pago" ligado</_F4VChip>
+        <span style={{fontSize:11.5,color:_F4V.td}}>{comLogin.length} deles têm login no Portal</span>
+      </div>
+      {itens.length>0&&<div data-v100="portal-lista" style={{border:"1px solid #f1f5f9",borderRadius:10,maxHeight:mob?320:240,overflowY:"auto"}}>
+        {itens.map(function(x){ return <div key={x.client_id} data-v100={"portal-"+x.client_id} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",fontSize:12,padding:"6px 10px",borderBottom:"1px solid #f8fafc"}}>
+          <span style={{flex:"1 1 150px",minWidth:0,fontWeight:700,color:_F4V.tx}}>{x.nome||x.client_id}</span>
+          {x.trafego_pago_no_portal?<_F4VChip cor="am" title={x.chave_gravada==null?"Nada gravado: vale como ligada":""}>Tráfego pago: ligado{x.chave_gravada==null?" (padrão)":""}</_F4VChip>:<_F4VChip cor="ok">Tráfego pago: desligado</_F4VChip>}
+          <_F4VChip cor={x.tem_login_portal?"cinza":"ok"}>{x.tem_login_portal?"tem login":"sem login"}</_F4VChip>
+          <_F4VChip cor={x.midia_ao_vivo_visivel?"er":"ok"}>{x.midia_ao_vivo_visivel?"mídia ao vivo VISÍVEL":"mídia ao vivo: interna"}</_F4VChip>
+        </div>; })}
+      </div>}
+      {d.explica&&<div style={{fontSize:11.5,color:_F4V.td}}>{d.explica}</div>}
+      <div data-v100="portal-vini" style={{fontSize:11.5,color:"#4c1d95",background:_F4V.roxoC,border:"1px solid "+_F4V.roxoB,borderRadius:9,padding:"7px 9px",lineHeight:1.45}}><b>O que o Vini faz:</b> dizer quais clientes continuam vendo "Tráfego pago" na Performance; os outros a gente desliga em Abas do portal.</div>
+    </>}
+  </>;
+}
+/* ══ fim v100 F4 (blocos novos) ══ */
+
 /* ── Painel e botão ── */
 function F4VSegLgpdPainel({onFechar}){
   const mob=(typeof _pxMob==="function")?_pxMob():(typeof window!=="undefined"&&window.innerWidth<768);
@@ -45480,6 +46269,14 @@ function F4VSegLgpdPainel({onFechar}){
     {id:"lgpd",icone:"🔒",titulo:"Regras da LGPD dos leads",item:"2.11.09 · só sócio",so:true,C:F4VLgpd},
     {id:"ia",icone:"🤖",titulo:"Outra IA lendo os números",item:"2.1.15 · só leitura · só sócio",so:true,C:F4VIaExterna},
     {id:"ret",icone:"🗄️",titulo:"Por quanto tempo guardar o histórico",item:"2.1.18 · só sócio",so:true,C:F4VRetencao},
+    // v100 (14/10/2026) P2_11_03 / P2_1_13 / P2_1_10 / P2_1_11 / P2_10_09 / P2_11_10: blocos novos no mesmo painel (sem aba nova)
+    {id:"perm",icone:"🧱",titulo:"Quem grava no banco",item:"2.11.03 · trava por papel · só sócio",so:true,C:F4WPermissoes},
+    {id:"entrada",icone:"🚪",titulo:"Porta de entrada de outros sistemas",item:"2.1.13 · webhook com senha por cliente",C:F4WEntrada},
+    {id:"google",icone:"🔎",titulo:"Google: página e busca sem anúncio",item:"2.1.10 · 2.1.11 · só leitura",C:F4WGoogle},
+    {id:"conector",icone:"🔌",titulo:"Conector oficial de IA (Meta e Google)",item:"2.10.09 · só leitura · só sócio",so:true,C:F4WConector},
+    {id:"api",icone:"🛰️",titulo:"Versão da API (Meta e Google)",item:"2.11.10 · aviso 90/30 dias",C:F4WApiVersao},
+    // v100 (14/10/2026) P2_8_07 etapa 2 (proposta extra): revisar a chave antiga do Portal (só sócio, só leitura)
+    {id:"portal",icone:"📺",titulo:"Portal: o que o cliente já vê de mídia",item:"2.8.07 · chave antiga 'Tráfego pago' · só sócio",so:true,C:F4WPortalTrafego},
   ].filter(function(b){ return !b.so||socio; });
   const [abertos,setAbertos]=useState(function(){ const o={}; blocos.forEach(function(b){ o[b.id]=!mob; }); return o; });
   useEffect(function(){
@@ -45493,7 +46290,7 @@ function F4VSegLgpdPainel({onFechar}){
         <div style={{width:34,height:34,borderRadius:10,background:_F4V.roxoC,color:_F4V.roxo,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>🛡️</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:800,fontSize:mob?15:16.5,color:_F4V.tx}}>Segurança e LGPD</div>
-          <div style={{fontSize:11.5,color:_F4V.ts}}>Quem fez o quê, código no celular, acessos e regras dos dados. Nada aqui mexe nas campanhas.</div>
+          <div style={{fontSize:11.5,color:_F4V.ts}}>Quem fez o quê, código no celular, acessos, regras dos dados e conexões. Nada aqui mexe nas campanhas.{/* v100 (14/10/2026): + conexões */}</div>
         </div>
         <button type="button" data-v99="fechar" onClick={onFechar} aria-label="Fechar" style={{background:"#fff",border:"1px solid "+_F4V.b,borderRadius:10,width:34,height:34,cursor:"pointer",fontSize:16,color:_F4V.ts,flexShrink:0}}>✕</button>
       </div>
@@ -50103,6 +50900,10 @@ function _cardPodeSerResp(u){
   // Remove <script>, <iframe>, event handlers (onerror, onclick...) e javascript:
   const sanitizeRichText=(html)=>{
     if(typeof html!=="string"||!html)return "";
+    /* (15/10 11:48, Gustavo: "acabei de abrir e tá do mesmo jeito") briefing JÁ SALVO com quebras de linha do código dentro do
+       HTML (colado do Word antes da correção) — o editor mostra cada "\n" como linha nova. Se o texto já tem tags de bloco
+       (<p>, <br>, <div>, <li>), o "\n" é só formatação do código → vira espaço. Texto puro (sem tags) mantém as quebras. */
+    if(/<(p|br|div|li|ul|ol)\b/i.test(html)) html=html.replace(/\s*\r?\n\s*/g," ").replace(/(<\/p>)\s+(<p\b)/gi,"$1$2");
     const cleaned=html
       /* (15/10/2026, Gustavo: "colei do Word e ficou todo bugado" — aparecia "Normal 0 21 false…") o HTML do Word traz <head>,
          <xml>, comentários condicionais <!--[if gte mso 9]>…--> e tags com prefixo (o:p, w:…). O filtro de tags tirava a TAG e
@@ -53270,7 +54071,7 @@ function _cardPodeSerResp(u){
               })()}
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
-              <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
+              <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}.brief-arial p{margin:0 0 4px!important;}"}</style>
               <div
                 ref={descRef}
                 className="brief-arial"
@@ -58935,7 +59736,9 @@ function useMediaStore(){
    busca e mostra o funil e o retorno do jeito certo. */
 
 /* ─── FORMATADORES (prefixo _m pra não conflitar com outros módulos) ─── */
-const _mFmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+// v100 (14/10/2026) E5: já no mesmo formato do _tiaBrl do 17e ("R$ 1.234"). Hoje ninguém chama _mFmtBRL nem _mFmtDate (lista do "pode apagar" no relatório F3b).
+// v100 (15/10/2026) E5: R$ pelo formatador ÚNICO (_tiaBrl, 17e), sem centavos como antes; sem o 17e, formata aqui
+const _mFmtBRL=n=>{ const v=Number(n||0); try{ if(typeof _tiaBrl==="function"&&isFinite(v)) return _tiaBrl(v,0); }catch(_){ } return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0}); };
 const _mFmtDate=iso=>iso?new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):"—";
 
 /* v96 (13/10/2026) Q1: categorias do quadro de Demandas de mídia (as mesmas do CDemandasCentral embutido) */
@@ -59782,6 +60585,13 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
         setError(profile.acesso_ativo===false?"Este acesso foi encerrado.":"Este acesso venceu.");
         await _sb.auth.signOut(); setLoading(false); return;
       }
+      // v100 (14/10/2026) P2_11_06: porta do código do celular (pxMfaPortao, do 09_acessos). Só cobra quem já cadastrou o código
+      // ou foi marcado "obrigatório"; cliente do Portal não passa por aqui; se a conferência falhar por erro, a porta deixa entrar.
+      if(profile.user_type!=="client"&&typeof pxMfaPortao==="function"){
+        let _mfaOk=true; try{ _mfaOk=await pxMfaPortao(); }catch(_m){ _mfaOk=true; }
+        if(_mfaOk===false){ setError("Código do celular não confirmado."); try{ await _sb.auth.signOut(); }catch(_e){} setLoading(false); return; }
+        try{ window._pxMfaPassou=data.user.id; }catch(_e){}
+      }
       ls.set(PROFILE_KEY,profile);
       if(profile.user_type==="client") onLoginClient(profile);
       else onLoginCollaborator(profile);
@@ -59944,12 +60754,141 @@ function _PxNovaSenha({onDone}){
   </div>;
 }
 
+// v100 (14/10/2026) P2_9_06/P2_4_18: página pública do link de aprovação do cliente (/?aprovar=<token>), antes do login,
+//   igual ao /?enviar=. Fala só com a edge aprov-link (C5b): {acao:"info", token} e {acao:"decidir", token, etapa, aprovar, nome, obs}.
+//   Sem login a edge só responde com "Visível para o cliente" LIGADO (hoje: "Link indisponível."). Com a sessão do app aberta,
+//   o supabase-js manda o Authorization do usuário e a edge responde no modo teste ("Teste interno"). Sem dado sensível.
+const _PX_APROV_UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function _pxAprovTokenDaUrl(){
+  try{ const t=new URLSearchParams(window.location.search||"").get("aprovar"); return t&&_PX_APROV_UUID.test(t.trim())?t.trim():(t!=null?"invalido":null); }catch(_){ return null; }
+}
+function _pxAprovBRL(v){ const n=Number(v); if(v==null||v===""||!isFinite(n)) return "—";
+  try{ if(typeof _tiaBrl==="function") return _tiaBrl(n,n%1?2:0); }catch(_){ }   // v100 (15/10/2026) E5: formatador ÚNICO (_tiaBrl, 17e); mesmas casas de antes
+  return "R$ "+n.toLocaleString("pt-BR",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2}); }
+function _pxAprovData(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleDateString("pt-BR")+" às "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }
+async function _pxAprovChamar(body){
+  try{
+    const r=await _sb.functions.invoke("aprov-link",{body:body});
+    if(r&&r.data) return r.data;
+    try{ if(r&&r.error&&r.error.context&&typeof r.error.context.json==="function"){ const j=await r.error.context.json(); if(j) return j; } }catch(_){ }
+    return {ok:false,erro:"Não consegui abrir agora. Tente de novo em instantes."};
+  }catch(_){ return {ok:false,erro:"Sem conexão. Confira a internet e tente de novo."}; }
+}
+const _PX_APROV_CTA={WHATSAPP_MESSAGE:"Chamar no WhatsApp",MESSAGE_PAGE:"Enviar mensagem",SEND_MESSAGE:"Enviar mensagem",LEARN_MORE:"Saiba mais",SIGN_UP:"Cadastre-se",CONTACT_US:"Fale conosco",GET_QUOTE:"Pedir orçamento",CALL_NOW:"Ligar agora",APPLY_NOW:"Inscreva-se",SHOP_NOW:"Comprar",BOOK_NOW:"Agendar",GET_OFFER:"Ver oferta",SUBSCRIBE:"Assinar"};
+const _PX_APROV_ETAPAS={briefing:["1","Público e cidades"],verba:["2","Verba"],criativo:["3","Anúncios"]};
+function PxAprovPublico({token}){
+  const [st,setSt]=useState({carregando:true});
+  const [nome,setNome]=useState("");
+  const [obs,setObs]=useState({});
+  const [oc,setOc]=useState("");
+  const [msg,setMsg]=useState("");
+  const ler=function(){ if(token==="invalido"){ setSt({ok:false,erro:"Link inválido. Confira se copiou o endereço inteiro."}); return; } _pxAprovChamar({acao:"info",token:token}).then(function(r){ setSt(r||{ok:false}); }); };
+  useEffect(function(){ ler(); },[token]);
+  const decidir=async function(etapa,aprovar){
+    setMsg("");
+    const n=String(nome||"").trim(), o=String(obs[etapa]||"").trim();
+    if(n.length<3){ setMsg("Escreva seu nome para registrar a decisão."); return; }
+    if(!aprovar&&!o){ setMsg("Diga o que precisa mudar."); return; }
+    setOc(etapa+(aprovar?"s":"n"));
+    const r=await _pxAprovChamar({acao:"decidir",token:token,etapa:etapa,aprovar:aprovar,nome:n,obs:o||null});
+    setOc("");
+    if(!r||r.ok===false){ setMsg((r&&r.erro)||"Não consegui registrar. Tente de novo."); return; }
+    setMsg(aprovar?"✓ Aprovado. Obrigado!":"✓ Pedido de ajuste enviado para a agência.");
+    ler();
+  };
+  const marca=(st&&st.marca)||{};
+  const cor=/^#[0-9a-f]{3,8}$/i.test(String(marca.cor_primaria||""))?marca.cor_primaria:"#6d28d9";
+  const logo=/^https:\/\//i.test(String(marca.logo_url||""))?marca.logo_url:null;
+  const casca=function(filhos){ return <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'Inter',system-ui,sans-serif",padding:"24px 16px",boxSizing:"border-box",color:"#0f172a"}}>
+    <div style={{maxWidth:620,margin:"0 auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        {logo?<img src={logo} alt="" style={{height:30,maxWidth:160,objectFit:"contain"}}/>:<span style={{width:28,height:28,borderRadius:8,background:cor,display:"inline-block"}}/>}
+        <div style={{fontWeight:800,fontSize:14,color:"#334155"}}>{marca.nome||"Pixels"}</div>
+      </div>
+      {filhos}
+      {marca.rodape?<div style={{fontSize:11,color:"#94a3b8",marginTop:16,textAlign:"center"}}>{String(marca.rodape)}</div>:null}
+    </div>
+  </div>; };
+  if(!st||st.carregando) return casca(<div style={{background:"#fff",borderRadius:14,padding:20,fontSize:14,color:"#64748b"}}>Abrindo…</div>);
+  if(st.ok===false) return casca(<div style={{background:"#fff",borderRadius:14,padding:22,border:"1px solid #e2e8f0"}}>
+    <div style={{fontWeight:800,fontSize:16,marginBottom:6}}>🔒 {st.erro||"Link indisponível."}</div>
+    <div style={{fontSize:13,color:"#64748b",lineHeight:1.5}}>Se você recebeu este link da agência, peça um novo para quem enviou.</div>
+  </div>);
+  const etapas=Array.isArray(st.etapas)?st.etapas:[];
+  const aprovada=function(e){ const x=etapas.find(function(y){ return y.etapa===e; }); return !!(x&&x.estado==="aprovado"); };
+  const libera=function(e){ return e==="briefing"||(e==="verba"&&aprovada("briefing"))||(e==="criativo"&&aprovada("briefing")&&aprovada("verba")); };
+  const teste=st.modo==="teste_agencia"||!!st.faixa;
+  const previa=Array.isArray(st.previa)&&st.previa.length?st.previa:null;
+  const tudo=etapas.length>0&&etapas.every(function(e){ return e.estado==="aprovado"; });
+  const btn=function(pri,des){ return {border:pri?"none":"1px solid #cbd5e1",background:pri?cor:"#fff",color:pri?"#fff":"#0f172a",borderRadius:9,padding:"9px 14px",fontWeight:700,fontSize:13,cursor:des?"default":"pointer",opacity:des?.5:1,fontFamily:"inherit"}; };
+  return casca(<div>
+    {teste&&<div style={{background:"#fef3c7",border:"1px solid #fcd34d",color:"#92400e",borderRadius:10,padding:"9px 12px",fontSize:12.5,fontWeight:700,marginBottom:10}}>🧪 {st.faixa||"Teste interno: você está vendo como o cliente"} — a decisão fica registrada como teste da agência.</div>}
+    <div style={{background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid #e2e8f0",marginBottom:10}}>
+      <div style={{fontWeight:900,fontSize:18}}>Aprovação da campanha</div>
+      <div style={{fontSize:13,color:"#64748b",marginTop:2}}>{[st.cliente,st.campanha].filter(Boolean).join(" · ")||"Campanha"}</div>
+      <div style={{fontSize:12.5,color:"#475569",marginTop:8,lineHeight:1.5}}>Confira as 3 partes, na ordem. Aprove cada uma ou peça um ajuste. Nada vai ao ar sem a sua aprovação.</div>
+      <input value={nome} onChange={function(e){ setNome(e.target.value); }} placeholder="Seu nome (fica registrado em cada decisão)" maxLength={120}
+        style={{width:"100%",boxSizing:"border-box",marginTop:10,border:"1px solid #cbd5e1",borderRadius:9,padding:"10px 12px",fontSize:16,fontFamily:"inherit"}}/>
+    </div>
+    {tudo&&<div style={{background:"#dcfce7",border:"1px solid #86efac",color:"#166534",borderRadius:10,padding:"10px 12px",fontSize:13,fontWeight:700,marginBottom:10}}>✓ Tudo aprovado. A agência foi avisada e cuida do resto.</div>}
+    {etapas.map(function(e){
+      const n=_PX_APROV_ETAPAS[e.etapa]||["•",e.etapa]; const q=e.o_que||{};
+      const ok=e.estado==="aprovado", aj=e.estado==="pediu_ajuste";
+      const quem=e.decidido_nome||e.quem, em=e.decidido_em||e.em;
+      const anuncios=e.etapa==="criativo"?(previa||(Array.isArray(q.anuncios)?q.anuncios:[])):[];
+      const pode=libera(e.etapa);
+      return <div key={e.etapa} style={{background:"#fff",borderRadius:14,padding:"14px 16px",border:"1px solid "+(ok?"#86efac":aj?"#fcd34d":"#e2e8f0"),marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{width:24,height:24,borderRadius:12,background:ok?"#16a34a":cor,color:"#fff",fontSize:12,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{ok?"✓":n[0]}</span>
+          <b style={{fontSize:15}}>{n[1]}</b>
+          <span style={{marginLeft:"auto",fontSize:11.5,fontWeight:700,borderRadius:20,padding:"3px 9px",background:ok?"#dcfce7":aj?"#fef3c7":"#f1f5f9",color:ok?"#166534":aj?"#92400e":"#475569"}}>{ok?"Aprovado":aj?"Pediu ajuste":"Esperando você"}</span>
+        </div>
+        <div style={{fontSize:13,color:"#334155",marginTop:8,lineHeight:1.55}}>
+          {e.etapa==="briefing"&&<div>
+            {q.publico?<div>Público: <b>{String(q.publico)}</b></div>:null}
+            {Array.isArray(q.cidades)&&q.cidades.length?<div>Cidades: {q.cidades.join(", ")}</div>:null}
+            {q.idade||q.genero?<div>{q.idade?"Idade: "+q.idade:""}{q.idade&&q.genero?" · ":""}{q.genero?(q.genero==="homens"||q.genero==="1"?"Homens":q.genero==="mulheres"||q.genero==="2"?"Mulheres":"Todos"):""}</div>:null}
+            {!q.publico&&!(q.cidades||[]).length&&!q.idade?<div style={{color:"#94a3b8"}}>A agência ainda não detalhou o público.</div>:null}
+          </div>}
+          {e.etapa==="verba"&&<div><b>{_pxAprovBRL(q.verba_dia)}</b> por dia{q.verba_30_dias?" · cerca de "+_pxAprovBRL(q.verba_30_dias)+" em 30 dias":""}</div>}
+          {e.etapa==="criativo"&&(anuncios.length?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
+            {anuncios.map(function(a,i){ const img=a.imagem||a.midia_url; const imgOk=/^https:\/\//i.test(String(img||""))&&a.midia_tipo!=="video";
+              return <div key={i} style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",fontSize:12}}>
+                {imgOk?<img src={img} alt="" style={{width:"100%",aspectRatio:"1 / 1",objectFit:"cover",display:"block",background:"#f1f5f9"}}/>:<div style={{width:"100%",height:90,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>{a.midia_tipo==="video"||a.tipo==="video"?"🎬":"🖼️"}</div>}
+                <div style={{padding:"7px 8px"}}>
+                  {a.titulo?<div style={{fontWeight:800}}>{String(a.titulo)}</div>:<div style={{fontWeight:800}}>{String(a.nome||"Anúncio "+(i+1))}</div>}
+                  {a.texto?<div style={{color:"#64748b",marginTop:2}}>{String(a.texto).slice(0,160)}{String(a.texto).length>160?"…":""}</div>:null}
+                  {a.cta?<div style={{marginTop:5,fontWeight:700,color:cor}}>{_PX_APROV_CTA[String(a.cta)]||String(a.cta).replace(/_/g," ").toLowerCase()}</div>:null}
+                </div>
+              </div>; })}
+          </div>:<div style={{color:"#94a3b8"}}>A prévia dos anúncios ainda não está pronta.</div>)}
+        </div>
+        {quem||em?<div style={{fontSize:11.5,color:"#64748b",marginTop:6}}>{ok?"Aprovado":"Ajuste pedido"}{quem?" por "+quem:""}{em?" em "+_pxAprovData(em):""}{e.obs?" · “"+String(e.obs)+"”":""}</div>:null}
+        {!ok&&<div style={{marginTop:9}}>
+          <textarea value={obs[e.etapa]||""} onChange={function(ev){ const o=Object.assign({},obs); o[e.etapa]=ev.target.value; setObs(o); }} placeholder="Se precisar mudar algo, escreva aqui" maxLength={1000} rows={2}
+            style={{width:"100%",boxSizing:"border-box",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 10px",fontSize:16,fontFamily:"inherit",resize:"vertical"}}/>
+          <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap",alignItems:"center"}}>
+            <button style={btn(true,!pode||!!oc)} disabled={!pode||!!oc} onClick={function(){ decidir(e.etapa,true); }}>{oc===e.etapa+"s"?"…":"✓ Aprovar"}</button>
+            <button style={btn(false,!!oc||!String(obs[e.etapa]||"").trim())} disabled={!!oc||!String(obs[e.etapa]||"").trim()} onClick={function(){ decidir(e.etapa,false); }}>{oc===e.etapa+"n"?"…":"✎ Pedir ajuste"}</button>
+            {!pode&&<span style={{fontSize:11.5,color:"#94a3b8"}}>aprove a parte anterior primeiro</span>}
+          </div>
+        </div>}
+      </div>;
+    })}
+    {!etapas.length&&<div style={{background:"#fff",borderRadius:14,padding:16,border:"1px solid #e2e8f0",fontSize:13,color:"#64748b"}}>Ainda não há nada para aprovar neste link.</div>}
+    {msg&&<div style={{background:msg.charAt(0)==="✓"?"#dcfce7":"#fef2f2",border:"1px solid "+(msg.charAt(0)==="✓"?"#86efac":"#fecaca"),color:msg.charAt(0)==="✓"?"#166534":"#b91c1c",borderRadius:10,padding:"9px 12px",fontSize:13,fontWeight:600,marginTop:4}}>{msg}</div>}
+  </div>);
+}
+
 // ── AgencyOS ──────────────────────────────────────────────────
 export default function AgencyOS(){
   /* (29/09/2026) Link de envio: /?enviar=CODIGO abre a página pública de envio, sem login (53_link_envio.jsx).
      O código não muda durante a vida da página, então os hooks abaixo nunca mudam de ordem. */
   const _pxEnvCod=(typeof pxEnvioCodigoDaUrl==="function")?pxEnvioCodigoDaUrl():null;
   if(_pxEnvCod) return <PxEnvioPublico codigo={_pxEnvCod}/>;
+  // v100 (14/10/2026) P2_9_06/P2_4_18: /?aprovar=<token> abre a página pública de aprovação (o token não muda durante a página; hooks em ordem fixa)
+  const _pxAprovTok=_pxAprovTokenDaUrl();
+  if(_pxAprovTok) return <PxAprovPublico token={_pxAprovTok}/>;
   const cachedProfile = ls.get(PROFILE_KEY);
   const initAuth = cachedProfile?(cachedProfile.user_type==="client"?"portal":"app"):"loading";
 
@@ -60829,6 +61768,7 @@ export default function AgencyOS(){
       if(event==="PASSWORD_RECOVERY"){ setRecoveryMode(true); }
       if(event==="SIGNED_OUT"||!session){
         if(event==="SIGNED_OUT"){ try{ _pxMidiaLimpaSaida(); }catch(_e){} }   // v96 (13/10/2026) S19: sessão encerrada (inclusive em outra aba) limpa dados de mídia
+        try{ window._pxMfaPassou=null; }catch(_e){}   // v100 (14/10/2026) P2_11_06: na próxima entrada a porta do código confere de novo
         tokenRef.current=null;
         ls.del(PROFILE_KEY);
         setAuthState("login");setCurrentProfile(null);setClientPortal(null);
@@ -60864,6 +61804,20 @@ export default function AgencyOS(){
               setCurrentProfile(null); setClientPortal(null); setAuthState("login");
               try{ if(typeof pixelsToast!=="undefined") pixelsToast.error(_venceu?"Este acesso venceu.":"Este acesso foi encerrado."); }catch(_e){}
               return;
+            }
+            // v100 (14/10/2026) P2_11_06: a mesma porta no evento de sessão (sem isto um F5 entrava só com a senha).
+            // Uma vez por pessoa por aba (renovação do token a cada hora e a volta para a aba não perguntam de novo).
+            // Erro na conferência = deixa entrar (a própria pxMfaPortao devolve true); só "não confirmou" volta para o login.
+            if(profile.user_type!=="client"&&typeof pxMfaPortao==="function"&&(typeof window==="undefined"||window._pxMfaPassou!==session.user.id)){
+              let _mfaOk=true; try{ _mfaOk=await pxMfaPortao(); }catch(_m){ _mfaOk=true; }
+              if(!active) return;
+              if(_mfaOk===false){
+                profileLoaded=true;
+                try{ localStorage.removeItem(PROFILE_KEY); }catch(_e){}
+                setCurrentProfile(null); setClientPortal(null); setAuthState("login");
+                return;
+              }
+              try{ window._pxMfaPassou=session.user.id; }catch(_e){}
             }
             profileLoaded=true;
             ls.set(PROFILE_KEY,profile);
@@ -61414,7 +62368,7 @@ export default function AgencyOS(){
       case "gestao":
       case "gestao_financeiro":     return _menuBloco("gestao.financeiro",effectivePerms)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "gestao_projecao":       return _menuBloco("gestao.projecao",effectivePerms)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
-      case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
+      case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks} nav={nav}/>:<NoPerm/>;   // v100 (14/10/2026) M13: a PageOperacional já lia props.nav, mas ninguém passava; agora "Ver aprovações" abre Avaliações
       case "gestao_eficiencia":     return _menuBloco("gestao.eficiencia",effectivePerms)?<PageEficiencia isMob={isMob}/>:<NoPerm/>; // (27/09/2026)
       case "gestao_creditos_ia":    return _menuBloco("gestao.creditos_ia",effectivePerms)?<PageGastosCreditosIA isMob={isMob}/>:<NoPerm/>; // (05/10/2026)
       case "gestao_crescimento":    return _menuBloco("gestao.crescimento",effectivePerms)?<PagePlanoCrescimento isMob={isMob}/>:<NoPerm/>; // (01/10/2026)
@@ -62340,14 +63294,18 @@ const QG_FONT="'Inter',system-ui,sans-serif";
 /* v96 (13/10/2026) M4: removido QG_ORIGENS_ADS — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
 /* ─── FORMATADORES ───────────────────────────────────── */
-const _qgBRL=function(n,dec){ const v=Number(n||0); const d=(dec===undefined||dec===null)?2:dec; return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }; /* regra 09/09: dinheiro com centavos */
+const _qgBRL=function(n,dec){ const v=Number(n||0); const d=(dec===undefined||dec===null)?2:dec;
+  /* v100 (14/10/2026) E5: usa o formatador ÚNICO de R$ do app (_tiaBrl, no 17e). O 17b continua mostrando "R$ 0,00" para vazio
+     (o _tiaBrl mostra "—"), por isso manda o número já convertido. Sem o 17e (ou outra casa decimal), formata aqui como antes. */
+  if((d===0||d===2)&&isFinite(v)){ try{ if(typeof _tiaBrl==="function") return _tiaBrl(v,d); }catch(_){ } }
+  return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }; /* regra 09/09: dinheiro com centavos */
 const _qgBRLk=function(n){ return _qgBRL(n,2); }; /* sem "12,3 mil": valor exato sempre */
-const _qgNum=function(n){ return Number(n||0).toLocaleString("pt-BR"); };
+const _qgNum=function(n){ const v=Number(n||0); try{ if(typeof _tiaNum==="function"&&isFinite(v)) return _tiaNum(v,3); }catch(_){ } return v.toLocaleString("pt-BR"); };   /* v100 (14/10/2026) E5: formatador único de número (_tiaNum, 17e); 3 casas = igual ao padrão de antes */
 const _qgPct=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return (n>0?"+":"")+Number(n).toLocaleString("pt-BR",{maximumFractionDigits:dec===undefined?0:dec})+"%"; };
 /* v96 (13/10/2026) M4: removido _qgX — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 const _qgDiv=function(a,b){ a=Number(a||0); b=Number(b||0); return b>0?a/b:null; };
 const _qgIso=function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
-const _qgFmtD=function(iso){ if(!iso) return "—"; const p=String(iso).slice(0,10).split("-"); return p[2]+"/"+p[1]; };
+const _qgFmtD=function(iso){ if(!iso) return "—"; try{ if(typeof _tiaDM==="function"){ const t=_tiaDM(iso); if(t) return t; } }catch(_){ } const p=String(iso).slice(0,10).split("-"); return p[2]+"/"+p[1]; };   /* v100 (14/10/2026) E5: formatador único de data (_tiaDM, 17e); vazio continua "—" */
 const _qgRel=function(iso){ if(!iso) return "nunca"; const d=new Date(iso); const diff=Math.floor((Date.now()-d.getTime())/86400000); if(diff<=0) return "hoje"; if(diff===1) return "ontem"; if(diff<7) return diff+" dias"; if(diff<30) return Math.floor(diff/7)+" sem."; return _qgFmtD(iso)+"/"+String(d.getFullYear()).slice(2); };
 const QG_MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -62617,7 +63575,7 @@ function _qgPorUnidade(mc,data,ini,fim){
     const u=_etq||acc.unidade||"—";
     const o=por[u]||(por[u]={u:u,lbl:_qgUnidadeLbl(u),gasto:0,gastoLead:0,leads:0,conversas:0,camps:{},semEtq:{}});
     if(!_etq) o.semEtq[r.campaign_id]=1;
-    const t=tipos[acc.ad_account_id+"|"+r.campaign_id]||(typeof _adsClassifica==="function"?_adsClassifica(r.objetivo,[],r.campaign_nome):"outro");
+    const t=tipos[acc.ad_account_id+"|"+r.campaign_id]||(typeof _adsTipoSrv==="function"&&_adsTipoSrv(r.campaign_id))/* v100 (15/10/2026) E1: tipo do servidor (ads_campanhas_tipos) antes da conta da tela */||(typeof _adsClassifica==="function"?_adsClassifica(r.objetivo,[],r.campaign_nome):"outro");
     const g=Number(r.gasto||0); o.gasto+=g; o.camps[r.campaign_id]=1;
     if(t==="form"){ o.leads+=Number(r.leads||0); o.gastoLead+=g; }
     else if(t==="lead_wpp"||t==="eng_wpp"){ o.conversas+=Number(r.conversas||0); o.gastoLead+=g; }
@@ -62658,7 +63616,7 @@ function _qgAdsSoma(mc,data,ini,fim){ const _sv=_qgNumServ(mc,data,ini,fim); if(
      WhatsApp conta só conversa; outras finalidades não geram lead. Custo por lead divide só o gasto das campanhas de lead. */
   const camp=(data.adsCamp||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
   const tipos=data.adsTipos||{};
-  camp.forEach(function(r){ const t=tipos[acc.ad_account_id+"|"+r.campaign_id]||(typeof _adsClassifica==="function"?_adsClassifica(r.objetivo,[],r.campaign_nome):"outro"); const l=Number(r.leads||0), c=Number(r.conversas||0); if(t==="form"){ o.leads+=l; o.leadsForm+=l; o.gastoLead+=Number(r.gasto||0); } else if(t==="lead_wpp"||t==="eng_wpp"){ o.leads+=c; o.conversas+=c; o.gastoLead+=Number(r.gasto||0); } });
+  camp.forEach(function(r){ const t=tipos[acc.ad_account_id+"|"+r.campaign_id]||(typeof _adsTipoSrv==="function"&&_adsTipoSrv(r.campaign_id))/* v100 (15/10/2026) E1: tipo do servidor (ads_campanhas_tipos) antes da conta da tela */||(typeof _adsClassifica==="function"?_adsClassifica(r.objetivo,[],r.campaign_nome):"outro"); const l=Number(r.leads||0), c=Number(r.conversas||0); if(t==="form"){ o.leads+=l; o.leadsForm+=l; o.gastoLead+=Number(r.gasto||0); } else if(t==="lead_wpp"||t==="eng_wpp"){ o.leads+=c; o.conversas+=c; o.gastoLead+=Number(r.gasto||0); } });
   return o; }
 function qgCalcCliente(mc,data,year,month,filtro){
   filtro=filtro||{};
@@ -62758,7 +63716,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
     const ld=adsP?adsP.leads:(cLeadsP>0?cLeadsP:(stages.length&&stQ(stages[0],p)>0?stQ(stages[0],p):sum(ls,"leads")));
     const vd=vs.length||(stages.length>=2?stQ(stages[stages.length-1],p):0)||sum(ls,"vendas");
     const rc=vs.length?sum(vs,"value"):sum(ls,"receita");
-    porPlat[p]={orcamento:orc,gasto:gst,gastoLead:adsP?adsP.gastoLead:gst,saldo:orc-gst,leads:ld,vendas:vd,receita:rc,cpl:_qgDiv(adsP?adsP.gastoLead:gst,ld),roas:_qgDiv(rc,gst),ativa:_qgPlataformas(mc).indexOf(p)>=0||orc>0||gst>0};
+    porPlat[p]={orcamento:orc,gasto:gst,gastoLead:adsP?adsP.gastoLead:gst,saldo:orc-gst,leads:ld,vendas:vd,receita:rc,cpl:(adsP&&adsP.servidor&&adsP.cpl!==null&&adsP.cpl!==undefined)?adsP.cpl/* v100 (15/10/2026) E1: CPL da Meta = o do servidor (o mesmo do placar) */:_qgDiv(adsP?adsP.gastoLead:gst,ld),roas:_qgDiv(rc,gst),ativa:_qgPlataformas(mc).indexOf(p)>=0||orc>0||gst>0};
   });
   // por produto / região (linhas + vendas + fechamentos)
   const agrupa=function(chaveLinha,chaveVenda,chaveClosing){
@@ -63031,6 +63989,8 @@ function QGDashboard({clients,data,store,year,month,setPeriodo,isMob,canEdit,onO
     {typeof QGVerbaCarteira==="function"&&<QGVerbaCarteira clients={clients} onOpenClient={onOpenClient} isMob={isMob}/>}
     {/* v99 (14/10/2026) 2.13.04 unidades lado a lado · 2.13.08 risco de cancelar (SÓ sócios) · 2.10.08 perguntar aos números (SÓ sócios) · 2.10.04 novidades (radar; só aprovador) */}
     {typeof QGV99Unidades==="function"&&<QGV99Unidades clients={clients} isMob={isMob} onOpenClient={onOpenClient}/>}
+    {/* v100 (14/10/2026) P2_5_09: "👥 Públicos que se repetem na carteira" (gaveta fechada; só carrega quando abre; sem dinheiro da agência) */}
+    {typeof QGV100PublicosCarteira==="function"&&<QGV100PublicosCarteira clients={clients} isMob={isMob} onOpenClient={onOpenClient}/>}
     {typeof QGV99Risco==="function"&&_v98Socio(_dVu99)&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.2fr) minmax(0,1fr)",gap:14,alignItems:"start"}}>
       <QGV99Risco clients={clients} isMob={isMob} onOpenClient={onOpenClient}/>
       <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
@@ -63333,7 +64293,10 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   const semanas=_qgLastWeeks(2);
   const s0=Object.assign({key:semanas[0].key,start:semanas[0].start},qgCalcSemana(mc,data,semanas[0]));
   const fechAtual={}; if(s0.w) fechAtual[mc.client_id]=s0.w;
-  const alertas=qgAlertas([c],fechAtual,data,store,year,month).filter(function(a){return a.tipo!=="fechamento";});
+  /* v100 (14/10/2026) E1: os alertas do placar vêm do servidor (midia_alertas_cliente, C5a) quando a função existe — uma conta só.
+     Sem a função (ou com erro), continua a conta da tela de antes. Lê 1 vez por cliente/mês; não fica em laço. */
+  const _al100=useF3a99Rpc("midia_alertas_cliente",{p_client:mc.client_id,p_mes:year+"-"+String(month).padStart(2,"0")+"-01"},[mc.client_id,year,month]);
+  const alertas=(_al100.ok&&_al100.data&&Array.isArray(_al100.data.itens))?_al100.data.itens.filter(function(a){return a&&a.tipo!=="fechamento";}):(_al100.carregando?[]:qgAlertas([c],fechAtual,data,store,year,month).filter(function(a){return a.tipo!=="fechamento";}));
   const st=(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[]).find(function(s){return s.id===mc.status;});
   const resp=(typeof TEAM!=="undefined"?(TEAM.find(function(u){return u.id===mc.responsavel;})||{}).name:null)||mc.responsavel||"—";
   const divisor={borderLeft:isMob?"none":"1px solid "+QG.borda,paddingLeft:isMob?0:16};
@@ -63386,6 +64349,8 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
         <QGClienteNav mc={mc} clients={clients} onTrocar={onTrocar} isMob={isMob}/>
         {c.gasto>0?<QGPill cor={QG.verde} bg={QG.verdeBg}>ativa</QGPill>:<QGPill cor={QG.txt3} bg={QG.cinzaBg}>sem gasto no mês</QGPill>}
         {st&&st.id!=="em_estruturacao"&&<QGPill cor={st.color} bg={st.bg}>{st.label}</QGPill>}
+        {/* v100 (14/10/2026) P2_8_16: nota que o cliente deu para a agência (pesquisa do trimestre ou NPS), ao lado dos números */}
+        {typeof QGV100NotaSelo==="function"&&<QGV100NotaSelo key={"ns"+mc.client_id} mc={mc}/>}
         {!isMob&&<span style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",color:QG.txt3,fontSize:12,fontWeight:600}}><span>Gestor <b style={{color:QG.txt2}}>{resp}</b></span>{_qgPlataformas(mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})}<span>atualizado {_qgRel(c.ultimaAtualizacao)}</span></span>}
         <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           {temMeta&&adsConta&&typeof AdsSeloFrescor==="function"&&<AdsSeloFrescor conta={adsConta.conta}/>}{/* v96 (13/10/2026) 2.13.03: até quando vão os dados desta conta */}
@@ -63436,7 +64401,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
           <div style={{minWidth:0,borderLeft:isMob?"none":"1px solid "+QG.borda,paddingLeft:isMob?0:20,borderTop:isMob?"1px solid "+QG.borda:"none",paddingTop:isMob?14:0}}>
             {Eye("Semana "+_qgWeekLabel(s0.start))}
             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6,flexWrap:"wrap"}}>{s0.w?<QGPill cor={QG.verde} bg={QG.verdeBg}>fechada</QGPill>:<QGPill cor={QG.amar} bg={QG.amarBg}>pendente</QGPill>}{s0.w&&<span style={{fontSize:13}}><b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>}</div>
-            {alertas.length>0&&!_sai.alertasSairam&&<div title={"Alertas antigos (calculados na tela) — saem em "+(_sai.alertasAte?_sai.alertasAte.slice(8,10)+"/"+_sai.alertasAte.slice(5,7):"")+"; depois ficam só os da IA nova."} style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</div>}
+            {alertas.length>0&&!_sai.alertasSairam&&<div title={(_al100.ok?"Alertas do placar (conta do servidor, midia_alertas_cliente)":"Alertas antigos (calculados na tela)")+" — saem em "+(_sai.alertasAte?_sai.alertasAte.slice(8,10)+"/"+_sai.alertasAte.slice(5,7):"")+"; depois ficam só os da IA nova."} style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{_f3a100PilulaTxt(a.titulo,mc)}</span>; })}</div>}
             {canEdit&&<div style={{marginTop:10}}><button onClick={function(){onFechamento(mc.client_id,semanas[0]);}} style={QG_BTN("sm")}>{s0.w?"Editar fechamento":"Fechar semana"}</button></div>}
           </div>
         </div>;
@@ -63548,6 +64513,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
 }
 
 /* ─── Funil vertical: Leads → Qualificados → Oportunidades → Vendas → Receita + CPL/CAC/ROIC ── */
+/* v100 (15/10/2026) CAC duplicado (revisor): aqui é só gasto do mês ÷ vendas do Portal no mês, sem o valor da agência; o rótulo virou "Custo por venda (mês)" para não ser um 3º "CAC" diferente do bloco 💰 do 03 e do 💳 Financeiro */
 function QGFunil({c}){
   const etapas=[["Leads",c.leads],["Qualificados",c.qualificados],["Oportunidades",c.oportunidades],["Vendas",c.vendas]];
   const max=Math.max.apply(null,etapas.map(function(e){return Number(e[1]||0);}).concat([1]));
@@ -63563,7 +64529,7 @@ function QGFunil({c}){
       <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"6px 12px"}}><span style={{fontSize:20,fontWeight:900,letterSpacing:-.5,color:c.receita>0?QG.verde:QG.txt3}}>{c.receita>0?_qgBRL(c.receita):"—"}</span><span style={{color:QG.txt2,fontSize:12.5,fontWeight:700}}>{c.receita>0?"em receita":"sem receita registrada"}</span></div>
     </div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginTop:14,borderTop:"1px solid #f1f4f8",paddingTop:14}}>
-      {[["CPL",c.cpl,function(v){return _qgBRL(v,2);}],["CAC",c.cac,function(v){return _qgBRL(v,2);}],["ROIC",c.roic,function(v){return _qgPct(v);}]].map(function(x){ const ok=x[1]!==null&&x[1]!==undefined&&isFinite(x[1]); return <div key={x[0]}><div style={{color:QG.txt3,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{x[0]}</div><div style={{fontSize:ok?20:12,fontWeight:ok?900:600,letterSpacing:ok?-.5:0,color:ok?(x[0]==="ROIC"?_qgRoicCor(x[1]):QG.txt):QG.txt3,marginTop:2}}>{ok?x[2](x[1]):"Dados insuficientes"}</div></div>; })}
+      {[["CPL",c.cpl,function(v){return _qgBRL(v,2);}],["Custo por venda (mês)",c.cac,function(v){return _qgBRL(v,2);}],["ROIC",c.roic,function(v){return _qgPct(v);}]].map(function(x){ const ok=x[1]!==null&&x[1]!==undefined&&isFinite(x[1]); return <div key={x[0]}><div style={{color:QG.txt3,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{x[0]}</div><div style={{fontSize:ok?20:12,fontWeight:ok?900:600,letterSpacing:ok?-.5:0,color:ok?(x[0]==="ROIC"?_qgRoicCor(x[1]):QG.txt):QG.txt3,marginTop:2}}>{ok?x[2](x[1]):"Dados insuficientes"}</div></div>; })}
     </div>
   </div>;
 }
@@ -63620,6 +64586,7 @@ function QGMiniBarras({rows,cor,fmt}){ // rows [{label,v}]
 /* ─── Relatório de 1 página: gerado na hora, impresso/PDF pelo navegador ─── */
 function pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise){
   const mes=QG_MESES[month-1]+" "+year;
+  const _mk100=arguments[7]||null;   // v100 (14/10/2026) P2_8_08: marca da agência (rel_marca), 8º argumento opcional — assinatura igual
   const feitas=(acoes||[]).filter(function(a){ return a.client_id===mc.client_id&&a.done&&String(a.done_at||"").slice(0,7)===year+"-"+String(month).padStart(2,"0"); });
   const abertas=(acoes||[]).filter(function(a){ return a.client_id===mc.client_id&&!a.done; });
   const esc=function(t){ return String(t==null?"":t).replace(/[&<>"]/g,function(ch){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]; }); };
@@ -63627,19 +64594,20 @@ function pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise){
   const kpi=function(bg,lab,val,sub){ return "<div class='k' style='background:"+bg+"'><small>"+lab+"</small><b>"+val+"</b><span>"+(sub||"")+"</span></div>"; };
   const html="<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>"+esc(mc.name)+" · "+esc(mes)+"</title><style>"+
     "@page{size:A4;margin:16mm} body{font-family:Inter,system-ui,sans-serif;color:#17131f;margin:0;padding:24px;max-width:760px} h1{font-size:22px;margin:0;letter-spacing:-.4px} .top{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #7326d6;padding-bottom:10px;margin-bottom:18px} .top .px{font-weight:900;color:#7326d6;font-size:14px} .mute{color:#7b7590} .g{display:grid;grid-template-columns:repeat(3,1fr);gap:12px} .k{color:#fff;border-radius:14px;padding:14px 16px} .k small{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#d9ccf5;font-weight:700} .k b{display:block;font-size:26px;margin-top:4px;letter-spacing:-.8px} .k span{font-size:11px;color:#e9e0fb} h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#7b7590;margin:22px 0 6px} .lead{font-size:15px;line-height:1.45;background:#221743;color:#fff;border-radius:14px;padding:14px 16px} ul{margin:0;padding-left:18px;line-height:1.6} p{margin:0} .foot{margin-top:26px;font-size:11px;color:#7b7590;border-top:1px solid #e7e3ef;padding-top:8px}"+
-    "</style></head><body><div class='top'><div><h1>"+esc(mc.name)+"</h1><div class='mute'>Relatório de mídia · "+esc(mes)+"</div></div><div class='px'>pixels</div></div>"+
+    "</style></head><body><div class='top'><div><h1>"+esc(mc.name)+"</h1><div class='mute'>Relatório de mídia · "+esc(mes)+"</div></div>"+(_mk100&&_mk100.logo_url?"<img src='"+esc(_mk100.logo_url)+"' alt='' style='height:34px;max-width:130px;object-fit:contain'>":"<div class='px'>"+esc((_mk100&&_mk100.nome)||"pixels")+"</div>")+"</div>"+/* v100 (14/10/2026) P2_8_08: logo da marca da agência */
     "<div class='g'>"+kpi("#2f1a5e","Investido",_qgBRL(c.gasto,2),c.orcamento>0?"de "+_qgBRL(c.orcamento)+" planejados":"")+kpi("#5a34a3","Leads",_qgNum(c.leads),m&&m.meta?"meta "+_qgNum(m.meta)+" · "+Math.round(m.pct)+"%":"")+kpi("#8a63cf","Custo por lead",c.cpl?_qgBRL(c.cpl,2):"—",c.vendas>0?_qgNum(c.vendas)+" vendas · "+_qgBRL(c.receita):"")+"</div>"+
-    (analise&&analise.resumo?"<h2>Leitura · "+(analise.periodo_inicio?new Date(analise.periodo_inicio+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" a "+new Date(analise.periodo_fim+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"")+"</h2><div class='lead'>"+esc(analise.resumo)+"</div>":"")+
+    (analise&&analise.resumo?"<h2>Leitura · "+(analise.periodo_inicio?new Date(analise.periodo_inicio+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" a "+new Date(analise.periodo_fim+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"")+"</h2><div class='lead'>"+esc(analise.resumo)+"</div>":"<h2>Leitura da IA</h2><p class='mute'>Sem leitura da IA neste mês.</p>")+/* v100 (14/10/2026) Q5: sem leitura do mês, o PDF diz isso em vez de sumir calado */
     "<h2>O que fizemos</h2>"+li(feitas,"Ações do mês registradas na Gestão de mídia aparecem aqui.")+
     "<h2>Próximo mês</h2>"+li(abertas,"Nenhuma ação aberta.")+
-    "<div class='foot'>Fonte: API de Marketing da Meta (coleta diária) · vendas e receita informadas pelo cliente no Portal · gerado em "+new Date().toLocaleDateString("pt-BR")+"</div>"+
+    "<div class='foot'>"+(_mk100&&_mk100.rodape?esc(_mk100.rodape)+(_mk100.site?" · "+esc(_mk100.site):"")+" · ":"")+"Fonte: API de Marketing da Meta (coleta diária) · vendas e receita informadas pelo cliente no Portal · gerado em "+new Date().toLocaleDateString("pt-BR")+"</div>"+
     "<script>setTimeout(function(){window.print();},300);</script></body></html>";
   const w=window.open("","_blank"); if(!w){ if(typeof pixelsToast!=="undefined") pixelsToast.error("O navegador bloqueou a janela — libere pop-ups."); return; } w.document.open(); w.document.write(html); w.document.close();
 }
 async function pxRelatorioAbrir(mc,c,m,year,month,acoes){
   let analise=null;
   try{ if(window._sb&&window._pxAdsAccounts&&typeof adsContaDoCliente==="function"){ const r=adsContaDoCliente(mc,window._pxAdsAccounts); if(r&&r.conta){ const mIni=year+"-"+String(month).padStart(2,"0")+"-01", mFim=year+"-"+String(month).padStart(2,"0")+"-"+String(new Date(year,month,0).getDate()).padStart(2,"0"); /* v96 (13/10/2026) Q5: último dia REAL do mês (antes "-31" = data inválida em meses de 30/28 dias e a leitura da IA nunca vinha) */ const q=await window._sb.from("ads_analises").select("resumo,gerado_em,periodo_inicio,periodo_fim").eq("ad_account_id",r.conta.ad_account_id).eq("escopo","cliente").gte("periodo_fim",mIni).lte("periodo_fim",mFim).order("gerado_em",{ascending:false}).limit(1); analise=(q.data||[])[0]||null; /* só leitura cujo período cai no mês do relatório */ } } }catch(_){ }
-  pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise);
+  let _mk100=null; try{ const rm=await _v98Rpc("rel_marca",{p_client:null}); if(rm.ok&&rm.data) _mk100=rm.data; }catch(_){ }   // v100 (14/10/2026) P2_8_08: logo e rodapé no PDF (só leitura)
+  pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise,_mk100);
 }
 function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClient,acoes}){
   const mesLabel=QG_MESES[month-1]+" "+year;
@@ -63673,11 +64641,17 @@ function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClie
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:QG_FONT}}>
     {/* v98 (14/10/2026) L7-f: selo MODO INTERNO + relatório do mês por cliente (Abrir prévia / Revisar / Gerar) */}
     {typeof QGRelMes==="function"&&<QGRelMes clients={clients} isMob={isMob} canEdit={_ed98} onAbrir={function(mc,ym,id){ setRelVista({tipo:"previa",cid:mc.client_id,ym:ym,relId:id}); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){ } }}/>}
+    {/* v100 (14/10/2026) P2_8_16 ⭐ nota do trimestre · P2_8_08 🎨 marca da agência · P2_8_03/P2_2_21/P2_1_14 📮 o que sai do app (só sócios). Gavetas fechadas: só carregam quando abrem. */}
+    {typeof QGV100Nps==="function"&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,alignItems:"start"}}>
+      <QGV100Nps clients={clients} isMob={isMob} canEdit={_ed98} viewUser={_vu98}/>
+      <QGV100Marca isMob={isMob} viewUser={_vu98}/>
+      {_v98Socio(_vu98)&&<div style={{gridColumn:isMob?undefined:"1 / -1"}}><QGV100Envios clients={clients} isMob={isMob} viewUser={_vu98}/></div>}
+    </div>}
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",margin:"0 2px"}}>
       <span style={{fontWeight:800,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Relatórios · {mesLabel}</span>
       <span style={{fontSize:12,color:QG.txt3}}>{calcs.length} cliente{calcs.length!==1?"s":""} com movimento · Meta pela API · vendas e receita do Portal</span>
       {/* v99 (14/10/2026) 2.1.14: levar os números para planilha (CSV que abre no Google Sheets/Looker) */}
-      <span style={{marginLeft:"auto",display:"inline-flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>{typeof QGV99Exportar==="function"&&<QGV99Exportar clients={clients} data={data} year={year} month={month}/>}<QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/></span>
+      <span style={{marginLeft:"auto",display:"inline-flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>{typeof QGV99Exportar==="function"&&<QGV99Exportar clients={clients} data={data} year={year} month={month}/>}{/* v100 (14/10/2026) P2_1_14: planilha que atualiza sozinha (só sócio; liga com PIN) */}{typeof QGV100Planilha==="function"&&<QGV100Planilha viewUser={_vu98} isMob={isMob}/>}<QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/></span>
     </div>
     {calcs.length===0?<QGCard><QGEmpty texto={"Nenhum dado de mídia em "+mesLabel+"."} alt="Cadastre orçamento nos clientes ou aguarde a coleta da Meta."/></QGCard>:<>
     <div className="px-sens" style={{display:"grid",gridTemplateColumns:isMob?"1fr":(temVendas?"repeat(4,1fr)":"repeat(3,1fr)"),gap:14}}>
@@ -63692,7 +64666,9 @@ function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClie
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:"12px 20px",borderBottom:"1px solid "+QG.borda}}>
         <QGClienteNav mc={c.mc} clients={calcs.map(function(x){return x.mc;})} onTrocar={setFoco} isMob={isMob}/>
         <span style={{fontSize:12,color:QG.txt3}}>{_qgPlataformas(c.mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})} · atualizado {_qgRel(c.ultimaAtualizacao)}</span>
-        <span style={{marginLeft:"auto",display:"inline-flex",gap:6}}><button style={QG_BTN("sm")} onClick={function(){pxRelatorioAbrir(c.mc,c,m,year,month,acoes);}}>Relatório de 1 página · PDF</button>{onOpenClient&&<button style={QG_BTN("sm")} onClick={function(){onOpenClient(c.mc.client_id);}}>Abrir ›</button>}</span>
+        {/* v100 (14/10/2026) P2_8_16: nota do cliente ao lado dos números */}
+        {typeof QGV100NotaSelo==="function"&&<QGV100NotaSelo key={"ns"+c.mc.client_id} mc={c.mc}/>}
+        <span style={{marginLeft:"auto",display:"inline-flex",gap:6,flexWrap:"wrap"}}>{/* v100 (14/10/2026) P2_8_07: prévia da mídia ao vivo do Portal */}{typeof QGV100VerComoCliente==="function"&&<QGV100VerComoCliente mc={c.mc} isMob={isMob}/>}<button style={QG_BTN("sm")} onClick={function(){pxRelatorioAbrir(c.mc,c,m,year,month,acoes);}}>Relatório de 1 página · PDF</button>{onOpenClient&&<button style={QG_BTN("sm")} onClick={function(){onOpenClient(c.mc.client_id);}}>Abrir ›</button>}</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,padding:"20px 20px 0"}}>
         {Sol("#2f1a5e","Investido",_qgBRL(c.gasto,2),c.orcamento>0?"de "+_qgBRLk(c.orcamento)+" · "+Math.round(c.usoPct)+"%":"sem orçamento")}
@@ -63710,6 +64686,8 @@ function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClie
     </>}
     {/* v98 (14/10/2026) L6-b2: seção "💳 Financeiro da mídia · carteira" — SÓ sócios (o Erick nunca vê dinheiro da agência; o servidor também recusa) */}
     {typeof QGFinCarteira==="function"&&_v98Socio(_vu98)&&<QGFinCarteira clients={clients} isMob={isMob} viewUser={_vu98} onOpenClient={onOpenClient}/>}
+    {/* v100 (14/10/2026) P2_6_10: "💼 Valor da agência (fee) · carteira" — SÓ sócios */}
+    {typeof QGV100FeeCarteira==="function"&&_v98Socio(_vu98)&&<QGV100FeeCarteira clients={clients} isMob={isMob} viewUser={_vu98} onOpenClient={onOpenClient}/>}
   </div>;
 }
 
@@ -64170,10 +65148,10 @@ function _v98PdfAbrir(D,R,mc){
   const fn=(D.funil||[]).map(function(p){ return "<div class='f'><b>"+esc(p.passo==="investido"||p.passo==="vendido"?_qgBRL(p.valor):_qgNum(p.valor))+"</b><small>"+esc(p.rotulo)+"</small></div>"; }).join("");
   const html="<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>"+esc(mc.name)+" · relatório</title><style>@page{size:A4;margin:14mm} body{font-family:Inter,system-ui,sans-serif;color:#17131f;margin:0;padding:20px;max-width:760px} .top{border-bottom:2px solid "+cor+";padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between} h1{font-size:20px;margin:0} h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:"+cor+";margin:16px 0 6px} .g{display:grid;grid-template-columns:repeat(4,1fr);gap:8px} .k{border:1px solid #e5e9f0;border-radius:10px;padding:8px 10px} .k small{display:block;font-size:10px;color:#64748b;text-transform:uppercase} .k b{font-size:18px} .bar{height:8px;background:#eee;border-radius:9px} .bar span{display:block;height:100%;background:"+cor+";border-radius:9px} .fs{display:flex;gap:6px;flex-wrap:wrap} .f{background:#f5f3ff;border-radius:8px;padding:6px 10px;text-align:center} .f small{display:block;font-size:10px;color:#64748b} .faixa{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:11px;margin-bottom:10px} .foot{margin-top:18px;font-size:10px;color:#64748b;border-top:1px solid #eee;padding-top:6px}</style></head><body>"+
     (D.faixa?"<div class='faixa'>🔒 "+esc(D.faixa)+"</div>":"")+
-    "<div class='top'><div><h1>"+esc(mc.name)+"</h1><div style='color:#64748b'>"+esc(_v98DM(R.de))+" a "+esc(_v98DM(R.ate))+"/"+esc(String(R.ate||"").slice(0,4))+" · "+esc(D.modelo||"")+"</div></div><b style='color:"+cor+"'>"+esc((D.marca&&D.marca.nome)||"Pixels")+"</b></div>"+
+    "<div class='top'><div><h1>"+esc(mc.name)+"</h1><div style='color:#64748b'>"+esc(_v98DM(R.de))+" a "+esc(_v98DM(R.ate))+"/"+esc(String(R.ate||"").slice(0,4))+" · "+esc(D.modelo||"")+"</div></div>"+(D.marca&&D.marca.logo_url?"<img src='"+esc(D.marca.logo_url)+"' alt='' style='height:32px;max-width:130px;object-fit:contain'>":"<b style='color:"+cor+"'>"+esc((D.marca&&D.marca.nome)||"Pixels")+"</b>")+"</div>"+/* v100 (14/10/2026) P2_8_08: logo da agência quando cadastrada */
     "<div class='g'>"+kp+"</div>"+(D.resumo?"<h2>O mês em poucas palavras</h2><p>"+esc(D.resumo)+"</p>":"")+mt+(fn?"<h2>Do anúncio à venda</h2><div class='fs'>"+fn+"</div>":"")+
     (D.comentario?"<h2>Comentário do gestor</h2><p>"+esc(D.comentario.texto||D.comentario)+"</p>":"")+
-    "<div class='foot'>"+esc(D.rodape||"Pixels · relatório de 1 página")+" · gerado em "+new Date().toLocaleDateString("pt-BR")+"</div><script>setTimeout(function(){window.print();},300);</script></body></html>";
+    "<div class='foot'>"+esc(D.rodape||(D.marca&&D.marca.rodape)||"Pixels · relatório de 1 página")+(D.marca&&D.marca.site?" · "+esc(D.marca.site):"")+" · gerado em "+new Date().toLocaleDateString("pt-BR")+"</div><script>setTimeout(function(){window.print();},300);</script></body></html>";
   const w=window.open("","_blank"); if(!w){ _v98Toast("error","O navegador bloqueou a janela — libere pop-ups."); return; } w.document.open(); w.document.write(html); w.document.close();
 }
 function QGRelPrevia({mc,relId,ym,isMob,canEdit,viewUser,onVoltar,onAgendar,onRelId}){
@@ -64230,7 +65208,7 @@ function QGRelPrevia({mc,relId,ym,isMob,canEdit,viewUser,onVoltar,onAgendar,onRe
   const folha=<div style={{background:"#fff",borderRadius:isMob?14:6,boxShadow:"0 2px 14px rgba(15,13,26,.10)",padding:isMob?"16px 14px":"26px 30px",position:"relative",overflow:"hidden",minWidth:0}}>
     {!visivel&&<div aria-hidden="true" style={{position:"absolute",left:"8%",top:"42%",transform:"rotate(-28deg)",fontSize:isMob?30:46,fontWeight:900,color:"rgba(250,204,21,.16)",whiteSpace:"nowrap",pointerEvents:"none",letterSpacing:2}}>MODO INTERNO · O CLIENTE NÃO VÊ</div>}
     <div style={{display:"flex",alignItems:"center",gap:12,borderBottom:"2px solid "+V98.roxo2,paddingBottom:12}}>
-      <span style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#6d28d9)",color:"#fff",fontWeight:900,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{String((Rd.marca&&Rd.marca.nome)||"P").charAt(0)}</span>
+      {Rd.marca&&Rd.marca.logo_url?<img src={Rd.marca.logo_url} alt="logo" style={{height:38,maxWidth:110,objectFit:"contain",flexShrink:0}}/>/* v100 (14/10/2026) P2_8_08: logo da agência */:<span style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#6d28d9)",color:"#fff",fontWeight:900,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{String((Rd.marca&&Rd.marca.nome)||"P").charAt(0)}</span>}
       <div style={{minWidth:0}}><div style={{fontWeight:900,fontSize:isMob?15:18,letterSpacing:-.3}}>Relatório de {mesNome} · {mc.name}</div><div style={{fontSize:11.5,color:V98.mut}}>{_v98DM(Rd.de)} a {_v98DM(Rd.ate)}/{String(Rd.ate||"").slice(0,4)} · preparado pela {(Rd.marca&&Rd.marca.nome)||"Pixels"}{mc.responsavel?" · gestor "+((typeof TEAM!=="undefined"&&(TEAM.find(function(u){return u.id===mc.responsavel;})||{}).name)||mc.responsavel):""}</div></div>
     </div>
     {tem("resumo")&&<>{Cab("resumo","📝","O mês em poucas palavras")}
@@ -64268,8 +65246,11 @@ function QGRelPrevia({mc,relId,ym,isMob,canEdit,viewUser,onVoltar,onAgendar,onRe
         {(lt.itens||[]).length===0?<div style={{fontSize:12,color:V98.mut}}>Nada registrado no período (pedidos aplicados, campanhas publicadas, tarefas e anotações).</div>:
         <div style={{borderLeft:"2px solid "+V98.roxoL,marginLeft:6,paddingLeft:14}}>
           {(lt.itens||[]).slice(0,8).map(function(it,i){ const cor=it.deu==="melhorou"?V98.ok:it.deu==="piorou"?V98.bad:V98.mut; return <div key={i} style={{position:"relative",marginBottom:10}}><span style={{position:"absolute",left:-21,top:2,width:10,height:10,borderRadius:"50%",border:"2px solid "+V98.roxo2,background:"#fff"}}/>
-            <div style={{fontSize:11.5,fontWeight:800,color:V98.mut}}>{_v98DM(it.data)}</div><div style={{fontSize:12.5}}>{it.o_que}{(it.resultado||it.deu)&&<span> → <b style={{color:cor}}>{it.resultado||it.deu}</b></span>}</div></div>; })}
+            <div style={{fontSize:11.5,fontWeight:800,color:V98.mut}}>{_v98DM(it.data)}</div><div style={{fontSize:12.5}}>{it.o_que}{it.resultado&&<span> → <b style={{color:cor}}>{it.resultado}</b></span>}</div>
+            {/* v100 (14/10/2026) P2_8_06: resultado de 3 E de 7 dias depois (custo por lead antes → depois) */}
+            {typeof _f3a100LtDias==="function"?_f3a100LtDias(it):(!it.resultado&&it.deu&&<div style={{fontSize:12.5}}>→ <b style={{color:cor}}>{it.deu}</b></div>)}</div>; })}
         </div>}
+        {lt.regra&&(lt.itens||[]).length>0&&<div style={{fontSize:10.5,color:V98.mut2,marginTop:2,lineHeight:1.4}}>{lt.regra}</div>}
         {canEdit&&(anota?<div style={{display:"flex",flexDirection:"column",gap:6,marginTop:6}}><input type="date" value={anota.data||_v98Hoje()} onChange={function(e){setAnota(Object.assign({},anota,{data:e.target.value}));}} style={QG_INP}/><input placeholder="O que foi feito" value={anota.o_que||""} onChange={function(e){setAnota(Object.assign({},anota,{o_que:e.target.value}));}} style={QG_INP}/><input placeholder="O que deu (opcional)" value={anota.resultado||""} onChange={function(e){setAnota(Object.assign({},anota,{resultado:e.target.value}));}} style={QG_INP}/><div style={{display:"flex",gap:6}}><button style={_v98Btn("pri")} onClick={anotar}>Anotar</button><button style={_v98Btn("gh")} onClick={function(){setAnota(null);}}>Cancelar</button></div></div>:<button style={Object.assign(_v98Btn("sm"),{marginTop:4})} onClick={function(){setAnota({data:_v98Hoje()});}}>+ anotar à mão</button>)}
       </div>}
       <div>{Cab("geral","💬","Comentário do gestor")}
@@ -64298,12 +65279,14 @@ function QGRelPrevia({mc,relId,ym,isMob,canEdit,viewUser,onVoltar,onAgendar,onRe
     <V98Retrai isMob={isMob} ini={false} titulo="Modelo e marca">
       <div style={{fontSize:12.5,lineHeight:1.9}}>
         <div>Modelo: {CFG.ok&&CFG.data&&CFG.data.pode_editar?<select value={(CFG.data&&CFG.data.modelo)||""} onChange={async function(e){ const r=await _v98Rpc("rel_cfg_salvar",{p_client:raiz,p_campos:{modelo:e.target.value}}); if(!r.ok) _v98Toast("error",r.erro); else { _v98Toast("success","Modelo trocado. Vale para o próximo relatório gerado."); CFG.recarregar(); } }} style={{border:"1px solid "+V98.roxoL,background:V98.roxoBg,color:V98.roxo,fontWeight:800,borderRadius:99,padding:"2px 8px",fontSize:12,fontFamily:QG_FONT}}>{((CFG.data&&CFG.data.modelos)||[]).map(function(m){ return <option key={m.id} value={m.id}>{m.nome}</option>; })}</select>:<V98Pill v="r" t={D.modelo_nome||D.modelo||"—"}/>}</div>
-        <div>Marca: <b>{(Rd.marca&&Rd.marca.nome)||"Pixels"}</b> {Rd.marca&&!Rd.marca.logo_url?<span style={{color:V98.mut}}>(falta logo e rodapé)</span>:<span style={{color:V98.mut}}>(logo, cores, endereço)</span>}</div>
+        <div>Marca: <b>{(Rd.marca&&Rd.marca.nome)||"Pixels"}</b> {Rd.marca&&!Rd.marca.logo_url?<span style={{color:V98.mut}}>(falta logo e rodapé · cadastro em Relatórios › 🎨 Marca da agência)</span>:<span style={{color:V98.mut}}>(logo, cores, endereço)</span>}</div>{/* v100 (14/10/2026) P2_8_08: onde cadastrar */}
         <div>Resumo: gerado pelos números do mês, <b>revisão obrigatória</b>.</div>
       </div>
     </V98Retrai>
     <div style={{background:visivel?V98.okBg2:V98.amarBg,border:"1px solid "+(visivel?"#86efac":V98.amarBorda),borderRadius:14,padding:"12px 14px",fontSize:12.5,lineHeight:1.5,color:visivel?"#14532d":"#5b4a00"}}>
       <b>Visível para o cliente: {visivel?"LIGADA":"DESLIGADA"}.</b><br/>{visivel?"O Portal de "+mc.name+" recebe esta página só depois de marcada como Revisado.":"O Portal de "+mc.name+" não recebe esta página. A trava fica no servidor: o login do cliente recebe \"Ainda não disponível\"."}
+      {/* v100 (14/10/2026) P2_8_07: prévia da área de mídia ao vivo do Portal deste cliente */}
+      {typeof QGV100VerComoCliente==="function"&&<div style={{marginTop:8}}><QGV100VerComoCliente mc={mc} isMob={isMob} rotulo="👁 Ver a mídia ao vivo como o cliente"/></div>}
     </div>
   </div>;
   return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:QG_FONT}}>
@@ -64385,6 +65368,8 @@ function QGRelAgendar({mc,isMob,canEdit,onVoltar,onAbrir}){
           <span style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:8,fontWeight:900,fontSize:12.5}}><V98Toggle on={false} disabled title="Desligado nesta fase"/>DESLIGADO</span>
         </div>
         <div style={{fontSize:11.5,color:V98.mut,marginTop:8,lineHeight:1.5}}>Mesmo ligado, enquanto "Visível para o cliente" estiver desligada, o servidor troca o número do cliente pelo da agência.</div>
+        {/* v100 (14/10/2026) P2_8_03: quantos números da agência recebem o teste (cadastro em Relatórios › 📮, sócio + PIN) */}
+        {typeof QGV100WhatsNumerosLinha==="function"&&<QGV100WhatsNumerosLinha/>}
       </V98Card>
     </div>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,alignItems:"start"}}>
@@ -64419,7 +65404,7 @@ function QGFinCarteira({clients,isMob,viewUser,onOpenClient}){
   const PAG=useV98Rpc("ads_contas_pagamento_ler",{},[]);
   const chave=linhasCli.map(function(c){return c.client_id;}).join(",");
   useEffect(function(){ let vivo=true; setCarEx(true); const o={};
-    Promise.all(linhasCli.map(function(c){ return Promise.all([_v98Rpc("ads_previsao_mes",{p_client:c.client_id,p_mes:null,p_verba:null}),_v98Rpc("ads_roi_cliente",{p_client:c.client_id,p_meses:1})]).then(function(a){ o[c.client_id]={prev:a[0].ok?a[0].data:null,roi:a[1].ok?a[1].data:null}; }); })).then(function(){ if(vivo){ setEx(o); setCarEx(false); } });
+    Promise.all(linhasCli.map(function(c){ return Promise.all([_v98Rpc("ads_previsao_mes",{p_client:c.client_id,p_mes:null,p_verba:null}),(function(){ try{ if(typeof _pxRoiCliLer==="function") return _pxRoiCliLer(c.client_id,1); }catch(_){ } return _v98Rpc("ads_roi_cliente",{p_client:c.client_id,p_meses:1}); })()/* v100 (15/10/2026) CAC duplicado: mesma leitura do 03 */]).then(function(a){ o[c.client_id]={prev:a[0].ok?a[0].data:null,roi:a[1].ok?a[1].data:null}; }); })).then(function(){ if(vivo){ setEx(o); setCarEx(false); } });
     return function(){ vivo=false; }; },[chave]);
   if(!_v98Socio(viewUser)) return null;   // o Erick nunca vê dinheiro da agência (o servidor também recusa)
   if(FAT.ok===false&&REP.ok===false&&!FAT.carregando&&!REP.carregando&&!FAT.falta) return null;   // servidor recusou: não é sócio
@@ -64476,13 +65461,37 @@ function QGFinCarteira({clients,isMob,viewUser,onOpenClient}){
   </V98Retrai>;
 }
 
+/* v100 (15/10/2026) CAC duplicado: lê o ads_roi_cliente pela MESMA leitura do bloco 💰 do 03 (_pxRoiCliLer, 60 s); sem o 03, lê direto.
+   Reler quando o 03 muda a janela ou salva a margem ("pixels:cac-meses" com recarregar). Só leitura. */
+function useF3a100RoiCli(cid,meses,ligado){
+  const [st,setSt]=useState({carregando:!!ligado}); const [v,setV]=useState(0);
+  useEffect(function(){ const h=function(e){ const d=(e&&e.detail)||{}; if(d.cid===cid&&d.recarregar) setV(function(x){ return x+1; }); }; window.addEventListener("pixels:cac-meses",h); return function(){ window.removeEventListener("pixels:cac-meses",h); }; },[cid]);
+  useEffect(function(){ let vivo=true;
+    if(!ligado||!cid){ setSt({carregando:false,ok:false}); return; }
+    setSt(function(s){ return Object.assign({},s,{carregando:true}); });
+    let p; try{ p=(typeof _pxRoiCliLer==="function")?_pxRoiCliLer(cid,meses):null; }catch(_){ p=null; }
+    Promise.resolve(p||_v98Rpc("ads_roi_cliente",{p_client:cid,p_meses:meses})).then(function(r){ if(vivo) setSt(Object.assign({carregando:false},r)); });
+    return function(){ vivo=false; }; },[cid,meses,ligado,v]);
+  return st;
+}
+/* janela do CAC escolhida no bloco 💰 do 03 (6/12/18 meses; padrão 12) */
+function useF3a100CacMeses(cid){
+  const ler=function(){ const m=window._pxCacMeses&&window._pxCacMeses[cid]; return m===6||m===18?m:12; };
+  const [m,setM]=useState(ler);
+  useEffect(function(){ setM(ler()); const h=function(e){ const d=(e&&e.detail)||{}; if(d.cid===cid&&d.meses) setM(d.meses); }; window.addEventListener("pixels:cac-meses",h); return function(){ window.removeEventListener("pixels:cac-meses",h); }; },[cid]);
+  return m;
+}
+function _f3a100IrCac(){ try{ window.dispatchEvent(new CustomEvent("pixels:mop-abrir",{detail:{id:"etapas-venda"}})); }catch(_){ }
+  setTimeout(function(){ try{ const el=document.querySelector('[data-mop="ciclo-longo"]')||document.querySelector('[data-mop="etapas-venda"]'); if(el&&el.scrollIntoView) el.scrollIntoView({behavior:"smooth",block:"center"}); }catch(_){ } },120); }
+
 /* ═══ L6-b1 · Financeiro da conta (Cliente › aba Gestão) ═══ */
 function QGFinConta({mc,isMob,canEdit,viewUser,year,month}){
   const socio=_v98Socio(viewUser);
   const ym=year+"-"+_v98Pad(month); const ymAnt=_v98MesAnt(_v98Hoje().slice(0,7)); const ymProx=_v98MesProx(_v98Hoje().slice(0,7));
   const PAG=useV98Rpc(canEdit?"ads_contas_pagamento_ler":null,{},[canEdit]);
   const PRV=useV98Rpc(canEdit?"ads_previsao_mes":null,{p_client:mc.client_id,p_mes:null,p_verba:null},[mc.client_id,canEdit]);
-  const ROI=useV98Rpc(canEdit?"ads_roi_cliente":null,{p_client:mc.client_id,p_meses:1},[mc.client_id,canEdit]);
+  const ROI=useF3a100RoiCli(mc.client_id,1,!!canEdit);   // v100 (15/10/2026) CAC duplicado: mesma leitura do 03 (números do mês)
+  const cacMeses=useF3a100CacMeses(mc.client_id); const ROIc=useF3a100RoiCli(mc.client_id,cacMeses,!!(canEdit&&socio));   // CAC = o MESMO número do bloco 💰 do 03 (6/12/18 meses)
   const FUN=useV98Rpc(canEdit?"rel_funil_venda":null,{p_client:mc.client_id,p_de:_v98MesIni(_v98Hoje().slice(0,7)),p_ate:_v98Hoje()},[mc.client_id,canEdit]);
   const FAT=useV98Rpc(socio?"ads_faturas_conferir":null,{p_mes:_v98MesIni(ymAnt)},[socio]);
   const REP=useV98Rpc(socio?"ads_repasse_mes":null,{p_mes:_v98MesIni(ym)},[socio,ym]);
@@ -64540,6 +65549,8 @@ function QGFinConta({mc,isMob,canEdit,viewUser,year,month}){
           {(prv.eventos||[]).slice(0,3).map(function(e,i){ return <div key={i} style={{fontSize:11.5,color:V98.mut,marginTop:4}}>📅 <b style={{color:V98.ink2}}>{e.titulo}</b> ({_v98DM(e.de)}) — {e.efeito}</div>; })}
           <div style={{fontSize:11,color:V98.mut2,marginTop:6}}>confiança: {prv.confianca==="alta"?"alta":prv.confianca==="media"?"média":prv.confianca==="baixa"?"baixa":"sem dado"}</div></>)}
       </div>
+      {/* v100 (14/10/2026) P2_6_10: "💼 Valor da agência (fee)" — cadastrar o modelo e ver o valor do mês. SÓ sócios (o servidor também recusa). */}
+      {socio&&typeof QGV100Fee==="function"&&<div style={{marginTop:12}}><QGV100Fee mc={mc} isMob={isMob} year={year} month={month}/></div>}
       {Sub(<span>📈 Custo por venda e retorno</span>,<V98Pill v="k" t={_v98MesNome(_v98Hoje().slice(0,7))+" até agora"}/>,<>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {Box("Leads",_qgNum(leads),custo(leads))}
@@ -64547,7 +65558,9 @@ function QGFinConta({mc,isMob,canEdit,viewUser,year,month}){
           {Box("Orçamentos",l5.propostas!==undefined?_qgNum(l5.propostas):"—",custo(Number(l5.propostas||0)))}
           {Box("Vendas",_qgNum(vendas),custo(vendas))}
           {Box("Retorno da mídia",roi&&roi.retorno?_qgBRL(roi.retorno):"—",roi&&roi.retorno?"para cada R$ 1,00 · receita "+_qgBRL(Number(roi.receita_funil||0)+Number(roi.receita_portal||0)):"falta venda lançada",!!(roi&&roi.retorno))}
-          {socio&&Box("Custo para conquistar 1 cliente",roi&&roi.cac?_qgBRL(roi.cac):"—",roi&&roi.cac?"mídia + valor da agência"+(roi.payback_vendas?" · se paga em "+roi.payback_vendas+" venda(s)":""):"falta venda lançada")}
+          {/* v100 (15/10/2026) CAC duplicado: antes este cartão fazia o CAC só do mês (p_meses:1) e o bloco 💰 do 03 fazia de 6/12/18 meses, com números diferentes.
+               Agora mostra o MESMO CAC do 03 (mesma leitura, mesma janela) e leva até ele. */}
+          {socio&&(function(){ const rc=ROIc.ok?ROIc.data:null; return <div data-f3a100="cac" onClick={_f3a100IrCac} title="Abrir o bloco 💰 Visita, orçamento e venda (6, 12 ou 18 meses)" style={{flex:"1 1 130px",cursor:"pointer",display:"flex"}}>{Box("Custo para conquistar 1 cliente",rc&&rc.cac?_qgBRL(rc.cac,Math.abs(Number(rc.cac))<100?2:0)/* mesmo formato do bloco 💰 do 03 */:(ROIc.carregando?"…":"—"),<span>{rc&&rc.cac?"em "+cacMeses+" meses":"em "+cacMeses+" meses · "+(ROIc.carregando?"lendo":"falta venda lançada")}{rc&&rc.payback_vendas?" · se paga em "+rc.payback_vendas+" venda(s)":""} · <b style={{color:V98.roxo2||"#7c3aed"}}>ver 6, 12 ou 18 meses ›</b></span>)}</div>; })()}
         </div>
         <div style={{fontSize:11.5,color:V98.mut,marginTop:8}}>{(roi&&roi.obs)||"Vem do funil de leads (a equipe marca visita, orçamento e venda) e do Portal."}</div>
       </>,{marginTop:12})}
@@ -64652,12 +65665,14 @@ function QGV99Hoje({clients,data,isMob,onOpenClient,canEdit,onFechamento}){
     itens.length===0?<div style={{fontSize:12.5,color:V98.ok,fontWeight:700,padding:"6px 0"}}>Nada pendente hoje. 🎉</div>:
     <div style={{display:"flex",flexDirection:"column"}} className="px-sens">
       {lista.map(function(it,i){ return <div key={it.chave} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 0",borderTop:i?"1px solid "+V98.line2:"none",opacity:it.feito?.55:1}}>
-        <input type="checkbox" checked={!!it.feito} disabled={!podeMarcar} onChange={function(){ marcar(it); }} title={podeMarcar?"Marcar como feito":"Só quem edita a mídia marca"} style={{accentColor:V98.roxo,width:17,height:17,margin:"1px 0 0",flexShrink:0,cursor:podeMarcar?"pointer":"default"}}/>
+        {/* v100 (14/10/2026) R14/R3 (pedido do F1): alarme NÃO dá "feito" aqui — o visto é dentro do cliente (🧠 Decisões › Alarmes desta conta) */}
+        {it.tipo==="alarme"?<span title="O alarme se resolve dentro do cliente" style={{width:17,flexShrink:0}}/>:<input type="checkbox" checked={!!it.feito} disabled={!podeMarcar} onChange={function(){ marcar(it); }} title={podeMarcar?"Marcar como feito":"Só quem edita a mídia marca"} style={{accentColor:V98.roxo,width:17,height:17,margin:"1px 0 0",flexShrink:0,cursor:podeMarcar?"pointer":"default"}}/>}
         <div style={{flex:1,minWidth:0,fontSize:12.8,lineHeight:1.45,color:V98.ink,textDecoration:it.feito?"line-through":"none"}}>
           <span style={{marginRight:6}}>{ico[it.tipo]||"•"}</span>{it.texto}
-          {(it.prazo||(it.client_id&&it.tipo!=="fechar_semana"))&&<div style={{fontSize:11,color:V98.mut,marginTop:2}}>{it.client_id&&it.tipo!=="fechar_semana"?(it.cliente||nomeDe(it.client_id)):""}{it.prazo?(it.client_id&&it.tipo!=="fechar_semana"?" · ":"")+"prazo "+it.prazo:""}{it.feito&&it.feito_por?" · ✓ "+it.feito_por:""}</div>}
+          {(it.prazo||(it.client_id&&it.tipo!=="fechar_semana")||(it.tipo==="criativo_velho"&&Number(it.prazo_dias)>0))&&<div style={{fontSize:11,color:V98.mut,marginTop:2}}>{it.client_id&&it.tipo!=="fechar_semana"?(it.cliente||nomeDe(it.client_id)):""}{it.prazo?(it.client_id&&it.tipo!=="fechar_semana"?" · ":"")+"prazo "+it.prazo:""}{it.feito&&it.feito_por?" · ✓ "+it.feito_por:""}{/* v100 (15/10/2026) P2_4_17: o servidor manda o prazo pela verba (21/14/7 dias) no item criativo_velho */}{it.tipo==="criativo_velho"&&Number(it.prazo_dias)>0?" · prazo de troca pela verba: "+Number(it.prazo_dias)+" dias":""}</div>}
         </div>
-        {it.client_id&&<button onClick={function(){ abrirIt(it); }} style={_v98Btn("sm")}>{it.abrir==="fechar"?"Fechar ›":"Abrir ›"}</button>}
+        {it.tipo==="alarme"&&(it.client_id||it.ad_account_id||it.conta)?<button onClick={function(){ const ct=it.ad_account_id||it.conta; if(ct&&typeof _tiaIrCliente==="function"){ try{ _tiaIrCliente(ct,it.unidade||null,"ia"); return; }catch(_){ } } _f3a99Abrir(onOpenClient,it.client_id,"estrategia"); }} style={_v98Btn("sm")}>Ver no cliente ›</button>
+        :it.client_id&&<button onClick={function(){ abrirIt(it); }} style={_v98Btn("sm")}>{it.abrir==="fechar"?"Fechar ›":"Abrir ›"}</button>}
       </div>; })}
       {itens.length>LIM&&<button onClick={function(){setVerTodos(!verTodos);}} style={Object.assign(_v98Btn(),{justifyContent:"center",border:"1px dashed "+V98.roxoL,marginTop:6})}>{verTodos?"Ver menos ▴":"Ver mais "+(itens.length-LIM)+" ▾"}</button>}
     </div>}
@@ -64806,6 +65821,14 @@ function QGV99Perguntar({clients,mc,isMob}){
   const cid=mc?mc.client_id:((cidSel&&opcoes.some(function(c){ return c.client_id===cidSel; }))?cidSel:((opcoes[0]&&opcoes[0].client_id)||""));   /* a lista pode chegar depois do 1º desenho */
   const [txt,setTxt]=useState("");
   const [st,setSt]=useState({});
+  /* v100 (14/10/2026) P2_8_15: sem crédito (ou teto do mês batido) o botão fica cinza e avisa ANTES de perguntar.
+     1º o servidor (ads_perguntar_estado, C5a; só leitura, sem IA); sem ele, o "Saldo da IA" do 17e (useIaSemCredito, 1 leitura guardada). */
+  const _cr100=(typeof useIaSemCredito==="function")?useIaSemCredito():{sem:false,desde:null};
+  const _pd100=useF3a99Rpc(cid?"ads_perguntar_pode":null,{p_client:cid||null},[cid]);   // C5a: {pode, cinza, motivo, aviso}
+  const _es100=useF3a99Rpc(_pd100.falta?"ads_perguntar_estado":null,{},[!!_pd100.falta]);   // reserva (nome do pedido original)
+  const _ed100=(_es100.ok&&_es100.data)||null;
+  const _pdd100=(_pd100.ok&&_pd100.data)||null;
+  const bloq100=(_pdd100&&(_pdd100.cinza||_pdd100.pode===false))?String(_pdd100.motivo||_pdd100.aviso||"Sem crédito de IA."):(_ed100&&_ed100.pode===false)?String(_ed100.texto||(_ed100.motivo==="teto_mes"?"O teto de IA do mês acabou.":_ed100.motivo==="teto_dia"?"O teto de IA de hoje acabou.":_ed100.motivo==="so_socio"?"Só sócio pergunta.":"Sem crédito de IA.")):(_cr100&&_cr100.sem?"Sem crédito de IA"+(_cr100.desde?" desde "+_v98DM(_cr100.desde):"")+". Um sócio informa o saldo novo em 💳 Saldo da IA e o botão volta.":null);
   const sugestoes=["Por que o custo por lead mudou esta semana?","Qual anúncio está trazendo os leads mais baratos?","Vamos bater a meta do mês?"];
   /* v99 (14/10/2026) etapa 2 · 2.10.08: agora usa ads_perguntar + ads_perguntar_colher (C5a): o servidor confere sócio,
      trava por cliente e teto de IA do mês, e não gasta de novo a mesma pergunta em 10 min. Busca a resposta a cada 3 s,
@@ -64823,6 +65846,7 @@ function QGV99Perguntar({clients,mc,isMob}){
   };
   const perguntar=function(q){
     const p=String(q||txt||"").trim(); if(!p||!cid||st.ocupado) return;
+    if(bloq100){ setSt({erro:bloq100}); return; }   // v100 P2_8_15: nem chama o servidor sem crédito
     setTxt(p); setSt({ocupado:true});
     _v98Rpc("ads_perguntar",{p_client:cid,p_pergunta:p}).then(function(r0){
       if(r0.ok&&r0.data&&r0.data.ok!==false&&r0.data.job_id){ colher(r0.data.job_id,p,0); return; }
@@ -64845,8 +65869,9 @@ function QGV99Perguntar({clients,mc,isMob}){
     dir={!mc&&opcoes.length>0&&<select value={cid} onChange={function(e){ setCid(e.target.value); setSt({}); }} onClick={function(e){ e.stopPropagation(); }} style={{fontSize:12,fontWeight:700,border:"1px solid "+V98.line,borderRadius:8,padding:"4px 6px",fontFamily:QG_FONT,maxWidth:180}}>{opcoes.map(function(c){ return <option key={c.client_id} value={c.client_id}>{_v98Nome(c)}</option>; })}</select>}>
     <div style={{display:"flex",gap:8,flexWrap:isMob?"wrap":"nowrap"}}>
       <input value={txt} onChange={function(e){ setTxt(e.target.value); }} onKeyDown={function(e){ if(e.key==="Enter") perguntar(); }} maxLength={500} placeholder={"Pergunte sobre "+(mcSel?_v98Nome(mcSel):"o cliente")+"…"} style={{flex:"1 1 220px",minWidth:0,border:"1px solid "+V98.line,borderRadius:10,padding:"9px 11px",fontSize:13,fontFamily:QG_FONT}}/>
-      <button disabled={st.ocupado||!txt.trim()} onClick={function(){ perguntar(); }} style={_v98Btn(st.ocupado||!txt.trim()?"dis":"pri")}>{st.ocupado?"Pensando…":"Perguntar"}</button>
+      <button disabled={st.ocupado||!txt.trim()||!!bloq100} title={bloq100||undefined} onClick={function(){ perguntar(); }} style={_v98Btn(st.ocupado||!txt.trim()||bloq100?"dis":"pri")}>{st.ocupado?"Pensando…":bloq100?"Sem crédito de IA":"Perguntar"}</button>
     </div>
+    {bloq100&&!st.erro&&<div style={{marginTop:8,fontSize:12,color:"#92400e",background:V98.warnBg,border:"1px solid #fcd34d",borderRadius:10,padding:"7px 10px"}}>⚠️ {bloq100}</div>}{/* v100 P2_8_15: avisa antes */}
     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{sugestoes.map(function(s){ return <button key={s} disabled={st.ocupado} onClick={function(){ setTxt(s); }} style={_v98Btn("sm",{background:V98.roxoBg,borderColor:V98.roxoL,fontWeight:700})}>{s}</button>; })}</div>
     {st.erro&&<div style={{marginTop:10,fontSize:12.5,color:V98.bad}}>Não deu: {st.erro}</div>}
     {st.resp&&<div className="px-sens" style={{marginTop:10,background:V98.roxoBg,border:"1px solid "+V98.roxoL,borderRadius:12,padding:"10px 12px",fontSize:13,lineHeight:1.55,color:"#2e1065",whiteSpace:"pre-wrap"}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:V98.roxo,marginBottom:4}}>{st.q}</div>{st.resp}{st.custo?<div style={{fontSize:10.5,color:V98.mut,marginTop:6}}>custou US$ {Number(st.custo).toFixed(3).replace(".",",")}</div>:null}</div>}
@@ -65012,6 +66037,608 @@ function QGV99Exportar({clients,data,year,month}){
   return <button onClick={clicar} disabled={busy} title="Baixa um arquivo .csv que abre direto no Google Sheets (Arquivo › Importar) e serve de fonte no Looker Studio. Não leva valores da agência." style={QG_BTN("sm")}>{busy?"Exportando…":"⬇️ Exportar para planilha"}</button>;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   v100 (14/10/2026) — F3a fecha os itens aprovados que ficaram pela metade. Nenhuma aba nova: tudo é gaveta, bloco ou botão
+   dentro de tela que já existe. Gaveta fechada não carrega nada; o que grava ou gasta só acontece no clique.
+     P2_8_08 QGV100Marca              → Relatórios: gaveta "🎨 Marca da agência" (logo, cores, site, endereço, rodapé; só sócio muda)
+     P2_8_16 QGV100Nps · QGV100NotaSelo → Relatórios: gaveta "⭐ Nota do cliente · trimestre" + selo ⭐ ao lado dos números do cliente
+     P2_6_10 QGV100Fee · QGV100FeeCarteira → cliente › Gestão › 💳 Financeiro: "💼 Valor da agência" · Relatórios: carteira (SÓ sócios)
+     P2_5_09 QGV100PublicosCarteira   → Dashboard: gaveta "👥 Públicos que se repetem na carteira" (ordem: custo de lead bom)
+     P2_1_14 QGV100Planilha           → Relatórios: botão "🔗 Planilha automática" ao lado do Exportar (SÓ sócio; liga com PIN)
+     P2_8_03 · P2_8_16 · P2_2_21 · P2_1_14 QGV100Envios → Relatórios: gaveta "📮 O que sai do app" (SÓ sócios; tudo desligado)
+     P2_8_07 QGV100VerComoCliente · QGV100AoVivoPainel → Relatórios e prévia: "👁 Ver como o cliente" (mídia ao vivo do Portal)
+     P2_8_06 _f3a100LtDias            → prévia do relatório: linha do tempo com o resultado de 3 E de 7 dias
+   Função do servidor que ainda não existe → "ainda não ligado no servidor" (F3a99Falta). Nada escreve na Meta. Nada sai para
+   cliente, WhatsApp ou e-mail. O PIN é digitado e mandado só para a função do servidor; não fica guardado na tela.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _f3a100Tri(d){ d=d||new Date(); return d.getFullYear()+"-T"+(Math.floor(d.getMonth()/3)+1); }
+function _f3a100IsoDias(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.getFullYear()+"-"+_v98Pad(d.getMonth()+1)+"-"+_v98Pad(d.getDate()); }
+function _f3a100Copiar(txt,ok){
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ _v98Toast("success",ok||"Copiado."); },function(){ _v98Toast("error","Não copiou: selecione o texto e copie."); }); return; } }catch(_){ }
+  _v98Toast("error","Não copiou: selecione o texto e copie.");
+}
+function _f3a100Num(v){ if(v===null||v===undefined||String(v).trim()==="") return null; const n=Number(String(v).replace(/\./g,"").replace(",",".")); return isFinite(n)?n:NaN; }
+function _f3a100Mediana(a){ const x=(a||[]).filter(function(v){ return v!==null&&v!==undefined&&isFinite(v); }).sort(function(p,q){ return p-q; }); if(!x.length) return null; const m=Math.floor(x.length/2); return x.length%2?x[m]:(x[m-1]+x[m])/2; }
+function _f3a100NomeRaiz(clients,r){ const c=(clients||[]).find(function(x){ return x.client_id===r; }); if(c) return _v98Nome(c); const f=(clients||[]).find(function(x){ return x.parent_client===r; }); return f?String(f.name||r).split(" ")[0]+" (grupo)":r; }
+
+/* campo de PIN (6 dígitos; vai só para a função do servidor) */
+function F3a100Pin({valor,onChange,disabled}){
+  return <input type="password" inputMode="numeric" autoComplete="off" maxLength={6} disabled={disabled} value={valor||""} onChange={function(e){ onChange(String(e.target.value||"").replace(/\D/g,"").slice(0,6)); }} placeholder="PIN do sócio" aria-label="PIN do sócio (6 dígitos)" style={Object.assign({},QG_INP,{width:132,letterSpacing:valor?2:0,padding:"7px 10px"})}/>;
+}
+/* gaveta que abre e fecha no computador e no celular; o conteúdo só monta (e só carrega) quando abre */
+function F3a100Gaveta({icone,titulo,pill,resumo,ini,dir,children}){
+  const [ab,setAb]=useState(!!ini);
+  return <V98Card pad="0" style={{overflow:"hidden"}}>
+    <div role="button" aria-expanded={ab} onClick={function(){ setAb(!ab); }} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",cursor:"pointer",flexWrap:"wrap"}}>
+      <span style={{fontSize:17,lineHeight:1}}>{icone}</span>
+      <div style={{minWidth:0,flex:"1 1 200px"}}>
+        <div style={{fontWeight:800,fontSize:14,color:V98.ink,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>{titulo}{pill}</div>
+        {resumo&&<div style={{fontSize:12,color:V98.mut,marginTop:2,lineHeight:1.4}}>{resumo}</div>}
+      </div>
+      {dir&&<span onClick={function(e){ e.stopPropagation(); }} style={{display:"inline-flex",gap:6,alignItems:"center"}}>{dir}</span>}
+      <span style={{color:V98.mut2,fontSize:12,fontWeight:800}}>{ab?"▾ fechar":"▸ abrir"}</span>
+    </div>
+    {ab&&<div style={{borderTop:"1px solid "+V98.line2,padding:"12px 16px 14px"}}>{children}</div>}
+  </V98Card>;
+}
+function F3a100Modal({titulo,onFechar,isMob,children,largura}){
+  useEffect(function(){ const h=function(e){ if(e.key==="Escape") onFechar(); }; window.addEventListener("keydown",h); return function(){ window.removeEventListener("keydown",h); }; },[]);
+  return <div onClick={onFechar} style={{position:"fixed",inset:0,zIndex:80,background:"rgba(15,13,26,.45)",display:"flex",alignItems:isMob?"flex-end":"flex-start",justifyContent:"center",padding:isMob?0:"48px 16px",overflowY:"auto",fontFamily:QG_FONT}}>
+    <div role="dialog" aria-label={typeof titulo==="string"?titulo:undefined} onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:isMob?"18px 18px 0 0":18,width:"100%",maxWidth:largura||640,maxHeight:isMob?"88vh":"none",overflowY:isMob?"auto":"visible",boxShadow:"0 20px 60px rgba(15,13,26,.25)",boxSizing:"border-box"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 18px",borderBottom:"1px solid "+V98.line2}}><b style={{fontSize:15,color:V98.ink}}>{titulo}</b><button onClick={onFechar} style={Object.assign(_v98Btn("gh"),{marginLeft:"auto"})}>✕ fechar</button></div>
+      <div style={{padding:"14px 18px 18px"}}>{children}</div>
+    </div>
+  </div>;
+}
+function _f3a100Linha(rot,val){ return <div style={{display:"grid",gridTemplateColumns:"140px 1fr",gap:8,padding:"4px 0",fontSize:12.5}}><span style={{color:V98.mut}}>{rot}</span><span style={{minWidth:0,wordBreak:"break-word"}}>{val}</span></div>; }
+
+/* ═══ P2_8_08 · Marca da agência (relatórios e Portal) ═══ */
+function QGV100Marca({isMob,viewUser}){
+  return <F3a100Gaveta icone="🎨" titulo="Marca da agência nos relatórios e no Portal" pill={<V98Pill v="y" t="o cliente ainda não vê"/>}
+    resumo="Logo, cores, site, endereço do Portal e rodapé. Vale para o PDF, o link e o Portal.">
+    <QGV100MarcaCorpo isMob={isMob} viewUser={viewUser}/>
+  </F3a100Gaveta>;
+}
+function QGV100MarcaCorpo({isMob,viewUser}){
+  const socio=_v98Socio(viewUser);
+  const M=useF3a99Rpc("rel_marca",{p_client:null},[]);
+  const [ed,setEd]=useState(null); const [busy,setBusy]=useState(false); const [subindo,setSubindo]=useState(false);
+  const d=(M.ok&&M.data)||{};
+  const campos=[["nome","Nome da agência","Pixels"],["site","Site","https://pixelsmarketing.com.br"],["endereco_portal","Endereço do Portal (com o nome da Pixels)","relatorios.pixelsmarketing.com.br"],["whatsapp","WhatsApp da agência","(49) 9…"],["instagram","Instagram","@pixels"],["rodape","Rodapé dos relatórios","Pixels Marketing · Chapecó/SC"]];
+  const editar=function(){ const o={}; campos.forEach(function(c){ o[c[0]]=d[c[0]]||""; }); o.logo_url=d.logo_url||""; o.cor_primaria=d.cor_primaria||"#7c3aed"; o.cor_secundaria=d.cor_secundaria||"#0ea5e9"; setEd(o); };
+  const subirLogo=async function(f){
+    if(!f||!ed) return;
+    if(!/^image\/(png|jpe?g|webp|svg\+xml)$/.test(f.type||"")){ _v98Toast("error","Use PNG, JPG, WEBP ou SVG."); return; }
+    if(f.size>2*1024*1024){ _v98Toast("error","A logo precisa ter até 2 MB."); return; }
+    setSubindo(true);
+    try{
+      const ext=(f.type==="image/svg+xml")?"svg":String(f.type).split("/")[1].replace("jpeg","jpg");
+      const caminho="marca-pixels/logo-"+Date.now()+"."+ext;
+      const up=await window._sb.storage.from("agency-files").upload(caminho,f,{upsert:false,contentType:f.type});
+      if(up&&up.error) throw up.error;
+      const pu=window._sb.storage.from("agency-files").getPublicUrl(caminho);
+      const url=pu&&pu.data&&pu.data.publicUrl; if(!url) throw new Error("sem endereço da logo");
+      setEd(Object.assign({},ed,{logo_url:url})); _v98Toast("success","Logo enviada. Clique em Salvar para valer.");
+    }catch(e){ _v98Toast("error","Não subiu a logo: "+String(e&&e.message||e)); }
+    setSubindo(false);
+  };
+  const salvar=async function(){ if(!ed||busy) return; setBusy(true);
+    const r=await _v98Rpc("rel_marca_salvar",{p:ed}); setBusy(false);
+    if(!r.ok){ _v98Toast("error","Não salvou: "+(r.falta?"ainda não ligado no servidor (rel_marca_salvar)":r.erro)); return; }
+    _v98Toast("success","Marca salva. Vale para os próximos PDFs e para o Portal quando a chave ligar."); setEd(null); M.recarregar(); };
+  if(M.carregando&&!M.data) return <QGEmpty texto="Lendo a marca…"/>;
+  if(!M.ok) return M.falta?<F3a99Falta nome="rel_marca" dono="C5b"/>:<div style={{fontSize:12.5,color:V98.bad}}>Não leu a marca: {String(M.erro||"")}</div>;
+  const v=ed||d; const cor=v.cor_primaria||"#7c3aed";
+  const previa=<div style={{border:"1px solid "+V98.line,borderRadius:12,padding:"12px 14px",background:"#fff"}}>
+    <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:V98.mut,marginBottom:8}}>Como sai no topo do relatório</div>
+    <div style={{display:"flex",alignItems:"center",gap:10,borderBottom:"2px solid "+cor,paddingBottom:8}}>
+      {v.logo_url?<img src={v.logo_url} alt="logo" style={{height:34,maxWidth:120,objectFit:"contain"}}/>:<span style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,"+cor+","+(v.cor_secundaria||"#0ea5e9")+")",color:"#fff",fontWeight:900,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{String(v.nome||"P").charAt(0)}</span>}
+      <div style={{minWidth:0,flex:1}}><b style={{fontSize:13.5}}>Relatório do mês</b><div style={{fontSize:11.5,color:V98.mut}}>preparado pela {v.nome||"Pixels"}</div></div>
+      <b style={{marginLeft:"auto",color:cor,fontSize:13}}>{v.nome||"Pixels"}</b>
+    </div>
+    <div style={{fontSize:11,color:V98.mut,marginTop:8}}>{v.rodape||((v.nome||"Pixels")+" · relatório de 1 página")}{v.site?" · "+v.site:""}</div>
+  </div>;
+  const falta=[]; if(!d.logo_url) falta.push("logo"); if(!d.site) falta.push("site"); if(!d.rodape) falta.push("rodapé"); if(!d.endereco_portal) falta.push("endereço do Portal");
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {falta.length>0&&!ed&&<div style={{fontSize:12,color:V98.warn}}>Falta cadastrar: {falta.join(", ")}.</div>}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,alignItems:"start"}}>
+      <div>{ed?<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <label style={{fontSize:12,fontWeight:700,color:V98.ink2}}>Logo (PNG, JPG, WEBP ou SVG, até 2 MB)
+          <div style={{display:"flex",gap:8,alignItems:"center",marginTop:4,flexWrap:"wrap"}}><label style={Object.assign(_v98Btn("gh"),{cursor:"pointer"})}>{subindo?"Enviando…":"📎 escolher arquivo"}<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{display:"none"}} disabled={subindo} onChange={function(e){ const f=e.target.files&&e.target.files[0]; if(f) subirLogo(f); }}/></label>{ed.logo_url&&<button style={_v98Btn("sm")} onClick={function(){ setEd(Object.assign({},ed,{logo_url:""})); }}>tirar a logo</button>}</div>
+        </label>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{[["cor_primaria","Cor principal"],["cor_secundaria","Cor de apoio"]].map(function(c){ return <label key={c[0]} style={{fontSize:12,fontWeight:700,color:V98.ink2,display:"flex",alignItems:"center",gap:6}}><input type="color" value={ed[c[0]]||"#7c3aed"} onChange={function(e){ const o=Object.assign({},ed); o[c[0]]=e.target.value; setEd(o); }} style={{width:34,height:26,border:"1px solid "+V98.line,borderRadius:6,padding:0,background:"#fff"}}/>{c[1]}</label>; })}</div>
+        {campos.map(function(c){ return <label key={c[0]} style={{fontSize:12,fontWeight:700,color:V98.ink2}}>{c[1]}<input value={ed[c[0]]||""} maxLength={c[0]==="rodape"?160:120} placeholder={c[2]} onChange={function(e){ const o=Object.assign({},ed); o[c[0]]=e.target.value; setEd(o); }} style={Object.assign({},QG_INP,{marginTop:4})}/></label>; })}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><button disabled={busy||subindo} style={_v98Btn(busy||subindo?"dis":"pri")} onClick={salvar}>{busy?"Salvando…":"Salvar marca"}</button><button style={_v98Btn("gh")} onClick={function(){ setEd(null); }}>Cancelar</button></div>
+      </div>:<div>
+        {_f3a100Linha("Nome",<b>{d.nome||"Pixels"}</b>)}
+        {_f3a100Linha("Logo",d.logo_url?<span style={{color:V98.ok,fontWeight:700}}>✓ cadastrada</span>:<span style={{color:V98.mut}}>falta</span>)}
+        {_f3a100Linha("Cores",<span style={{display:"inline-flex",gap:6,alignItems:"center",whiteSpace:"nowrap",flexWrap:"wrap"}}><span style={{width:14,height:14,borderRadius:4,background:d.cor_primaria||"#7c3aed",display:"inline-block"}}/>{d.cor_primaria||"—"}<span style={{width:14,height:14,borderRadius:4,background:d.cor_secundaria||"#0ea5e9",display:"inline-block",marginLeft:6}}/>{d.cor_secundaria||"—"}</span>)}
+        {_f3a100Linha("Site",d.site||<span style={{color:V98.mut}}>falta</span>)}
+        {_f3a100Linha("Endereço do Portal",d.endereco_portal?<span>{d.endereco_portal} <V98Pill v="y" t="🔒 só abre com a chave ligada"/></span>:<span style={{color:V98.mut}}>falta</span>)}
+        {_f3a100Linha("WhatsApp · Instagram",(d.whatsapp||"—")+" · "+(d.instagram||"—"))}
+        {_f3a100Linha("Rodapé",d.rodape||<span style={{color:V98.mut}}>falta (usa "Pixels · relatório de 1 página")</span>)}
+        {socio?<button style={Object.assign(_v98Btn("pri"),{marginTop:8})} onClick={editar}>Editar a marca</button>:<div style={{fontSize:11.5,color:V98.mut,marginTop:8}}>Só um sócio muda a marca.</div>}
+      </div>}</div>
+      {previa}
+    </div>
+    <div style={{fontSize:11.5,color:V98.mut,lineHeight:1.5,background:"#fafafc",border:"1px solid "+V98.line,borderRadius:10,padding:"8px 12px"}}>A logo e o rodapé entram no PDF e na prévia do relatório na hora. No Portal, entram quando a área de mídia do Portal ligar (chave "Visível para o cliente", só sócio, com PIN). Endereço com o nome da Pixels: o Vini cria o endereço no domínio da agência e aponta para o app; até lá fica só guardado aqui.</div>
+  </div>;
+}
+
+/* ═══ P2_8_16 · Nota do cliente para a agência (pesquisa do trimestre + NPS que já existe no menu Clientes) ═══ */
+const _F3A100_NPS={p:null,t:0};
+function _f3a100NpsOutro(){
+  if(_F3A100_NPS.p&&Date.now()-_F3A100_NPS.t<60000) return _F3A100_NPS.p;
+  if(typeof window==="undefined"||!window._sb) return Promise.resolve({});
+  _F3A100_NPS.t=Date.now();
+  _F3A100_NPS.p=Promise.resolve(window._sb.from("nps_responses").select("client_id,score,created_at").order("created_at",{ascending:false}).limit(300)).then(function(r){ const o={}; ((r&&!r.error&&r.data)||[]).forEach(function(x){ if(x&&x.client_id&&!o[x.client_id]&&x.score!==null&&x.score!==undefined) o[x.client_id]={nota:Number(x.score),em:x.created_at}; }); return o; },function(){ return {}; });
+  return _F3A100_NPS.p;
+}
+function useF3a100NpsOutro(){ const [o,setO]=useState(null); useEffect(function(){ let vivo=true; _f3a100NpsOutro().then(function(x){ if(vivo) setO(x||{}); }); return function(){ vivo=false; }; },[]); return o; }
+function _f3a100NotaDo(mc,lista,outro){
+  const raiz=(mc&&(mc.parent_client||mc.client_id))||""; const ids=[mc&&mc.client_id,raiz];
+  const its=((lista&&lista.itens)||[]).filter(function(x){ return ids.indexOf(x.client_id)>=0; }).sort(function(a,b){ return String(b.trimestre).localeCompare(String(a.trimestre)); });
+  const resp=its.find(function(x){ return x.nota!==null&&x.nota!==undefined; });
+  let nota=resp?{nota:Number(resp.nota),quando:resp.trimestre,em:resp.respondido_em||"",fonte:"trimestre",comentario:resp.comentario||""}:null;
+  const srvOutro=its.map(function(x){ return x.nota_outro_menu; }).filter(Boolean)[0];
+  const out=srvOutro||(outro&&(outro[mc&&mc.client_id]||outro[raiz]));
+  if(out&&out.nota!==null&&out.nota!==undefined&&(!nota||String(out.em||"")>String(nota.em||""))) nota={nota:Number(out.nota),quando:out.em?_v98DM(out.em)+"/"+String(out.em).slice(2,4):"NPS",em:out.em||"",fonte:"NPS",comentario:""};
+  return {nota:nota,atual:its[0]||null};
+}
+function _f3a100CorNota(v){ return v>=9?"g":v>=7?"y":"red"; }
+function QGV100NotaSelo({mc}){
+  const L=useF3a99Rpc("rel_nps_lista",{p_client:null},[]);
+  const RS=useF3a99Rpc(mc?"rel_nps_resumo_cliente":null,{p_client:mc&&mc.client_id},[mc&&mc.client_id]);   // C5b: {ultima, pendente, alerta}
+  const outro=useF3a100NpsOutro();
+  if(!mc||(!L.ok&&!outro&&!RS.ok)) return null;
+  const rs=RS.ok&&RS.data?RS.data:null;
+  const lista={itens:((L.ok&&L.data&&L.data.itens)||[]).concat(rs&&rs.ultima&&rs.ultima.nota!==null&&rs.ultima.nota!==undefined?[{client_id:mc.client_id,trimestre:rs.ultima.trimestre,nota:rs.ultima.nota,comentario:rs.ultima.comentario,respondido_em:rs.ultima.em}]:[])};
+  const n=_f3a100NotaDo(mc,lista,outro);
+  if(rs&&rs.alerta&&n.nota&&isFinite(n.nota.nota)) n.nota.comentario=(n.nota.comentario?n.nota.comentario+" · ":"")+String(rs.alerta);
+  if(n.nota&&isFinite(n.nota.nota)) return <V98Pill v={_f3a100CorNota(n.nota.nota)} t={"⭐ nota "+n.nota.nota+"/10 · "+n.nota.quando} title={"Nota que o cliente deu para a agência ("+(n.nota.fonte==="NPS"?"pesquisa NPS do menu Clientes":"pesquisa do trimestre")+")"+(n.nota.comentario?": "+n.nota.comentario:"")+". 9–10 = fã · 7–8 = neutro · 0–6 = em risco."}/>;
+  if(n.atual) return <V98Pill v="k" t={"⭐ "+n.atual.trimestre+": sem nota"} title="A pesquisa do trimestre está pronta, mas o envio está desligado (Relatórios › ⭐ Nota do cliente)."/>;
+  return null;
+}
+function QGV100Nps({clients,isMob,canEdit,viewUser}){
+  return <F3a100Gaveta icone="⭐" titulo="Nota do cliente para a agência · trimestre" pill={<V98Pill v="y" t="envio desligado"/>}
+    resumo="Pesquisa de 0 a 10 a cada trimestre. A nota aparece ao lado dos números de cada cliente.">
+    <QGV100NpsCorpo clients={clients} isMob={isMob} canEdit={canEdit} viewUser={viewUser}/>
+  </F3a100Gaveta>;
+}
+function QGV100NpsCorpo({clients,isMob,canEdit,viewUser}){
+  const L=useF3a99Rpc("rel_nps_lista",{p_client:null},[]);
+  const outro=useF3a100NpsOutro();
+  const [ed,setEd]=useState(null); const [busy,setBusy]=useState(false);
+  const [pin,setPin]=useState(""); const [ligando,setLigando]=useState(false); const [msgEnvio,setMsgEnvio]=useState("");
+  const tri=_f3a100Tri(); const socio=_v98Socio(viewUser);
+  const raizes=[]; (clients||[]).forEach(function(c){ const r=c.parent_client||c.client_id; if(raizes.indexOf(r)<0) raizes.push(r); });
+  if(L.carregando&&!L.data) return <QGEmpty texto="Lendo as pesquisas…"/>;
+  if(!L.ok) return L.falta?<F3a99Falta nome="rel_nps_lista" dono="C5b"/>:<div style={{fontSize:12.5,color:V98.bad}}>Não leu as pesquisas: {String(L.erro||"")}</div>;
+  const itens=(L.data&&L.data.itens)||[]; const ligado=!!(L.data&&L.data.envio_ligado);
+  const PADRAO="De 0 a 10, quanto você recomendaria a Pixels para um amigo do seu ramo? E o que faria essa nota subir?";
+  const linhas=raizes.map(function(r){ const at=itens.find(function(x){ return x.client_id===r&&x.trimestre===tri; })||null; const n=_f3a100NotaDo({client_id:r},{itens:itens},outro); return {r:r,nome:_f3a100NomeRaiz(clients,r),at:at,nota:n.nota}; });
+  const Situacao=function(l){ if(!l.at) return <V98Pill v="k" t="não preparada"/>; if(l.at.nota!==null&&l.at.nota!==undefined) return <V98Pill v="g" t={"respondida "+_v98DM(l.at.respondido_em)}/>; if(l.at.status==="guardada") return <V98Pill v="y" t="pronta · não enviada"/>; return <V98Pill v="k" t={String(l.at.status||"—")}/>; };
+  const Nota=function(l){ if(!l.nota) return <span style={{color:V98.mut2}}>—</span>; return <span title={l.nota.comentario||""}><V98Pill v={_f3a100CorNota(l.nota.nota)} t={l.nota.nota+"/10"}/> <span style={{fontSize:11,color:V98.mut}}>{l.nota.quando}{l.nota.fonte==="NPS"?" · NPS":""}</span></span>; };
+  const preparar=async function(){ if(!ed||busy) return; setBusy(true);
+    const r=await _v98Rpc("rel_nps_preparar",{p_client:ed.r,p_trimestre:tri,p_pergunta:(ed.pergunta||"").trim()||null}); setBusy(false);
+    if(!r.ok){ _v98Toast("error","Não guardou: "+(r.falta?"ainda não ligado no servidor (rel_nps_preparar)":r.erro)); return; }
+    _v98Toast("success","Pesquisa de "+tri+" pronta. Nada foi enviado."); setEd(null); L.recarregar(); };
+  const mudarEnvio=async function(){ if(pin.length!==6||ligando) return; setLigando(true); setMsgEnvio("");
+    const r=await _v98Rpc("rel_nps_envio_definir",{p_ligar:!ligado,p_pin:pin}); setLigando(false); setPin("");
+    if(!r.ok){ setMsgEnvio(r.falta?"Ainda não ligado no servidor (rel_nps_envio_definir · C5b).":String(r.erro||"recusado")); return; }
+    _v98Toast("success",!ligado?"Envio da pesquisa ligado. O cliente só vê com a chave Visível dele ligada.":"Envio da pesquisa desligado."); L.recarregar(); };
+  const Acao=function(l){ if(!canEdit) return null; if(l.at&&l.at.status!=="guardada") return null; return <button style={_v98Btn("sm")} onClick={function(){ setEd({r:l.r,nome:l.nome,pergunta:(l.at&&l.at.pergunta)||PADRAO}); }}>{l.at?"Editar pergunta":"Preparar"}</button>; };
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:12.5}}>
+      <span>Envio da pesquisa: <b style={{color:ligado?V98.ok:V98.warn}}>{ligado?"LIGADO":"DESLIGADO"}</b></span>
+      {socio&&<span style={{display:"inline-flex",gap:6,alignItems:"center",flexWrap:"wrap",marginLeft:isMob?0:"auto"}}><F3a100Pin valor={pin} onChange={setPin} disabled={ligando}/><button disabled={pin.length!==6||ligando} style={_v98Btn(pin.length!==6||ligando?"dis":"gh")} onClick={mudarEnvio}>{ligando?"…":(ligado?"Desligar o envio":"Ligar o envio")}</button></span>}
+    </div>
+    {msgEnvio&&<div style={{fontSize:12,color:V98.bad}}>{msgEnvio}</div>}
+    {ed&&<div style={{border:"1px solid "+V98.roxoL,background:V98.roxoBg,borderRadius:12,padding:"10px 12px"}}>
+      <div style={{fontSize:12.5,fontWeight:800,marginBottom:6}}>Pergunta de {tri} · {ed.nome}</div>
+      <textarea rows={3} maxLength={300} value={ed.pergunta} onChange={function(e){ setEd(Object.assign({},ed,{pergunta:e.target.value})); }} style={Object.assign({},QG_INP,{fontWeight:500,lineHeight:1.45})}/>
+      <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}><button disabled={busy} style={_v98Btn(busy?"dis":"pri")} onClick={preparar}>{busy?"Guardando…":"Guardar (não envia)"}</button><button style={_v98Btn("gh")} onClick={function(){ setEd(null); }}>Cancelar</button></div>
+    </div>}
+    {isMob?<div style={{display:"flex",flexDirection:"column",gap:8}}>{linhas.map(function(l){ return <div key={l.r} style={{border:"1px solid "+V98.line,borderRadius:12,padding:"10px 12px",fontSize:12.5}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><b>{l.nome}</b><span style={{marginLeft:"auto"}}>{Situacao(l)}</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>Última nota: {Nota(l)}<span style={{marginLeft:"auto"}}>{Acao(l)}</span></div>
+      </div>; })}</div>:
+    <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontFamily:QG_FONT}}>
+      <thead><tr><th style={_F3A99_TH}>Cliente</th><th style={_F3A99_TH}>Pesquisa de {tri}</th><th style={_F3A99_TH}>Última nota</th><th style={_F3A99_TH}></th></tr></thead>
+      <tbody>{linhas.map(function(l){ return <tr key={l.r}><td style={Object.assign({},_F3A99_TD,{fontWeight:800})}>{l.nome}</td><td style={_F3A99_TD}>{Situacao(l)}</td><td style={_F3A99_TD}>{Nota(l)}</td><td style={Object.assign({},_F3A99_TD,{textAlign:"right"})}>{Acao(l)}</td></tr>; })}</tbody>
+    </table></div>}
+    <div style={{fontSize:11.5,color:V98.mut,lineHeight:1.5}}>9–10 = fã · 7–8 = neutro · 0–6 = em risco (ligue para conversar). A nota mais recente vale: a do trimestre ou a do NPS do menu Clientes. Mesmo com o envio ligado, o cliente só vê a pesquisa no Portal com a chave "Visível para o cliente" dele ligada. Nada é mandado por WhatsApp ou e-mail.</div>
+  </div>;
+}
+
+/* v100 (15/10/2026) E1 (revisor): a pílula do placar tira o nome do cliente do título do servidor (midia_alertas_cliente manda o nome completo:
+   "Funil desatualizado: Arabutã Pré-moldados", "Queda forte de leads em …", "… em atenção na meta"). */
+function _f3a100PilulaTxt(titulo,mc){
+  let t=String(titulo||""); const orig=t;
+  [String((mc&&mc.name)||""),(typeof _v98Nome==="function"?_v98Nome(mc):"")].filter(function(n){ return n&&n.length>1; }).forEach(function(n){ t=t.split(n).join(""); });
+  t=t.replace(/^(Funil desatualizado)\s*:.*$/i,"$1").replace(/^(Queda forte de leads)\s+em\s+.*$/i,"$1");
+  const m=t.match(/(abaixo do ritmo da meta|em atenção na meta|estourou o orçamento|com orçamento quase esgotado)\s*$/i); if(m) t=m[1];
+  t=t.replace(/^[\s:·-]+|[\s:·-]+$/g,"");
+  return t?t.charAt(0).toUpperCase()+t.slice(1):orig;
+}
+/* v100 (15/10/2026) P2_6_10 (revisor): quem é nível 1 na tela mas não está em ads_aprovadores no servidor (ex.: login de teste)
+   via as gavetas de dinheiro/envio com "Indisponível: Só sócio.". Agora pergunta 1 vez ao servidor (_px_eh_aprovador_ads, só leitura)
+   e esconde quando a resposta é "não". Se a função faltar ou der erro, segue como antes (o servidor continua recusando). */
+let _f3a100AprovCache={v:null,em:0};   // 1 pergunta por página (vale 10 min); é só aparência, o servidor continua recusando
+function useF3a100Aprovador(ativo){
+  const c=_f3a100AprovCache; const novo=typeof c.v==="boolean"&&(Date.now()-c.em)<600000;
+  const [v,setV]=useState(novo?c.v:null);
+  useEffect(function(){ if(!ativo) return; let vivo=true;
+    const fresco=typeof _f3a100AprovCache.v==="boolean"&&(Date.now()-_f3a100AprovCache.em)<600000;
+    if(!fresco&&!(_f3a100AprovCache.v&&typeof _f3a100AprovCache.v.then==="function")) _f3a100AprovCache={v:_v98Rpc("_px_eh_aprovador_ads",{}).then(function(r){ const x=!(r&&r.ok&&r.data===false); _f3a100AprovCache={v:x,em:Date.now()}; return x; }),em:0};
+    Promise.resolve(_f3a100AprovCache.v).then(function(x){ if(vivo) setV(x); });
+    return function(){ vivo=false; }; },[ativo]);
+  return v!==false;
+}
+function _f3a100SoSocio(F){ return !!(F&&F.ok===false&&/s[óo] s[óo]cio/i.test(String(F.erro||(F.data&&F.data.erro)||""))); }
+/* ═══ P2_6_10 · Valor da agência (fee) — SÓ sócios (o servidor também recusa para o resto) ═══ */
+function _f3a100FeeModeloTxt(it){
+  if(!it) return "—";
+  const p=[]; if(Number(it.fixo)>0) p.push(_qgBRL(it.fixo)+" fixo"); if(Number(it.pct)>0) p.push(String(it.pct).replace(".",",")+"% da mídia"); if(Number(it.minimo)>0) p.push("mínimo "+_qgBRL(it.minimo));
+  if(!p.length) return "sem modelo e sem valor no contrato";
+  /* v100 (14/10/2026) P2_6_10 (etapa 2): ads_fee_mes do C4b agora manda tem_modelo — "modelo cadastrado" × "valor do contrato". */
+  return p.join(" + ").replace(" + mínimo"," · mínimo")+(it.tem_modelo===true?" (modelo cadastrado)":(it.origem_fixo==="contrato"&&!(Number(it.pct)>0)?" (valor do contrato)":""));
+}
+function _f3a100CobrancaTxt(it,nome,ym){
+  const mes=_v98MesNome(ym,true)+"/"+ym.slice(0,4);
+  const partes=[]; if(Number(it.fixo)>0) partes.push("fixo "+_qgBRL(it.fixo)); if(Number(it.pct)>0) partes.push(String(it.pct).replace(".",",")+"% de "+_qgBRL(it.midia)+" em mídia");
+  return "Pixels · "+nome+" · "+mes+": valor da agência "+_qgBRL(it.fee)+(partes.length?" ("+partes.join(" + ")+(Number(it.minimo)>0?"; mínimo "+_qgBRL(it.minimo):"")+")":"")+".";
+}
+function QGV100Fee({mc,isMob,year,month}){
+  const ym=year+"-"+_v98Pad(month); const mes=ym+"-01";
+  const F=useF3a99Rpc("ads_fee_mes",{p_mes:mes},[mes]);
+  const [ed,setEd]=useState(null); const [busy,setBusy]=useState(false);
+  const aprov100=useF3a100Aprovador(true);
+  const it=(F.ok&&F.data&&(F.data.itens||[]).find(function(x){ return x.client_id===mc.client_id; }))||null;
+  const salvar=async function(){ if(!ed||busy) return;
+    const fixo=_f3a100Num(ed.fixo), pct=_f3a100Num(ed.pct), minimo=_f3a100Num(ed.minimo);
+    if([fixo,pct,minimo].some(function(v){ return v!==null&&!isFinite(v); })){ _v98Toast("error","Confira os números (use só dígitos e vírgula)."); return; }
+    setBusy(true); const r=await _v98Rpc("ads_fee_modelo_salvar",{p_client:mc.client_id,p_fixo:fixo,p_pct:pct,p_minimo:minimo,p_obs:(ed.obs||"").trim()||null}); setBusy(false);
+    if(!r.ok){ _v98Toast("error","Não salvou: "+(r.falta?"ainda não ligado no servidor (ads_fee_modelo_salvar)":r.erro)); return; }
+    _v98Toast("success","Modelo do valor da agência salvo."); setEd(null); F.recarregar(); };
+  const box={border:"1px solid "+V98.line,borderRadius:14,padding:"12px 14px",background:"#fff",minWidth:0};
+  const cab=<div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:13.5,marginBottom:8,flexWrap:"wrap"}}>💼 Valor da agência (fee) <V98Pill v="r" t="só sócios"/><V98Pill v="k" t={_v98MesNome(ym)}/></div>;
+  if(!aprov100||_f3a100SoSocio(F)) return null;   // v100 (15/10/2026) P2_6_10 (revisor): o servidor diz que não é sócio aprovador → não mostra a caixa
+  if(F.carregando&&!F.data) return <div style={box}>{cab}<div style={{fontSize:12,color:V98.mut}}>Lendo…</div></div>;
+  if(!F.ok) return <div style={box}>{cab}{F.falta?<F3a99Falta nome="ads_fee_mes" dono="C4b"/>:<div style={{fontSize:12,color:V98.mut}}>Indisponível ({String(F.erro||"")}).</div>}</div>;
+  return <div style={box}>{cab}
+    {ed?<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:8}}>
+        {[["fixo","Fixo por mês (R$)"],["pct","% da mídia"],["minimo","Mínimo (R$)"]].map(function(c){ return <label key={c[0]} style={{fontSize:11.5,fontWeight:700,color:V98.ink2}}>{c[1]}<input inputMode="decimal" value={ed[c[0]]} onChange={function(e){ const o=Object.assign({},ed); o[c[0]]=e.target.value; setEd(o); }} placeholder="vazio = não usa" style={Object.assign({},QG_INP,{marginTop:4})}/></label>; })}
+      </div>
+      <label style={{fontSize:11.5,fontWeight:700,color:V98.ink2}}>Observação (só a equipe vê)<input value={ed.obs} maxLength={500} onChange={function(e){ setEd(Object.assign({},ed,{obs:e.target.value})); }} style={Object.assign({},QG_INP,{marginTop:4})}/></label>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><button disabled={busy} style={_v98Btn(busy?"dis":"pri")} onClick={salvar}>{busy?"Salvando…":"Salvar modelo"}</button><button style={_v98Btn("gh")} onClick={function(){ setEd(null); }}>Cancelar</button></div>
+      <div style={{fontSize:11,color:V98.mut}}>Exemplo: R$ 1.500 fixo + 10% da mídia. Com R$ 6.000 de mídia no mês, o valor é R$ 2.100.</div>
+    </div>:<>
+      <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><b style={{fontSize:22,letterSpacing:-.5}}>{it?_qgBRL(it.fee):"—"}</b><span style={{fontSize:12,color:V98.mut}}>{it?"mídia do mês "+_qgBRL(it.midia):"cliente sem linha no cálculo"}</span></div>
+      {_f3a100Linha("Modelo",_f3a100FeeModeloTxt(it))}
+      {it&&it.origem_fixo==="contrato"&&!(it.tem_modelo)&&<div style={{fontSize:11.5,color:V98.warn}}>Sem modelo cadastrado: usa o valor mensal do contrato como fixo.</div>}
+      {it&&it.obs&&_f3a100Linha("Observação",it.obs)}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+        <button style={_v98Btn("gh")} onClick={function(){ setEd({fixo:it&&it.fixo!==null&&it.fixo!==undefined?String(it.fixo).replace(".",","):"",pct:it&&it.pct!==null&&it.pct!==undefined?String(it.pct).replace(".",","):"",minimo:it&&it.minimo!==null&&it.minimo!==undefined?String(it.minimo).replace(".",","):"",obs:(it&&it.obs)||""}); }}>{it&&(it.tem_modelo||Number(it.pct)>0)?"Editar modelo":"Cadastrar modelo"}{/* v100 (15/10/2026) P2_6_10 (revisor): sem modelo (com ou sem valor no contrato) = "Cadastrar" */}</button>
+        {it&&Number(it.fee)>0&&<button style={_v98Btn("gh")} onClick={function(){ _f3a100Copiar(it.texto_cobranca||_f3a100CobrancaTxt(it,mc.name,ym),"Texto da cobrança copiado. Nada foi enviado."); }}>📋 Copiar texto da cobrança</button>}
+      </div>
+      <div style={{fontSize:11,color:V98.mut,marginTop:6}}>A cobrança em si (boleto/nota) fica fora do app: aqui o valor fica pronto para copiar. Nada é enviado.</div>
+    </>}
+  </div>;
+}
+function QGV100FeeCarteira({clients,isMob,viewUser,onOpenClient}){
+  const aprov100=useF3a100Aprovador(_v98Socio(viewUser));   // v100 (15/10/2026) revisor: esconde se o servidor diz "não é sócio aprovador"
+  if(!_v98Socio(viewUser)||!aprov100) return null;
+  return <F3a100Gaveta icone="💼" titulo="Valor da agência (fee) · carteira" pill={<V98Pill v="r" t="só sócios"/>} resumo="Quanto cobrar de cada cliente no mês: fixo, % da mídia e mínimo. A cobrança fica pronta para copiar; nada é enviado.">
+    <QGV100FeeCarteiraCorpo clients={clients} isMob={isMob} onOpenClient={onOpenClient}/>
+  </F3a100Gaveta>;
+}
+function QGV100FeeCarteiraCorpo({clients,isMob,onOpenClient}){
+  const hoje=_v98Hoje().slice(0,7); const [ym,setYm]=useState(hoje);
+  const F=useF3a99Rpc("ads_fee_mes",{p_mes:ym+"-01"},[ym]);
+  const ids={}; (clients||[]).forEach(function(c){ ids[c.client_id]=1; });
+  if(F.carregando&&!F.data) return <QGEmpty texto="Calculando…"/>;
+  if(!F.ok) return F.falta?<F3a99Falta nome="ads_fee_mes" dono="C4b"/>:<div style={{fontSize:12.5,color:V98.bad}}>Indisponível: {String(F.erro||"")}</div>;
+  const L=((F.data&&F.data.itens)||[]).filter(function(x){ return ids[x.client_id]&&(Number(x.fee)>0||Number(x.midia)>0); });
+  const tot=L.reduce(function(s,x){ return s+Number(x.fee||0); },0); const semModelo=L.filter(function(x){ return !(Number(x.fee)>0); }).length;
+  const mcDe=function(id){ return (clients||[]).find(function(c){ return c.client_id===id; })||{name:id}; };
+  const meses=[[hoje,_v98MesNome(hoje,true)],[_v98MesAnt(hoje),_v98MesNome(_v98MesAnt(hoje),true)]];
+  const copiarTudo=function(){ const t=L.filter(function(x){ return Number(x.fee)>0; }).map(function(x){ return x.texto_cobranca||_f3a100CobrancaTxt(x,x.nome||mcDe(x.client_id).name,ym); }).join("\n"); _f3a100Copiar(t,"Cobranças copiadas. Nada foi enviado."); };
+  const baixar=function(){ const ok=_f3a99Baixar("pixels-fee-"+ym+".csv",_f3a99Csv(L.map(function(x){ return {cliente:x.nome||mcDe(x.client_id).name,modelo:_f3a100FeeModeloTxt(x),midia:Number(x.midia||0),fee:Number(x.fee||0)}; }),[["cliente","Cliente"],["modelo","Modelo"],["midia","Mídia do mês (R$)"],["fee","Valor da agência (R$)"]])); if(ok) _v98Toast("success","Arquivo baixado."); };
+  const abrir=function(id){ if(onOpenClient){ window._pxSubDesejada="gestao"; onOpenClient(id); } };
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <QGSel value={ym} onChange={setYm} options={meses.map(function(m){ return {id:m[0],label:m[1]}; })}/>
+      <span className="px-sens" style={{fontSize:13}}>Total: <b>{_qgBRL(tot)}</b></span>{semModelo>0&&<V98Pill v="y" t={semModelo+" sem valor"}/>}
+      <span style={{marginLeft:isMob?0:"auto",display:"inline-flex",gap:6,flexWrap:"wrap"}}><button style={_v98Btn("gh")} onClick={copiarTudo}>📋 Copiar cobranças</button><button style={_v98Btn("gh")} onClick={baixar}>⬇️ Planilha</button></span>
+    </div>
+    {isMob?<div className="px-sens" style={{display:"flex",flexDirection:"column",gap:8}}>{L.map(function(x){ return <div key={x.client_id} onClick={function(){ abrir(x.client_id); }} style={{border:"1px solid "+V98.line,borderRadius:12,padding:"10px 12px",fontSize:12.5,cursor:"pointer"}}><div style={{display:"flex",gap:8}}><b>{_v98Nome(mcDe(x.client_id))}</b><b style={{marginLeft:"auto"}}>{_qgBRL(x.fee)}</b></div><div style={{fontSize:11.5,color:V98.mut,marginTop:4}}>{_f3a100FeeModeloTxt(x)} · mídia {_qgBRL(x.midia)}</div></div>; })}</div>:
+    <div className="px-sens" style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontFamily:QG_FONT}}>
+      <thead><tr><th style={_F3A99_TH}>Cliente</th><th style={_F3A99_TH}>Modelo</th><th style={Object.assign({},_F3A99_TH,{textAlign:"right"})}>Mídia do mês</th><th style={Object.assign({},_F3A99_TH,{textAlign:"right"})}>Valor da agência</th></tr></thead>
+      <tbody>{L.map(function(x){ return <tr key={x.client_id} onClick={function(){ abrir(x.client_id); }} style={{cursor:"pointer"}} title="Abrir o cliente › Gestão › 💳 Financeiro"><td style={Object.assign({},_F3A99_TD,{fontWeight:800})}>{_v98Nome(mcDe(x.client_id))}</td><td style={Object.assign({},_F3A99_TD,{color:Number(x.fee)>0?V98.ink2:V98.warn})}>{_f3a100FeeModeloTxt(x)}</td><td style={Object.assign({},_F3A99_TD,{textAlign:"right"})}>{_qgBRL(x.midia)}</td><td style={Object.assign({},_F3A99_TD,{textAlign:"right",fontWeight:800})}>{_qgBRL(x.fee)}</td></tr>; })}</tbody>
+    </table></div>}
+    <div style={{fontSize:11.5,color:V98.mut}}>{(F.data&&F.data.obs)||""}{F.data&&F.data.envio?" "+F.data.envio:""} Para cadastrar o modelo de um cliente: abra o cliente › Gestão › 💳 Financeiro › 💼 Valor da agência.</div>
+  </div>;
+}
+
+/* ═══ P2_5_09 · Públicos que se repetem na carteira (ordem: custo de lead BOM; cuidado com público barato desqualificado) ═══ */
+function QGV100PublicosCarteira({clients,isMob,onOpenClient}){
+  return <F3a100Gaveta icone="👥" titulo="Públicos que se repetem na carteira" pill={<V98Pill v="k" t="idade × gênero"/>}
+    resumo="Quais públicos dão lead BOM mais barato em vários clientes. Ajuda a montar cliente novo. Só carrega quando abre.">
+    <QGV100PublicosCorpo clients={clients} isMob={isMob} onOpenClient={onOpenClient}/>
+  </F3a100Gaveta>;
+}
+function _f3a100JuntarPublicos(porCliente){
+  const m={}; let marcados=0;
+  porCliente.forEach(function(pc){
+    const its=((pc.d&&pc.d.itens)||[]).filter(function(x){ return x&&x.tipo!=="conjunto"&&Number(x.leads)>0; });
+    marcados+=Number((pc.d&&pc.d.leads_marcados)||0);
+    const temBom=its.some(function(x){ return x.custo_lead_bom!==null&&x.custo_lead_bom!==undefined; });
+    const ord=its.slice().sort(function(a,b){ const ka=temBom?(a.custo_lead_bom===null||a.custo_lead_bom===undefined?1e9:Number(a.custo_lead_bom)):Number(a.custo_lead||1e9); const kb=temBom?(b.custo_lead_bom===null||b.custo_lead_bom===undefined?1e9:Number(b.custo_lead_bom)):Number(b.custo_lead||1e9); return ka-kb; });
+    ord.forEach(function(x,i){ const k=x.publico_chave||x.publico; const o=m[k]||(m[k]={publico_chave:k,publico:x.publico,posicoes:[],ruim_em:[]});
+      o.posicoes.push({client_id:pc.mc.client_id,nome:_v98Nome(pc.mc),posicao:i+1,de:ord.length,custo_lead:x.custo_lead,custo_lead_bom:x.custo_lead_bom,leads:Number(x.leads||0),leads_bons:x.leads_bons,etiqueta:x.etiqueta});
+      if(/ruim|desqualif/i.test(String(x.etiqueta||""))) o.ruim_em.push(_v98Nome(pc.mc)); });
+  });
+  const lista=Object.keys(m).map(function(k){ const o=m[k]; const ps=o.posicoes;
+    return {publico_chave:k,publico:o.publico,clientes:ps.length,clientes_bom:ps.filter(function(p){ return p.posicao<=3; }).length,leads:ps.reduce(function(s,p){ return s+p.leads; },0),
+      leads_bons:ps.some(function(p){ return p.leads_bons!==null&&p.leads_bons!==undefined; })?ps.reduce(function(s,p){ return s+Number(p.leads_bons||0); },0):null,
+      custo_lead:_f3a100Mediana(ps.map(function(p){ return p.custo_lead===null||p.custo_lead===undefined?null:Number(p.custo_lead); })),
+      custo_lead_bom:_f3a100Mediana(ps.map(function(p){ return p.custo_lead_bom===null||p.custo_lead_bom===undefined?null:Number(p.custo_lead_bom); })),
+      ruim_em:o.ruim_em,posicoes:ps.sort(function(a,b){ return a.posicao-b.posicao; })}; });
+  lista.sort(function(a,b){ const ab=a.custo_lead_bom===null?1e9:a.custo_lead_bom, bb=b.custo_lead_bom===null?1e9:b.custo_lead_bom; if(ab!==bb) return ab-bb; return (b.clientes_bom-a.clientes_bom)||((a.custo_lead===null?1e9:a.custo_lead)-(b.custo_lead===null?1e9:b.custo_lead)); });
+  return {publicos:lista.filter(function(p){ return p.clientes>=2; }),so_um:lista.filter(function(p){ return p.clientes<2; }).length,leads_marcados:marcados};
+}
+function QGV100PublicosCorpo({clients,isMob,onOpenClient}){
+  const [dias,setDias]=useState(90);
+  /* v100 (14/10/2026) P2_5_09 (etapa 2): ads_publicos_carteira do C5b aceita até 120 dias — filtro 30/90/120; 'leads' por cliente só aparece quando o servidor manda. */
+  const de=_f3a100IsoDias(dias), ate=_f3a100IsoDias(1);
+  const S=useF3a99Rpc("ads_publicos_carteira",{p_de:de,p_ate:ate},[de,ate]);
+  const [loc,setLoc]=useState(null); const [aberto,setAberto]=useState(null);
+  const vivoRef=useRef(true); useEffect(function(){ vivoRef.current=true; return function(){ vivoRef.current=false; }; },[]);
+  const pais=_v98Familia(clients);
+  const folhas=(clients||[]).filter(function(c){ return !pais[c.client_id]; });
+  const montar=async function(){ if(loc&&loc.carregando) return; setLoc({carregando:true,feitos:0,total:folhas.length});
+    const pcs=[]; let falhas=0;
+    for(let i=0;i<folhas.length;i++){ if(!vivoRef.current) return;
+      const r=await _v98Rpc("ads_publicos_lead_bom",{p_client:folhas[i].client_id,p_unidade:null,p_de:de,p_ate:ate});
+      if(r.ok&&r.data) pcs.push({mc:folhas[i],d:r.data}); else falhas++;
+      if(vivoRef.current) setLoc({carregando:true,feitos:i+1,total:folhas.length}); }
+    if(!vivoRef.current) return;
+    const j=_f3a100JuntarPublicos(pcs); setLoc(Object.assign({carregando:false,falhas:falhas,clientes:pcs.length},j)); };
+  const srv=S.ok&&S.data&&Array.isArray(S.data.publicos)?S.data:null;
+  const dados=srv?{publicos:srv.publicos,leads_marcados:srv.leads_marcados,aviso:srv.aviso,explica:srv.explica}:(loc&&!loc.carregando?loc:null);
+  const filtro=<span style={{display:"inline-flex",gap:4}}>{[30,90,120].map(function(n){ return <button key={n} onClick={function(){ setDias(n); setLoc(null); }} style={_v98Btn("sm",dias===n?{background:V98.roxo,color:"#fff",border:"1px solid "+V98.roxo}:{})}>{n} dias</button>; })}</span>;
+  if(S.carregando&&!S.data&&!loc) return <QGEmpty texto="Lendo os públicos da carteira…"/>;
+  const Rs=function(v){ return v===null||v===undefined?<span style={{color:V98.mut2}}>—</span>:_qgBRL(v); };
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{filtro}<span style={{fontSize:12,color:V98.mut}}>{_v98DM(de)} a {_v98DM(ate)}</span></div>
+    {!srv&&!dados&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {S.falta?<F3a99Falta nome="ads_publicos_carteira" dono="C5b" txt="A conta da carteira inteira ainda não está no servidor. Dá para montar agora lendo cliente por cliente."/>:(!S.ok&&<div style={{fontSize:12,color:V98.bad}}>Não leu: {String(S.erro||"")}</div>)}
+      {(S.falta||!S.ok)&&<div><button disabled={!!(loc&&loc.carregando)} style={_v98Btn(loc&&loc.carregando?"dis":"pri")} onClick={montar}>{loc&&loc.carregando?"Lendo "+loc.feitos+" de "+loc.total+"…":"Montar agora ("+folhas.length+" clientes)"}</button></div>}
+    </div>}
+    {dados&&<>
+      {!(Number(dados.leads_marcados)>0)&&<div style={{fontSize:12,color:"#92400e",background:V98.warnBg,border:"1px solid #fcd34d",borderRadius:10,padding:"8px 12px",lineHeight:1.45}}>⚠️ Nenhum lead deste período foi marcado como bom ou ruim. A ordem abaixo é só por custo de lead: <b>público barato pode ser desqualificado</b>. Marque os leads na aba Leads e o retorno do cliente na aba Público para a ordem passar a ser por lead bom.</div>}
+      {dados.aviso&&Number(dados.leads_marcados)>0&&<div style={{fontSize:12,color:V98.warn}}>{dados.aviso}</div>}
+      {(dados.publicos||[]).length===0?<QGEmpty texto="Nenhum público aparece em 2 ou mais clientes neste período."/>:
+      isMob?<div style={{display:"flex",flexDirection:"column",gap:8}}>{dados.publicos.slice(0,12).map(function(p){ const ab=aberto===p.publico_chave; return <div key={p.publico_chave} onClick={function(){ setAberto(ab?null:p.publico_chave); }} style={{border:"1px solid "+V98.line,borderRadius:12,padding:"10px 12px",fontSize:12.5,cursor:"pointer"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}><b>{p.publico}</b>{p.ruim_em.length>0&&<V98Pill v="red" t="⚠️ ruim em 1+"/>}<span style={{marginLeft:"auto",fontWeight:800}}>{p.custo_lead_bom!==null?Rs(p.custo_lead_bom)+" bom":Rs(p.custo_lead)}</span></div>
+          <div style={{fontSize:11.5,color:V98.mut,marginTop:4}}>em {p.clientes} clientes · top 3 em {p.clientes_bom} · {_qgNum(p.leads)} leads</div>
+          {ab&&<div style={{marginTop:6}}>{p.posicoes.map(function(x){ return <div key={x.client_id} style={{fontSize:11.5,display:"flex",gap:6,padding:"2px 0"}}><span>{x.nome}</span><span style={{marginLeft:"auto"}}>{x.posicao}º de {x.de} · {Rs(x.custo_lead)}</span></div>; })}</div>}
+        </div>; })}</div>:
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontFamily:QG_FONT}}>
+        <thead><tr><th style={_F3A99_TH}>Público</th><th style={Object.assign({},_F3A99_TH,{textAlign:"right"})}>Clientes</th><th style={Object.assign({},_F3A99_TH,{textAlign:"right"})}>Entre os 3 melhores</th><th style={Object.assign({},_F3A99_TH,{textAlign:"right"})}>Custo por lead bom</th><th style={Object.assign({},_F3A99_TH,{textAlign:"right"})}>Custo por lead</th><th style={Object.assign({},_F3A99_TH,{textAlign:"right"})}>Leads</th><th style={_F3A99_TH}>Retorno dos clientes</th></tr></thead>
+        <tbody>{dados.publicos.slice(0,15).map(function(p){ const ab=aberto===p.publico_chave; return <Fragment key={p.publico_chave}>
+          <tr onClick={function(){ setAberto(ab?null:p.publico_chave); }} style={{cursor:"pointer"}} title="Clique para ver a posição em cada cliente">
+            <td style={Object.assign({},_F3A99_TD,{fontWeight:800})}>{ab?"▾ ":"▸ "}{p.publico}</td>
+            <td style={Object.assign({},_F3A99_TD,{textAlign:"right"})}>{p.clientes}</td>
+            <td style={Object.assign({},_F3A99_TD,{textAlign:"right",fontWeight:800,color:p.clientes_bom>=Math.max(2,Math.ceil(p.clientes*0.6))?V98.ok:V98.ink})}>{p.clientes_bom} de {p.clientes}</td>
+            <td style={Object.assign({},_F3A99_TD,{textAlign:"right",fontWeight:800})}>{Rs(p.custo_lead_bom)}</td>
+            <td style={Object.assign({},_F3A99_TD,{textAlign:"right"})}>{Rs(p.custo_lead)}</td>
+            <td style={Object.assign({},_F3A99_TD,{textAlign:"right"})}>{_qgNum(p.leads)}{p.leads_bons!==null?<span style={{color:V98.mut}}> · {_qgNum(p.leads_bons)} bons</span>:null}</td>
+            <td style={_F3A99_TD}>{p.ruim_em.length?<span style={{color:V98.bad,fontWeight:700}}>⚠️ ruim em {p.ruim_em.join(", ")}</span>:<span style={{color:V98.mut2}}>—</span>}</td>
+          </tr>
+          {ab&&<tr><td colSpan={7} style={{padding:"4px 8px 10px 26px",background:"#fafafc",borderBottom:"1px solid "+V98.line2}}>{p.posicoes.map(function(x){ return <div key={x.client_id} style={{display:"flex",gap:10,fontSize:12,padding:"3px 0",alignItems:"center"}}><a onClick={function(){ _f3a99Abrir(onOpenClient,x.client_id,"publico"); }} style={{fontWeight:700,color:V98.roxo,cursor:"pointer",minWidth:160}}>{x.nome} ›</a><span>{x.posicao}º de {x.de}</span><span style={{color:V98.mut}}>{Rs(x.custo_lead)} por lead{x.custo_lead_bom!==null&&x.custo_lead_bom!==undefined?" · "+_qgBRL(x.custo_lead_bom)+" por lead bom":""}{x.leads!==undefined&&x.leads!==null?" · "+_qgNum(x.leads)+" leads":""}</span>{x.etiqueta&&<V98Pill v={/ruim|desqualif/i.test(x.etiqueta)?"red":"g"} t={String(x.etiqueta).replace(/_/g," ")}/>}</div>; })}</td></tr>}
+        </Fragment>; })}</tbody>
+      </table></div>}
+      <div style={{fontSize:11.5,color:V98.mut,lineHeight:1.5}}>{dados.explica||"Idade × gênero de cada cliente, comparados entre si. Só entram públicos que aparecem em 2 ou mais clientes. \"Entre os 3 melhores\" = em quantos clientes ele ficou no top 3 do próprio cliente. Lead bom = marcado pela equipe a partir do retorno do cliente."}{loc&&loc.falhas?" "+loc.falhas+" cliente(s) não responderam.":""}</div>
+    </>}
+  </div>;
+}
+
+/* ═══ P2_1_14 · Planilha que atualiza sozinha (Google Sheets · Looker Studio) — SÓ sócio, liga com PIN ═══ */
+function QGV100Planilha({viewUser,isMob}){
+  const [ab,setAb]=useState(false);
+  const aprov100=useF3a100Aprovador(_v98Socio(viewUser));   // v100 (15/10/2026) revisor: esconde se o servidor diz "não é sócio aprovador"
+  if(!_v98Socio(viewUser)||!aprov100) return null;
+  return <>
+    <button onClick={function(){ setAb(true); }} title="Link de leitura que o Google Sheets atualiza sozinho (=IMPORTDATA). Só sócio liga, com PIN." style={QG_BTN("sm")}>🔗 Planilha automática</button>
+    {ab&&<F3a100Modal titulo="🔗 Planilha que atualiza sozinha" isMob={isMob} onFechar={function(){ setAb(false); }}><QGV100PlanilhaCorpo/></F3a100Modal>}
+  </>;
+}
+function QGV100PlanilhaCorpo(){
+  const E=useF3a99Rpc("midia_exportar_estado",{},[]);   // C4a: {ligado, links, como_sheets, como_looker, bigquery}
+  const usaE=!!(E.ok&&E.data); const reserva=!E.carregando&&!usaE;
+  const G=useF3a99Rpc(reserva?"gov_chaves_ler":null,{},[reserva]);
+  const X=useF3a99Rpc(reserva?"ia_externa_ler":null,{},[reserva]);
+  const [pin,setPin]=useState(""); const [busy,setBusy]=useState(false); const [msg,setMsg]=useState("");
+  const [nome,setNome]=useState("Planilha da agência"); const [novo,setNovo]=useState(null);
+  const ch=G.ok&&G.data&&G.data.chaves&&G.data.chaves.export_planilha_ligado;
+  const ligado=usaE?!!E.data.ligado:(!!(ch&&ch.valor==="sim")||!!(X.ok&&X.data&&X.data.planilha_ligada));
+  const links=usaE?(E.data.links||[]).filter(function(a){ return !a.revogado_em; }):((X.ok&&X.data&&X.data.acessos)||[]).filter(function(a){ return a.escopo==="planilha"&&!a.revogado_em; });
+  const recarregarTudo=function(){ E.recarregar(); G.recarregar(); X.recarregar(); };
+  const mudar=async function(){ if(pin.length!==6||busy) return; setBusy(true); setMsg("");
+    const r=await _v98Rpc("gov_chave_definir",{p_chave:"export_planilha_ligado",p_valor:ligado?"nao":"sim",p_pin:pin}); setBusy(false); setPin("");
+    if(!r.ok){ setMsg(r.falta?"Ainda não ligado no servidor (gov_chave_definir · C4a).":String(r.erro||"recusado")); return; }
+    _v98Toast("success",ligado?"Planilha automática desligada. Os links param de responder.":"Planilha automática ligada. Agora crie o link."); recarregarTudo(); };
+  const criar=async function(){ if(pin.length!==6||busy||!nome.trim()) return; setBusy(true); setMsg("");
+    const r=await _v98Rpc("midia_exportar_link_criar",{p_nome:nome.trim().slice(0,60),p_pin:pin}); setBusy(false); setPin("");
+    if(!r.ok){ setMsg(r.falta?"Ainda não ligado no servidor (midia_exportar_link_criar · C4a).":String(r.erro||"recusado")); return; }
+    setNovo({url:r.data&&r.data.url_uma_vez,aviso:r.data&&r.data.aviso}); recarregarTudo(); };
+  const cortar=async function(id){ if(typeof pixelsConfirm==="function"&&!(await pixelsConfirm("Cortar este link? A planilha que usa ele para de atualizar.",{okText:"Cortar",danger:true}))) return;
+    const r=await _v98Rpc("ia_externa_revogar",{p_id:id}); if(!r.ok){ _v98Toast("error","Não cortou: "+r.erro); return; } _v98Toast("success","Link cortado na hora."); recarregarTudo(); };
+  if(E.carregando||(reserva&&G.carregando&&!G.data)) return <QGEmpty texto="Lendo…"/>;
+  return <div style={{display:"flex",flexDirection:"column",gap:10,fontSize:12.5,lineHeight:1.5}}>
+    <div>A planilha puxa os números por dia de cada cliente (investido, impressões, cliques, leads, conversas). <b>Não leva valor da agência.</b> Só leitura: nada muda no app nem na Meta.</div>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span>Situação: <b style={{color:ligado?V98.ok:V98.warn}}>{ligado?"LIGADA":"DESLIGADA"}</b></span>{reserva&&G.falta&&<F3a99Falta nome="midia_exportar_estado" dono="C4a"/>}</div>
+    {novo&&novo.url&&<div style={{border:"1px solid #86efac",background:V98.okBg2,borderRadius:12,padding:"10px 12px"}}>
+      <b>Link criado. Ele aparece só agora: copie e guarde.</b>
+      <div style={{fontFamily:"monospace",fontSize:11.5,wordBreak:"break-all",background:"#fff",border:"1px solid "+V98.line,borderRadius:8,padding:"6px 8px",margin:"6px 0"}}>=IMPORTDATA("{novo.url}")</div>
+      <button style={_v98Btn("grn")} onClick={function(){ _f3a100Copiar("=IMPORTDATA(\""+novo.url+"\")","Fórmula copiada. Cole na célula A1 de uma planilha nova do Google."); }}>📋 Copiar fórmula</button>
+      {novo.aviso&&<div style={{fontSize:11.5,color:V98.mut,marginTop:6}}>{novo.aviso}</div>}
+    </div>}
+    <div style={{border:"1px solid "+V98.line,borderRadius:12,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}><F3a100Pin valor={pin} onChange={setPin} disabled={busy}/>
+        <button disabled={pin.length!==6||busy} style={_v98Btn(pin.length!==6||busy?"dis":"gh")} onClick={mudar}>{ligado?"Desligar":"Ligar a planilha automática"}</button></div>
+      {ligado&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}><input value={nome} maxLength={60} onChange={function(e){ setNome(e.target.value); }} placeholder="Nome do link" style={Object.assign({},QG_INP,{width:220,padding:"7px 10px"})}/><button disabled={pin.length!==6||busy||!nome.trim()} style={_v98Btn(pin.length!==6||busy||!nome.trim()?"dis":"pri")} onClick={criar}>Criar link (usa o PIN acima)</button></div>}
+      {msg&&<div style={{color:V98.bad}}>{msg}</div>}
+    </div>
+    <div><b>Links ativos ({links.length})</b>
+      {links.length===0?<div style={{color:V98.mut}}>Nenhum link criado.</div>:links.map(function(a){ return <div key={a.id} style={{display:"flex",gap:8,alignItems:"center",padding:"6px 0",borderTop:"1px solid "+V98.line2,flexWrap:"wrap"}}><b>{a.nome}</b><span style={{color:V98.mut,fontSize:11.5}}>criado {_v98DM(a.criado_em)}{a.criado_por?" por "+a.criado_por:""} · {a.ultimo_uso?"último uso "+_v98Quando(a.ultimo_uso):"ainda não usado"}{a.usos?" · "+a.usos+" leituras":""}</span><button style={Object.assign(_v98Btn("sm"),{marginLeft:"auto"})} onClick={function(){ cortar(a.id); }}>Cortar</button></div>; })}</div>
+    <div style={{fontSize:11.5,color:V98.mut,background:"#fafafc",border:"1px solid "+V98.line,borderRadius:10,padding:"8px 12px"}}><b>Google Sheets:</b> {(usaE&&E.data.como_sheets)||"cole a fórmula na célula A1; o Google relê sozinho (mais ou menos a cada hora)."} <b>Looker Studio:</b> {(usaE&&E.data.como_looker)||"crie a fonte \"Google Sheets\" apontando para essa planilha."} <b>BigQuery:</b> não foi feito ({(usaE&&E.data.bigquery&&E.data.bigquery.motivo)||"precisa de um projeto pago no Google Cloud; é decisão do Vini"}). Para baixar uma vez só, use "⬇️ Exportar para planilha".</div>
+  </div>;
+}
+
+/* ═══ P2_8_03 · P2_8_16 · P2_2_21 · P2_1_14 · O que sai do app (SÓ sócios; tudo pronto e desligado) ═══ */
+function QGV100Envios({clients,isMob,viewUser}){
+  const aprov100=useF3a100Aprovador(_v98Socio(viewUser));   // v100 (15/10/2026) revisor: esconde se o servidor diz "não é sócio aprovador"
+  if(!_v98Socio(viewUser)||!aprov100) return null;
+  return <F3a100Gaveta icone="📮" titulo="O que sai do app" pill={<V98Pill v="y" t="desligado · liga com PIN"/>} resumo="Relatório no WhatsApp do cliente, pesquisa do trimestre, alarmes no WhatsApp/e-mail/celular e planilha automática: o que já está pronto e o que falta.">
+    <QGV100EnviosCorpo clients={clients} isMob={isMob} viewUser={viewUser}/>
+  </F3a100Gaveta>;
+}
+function QGV100EnviosCorpo({clients,isMob,viewUser}){
+  const N=useF3a99Rpc("rel_nps_lista",{p_client:null},[]);
+  const W=useF3a99Rpc("rel_whats_numeros_ler",{},[]);
+  const A=useF3a99Rpc("ads_alarmes_envio_estado",{},[]);
+  /* v100 (14/10/2026) P2_2_21 (etapa 2): ads_alarmes_envio_estado do C5a conferido — mostra destinos, o que falta no e-mail e no celular e a fila pronta (desligada). */
+  const G=useF3a99Rpc("gov_chaves_ler",{},[]);
+  const [verPlan,setVerPlan]=useState(false);
+  const [edNum,setEdNum]=useState(null); const [pin,setPin]=useState(""); const [busy,setBusy]=useState(false); const [msg,setMsg]=useState("");
+  const npsLig=!!(N.ok&&N.data&&N.data.envio_ligado);
+  const [pinW,setPinW]=useState(""); const [busyW,setBusyW]=useState(false); const [msgW,setMsgW]=useState("");
+  const planLig=!!(G.ok&&G.data&&G.data.chaves&&G.data.chaves.export_planilha_ligado&&G.data.chaves.export_planilha_ligado.valor==="sim");
+  const w=W.ok?W.data:null; const a=A.ok?A.data:null;
+  const salvarNumeros=async function(){ if(!edNum||pin.length!==6||busy) return;
+    const lista=String(edNum).split(/\n+/).map(function(l){ const p=l.split(/[;,]/); const numero=String(p[p.length-1]||"").replace(/\D/g,""); const nome=p.length>1?p.slice(0,-1).join(" ").trim():""; return {nome:nome||"equipe",numero:numero}; }).filter(function(x){ return x.numero.length>=10; });
+    if(!lista.length){ setMsg("Escreva um número por linha (nome; número com DDD)."); return; }
+    setBusy(true); setMsg(""); const r=await _v98Rpc("rel_whats_numeros_salvar",{p_numeros:lista,p_pin:pin}); setBusy(false); setPin("");
+    if(!r.ok){ setMsg(r.falta?"Ainda não ligado no servidor (rel_whats_numeros_salvar · C5b).":String(r.erro||"recusado")); return; }
+    setEdNum(null); _v98Toast("success",lista.length+" número(s) da agência guardado(s). Nada foi enviado."); W.recarregar(); };
+  /* liga/desliga o envio do relatório (C5b rel_envio_chave_definir): ligar pede ticket com o PIN do sócio (ads_ticket), igual à chave "Visível" */
+  const mudarWhats=async function(){ if(pinW.length!==6||busyW) return; const lig=!!(w&&w.envio_ligado); setBusyW(true); setMsgW("");
+    try{
+      let r=await _v98Rpc("rel_envio_chave_definir",{p_chave:"rel_whats_envio_ligado",p_ligar:!lig,p_ticket:null});
+      if(!r.ok&&r.data&&r.data.precisa_pin){ const acao=r.data.acao_ticket;
+        let t=await _v98Rpc("ads_ticket",{p_acao:acao,p_pin:pinW});
+        if(!t.ok&&/PIN de entrada/i.test(String(t.erro||""))){ const d=await _v98Rpc("ads_desbloquear",{p_pin:pinW}); if(!d.ok) throw new Error(d.erro||"PIN recusado."); t=await _v98Rpc("ads_ticket",{p_acao:acao,p_pin:pinW}); }
+        if(!t.ok||!t.data||!t.data.ticket) throw new Error(t.erro||"PIN recusado.");
+        r=await _v98Rpc("rel_envio_chave_definir",{p_chave:"rel_whats_envio_ligado",p_ligar:!lig,p_ticket:t.data.ticket}); }
+      if(!r.ok) throw new Error(r.falta?"Ainda não ligado no servidor (rel_envio_chave_definir · C5b).":(r.erro||"recusado"));
+      _v98Toast("success",!lig?"Envio do relatório ligado. Com a chave Visível desligada, só os números da agência recebem.":"Envio do relatório desligado."); W.recarregar();
+    }catch(e){ setMsgW(String(e&&e.message||e)); }
+    setBusyW(false); setPinW(""); };
+  const fimNum=function(n){ if(typeof n==="string") return "••"+n.replace(/\D/g,"").slice(-4); return (n.nome||"equipe")+" ••"+String(n.final||n.numero||"").replace(/\D/g,"").slice(-4); };
+  const Item=function(ic,tit,estado,corpo,vini){ return <div style={{border:"1px solid "+V98.line,borderRadius:12,padding:"10px 12px",fontSize:12.5,lineHeight:1.5,minWidth:0}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontWeight:800}}>{ic} {tit}<span style={{marginLeft:"auto"}}>{estado}</span></div>
+    <div style={{marginTop:6,color:V98.ink2}}>{corpo}</div>
+    {vini&&<div style={{marginTop:6,fontSize:11.5,color:"#5b21b6",background:V98.roxoBg,borderRadius:8,padding:"5px 8px"}}>👤 O que o Vini faz: {vini}</div>}
+  </div>; };
+  const Falta=function(arr){ return arr&&arr.length?<ul style={{margin:"4px 0 0",paddingLeft:18}}>{arr.map(function(t,i){ return <li key={i}>{t}</li>; })}</ul>:null; };
+  const pDesl=<V98Pill v="y" t="pronto · desligado"/>;
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10,alignItems:"start"}}>
+    {Item("📄","Relatório no WhatsApp do cliente",w&&w.envio_ligado?<V98Pill v="g" t="envio ligado · só agência"/>:pDesl,<>
+      O "Preparar mensagem de teste" (cliente › Relatório do mês › ⏰ Agendar) monta a mensagem e guarda na fila. Com a chave "Visível para o cliente" desligada, o servidor só aceita os números da agência.{w&&w.envio_real_existe?" O envio de verdade já existe no servidor e está "+(w.envio_ligado?"LIGADO.":"DESLIGADO."):""}
+      {Falta(w&&w.falta?w.falta:["o envio de verdade pelo WhatsApp oficial da agência (hoje fica sempre \"pronto e desligado\")","os números da agência que recebem o teste"])}
+      <div style={{marginTop:6}}><b>Números da agência:</b> {W.carregando?"…":w?((w.numeros||[]).length?(w.numeros||[]).map(fimNum).join(" · "):"nenhum cadastrado"):<F3a99Falta nome="rel_whats_numeros_ler" dono="C5b"/>}</div>
+      {edNum!==null?<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:6}}><textarea rows={3} value={edNum} onChange={function(e){ setEdNum(e.target.value); }} placeholder={"Vini; 49 99999-0000\nErick; 49 98888-0000"} style={Object.assign({},QG_INP,{fontWeight:500})}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}><F3a100Pin valor={pin} onChange={setPin} disabled={busy}/><button disabled={pin.length!==6||busy} style={_v98Btn(pin.length!==6||busy?"dis":"pri")} onClick={salvarNumeros}>Guardar números</button><button style={_v98Btn("gh")} onClick={function(){ setEdNum(null); setMsg(""); }}>Cancelar</button></div>
+        <div style={{fontSize:11,color:V98.mut}}>Depois de guardar, a tela mostra só os 4 últimos dígitos.</div></div>
+      :<button style={Object.assign(_v98Btn("sm"),{marginTop:6})} onClick={function(){ setEdNum(""); }}>Cadastrar números da agência</button>}
+      {msg&&<div style={{color:V98.bad,marginTop:4}}>{msg}</div>}
+      {w&&w.pode_mudar!==false&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:8}}><F3a100Pin valor={pinW} onChange={setPinW} disabled={busyW}/><button disabled={pinW.length!==6||busyW} style={_v98Btn(pinW.length!==6||busyW?"dis":"gh")} onClick={mudarWhats}>{busyW?"…":(w.envio_ligado?"Desligar o envio":"Ligar o envio (só agência)")}</button></div>}
+      {msgW&&<div style={{color:V98.bad,marginTop:4}}>{msgW}</div>}
+    </>,"ligar o WhatsApp oficial da agência (Meta Business) e cadastrar aqui os números da equipe que recebem o teste.")}
+    {Item("⭐","Pesquisa do trimestre (nota de 0 a 10)",npsLig?<V98Pill v="g" t="envio ligado"/>:pDesl,<>
+      A pergunta de cada cliente fica guardada (gaveta "⭐ Nota do cliente"). Quando ligar, o cliente responde no Portal, e só se a chave "Visível para o cliente" dele estiver ligada. Nada vai por WhatsApp ou e-mail.
+    </>,"decidir quando ligar o envio (gaveta ⭐, com PIN).")}
+    {Item("🔔","Alarmes no WhatsApp, e-mail ou celular",a&&a.whatsapp&&a.whatsapp.ligado?<V98Pill v="g" t="WhatsApp ligado"/>:pDesl,<>
+      {a?<>
+        <div>WhatsApp: <b>{a.whatsapp&&a.whatsapp.ligado?"ligado":"desligado"}</b>{a.whatsapp&&a.whatsapp.niveis?" · só "+[].concat(a.whatsapp.niveis).join(", "):""}{a.whatsapp&&a.whatsapp.modelo_aprovado===false?" · modelo de mensagem ainda não aprovado pela Meta":""}</div>
+        {a.whatsapp&&a.whatsapp.destinos!==undefined&&a.whatsapp.destinos!==null&&<div style={{fontSize:11.5,color:V98.mut}}>{a.whatsapp.destinos} número(s) da agência cadastrado(s) para os alarmes.</div>}
+        {Falta(a.whatsapp&&a.whatsapp.falta)}
+        <div>E-mail: <b>{a.email&&a.email.existe?(a.email.ligado?"ligado":"desligado"):"não existe ainda"}</b>{a.email&&a.email.fila_pronta?" (fila pronta, desligada)":""}</div>
+        {Falta(a.email&&a.email.falta)}
+        <div>Celular: <b>{a.celular&&a.celular.existe?(a.celular.ligado?"ligado":"desligado"):"não existe ainda"}</b>{a.celular&&a.celular.fila_pronta?" (fila pronta, desligada)":""}</div>
+        {Falta(a.celular&&a.celular.falta)}
+      </>:<>
+        <div>WhatsApp: <b>montado e desligado</b>, só para os alarmes críticos.</div>
+        {Falta(["o modelo de mensagem aprovado pela Meta","um sócio ligar o envio","e-mail e notificação no celular: ainda não existem"])}
+        {A.falta&&<F3a99Falta nome="ads_alarmes_envio_estado" dono="C5a" txt="Estado detalhado ainda não ligado no servidor."/>}
+      </>}
+      Enquanto isso, os alarmes aparecem no 🔔 do topo do app.
+    </>,(a&&a.o_que_o_vini_faz)||"pedir à Meta a aprovação do modelo de mensagem \"Alerta Pixels\" no WhatsApp Business da agência.")}
+    {Item("🔗","Planilha que atualiza sozinha",planLig?<V98Pill v="g" t="ligada"/>:pDesl,<>
+      Link de leitura para Google Sheets e Looker Studio, sem valor da agência. {verPlan?null:<button style={_v98Btn("sm")} onClick={function(){ setVerPlan(true); }}>Abrir</button>}
+      {verPlan&&<div style={{marginTop:8}}><QGV100PlanilhaCorpo/></div>}
+    </>,"se quiser a planilha, ligar aqui com o PIN e colar a fórmula numa planilha do Google.")}
+  </div>;
+}
+/* linha curta no ⏰ Agendar: quantos números da agência recebem o teste */
+function QGV100WhatsNumerosLinha(){
+  const W=useF3a99Rpc("rel_whats_numeros_ler",{},[]);
+  const w=W.ok?W.data:null; const n=w?(w.numeros||[]).length:null;
+  return <div style={{fontSize:11.5,color:V98.mut,marginTop:6}}>Números da agência que recebem o teste: <b style={{color:n?V98.ink:V98.warn}}>{W.carregando?"…":w?(n?n+" cadastrado"+(n>1?"s":""):"nenhum cadastrado"):"ainda não ligado no servidor"}</b> · cadastro em Relatórios › 📮 O que sai do app (só sócio, com PIN).</div>;
+}
+
+/* ═══ P2_8_07 · Mídia ao vivo do Portal: "Ver como o cliente" (prévia da agência; o cliente NÃO vê com a chave desligada) ═══
+   QGV100AoVivoPainel também serve para a área de mídia do Portal (portal=true): sem a chave, o servidor devolve "Ainda não disponível." */
+function QGV100AoVivoPainel({clientId,isMob,portal}){
+  const S=useF3a99Rpc(clientId?"portal_midia_ao_vivo":null,{p_client:clientId},[clientId]);
+  if(S.carregando&&!S.data) return <QGEmpty texto="Abrindo…"/>;
+  if(!S.ok) return portal?<QGEmpty texto="Ainda não disponível."/>:(S.falta?<F3a99Falta nome="portal_midia_ao_vivo" dono="C5b"/>:<QGEmpty texto="Ainda não disponível para este cliente." alt={String(S.erro||"")}/>);
+  const d=S.data||{}; const m=d.mes||{}; const s7=d.ultimos_7_dias||{}; const mk=d.marca||{}; const cor=mk.cor_primaria||V98.roxo2;
+  const Var=function(v,inv){ if(v===null||v===undefined||!isFinite(v)) return null; const bom=inv?v<=0:v>=0; return <span style={{color:bom?V98.ok:V98.bad,fontWeight:800}}>{v>=0?"▲":"▼"} {Math.abs(Math.round(v))}%</span>; };
+  const Box=function(t,big,sub){ return <div style={{flex:"1 1 150px",border:"1px solid "+V98.line,borderRadius:14,padding:"10px 12px",minWidth:0}}><div style={{fontSize:11,color:V98.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{t}</div><div style={{fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:2}}>{big}</div><div style={{fontSize:11.5,color:V98.mut,marginTop:2}}>{sub}</div></div>; };
+  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:QG_FONT}}>
+    {d.modo==="previa_agencia"&&<V98FaixaInterno texto={<span>{d.faixa||"Modo interno: o cliente não vê"}. É isto que o Portal do cliente mostraria. A trava fica no servidor: o login do cliente recebe "Ainda não disponível".</span>}/>}
+    <div style={{display:"flex",alignItems:"center",gap:10,borderBottom:"2px solid "+cor,paddingBottom:8}}>
+      {mk.logo_url?<img src={mk.logo_url} alt="logo" style={{height:30,maxWidth:110,objectFit:"contain"}}/>:<span style={{width:30,height:30,borderRadius:8,background:cor,color:"#fff",fontWeight:900,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{String(mk.nome||"P").charAt(0)}</span>}
+      <div style={{minWidth:0}}><b style={{fontSize:14}}>Seus anúncios ao vivo</b><div style={{fontSize:11.5,color:V98.mut}}>números até {_v98DM(d.atualizado_ate||m.ate)} · {mk.nome||"Pixels"}</div></div>
+    </div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {Box("Leads no mês",_qgNum(m.leads),m.tem_meta?"meta "+_qgNum(m.meta_leads)+" · "+Math.round(Number(m.feito_pct)||0)+"%":"sem meta cadastrada")}
+      {Box("Investido no mês",_qgBRL(m.gasto),Number(m.verba_mes)>0?"de "+_qgBRL(m.verba_mes)+" · "+Math.round(Number(m.verba_pct)||0)+"%":"")}
+      {Box("Custo por lead",m.cpl?_qgBRL(m.cpl):"—",m.ritmo_texto||"")}
+    </div>
+    {m.tem_meta&&<div><div style={{height:8,background:"#ececf3",borderRadius:99}}><div style={{width:Math.min(100,Number(m.barra_pct)||0)+"%",height:"100%",background:"#16a34a",borderRadius:99}}/></div><div style={{fontSize:11.5,color:V98.mut,marginTop:4}}>{m.ritmo_texto}</div></div>}
+    <div style={{border:"1px solid "+V98.line,borderRadius:14,padding:"10px 12px",fontSize:12.5}}>
+      <b>Últimos 7 dias</b> <span style={{color:V98.mut}}>({_v98DM(s7.de)} a {_v98DM(s7.ate)})</span>
+      <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:6}}><span><b>{_qgNum(s7.contatos)}</b> contatos {Var(s7.variacao_contatos_pct,false)}</span><span><b>{_qgBRL(s7.investido)}</b> investidos</span><span>{s7.custo_por_contato?<span><b>{_qgBRL(s7.custo_por_contato)}</b> por contato {Var(s7.variacao_custo_pct,true)}</span>:"custo por contato: —"}</span>{Number(s7.conversas_5mais)>0&&<span><b>{_qgNum(s7.conversas_5mais)}</b> conversas com 5+ mensagens</span>}</div>
+    </div>
+    <div style={{fontSize:12.5}}><b>Relatórios</b>{(d.relatorios||[]).length===0?<div style={{color:V98.mut,marginTop:4}}>Nenhum relatório revisado ainda.</div>:(d.relatorios||[]).slice(0,6).map(function(r,i){ return <div key={r.id||i} style={{padding:"5px 0",borderTop:"1px solid "+V98.line2}}>📄 {r.titulo||((r.tipo||"relatório")+" · "+_v98DM(r.de)+" a "+_v98DM(r.ate))}</div>; })}</div>
+  </div>;
+}
+function QGV100VerComoCliente({mc,isMob,rotulo}){
+  const [ab,setAb]=useState(false);
+  if(!mc) return null;
+  return <>
+    <button onClick={function(){ setAb(true); }} title="Prévia da área de mídia do Portal deste cliente. O cliente não vê enquanto a chave estiver desligada." style={QG_BTN("sm")}>{rotulo||"👁 Ver como o cliente"}</button>
+    {ab&&<F3a100Modal titulo={"👁 "+mc.name+" · como o cliente veria no Portal"} isMob={isMob} largura={720} onFechar={function(){ setAb(false); }}><QGV100AoVivoPainel clientId={mc.client_id} isMob={isMob}/></F3a100Modal>}
+  </>;
+}
+
+/* ═══ P2_8_06 · linha do tempo: resultado de 3 e de 7 dias depois de cada ação ═══ */
+function _f3a100LtDias(it){
+  const cor=function(d){ return d==="melhorou"?V98.ok:d==="piorou"?V98.bad:V98.mut; };
+  const cpl=function(a,b){ return (a!==null&&a!==undefined&&b!==null&&b!==undefined)?" ("+_qgBRL(a)+" → "+_qgBRL(b)+")":""; };
+  const tem3=Object.prototype.hasOwnProperty.call(it||{},"deu_3d");
+  return <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:3}}>
+    <span title={tem3?"custo por lead nos 7 dias antes × 3 dias depois":"o servidor ainda não manda o resultado de 3 dias"} style={{fontSize:11,fontWeight:700,borderRadius:99,padding:"1px 8px",background:V98.line2,color:tem3?cor(it.deu_3d):V98.mut2}}>3 dias: {tem3?(it.deu_3d||"—")+cpl(it.cpl_antes_3d!==undefined&&it.cpl_antes_3d!==null?it.cpl_antes_3d:it.cpl_antes,it.cpl_depois_3d):"—"}</span>
+    <span title="custo por lead nos 7 dias antes × 7 dias depois" style={{fontSize:11,fontWeight:700,borderRadius:99,padding:"1px 8px",background:V98.line2,color:cor(it.deu)}}>7 dias: {(it.deu||"—")+cpl(it.cpl_antes,it.cpl_depois)}</span>
+  </div>;
+}
+
 // ======= 17c_qg_ads.jsx =======
 // TRÁFEGO PAGO (Meta) — cliente › Visão geral · Campanhas · Criativos · Público · Leads · Histórico.
 // v2 (08/09/2026): redesenho "claro premium" (mockup claude/mockup-trafego-v2.html) + período selecionável +
@@ -65040,7 +66667,11 @@ const ADS_MIN_RESULTADOS=10;
 const ADS_MAXW=1240;
 
 /* ─── formatadores ─── */
-const _adsBRL=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return "R$ "+Number(n).toLocaleString("pt-BR",{minimumFractionDigits:dec===undefined?2:dec,maximumFractionDigits:dec===undefined?2:dec}); };
+/* v100 (14/10/2026) E5: este é o ÚNICO formatador de R$ do 17c (todas as telas daqui usam _adsBRL/_adsBRL0/_adsBRLc), com a mesma regra do _tiaBrl do 17e: vazio ou sem número = "—" */
+const _adsBRL=function(n,dec){ if(n===null||n===undefined||n===""||!isFinite(n)) return "—";
+  /* v100 (15/10/2026) E5: usa o formatador ÚNICO de R$ do app (_tiaBrl, 17e) para 0 ou 2 casas; 3 casas (custo < R$ 0,10) e sem o 17e formatam aqui, igual a antes */
+  if(dec===undefined||dec===2||dec===0){ try{ if(typeof _tiaBrl==="function") return _tiaBrl(Number(n),dec===0?0:2); }catch(_){ } }
+  return "R$ "+Number(n).toLocaleString("pt-BR",{minimumFractionDigits:dec===undefined?2:dec,maximumFractionDigits:dec===undefined?2:dec}); };
 const _adsBRL0=function(n){ return _adsBRL(n,2); }; /* regra 09/09: dinheiro sempre com centavos */
 const _adsBRLc=function(n){ return (n!==null&&n!==undefined&&isFinite(n)&&n>0&&n<0.1)?_adsBRL(n,3):_adsBRL(n); };
 const _adsNum1=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1}); };
@@ -65048,7 +66679,10 @@ const _adsNum=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—
 const _adsPct=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:dec===undefined?1:dec,minimumFractionDigits:dec===undefined?1:dec})+"%"; };
 const _adsX=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1})+"×"; };
 const _adsDelta=function(cur,prev){ if(cur===null||prev===null||cur===undefined||prev===undefined||!(Math.abs(prev)>0)) return null; return (cur-prev)/Math.abs(prev)*100; };
-const _adsFmtD=function(iso){ if(!iso) return ""; const p=String(iso).slice(0,10).split("-"); return p[2]+"/"+p[1]; };
+const _adsFmtD=function(iso){ if(!iso) return "";
+  /* v100 (15/10/2026) E5: data dd/mm pelo formatador ÚNICO (_tiaDM, 17e) quando a data vem no formato AAAA-MM-DD; senão, igual a antes */
+  try{ if(typeof _tiaDM==="function"&&/^\d{4}-\d{2}-\d{2}/.test(String(iso))) return _tiaDM(iso); }catch(_){ }
+  const p=String(iso).slice(0,10).split("-"); return p[2]+"/"+p[1]; };
 const _adsFmtDL=function(iso){ if(!iso) return ""; const d=new Date(String(iso).slice(0,10)+"T12:00:00"); return d.getDate()+" de "+["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][d.getMonth()]; };
 const _adsIso=function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const _adsAddDays=function(iso,n){ const d=new Date(String(iso).slice(0,10)+"T12:00:00"); d.setDate(d.getDate()+n); return _adsIso(d); };
@@ -65374,6 +67008,7 @@ function useAdsVisaoGeral(accountId){
           const e=await window._sb.from("ads_entidades").select("nivel,entidade_id,nome,parent_id,objetivo,status,status_efetivo,fase_aprendizado,orcamento,tipo_orcamento,otimizacao,publico,snapshot_em,destino:raw->>destination_type").eq("ad_account_id",accountId).eq("snapshot_em",s.data[0].snapshot_em).in("nivel",["campanha","conjunto"]).limit(600);
           if(!e.error) ent=e.data||[];
         }
+        try{ await _adsTiposSrvCarregar(accountId); }catch(_){ }   /* v100 (15/10/2026) E1: tipo de cada campanha pelo servidor (só leitura, 1x por conta) */
         const periodo=analise?{ini:analise.periodo_inicio,fim:analise.periodo_fim}:null;
         const res={loading:false,analise:analise,ent:ent,periodo:periodo,erro:null,_em:Date.now()};
         window._pxAdsCache[accountId]=res;
@@ -65387,10 +67022,25 @@ function useAdsVisaoGeral(accountId){
 // tipo (objetivo em português) de cada campanha do snapshot
 /* Tipo de cada campanha. FONTE ÚNICA = coluna "tipo" que as RPCs trazem da view ads_campanhas_tipo (classificação do banco);
    o cálculo local (_adsClassifica) só cobre campanha que ainda não está na view. */
+/* v100 (15/10/2026) E1: classificação ÚNICA do servidor — ads_campanhas_tipos(p_conta) -> {ok, tipos:{campaign_id: tipo}}.
+   Lida 1 vez por conta (junto com o snapshot das entidades, em useAdsVisaoGeral) e guardada em window._pxAdsTiposSrv.
+   _adsClassifica (conta da tela) fica só de RESERVA: campanha que o servidor não conhece ou função que falhou (aviso discreto na Estratégia). */
+window._pxAdsTiposSrv=window._pxAdsTiposSrv||{}; window._pxAdsTiposConta=window._pxAdsTiposConta||{};
+function _adsTipoSrv(campId){ if(!campId) return null; const t=window._pxAdsTiposSrv[String(campId)]; return t||null; }
+function _adsTiposSrvCarregar(accountId){
+  if(!accountId||!window._sb) return Promise.resolve(null);
+  const x=window._pxAdsTiposConta[accountId]; if(x&&(x.ok||Date.now()-x.em<60000)) return x.p;
+  const p=Promise.resolve(window._sb.rpc("ads_campanhas_tipos",{p_conta:accountId})).then(function(r){
+    const d=r&&r.data; const ok=!(r&&r.error)&&d&&d.ok!==false&&d.tipos&&typeof d.tipos==="object";
+    if(ok) Object.keys(d.tipos).forEach(function(k){ if(d.tipos[k]) window._pxAdsTiposSrv[String(k)]=d.tipos[k]; });
+    window._pxAdsTiposConta[accountId]={p:p,ok:!!ok,falhou:!ok,em:Date.now()}; return ok?d.tipos:null;
+  },function(){ window._pxAdsTiposConta[accountId]={p:p,ok:false,falhou:true,em:Date.now()}; return null; });
+  window._pxAdsTiposConta[accountId]={p:p,ok:false,em:Date.now()}; return p;
+}
 function _adsTiposDasCampanhas(ent,rows){
   const out={}; (rows||[]).forEach(function(r){ if(r&&r.tipo&&(r.id||r.campaign_id)) out[r.id||r.campaign_id]=r.tipo; });
   const camps=(ent||[]).filter(function(e){return e.nivel==="campanha";}); const conj=(ent||[]).filter(function(e){return e.nivel==="conjunto";});
-  camps.forEach(function(c){ if(!out[c.entidade_id]) out[c.entidade_id]=_adsClassifica(c.objetivo,conj.filter(function(x){return x.parent_id===c.entidade_id;}),c.nome); });
+  camps.forEach(function(c){ if(!out[c.entidade_id]) out[c.entidade_id]=_adsTipoSrv(c.entidade_id)||_adsClassifica(c.objetivo,conj.filter(function(x){return x.parent_id===c.entidade_id;}),c.nome); });   /* v100 E1: servidor primeiro */
   return out;
 }
 /* totais da conta pela finalidade — calculados no banco (ads_periodo.conta): res, leads_form, conversas_wpp, gasto_lead, gasto_outras.
@@ -65513,7 +67163,7 @@ function AdsSeloFrescor({conta,compacto}){
   return <span title={nivel==="ok"?("Coleta da Meta em dia. "+(_adsHorarios().texto||"")):"O último dia com dado desta conta é "+_adsFmtD(st.ult)+". Pode ser conta sem gasto (parada) ou falha na coleta — confira antes de concluir que o cliente parou."} style={{fontSize:compacto?10.5:11,fontWeight:700,color:cor,background:bg,borderRadius:99,padding:"3px 9px",whiteSpace:"nowrap"}}>{txt}</span>;
 }
 /* benchmark interno: mediana do custo por lead da carteira, por tipo de campanha (7 dias) */
-function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=r.tipo||_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=ADS_MIN_RESULTADOS&&o.g>0;}).map(function(o){return o.g/o.res;})/* v96 R16: régua única */.sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
+function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=r.tipo||_adsTipoSrv(r.camp||r.campaign_id)||_adsClassifica(r.objetivo,[],r.nome)/* v100 E1 */; if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=ADS_MIN_RESULTADOS&&o.g>0;}).map(function(o){return o.g/o.res;})/* v96 R16: régua única */.sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
 function QGAdsEmBreve({nome,dica}){ return <AdsCard style={{textAlign:"center",color:ADS.muted,fontSize:13,border:"1px dashed "+ADS.line2}}>{nome}{dica?<div style={{marginTop:6,fontSize:12.5}}>{dica}</div>:null}</AdsCard>; }
 function AdsBtn({children,onClick,primary,disabled,small,style}){ return <button onClick={onClick} disabled={disabled} style={Object.assign({background:primary?ADS.accent:"#fff",color:primary?"#fff":ADS.ink,border:primary?"none":"1px solid "+ADS.line2,borderRadius:10,padding:small?"6px 11px":"9px 14px",fontSize:small?12:12.5,fontWeight:800,cursor:disabled?"default":"pointer",fontFamily:ADS_FONT,opacity:disabled?.6:1,minHeight:0,whiteSpace:"nowrap"},style||{})}>{children}</button>; }
 
@@ -65521,6 +67171,9 @@ function AdsBtn({children,onClick,primary,disabled,small,style}){ return <button
    VISÃO GERAL — três números, veredito da IA (7 dias), ações do dia, onde o dinheiro está
    ═══════════════════════════════════════════════════════ */
 function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
+  /* v100 (14/10/2026) R15/Q3: chave Meta Ads | Google Ads — só aparece em cliente com Google (midia_plataformas). Sem a função: só se o cadastro tem verba de Google. */
+  const _v100PL=useF2V98Rpc("midia_plataformas",mc&&mc.client_id?{p_client:mc.client_id}:null,[mc&&mc.client_id]);
+  const [_v100plat,_v100setPlat]=useState("meta");
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
   const [atualizando,setAtualizando]=useState(false);
@@ -65537,13 +67190,17 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
     catch(e){ setMsg("Não deu pra atualizar: "+(e.message||e)); }
     setAtualizando(false);
   };
+  const _v100info=(_v100PL.data&&!_v100PL.erro)?_v100PL.data:null;
+  const _v100mostra=!!(_v100info?_v100info.mostrar_chave:(_v100PL.falta&&mc&&Number(mc.investimento_google||0)>0));
+  const _v100chave=_v100mostra&&typeof AdsPlataformaChaveV100==="function"?<AdsPlataformaChaveV100 plat={_v100plat} setPlat={_v100setPlat} isMob={isMob} info={_v100info}/>:null;
+  if(_v100chave&&_v100plat==="google") return <AdsWrap>{_v100chave}<AdsGoogleAdsV100 mc={mc} isMob={isMob} canEdit={canEdit} info={_v100info} onMudou={_v100PL.reload}/></AdsWrap>;
   if(D.loading||X.loading) return <AdsLoading t={"Lendo a conta "+conta.nome+"…"}/>;
   if(X.erro) return <AdsWrap><AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13}}>Erro ao ler os dados: {X.erro}</AdsCard></AdsWrap>;
   const P=X.P; const cur=X.cur||{conta:{},campanhas:[],anuncios:[]}; const prev=_adsTotaisConta((X.prev||{}).conta);
   const T=_adsTotaisConta(cur.conta); const A=D.analise; const ent=D.ent||[];
   const tipos=_adsTiposDasCampanhas(ent,cur.campanhas);
   const entCamp={}; ent.filter(function(e){return e.nivel==="campanha";}).forEach(function(e){ entCamp[e.entidade_id]=e; });
-  const camps=(cur.campanhas||[]).map(function(c){ const e=entCamp[c.id]||{}; const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return Object.assign({},c,{ent:e,tipo:tipo,cfg:cfg,fam:cfg.fam,res:_adsResDe(c,cfg)}); });
+  const camps=(cur.campanhas||[]).map(function(c){ const e=entCamp[c.id]||{}; const tipo=tipos[c.id]||_adsTipoSrv(c.id)||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return Object.assign({},c,{ent:e,tipo:tipo,cfg:cfg,fam:cfg.fam,res:_adsResDe(c,cfg)}); });
   const leadCamps=camps.filter(function(c){return c.fam==="leads";});
   /* custo por lead: só o gasto das campanhas cuja finalidade é lead (09/09) */
   /* T e prev já vêm prontos do banco pela finalidade (_adsTotaisConta): resultados, leads (formulário), conversas (WhatsApp), gastoLead, gastoOutras, cpa */
@@ -65575,6 +67232,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const acaoResto=function(t){ const s=acaoLimpa(t); const ti=acaoTitulo(t).replace(/…$/,""); return s.slice(ti.length).replace(/^[\s\(—:\-\.,]+/,"").replace(/\)$/,""); };
   const tipCusto=[["O que é","quanto custou, em média, cada lead no período: gasto SÓ das campanhas de lead ÷ leads (formulário nas campanhas de formulário, conversa nas de WhatsApp). Engajamento, reconhecimento, seguidores, vídeo e tráfego não entram."],["Como está",_adsBRL(T.cpa)+" contra "+_adsBRL(prev.cpa)+" no período anterior."],["Referência","a própria conta: campanhas acima de 1,5× essa média ficam em atenção; acima de 2× são críticas."],["Leitura",media&&prev.cpa?(T.cpa>prev.cpa*1.15?"piorou — vale olhar quais frentes puxaram o custo.":T.cpa<prev.cpa*0.85?"melhorou em relação ao período anterior.":"estável."):""]];
   return <AdsWrap>
+    {_v100chave}
     {compartilhada&&<div style={{fontSize:12,color:ADS.muted,marginBottom:10}}>Conta compartilhada com Bioter {compartilhada} — as praças só se distinguem pelo nome da campanha.</div>}
     {P.parcial&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:ADS.warnSoft,border:"1px solid "+ADS.warn+"55",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5}}><b style={{color:ADS.warn}}>Hoje é dado parcial.</b><span style={{color:ADS.ink2}}>{"A coleta automática começa às "+_adsHorarios().coleta+";"} o que está aqui é o que a Meta já fechou até a última coleta. A Meta ainda reatribui conversas por até 7 dias.</span><AdsBtn onClick={coletarHoje} disabled={coletando} style={{marginLeft:"auto"}}>{coletando?"Coletando…":"↻ Puxar agora da Meta"}</AdsBtn>{msg&&<span style={{fontSize:12,color:ADS.muted}}>{msg}</span>}</div>}
     {/* três números — sólidos, um tom cada */}
@@ -65676,7 +67334,7 @@ function _adsStatus(s){ return ADS_ST_LBL[s]||[String(s||"—"),"n"]; }
 // campanhas do período já classificadas + status do snapshot
 function _adsCampanhasEnriquecidas(cur,ent){
   const tipos=_adsTiposDasCampanhas(ent,cur&&cur.campanhas); const entCamp={}; (ent||[]).filter(function(e){return e.nivel==="campanha";}).forEach(function(e){ entCamp[e.entidade_id]=e; });
-  return ((cur&&cur.campanhas)||[]).map(function(c){ const e=entCamp[c.id]||{}; const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); const res=_adsResDe(c,cfg); const custo=cfg.campo?_adsDiv(c.gasto,res):null; return Object.assign({},c,{ent:e,tipo:tipo,cfg:cfg,fam:cfg.fam,res:res,custo:custo,ativa:e.status_efetivo==="ACTIVE",marca:!cfg.campo}); });
+  return ((cur&&cur.campanhas)||[]).map(function(c){ const e=entCamp[c.id]||{}; const tipo=tipos[c.id]||_adsTipoSrv(c.id)||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); const res=_adsResDe(c,cfg); const custo=cfg.campo?_adsDiv(c.gasto,res):null; return Object.assign({},c,{ent:e,tipo:tipo,cfg:cfg,fam:cfg.fam,res:res,custo:custo,ativa:e.status_efetivo==="ACTIVE",marca:!cfg.campo}); });
 }
 // média de custo por TIPO (só compara igual com igual)
 function _adsMediaPorTipo(camps){ const m={}; camps.forEach(function(c){ if(!c.cfg.campo) return; const o=m[c.tipo]||(m[c.tipo]={g:0,r:0}); o.g+=c.gasto; o.r+=c.res; }); Object.keys(m).forEach(function(k){ m[k]=_adsDiv(m[k].g,m[k].r); }); return m; }
@@ -65712,7 +67370,7 @@ function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
   const TDR=Object.assign({},TD,{textAlign:"right",whiteSpace:"nowrap"},ADS_MONO);   /* v98: nowrap — com a coluna de chaves o valor quebrava em 2 linhas */
   return <AdsWrap>
     {/* v98 (14/10/2026) L9-g: plano de testes da semana + resultado A×B (bloco no topo de Campanhas) */}
-    {typeof AdsTestesSemanaV98==="function"&&<AdsTestesSemanaV98 conta={conta} camps={todas} isMob={isMob}/>}
+    {typeof AdsTestesSemanaV98==="function"&&<AdsTestesSemanaV98 conta={conta} camps={todas} isMob={isMob} anuncios={cur.anuncios} conjuntos={cur.conjuntos}/>}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
       <AdsSolido bg={ADS_SOL.escuro} eyebrow="Campanhas ativas" big={<span>{nAtivas}<span style={{fontSize:16,color:ADS_SOL.sub,fontWeight:700}}> / {todas.length}</span></span>} sub={(todas.length-nAtivas)+" pausada"+(todas.length-nAtivas!==1?"s":"")+" com gasto no período"}/>
       <AdsSolido bg={ADS_SOL.medio} eyebrow="Melhor custo" big={melhor?_adsBRLc(melhor.custo):"—"} sub={melhor?_adsNomeCurto(melhor.nome)+" · "+melhor.cfg.label+" · "+_adsNum(melhor.res)+" "+melhor.cfg.resLbl:"nenhuma campanha com 3+ resultados"}/>
@@ -65745,7 +67403,7 @@ function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
       <div style={{fontSize:12,color:ADS.muted,marginTop:10}}>Objetivo lido da Meta (objetivo da campanha + otimização e destino dos conjuntos). Campanha de marca (seguidores, reconhecimento) não entra no ranking de custo — não tem lead. Amostra pequena (menos de {ADS_MIN_RESULTADOS} resultados) aparece, mas não é julgada.</div>
     </AdsSec>
     {/* v99 (14/10/2026) 2.1.07/2.1.08/2.1.10/2.1.11/2.12.05/2.12.09/2.12.13/2.10.09: 🧰 Ferramentas (gavetas fechadas; só leem ao abrir) */}
-    {typeof AdsFerramentasCampanhasV99==="function"&&<AdsFerramentasCampanhasV99 mc={mc} conta={conta} camps={todas} P={P} isMob={isMob} canEdit={_v99canEdit}/>}
+    {typeof AdsFerramentasCampanhasV99==="function"&&<AdsFerramentasCampanhasV99 mc={mc} conta={conta} camps={todas} P={P} isMob={isMob} canEdit={_v99canEdit} cur={cur} prev={X.prev}/>}   {/* v100 (14/10/2026) P2_3_11/P2_3_13: cur/prev para comparar períodos */}
   </AdsWrap>;
 }
 
@@ -66585,6 +68243,7 @@ function AdsAtivosPerf({ativos,cfg,compacto,onVer,isMob}){ const isMobG=!!isMob;
 }
 /* anúncios do período + do snapshot, agrupados por conjunto */
 function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta,notaConj}){
+  const _x5Edit=!!(arguments[0]&&arguments[0].canEdit);   // v100 (15/10/2026) X5 P2_5_07: quem edita a mídia vê "⭐ Guardar na biblioteca" (prop nova por arguments[0])
   const accountId=conta&&conta.ad_account_id;
   const cur=X.cur||{};
   const anPeriodo=(cur.anuncios||[]).filter(function(a){return a.campaign_id===campId;});
@@ -66667,7 +68326,7 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta,notaCo
         </>:<div style={{background:"#fff",padding:"12px 16px",fontSize:12.5,color:ADS.muted,gridColumn:"1 / -1"}}>Sem gasto no período selecionado.</div>}
       </div>
       <div style={{padding:"18px 22px"}}>
-        {!x.foraSnap&&<div style={{marginBottom:22}}><AdsPublicoBloco p={x.publico} isMob={isMob}/></div>}
+        {!x.foraSnap&&<div style={{marginBottom:22}}><AdsPublicoBloco p={x.publico} isMob={isMob}/>{_x5Edit&&<AdsBibGuardarV100 conjunto={x} isMob={isMob}/>}</div>}
         <div>
           {Titulo("Anúncios deste conjunto",(ativos.length+" "+(x.status_efetivo==="ACTIVE"?"ativo"+(ativos.length!==1?"s":""):"com gasto"))+" · do maior gasto pro menor · clique pra abrir")}
           {x.an.length===0&&<div style={{fontSize:12.5,color:ADS.muted}}>Nenhum anúncio neste conjunto.</div>}
@@ -66725,7 +68384,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
   const ent=D.ent||[]; const e=ent.find(function(x){return x.nivel==="campanha"&&x.entidade_id===campId;})||{};
   if(!c&&!e.entidade_id) return <AdsWrap><AdsBtn onClick={onVoltar}>‹ Campanhas</AdsBtn><div style={{marginTop:12,color:ADS.muted,fontSize:13}}>Campanha sem dados no período.</div></AdsWrap>;
   const nome=(c&&c.nome)||e.nome||campId;
-  const tipo=c?c.tipo:_adsClassifica(e.objetivo,ent.filter(function(x){return x.nivel==="conjunto"&&x.parent_id===campId;}),nome); const cfg=_adsTipo(tipo); const marca=!cfg.campo;
+  const tipo=c?c.tipo:(_adsTipoSrv(campId)||_adsClassifica(e.objetivo,ent.filter(function(x){return x.nivel==="conjunto"&&x.parent_id===campId;}),nome))/* v100 E1 */; const cfg=_adsTipo(tipo); const marca=!cfg.campo;
   const media=medias[tipo]||null;
   const conjuntos=ent.filter(function(x){return x.nivel==="conjunto"&&x.parent_id===campId;});
   const conjAtivos=conjuntos.filter(function(x){return x.status_efetivo==="ACTIVE";});
@@ -66810,7 +68469,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
 
     {/* v96 (13/10/2026) M4: removida a sub-aba "conjuntos" — não estava no menu (SUBS), ninguém chegava nela; os conjuntos aparecem em "Conjuntos e anúncios" */}
 
-    {sub==="estrutura"&&(E.loading?<AdsLoading t="Lendo conjuntos e anúncios…"/>:<QGAdsEstrutura conta={conta} campId={campId} P={P} cfg={cfg} tipo={tipo} X={X} ent={ent} E={E} isMob={isMob} notaConj={notaConj} mediaConta={mediaConta}/>)}
+    {sub==="estrutura"&&(E.loading?<AdsLoading t="Lendo conjuntos e anúncios…"/>:<QGAdsEstrutura conta={conta} campId={campId} P={P} cfg={cfg} tipo={tipo} X={X} ent={ent} E={E} isMob={isMob} notaConj={notaConj} mediaConta={mediaConta} canEdit={canEdit}/>)}
     {sub==="criativos"&&<QGAdsCriativos mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
     {sub==="publico"&&<QGAdsPublico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido canEdit={canEdit}/>}
     {sub==="historico"&&<QGAdsHistorico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
@@ -66953,6 +68612,9 @@ function useAdsQuebrasPorCampanha(accountId,P,ids){
     return function(){ alive=false; }; },[accountId,key,tick]);
   return Object.assign({},st,{reload:function(){ setTick(function(x){return x+1;}); }});
 }
+/* v100 (15/10/2026) E1: CTR das regras = cliques no LINK ÷ impressões (a mesma régua do servidor, ads_estrategia_regras).
+   Antes a Estratégia usava todos os cliques: a mesma campanha podia aparecer com "CTR 1,5% — clicam" na tela e "0,39% — não clicam" no servidor. */
+function _adsCtrLink(c){ const im=Number(c&&c.impressoes||0); if(im>0&&c&&c.cliques_link!==undefined&&c.cliques_link!==null) return Number(c.cliques_link||0)/im*100; return Number(c&&c.ctr||0); }
 function _adsSugestoes(ctx){
   const camps=ctx.camps, medias=ctx.medias, ent=ctx.ent, conj=ctx.conjuntos||[], ativos=ctx.ativos||[], quebras=ctx.quebras||{};
   const out=[];
@@ -66961,7 +68623,7 @@ function _adsSugestoes(ctx){
   camps.forEach(function(c){
     const gasto=Number(c.gasto||0); if(!(gasto>0)) return;
     const cfg=c.cfg; const marca=!cfg.campo; const res=Number(c.res||0); const custo=c.custo; const media=medias[c.tipo]||null; const rel=custo&&media?custo/media:null;
-    const ctr=Number(c.ctr||0); const freq=Number(c.frequencia||0); const nome=nomeC(c); const lbl=cfg.resSing||"resultado";
+    const ctr=_adsCtrLink(c)/* v100 E1 */; const freq=Number(c.frequencia||0); const nome=nomeC(c); const lbl=cfg.resSing||"resultado";
     const add=function(regra,prio,titulo,motivo,acao,impacto){ out.push({chave:"r"+regra+":"+c.id,regra:regra,c:c,prio:prio,titulo:titulo,motivo:motivo,acao:acao,impacto:impacto||null}); };
     if(marca){
       if(freq>3.5) add(10,gasto*0.3,"Renovar os criativos de "+nome,"Frequência "+freq.toLocaleString("pt-BR",{maximumFractionDigits:1})+": cada pessoa já viu o anúncio mais de 3 vezes no período — o CPM tende a subir e o engajamento a cair.","Trocar ou adicionar criativos, ou ampliar o público.",null);
@@ -67176,11 +68838,11 @@ function AdsEstrategiaDetalhe({s,ctx,isMob}){
     const rows=((ctx.quebras||{})[c.id]||[]).filter(function(r){return r.dimensao===dim&&Number(r.gasto)>0;}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);}); const tq=rows.reduce(function(t,r){return t+Number(r.gasto);},0)||1;
     evid=<div>{K(dim==="idade"?"Gasto e resultado por faixa etária":"Gasto e resultado por posicionamento")}<div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:12,padding:"4px 12px"}}>{rows.map(function(r,i){ const ruim=String(r.valor)===String(valor); const res=Number(r.resultados||0); const cor=ruim?ADS.crit:res>0?ADS.ink2:ADS.muted; return <div key={r.valor} style={{display:"grid",gridTemplateColumns:isMob?"1fr 90px":"140px 1fr 90px 100px",gap:12,alignItems:"center",padding:"8px 0",borderTop:i?"1px solid "+ADS.line:"none"}}><div style={{fontSize:12.5,fontWeight:700,color:cor}}>{_adsValLbl(dim,r.valor)}{ruim&&<span style={{fontSize:10,fontWeight:800,marginLeft:6,color:ADS.crit}}>EXCLUIR</span>}</div>{!isMob&&<div>{Barra(Number(r.gasto)/tq*100,ruim?ADS.crit:"#b58ff2")}</div>}{!isMob&&<div style={{textAlign:"right",fontSize:12}}><b style={ADS_MONO}>{_adsBRL0(r.gasto)}</b> <span style={{color:ADS.muted}}>{Math.round(Number(r.gasto)/tq*100)}%</span></div>}<div style={{textAlign:"right",fontSize:12}}><b style={Object.assign({color:cor},ADS_MONO)}>{_adsNum(res)}</b> <span style={{color:ADS.muted}}>{res===1?lbl:(cfg.resLbl||lbl+"s")}</span></div></div>; })}</div></div>;
   } else {
-    const ctr=Number(c.ctr||0), freq=Number(c.frequencia||0);
+    const ctr=_adsCtrLink(c)/* v100 E1: CTR de link, igual ao servidor */, freq=Number(c.frequencia||0);
     const custoCor=rel?(rel>1.5?ADS.crit:rel<0.8?ADS.ok:ADS.ink):ADS.ink;
     const nums=[Num("Custo por "+lbl,c.custo?_adsBRLc(c.custo):"—",media?"média do objetivo "+_adsBRLc(media)+(rel?" · "+_adsX(rel):""):null,custoCor)];
     nums.push(Num("Gasto no período",_adsBRL0(c.gasto),_adsNum(c.res)+" "+(c.res===1?lbl:(cfg.resLbl||lbl+"s"))));
-    if(s.regra===3||s.regra===4||s.regra===2) nums.push(Num("CTR",_adsPct(ctr,2),ctr<1?"abaixo de 1% — poucos clicam":"acima de 1% — clicam, o problema é depois",ctr<1?ADS.crit:ADS.ok));
+    if(s.regra===3||s.regra===4||s.regra===2) nums.push(Num("CTR (link)",_adsPct(ctr,2),ctr<1?"abaixo de 1% — poucos clicam":"acima de 1% — clicam, o problema é depois",ctr<1?ADS.crit:ADS.ok));
     if(s.regra===7||s.regra===10) nums.push(Num("Frequência",freq.toLocaleString("pt-BR",{maximumFractionDigits:1}),"acima de 3,5 = mesmo público cansando",ADS.warn));
     if(s.regra===11){ const fatia=ctx.gastoLeadTotal>0?c.gasto/ctx.gastoLeadTotal*100:0; nums.push(Num("Fatia da verba de lead",Math.round(fatia)+"%","pouca verba pra um custo tão bom",ADS.ok)); if(orc) nums.push(Num("Verba hoje",orcTxt,"sugestão: "+_adsBRL(orc.v*1.4)+(orc.tipo==="diario"?"/dia":"")+" (+40%)",ADS.accent)); }
     else if(orc) nums.push(Num("Verba hoje",orcTxt,null));
@@ -67196,8 +68858,23 @@ function AdsEstrategiaDetalhe({s,ctx,isMob}){
     {evid}
   </div>;
 }
+/* v100 (15/10/2026) E1: converte as sugestões do servidor (ads_estrategia_regras) no formato que a tela já usa ({chave, regra, c, prio, titulo, motivo, acao, impacto}).
+   "c" = a campanha enriquecida da tela (para o detalhe "Por quê / O que fazer" e as evidências). Com unidade escolhida, só entram as campanhas da unidade. */
+function _adsSugestoesDoServidor(d,camps){
+  const porId={}; (camps||[]).forEach(function(c){ porId[String(c.id)]=c; });
+  const uni=(typeof _adsUnidadeAtiva==="function")?_adsUnidadeAtiva():null;
+  const out=[];
+  (d.sugestoes||[]).forEach(function(x){ if(!x||!x.chave) return; const cid=String(x.campaign_id||"");
+    let c=porId[cid];
+    if(!c){ if(uni) return; const tipo=_adsTipoSrv(cid)||"outro"; const cfg=_adsTipo(tipo); c={id:cid,nome:x.campanha||cid,tipo:tipo,cfg:cfg,fam:cfg.fam,gasto:0,res:0,custo:null,ent:{}}; }
+    out.push({chave:String(x.chave),regra:Number(x.regra),c:c,prio:Number(x.prio||0),titulo:x.titulo||"",motivo:x.motivo||"",acao:x.acao||"",impacto:(x.impacto===null||x.impacto===undefined)?null:Number(x.impacto),servidor:true}); });
+  out.sort(function(a,b){ return (b.prio||0)-(a.prio||0); });
+  return out;
+}
 function QGAdsEstrategia({mc,conta,isMob,canEdit}){
-  const SAI=useAdsSaida();   /* v96 R2 (rodada 2) */
+  const SAI=useAdsSaida();
+  const _r3pode=_f2v98Pode();   /* v100 (14/10/2026) R3: Feito/Ignorar viram "🧠 Resolver em Decisões" (só sócio com PIN aberto) */
+  const _r3ir=function(){ try{ window.dispatchEvent(new CustomEvent("pixels:qg-sub",{detail:{sub:"ia"}})); }catch(_){ } };   /* v96 R2 (rodada 2) */
   const accountId=conta&&conta.ad_account_id;
   const D=useAdsVisaoGeral(accountId);
   /* 19/09: a Estratégia precisa de amostra — com menos de 14 dias quase nada é julgado (mínimo de ADS_MIN_RESULTADOS = 10 resultados por campanha · v96 M14).
@@ -67211,13 +68888,19 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   const Q=useAdsQuebrasPorCampanha(accountId,X.P,leadIds);
   const adIds=useMemo(function(){ return ((X.cur||{}).anuncios||[]).filter(function(a){return Number(a.gasto||0)>0;}).map(function(a){return a.id;}); },[X.cur]);
   const CR=useAdsCriativos(accountId,adIds);
+  /* v100 (15/10/2026) E1: as sugestões R1–R11 vêm do SERVIDOR — ads_estrategia_regras(p_conta,p_de,p_ate), mesma janela (mín. 14 dias)
+     e as mesmas chaves do ads_sugestoes_status ("r3:<campanha>", "r5:<anúncio>:<ativo>", "r8:<campanha>:<dimensão>:<valor>").
+     A conta da tela (_adsSugestoes) fica só de RESERVA, se a função falhar (com aviso discreto). Só leitura, 1x ao abrir/trocar período. */
+  const SRV=useF2V98Rpc("ads_estrategia_regras",accountId?{p_conta:accountId,p_de:Pbase.ini,p_ate:Pbase.fim}:null,[accountId,Pbase.key]);
   const [filtro,setFiltro]=useState("pendentes");
   const [abertoS,setAbertoS]=useState(null);   // recomendação com o "porquê / como fazer" aberto (19/09)
   const [verRegras,setVerRegras]=useState(false);
   if(SAI.alertasSairam) return <AdsWrap><AdsCard style={{background:ADS.surface2,border:"1px dashed "+ADS.line2,fontSize:13,color:ADS.ink2,lineHeight:1.6}}><b>As regras antigas saíram em {_adsFmtD(SAI.alertasAte)}.</b> Os avisos agora vêm só da IA nova (🔔 alarmes e 🧠 Decisões, com os sócios). Nada foi apagado: as marcações de feito/ignorado continuam no banco.</AdsCard></AdsWrap>;   /* v96 R2 */
-  if(D.loading||X.loading||AT.loading||Q.loading) return <AdsLoading t="Montando a estratégia…"/>;
+  if(D.loading||X.loading||AT.loading||Q.loading||SRV.loading) return <AdsLoading t="Montando a estratégia…"/>;
   const P=X.P; const medias=_adsMediaPorTipo(camps); const gastoLeadTotal=camps.filter(function(c){return c.fam==="leads";}).reduce(function(s,c){return s+Number(c.gasto||0);},0);
-  const sug=_adsSugestoes({camps:camps,medias:medias,ent:D.ent||[],conjuntos:(X.cur||{}).conjuntos||[],ativos:AT.rows,quebras:Q.por,gastoLeadTotal:gastoLeadTotal});
+  const _srvD=(!SRV.erro&&SRV.data&&Array.isArray(SRV.data.sugestoes))?SRV.data:null;   /* v100 E1 */
+  const sug=_srvD?_adsSugestoesDoServidor(_srvD,camps):_adsSugestoes({camps:camps,medias:medias,ent:D.ent||[],conjuntos:(X.cur||{}).conjuntos||[],ativos:AT.rows,quebras:Q.por,gastoLeadTotal:gastoLeadTotal});
+  const _tiposFalhou=!!(window._pxAdsTiposConta&&window._pxAdsTiposConta[accountId]&&window._pxAdsTiposConta[accountId].falhou);
   const pend=sug.filter(function(s){return !S.st[s.chave];}), feitas=sug.filter(function(s){return S.st[s.chave]&&S.st[s.chave].status==="feito";}), ign=sug.filter(function(s){return S.st[s.chave]&&S.st[s.chave].status==="ignorado";});
   const lista=(filtro==="pendentes"?pend:filtro==="feitas"?feitas:ign).slice().sort(function(a,b){ return (b.impacto||0)-(a.impacto||0)||(b.prio||0)-(a.prio||0); });
   const impTot=pend.reduce(function(s,x){return s+(x.impacto||0);},0);
@@ -67228,7 +68911,11 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   /* Estratégia (19/09): uma lista de ações, da que mais vale dinheiro pra que menos vale. Título em uma linha; o porquê e o como abrem no clique. */
   return <AdsWrap>
     <div style={{background:ADS.warnSoft,border:"1px solid #f3dca0",borderRadius:12,padding:"8px 14px",marginBottom:12,fontSize:12,color:"#6b4d00"}}><b>Estas regras antigas saem em {_adsFmtD(SAI.alertasAte)}.</b> Daí em diante os avisos vêm só da IA nova (🔔 alarmes e 🧠 Decisões).</div>{/* v96 R2 (rodada 2) */}
+    {/* v100 (15/10/2026) R3 (revisor): Feito e Ignorar saíram; diz para onde ir (o botão só aparece para sócio com PIN aberto) */}
+    <div data-v100="R3-alertas" style={{fontSize:12,color:ADS.ink2,margin:"-4px 0 12px",lineHeight:1.5}}>👉 Quem dá baixa nestes alertas é um sócio, em <b>🧠 Decisões</b> (com PIN). Feito e Ignorar saíram desta aba.{canEdit&&_r3pode?<span> Use o botão "🧠 Resolver em Decisões" em cada linha.</span>:<span> Aqui é só para ler.</span>}</div>
     {/* v96 (13/10/2026) Q6: se parte da leitura falhou, a lista pode estar incompleta — diz isso em vez de "nada pra fazer" */}
+    {/* v100 (15/10/2026) E1: aviso discreto quando a conta do servidor falhou e a tela usou a reserva */}
+    {(!_srvD||_tiposFalhou)&&<div data-v100="E1-reserva" style={{fontSize:11.5,color:ADS.muted,margin:"-4px 0 10px"}}>ⓘ {!_srvD?"O servidor não respondeu às regras agora: a lista abaixo foi calculada nesta tela (reserva)":"O tipo de algumas campanhas foi calculado nesta tela (o servidor não respondeu)"}{SRV.erro&&!SRV.falta?" · "+String(SRV.erro).slice(0,80):""}.</div>}
     {(AT.erro||Q.erro)&&<AdsErroCarga tela={AT.erro?"os ativos dos anúncios":"o público das campanhas"} erro={(AT.erro||Q.erro)+" — as ações abaixo podem estar incompletas"} onTentar={function(){ if(AT.erro) AT.reload(); if(Q.erro) Q.reload(); }}/>}
     <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:14}}>
       <div style={{fontSize:isMob?16:19,fontWeight:800,letterSpacing:"-.3px",color:ADS.ink}}>{pend.length?<span><b>{pend.length} {pend.length===1?"ação":"ações"}</b> pra fazer{nCampPend?" em "+nCampPend+" campanha"+(nCampPend>1?"s":""):""}{impTot>0?<span> · <b style={{color:ADS.crit}}>{_adsBRL0(impTot)}</b> em jogo</span>:null}</span>:<span>Nada pra fazer com os dados de {_adsFmtD(P.ini)}–{_adsFmtD(P.fim)}</span>}</div>
@@ -67246,11 +68933,11 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
               <div style={{fontSize:11.5,color:ADS.muted,marginTop:3,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><span style={{fontWeight:800,color:cor,textTransform:"uppercase",letterSpacing:".05em",fontSize:10}}>{REG[s.regra]}</span><span>·</span><span style={{fontWeight:700,color:ADS.ink2}}>{_adsNomeCurto(c.nome)}</span><AdsObjTag tipo={c.tipo}/>{stt&&<span>· {stt.status==="feito"?"feita":"ignorada"}{stt.por?" por "+stt.por:""} · {_adsFmtD(String(stt.em).slice(0,10))}</span>}{isMob&&s.impacto>0&&<span>· <b style={{color:ADS.ink2}}>{_adsBRLc(s.impacto)}</b> em jogo</span>}</div>
             </div>
             {!isMob&&<div style={{textAlign:"right"}}>{s.impacto>0?<><div style={Object.assign({fontSize:15,fontWeight:900,color:ADS.ink,letterSpacing:"-.3px"},ADS_MONO)}>{_adsBRLc(s.impacto)}</div><div style={{fontSize:10.5,color:ADS.muted}}>em jogo</div></>:<span style={{fontSize:11,color:ADS.muted}}>—</span>}</div>}
-            {!isMob&&<div style={{display:"flex",gap:6,alignItems:"center"}} onClick={function(e){e.stopPropagation();}}>{canEdit&&!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{canEdit&&!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}{canEdit&&stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,null); }}>Reabrir</AdsBtn>}<span style={{fontSize:12,color:ADS.muted,marginLeft:4,transform:on?"rotate(90deg)":"none",display:"inline-block",transition:"transform .15s"}}>›</span></div>}
+            {!isMob&&<div style={{display:"flex",gap:6,alignItems:"center"}} onClick={function(e){e.stopPropagation();}}>{canEdit&&!stt&&_r3pode&&<AdsBtn small primary onClick={_r3ir}>🧠 Resolver em Decisões</AdsBtn>}{canEdit&&stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,null); }}>Reabrir</AdsBtn>}<span style={{fontSize:12,color:ADS.muted,marginLeft:4,transform:on?"rotate(90deg)":"none",display:"inline-block",transition:"transform .15s"}}>›</span></div>}
           </div>
           {on&&<div style={{padding:isMob?"0 14px 16px 14px":"4px 18px 18px 58px",background:ADS.surface2}}>
             <AdsEstrategiaDetalhe s={s} isMob={isMob} ctx={{medias:medias,anuncios:(X.cur||{}).anuncios||[],conjuntos:(X.cur||{}).conjuntos||[],ativos:AT.rows,quebras:Q.por,ent:D.ent||[],cr:CR.cr||{},gastoLeadTotal:gastoLeadTotal}}/>
-            <div style={{display:"flex",gap:6,marginTop:14,flexWrap:"wrap"}}><AdsBtn small onClick={function(){ _adsAbrirCampanha(c.id); }}>Abrir campanha ›</AdsBtn>{isMob&&canEdit&&!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{isMob&&canEdit&&!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}</div>
+            <div style={{display:"flex",gap:6,marginTop:14,flexWrap:"wrap"}}><AdsBtn small onClick={function(){ _adsAbrirCampanha(c.id); }}>Abrir campanha ›</AdsBtn>{isMob&&canEdit&&!stt&&_r3pode&&<AdsBtn small primary onClick={_r3ir}>🧠 Resolver em Decisões</AdsBtn>}</div>
           </div>}
         </div>; })}
     </AdsCard>}
@@ -68522,7 +70209,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const tipos=_adsTiposDasCampanhas(D.ent,(X.cur||{}).campanhas);
   const campNome={}; ((X.cur||{}).campanhas||[]).forEach(function(c){ campNome[c.id]=c.nome; });
   /* enriquece cada anúncio: objetivo → família → resultado/custo */
-  const enr=todosAn.map(function(a){ const tipo=tipos[a.campaign_id]||_adsClassifica(a.objetivo,[],a.campaign_nome||campNome[a.campaign_id]||a.nome); const t=_adsTipo(tipo); const F=_adsFam(t.fam); const res=F.campo==="resultados"?_adsResDe(a,t):_adsResDe(a,F); const custo=F.campo?_adsDiv(a.gasto,res):null; const online=ST.pronto?(ST.mapa[a.id]==="ACTIVE"):null; return Object.assign({},a,{cr:C.cr[a.id]||{},tipo:tipo,cfg:t,F:F,res:res,custo:custo,campNome:a.campaign_nome||campNome[a.campaign_id]||"",campId:a.campaign_id,online:online}); });
+  const enr=todosAn.map(function(a){ const tipo=tipos[a.campaign_id]||_adsTipoSrv(a.campaign_id)||_adsClassifica(a.objetivo,[],a.campaign_nome||campNome[a.campaign_id]||a.nome); const t=_adsTipo(tipo); const F=_adsFam(t.fam); const res=F.campo==="resultados"?_adsResDe(a,t):_adsResDe(a,F); const custo=F.campo?_adsDiv(a.gasto,res):null; const online=ST.pronto?(ST.mapa[a.id]==="ACTIVE"):null; return Object.assign({},a,{cr:C.cr[a.id]||{},tipo:tipo,cfg:t,F:F,res:res,custo:custo,campNome:a.campaign_nome||campNome[a.campaign_id]||"",campId:a.campaign_id,online:online}); });
   /* ── NOTA (19/09): 5,0 = mediana do grupo. Régua da conta = criativos do mesmo objetivo neste cliente;
         régua da carteira = todos os anúncios da agência no mesmo objetivo, no mesmo período. ── */
   const refConta=(function(){ const m={}; enr.forEach(function(a){ (m[a.tipo]=m[a.tipo]||[]).push(a); });
@@ -69056,7 +70743,7 @@ function _adsPainelCalc(data,accounts,clients){
   /* classificação por campanha */
   const entPorConta={}; (data.ent||[]).forEach(function(e){ const o=entPorConta[e.conta]||(entPorConta[e.conta]={camp:{},conj:{}}); if(e.nivel==="campanha") o.camp[e.id]=e; else (o.conj[e.parent]=o.conj[e.parent]||[]).push(e); });
   const tipoDe={}; const tipoCache={};
-  (data.dias||[]).forEach(function(r){ const k=r.conta+"|"+r.camp; if(tipoCache[k]) return; if(r.tipo){ tipoCache[k]=r.tipo; return; } /* classificação única do banco */ const o=entPorConta[r.conta]||{camp:{},conj:{}}; const c=o.camp[r.camp]||{}; tipoCache[k]=_adsClassifica(c.objetivo||r.objetivo,o.conj[r.camp]||[],c.nome||r.nome); });
+  (data.dias||[]).forEach(function(r){ const k=r.conta+"|"+r.camp; if(tipoCache[k]) return; if(r.tipo){ tipoCache[k]=r.tipo; return; } /* classificação única do banco */ const o=entPorConta[r.conta]||{camp:{},conj:{}}; const c=o.camp[r.camp]||{}; tipoCache[k]=_adsTipoSrv(r.camp)||_adsClassifica(c.objetivo||r.objetivo,o.conj[r.camp]||[],c.nome||r.nome); });
   /* resultado por tipo: leads (form) ou conversas (wpp) — família leads; demais famílias não contam como lead */
   const resDe=function(r,tipo){ const l=Number(r.leads||0), c=Number(r.conversas||0); if(tipo==="form") return l; if(tipo==="lead_wpp"||tipo==="eng_wpp") return c; return 0; }; /* cada campanha conta pela finalidade (09/09); campanha que não é de lead não gera lead */
   const vazio=function(){ return {gasto:0,gastoLead:0,res:0,leads:0,conversas:0,leads_meta:0,impressoes:0,cliques:0}; };
@@ -69179,6 +70866,7 @@ function _adsExcecoes(W,C){
 }
 function QGAdsPainel({clients,onOpenClient,isMob,direita}){
   const P=useAdsPainel(); const accounts=useAdsAccounts(); const AL=useAdsAlertasStatus();
+  const _r3pode=_f2v98Pode();   /* v100 (14/10/2026) R3: sócio com PIN aberto vai para 🧠 Decisões; os outros, para os Alertas do cliente */
   const [verOcultos,setVerOcultos]=useState(false);
   const [nDias,setNDias]=useState(7);
   const tblRef=useRef(null); const wrapRef=useRef(null); const [tblW,setTblW]=useState(0); const [wrapW,setWrapW]=useState(0);
@@ -69294,8 +70982,8 @@ function QGAdsPainel({clients,onOpenClient,isMob,direita}){
                 <div style={{fontSize:12,color:D.ink2,marginTop:5,lineHeight:1.5}}>{p.detalhe}{p.acao?<span style={{color:D.muted}}> → {p.acao}</span>:null}</div>
                 <div style={{display:"flex",gap:4,marginTop:11,alignItems:"center",flexWrap:"wrap"}}>
                   <Btn primary onClick={function(){abrir(p);}}>{p.abrir==="visao"?"Abrir conta →":p.camp?"Abrir campanha →":"Ver campanhas →"}</Btn>{/* v96 Q4: só diz "Abrir campanha" quando abre uma */}
-                  {!oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"visto");}}>visto</Btn>}
-                  {!oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"adiado",3);}}>adiar 3 dias</Btn>}
+                  {/* v100 (14/10/2026) R3: "visto" e "adiar 3 dias" não dão mais baixa aqui; resolve-se dentro do cliente */}
+                  {!oculto&&<Btn onClick={function(){ try{ window._pxSubDesejada=_r3pode?"ia":"estrategia"; window._pxAdsCampDesejada=null; }catch(_){ } onOpenClient(p.cliente.client_id); }}>{_r3pode?"🧠 Resolver em Decisões":"Ver nos alertas"}</Btn>}
                   {oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"adiado",0);}}>reabrir</Btn>}
                 </div>
               </div>
@@ -69651,25 +71339,16 @@ function _adsCorteLbl(dim,v){
   return _adsValLbl(dim,s);
 }
 
-/* ── o que a IA deve devolver ────────────────────────────
-   Prompt curto de propósito: quanto mais regra, mais ela inventa.
-   Manda extrair SÓ o que está escrito e marcar o que não entendeu. */
-const ADS_CER_PROMPT=
-"Você lê o relato de um gestor de tráfego sobre o que o CLIENTE dele falou e transforma em fatos.\n"+
-"Devolva SÓ um JSON, sem texto antes ou depois, neste formato:\n"+
-'{"quem_falou":"nome ou null","periodo_ini":"AAAA-MM-DD ou null","periodo_fim":"AAAA-MM-DD ou null",'+
-'"fatos":[{"tipo":"...","chave":"...","valor":"...","sinal":-1,"numero":null,"unidade_num":null,"trecho":"...","confianca":0.8}],'+
-'"nao_entendi":["..."]}\n\n'+
-"tipo: venda | qualidade_lead | publico | criativo | regiao | produto | horario | oferta | operacao | concorrencia | outro\n"+
-"chave: o assunto em uma ou duas palavras (ex.: \"65+\", \"Caçador\", \"biodigestor\", \"vídeo do produtor\").\n"+
-"valor: o fato em uma frase curta, na terceira pessoa.\n"+
-"sinal: -1 ruim, 0 neutro, 1 bom (do ponto de vista do resultado da campanha).\n"+
-"numero e unidade_num: só quando o relato traz número (unidade_num: vendas, reais, leads ou pct).\n"+
-"trecho: o pedaço EXATO do texto original que sustenta o fato. Nunca invente trecho.\n"+
-"confianca: 0 a 1.\n"+
-"nao_entendi: pedaços do relato que você não conseguiu classificar — é melhor listar do que chutar.\n\n"+
-"REGRAS: não invente nada que não esteja escrito; não deduza idade de quem mandou mensagem; "+
-"se o relato não tiver fato nenhum, devolva a lista de fatos vazia.";
+/* v100 (15/10/2026) E1: o texto de instrução da IA (antes ADS_CER_PROMPT, aqui na tela) agora mora na edge ask-claude,
+   no tipo de pedido "cerebro_fatos" (mesmo texto, palavra por palavra). A tela manda só o tipo e os dados (cliente, unidade, data, relato).
+   A edge continua aceitando o formato antigo (system + messages) — o app no ar segue igual até a publicação. */
+async function _adsAskTipo(body){
+  if(!window._sb||!window._sb.functions) throw new Error("Supabase indisponível");
+  const {data,error}=await window._sb.functions.invoke("ask-claude",{body:body});
+  if(error){ let m=null; try{ const r=error.context; if(r&&typeof r.json==="function"){ const j=await r.json(); m=j&&(j.error||j.message); } }catch(_){ } throw new Error(m?(typeof m==="string"?m:(m.message||JSON.stringify(m))):(error.message||"falha na IA")); }
+  if(data&&data.error) throw new Error(data.error);
+  return data;
+}
 
 function useAdsCerebro(conta,P){
   const [st,setSt]=useState({loading:true,d:null,erro:null});
@@ -69828,10 +71507,9 @@ function QGAdsDiagnostico({mc,conta,isMob,canEdit:_canEditTela,currentUser}){
       setSalvando("lendo");
       let j=null,modelo="";
       try{
-        const resp=await askClaude({model:(typeof PX_IA_MODELO!=="undefined"?PX_IA_MODELO:"claude-sonnet-5"),max_tokens:1600,
-          system:ADS_CER_PROMPT,
-          messages:[{role:"user",content:"Cliente: "+(conta.client_id||"")+(conta.unidade?" ("+conta.unidade+")":"")+
-            "\nData do relato: "+quando+"\n\nRelato:\n"+t}]});
+        /* v100 (15/10/2026) E1: só tipo + dados; o prompt é montado na edge (ask-claude, tipo "cerebro_fatos") */
+        const resp=await _adsAskTipo({tipo:"cerebro_fatos",dados:{cliente:conta.client_id||"",unidade:conta.unidade||null,data:quando,relato:t},
+          model:(typeof PX_IA_MODELO!=="undefined"?PX_IA_MODELO:"claude-sonnet-5"),max_tokens:1600,origem:"cerebro_fatos"});
         modelo=(resp&&resp._modelo_usado)||"";
         const bruto=((resp&&resp.content)||[]).map(function(b){ return b.text||""; }).join("");
         const m=bruto.match(/\{[\s\S]*\}/);
@@ -70046,7 +71724,7 @@ const _f2v98Pode=function(){ try{ return (typeof useTCliPode==="function")?!!use
 const _f2v98Mes=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 const _f2v98PerLbl=function(P){ if(!P||!P.ini) return ""; const a=String(P.ini), b=String(P.fim); if(a.slice(8,10)==="01"&&a.slice(0,7)===b.slice(0,7)) return _f2v98Mes[Number(a.slice(5,7))-1]; return _adsFmtD(a)+" a "+_adsFmtD(b); };
 const _f2v98DataHora=function(ts){ if(!ts) return "—"; const d=new Date(ts); if(isNaN(d)) return "—"; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
-const _f2v98Dia=function(ts){ if(!ts) return ""; const d=new Date(ts); if(isNaN(d)) return ""; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0"); };
+const _f2v98Dia=function(ts){ if(!ts) return ""; const d=new Date(ts); if(isNaN(d)) return ""; return _adsFmtD(_adsIso(d)); };   /* v100 E5: usa o formatador único de data */
 const _f2v98CliUni=function(mc){ return {cli:(mc&&(mc.parent_client||mc.client_id))||null, uni:(mc&&mc.bioter_unit)||_adsUnidadeAtiva()||null}; };
 const F2V98_AMARELO="#e9b308";
 function F2V98Chip({children,cor,bg,borda,style,title}){ return <span title={title} style={Object.assign({display:"inline-flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:cor||ADS.muted,background:bg||ADS.surface2,border:borda?"1px solid "+borda:"none",borderRadius:99,padding:"2px 9px",whiteSpace:"nowrap",lineHeight:1.5},style||{})}>{children}</span>; }
@@ -70121,8 +71799,8 @@ function AdsLeadsV98(props){
     <AdsLeadsFunilV98 P={P} X={X} C={C} CR={CR} leads={leads} matVenda={matVenda} isMob={isMob}/>
     <AdsLeadsListaV98 P={P} D={D} leads={leads} isMob={isMob} canEdit={canEdit} onAbrir={setAberto} onMudou={recarregar}/>
     {/* v99 (14/10/2026) 2.12.11/2.11.09/2.10.11: 🧰 Ferramentas dos leads (gavetas fechadas; só leem ao abrir) */}
-    {typeof AdsFerramentasLeadsV99==="function"&&<AdsFerramentasLeadsV99 mc={mc} conta={conta} D={D} isMob={isMob} canEdit={canEdit}/>}
-    {abertoIdx>=0&&<AdsLeadJanelaV98 lead={leads[abertoIdx]} cu={cu} D={D} isMob={isMob} canEdit={canEdit} capiLigada={capiLigada}
+    {typeof AdsFerramentasLeadsV99==="function"&&<AdsFerramentasLeadsV99 mc={mc} conta={conta} D={D} isMob={isMob} canEdit={canEdit} P={P}/>}
+    {abertoIdx>=0&&<AdsLeadJanelaV98 lead={leads[abertoIdx]} cu={cu} D={D} isMob={isMob} canEdit={canEdit} capiLigada={capiLigada} etapas={etapasCfg}
       onFechar={function(){ setAberto(null); }} onMudou={recarregar}
       onAnterior={abertoIdx>0?function(){ setAberto(leads[abertoIdx-1].id); }:null}
       onProximo={abertoIdx<leads.length-1?function(){ setAberto(leads[abertoIdx+1].id); }:null}/>}
@@ -70313,6 +71991,7 @@ const _f2v98Mascara=function(s,tipo){ s=String(s||""); if(!s) return "—"; if(t
 const _f2v98LerConversa=function(txt){ const out=[]; String(txt||"").split(/\r?\n/).forEach(function(ln){ const m=ln.match(/^\[?(\d{1,2}\/\d{1,2}\/\d{2,4})[ ,]+(\d{1,2}:\d{2})(?::\d{2})?\]?\s*[-–]?\s*([^:]{1,40}):\s*(.*)$/); if(m) out.push({dia:m[1],hora:m[2],quem:m[3].trim(),txt:m[4]}); else if(out.length&&ln.trim()) out[out.length-1].txt+="\n"+ln; }); return out; };
 function AdsLeadJanelaV98({lead,cu,D,isMob,canEdit,capiLigada,onFechar,onMudou,onAnterior,onProximo}){
   const l=lead;
+  const _v100et=(arguments[0]&&arguments[0].etapas)||[];   /* v100 (14/10/2026) P2_7_04: regra de cada etapa (prop nova por arguments[0]) */
   const H=useF2V98Rpc("lead_historico",{p_lead:l.id},[l.id]);
   const IA=useF2V98Rpc("lead_ia_pode",cu.cli?{p_client:cu.cli}:null,[cu.cli]);
   const _ia=(typeof useAdsIaCredito==="function")?useAdsIaCredito():{sem:false};
@@ -70324,6 +72003,7 @@ function AdsLeadJanelaV98({lead,cu,D,isMob,canEdit,capiLigada,onFechar,onMudou,o
   const [f,setF]=useState({etapa:"",valor:"",motivo:"",obs:""});
   const [salvando,setSalvando]=useState(false);
   const inp=useRef(null);
+  const _v100RD=useF2V98Rpc("lead_etapa_regra_de",f.etapa?{p_lead:l.id,p_etapa:f.etapa}:null,[l.id,f.etapa]);   /* v100 (14/10/2026) P2_7_04 (etapa 2): regra e dono vindos do servidor ANTES de confirmar */
   useEffect(function(){ setVerContato(false); setConversa(null); setResIA(null); setAnotar(false); },[l.id]);
   useEffect(function(){ const h=function(e){ if(e.key==="Escape") onFechar(); }; window.addEventListener("keydown",h); return function(){ window.removeEventListener("keydown",h); }; },[]);
   const podeVer=!!D.pode_ver_contato; const podeMarcar=!!D.pode_marcar&&!!canEdit;
@@ -70386,6 +72066,7 @@ function AdsLeadJanelaV98({lead,cu,D,isMob,canEdit,capiLigada,onFechar,onMudou,o
           <div style={{borderRadius:12,background:"linear-gradient(120deg,#0e7490,#22d3ee)",color:"#fff",padding:"12px 12px",minHeight:56,display:"flex",alignItems:"flex-end",fontWeight:800,fontSize:12.5}}>{l.anuncio||"Sem anúncio"}</div>
           <div style={{fontSize:12,color:ADS.ink2,marginTop:6}}><b>{_adsNomeCurto(l.campanha||"")}</b>{l.conjunto?" › "+l.conjunto:""}</div>
           <div style={{fontSize:11.5,color:ADS.muted,marginTop:4,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}><F2V98Origem o={l.ad_id?l.origem:"pixels"}/>{(l.tem_lead_id||l.tem_ctwa||l.link_codigo)?"rastreio ✓":"sem rastreio"}{l.link_codigo?" · cód. "+l.link_codigo:""} · {_f2v98DataHora(l.criado_em)}</div>
+          {l.utm&&typeof l.utm==="object"&&Object.keys(l.utm).length>0&&<div data-v100-utm="1" style={{fontSize:11,color:ADS.muted,marginTop:3,overflowWrap:"anywhere"}}>Etiquetas do link: {Object.keys(l.utm).slice(0,6).map(function(k){ return String(k).replace(/^utm_/,"")+" = "+String(l.utm[k]); }).join(" · ")}</div>}{/* v100 P2_1_06 */}
         </div>
         {/* conversa para a IA */}
         <div style={{padding:isMob?"14px":"16px 18px",borderRight:isMob?"none":"1px solid "+ADS.line,borderBottom:isMob?"1px solid "+ADS.line:"none",minWidth:0}}>
@@ -70421,6 +72102,7 @@ function AdsLeadJanelaV98({lead,cu,D,isMob,canEdit,capiLigada,onFechar,onMudou,o
           {podeMarcar&&!anotar&&<button onClick={function(){ setAnotar(true); }} style={{width:"100%",marginTop:12,border:"1px solid "+ADS.line2,background:"#fff",borderRadius:10,padding:"8px 10px",fontWeight:800,fontSize:12.5,textAlign:"left",cursor:"pointer",fontFamily:ADS_FONT,minHeight:0}}>➕ Anotar ou mudar etapa</button>}
           {anotar&&<div style={{border:"1px solid "+ADS.line,borderRadius:12,padding:10,marginTop:12,display:"flex",flexDirection:"column",gap:7}}>
             <select value={f.etapa} onChange={function(e){ setF(Object.assign({},f,{etapa:e.target.value})); }} style={{border:"1px solid "+ADS.line2,borderRadius:8,padding:"6px",fontSize:12.5,fontFamily:ADS_FONT}}><option value="">Etapa: não mudar</option><option value="qualificado">Lead bom</option><option value="visita_orcamento">Visita</option><option value="proposta">Orçamento</option><option value="venda">Venda</option><option value="perdido">Ruim (saiu do funil)</option></select>
+            {f.etapa&&(function(){ const _rd=(!_v100RD.erro&&_v100RD.data&&_v100RD.data.ok!==false)?_v100RD.data:null; const e=_rd?{regra:_rd.regra,dono:_rd.dono}:_v100et.find(function(x){ return x.codigo===f.etapa; }); if(!e||!e.regra) return null; return <div data-v100-regra="1" style={{fontSize:11.5,color:"#4c1d95",background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:8,padding:"6px 8px",lineHeight:1.45}}><b>Regra desta etapa:</b> {e.regra}{e.dono?<span style={{display:"block",color:ADS.muted}}>Quem marca: {e.dono}</span>:null}</div>; })()}
             {(f.etapa==="venda"||f.etapa==="proposta")&&<input value={f.valor} onChange={function(e){ setF(Object.assign({},f,{valor:e.target.value})); }} placeholder="Valor (R$)" inputMode="decimal" style={{border:"1px solid "+ADS.line2,borderRadius:8,padding:"6px",fontSize:12.5}}/>}
             {f.etapa==="perdido"&&<select value={f.motivo} onChange={function(e){ setF(Object.assign({},f,{motivo:e.target.value})); }} style={{border:"1px solid "+ADS.line2,borderRadius:8,padding:"6px",fontSize:12.5,fontFamily:ADS_FONT}}><option value="">Motivo…</option>{(D.motivos||Object.keys(F2V98_MOTIVOS)).map(function(m){ return <option key={m} value={m}>{F2V98_MOTIVOS[m]||m}</option>; })}</select>}
             <input value={f.obs} onChange={function(e){ setF(Object.assign({},f,{obs:e.target.value})); }} placeholder="Anotação (o que o cliente contou)" style={{border:"1px solid "+ADS.line2,borderRadius:8,padding:"6px",fontSize:12.5}}/>
@@ -70441,6 +72123,7 @@ function AdsLeadsRegrasV98({cu,nomeCli,isMob,canEdit,etapasR,chavesR,onVoltar}){
   const S=useF2V98Rpc("lead_coleta_saude",{},[]);
   const aprov=_f2v98Pode();
   const [editEt,setEditEt]=useState(null); const [txtEt,setTxtEt]=useState("");
+  const [donoEt,setDonoEt]=useState("");   /* v100 (14/10/2026) P2_7_04: quem move o lead nesta etapa */
   const [novaReg,setNovaReg]=useState(null);
   const [pinAberto,setPinAberto]=useState(false); const [pin,setPin]=useState(""); const [salvando,setSalvando]=useState(false);
   const etapas=(etapasR.data&&etapasR.data.etapas)||[];
@@ -70450,7 +72133,9 @@ function AdsLeadsRegrasV98({cu,nomeCli,isMob,canEdit,etapasR,chavesR,onVoltar}){
   const mostrar=[["novo","Chegou","Preencheu o formulário ou mandou a 1ª mensagem pelo anúncio",["automático · Meta"]],["_conversou","Conversou","A conversa passou do \"oi\": 5 mensagens ou mais, ou atendeu a ligação",["automático","ou equipe"]]];
   etapas.filter(function(e){return e.codigo!=="novo"&&e.codigo!=="perdido";}).forEach(function(e){ const nomes={qualificado:"Lead bom",visita_orcamento:"Visita",proposta:"Orçamento",venda:"Venda"}; mostrar.push([e.codigo,nomes[e.codigo]||e.nome,e.regra,e.codigo==="qualificado"?["equipe"]:["equipe","planilha"],e]); });
   const matV=(etapas.find(function(e){return e.codigo==="venda";})||{}).maturacao_dias||21;
-  const salvarEt=async function(cod,regra,mat){ setSalvando(true); const r=await _f2v98Rpc("lead_etapa_regra_salvar",{p_client:cu.cli,p_etapa:cod,p_regra:regra,p_dono:null,p_maturacao_dias:mat||null}); setSalvando(false); if(r.erro){ _f2v98Toast(false,"Não salvou: "+r.erro); return; } _f2v98Toast(true,"Regra salva."); setEditEt(null); etapasR.reload(); };
+  /* v100 (14/10/2026) P2_7_04: grava o dono e NÃO apaga o resto (o servidor regrava os 3 campos juntos: regra, dono e prazo) */
+  const salvarEt=async function(cod,regra,mat,dono){ const e0=etapas.find(function(x){ return x.codigo===cod; })||{}; const rg=(regra===undefined||regra===null)?(e0.regra_propria?e0.regra:null):(String(regra).trim()||null); const dn=(dono===undefined||dono===null)?(e0.dono||null):(String(dono).trim()||null);
+    setSalvando(true); const r=await _f2v98Rpc("lead_etapa_regra_salvar",{p_client:cu.cli,p_etapa:cod,p_regra:rg,p_dono:dn,p_maturacao_dias:mat||e0.maturacao_dias||null}); setSalvando(false); if(r.erro){ _f2v98Toast(false,"Não salvou: "+r.erro); return; } _f2v98Toast(true,"Regra salva."); setEditEt(null); etapasR.reload(); };
   const salvarReg=async function(){ const n=novaReg; if(!n||!n.nome) return; setSalvando(true); const r=await _f2v98Rpc("lead_regiao_salvar",{p_client:cu.cli,p_nome:n.nome,p_id:n.id||null,p_unidade:cu.uni||"",p_ufs:String(n.ufs||"").split(/[,; ]+/).filter(Boolean).map(function(x){return x.toUpperCase();}),p_cidades:String(n.cidades||"").split(/[,;]+/).map(function(x){return x.trim();}).filter(Boolean),p_vendedor_nome:n.vendedor||"",p_vendedor_whats:n.whats||"",p_prioridade:100,p_ativo:true}); setSalvando(false); if(r.erro){ _f2v98Toast(false,"Não salvou: "+r.erro); return; } _f2v98Toast(true,"Região salva"+(r.data&&r.data.leads_reavaliados?" · "+r.data.leads_reavaliados+" leads reavaliados":"")+"."); setNovaReg(null); R.reload(); };
   const ligarCapi=async function(){ if(!aprov||pin.length<4) return; setSalvando(true); const r=await _f2v98Rpc("lead_chave_definir",{p_chave:"capi_meta_envio_ligado",p_valor:"sim",p_pin:pin}); setSalvando(false); setPin(""); if(r.erro){ _f2v98Toast(false,r.erro); return; } _f2v98Toast(true,"Devolver para a Meta: LIGADA e registrada."); setPinAberto(false); chavesR.reload(); };
   const desligarCapi=async function(){ if(!aprov) return; setPinAberto(true); };
@@ -70468,8 +72153,8 @@ function AdsLeadsRegrasV98({cu,nomeCli,isMob,canEdit,etapasR,chavesR,onVoltar}){
           {etapasR.falta?<F2V98Faltando/>:<div>
             {mostrar.map(function(m,i){ const e=m[4]; const ed=editEt===m[0]; return <div key={m[0]} style={{display:"grid",gridTemplateColumns:isMob?"22px 1fr":"26px 120px 1fr 170px",gap:10,alignItems:"center",padding:"9px 0",borderBottom:"1px solid #f1f0f5"}}>
               <span style={{fontSize:11,fontWeight:800,color:ADS.accent,background:ADS.accentSoft,borderRadius:99,width:20,height:20,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
-              {isMob?<div><b style={{fontSize:13}}>{m[1]}</b><div style={{fontSize:12,color:ADS.ink2}}>{m[2]}</div><div style={{display:"flex",gap:4,marginTop:4}}>{m[3].map(tag)}</div></div>:<b style={{fontSize:13}}>{m[1]}</b>}
-              {!isMob&&<div style={{fontSize:12.5,color:ADS.ink2}}>{ed?<span style={{display:"flex",gap:6}}><input value={txtEt} onChange={function(ev){ setTxtEt(ev.target.value); }} style={{flex:1,border:"1px solid "+ADS.line2,borderRadius:8,padding:"5px 7px",fontSize:12.5}}/><F2V98Btn small primary disabled={salvando} onClick={function(){ salvarEt(m[0],txtEt||null); }}>Salvar</F2V98Btn><F2V98Btn small onClick={function(){ setEditEt(null); }}>✕</F2V98Btn></span>:<span>{m[2]}{e&&canEdit&&<button onClick={function(){ setEditEt(m[0]); setTxtEt(e.regra||""); }} title="Mudar a regra deste cliente" style={{border:0,background:"none",color:ADS.accent,cursor:"pointer",fontSize:11.5,fontWeight:700,minHeight:0}}>✎</button>}{e&&e.regra_propria&&<F2V98Chip style={{marginLeft:6}}>própria</F2V98Chip>}</span>}</div>}
+              {isMob?<div><b style={{fontSize:13}}>{m[1]}</b><div style={{fontSize:12,color:ADS.ink2}}>{m[2]}</div>{e&&e.dono&&<div style={{fontSize:11.5,color:ADS.muted}}>Quem marca: {e.dono}</div>}<div style={{display:"flex",gap:4,marginTop:4}}>{m[3].map(tag)}</div></div>:<b style={{fontSize:13}}>{m[1]}</b>}
+              {!isMob&&<div style={{fontSize:12.5,color:ADS.ink2}}>{ed?<span style={{display:"flex",gap:6,flexWrap:"wrap"}}><input value={txtEt} onChange={function(ev){ setTxtEt(ev.target.value); }} placeholder="regra (vazio = a padrão)" style={{flex:"2 1 200px",border:"1px solid "+ADS.line2,borderRadius:8,padding:"5px 7px",fontSize:12.5}}/><input data-v100-dono="1" value={donoEt} onChange={function(ev){ setDonoEt(ev.target.value); }} placeholder="quem marca (ex.: vendedor, em 24 h)" style={{flex:"1 1 150px",border:"1px solid "+ADS.line2,borderRadius:8,padding:"5px 7px",fontSize:12.5}}/><F2V98Btn small primary disabled={salvando} onClick={function(){ salvarEt(m[0],(e&&!e.regra_propria&&txtEt===(e.regra||""))?null:txtEt,null,donoEt); }}>Salvar</F2V98Btn><F2V98Btn small onClick={function(){ setEditEt(null); }}>✕</F2V98Btn></span>:<span>{m[2]}{e&&e.dono&&<span data-v100-dono-txt="1" style={{display:"block",fontSize:11.5,color:ADS.muted}}>Quem marca: {e.dono}</span>}{e&&canEdit&&<button onClick={function(){ setEditEt(m[0]); setTxtEt(e.regra_propria?(e.regra||""):(e.regra||"")); setDonoEt(e.dono||""); }} title="Mudar a regra deste cliente" style={{border:0,background:"none",color:ADS.accent,cursor:"pointer",fontSize:11.5,fontWeight:700,minHeight:0}}>✎</button>}{e&&e.regra_propria&&<F2V98Chip style={{marginLeft:6}}>própria</F2V98Chip>}</span>}</div>}
               {!isMob&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{m[3].map(tag)}</div>}
             </div>; })}
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12,fontSize:12.5}}>Julgar o anúncio só depois de <select disabled={!canEdit||salvando} value={String(matV)} onChange={function(ev){ salvarEt("venda",null,Number(ev.target.value)); }} style={{border:"1px solid #ddd0fb",background:ADS.accentSoft,color:ADS.accent,fontWeight:800,borderRadius:8,padding:"3px 6px",fontFamily:ADS_FONT}}>{[7,14,21,30,45,60,90].map(function(d){ return <option key={d} value={d}>{d} dias</option>; })}</select></div>
@@ -70542,7 +72227,8 @@ function AdsChavesCelV98({c,chv,aberta,onAbrir}){
 }
 function AdsPainelChaveV98({tipo,c,conta,camps,isMob,onFechar,onPedido,chv}){
   const pode=_f2v98Pode();
-  const manual=!!(chv&&chv.data&&chv.data.manual);   /* C3: o ads-aplicar não sabe horário/lista — o pedido vem com o passo a passo e resolve com "Já fiz no Gerenciador" */
+  const _v100k=((chv&&chv.data&&chv.data.campanhas)||{})[c.id]&&(((chv.data.campanhas)[c.id])[tipo])||{};   /* v100 (14/10/2026) P2_3_09/P2_5_04 (etapa 2): cada chave diz se o app aplica com o PIN 2x (pin) ou se fica manual (pin_motivo) */
+  const manual=!!(chv&&chv.data&&chv.data.manual)||_v100k.pin===false;   /* C3: o ads-aplicar não sabe horário/lista — o pedido vem com o passo a passo e resolve com "Já fiz no Gerenciador" */
   /* o painel fica dentro da linha da tabela (que rola para o lado): ele "gruda" à esquerda e tem a largura da parte visível */
   const ref=useRef(null); const [larg,setLarg]=useState(null);
   useEffect(function(){ const med=function(){ const el=ref.current; const sc=el&&el.closest(".scroll-x"); if(sc) setLarg(sc.clientWidth-12); }; med(); window.addEventListener("resize",med); return function(){ window.removeEventListener("resize",med); }; },[]);
@@ -70550,11 +72236,12 @@ function AdsPainelChaveV98({tipo,c,conta,camps,isMob,onFechar,onPedido,chv}){
     <span style={{position:"absolute",top:-9,right:14,background:"#fde047",color:"#3f2d00",fontSize:9.5,fontWeight:900,letterSpacing:".05em",textTransform:"uppercase",borderRadius:6,padding:"2px 7px",zIndex:1}}>painel da chave · só nesta campanha</span>
     <div style={{border:"2px solid #8b5cf6",borderRadius:13,padding:isMob?"12px":"14px 16px",background:"#fff"}}>
       {tipo==="horario"?<AdsHorarioV98 c={c} conta={conta} camps={camps} isMob={isMob} pode={pode} manual={manual} onFechar={onFechar} onPedido={onPedido}/>:<AdsJaClientesV98 c={c} conta={conta} camps={camps} isMob={isMob} pode={pode} manual={manual} onFechar={onFechar} onPedido={onPedido}/>}
-      {manual&&chv.data.aviso&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>ℹ {chv.data.aviso}</div>}
+      {manual&&_v100k.pin_motivo?<div style={{fontSize:11.5,color:"#92400e",marginTop:8}}>ℹ {_v100k.pin_motivo}</div>:manual&&chv.data.aviso&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>ℹ {chv.data.aviso}</div>}
+      {!manual&&_v100k.pin===true&&<div data-v100-aplica="1" style={{fontSize:11.5,color:"#15803d",marginTop:8}}>✔ {tipo==="horario"?"O app aplica o horário na Meta depois do PIN 2x.":"O app aplica a exclusão na Meta depois do PIN 2x (a lista vai só em hash)."}</div>}
     </div>
   </div>;
 }
-const _f2v98Pedir=async function(conta,c,tipo,cfg){ const r=await _f2v98Rpc("ads_chave_campanha_pedir",{p_conta:conta.ad_account_id,p_campanha:c.id,p_tipo:tipo,p_config:cfg}); if(r.falta){ _f2v98Toast(false,"O pedido desta chave ainda não está ligado no servidor."); return r; } if(r.erro){ _f2v98Toast(false,"Pedido não criado: "+r.erro); return r; } _f2v98Toast(true,"Pedido criado em 🧠 Decisões › Precisa de vocês. Só muda na Meta depois do PIN 2x."); return r; };
+const _f2v98Pedir=async function(conta,c,tipo,cfg){ const r=await _f2v98Rpc("ads_chave_campanha_pedir",{p_conta:conta.ad_account_id,p_campanha:c.id,p_tipo:tipo,p_config:cfg}); if(r.falta){ _f2v98Toast(false,"O pedido desta chave ainda não está ligado no servidor."); return r; } if(r.erro){ _f2v98Toast(false,"Pedido não criado: "+r.erro); return r; } _f2v98Toast(true,(r.data&&r.data.aplica_app===false)?"Pedido criado em 🧠 Decisões com o passo a passo para o Gerenciador.":"Pedido criado em 🧠 Decisões › Precisa de vocês. Só muda na Meta depois do PIN 2x."); return r; };   /* v100 (14/10/2026) etapa 2: aplica_app do C4b */
 function AdsHorarioV98({c,conta,camps,isMob,pode,manual,onFechar,onPedido}){
   const S=useF2V98Rpc("ads_horario_sugestao",{p_conta:conta.ad_account_id,p_campanha:c.id,p_dias:30},[c.id]);
   const ontem=_adsAddDays(_adsIso(new Date()),-1), de=_adsAddDays(ontem,-29);
@@ -70614,7 +72301,7 @@ function AdsJaClientesV98({c,conta,camps,isMob,pode,manual,onFechar,onPedido}){
   const inpL=useRef(null); const [subindo,setSubindo]=useState(false);
   const subirLista=function(file){ if(!file) return; const rd=new FileReader(); rd.onload=async function(){ const txt=String(rd.result||""); const linhas=[]; txt.split(/\r?\n/).forEach(function(ln){ const em=(ln.match(/[\w.+-]+@[\w-]+\.[\w.]+/)||[])[0]||null; const dg=(ln.replace(/[^\d]/g," ").split(/\s+/).filter(function(x){ return x.length>=10&&x.length<=13; })[0])||null; if(em||dg) linhas.push({tel:dg,email:em}); });
       if(!linhas.length){ _f2v98Toast(false,"Não achei telefone nem e-mail na planilha."); return; }
-      setSubindo(true); const r=await _f2v98Rpc("ads_clientes_lista_subir",{p_client:s.client_id||null,p_unidade:null,p_linhas:linhas.slice(0,50000)}); setSubindo(false);
+      setSubindo(true); let r=await _f2v98Rpc("ads_lista_subir",{p_client:s.client_id||null,p_unidade:null,p_linhas:linhas.slice(0,50000),p_finalidade:"clientes"}); if(r.falta) r=await _f2v98Rpc("ads_clientes_lista_subir",{p_client:s.client_id||null,p_unidade:null,p_linhas:linhas.slice(0,50000)}); setSubindo(false);   /* v100 (14/10/2026) P2_5_06 (etapa 2): lista com finalidade (C4b; só hash) */
       if(r.erro){ _f2v98Toast(false,r.falta?"Subir a lista ainda não está ligado no servidor.":"Não subiu: "+r.erro); return; } _f2v98Toast(true,(r.data&&r.data.explica)||("Lista subida: "+_adsNum(r.data&&r.data.qtd)+" clientes (só o hash fica guardado).")); S.reload(); };
     rd.readAsText(file); };
   const card=function(t,big,unid,sub,amarelo){ return <div style={{border:"1px solid "+(amarelo?"#fde68a":ADS.line),background:amarelo?"#fefce8":"#fff",borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:11.5,color:ADS.muted}}>{t}</div><div style={{fontSize:22,fontWeight:900,color:amarelo?"#b45309":ADS.ink,marginTop:2}}>{big}<span style={{fontSize:12,fontWeight:600,color:amarelo?"#b45309":ADS.muted}}> {unid}</span></div><div style={{fontSize:11.5,color:amarelo?"#b45309":ADS.muted,fontWeight:amarelo?700:500}}>{sub}</div></div>; };
@@ -70634,7 +72321,7 @@ function AdsJaClientesV98({c,conta,camps,isMob,pode,manual,onFechar,onPedido}){
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:10}}>
       <F2V98Btn escuro disabled={!pode||enviando} title={pode?undefined:"Só sócio aprovador, com o PIN aberto, cria o pedido."} onClick={criar}>{enviando?"criando…":manual?"Criar pedido":"Criar pedido (PIN 2x)"}</F2V98Btn>
       <F2V98Btn onClick={onFechar}>Cancelar</F2V98Btn>
-      <span style={{fontSize:11.5,color:ADS.muted}}>{manual?"Vai para 🧠 Decisões com o passo a passo; nada muda na Meta sozinho. ":""}{c.ativa?"Campanha no ar: muda só depois do 2º PIN.":"Campanha pausada: o pedido vale quando ela voltar."}</span>
+      <span style={{fontSize:11.5,color:ADS.muted}}>{s.aplica_app?"O app aplica a exclusão na Meta depois do 2º PIN. ":manual?"Vai para 🧠 Decisões com o passo a passo (o app ainda não aplica a exclusão sozinho); nada muda na Meta sozinho. ":""}{c.ativa?"Campanha no ar: muda só depois do 2º PIN.":"Campanha pausada: o pedido vale quando ela voltar."}</span>
     </div>
   </div>;
 }
@@ -70647,7 +72334,7 @@ function AdsCampMenuV98({c,conta}){
     <button title="Mais" onClick={function(){ setAb(!ab); }} style={{border:"1px solid "+ADS.line,background:"#fff",borderRadius:8,padding:"1px 7px",cursor:"pointer",fontWeight:900,minHeight:0}}>⋯</button>
     {ab&&<div style={{position:"absolute",right:0,top:28,background:"#fff",border:"1px solid "+ADS.line,borderRadius:10,boxShadow:"0 10px 30px rgba(0,0,0,.12)",zIndex:30,padding:4,minWidth:260}}>
       <button onClick={function(){ setAb(false); try{ window.dispatchEvent(new CustomEvent("pixels:tseg-abrir",{detail:{painel:"montador",conta:conta.ad_account_id,copiar:{campanha_id:c.id,nome:c.nome}}})); }catch(_){ } }} style={{display:"block",width:"100%",textAlign:"left",border:0,background:"none",padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12.5,fontWeight:700,fontFamily:ADS_FONT,minHeight:0}}>🌎 Copiar para outra região ou idioma</button>
-      {typeof AdsCopiarOutraContaV99==="function"&&<button onClick={function(){ setAb(false); _v99setOutra(true); }} style={{display:"block",width:"100%",textAlign:"left",border:0,background:"none",padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12.5,fontWeight:700,fontFamily:ADS_FONT,minHeight:0}}>📤 Copiar para outra conta (pedido com PIN)</button>}
+      {typeof AdsCopiarOutraContaV99==="function"&&<button onClick={function(){ setAb(false); _v99setOutra(true); }} style={{display:"block",width:"100%",textAlign:"left",border:0,background:"none",padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12.5,fontWeight:700,fontFamily:ADS_FONT,minHeight:0}}>📤 Copiar para outra conta (vira rascunho)</button>/* v100 (15/10/2026) P2_3_19 */}
     </div>}
     {_v99outra&&typeof AdsCopiarOutraContaV99==="function"&&<AdsCopiarOutraContaV99 c={c} conta={conta} isMob={(typeof window!=="undefined")&&window.innerWidth<768} onFechar={function(){ _v99setOutra(false); }}/>}
   </span>;
@@ -70657,18 +72344,23 @@ function AdsCampMenuV98({c,conta}){
 function AdsTestesSemanaV98({conta,camps,isMob}){
   const T=useF2V98Rpc("ads_testes_semana_ler",conta&&conta.ad_account_id?{p_conta:conta.ad_account_id}:null,[conta&&conta.ad_account_id]);
   const pode=_f2v98Pode();
+  /* v100 (14/10/2026) P2_3_16/P2_3_17: criar o teste e fechar o plano da semana aqui (ads_teste_salvar / ads_testes_semana_fechar); props novas por arguments[0] */
+  const _v100a=arguments[0]||{}; const [_v100novo,_v100setNovo]=useState(false); const [_v100fech,_v100setFech]=useState(false);
   if(T.loading) return null;
   const d=T.data||{}; const sem=d.semana||null; const testes=d.testes||[];
   const abrirMontador=function(){ try{ window.dispatchEvent(new CustomEvent("pixels:tseg-abrir",{detail:{painel:"montador",conta:conta.ad_account_id,teste_ab:true}})); }catch(_){ } };
   const marcadas=(d.campanhas||(camps||[]).filter(function(c){return c.ativa;}).map(function(c){ return {campaign_id:c.id,nome:c.nome,teste_n:null}; }));
   const ab=testes.find(function(t){ return t.a&&t.b; });
+  const _v100podeEd=pode&&!T.falta&&(d.pode_editar!==false);
+  const _v100fechar=async function(fechar){ _v100setFech(true); const r=await _f2v98Rpc("ads_testes_semana_fechar",{p_conta:conta.ad_account_id,p_semana:(sem&&sem.de)||null,p_fechar:fechar}); _v100setFech(false); if(r.erro){ _f2v98Toast(false,r.falta?"Fechar o plano ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,fechar?"Plano da semana fechado: nada novo entra até "+_adsFmtD(sem&&sem.ate)+".":"Plano reaberto."); T.reload(); };
+  const _v100btns=_v100podeEd&&sem?<span style={{display:"inline-flex",gap:6,flexWrap:"wrap"}}>{!sem.fechado&&<F2V98Btn small primary onClick={function(){ _v100setNovo(!_v100novo); }}>+ Novo teste</F2V98Btn>}{sem.fechado?<F2V98Btn small disabled={_v100fech} onClick={function(){ _v100fechar(false); }}>Reabrir o plano</F2V98Btn>:<F2V98Btn small escuro disabled={_v100fech||!testes.length} title={testes.length?"Depois de fechado, nada novo entra no plano até domingo.":"Ponha pelo menos 1 teste no plano."} onClick={function(){ _v100fechar(true); }}>🔒 Fechar o plano da semana</F2V98Btn>}</span>:null;
   const Lado=function(x,lado,frente){ return <div style={{border:frente?"2px solid #16a34a":"1px solid "+ADS.line,background:frente?"#f0fdf4":"#fff",borderRadius:12,padding:"10px 12px",minWidth:0}}>
     <div style={{display:"flex",gap:10}}><div style={{width:54,height:60,borderRadius:8,background:lado==="A"?"linear-gradient(135deg,#166534,#22c55e)":"linear-gradient(135deg,#0e7490,#0891b2)",color:"#fff",display:"flex",alignItems:"flex-end",padding:4,fontWeight:900,fontSize:11,flexShrink:0}}>{lado}</div><div style={{minWidth:0}}><b style={{fontSize:13}}>{lado} · {x.nome}</b>{frente&&<div><F2V98Chip cor="#15803d" bg="#dcfce7">🏆 na frente</F2V98Chip></div>}</div></div>
     <div style={{fontSize:12,color:ADS.ink2,marginTop:8,lineHeight:1.6}}>Gasto <b>{_adsBRL(x.gasto)}</b> · <b>{_adsNum(x.leads)}</b> leads<br/>Custo por lead <b style={{color:frente?"#15803d":"#b91c1c"}}>{_adsBRL(x.custo_lead)}</b><br/>Conversas 5+: <b>{_adsNum(x.conversas_5mais)}</b></div>
   </div>; };
   return <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:20}}>
-    <F2V98Bloco isMob={isMob} novo="novo no topo de Campanhas" titulo={"🧪 Plano de testes da semana"+(sem?" · "+_adsFmtD(sem.de)+" a "+_adsFmtD(sem.ate):"")} chip={sem?<span style={{color:sem.fechado?"#15803d":ADS.muted}}>{sem.fechado?"fechado":"aberto"}</span>:null} direita={sem&&sem.fechado?<span style={{fontSize:11.5,color:ADS.muted}}>fechado por {sem.fechado_por||"—"} em {_f2v98DataHora(sem.fechado_em)} · nada novo entra até {_adsFmtD(sem.ate)}</span>:null}>
-      {T.falta||T.erro||!testes.length?<div style={{fontSize:12.5,color:ADS.muted}}>{T.falta?"O plano de testes ainda não está ligado no servidor.":"Nenhum plano de testes fechado nesta semana."} <F2V98Btn small primary disabled={!pode} onClick={abrirMontador} style={{marginLeft:8}}>+ Criar teste A×B (abre o Montador)</F2V98Btn></div>:
+    <F2V98Bloco isMob={isMob} novo="novo no topo de Campanhas" titulo={"🧪 Plano de testes da semana"+(sem?" · "+_adsFmtD(sem.de)+" a "+_adsFmtD(sem.ate):"")} chip={sem?<span style={{color:sem.fechado?"#15803d":ADS.muted}}>{sem.fechado?"fechado":"aberto"}</span>:null} direita={<span style={{display:"inline-flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>{sem&&sem.fechado?<span style={{fontSize:11.5,color:ADS.muted}}>fechado por {sem.fechado_por||"—"} em {_f2v98DataHora(sem.fechado_em)} · nada novo entra até {_adsFmtD(sem.ate)}</span>:null}{_v100btns}</span>}>
+      {T.falta||T.erro||!testes.length?<div style={{fontSize:12.5,color:ADS.muted}}>{T.falta?"O plano de testes ainda não está ligado no servidor.":"Nenhum teste no plano desta semana."} <F2V98Btn small disabled={!pode} onClick={abrirMontador} style={{marginLeft:8}}>Abrir o Montador</F2V98Btn></div>:
       testes.map(function(t,i){ const cert=Number(t.certeza_pct||0); const ok=cert>=90; return <div key={i} style={{display:"grid",gridTemplateColumns:"24px 1fr auto",gap:10,padding:"10px 0",borderTop:i?"1px solid "+ADS.line:"none",alignItems:"start"}}>
         <span style={{fontSize:11,fontWeight:800,color:ADS.accent,background:ADS.accentSoft,borderRadius:99,width:20,height:20,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{t.n||i+1}</span>
         <div style={{minWidth:0}}><b style={{fontSize:13}}>{t.titulo}</b> <span style={{fontSize:11.5,color:ADS.muted}}>· {_adsNomeCurto(t.campanha_nome||"")}</span>
@@ -70677,6 +72369,8 @@ function AdsTestesSemanaV98({conta,camps,isMob}){
         </div>
         {t.acao?(t.acao.pedido_id&&pode?<F2V98Btn small primary onClick={function(){ try{ window.dispatchEvent(new CustomEvent("pixels:qg-sub",{detail:{sub:"ia"}})); }catch(_){ } }}>{t.acao.rotulo} · abrir pedido</F2V98Btn>:<F2V98Btn small disabled title={t.acao.libera_em?"libera em "+_adsFmtD(t.acao.libera_em):undefined}>{t.acao.rotulo}{t.acao.libera_em?" · libera "+_adsFmtD(t.acao.libera_em):""}</F2V98Btn>):<F2V98Chip>{t.status==="vai_comecar"?"abrir no Montador":"aguardando"}</F2V98Chip>}
       </div>; })}
+      {_v100novo&&_v100podeEd&&typeof AdsTesteNovoV100==="function"&&<AdsTesteNovoV100 conta={conta} camps={camps} anuncios={_v100a.anuncios} conjuntos={_v100a.conjuntos} isMob={isMob} onFechar={function(){ _v100setNovo(false); }} onSalvou={function(){ _v100setNovo(false); T.reload(); }}/>}
+      {!pode&&!T.falta&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>Só um sócio, com o PIN aberto, monta e fecha o plano.</div>}
     </F2V98Bloco>
     {ab&&<div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1.6fr) minmax(0,1fr)",gap:14,alignItems:"start"}}>
       <F2V98Bloco isMob={isMob} novo="resultado do teste A×B" titulo={"⚖️ Teste "+(ab.n||1)+" · "+(ab.a.nome)+" × "+(ab.b.nome)} chip={ab.dia?"dia "+ab.dia+" de "+(ab.dias||7):null}>
@@ -70700,8 +72394,10 @@ function AdsRankingCriativosV98({conta,P,items,notaDe,isMob,cliUni}){
   const _uniR=_adsUnidadeAtiva(); const _campsR=_uniR?Array.from(new Set((items||[]).filter(function(a){ return a.F&&a.F.id==="leads"; }).map(function(a){ return a.campaign_id; }).filter(Boolean))):null;
   const _v99pode=_f2v98Pode();   /* v99 (14/10/2026) 2.10.10 (pedido F1): botão "✨ Novos anúncios a partir destes" só para sócio com PIN aberto */
   const R=useF2V98Rpc("ads_criativos_ranking",conta&&P?{p_conta:conta.ad_account_id,p_de:P.ini,p_ate:P.fim,p_campanhas:_campsR&&_campsR.length?_campsR:null}:null,[conta&&conta.ad_account_id,P&&P.key,(_campsR||[]).join(",")]);
-  const OP=useF2V98Rpc("ads_criativo_etiquetas_opcoes",{},[]);
-  const [editEt,setEditEt]=useState(null);   /* {ad_id, gancho, formato, mensagem} */
+  const OP0=useF2V98Rpc("ads_criativo_etiquetas_opcoes",{},[]);
+  const _v100cli=(cliUni&&cliUni.cli)||null; const OPT=useF2V98Rpc("ads_criativo_etiquetas_opcoes_todas",_v100cli?{p_client:_v100cli}:null,[_v100cli]);   /* v100 (14/10/2026) P2_4_04 (etapa 2): listas com o que este cliente já usa (produto, oferta…); a geral fica de reserva */
+  const OP=(!OPT.erro&&OPT.data&&OPT.data.gancho)?OPT:OP0;
+  const [editEt,setEditEt]=useState(null);   /* {ad_id, gancho, formato, mensagem} · v100 P2_4_04: + angulo, oferta, produto */
   const [salvEt,setSalvEt]=useState(false);
   const CR=useF2V98Rpc("lead_conversas_reais",(R.falta||R.erro)&&cliUni&&cliUni.cli&&P?{p_client:cliUni.cli,p_unidade:cliUni.uni,p_de:P.ini,p_ate:P.fim}:null,[R.falta,R.erro,cliUni&&cliUni.cli,P&&P.key]);
   const [ordem,setOrdem]=useState("conv");
@@ -70725,11 +72421,19 @@ function AdsRankingCriativosV98({conta,P,items,notaDe,isMob,cliUni}){
   const corCusto=function(v){ if(!v||cvs.length<2) return ADS.ink2; if(v<=cvs[0]*1.05) return "#15803d"; if(v>=cvs[cvs.length-1]*0.95) return "#dc2626"; return "#d97706"; };
   const corNota=function(n){ return n>=7?"#16a34a":n>=5?"#f59e0b":"#dc2626"; };
   const g=srv&&srv.geral;
-  const salvarEt=async function(){ if(!editEt) return; setSalvEt(true); const r=await _f2v98Rpc("ads_criativo_etiqueta_confirmar",{p_ad_id:editEt.ad_id,p_gancho:editEt.gancho||null,p_formato:editEt.formato||null,p_mensagem:editEt.mensagem||null}); setSalvEt(false); if(r.erro){ _f2v98Toast(false,r.falta?"Etiquetar ainda não está ligado no servidor.":"Não salvou: "+r.erro); return; } _f2v98Toast(true,"Etiquetas salvas (equipe)."); setEditEt(null); R.reload(); };
+  /* v100 (14/10/2026) P2_4_17: prazo de troca pela verba diária desta conta (antes fixo em 45 dias) */
+  const _v100verba=(function(){ const dias=Math.max(1,Number(P&&P.dias)||7); const gs=lista.reduce(function(s,x){ return s+_f2v100Gasto(x); },0)+((srv&&srv.pouco_dado)||[]).reduce(function(s,x){ return s+_f2v100Gasto(x); },0); return gs/dias; })();
+  const _v100prazo=Object.assign({verba:_v100verba},_f2v100PrazoTroca(_v100verba));
+  /* v100 (14/10/2026) P2_4_04: grava as 6 etiquetas (gancho, formato, mensagem, ângulo, oferta, produto); sem a função nova, cai na de 3 */
+  const salvarEt=async function(){ if(!editEt) return; setSalvEt(true); let r=await _f2v98Rpc("ads_criativo_etiquetas_salvar",{p_ad_id:editEt.ad_id,p_gancho:editEt.gancho||"",p_formato:editEt.formato||"",p_mensagem:editEt.mensagem||"",p_angulo:editEt.angulo||"",p_oferta:editEt.oferta||"",p_produto:editEt.produto||""});
+    if(r.falta) r=await _f2v98Rpc("ads_criativo_etiqueta_confirmar",{p_ad_id:editEt.ad_id,p_gancho:editEt.gancho||null,p_formato:editEt.formato||null,p_mensagem:editEt.mensagem||null}); setSalvEt(false); if(r.erro){ _f2v98Toast(false,r.falta?"Etiquetar ainda não está ligado no servidor.":"Não salvou: "+r.erro); return; } _f2v98Toast(true,"Etiquetas salvas (equipe)."); setEditEt(null); R.reload(); };
   const opc=OP.data||{};
   const EtqEditor=function(x){ if(!editEt||editEt.ad_id!==x.id) return null; const sel=function(k,lbl){ const lista=(opc[k]||[]); return <select value={editEt[k]||""} onChange={function(e){ const o=Object.assign({},editEt); o[k]=e.target.value; setEditEt(o); }} style={{border:"1px solid "+ADS.line2,borderRadius:8,padding:"4px 6px",fontSize:12,fontFamily:ADS_FONT}}><option value="">{lbl}: —</option>{lista.map(function(v){ return <option key={v} value={v}>{lbl}: {v}</option>; })}{editEt[k]&&lista.indexOf(editEt[k])<0?<option value={editEt[k]}>{lbl}: {editEt[k]}</option>:null}</select>; };
-    return <div onClick={function(e){e.stopPropagation();}} style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginTop:6,background:ADS.surface2,borderRadius:9,padding:"6px 8px"}}>{sel("gancho","gancho")}{sel("formato","formato")}{sel("mensagem","mensagem")}<F2V98Btn small primary disabled={salvEt} onClick={salvarEt}>{salvEt?"salvando…":"Confirmar"}</F2V98Btn><F2V98Btn small onClick={function(){ setEditEt(null); }}>✕</F2V98Btn></div>; };
-  const abrirEt=function(x){ const e=x.etiquetas||{}; setEditEt({ad_id:x.id,gancho:e.gancho||"",formato:e.formato||"",mensagem:e.mensagem||""}); };
+    return <div onClick={function(e){e.stopPropagation();}} style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginTop:6,background:ADS.surface2,borderRadius:9,padding:"6px 8px"}}>{sel("gancho","gancho")}{sel("formato","formato")}{sel("mensagem","mensagem")}{_v100sel("angulo","ângulo")}{_v100sel("oferta","oferta")}{_v100sel("produto","produto")}<F2V98Btn small primary disabled={salvEt} onClick={salvarEt}>{salvEt?"salvando…":"Confirmar"}</F2V98Btn><F2V98Btn small onClick={function(){ setEditEt(null); }}>✕</F2V98Btn></div>; };
+  const abrirEt=function(x){ const e=x.etiquetas||{}; setEditEt({ad_id:x.id,gancho:e.gancho||"",formato:e.formato||"",mensagem:e.mensagem||"",angulo:e.angulo||"",oferta:e.oferta||"",produto:e.produto||""}); };
+  /* v100 P2_4_04: ângulo, oferta e produto — lista do servidor quando vier; sem lista, texto livre */
+  const _v100sel=function(k,lbl){ const l=(opc[k]||[]); if(l.length){ return <select key={k} value={editEt[k]||""} onChange={function(ev){ const o=Object.assign({},editEt); o[k]=ev.target.value; setEditEt(o); }} style={{border:"1px solid "+ADS.line2,borderRadius:8,padding:"4px 6px",fontSize:12,fontFamily:ADS_FONT}}><option value="">{lbl}: —</option>{l.map(function(v){ return <option key={v} value={v}>{lbl}: {v}</option>; })}{editEt[k]&&l.indexOf(editEt[k])<0?<option value={editEt[k]}>{lbl}: {editEt[k]}</option>:null}</select>; }
+    return <input key={k} data-v100-etq={k} value={editEt[k]||""} placeholder={lbl} onChange={function(ev){ const o=Object.assign({},editEt); o[k]=ev.target.value; setEditEt(o); }} style={{border:"1px solid "+ADS.line2,borderRadius:8,padding:"4px 6px",fontSize:12,fontFamily:ADS_FONT,width:110}}/>; };
   const TH={fontSize:10.5,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase",color:ADS.muted,textAlign:"right"};
   return <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:18}}>
     {g&&<F2V98Bloco isMob={isMob} novo="novo" fundo="#fcfaff" titulo="🏆 O que vence no geral" chip={g.texto?(g.dias||90)+" dias · "+(g.clientes||"—")+" clientes · "+(g.criativos||"—")+" criativos":null}>
@@ -70739,19 +72443,20 @@ function AdsRankingCriativosV98({conta,P,items,notaDe,isMob,cliUni}){
     <F2V98Bloco isMob={isMob} novo="ranking com etiquetas e 3 segundos" titulo="📊 Do melhor para o pior" chip={"ordem: "+(ordem==="nota"?"nota":ordem==="lead"?"custo por lead":"custo por conversa de verdade")} direita={<span style={{display:"inline-flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
         <span style={{display:"inline-flex",background:ADS.surface2,borderRadius:9,padding:2}}>{[["conv","Conversa de verdade"],["lead","Custo por lead"],["nota","Nota"]].map(function(o){ const at=ordem===o[0]; return <button key={o[0]} onClick={function(e){ e.stopPropagation(); setOrdem(o[0]); }} style={{border:0,background:at?"#fff":"transparent",borderRadius:7,padding:"5px 10px",fontWeight:800,fontSize:12,color:at?ADS.ink:ADS.muted,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT,boxShadow:at?"0 1px 3px rgba(0,0,0,.1)":"none"}}>{o[1]}</button>; })}</span>
         <select value={etq} onClick={function(e){e.stopPropagation();}} onChange={function(e){ setEtq(e.target.value); }} style={{border:"1px solid "+ADS.line2,borderRadius:9,padding:"5px 8px",fontSize:12,fontWeight:700,fontFamily:ADS_FONT,background:"#fff"}}><option value="">Etiqueta ▾</option>{etqs.map(function(x){ return <option key={x} value={x}>gancho: {x}</option>; })}</select>
+        {typeof AdsEtiquetarIAV100==="function"&&<AdsEtiquetarIAV100 conta={conta} onPronto={R.reload}/>}{/* v100 (14/10/2026) P2_4_05 */}
         {_v99pode&&<F2V98Btn small primary title="Abre o Montador com os textos a partir dos anúncios que mais venderam (a IA só roda lá, no clique)" onClick={function(){ try{ window.dispatchEvent(new CustomEvent("pixels:tseg-abrir",{detail:{painel:"montador",conta:conta&&conta.ad_account_id,novo:true,vencedores:true}})); }catch(_){ } }}>✨ Novos anúncios a partir destes</F2V98Btn>}
       </span>}>
       {ord.length===0?<div style={{fontSize:12.5,color:ADS.muted}}>Nenhum criativo com {regua}+ leads neste período.</div>:
-      isMob?<div style={{display:"flex",flexDirection:"column",gap:10}}>{ord.map(function(x,i){ const e=x.etiquetas||{}; const velho=Number(x.idade_dias||0)>45; const nt=x.nota;   /* v98 L10-h: no celular, um cartão por criativo */
+      isMob?<div style={{display:"flex",flexDirection:"column",gap:10}}>{ord.map(function(x,i){ const e=x.etiquetas||{}; const velho=Number(x.idade_dias||0)>_v100prazo.dias;   /* v100 P2_4_17 */ const nt=x.nota;   /* v98 L10-h: no celular, um cartão por criativo */
         return <div key={x.id} style={{border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px"}}>
           <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
             <b style={{fontSize:18,color:"#cbd5e1",fontWeight:900,width:16}}>{i+1}</b>
             <div style={{width:52,height:52,borderRadius:8,overflow:"hidden",position:"relative",flexShrink:0,background:"linear-gradient(135deg,#14532d,#16a34a)"}}>{x.cr&&typeof AdsCapa==="function"?<AdsCapa cr={x.cr} adId={x.id} h={52} radius={0} fixa/>:(x.thumbnail_url&&typeof _adsThumbUrl==="function")?<img src={_adsThumbUrl(x.id)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:null}<span style={{position:"absolute",left:4,bottom:2,color:"#fff",fontSize:9.5,fontWeight:900}}>{x.proporcao||""}</span></div>
-            <div style={{flex:1,minWidth:0}}><b style={{fontSize:13}}>{x.nome}</b><div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>{e.gancho&&<F2V98Chip cor={_f2v98EtqCor.gancho[0]} bg={_f2v98EtqCor.gancho[1]}>gancho: {e.gancho}</F2V98Chip>}{e.formato&&<F2V98Chip cor={_f2v98EtqCor.formato[0]} bg={_f2v98EtqCor.formato[1]}>{e.formato}</F2V98Chip>}{e.mensagem&&<F2V98Chip cor={_f2v98EtqCor.mensagem[0]} bg={_f2v98EtqCor.mensagem[1]}>{e.mensagem}</F2V98Chip>}{(x.etiquetas_por==="ia"||(srv&&!e.gancho&&!e.mensagem))&&<button onClick={function(){ abrirEt(x); }} style={{border:"1px dashed "+ADS.line2,background:"#fff",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,color:ADS.muted,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{x.etiquetas_por==="ia"?"🤖 confira":"+ etiquetar"}</button>}</div>{EtqEditor(x)}{x.idade_dias?<div style={{fontSize:11,marginTop:3,color:velho?"#b91c1c":ADS.muted,fontWeight:velho?700:500}}>roda há {x.idade_dias} dias{velho?" · trocar":""}</div>:null}</div>
+            <div style={{flex:1,minWidth:0}}><b style={{fontSize:13}}>{x.nome}</b><div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>{e.gancho&&<F2V98Chip cor={_f2v98EtqCor.gancho[0]} bg={_f2v98EtqCor.gancho[1]}>gancho: {e.gancho}</F2V98Chip>}{e.formato&&<F2V98Chip cor={_f2v98EtqCor.formato[0]} bg={_f2v98EtqCor.formato[1]}>{e.formato}</F2V98Chip>}{e.mensagem&&<F2V98Chip cor={_f2v98EtqCor.mensagem[0]} bg={_f2v98EtqCor.mensagem[1]}>{e.mensagem}</F2V98Chip>}{e.angulo&&<F2V98Chip cor="#9a3412" bg="#ffedd5">ângulo: {e.angulo}</F2V98Chip>}{e.oferta&&<F2V98Chip cor="#0f766e" bg="#ccfbf1">oferta: {e.oferta}</F2V98Chip>}{e.produto&&<F2V98Chip cor="#334155" bg="#e2e8f0">produto: {e.produto}</F2V98Chip>}{(x.etiquetas_por==="ia"||(srv&&!e.gancho&&!e.mensagem))&&<button onClick={function(){ abrirEt(x); }} style={{border:"1px dashed "+ADS.line2,background:"#fff",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,color:ADS.muted,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{x.etiquetas_por==="ia"?"🤖 confira":"+ etiquetar"}</button>}</div>{EtqEditor(x)}{x.idade_dias?<div style={{fontSize:11,marginTop:3,color:velho?"#b91c1c":ADS.muted,fontWeight:velho?700:500}}>roda há {x.idade_dias} dias{velho?" · trocar":""}</div>:null}</div>
             {nt!==null&&nt!==undefined&&<b style={{background:corNota(nt),color:"#fff",borderRadius:7,padding:"3px 7px",fontSize:12.5}}>{_adsNum1(nt)}</b>}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:6,marginTop:8,fontSize:11,color:ADS.muted}}>
-            <div>3 s<br/><b style={{fontSize:12.5,color:ADS.ink}}>{x.prende_3s_pct!==null&&x.prende_3s_pct!==undefined?Math.round(x.prende_3s_pct)+"%":"—"}</b></div>
+            <div>3 s · 15 s<br/><b style={{fontSize:12.5,color:ADS.ink}}>{x.prende_3s_pct!==null&&x.prende_3s_pct!==undefined?Math.round(x.prende_3s_pct)+"%":"—"}</b><span style={{color:ADS.muted}}> · {x.retencao_pct!==null&&x.retencao_pct!==undefined?Math.round(x.retencao_pct)+"%":"—"}</span></div>
             <div>leads<br/><b style={{fontSize:12.5,color:ADS.ink}}>{_adsNum(x.leads)}</b></div>
             <div>custo/lead<br/><b style={{fontSize:12.5,color:ADS.ink}}>{_adsBRL(x.custo_lead)}</b></div>
             <div>conv. de verdade<br/><b style={{fontSize:12.5,color:corCusto(x.custo_conversa_5mais)}}>{x.custo_conversa_5mais?_adsBRL(x.custo_conversa_5mais):"—"}</b></div>
@@ -70762,18 +72467,18 @@ function AdsRankingCriativosV98({conta,P,items,notaDe,isMob,cliUni}){
         <div style={{display:"grid",gridTemplateColumns:"28px 64px minmax(200px,1fr) 80px 56px 84px 64px 100px 52px",gap:10,alignItems:"end",padding:"0 0 6px",borderBottom:"1px solid "+ADS.line}}>
           <span/><span/><span/><span style={Object.assign({},TH,{textAlign:"left",background:"#fef9c3",padding:"3px 4px",borderRadius:4})}>Prende 3 s</span><span style={TH}>Leads</span><span style={TH}>Custo/lead</span><span style={TH}>Conv. 5+</span><span style={Object.assign({},TH,{background:"#faf5ff",padding:"3px 4px"})}>Custo conv. de verdade</span><span style={TH}>Nota</span>
         </div>
-        {ord.map(function(x,i){ const e=x.etiquetas||{}; const velho=Number(x.idade_dias||0)>45; const nt=x.nota;
+        {ord.map(function(x,i){ const e=x.etiquetas||{}; const velho=Number(x.idade_dias||0)>_v100prazo.dias;   /* v100 P2_4_17 */ const nt=x.nota;
           return <div key={x.id} style={{display:"grid",gridTemplateColumns:"28px 64px minmax(200px,1fr) 80px 56px 84px 64px 100px 52px",gap:10,alignItems:"start",padding:"12px 0",borderBottom:"1px solid #f1f0f5"}}>
             <b style={{fontSize:20,color:"#cbd5e1",fontWeight:900,paddingTop:6}}>{i+1}</b>
             <div style={{width:64,height:64,borderRadius:9,overflow:"hidden",position:"relative",background:"linear-gradient(135deg,#14532d,#16a34a)"}}>{x.cr&&typeof AdsCapa==="function"?<AdsCapa cr={x.cr} adId={x.id} h={64} radius={0} fixa/>:(x.thumbnail_url&&typeof _adsThumbUrl==="function")?<img src={_adsThumbUrl(x.id)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:null}<span style={{position:"absolute",left:5,bottom:3,color:"#fff",fontSize:10,fontWeight:900,textShadow:"0 1px 3px rgba(0,0,0,.6)"}}>{x.proporcao||(x.formato==="video"?"▶":"")}</span></div>
             <div style={{minWidth:0}}>
               <b style={{fontSize:13,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={x.nome}>{x.nome}</b>
-              <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>{e.gancho&&<F2V98Chip cor={_f2v98EtqCor.gancho[0]} bg={_f2v98EtqCor.gancho[1]}>gancho: {e.gancho}</F2V98Chip>}{e.formato&&<F2V98Chip cor={_f2v98EtqCor.formato[0]} bg={_f2v98EtqCor.formato[1]}>{e.formato}</F2V98Chip>}{e.mensagem&&<F2V98Chip cor={_f2v98EtqCor.mensagem[0]} bg={_f2v98EtqCor.mensagem[1]}>{e.mensagem}</F2V98Chip>}{x.etiquetas_por==="ia"&&<button onClick={function(){ abrirEt(x); }} title="Confirmar ou corrigir as etiquetas da IA" style={{border:"1px solid "+ADS.line2,background:"#fff",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,color:ADS.muted,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>🤖 IA etiquetou · confira</button>}{!e.gancho&&!e.mensagem&&(srv?<button onClick={function(){ abrirEt(x); }} style={{border:"1px dashed "+ADS.line2,background:"#fff",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,color:ADS.muted,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>+ etiquetar</button>:<F2V98Chip>sem etiqueta</F2V98Chip>)}</div>
+              <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>{e.gancho&&<F2V98Chip cor={_f2v98EtqCor.gancho[0]} bg={_f2v98EtqCor.gancho[1]}>gancho: {e.gancho}</F2V98Chip>}{e.formato&&<F2V98Chip cor={_f2v98EtqCor.formato[0]} bg={_f2v98EtqCor.formato[1]}>{e.formato}</F2V98Chip>}{e.mensagem&&<F2V98Chip cor={_f2v98EtqCor.mensagem[0]} bg={_f2v98EtqCor.mensagem[1]}>{e.mensagem}</F2V98Chip>}{e.angulo&&<F2V98Chip cor="#9a3412" bg="#ffedd5">ângulo: {e.angulo}</F2V98Chip>}{e.oferta&&<F2V98Chip cor="#0f766e" bg="#ccfbf1">oferta: {e.oferta}</F2V98Chip>}{e.produto&&<F2V98Chip cor="#334155" bg="#e2e8f0">produto: {e.produto}</F2V98Chip>}{x.etiquetas_por==="ia"&&<button onClick={function(){ abrirEt(x); }} title="Confirmar ou corrigir as etiquetas da IA" style={{border:"1px solid "+ADS.line2,background:"#fff",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,color:ADS.muted,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>🤖 IA etiquetou · confira</button>}{!e.gancho&&!e.mensagem&&(srv?<button onClick={function(){ abrirEt(x); }} style={{border:"1px dashed "+ADS.line2,background:"#fff",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,color:ADS.muted,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>+ etiquetar</button>:<F2V98Chip>sem etiqueta</F2V98Chip>)}</div>
               {EtqEditor(x)}
               {x.idade_dias?<div style={{fontSize:11.5,marginTop:4,color:velho?"#b91c1c":ADS.muted,fontWeight:velho?700:500}}>roda há {x.idade_dias} dias{velho?" · trocar":""}</div>:null}
               {x.motivo_queda&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"6px 9px",fontSize:12,color:"#7f1d1d",marginTop:6,lineHeight:1.45}}><b>Por que caiu{x.nota_antes?" ("+_adsNum1(x.nota_antes)+" → "+_adsNum1(nt)+")":""}:</b> {x.motivo_queda}</div>}
             </div>
-            <div>{x.prende_3s_pct!==null&&x.prende_3s_pct!==undefined?<div><b style={{fontSize:13}}>{Math.round(x.prende_3s_pct)}%</b><span style={{display:"block",height:6,background:"#eef0f3",borderRadius:99,marginTop:4}}><i style={{display:"block",height:"100%",width:Math.min(100,x.prende_3s_pct*2)+"%",background:x.prende_3s_pct>=35?"#16a34a":x.prende_3s_pct>=20?"#f59e0b":"#dc2626",borderRadius:99}}/></span></div>:<span style={{fontSize:11.5,color:ADS.muted}}>só vídeo</span>}</div>
+            <div>{x.prende_3s_pct!==null&&x.prende_3s_pct!==undefined?<div><b style={{fontSize:13}}>{Math.round(x.prende_3s_pct)}%</b><span style={{display:"block",height:6,background:"#eef0f3",borderRadius:99,marginTop:4}}><i style={{display:"block",height:"100%",width:Math.min(100,x.prende_3s_pct*2)+"%",background:x.prende_3s_pct>=35?"#16a34a":x.prende_3s_pct>=20?"#f59e0b":"#dc2626",borderRadius:99}}/></span></div>:<span style={{fontSize:11.5,color:ADS.muted}}>só vídeo</span>}{x.prende_3s_pct!==null&&x.prende_3s_pct!==undefined?<div data-v100-15s="1" title="Assiste 15 s (ThruPlay): quem viu 15 segundos ou o vídeo inteiro" style={{fontSize:10.5,color:ADS.muted,marginTop:5}}>15 s: <b style={{color:ADS.ink}}>{x.retencao_pct!==null&&x.retencao_pct!==undefined?Math.round(x.retencao_pct)+"%":"—"}</b></div>:null}</div>
             <b style={Object.assign({fontSize:13,textAlign:"right"},ADS_MONO)}>{_adsNum(x.leads)}</b>
             <span style={Object.assign({fontSize:13,textAlign:"right"},ADS_MONO)}>{_adsBRL(x.custo_lead)}</span>
             <b style={Object.assign({fontSize:13,textAlign:"right"},ADS_MONO)}>{x.conversas_5mais===null||x.conversas_5mais===undefined?"—":_adsNum(x.conversas_5mais)}</b>
@@ -70781,11 +72486,13 @@ function AdsRankingCriativosV98({conta,P,items,notaDe,isMob,cliUni}){
             <span style={{textAlign:"right"}}>{nt!==null&&nt!==undefined?<b style={{background:corNota(nt),color:"#fff",borderRadius:7,padding:"3px 7px",fontSize:12.5}}>{_adsNum1(nt)}</b>:<span style={{color:ADS.muted}}>—</span>}</span>
           </div>; })}
       </div></div>}
-      <div style={{fontSize:11.5,color:ADS.muted,marginTop:10}}>Só entram no ranking criativos com {regua} leads ou mais (a mesma régua do Diagnóstico). "Prende 3 s" = quem viu os 3 primeiros segundos ÷ {srv?"quem viu o vídeo começar":"impressões do vídeo (estimativa até o servidor mandar)"}.{!srv&&!temConv?" Conversa de verdade (5+ mensagens) aparece quando a coleta das conversas tiver dado.":""}{!srv?" Etiquetas (gancho, formato, mensagem) chegam com o ranking do servidor.":""}</div>
+      <div style={{fontSize:11.5,color:ADS.muted,marginTop:10}}>Só entram no ranking criativos com {regua} leads ou mais (a mesma régua do Diagnóstico). "Prende 3 s" = quem viu os 3 primeiros segundos ÷ {srv?"quem viu o vídeo começar":"impressões do vídeo (estimativa até o servidor mandar)"}. "15 s" = quem assistiu 15 segundos ou o vídeo todo (ThruPlay){lista.some(function(x){ return x.retencao_pct!==null&&x.retencao_pct!==undefined; })?"":": ainda não ligado no servidor"}. "Trocar" aparece depois de {_v100prazo.dias} dias no ar ({_v100prazo.txt}).{!srv&&!temConv?" Conversa de verdade (5+ mensagens) aparece quando a coleta das conversas tiver dado.":""}{!srv?" Etiquetas (gancho, formato, mensagem) chegam com o ranking do servidor.":""}</div>
     </F2V98Bloco>
     {pouco.length>0&&<F2V98Bloco isMob={isMob} fechadoMob fundo="#fafafc" titulo="○ Pouco dado ainda" chip={pouco.length+" criativo"+(pouco.length>1?"s":"")+" com menos de "+regua+" leads · sem posição no ranking"}>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{pouco.slice(0,12).map(function(x){ return <F2V98Chip key={x.id||x.ad_id} bg="#fff" borda={ADS.line} cor={ADS.ink2}>{_adsNomeCurto(x.nome)} · {_adsNum(x.leads)} leads{x.custo_lead?" · "+_adsBRL(x.custo_lead):""}</F2V98Chip>; })}</div>
     </F2V98Bloco>}
+    {/* v100 (14/10/2026) P2_4_07, P2_4_16, P2_4_17: 🧰 Ferramentas dos criativos (gavetas fechadas) */}
+    {typeof AdsFerramentasCriativosV100==="function"&&<AdsFerramentasCriativosV100 conta={conta} lista={lista.concat(srv?(srv.pouco_dado||[]).map(function(x){ return Object.assign({},x,{id:x.ad_id}); }):[])} P={P} isMob={isMob} prazo={_v100prazo}/>}
   </div>;
 }
 
@@ -71020,7 +72727,7 @@ function AdsGoogleOrgV99(props){
   const _idDica={ga4:"ID da propriedade (só números, ex.: 412345678)",clarity:"código do projeto no Clarity",search_console:"https://site-do-cliente.com.br/ ou sc-domain:site.com.br",gmn:"ID da ficha no Perfil da Empresa"};
   const podeId=!!canEdit&&!G.falta&&!!d.pode_editar;
   const salvarId=async function(k){ const v=String(_idEd[k]||"").trim(); if(!v){ _f2v98Toast(false,"Escreva o ID antes de salvar."); return; } _setIdSal(k); const r=await _f2v98Rpc("midia_google_salvar",{p_client:cu.cli,p_unidade:cu.uni,p_tipo:k,p_ident:v,p_obs:null}); _setIdSal(null); if(r.erro){ _f2v98Toast(false,r.falta?"Anotar o ID ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"ID anotado. A leitura liga quando a conta de serviço do Google existir."); const o=Object.assign({},_idEd); delete o[k]; _setIdEd(o); G.reload(); };
-  const caixa=function(k){ const x=d[k]||{}; const lig=!!x.ligado&&!!x.dados; const falta=(x.falta&&x.falta.length?x.falta:F2V99_GOOGLE_FALTA[k]); const dd=x.dados||{};
+  const caixa=function(k){ const x=d[k]||{}; const lig=!!x.ligado&&!!x.dados; const falta=(x.falta&&x.falta.length?[].concat(x.falta).map(_f2v100Humano):F2V99_GOOGLE_FALTA[k]);   /* v100 (15/10/2026) Q3 (revisor): sem nome de chave */ const dd=x.dados||{};
     return <div key={k} data-google={k} style={{border:"1px solid "+(lig?"#bbf7d0":ADS.line),background:lig?"#f0fdf4":"#fff",borderRadius:12,padding:"10px 12px",minWidth:0}}>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><b style={{fontSize:13}}>{nome[k]}</b><F2V98Chip cor={lig?"#15803d":"#92400e"} bg={lig?"#dcfce7":"#fef3c7"}>{lig?"ligado":"falta ligar"}</F2V98Chip></div>
       {lig?(k==="ga4"?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginTop:8}}>{[["Visitas",_adsNum(dd.sessoes)],["Tempo na página",dd.engajamento_seg!==undefined&&dd.engajamento_seg!==null?Math.round(dd.engajamento_seg)+" s":"—"],["Saíram em 5 s",dd.saiu_rapido_pct!==undefined&&dd.saiu_rapido_pct!==null?Math.round(dd.saiu_rapido_pct)+"%":"—"],["No celular",dd.celular_pct!==undefined&&dd.celular_pct!==null?Math.round(dd.celular_pct)+"%":"—"]].map(function(v){ return <div key={v[0]}><div style={{fontSize:11,color:ADS.muted}}>{v[0]}</div><b style={{fontSize:17}}>{v[1]}</b></div>; })}
@@ -71078,6 +72785,8 @@ const _f2v99Parcela=function(V,taxa,prazo,car,sistema){ V=Math.max(0,Number(V)||
 function AdsSimuladorParcelaV99(props){
   const isMob=props.isMob; const nomeCli=(props.mc&&props.mc.name)||"";
   const L=useF2V98Rpc("agro_linhas_credito",{},[]);
+  const _v100pode=_f2v98Pode(); const [_v100pin,_v100setPin]=useState(null); const [_v100sal,_v100setSal]=useState(false);   /* v100 (14/10/2026) P2_12_09 */
+  const [_v100lk,_v100setLk]=useState(null); const [_v100num,_v100setNum]=useState(""); const [_v100lkSal,_v100setLkSal]=useState(false);   /* v100 (14/10/2026) P2_12_09 (etapa 2): link do anúncio (agro_simulador_link, C5b) */
   const linhas=(L.data&&L.data.linhas&&L.data.linhas.length)?L.data.linhas:F2V99_LINHAS_EXEMPLO; const exemplo=!(L.data&&L.data.linhas&&L.data.linhas.length)||(L.data&&L.data.conferido===false)||linhas.some(function(x){ return x.conferido===false; });
   const [valor,setValor]=useState("250000"); const [entrada,setEntrada]=useState("0"); const [lin,setLin]=useState(""); const [taxa,setTaxa]=useState(null); const [prazo,setPrazo]=useState(null); const [car,setCar]=useState(null); const [sis,setSis]=useState("price");
   const l=linhas.find(function(x){ return x.codigo===lin; })||linhas[0]||{};
@@ -71102,6 +72811,23 @@ function AdsSimuladorParcelaV99(props){
     </div>
     <div style={{marginTop:10}}><span style={_f2v99Lbl}>Texto pronto para o WhatsApp</span><div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:"9px 12px",fontSize:12.5,color:"#14532d",lineHeight:1.5}}>{txt}</div>
       <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center",flexWrap:"wrap"}}><F2V98Btn small primary onClick={function(){ _f2v99Copiar(txt,"Texto copiado: cole no WhatsApp."); }}>Copiar texto</F2V98Btn><span style={{fontSize:11.5,color:ADS.muted}}>Quem pede consultor depois da simulação já é lead quente: marque como "Lead bom" na aba Leads.</span></div></div>
+    {/* v100 (14/10/2026) P2_12_09: texto curto para o anúncio + o sócio confere as taxas (com PIN) */}
+    {(function(){ const curto="Investimento de "+_adsBRL0(_f2v99Num(valor)||0)+" em "+R.n+" parcelas anuais de cerca de "+_adsBRL0(R.primeira)+" ("+(l.nome||"linha rural")+"). Valores estimados. Simule a sua no WhatsApp."; return <div style={{marginTop:10}}><span style={_f2v99Lbl}>Texto curto para o anúncio</span><div style={{background:"#faf8ff",border:"1px solid #ddd6fe",borderRadius:12,padding:"8px 12px",fontSize:12.5,lineHeight:1.5}}>{curto}</div><div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap",alignItems:"center"}}><F2V98Btn small onClick={function(){ _f2v99Copiar(curto,"Texto do anúncio copiado."); }}>Copiar</F2V98Btn><span style={{fontSize:11.5,color:ADS.muted}}>Responder a simulação sozinho no WhatsApp depende do WhatsApp oficial do cliente.</span></div></div>; })()}
+    {/* v100 (14/10/2026) P2_12_09 (etapa 2): botão "Criar link para o anúncio" (midia.editar; nada é enviado) */}
+    {!!props.canEdit&&<div data-v100="P2_12_09-link" style={{marginTop:10,border:"1px solid #ddd6fe",borderRadius:10,padding:"8px 10px"}}>
+      <span style={_f2v99Lbl}>Link de WhatsApp para o anúncio (com esta simulação)</span>
+      <div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}><label style={{flex:"1 1 180px"}}><span style={_f2v99Lbl}>WhatsApp que atende</span><input inputMode="tel" value={_v100num} onChange={function(e){ _v100setNum(e.target.value); }} placeholder="(45) 99999-0000" style={_f2v99Inp}/></label>
+        <F2V98Btn small primary disabled={_v100lkSal||String(_v100num).replace(/\D/g,"").length<10} onClick={async function(){ _v100setLkSal(true); const cu=_f2v98CliUni(props.mc); const r=await _f2v98Rpc("agro_simulador_link",{p_client:cu.cli,p_numero:_v100num,p_valor:V,p_linha:l.codigo||l.id,p_unidade:cu.uni||""}); _v100setLkSal(false); if(r.erro){ _f2v98Toast(false,r.falta?"O link do simulador ainda não está ligado no servidor.":r.erro); return; } _v100setLk(r.data); _f2v98Toast(true,"Link criado."); }}>{_v100lkSal?"criando…":"Criar link para o anúncio"}</F2V98Btn></div>
+      {_v100lk&&<div style={{marginTop:8,fontSize:12.5,lineHeight:1.5}}>
+        {_v100lk.aviso&&<div style={{color:"#92400e",marginBottom:4}}>⚠ {_v100lk.aviso}</div>}
+        <div><b>Link:</b> <span style={Object.assign({wordBreak:"break-all"},ADS_MONO)}>{_v100lk.url}</span> <F2V98Btn small onClick={function(){ _f2v99Copiar(_v100lk.url,"Link copiado."); }}>Copiar link</F2V98Btn></div>
+        {_v100lk.mensagem_que_chega&&<div style={{marginTop:4}}><b>Chega assim:</b> "{_v100lk.mensagem_que_chega}"</div>}
+        {_v100lk.texto_para_anuncio&&<div style={{marginTop:4}}><b>Texto para o anúncio:</b> {_v100lk.texto_para_anuncio} <F2V98Btn small onClick={function(){ _f2v99Copiar(_v100lk.texto_para_anuncio,"Texto copiado."); }}>Copiar</F2V98Btn></div>}
+        {_v100lk.texto_resposta&&<div style={{marginTop:4}}><b>Resposta pronta do vendedor:</b> {_v100lk.texto_resposta} <F2V98Btn small onClick={function(){ _f2v99Copiar(_v100lk.texto_resposta,"Resposta copiada."); }}>Copiar</F2V98Btn></div>}
+      </div>}
+    </div>}
+    {exemplo&&_v100pode&&<div data-v100="P2_12_09" style={{marginTop:10,border:"1px dashed #fde68a",borderRadius:10,padding:"8px 10px",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><span style={{fontSize:12,color:"#92400e"}}>Conferiu no banco a taxa de <b>{l.nome||"esta linha"}</b> ({String(tx).replace(".",",")}% ao ano, {pz} anos, {cr} de carência)?</span>
+      {_v100pin===null?<F2V98Btn small onClick={function(){ _v100setPin(""); }}>✔ Marcar como conferida (PIN)</F2V98Btn>:<Fragment><input type="password" inputMode="numeric" value={_v100pin} onChange={function(e){ _v100setPin(e.target.value); }} placeholder="PIN" style={Object.assign({},_f2v99Inp,{width:90})}/><F2V98Btn small primary disabled={_v100sal||String(_v100pin).length<4} onClick={async function(){ _v100setSal(true); const ls=[{id:l.id||l.codigo,codigo:l.codigo,nome:l.nome,taxa_aa:_f2v99Num(tx),prazo_anos:_f2v99Num(pz),carencia_anos:_f2v99Num(cr),teto:l.teto!==undefined?l.teto:l.limite,para_quem:l.para_quem}];   /* v100 (14/10/2026) P2_12_09 (etapa 2): manda só a linha conferida (o servidor aceita de 1 a 20) */ const r=await _f2v98Rpc("agro_linhas_credito_salvar",{p_linhas:ls,p_pin:_v100pin}); _v100setSal(false); _v100setPin(null); if(r.erro){ _f2v98Toast(false,r.falta?"Salvar as taxas conferidas ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Taxas conferidas e salvas."); L.reload(); }}>{_v100sal?"salvando…":"Salvar"}</F2V98Btn><F2V98Btn small onClick={function(){ _v100setPin(null); }}>Cancelar</F2V98Btn></Fragment>}</div>}
   </div>;
 }
 
@@ -71150,7 +72876,7 @@ function AdsConectorIAV99(props){
   const caixa=function(k,nome){ const x=d[k]||{}; const est=x.estado||"nao_ligado"; const lig=est==="ligado"; const lbl={nao_ligado:"não ligado",teste:"em teste",ligado:"ligado"}[est]||est;
     return <div key={k} data-conector={k} style={{border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><b style={{fontSize:13}}>{nome}</b><F2V98Chip cor={lig?"#15803d":"#92400e"} bg={lig?"#dcfce7":"#fef3c7"}>{lbl}{x.so_leitura?" · só leitura":""}</F2V98Chip></div>
       {x.explica&&<div style={{fontSize:12,color:ADS.muted,marginTop:4}}>{x.explica}</div>}
-      {!lig&&<div><div style={{fontSize:12,fontWeight:800,color:ADS.ink2,marginTop:6}}>O que falta:</div><F2V99Passos itens={(x.falta&&x.falta.length)?x.falta:F2V99_CONECTOR_FALTA[k]}/></div>}</div>; };
+      {!lig&&<div><div style={{fontSize:12,fontWeight:800,color:ADS.ink2,marginTop:6}}>O que falta:</div><F2V99Passos itens={(x.falta&&x.falta.length)?[].concat(x.falta).map(_f2v100Humano):F2V99_CONECTOR_FALTA[k]}/></div>}</div>; };
   return <div>
     <div style={{fontSize:12.5,color:ADS.ink2,marginBottom:10,lineHeight:1.5}}>Hoje o app fala com a Meta por programas próprios. O conector oficial deixaria a IA enxergar recurso novo da Meta no dia em que sai. Aqui só mostra o que falta: nada é ligado daqui.</div>
     {S.falta&&<F2V98Faltando txt="O status do conector ainda não está ligado no servidor; abaixo, o que falta."/>}
@@ -71158,7 +72884,9 @@ function AdsConectorIAV99(props){
   </div>;
 }
 
-/* ─────────── Copiar campanha para OUTRA conta (pedido com PIN, em 🧠 Decisões) ─────────── */
+/* ─────────── Copiar campanha para OUTRA conta (v100: vira rascunho na conta destino; o Montador publica pausado, PIN 2x) ─────────── */
+/* v100 (15/10/2026) P2_3_19 (revisor): resultado do servidor antigo (pedido em 🧠 Decisões) ou do novo (rascunho no Montador) */
+function _x1EhManual(res){ const d=res&&res.data; return !!(d&&(d.manual===true||(d.pedido_id&&d.manual!==false))); }
 function AdsCopiarOutraContaV99(props){
   const c=props.c, conta=props.conta, isMob=props.isMob, onFechar=props.onFechar;
   const CT=useF2V98Rpc("ads_montar_contas",{},[]);
@@ -71166,11 +72894,13 @@ function AdsCopiarOutraContaV99(props){
   const contas=Array.isArray(CT.data)?CT.data:[];
   const ops=[]; contas.forEach(function(k){ if(String(k.id)===String(conta&&conta.ad_account_id)) return; const us=(k.unidades||[]); if(!us.length) ops.push({v:k.id+"|",conta:k.id,uni:null,nome:k.nome,idioma:k.pais==="PY"?"es_PY":"pt_BR"}); else us.forEach(function(u){ ops.push({v:k.id+"|"+u.unidade,conta:k.id,uni:u.unidade,nome:k.nome+" › "+u.nome,idioma:u.idioma||"pt_BR"}); }); });
   const op=ops.find(function(o){ return o.v===dest; })||null; const idioma=idi||(op?op.idioma:"pt_BR");
-  const criar=async function(){ if(!op) return; setEnv(true); const r=await _f2v98Rpc("ads_copiar_outra_conta_pedir",{p_conta_origem:conta.ad_account_id,p_campanha:c.id,p_conta_destino:op.conta,p_unidade_destino:op.uni,p_idioma:idioma,p_obs:obs||null}); setEnv(false); setRes(r); if(!r.erro) _f2v98Toast(true,"Pedido criado: falta o PIN em 🧠 Decisões."); };
+  const criar=async function(){ if(!op) return; setEnv(true); const r=await _f2v98Rpc("ads_copiar_outra_conta_pedir",{p_conta_origem:conta.ad_account_id,p_campanha:c.id,p_conta_destino:op.conta,p_unidade_destino:op.uni,p_idioma:idioma,p_obs:obs||null}); setEnv(false); setRes(r); if(!r.erro) _f2v98Toast(true,_x1EhManual(r)?"Pedido criado: falta o PIN em 🧠 Decisões.":"Rascunho criado na conta destino: abra no Montador."); };   /* v100 (15/10/2026) P2_3_19: fluxo real (rascunho → Montador pausado) */
+  const _x1Manual=_x1EhManual(res);   /* v100 (15/10/2026) P2_3_19 (revisor): chave v100c_montar_outra_conta desligada = servidor antigo devolve pedido_id sem o campo manual → volta o texto e o botão 🧠 Decisões */
+  const _x1AbrirRasc=function(){ const rid=res&&res.data&&res.data.rascunho_id; onFechar(); try{ window.dispatchEvent(new CustomEvent("pixels:tseg-abrir",{detail:{painel:"montador",conta:op?op.conta:null,abrirId:rid||null}})); }catch(_){ } };
   const _janela=<div onClick={function(e){ e.stopPropagation(); }} style={{position:"fixed",inset:0,background:"rgba(15,13,26,.45)",zIndex:2147483000,display:"flex",alignItems:isMob?"flex-end":"center",justifyContent:"center",padding:isMob?0:20}}>
     <div data-copiar-conta="1" style={{background:"#fff",borderRadius:isMob?"18px 18px 0 0":18,width:isMob?"100%":560,maxWidth:"100%",maxHeight:"90vh",overflowY:"auto",padding:isMob?"16px 16px 22px":"20px 22px",boxSizing:"border-box",fontFamily:ADS_FONT,textAlign:"left",cursor:"default"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}><b style={{fontSize:16,fontWeight:900}}>📤 Copiar para outra conta</b><F2V98Chip cor="#92400e" bg="#fef3c7">pedido com PIN</F2V98Chip><button onClick={onFechar} style={{marginLeft:"auto",border:0,background:"none",fontSize:18,cursor:"pointer",color:ADS.muted,minHeight:0}}>✕</button></div>
-      <div style={{fontSize:12.5,color:ADS.ink2,marginTop:6,lineHeight:1.5}}>Origem: <b>{_adsNomeCurto(c.nome)}</b> · {conta&&conta.nome||conta&&conta.ad_account_id}. O app prepara a cópia (estrutura, públicos e textos) num rascunho da conta de destino e cria um <b>pedido em 🧠 Decisões</b> com o passo a passo. A cópia entre contas é feita no Gerenciador, sempre <b>pausada</b>; ligar só com PIN 2x. Nada vai para a Meta daqui.</div>{/* v99 (14/10/2026) copiar para outra conta: texto conforme ads_copiar_outra_conta_pedir real (passo a passo manual) */}
+      <div style={{display:"flex",alignItems:"center",gap:8}}><b style={{fontSize:16,fontWeight:900}}>📤 Copiar para outra conta</b><F2V98Chip cor="#92400e" bg="#fef3c7">{_x1Manual?"pedido com PIN":"vira rascunho · PIN 2x"}</F2V98Chip><button onClick={onFechar} style={{marginLeft:"auto",border:0,background:"none",fontSize:18,cursor:"pointer",color:ADS.muted,minHeight:0}}>✕</button></div>
+      <div style={{fontSize:12.5,color:ADS.ink2,marginTop:6,lineHeight:1.5}}>Origem: <b>{_adsNomeCurto(c.nome)}</b> · {conta&&conta.nome||conta&&conta.ad_account_id}. {_x1Manual?<span>O app preparou a cópia (estrutura, públicos e textos) num rascunho da conta de destino e criou um <b>pedido em 🧠 Decisões</b> com o passo a passo. A cópia entre contas é feita no Gerenciador, sempre <b>pausada</b>; ligar só com PIN 2x. Nada vai para a Meta daqui.</span>:<span>O app copia a campanha (estrutura, públicos e textos) para um <b>rascunho na conta de destino</b>. Você confere textos, cidades e a página/Instagram do cliente destino no <b>🧰 Montador</b>, passa no 🚦 Validar e o Montador publica <b>pausado</b>. Publicar e ligar pedem <b>PIN 2x</b> de sócio. Nada vai para a Meta daqui.</span>}</div>{/* v100 (15/10/2026) P2_3_19 (revisor): com a chave desligada (servidor antigo) o selo e o texto voltam aos do pedido em 🧠 Decisões */}{/* v100 (15/10/2026) P2_3_19: texto do fluxo real (ads_copiar_outra_conta_pedir com v100c_montar_outra_conta=sim cria o rascunho; o Montador publica pausado) — antes dizia "cópia feita no Gerenciador" e mandava abrir 🧠 Decisões */}
       {CT.loading?<AdsLoading t="Lendo as contas…"/>:<div style={{display:"grid",gap:10,marginTop:12}}>
         <label><span style={_f2v99Lbl}>Conta de destino</span><select value={dest} onChange={function(e){ setDest(e.target.value); setIdi(""); setRes(null); }} style={_f2v99Inp}><option value="">Escolha a conta…</option>{ops.map(function(o){ return <option key={o.v} value={o.v}>{o.nome}</option>; })}</select></label>
         <label><span style={_f2v99Lbl}>Idioma dos textos</span><select value={idioma} onChange={function(e){ setIdi(e.target.value); }} style={_f2v99Inp}><option value="pt_BR">Português (Brasil)</option><option value="es_PY">Espanhol (Paraguai)</option></select>{idioma==="es_PY"&&<span style={{display:"block",fontSize:11.5,color:"#92400e",marginTop:4}}>Em espanhol a IA traduz os textos ao criar o pedido (usa crédito do mês; sem crédito, fica em português para corrigir à mão).</span>}</label>
@@ -71178,9 +72908,9 @@ function AdsCopiarOutraContaV99(props){
         <div style={{fontSize:11.5,color:ADS.muted}}>Para outra unidade da MESMA conta (ex.: Toledo → Paraguai) use "🌎 Copiar para outra região ou idioma".</div>
       </div>}
       {res&&res.erro&&<F2V98Faltando txt={res.falta?"Copiar para outra conta ainda não está ligado no servidor: nada foi criado.":"Não criou: "+res.erro}/>}
-      {res&&!res.erro&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"8px 12px",fontSize:12.5,color:"#14532d",marginTop:10}}>✔ {(res.data&&res.data.texto)||"Pedido criado."}{res.data&&res.data.aviso?<div style={{color:"#92400e",marginTop:4}}>⚠ {res.data.aviso}</div>:null}{res.data&&Array.isArray(res.data.passos)&&res.data.passos.length?<ol data-copiar-passos="1" style={{margin:"8px 0 0",paddingLeft:20,color:ADS.ink2,lineHeight:1.5}}>{res.data.passos.map(function(t,i){ return <li key={i} style={{marginTop:2}}>{t}</li>; })}</ol>:null}{res.data&&res.data.traduzindo?<div style={{color:ADS.muted,marginTop:4}}>Os textos em espanhol estão sendo traduzidos; aparecem no rascunho em alguns segundos.</div>:null}</div>}
+      {res&&!res.erro&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"8px 12px",fontSize:12.5,color:"#14532d",marginTop:10}}>✔ {(res.data&&res.data.texto)||(_x1Manual?"Pedido criado.":"Rascunho"+(res.data&&res.data.rascunho_id?" #"+res.data.rascunho_id:"")+" criado na conta destino (pausado até o PIN 2x).")}{res.data&&res.data.aviso?<div style={{color:"#92400e",marginTop:4}}>⚠ {res.data.aviso}</div>:null}{res.data&&Array.isArray(res.data.passos)&&res.data.passos.length?<ol data-copiar-passos="1" style={{margin:"8px 0 0",paddingLeft:20,color:ADS.ink2,lineHeight:1.5}}>{res.data.passos.map(function(t,i){ return <li key={i} style={{marginTop:2}}>{t}</li>; })}</ol>:null}{res.data&&res.data.traduzindo?<div style={{color:ADS.muted,marginTop:4}}>Os textos em espanhol estão sendo traduzidos; aparecem no rascunho em alguns segundos.</div>:null}</div>}
       <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
-        {res&&!res.erro?<F2V98Btn primary onClick={function(){ onFechar(); try{ window.dispatchEvent(new CustomEvent("pixels:qg-sub",{detail:{sub:"ia"}})); }catch(_){ } }}>Abrir 🧠 Decisões</F2V98Btn>:<F2V98Btn escuro disabled={!op||env} onClick={criar}>{env?"criando…":"Criar pedido"}</F2V98Btn>}
+        {res&&!res.erro?(_x1Manual?<F2V98Btn primary onClick={function(){ onFechar(); try{ window.dispatchEvent(new CustomEvent("pixels:qg-sub",{detail:{sub:"ia"}})); }catch(_){ } }}>Abrir 🧠 Decisões</F2V98Btn>:<F2V98Btn primary onClick={_x1AbrirRasc}>Abrir o rascunho no Montador ›</F2V98Btn>):<F2V98Btn escuro disabled={!op||env} onClick={criar}>{env?"criando…":"Criar rascunho na conta destino"}</F2V98Btn>}
         <F2V98Btn onClick={onFechar}>Fechar</F2V98Btn>
       </div>
     </div>
@@ -71199,9 +72929,11 @@ function AdsFerramentasCampanhasV99(props){
     <G item="2.1.10" icone="🖱️" titulo="Depois do clique" resumo="o que a pessoa faz na página (Google Analytics)" isMob={isMob}><AdsGoogleOrgV99 parte="ga4" mc={mc} P={P} isMob={isMob} canEdit={canEdit}/></G>
     <G item="2.1.11" icone="🔎" titulo="Google sem anúncio" resumo="buscas no Google e ligações pela ficha do mapa" isMob={isMob}><AdsGoogleOrgV99 parte="organico" mc={mc} P={P} isMob={isMob} canEdit={canEdit}/></G>
     <G item="2.12.05" icone="📄" titulo="Página por cultura e região" resumo="qual página ou formulário cada cultura e região recebe, e quanto rende" isMob={isMob}><AdsPaginasCulturaV99 mc={mc} camps={camps} isMob={isMob} canEdit={canEdit}/></G>
-    <G item="2.12.09" icone="🧮" titulo="Simulador de parcela" resumo="parcela estimada do financiamento rural + texto pronto para o WhatsApp" isMob={isMob}><AdsSimuladorParcelaV99 mc={mc} isMob={isMob}/></G>
+    <G item="2.12.09" icone="🧮" titulo="Simulador de parcela" resumo="parcela estimada do financiamento rural + texto pronto para o WhatsApp" isMob={isMob}><AdsSimuladorParcelaV99 mc={mc} isMob={isMob} canEdit={canEdit}/></G>
     <G item="2.12.13" icone="📊" titulo="Comparar com o mesmo nicho" resumo="custo por lead deste cliente × média do nicho × carteira" isMob={isMob}><AdsReguaNichoV99 mc={mc} P={P} isMob={isMob} canEdit={canEdit}/></G>
     <G item="2.10.09" icone="🔌" titulo="Conector oficial de IA (Meta e Google)" resumo="só aviso do que falta para ligar" estado={{t:"aviso",tipo:"info"}} isMob={isMob}><AdsConectorIAV99 isMob={isMob}/></G>
+    {/* v100 (14/10/2026) E6, P2_3_11, P2_3_13, P2_1_16, P2_3_10: gavetas novas no mesmo bloco */}
+    {typeof AdsFerramentasCampanhasV100Gavetas==="function"&&<AdsFerramentasCampanhasV100Gavetas mc={mc} conta={conta} P={P} isMob={isMob} canEdit={canEdit} cur={props.cur} prev={props.prev}/>}
   </F2V99Ferramentas>;
 }
 
@@ -71269,13 +73001,15 @@ function AdsCulturaPorteV99(props){
   const comBom=itens.filter(function(x){ return x.custo_bom; }); const melhor=comBom.slice().sort(function(a,b){ return a.custo_bom-b.custo_bom; })[0]; const pior=comBom.slice().sort(function(a,b){ return b.custo_bom-a.custo_bom; })[0];
   return <div>
     <div style={{fontSize:12.5,color:ADS.ink2,marginBottom:8,lineHeight:1.5}}>Custo por lead e lead bom separados por cultura e tamanho da propriedade. A Meta não deixa mirar por tamanho: o porte vem da resposta do produtor no formulário.</div>
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{["1 · nome da campanha leva cultura e porte, ex.: [Suínos] [G]","2 · o formulário pergunta cultura e tamanho","3 · aqui aparece custo e lead bom por grupo","4 · a sugestão de mudar verba vira pedido com PIN em 🧠 Decisões"].map(function(t,i){ return i===3?<span key={i} data-passo4-embreve="1" title="Ainda não funciona: o pedido com PIN a partir desta sugestão está sendo ligado no servidor." style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,color:ADS.muted,border:"1px dashed #c4b5fd",borderRadius:999,padding:"2px 9px"}}>{t}<b style={{fontSize:10.5,color:"#92400e",background:"#fef3c7",borderRadius:999,padding:"1px 7px",whiteSpace:"nowrap",flexShrink:0}}>em breve</b></span>:<F2V98Chip key={i} cor="#5b21b6" bg="#f5f3ff">{t}</F2V98Chip>; })}</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{["1 · nome da campanha leva cultura e porte, ex.: [Suínos] [G]","2 · o formulário pergunta cultura e tamanho","3 · aqui aparece custo e lead bom por grupo","4 · a sugestão de mudar verba vira pedido com PIN em 🧠 Decisões"].map(function(t,i){ return (i===3&&typeof AdsCulturaPorteLeadsV100!=="function")?<span key={i} data-passo4-embreve="1" title="Ainda não funciona: o pedido com PIN a partir desta sugestão está sendo ligado no servidor." style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,color:ADS.muted,border:"1px dashed #c4b5fd",borderRadius:999,padding:"2px 9px"}}>{t}<b style={{fontSize:10.5,color:"#92400e",background:"#fef3c7",borderRadius:999,padding:"1px 7px",whiteSpace:"nowrap",flexShrink:0}}>em breve</b></span>:<F2V98Chip key={i} cor="#5b21b6" bg="#f5f3ff" style={{whiteSpace:"normal",maxWidth:"100%"}}>{t}</F2V98Chip>; })}</div>   {/* v100 (15/10/2026) conferência final: no celular a etiqueta quebra linha em vez de empurrar a página */}
     {!doServidor&&<F2V98Faltando txt={S.falta?"A separação com os leads do formulário ainda não está ligada no servidor: abaixo, só pelo nome das campanhas (sem lead bom).":"Não deu para ler do servidor: abaixo, só pelo nome das campanhas."}/>}
     {itens.length>0?<div style={{marginTop:8}}><F2V99Tabela minW={560} cab={["Cultura","Porte","Gasto","Leads","Custo por lead","Leads bons","Custo por lead bom"]} dir={[0,0,1,1,1,1,1]} linhas={itens.map(function(x){ return [<b>{x.cultura_nome||x.cultura}</b>,x.porte||"—",_adsBRL0(x.gasto),_adsNum(x.leads),x.cpl?_adsBRL(x.cpl):"—",x.bons!==null&&x.bons!==undefined?_adsNum(x.bons):"—",x.custo_bom?<b style={{color:x===melhor?"#15803d":x===pior&&pior!==melhor?"#b91c1c":ADS.ink}}>{_adsBRL(x.custo_bom)}</b>:"—"]; })}/></div>
       :<div style={{fontSize:12.5,color:ADS.muted,marginTop:8}}>Nenhuma campanha com cultura ou porte no nome neste período.</div>}
     {sem&&Number(sem.gasto||0)>0&&<div style={{fontSize:12,color:ADS.muted,marginTop:6}}>Sem etiqueta: {_adsBRL0(sem.gasto)} e {_adsNum(sem.leads)} leads{sem.n?" em "+sem.n+" campanha"+(sem.n>1?"s":""):""}.</div>}
     {melhor&&pior&&melhor!==pior&&<div style={{background:ADS.surface2,borderRadius:10,padding:"8px 12px",fontSize:12.5,color:ADS.ink2,marginTop:10}}><b>{melhor.cultura_nome||melhor.cultura} {melhor.porte||""}</b>: {_adsBRL(melhor.custo_bom)} por lead bom; <b>{pior.cultura_nome||pior.cultura} {pior.porte||""}</b>: {_adsBRL(pior.custo_bom)}. Vale pôr mais verba no primeiro.</div>}
     {S.data&&S.data.explica&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>{S.data.explica}</div>}
+    {/* v100 (14/10/2026) P2_12_04: passo 2 (cada lead com cultura e porte) e passo 4 (sugestão de verba → pedido com PIN) */}
+    {typeof AdsCulturaPorteLeadsV100==="function"&&<AdsCulturaPorteLeadsV100 mc={mc} P={P} isMob={isMob} canEdit={props.canEdit}/>}
   </div>;
 }
 
@@ -71308,10 +73042,12 @@ function AdsQuemRecomendaV99(props){
 /* ─────────── Público › 🧰 Ferramentas (2.12.03, 2.12.04, 2.12.06) ─────────── */
 function AdsFerramentasPublicoV99(props){
   const mc=props.mc, conta=props.conta, camps=props.camps, P=props.P, isMob=props.isMob, canEdit=props.canEdit; const G=F2V99Gaveta;
-  return <F2V99Ferramentas titulo="Ferramentas do público (agro)" isMob={isMob}>
-    <G item="2.12.04" icone="🌾" titulo="Cultura e tamanho da propriedade" resumo="custo por lead e lead bom por cultura e porte" isMob={isMob}><AdsCulturaPorteV99 mc={mc} camps={camps} P={P} isMob={isMob}/></G>
+  return <F2V99Ferramentas titulo="Ferramentas do público" isMob={isMob}>
+    <G item="2.12.04" icone="🌾" titulo="Cultura e tamanho da propriedade" resumo="custo por lead e lead bom por cultura e porte · onde pôr mais verba" isMob={isMob}><AdsCulturaPorteV99 mc={mc} camps={camps} P={P} isMob={isMob} canEdit={canEdit}/></G>
     <G item="2.12.03" icone="📍" titulo="Raio em cidades polo" resumo="regiões produtoras prontas, com raio e sem capital" isMob={isMob}><AdsCidadesPoloV99 mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}/></G>
     <G item="2.12.06" icone="👷" titulo="Público de quem recomenda" resumo="agrônomo, técnico, engenheiro e revenda, medidos à parte" isMob={isMob}><AdsQuemRecomendaV99 mc={mc} conta={conta} camps={camps} P={P} isMob={isMob}/></G>
+    {/* v100 (14/10/2026) P2_5_02/03/06 e P2_5_08/P2_3_12: listas viram público (PIN 2x) e sobreposição */}
+    {typeof AdsFerramentasPublicoV100Gavetas==="function"&&<AdsFerramentasPublicoV100Gavetas mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}/>}
   </F2V99Ferramentas>;
 }
 
@@ -71360,12 +73096,13 @@ function AdsReativarV99(props){
   const mc=props.mc, conta=props.conta, isMob=props.isMob, canEdit=props.canEdit; const cu=_f2v98CliUni(mc); const pode=_f2v98Pode();
   const R=useF2V98Rpc("agro_reativar_ler",cu.cli?{p_client:cu.cli,p_unidade:cu.uni}:null,[cu.cli,cu.uni]);
   const [ep,setEp]=useState(null); const [sal,setSal]=useState(false); const inp=useRef(null); const [subindo,setSubindo]=useState(false);
+  const [_v100pub,_v100setPub]=useState(null);   /* v100 P2_12_11 */
   if(R.loading) return <AdsLoading t="Lendo…"/>;
   const d=R.data||{}; const epocas=ep||d.epocas||[]; const lst=d.lista||null; const podeEd=!!canEdit&&!R.falta&&!!d.pode_editar;
   const salvar=async function(){ setSal(true); const r=await _f2v98Rpc("agro_reativar_salvar",{p_client:cu.cli,p_unidade:cu.uni,p_epocas:epocas}); setSal(false); if(r.erro){ _f2v98Toast(false,"Não salvou: "+r.erro); return; } _f2v98Toast(true,"Épocas de reposição salvas."); setEp(null); R.reload(); };
   const subirLista=function(file){ if(!file) return; const rd=new FileReader(); rd.onload=async function(){ const txt=String(rd.result||""); const linhas=[]; txt.split(/\r?\n/).forEach(function(ln){ const em=(ln.match(/[\w.+-]+@[\w-]+\.[\w.]+/)||[])[0]||null; const dg=(ln.replace(/[^\d]/g," ").split(/\s+/).filter(function(x){ return x.length>=10&&x.length<=13; })[0])||null; if(em||dg) linhas.push({tel:dg,email:em}); });
       if(!linhas.length){ _f2v98Toast(false,"Não achei telefone nem e-mail na planilha."); return; }
-      setSubindo(true); const r=await _f2v98Rpc("ads_clientes_lista_subir",{p_client:cu.cli,p_unidade:cu.uni,p_linhas:linhas.slice(0,50000)}); setSubindo(false);
+      setSubindo(true); let r=await _f2v98Rpc("ads_lista_subir",{p_client:cu.cli,p_unidade:cu.uni,p_linhas:linhas.slice(0,50000),p_finalidade:"compradores"}); if(r.falta) r=await _f2v98Rpc("ads_clientes_lista_subir",{p_client:cu.cli,p_unidade:cu.uni,p_linhas:linhas.slice(0,50000)}); setSubindo(false);   /* v100 (14/10/2026) P2_12_11 (etapa 2): a lista de compradores sobe com finalidade (C4b; só hash) e aparece em Público › 👥 */
       if(r.erro){ _f2v98Toast(false,r.falta?"Subir a lista ainda não está ligado no servidor.":"Não subiu: "+r.erro); return; } _f2v98Toast(true,(r.data&&r.data.explica)||"Lista subida (só o hash fica guardado)."); R.reload(); };
     rd.readAsText(file); };
   /* janela de cada época = (1º dia do mês − dias antes) até o fim do mês; se hoje está dentro, é "agora" */
@@ -71394,6 +73131,8 @@ function AdsReativarV99(props){
     <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap",alignItems:"center"}}>
       <F2V98Btn small disabled={!canEdit||subindo} title={canEdit?undefined:"Só quem edita a mídia sobe a lista."} onClick={function(){ if(inp.current) inp.current.click(); }}>{subindo?"subindo…":"⬆ Subir lista de compradores"}</F2V98Btn>
       <F2V98Btn small primary disabled={!pode} title={pode?undefined:"Só sócio aprovador, com o PIN aberto, abre o Montador."} onClick={function(){ _f2v99Abrir({painel:"montador",conta:conta&&conta.ad_account_id,modelo:"reposicao",produto:prox&&prox.produto||null}); }}>Montar campanha de reposição</F2V98Btn>
+      {/* v100 (14/10/2026) P2_12_11: criar o público personalizado na Meta a partir da lista (pedido com PIN 2x; só hash) */}
+      <F2V98Btn small disabled={!pode||!lst||!Number(lst.qtd||0)||!!_v100pub} title={pode?"Cria o pedido em 🧠 Decisões; o público só nasce na Meta depois do PIN 2x.":"Só sócio aprovador, com o PIN aberto."} onClick={async function(){ _v100setPub("…"); const r=await _f2v98Rpc("ads_publico_lista_pedir",{p_client:cu.cli,p_unidade:cu.uni,p_conta:conta&&String(conta.ad_account_id),p_lista:"compradores",p_nome:((props.mc&&props.mc.name)||cu.cli)+" · quem comprou"}); _v100setPub(null); if(r.erro){ _f2v98Toast(false,r.falta?"Criar o público na Meta ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Pedido criado em 🧠 Decisões (PIN 2x)."); }}>{_v100pub?"criando…":"👥 Criar público na Meta (PIN 2x)"}</F2V98Btn>
       <span style={{fontSize:11.5,color:ADS.muted}}>a mesma lista também serve para "🚫 não mostrar para quem já é cliente" · nada é enviado</span>
     </div>
   </div>;
@@ -71446,6 +73185,8 @@ function AdsFerramentasLeadsV99(props){
     <G item="2.12.11" icone="🔁" titulo="Clientes antigos na época de repor" resumo="lista de compradores + época de repor de cada produto" isMob={isMob}><AdsReativarV99 mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}/></G>
     <G item="2.11.09" icone="🔒" titulo="LGPD dos leads" resumo="quem vê o contato, hash, prazo de guarda, aceite e pedidos de apagar" isMob={isMob}><AdsLgpdLeadsV99 mc={mc} D={D} isMob={isMob}/></G>
     <G item="2.10.11" icone="🤖" titulo="Conferir a nota da IA" resumo="a IA dá nota lendo a conversa; a equipe confere se acertou" isMob={isMob}><AdsNotasIAConferirV99 mc={mc} D={D} isMob={isMob} canEdit={canEdit}/></G>
+    {/* v100 (14/10/2026) P2_1_17, P2_7_11, P2_1_06, P2_7_16, P2_7_08/P2_1_05, P2_7_20, P2_7_19, P2_7_14/P2_7_01 */}
+    {typeof AdsFerramentasLeadsV100Gavetas==="function"&&<AdsFerramentasLeadsV100Gavetas mc={mc} conta={conta} D={D} isMob={isMob} canEdit={canEdit} P={props.P}/>}
   </F2V99Ferramentas>;
 }
 
@@ -71460,6 +73201,1033 @@ function AdsLgpdPedidoV99(props){
     <input value={obs} onChange={function(e){ setObs(e.target.value); }} placeholder="como pediu (ex.: por WhatsApp em 14/10)" style={Object.assign({},_f2v99Inp,{marginTop:6})}/>
     {res&&res.erro&&<F2V98Faltando txt={res.falta?"O registro de pedidos LGPD ainda não está ligado no servidor: nada foi gravado.":"Não registrou: "+res.erro}/>}
     {res&&!res.erro?<div style={{fontSize:12,color:"#15803d",fontWeight:700,marginTop:6}}>✔ Pedido registrado.</div>:<div style={{display:"flex",gap:6,marginTop:6}}><F2V98Btn small escuro disabled={env} onClick={registrar}>{env?"registrando…":"Registrar pedido"}</F2V98Btn><F2V98Btn small onClick={function(){ setAb(false); setRes(null); }}>Cancelar</F2V98Btn></div>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v100 (14/10/2026) F2 · fechar os itens aprovados que ficaram parciais (abas do cliente)
+   Sem aba nova: tudo em GAVETAS fechadas (F2V99Gaveta) dentro das 🧰 Ferramentas de cada aba. A gaveta só lê o
+   servidor quando alguém abre; nada roda em laço. Nada escreve na Meta: o que mexe na Meta vira PEDIDO com PIN 2x
+   em 🧠 Decisões. IA só no clique de sócio com PIN aberto. Função do servidor ausente → "ainda não ligado".
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _f2v100Pct=function(a,b){ a=Number(a||0); b=Number(b||0); return b>0?a/b*100:null; };
+const _f2v100Mes=function(iso){ if(!iso) return "—"; const m=Number(String(iso).slice(5,7)); return (_f2v99Meses[m-1]||"")+"/"+String(iso).slice(2,4); };
+const _f2v100CorCaixa={info:["#f5f3ff","#ddd6fe","#4c1d95"],ok:["#f0fdf4","#bbf7d0","#14532d"],atencao:["#fffbeb","#fde68a","#92400e"],erro:["#fef2f2","#fecaca","#7f1d1d"]};
+function F2V100Caixa({tipo,children,style}){ const c=_f2v100CorCaixa[tipo||"info"]||_f2v100CorCaixa.info; return <div style={Object.assign({background:c[0],border:"1px solid "+c[1],color:c[2],borderRadius:10,padding:"8px 11px",fontSize:12.5,lineHeight:1.5,marginTop:8},style||{})}>{children}</div>; }
+function F2V100Card({t,v,sub,destaque,cor}){ return <div style={{background:destaque?"#6d28d9":"#faf8ff",color:destaque?"#fff":ADS.ink,border:"1px solid #ddd6fe",borderRadius:12,padding:"9px 11px",minWidth:0}}><div style={{fontSize:11,opacity:.85}}>{t}</div><b style={{fontSize:18,color:destaque?"#fff":(cor||ADS.ink)}}>{v}</b>{sub?<div style={{fontSize:11,opacity:.85,lineHeight:1.35}}>{sub}</div>:null}</div>; }
+function F2V100Cards({isMob,children,n}){ return <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat("+(n||4)+",minmax(0,1fr))",gap:8,marginTop:8}}>{children}</div>; }
+const _f2v100Unis=function(){ const s=_adsUnidadesLista(); return s.length?s.map(function(u){ return {u:u.unidade,lbl:u.nome||u.unidade}; }):ADS_UNIDADES.map(function(u){ return {u:u.u,lbl:u.lbl}; }); };
+
+/* ─────────── E6 · unidade de cada campanha escolhida numa lista (ads_unidade_definir) ─────────── */
+function AdsUnidadeCampanhasV100(props){
+  const conta=props.conta, isMob=props.isMob, canEdit=!!props.canEdit;
+  const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const U=useF2V98Rpc("ads_unidade_campanhas",acc?{p_conta:acc,p_dias:90}:null,[acc]);
+  const [sal,setSal]=useState(null); const [soSem,setSoSem]=useState(false);
+  if(U.loading) return <AdsLoading t="Lendo a unidade de cada campanha…"/>;
+  if(U.falta||U.erro) return <F2V98Faltando txt={U.falta?"A unidade de cada campanha ainda não está ligada no servidor: o app segue pela etiqueta [Unidade] do nome.":"Não deu para ler: "+U.erro}/>;
+  const camps=((U.data||{}).campanhas)||[]; const unis=_f2v100Unis();
+  const lbl=function(u){ const o=unis.find(function(x){ return x.u===u; }); return o?o.lbl:(u||"—"); };
+  const ORI={manual:["escolhida à mão","#5b21b6","#ede9fe"],etiqueta:["pelo nome [ ]","#15803d","#dcfce7"],conta:["pela conta","#92400e","#fef3c7"],sem_unidade:["sem unidade","#b91c1c","#fee2e2"]};
+  const semU=function(c){ return c.origem==="sem_unidade"||!c.unidade; };
+  const nSem=camps.filter(semU).length;
+  const lista=camps.filter(function(c){ return !soSem||semU(c); });
+  const definir=async function(c,v){ setSal(c.campaign_id); const r=await _f2v98Rpc("ads_unidade_definir",{p_conta:acc,p_campaign:c.campaign_id,p_unidade:v||null}); setSal(null);
+    if(r.erro){ _f2v98Toast(false,r.falta?"Escolher a unidade ainda não está ligado no servidor.":"Não salvou: "+r.erro); return; }
+    _f2v98Toast(true,v?"Pronto: o gasto e os leads desta campanha passam a contar em "+lbl(r.data&&r.data.unidade||v)+".":"Voltou para a etiqueta do nome.");
+    try{ if(window._pxAdsUniCamp) delete window._pxAdsUniCamp[acc]; _adsLimpaCaches(); window.dispatchEvent(new CustomEvent("pixels:ads-periodo")); }catch(_){ } U.reload(); };
+  return <div data-v100="E6">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Na conta de anúncios que roda várias unidades, o app lia a unidade pela etiqueta do nome, como <b>[Uberlândia]</b>. Campanha sem etiqueta caía na unidade dona da conta, sem aviso. Aqui você escolhe a unidade de cada campanha numa lista. A escolha vale para os filtros, as somas e as decisões da IA.</div>
+    {nSem>0?<F2V100Caixa tipo="atencao">⚠ {nSem} campanha{nSem>1?"s":""} sem unidade definida: hoje conta{nSem>1?"m":""} na unidade dona da conta.</F2V100Caixa>:<F2V100Caixa tipo="ok">✔ Todas as campanhas dos últimos 90 dias têm unidade.</F2V100Caixa>}
+    <div style={{display:"flex",gap:6,margin:"10px 0 6px"}}><AdsChip on={!soSem} onClick={function(){ setSoSem(false); }}>Todas ({camps.length})</AdsChip><AdsChip on={soSem} onClick={function(){ setSoSem(true); }}>Só sem unidade ({nSem})</AdsChip></div>
+    {lista.length===0?<div style={{fontSize:12.5,color:ADS.muted}}>Nenhuma campanha com gasto nos últimos 90 dias.</div>:
+    <F2V99Tabela minW={isMob?560:0} cab={["Campanha","Gasto 90 dias","Unidade","Como foi definida"]} dir={[0,1,0,0]} linhas={lista.map(function(c){ const o=ORI[c.origem]||[c.origem||"—",ADS.muted,ADS.surface2];
+      return [<span style={{display:"block",maxWidth:isMob?220:420,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={c.nome}><b style={{fontSize:12.5}}>{_adsNomeCurto(c.nome)}</b>{c.aviso?<span style={{display:"block",fontSize:11,color:"#b91c1c"}}>{c.aviso}</span>:null}</span>,
+        _adsBRL0(c.gasto),
+        canEdit?<select data-v100-uni={c.campaign_id} disabled={sal===c.campaign_id} value={c.origem==="manual"?(c.unidade||""):""} onChange={function(e){ definir(c,e.target.value); }} style={Object.assign({},_f2v99Inp,{width:isMob?170:220})}><option value="">{c.unidade&&c.origem!=="manual"?lbl(c.unidade)+(c.origem==="etiqueta"?" (pelo nome)":c.origem==="conta"?" (pela conta)":" (sem etiqueta)"):"pelo nome [ ]"}</option>{unis.map(function(u){ return <option key={u.u} value={u.u}>{u.lbl}</option>; })}</select>:<b>{lbl(c.unidade)}</b>,
+        <F2V98Chip cor={o[1]} bg={o[2]}>{o[0]}</F2V98Chip>]; })}/>}
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>{canEdit?"A primeira opção da lista volta para a etiqueta do nome. Nada muda na Meta: é só como o app conta.":"Só quem edita o cadastro da mídia muda a unidade."}</div>
+  </div>;
+}
+
+/* ─────────── P2_3_11 · por que o custo por lead subiu (comparar 2 períodos) ─────────── */
+const _f2v100Comparar=function(A,B,campos){
+  /* A e B: listas {chave, nome, gasto, res}. Peso = quanto do "pago a mais" veio de cada linha, pelo custo antigo dela */
+  const mA={}; A.forEach(function(x){ mA[x.chave]=x; });
+  const gA=A.reduce(function(s,x){ return s+Number(x.gasto||0); },0), rA=A.reduce(function(s,x){ return s+Number(x.res||0); },0);
+  const gB=B.reduce(function(s,x){ return s+Number(x.gasto||0); },0), rB=B.reduce(function(s,x){ return s+Number(x.res||0); },0);
+  const cplA=rA>0?gA/rA:null, cplB=rB>0?gB/rB:null;
+  const chaves=Array.from(new Set(A.map(function(x){ return x.chave; }).concat(B.map(function(x){ return x.chave; }))));
+  const linhas=chaves.map(function(k){ const a=mA[k]||{gasto:0,res:0}; const b=B.find(function(x){ return x.chave===k; })||{gasto:0,res:0};
+    const ca=Number(a.res||0)>=3?Number(a.gasto)/Number(a.res):cplA; const extra=cplA===null?0:Number(b.gasto||0)-(ca||cplA)*Number(b.res||0);
+    return {chave:k,nome:b.nome||a.nome,a_gasto:Number(a.gasto||0),a_res:Number(a.res||0),a_cpl:Number(a.res||0)>0?Number(a.gasto)/Number(a.res):null,b_gasto:Number(b.gasto||0),b_res:Number(b.res||0),b_cpl:Number(b.res||0)>0?Number(b.gasto)/Number(b.res):null,extra:extra}; });
+  const sobe=cplA!==null&&cplB!==null&&cplB>cplA*1.03;   /* só existe "peso na alta" quando o custo subiu */
+  const tot=linhas.reduce(function(s,x){ return s+Math.max(0,x.extra); },0);
+  linhas.forEach(function(x){ x.peso_pct=sobe&&tot>0&&x.extra>0?x.extra/tot*100:0; });
+  linhas.sort(function(a,b){ return b.extra-a.extra; });
+  return {a:{gasto:gA,leads:rA,cpl:cplA},b:{gasto:gB,leads:rB,cpl:cplB},linhas:linhas,variacao_pct:cplA&&cplB?(cplB-cplA)/cplA*100:null,pouco:rA<ADS_MIN_RESULTADOS||rB<ADS_MIN_RESULTADOS};
+};
+const _f2v100TextoComp=function(R,dimNome){ if(!R||R.a.cpl===null||R.b.cpl===null) return "Sem leads suficientes nos dois períodos para comparar.";
+  const v=R.variacao_pct; const sobe=v>3, desce=v<-3; let t="O custo por lead foi de "+_adsBRL(R.a.cpl)+" para "+_adsBRL(R.b.cpl)+" ("+(v>0?"+":"")+_adsNum1(v)+"%). ";
+  if(!sobe) return t+(desce?"Baixou: nada a investigar.":"Ficou praticamente igual.");
+  const top=R.linhas.filter(function(x){ return x.peso_pct>0; }); if(!top.length) return t+"A alta veio do conjunto todo, sem uma parte que se destaque.";
+  const x=top[0]; t+=(x.peso_pct>=60?"Quase toda a alta veio ":"A maior parte da alta veio ")+(dimNome||"de ")+"«"+_adsNomeCurto(x.nome)+"»: custo por lead "+(x.a_cpl?_adsBRL(x.a_cpl):"(não rodava antes)")+" → "+(x.b_cpl?_adsBRL(x.b_cpl):"sem lead")+", gasto "+_adsBRL0(x.a_gasto)+" → "+_adsBRL0(x.b_gasto)+".";
+  if(top[1]&&top[1].peso_pct>=20) t+=" Depois vem «"+_adsNomeCurto(top[1].nome)+"» ("+Math.round(top[1].peso_pct)+"% da alta).";
+  return t; };
+/* v100 (14/10/2026) P2_3_11 (etapa 2): nomes que a Meta manda em inglês (idade|gênero, posicionamento, aparelho) em português */
+const _f2v100NomeDim=function(n){ n=String(n||""); const T={male:"homens",female:"mulheres",unknown:"não informado",feed:"Feed",story:"Stories",reels:"Reels",facebook_reels:"Reels do Facebook",instagram_reels:"Reels do Instagram",instagram_stories:"Stories do Instagram",facebook_stories:"Stories do Facebook",marketplace:"Marketplace",video_feeds:"Vídeos no feed",instream_video:"Vídeo in-stream",search:"Busca",explore:"Explorar",explore_home:"Explorar",mobile_app:"celular (app)",desktop:"computador",mobile_web:"celular (navegador)",iphone:"iPhone",android_smartphone:"Android",ipad:"iPad",android_tablet:"tablet Android",other:"outro"}; return n.split("|").map(function(p){ const k=p.trim(); return T[k]||T[k.toLowerCase()]||k.replace(/_/g," "); }).join(" · "); };
+function AdsCplCompararV100(props){
+  const conta=props.conta, isMob=props.isMob, P=props.P, cur=props.cur, prev=props.prev;
+  const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const ontem=_adsAddDays(_adsIso(new Date()),-1);
+  const OP={periodo:{a_de:P&&P.prevIni,a_ate:P&&P.prevFim,b_de:P&&P.ini,b_ate:P&&P.fim,lbl:"período escolhido × o anterior"},semanas:{a_de:_adsAddDays(ontem,-13),a_ate:_adsAddDays(ontem,-7),b_de:_adsAddDays(ontem,-6),b_ate:ontem,lbl:"última semana × a anterior"}};
+  const [qual,setQual]=useState("semanas"); const [dim,setDim]=useState("campanha"); const [res,setRes]=useState(null); const [lendo,setLendo]=useState(false);
+  const o=OP[qual];
+  /* só o que trouxe lead em A ou em B (campanha de seguidor/engajamento não entra no custo por lead) */
+  const local=function(ca,pa){ const comLead={}; [ca,pa].forEach(function(x){ ["campanhas","conjuntos"].forEach(function(k){ ((x&&x[k])||[]).forEach(function(c){ if(Number(c.res!==undefined?c.res:c.resultados||0)>0) comLead[c.id]=1; }); }); });
+    const leads=function(lst){ return (lst||[]).filter(function(c){ return comLead[c.id]; }).map(function(c){ return {chave:c.id,nome:c.nome,gasto:Number(c.gasto||0),res:Number(c.res!==undefined?c.res:c.resultados||0)}; }); };
+    return {fonte:"app",campanha:_f2v100Comparar(leads(pa&&pa.campanhas),leads(ca&&ca.campanhas)),conjunto:_f2v100Comparar(leads(pa&&pa.conjuntos),leads(ca&&ca.conjuntos))}; };
+  const comparar=async function(){ if(!acc) return; setLendo(true); setRes(null);
+    const r=await _f2v98Rpc("ads_cpl_comparar",{p_conta:acc,p_a_de:o.a_de,p_a_ate:o.a_ate,p_b_de:o.b_de,p_b_ate:o.b_ate});
+    if(!r.erro&&r.data){ setRes({fonte:"servidor",srv:r.data}); setLendo(false); return; }
+    let ca=null, pa=null;
+    if(qual==="periodo"&&cur&&prev){ ca=cur; pa=prev; }
+    else { try{ const q=await Promise.all([window._sb.rpc("ads_periodo",{p_account:acc,p_de:o.b_de,p_ate:o.b_ate}),window._sb.rpc("ads_periodo",{p_account:acc,p_de:o.a_de,p_ate:o.a_ate})]); ca=_adsEnriquece(q[0].error?null:q[0].data); pa=_adsEnriquece(q[1].error?null:q[1].data); const uni=_adsUnidadeAtiva(); if(uni){ ca=_adsFiltraUnidade(ca,uni,_adsUnidadeDonaDaConta(acc),acc); pa=_adsFiltraUnidade(pa,uni,_adsUnidadeDonaDaConta(acc),acc); } }catch(e){ } }
+    const L=local(ca,pa); L.falta=!!r.falta; L.erroSrv=r.falta?null:r.erro; setRes(L); setLendo(false); };
+  const srv=res&&res.fonte==="servidor"?res.srv:null;
+  const dims=srv?[["campanha","Campanha"],["publico","Público"],["posicionamento","Posicionamento"],["aparelho","Aparelho"]]:[["campanha","Campanha"],["conjunto","Conjunto (público)"],["posicionamento","Posicionamento"],["aparelho","Aparelho"]];
+  const R=res?(srv?null:res[dim]):null;
+  const linhasSrv=srv&&srv.por?(srv.por[dim]||[]):[];
+  return <div data-v100="P2_3_11">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Escolha os dois períodos e o app separa de onde veio a alta do custo por lead: campanha, público, posicionamento e aparelho. Só leitura; não gasta IA.</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"10px 0"}}>{Object.keys(OP).map(function(k){ return <AdsChip key={k} on={qual===k} onClick={function(){ setQual(k); setRes(null); }}>{OP[k].lbl}</AdsChip>; })}</div>
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><span style={{fontSize:12,color:ADS.muted}}>A: {_adsFmtD(o.a_de)} a {_adsFmtD(o.a_ate)} · B: {_adsFmtD(o.b_de)} a {_adsFmtD(o.b_ate)}</span><F2V98Btn small primary disabled={lendo||!acc} onClick={comparar}>{lendo?"comparando…":"Comparar"}</F2V98Btn></div>
+    {res&&<div style={{marginTop:10}}>
+      {(function(){ const a=srv?srv.a:R&&R.a, b=srv?srv.b:R&&R.b; if(!a||!b) return null; const v=srv?srv.variacao_pct:R.variacao_pct; return <F2V100Cards isMob={isMob} n={3}>
+        <F2V100Card t={"A · "+_adsFmtD(o.a_de)+" a "+_adsFmtD(o.a_ate)} v={_adsBRL(a.cpl)} sub={_adsBRL0(a.gasto)+" · "+_adsNum(a.leads)+" leads"}/>
+        <F2V100Card t={"B · "+_adsFmtD(o.b_de)+" a "+_adsFmtD(o.b_ate)} v={_adsBRL(b.cpl)} sub={_adsBRL0(b.gasto)+" · "+_adsNum(b.leads)+" leads"}/>
+        <F2V100Card destaque t="Custo por lead" v={v===null||v===undefined?"—":(v>0?"+":"")+_adsNum1(v)+"%"} sub={v>3?"subiu":v<-3?"baixou":"igual"}/>
+      </F2V100Cards>; })()}
+      <F2V100Caixa tipo={(srv?srv.variacao_pct:R&&R.variacao_pct)>3?"atencao":"info"}><b>O que mudou:</b> {srv?(srv.texto||"—"):_f2v100TextoComp(R,dim==="conjunto"?"do conjunto ":"da campanha ")}</F2V100Caixa>
+      {(srv?srv.pouco_dado:R&&R.pouco)&&<div style={{fontSize:11.5,color:"#92400e",marginTop:6}}>⚠ Pouco dado: menos de {ADS_MIN_RESULTADOS} leads em um dos períodos. Leia como pista, não como prova.</div>}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"10px 0 6px"}}>{dims.map(function(d){ return <AdsChip key={d[0]} on={dim===d[0]} onClick={function(){ setDim(d[0]); }}>{d[1]}</AdsChip>; })}</div>
+      {!srv&&(dim==="posicionamento"||dim==="aparelho")?<F2V98Faltando txt={"Por "+(dim==="posicionamento"?"posicionamento (Feed, Stories, Reels)":"aparelho (celular, computador)")+": ainda não ligado no servidor (ads_cpl_comparar). Por campanha e por conjunto já funciona aqui."}/>:
+      (function(){ const ls=srv?linhasSrv.map(function(x){ return {nome:_f2v100NomeDim(x.nome||x.chave),leitura:x.leitura,a_cpl:x.a_cpl,b_cpl:x.b_cpl,a_gasto:x.a_gasto,b_gasto:x.b_gasto,a_res:x.a_leads,b_res:x.b_leads,peso_pct:x.peso_pct}; }):(R?R.linhas:[]); if(!ls.length) return <div style={{fontSize:12.5,color:ADS.muted}}>Nada para mostrar nesta divisão.</div>;
+        return <F2V99Tabela minW={isMob?620:0} cab={["","Gasto A → B","Leads A → B","Custo/lead A → B","Peso na alta"]} dir={[0,1,1,1,1]} linhas={ls.slice(0,10).map(function(x){ return [<span style={{display:"block",maxWidth:isMob?180:360,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.nome}><b style={{fontSize:12.5}}>{_adsNomeCurto(x.nome)}</b>{x.leitura?<span style={{display:"block",fontSize:11,color:ADS.muted,whiteSpace:"normal"}}>{x.leitura}</span>:null}</span>,_adsBRL0(x.a_gasto)+" → "+_adsBRL0(x.b_gasto),_adsNum(x.a_res)+" → "+_adsNum(x.b_res),(x.a_cpl?_adsBRL(x.a_cpl):"—")+" → "+(x.b_cpl?_adsBRL(x.b_cpl):"—"),x.peso_pct>0?<b style={{color:x.peso_pct>=40?"#b91c1c":"#c2410c"}}>{Math.round(x.peso_pct)}%</b>:"—"]; })}/>; })()}
+      {!srv&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>{res.falta?"Calculado aqui com os números que o app já tem (campanha e conjunto). ":res.erroSrv?"O servidor não respondeu ("+res.erroSrv+"); calculado aqui. ":""}"Peso na alta" = quanto do valor pago a mais em B veio daquela linha, comparando com o custo que ela tinha em A.</div>}
+    </div>}
+  </div>;
+}
+
+/* ─────────── P2_1_16 · resultados contados de jeitos diferentes (janela de atribuição) ─────────── */
+function AdsJanelasV100(props){
+  const conta=props.conta, isMob=props.isMob, canEdit=!!props.canEdit; const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const J=useF2V98Rpc("ads_janelas_ler",acc?{p_conta:acc,p_dias:30,p_campanha:null}:null,[acc]);
+  const [lendo,setLendo]=useState(false);
+  const lerAgora=async function(){ if(!window._sb||!acc) return; setLendo(true); try{ const r=await window._sb.functions.invoke("meta-extras-ler",{body:{modo:"janelas",conta:acc}}); const d=r&&r.data; if(r.error||!d||d.ok===false) _f2v98Toast(false,(d&&d.erro)||"A leitura da Meta ainda não está ligada no servidor."); else { _f2v98Toast(true,"Lido da Meta."); J.reload(); } }catch(e){ _f2v98Toast(false,"Não leu: "+((e&&e.message)||e)); } setLendo(false); };
+  if(J.loading) return <AdsLoading t="Lendo…"/>;
+  const d=(!J.erro&&J.data)||null; const t=(d&&d.totais)||{};
+  return <div data-v100="P2_1_16">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>A Meta conta um lead como dela se a pessoa clicou no anúncio até 7 dias antes, ou só viu o anúncio no dia anterior. Mudando a regra (a "janela"), o número muda. Aqui ficam lado a lado: <b>1 dia após o clique</b>, <b>7 dias após o clique</b> e <b>só visualização (1 dia)</b>.</div>
+    {J.falta?<F2V98Faltando txt="A leitura das janelas ainda não está ligada no servidor (ads_janelas_ler). Até lá, a tela de cada campanha mostra só a janela configurada nela."/>:J.erro?<F2V98Faltando txt={"Não deu para ler: "+J.erro}/>:
+    <div>
+      <F2V100Cards isMob={isMob} n={4}>
+        <F2V100Card t="7 dias após o clique" v={_adsNum(t.c7d)} sub="o padrão da Meta"/>
+        <F2V100Card t="1 dia após o clique" v={_adsNum(t.c1d)} sub="só quem clicou e virou lead no mesmo dia"/>
+        <F2V100Card t="Só visualização (1 dia)" v={_adsNum(t.v1d)} sub="viu, não clicou e virou lead"/>
+        <F2V100Card destaque t="O app usa" v={_adsNum(t.padrao)} sub="o número da janela de cada campanha"/>
+      </F2V100Cards>
+      {(d.campanhas||[]).length>0&&<div style={{marginTop:10}}><F2V99Tabela minW={isMob?560:0} cab={["Campanha","1d clique","7d clique","1d visualização","O app usa"]} dir={[0,1,1,1,1]} linhas={(d.campanhas||[]).slice(0,15).map(function(c){ return [<b style={{fontSize:12.5}} title={c.nome}>{_adsNomeCurto(c.nome)}</b>,_adsNum(c.c1d),_adsNum(c.c7d),_adsNum(c.v1d),<b>{_adsNum(c.padrao)}</b>]; })}/></div>}
+      <div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>{d.de?"De "+_adsFmtD(d.de)+" a "+_adsFmtD(d.ate):""}{d.lido_em?" · lido da Meta em "+_f2v98DataHora(d.lido_em):" · ainda não lido da Meta"}{d.explica?" · "+d.explica:""}</div>
+    </div>}
+    <F2V100Caixa>Para conversar com o cliente: se ele diz que "a Meta inventa lead", mostre a diferença. O de 1 dia após o clique é o mais duro; o de visualização é o que mais pode ser contado em dobro.</F2V100Caixa>
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8}}><F2V98Btn small disabled={!canEdit||lendo||J.falta} title={canEdit?undefined:"Só quem edita a mídia pede a leitura."} onClick={lerAgora}>{lendo?"lendo…":"↻ Ler agora da Meta (só leitura)"}</F2V98Btn><span style={{fontSize:11.5,color:ADS.muted}}>não muda nada na Meta</span></div>
+  </div>;
+}
+
+/* ─────────── P2_3_10 · nota de oportunidade da Meta (Opportunity Score) ─────────── */
+function AdsOportunidadeV100(props){
+  const conta=props.conta, isMob=props.isMob, canEdit=!!props.canEdit; const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const O=useF2V98Rpc("ads_oportunidade_ler",acc?{p_conta:acc}:null,[acc]);
+  const [lendo,setLendo]=useState(false);
+  const lerAgora=async function(){ if(!window._sb||!acc) return; setLendo(true); try{ const r=await window._sb.functions.invoke("meta-extras-ler",{body:{modo:"oportunidade",conta:acc}}); const d=r&&r.data; if(r.error||!d||d.ok===false) _f2v98Toast(false,(d&&d.erro)||"A leitura da Meta ainda não está ligada no servidor."); else { _f2v98Toast(true,"Lido da Meta."); O.reload(); } }catch(e){ _f2v98Toast(false,"Não leu: "+((e&&e.message)||e)); } setLendo(false); };
+  if(O.loading) return <AdsLoading t="Lendo…"/>;
+  const d=(!O.erro&&O.data)||null; const n=d&&d.nota!==null&&d.nota!==undefined?Number(d.nota):null; const rec=(d&&d.recomendacoes)||[];
+  return <div data-v100="P2_3_10">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>A Meta dá uma nota de 0 a 100 para a conta, com dicas do que melhorar. Ela fica no Gerenciador e ninguém olha: aqui ela aparece dentro do cliente.</div>
+    {O.falta?<F2V98Faltando txt="A nota de oportunidade ainda não está ligada no servidor (ads_oportunidade_ler). A coleta vai buscar a nota e as dicas 1 vez por dia."/>:O.erro?<F2V98Faltando txt={"Não deu para ler: "+O.erro}/>:
+    <div>
+      <div style={{display:"flex",gap:14,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
+        <div style={{width:74,height:74,borderRadius:99,border:"6px solid "+(n===null?"#e5e1ec":n>=80?"#16a34a":n>=60?"#f59e0b":"#dc2626"),display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><b style={{fontSize:22}}>{n===null?"—":Math.round(n)}</b></div>
+        <div style={{minWidth:0,flex:1}}><b style={{fontSize:14}}>{n===null?"Ainda sem nota lida":"Nota da Meta: "+Math.round(n)+" de 100"}</b><div style={{fontSize:12,color:ADS.muted}}>{d.lido_em?"lida em "+_f2v98DataHora(d.lido_em):"a coleta ainda não leu"}{d.explica?" · "+d.explica:""}</div>{d.erro_meta?<div style={{fontSize:11.5,color:"#92400e",marginTop:2}}>A Meta respondeu: {String(d.erro_meta)}</div>:null}</div>
+      </div>
+      {rec.length>0?<div style={{marginTop:10}}>{rec.slice(0,8).map(function(r,i){ return <div key={i} style={{display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:10,padding:"8px 0",borderTop:"1px solid "+ADS.line}}>
+        <F2V98Chip cor="#15803d" bg="#dcfce7">{r.pontos?"+"+_adsNum(r.pontos)+" pts":"dica"}</F2V98Chip>
+        <div style={{minWidth:0}}><b style={{fontSize:12.5}}>{r.titulo||r.tipo}</b>{r.campanha?<span style={{fontSize:11.5,color:ADS.muted}}> · {_adsNomeCurto(r.campanha)}</span>:null}<div style={{fontSize:12,color:ADS.ink2}}>{r.texto}</div></div>
+      </div>; })}</div>:<div style={{fontSize:12.5,color:ADS.muted,marginTop:8}}>Nenhuma dica da Meta agora.</div>}
+    </div>}
+    <F2V100Caixa>Aceitar uma dica não é feito daqui: se ela mexe na campanha, vira pedido com PIN 2x em 🧠 Decisões (ou é feita pelo Montador). Nada muda na Meta sozinho.</F2V100Caixa>
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8}}><F2V98Btn small disabled={!canEdit||lendo||O.falta} title={canEdit?undefined:"Só quem edita a mídia pede a leitura."} onClick={lerAgora}>{lendo?"lendo…":"↻ Ler agora da Meta (só leitura)"}</F2V98Btn></div>
+  </div>;
+}
+
+/* ─────────── P2_3_13 · conta picotada em conjuntos demais ─────────── */
+function AdsFragmentacaoV100(props){
+  const conta=props.conta, isMob=props.isMob, cur=props.cur, P=props.P; const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const F=useF2V98Rpc("ads_fragmentacao_ler",acc?{p_conta:acc}:null,[acc]);
+  if(F.loading) return <AdsLoading t="Lendo…"/>;
+  const srv=!F.erro&&F.data?F.data:null;
+  let conj, verba, nivel, texto, sug;
+  if(srv){ conj=(srv.conjuntos||[]).map(function(c){ return {id:c.adset_id,nome:c.nome,campanha:c.campanha,verba_dia:c.verba_dia,sem:c.resultados_7d,apr:c.aprendizado}; }); verba=srv.verba_dia; nivel=(srv.nivel&&srv.nivel!=="ok")?"atencao":"ok"; texto=srv.texto; sug=srv.sugestao&&srv.sugestao.texto; }   /* v100 (14/10/2026) P2_3_13 (etapa 2): o servidor manda "ok" | "atencao" | "picotada" */
+  else { const dias=Math.max(1,Number(P&&P.dias)||7); const cam={}; ((cur&&cur.campanhas)||[]).forEach(function(c){ cam[c.id]=c.nome; });
+    conj=((cur&&cur.conjuntos)||[]).filter(function(c){ return Number(c.gasto||0)>0; }).map(function(c){ return {id:c.id,nome:c.nome,campanha:cam[c.campaign_id]||"",verba_dia:Number(c.gasto||0)/dias,sem:Number(c.res||0)*7/dias,apr:null}; });
+    verba=conj.reduce(function(s,c){ return s+c.verba_dia; },0); const fracos=conj.filter(function(c){ return c.sem<10; });
+    nivel=(conj.length>5||(conj.length>=2&&fracos.length>=Math.ceil(conj.length/2)))?"atencao":"ok";
+    texto=nivel==="atencao"?(conj.length+" conjuntos com gasto e "+fracos.length+" com menos de 10 resultados por semana. A Meta aprende melhor com 1 ou 2 conjuntos amplos e muitos criativos."):"A verba não está picotada: "+conj.length+" conjunto"+(conj.length===1?"":"s")+" com gasto.";
+    sug=nivel==="atencao"&&fracos.length>=2?"Sugestão: juntar "+fracos.slice(0,4).map(function(c){ return "«"+_adsNomeCurto(c.nome)+"»"; }).join(", ")+" em 1 conjunto e deixar a Meta escolher (regra Andromeda).":null; }
+  conj=(conj||[]).slice().sort(function(a,b){ return Number(a.sem||0)-Number(b.sem||0); });
+  return <div data-v100="P2_3_13">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Verba espalhada em vários conjuntos pequenos: nenhum junta resultado suficiente para a Meta aprender. A regra do Andromeda (o sistema novo da Meta) prefere 1 ou 2 conjuntos amplos, com muitos criativos, e pelo menos 10 resultados por semana em cada um.</div>
+    {F.falta&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>🔌 Calculado aqui com os conjuntos do período (o servidor ainda não manda a fase de aprendizado).</div>}
+    <F2V100Caixa tipo={nivel==="atencao"?"atencao":"ok"}>{nivel==="atencao"?"⚠ ":"✔ "}{texto}{verba?" Verba média: "+_adsBRL0(verba)+" por dia.":""}</F2V100Caixa>
+    {sug&&<F2V100Caixa>{sug} Juntar é feito no Montador ou vira pedido com PIN; nada muda daqui.</F2V100Caixa>}
+    {conj.length>0&&<div style={{marginTop:10}}><F2V99Tabela minW={isMob?560:0} cab={["Conjunto","Verba/dia","Resultados por semana","Aprendizado"]} dir={[0,1,1,0]} linhas={conj.slice(0,15).map(function(c){ const fraco=Number(c.sem||0)<10; return [<span style={{display:"block",maxWidth:isMob?200:380,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={c.nome}><b style={{fontSize:12.5}}>{c.nome}</b>{c.campanha?<span style={{display:"block",fontSize:11,color:ADS.muted}}>{_adsNomeCurto(c.campanha)}</span>:null}</span>,_adsBRL0(c.verba_dia),<b style={{color:fraco?"#b91c1c":"#15803d"}}>{_adsNum1(c.sem)}</b>,c.apr==="saiu"?"saiu ✓":c.apr==="aprendendo"?"aprendendo":c.apr==="limitado"?"aprendizado limitado":"—"]; })}/></div>}
+  </div>;
+}
+
+/* ─────────── Campanhas › 🧰 · gavetas novas da v100 (entram no mesmo bloco das Ferramentas) ─────────── */
+function AdsFerramentasCampanhasV100Gavetas(props){
+  const mc=props.mc, conta=props.conta, P=props.P, isMob=props.isMob, canEdit=props.canEdit, cur=props.cur, prev=props.prev; const G=F2V99Gaveta;
+  const cu=_f2v98CliUni(mc); const multi=(cu.cli==="bioter")||!!(mc&&mc.bioter_unit);
+  return <Fragment>
+    {multi&&<G item="E6" icone="🏷️" titulo="Unidade de cada campanha" resumo="escolher numa lista a unidade de cada campanha (sem depender do [nome])" isMob={isMob}><AdsUnidadeCampanhasV100 mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}/></G>}
+    <G item="P2_3_11" icone="🔍" titulo="Por que o custo por lead subiu" resumo="compara 2 períodos por campanha, público, posicionamento e aparelho" isMob={isMob}><AdsCplCompararV100 conta={conta} P={P} cur={cur} prev={prev} isMob={isMob}/></G>
+    <G item="P2_3_13" icone="🧩" titulo="Conta picotada em conjuntos demais?" resumo="conjuntos com pouco resultado por semana e sugestão de juntar" isMob={isMob}><AdsFragmentacaoV100 conta={conta} P={P} cur={cur} isMob={isMob}/></G>
+    <G item="P2_1_16" icone="🪟" titulo="Leads contados de jeitos diferentes" resumo="1 dia após o clique, 7 dias após o clique e só visualização, lado a lado" isMob={isMob}><AdsJanelasV100 conta={conta} isMob={isMob} canEdit={canEdit}/></G>
+    <G item="P2_3_10" icone="⭐" titulo="Nota de oportunidade da Meta" resumo="a nota de 0 a 100 da Meta e as dicas, dentro do cliente" isMob={isMob}><AdsOportunidadeV100 conta={conta} isMob={isMob} canEdit={canEdit}/></G>
+    {/* v100 (15/10/2026) P2_3_20: termos pesquisados no Google + negativas sugeridas (só lê ao abrir; o pedido nasce só no clique, PIN 2x) */}
+    <G item="P2_3_20" icone="🔎" titulo="Google: o que pesquisaram" resumo="o que as pessoas pesquisaram para ver o anúncio no Google e o que bloquear (palavras negativas)" isMob={isMob}><AdsGoogleTermosV100 mc={mc} isMob={isMob} canEdit={canEdit}/></G>
+  </Fragment>;
+}
+
+/* ─────────── v100 (15/10/2026) P2_3_20 · Google: termos pesquisados e palavras negativas ───────────
+   Lê ads_google_termos_ler(p_client, p_dias) ao abrir a gaveta (regras fixas no servidor, sem IA; S4 pelo cliente).
+   Os termos que o servidor marca como "negativar" (como fazer, emprego, grátis, curso…) já vêm marcados; a pessoa marca/desmarca.
+   "Pedir negativas (PIN 2x)" cria um PEDIDO em 🧠 Decisões com ads_google_negativas_pedir(p_client, p_conta, p_termos, p_nivel) -> {ok, pedido_id}.
+   Nada é escrito no Google daqui. Sem a função no servidor: "ainda não ligado". Sem o Google ligado: 1 linha com o que falta. */
+function AdsGoogleTermosV100(props){
+  const mc=props.mc, isMob=props.isMob, canEdit=!!props.canEdit; const cid=mc&&mc.client_id;
+  const pode=_f2v98Pode();   /* sócio aprovador com o PIN aberto (17e) */
+  const [dias,setDias]=useState(30);
+  const T=useF2V98Rpc("ads_google_termos_ler",cid?{p_client:cid,p_dias:dias}:null,[cid,dias]);
+  const d=(!T.erro&&T.data)||{}; const termos=Array.isArray(d.termos)?d.termos:[]; const negs=Array.isArray(d.negativas)?d.negativas:[];
+  const temTermos=termos.length>0;
+  /* conta Google do cliente (para o pedido): só lê quando há termo para negativar */
+  const hoje=_adsIso(new Date()); const ini=_adsAddDays(hoje,-dias);
+  const _cSrv=Array.isArray(d.contas)?d.contas.map(function(x){ return typeof x==="string"?x:String((x&&(x.customer_id||x.id))||""); }).filter(Boolean):null;   /* X3: o _ler já traz as contas Google do cliente */
+  const GC=useF2V98Rpc("midia_google_ads_ler",(temTermos&&cid&&!_cSrv)?{p_client:cid,p_de:ini,p_ate:hoje}:null,[cid,temTermos,dias,!!_cSrv]);
+  const contas=_cSrv||((GC.data&&GC.data.customer_ids)||[]).map(String);
+  const podeSrv=d.pode_pedir!==false;   /* o servidor diz se quem está vendo pode pedir (sócio) */
+  const nPed=Array.isArray(d.pedidos)?d.pedidos.length:0;
+  const [marca,setMarca]=useState(null); const [nivel,setNivel]=useState("conta"); const [env,setEnv]=useState(false); const [res,setRes]=useState(null);
+  useEffect(function(){ setMarca(null); setRes(null); },[cid,dias]);
+  const marcados=marca||(function(){ const m={}; negs.forEach(function(n){ if(n&&n.termo) m[n.termo]=true; }); termos.forEach(function(t){ if(t&&t.negativar&&!(Number(t.conversoes)>0)) m[t.termo]=true; }); return m; })();
+  const lista=Object.keys(marcados).filter(function(k){ return marcados[k]; });
+  const alterna=function(t){ const m=Object.assign({},marcados); m[t]=!m[t]; setMarca(m); };
+  const custoMarc=termos.filter(function(t){ return marcados[t.termo]; }).reduce(function(a,t){ return a+Number(t.custo||0); },0);
+  const pedir=async function(){
+    if(!pode||!lista.length||env) return;
+    let ok=true; try{ if(typeof pixelsConfirm==="function") ok=await pixelsConfirm("Criar o pedido para negativar "+lista.length+" termo"+(lista.length===1?"":"s")+" no Google ("+(nivel==="conta"?"a conta inteira":"só nas campanhas onde apareceram")+")? Nada muda no Google agora: o pedido vai para 🧠 Decisões e só segue com o PIN 2x de um sócio.",{title:"Pedir negativas",okText:"Criar pedido",cancelText:"Cancelar"}); }catch(_){ }
+    if(!ok) return;
+    setEnv(true);
+    const r=await _f2v98Rpc("ads_google_negativas_pedir",{p_client:cid,p_conta:contas[0]||null,p_termos:lista,p_nivel:nivel});
+    setEnv(false); setRes(r);
+    if(r.falta){ _f2v98Toast(false,"Pedir negativas ainda não está ligado no servidor."); return; }
+    if(r.erro){ _f2v98Toast(false,r.erro); return; }
+    _f2v98Toast(true,(r.data&&r.data.msg)||"Pedido criado em 🧠 Decisões (PIN 2x). Nada muda no Google sozinho.");
+  };
+  if(T.loading) return <AdsLoading t="Lendo o que pesquisaram no Google…"/>;
+  if(T.falta) return <F2V98Faltando txt="Os termos do Google ainda não estão ligados no servidor."/>;
+  if(T.erro) return <F2V98Faltando txt={"Não deu para ler: "+T.erro}/>;
+  const falta=(d.falta||[]).map(function(t){ return _f2v100Humano(String(t||"").replace(/\s*\([a-z0-9_]+\)/g,"").replace(/\s+em\s+auto\.[a-z0-9_]+/gi,"")); }).filter(Boolean);   /* tira nome técnico de tabela/visão */
+  return <div data-v100="P2_3_20">
+    {!d.ligado&&<div data-v100-google-falta="1" style={{fontSize:12.5,color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"8px 11px",lineHeight:1.5}}>🔌 <b>Google ainda não ligado.</b> Falta: {falta.length?falta.join(" · "):"os acessos do Google Ads da agência (o Vini cadastra no servidor) e a busca dos termos ligada."}</div>}
+    {d.ligado&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <span style={{fontSize:12.5,color:ADS.ink2}}>Últimos</span>
+      <select value={dias} onChange={function(e){ setDias(Number(e.target.value)); }} style={Object.assign({},_f2v99Inp,{width:"auto"})}>{[7,14,30,60,90].map(function(n){ return <option key={n} value={n}>{n} dias</option>; })}</select>
+      <span style={{fontSize:12,color:ADS.muted}}>{termos.length} termo{termos.length===1?"":"s"} · {negs.length} sugest{negs.length===1?"ão":"ões"} de negativa</span>
+    </div>}
+    {d.ligado&&!temTermos&&<div style={{fontSize:12.5,color:ADS.muted,marginTop:8}}>Nenhum termo pesquisado neste período.</div>}
+    {/* v100 (15/10/2026) X5 (revisor X3): no celular a tabela passava da largura do cartão; agora empilha cliques/custo/conversões embaixo do termo */}
+    {temTermos&&isMob&&<div data-x5="termos-mob" style={{marginTop:10,display:"flex",flexDirection:"column",gap:6}}>{termos.slice(0,30).map(function(t,j){ const on=!!marcados[t.termo]; return <label key={j} style={{display:"grid",gridTemplateColumns:"22px minmax(0,1fr)",gap:8,alignItems:"start",border:"1px solid "+ADS.line,borderRadius:10,padding:"8px 10px",minWidth:0,background:on?"#fffbeb":"#fff"}}>
+      <input type="checkbox" checked={on} onChange={function(){ alterna(t.termo); }} aria-label={"bloquear "+t.termo} style={{marginTop:2}}/>
+      <span style={{minWidth:0}}><b style={{fontSize:12.5,wordBreak:"break-word"}}>{t.termo}</b>{t.negativar&&<F2V98Chip cor="#92400e" bg="#fef3c7" style={{marginLeft:6}}>sugerido</F2V98Chip>}
+        {t.campanha&&<span style={{display:"block",fontSize:11.5,color:ADS.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.campanha}</span>}
+        <span style={Object.assign({display:"flex",gap:10,flexWrap:"wrap",fontSize:11.5,color:ADS.ink2,marginTop:3},ADS_MONO)}><span>{_adsNum(t.cliques)} cliques</span><span>{_adsBRL0(t.custo)}</span><span>{_adsNum(t.conversoes)} conv.</span></span></span>
+    </label>; })}</div>}
+    {temTermos&&!isMob&&<div style={{marginTop:10}}><F2V99Tabela minW={isMob?560:0} cab={["Bloquear","Termo pesquisado","Campanha","Cliques","Custo","Conversões"]} dir={[0,0,0,1,1,1]} linhas={termos.slice(0,isMob?30:60).map(function(t){ const on=!!marcados[t.termo]; return [
+      <input type="checkbox" checked={on} onChange={function(){ alterna(t.termo); }} aria-label={"bloquear "+t.termo}/>,
+      <span><b style={{fontSize:12.5}}>{t.termo}</b>{t.negativar&&<F2V98Chip cor="#92400e" bg="#fef3c7" style={{marginLeft:6}}>sugerido</F2V98Chip>}</span>,
+      <span style={{fontSize:12,color:ADS.muted}}>{t.campanha||"—"}</span>,_adsNum(t.cliques),_adsBRL0(t.custo),_adsNum(t.conversoes)]; })}/></div>}
+    {temTermos&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:10}}>
+      <span style={{fontSize:12.5}}><b>{lista.length}</b> marcado{lista.length===1?"":"s"}{custoMarc>0?" · "+_adsBRL0(custoMarc)+" gastos neles":""}</span>
+      <select value={nivel} onChange={function(e){ setNivel(e.target.value); }} style={Object.assign({},_f2v99Inp,{width:"auto"})}><option value="conta">na conta inteira</option><option value="campanha">só nas campanhas onde apareceram</option></select>
+      {canEdit&&<F2V98Btn escuro disabled={!pode||!podeSrv||!lista.length||env} title={pode?"Cria o pedido em 🧠 Decisões; o Google só muda depois do PIN 2x.":"Só sócio aprovador, com o PIN aberto, cria o pedido."} onClick={pedir}>{env?"criando…":"Pedir negativas (PIN 2x)"}</F2V98Btn>}
+      {nPed>0&&<span style={{fontSize:11.5,color:ADS.muted}}>{nPed} pedido{nPed===1?"":"s"} de negativas em 🧠 Decisões</span>}
+      {!contas.length&&(GC.data||_cSrv)&&<span style={{fontSize:11.5,color:"#92400e"}}>Conta Google não anotada (Visão geral › Google Ads).</span>}
+    </div>}
+    {res&&res.falta&&<F2V98Faltando txt="Pedir negativas: ainda não ligado no servidor. Nada foi criado."/>}
+    {res&&!res.falta&&!res.erro&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"8px 12px",fontSize:12.5,color:"#14532d",marginTop:10}}>✔ {(res.data&&res.data.msg)||("Pedido "+(res.data&&res.data.pedido_id?"#"+res.data.pedido_id+" ":"")+"criado. Um sócio confirma com o PIN 2x em 🧠 Decisões.")}</div>}
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>{d.explica?_f2v100Humano(d.explica):"O app sugere; um sócio aprova."}</div>
+  </div>;
+}
+
+/* ─────────── P2_3_16 / P2_3_17 · criar teste e fechar o plano da semana (dentro do 🧪 Plano de testes) ─────────── */
+function AdsTesteNovoV100(props){
+  const conta=props.conta, camps=props.camps||[], anuncios=props.anuncios||[], conjuntos=props.conjuntos||[], isMob=props.isMob, onSalvou=props.onSalvou, onFechar=props.onFechar;
+  const ativas=camps.filter(function(c){ return c.ativa; }); const lst=ativas.length?ativas:camps;
+  const [f,setF]=useState({titulo:"",tipo:"ab_meta",campanha_id:(lst[0]&&lst[0].id)||"",a:"",b:"",dias:7,hipotese:""}); const [sal,setSal]=useState(false);
+  const set=function(k,v){ const o=Object.assign({},f); o[k]=v; if(k==="campanha_id"||k==="tipo"){ o.a=""; o.b=""; } setF(o); };
+  const nivel=f.tipo==="ab_meta"?"conjunto":"anuncio";
+  const opcoes=(nivel==="anuncio"?anuncios:conjuntos).filter(function(x){ return !f.campanha_id||String(x.campaign_id)===String(f.campanha_id); });
+  const nomeDe=function(id){ const x=opcoes.find(function(o){ return String(o.id)===String(id); }); return x?x.nome:id; };
+  const salvar=async function(){ setSal(true); const r=await _f2v98Rpc("ads_teste_salvar",{p_conta:conta.ad_account_id,p_teste:{titulo:f.titulo,tipo:f.tipo,campanha_id:f.campanha_id,a:f.a?{id:f.a,nome:nomeDe(f.a),nivel:nivel}:{},b:f.b?{id:f.b,nome:nomeDe(f.b),nivel:nivel}:{},dias:Number(f.dias)||7,hipotese:f.hipotese}}); setSal(false);
+    if(r.erro){ _f2v98Toast(false,r.falta?"Criar teste ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Teste salvo no plano da semana."); if(onSalvou) onSalvou(r.data); };
+  const ok=f.titulo.trim()&&f.campanha_id&&(f.tipo==="conjunto_novo"||(f.a&&f.b&&f.a!==f.b));
+  return <div data-v100="P2_3_16" style={{border:"1px solid #ddd6fe",background:"#faf8ff",borderRadius:12,padding:"10px 12px",marginTop:10}}>
+    <b style={{fontSize:13}}>➕ Novo teste no plano desta semana</b>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1.4fr) minmax(0,1fr) minmax(0,1.4fr)",gap:8,marginTop:8}}>
+      <label><span style={_f2v99Lbl}>Nome do teste</span><input value={f.titulo} onChange={function(e){ set("titulo",e.target.value); }} placeholder="ex.: vídeo do produtor × foto do produto" style={_f2v99Inp}/></label>
+      <label><span style={_f2v99Lbl}>Tipo</span><select value={f.tipo} onChange={function(e){ set("tipo",e.target.value); }} style={_f2v99Inp}><option value="ab_meta">A×B da Meta (divide o público ao meio)</option><option value="criativo">Criativo × criativo (mesmo conjunto)</option><option value="conjunto_novo">Conjunto novo (sem B)</option></select></label>
+      <label><span style={_f2v99Lbl}>Campanha</span><select value={f.campanha_id} onChange={function(e){ set("campanha_id",e.target.value); }} style={_f2v99Inp}>{lst.map(function(c){ return <option key={c.id} value={c.id}>{_adsNomeCurto(c.nome)}</option>; })}</select></label>
+      {f.tipo!=="conjunto_novo"&&<label><span style={_f2v99Lbl}>A ({nivel==="anuncio"?"anúncio":"conjunto"})</span><select value={f.a} onChange={function(e){ set("a",e.target.value); }} style={_f2v99Inp}><option value="">escolha…</option>{opcoes.map(function(o){ return <option key={o.id} value={o.id}>{o.nome}</option>; })}</select></label>}
+      {f.tipo!=="conjunto_novo"&&<label><span style={_f2v99Lbl}>B ({nivel==="anuncio"?"anúncio":"conjunto"})</span><select value={f.b} onChange={function(e){ set("b",e.target.value); }} style={_f2v99Inp}><option value="">escolha…</option>{opcoes.filter(function(o){ return String(o.id)!==String(f.a); }).map(function(o){ return <option key={o.id} value={o.id}>{o.nome}</option>; })}</select></label>}
+      <label><span style={_f2v99Lbl}>Dias</span><select value={f.dias} onChange={function(e){ set("dias",e.target.value); }} style={_f2v99Inp}>{[7,10,14,21].map(function(d){ return <option key={d} value={d}>{d} dias</option>; })}</select></label>
+      <label style={{gridColumn:"1 / -1"}}><span style={_f2v99Lbl}>O que esperamos (hipótese)</span><input value={f.hipotese} onChange={function(e){ set("hipotese",e.target.value); }} placeholder="ex.: o vídeo com o produtor falando traz lead mais barato" style={_f2v99Inp}/></label>
+    </div>
+    {opcoes.length===0&&f.tipo!=="conjunto_novo"&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>Nenhum {nivel==="anuncio"?"anúncio":"conjunto"} com gasto nesta campanha no período. Troque o período no topo ou escolha "Conjunto novo".</div>}
+    <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap",alignItems:"center"}}><F2V98Btn small primary disabled={!ok||sal} onClick={salvar}>{sal?"salvando…":"Salvar no plano"}</F2V98Btn><F2V98Btn small onClick={onFechar}>Cancelar</F2V98Btn><span style={{fontSize:11.5,color:ADS.muted}}>Só entra no plano. Para subir na Meta: Montador, sempre pausado, PIN 2x.</span></div>
+  </div>;
+}
+
+/* ─────────── Criativos · P2_4_07 que tipo vence neste cliente · P2_4_16 variedade · P2_4_17 prazo de troca ─────────── */
+const F2V100_DIMS=[["gancho","Gancho"],["formato","Formato"],["mensagem","Mensagem"],["angulo","Ângulo"],["oferta","Oferta"],["produto","Produto"]];
+const _f2v100Gasto=function(x){ return Number(x&&x.gasto||0)||(Number(x&&x.custo_lead||0)*Number(x&&x.leads||0)); };
+const _f2v100PrazoTroca=function(verbaDia){ const v=Number(verbaDia||0); if(v<=0) return {dias:21,txt:"sem gasto lido no período"}; if(v<=100) return {dias:21,txt:"verba de até R$ 100 por dia"}; if(v<=300) return {dias:14,txt:"verba de R$ 100 a R$ 300 por dia"}; return {dias:7,txt:"verba acima de R$ 300 por dia"}; };
+function AdsTipoVenceClienteV100(props){
+  const lista=props.lista||[], isMob=props.isMob;
+  const [dim,setDim]=useState("gancho");
+  const comEt=lista.filter(function(x){ const e=x.etiquetas||{}; return F2V100_DIMS.some(function(d){ return !!e[d[0]]; }); });
+  const g={}; comEt.forEach(function(x){ const v=(x.etiquetas||{})[dim]; if(!v) return; const o=g[v]||(g[v]={v:v,n:0,gasto:0,leads:0}); o.n++; o.gasto+=_f2v100Gasto(x); o.leads+=Number(x.leads||0); });
+  const ls=Object.keys(g).map(function(k){ const o=g[k]; o.cpl=o.leads>0?o.gasto/o.leads:null; return o; }).sort(function(a,b){ return (a.cpl||1e9)-(b.cpl||1e9); });
+  const melhor=ls.find(function(x){ return x.cpl&&x.leads>=ADS_MIN_RESULTADOS; });
+  return <div data-v100="P2_4_07">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Soma por tipo de criativo <b>neste cliente</b> (o "geral" da agência fica no bloco 🏆 acima). Mostra se depoimento vence demonstração, se vídeo vence foto…</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"10px 0"}}>{F2V100_DIMS.map(function(d){ return <AdsChip key={d[0]} on={dim===d[0]} onClick={function(){ setDim(d[0]); }}>{d[1]}</AdsChip>; })}</div>
+    {comEt.length<3?<F2V100Caixa tipo="atencao">Só {comEt.length} criativo{comEt.length===1?"":"s"} etiquetado{comEt.length===1?"":"s"} neste período. Etiquete pelo menos 3 (à mão no ranking, ou "🤖 Etiquetar com IA") para comparar.</F2V100Caixa>:
+     ls.length<2?<div style={{fontSize:12.5,color:ADS.muted}}>Ainda não há 2 tipos diferentes de {(F2V100_DIMS.find(function(d){return d[0]===dim;})||[])[1]||dim} etiquetados.</div>:
+     <div>
+       {melhor&&<F2V100Caixa tipo="ok">🏆 Neste cliente, <b>{melhor.v}</b> vence: {_adsBRL(melhor.cpl)} por lead em {melhor.n} criativo{melhor.n>1?"s":""}.</F2V100Caixa>}
+       <div style={{marginTop:8}}><F2V99Tabela minW={isMob?460:0} cab={["Tipo","Criativos","Gasto","Leads","Custo por lead"]} dir={[0,1,1,1,1]} linhas={ls.map(function(x){ return [<b>{x.v}</b>,_adsNum(x.n),_adsBRL0(x.gasto),_adsNum(x.leads),x.cpl?<b style={{color:x===melhor?"#15803d":ADS.ink}}>{_adsBRL(x.cpl)}</b>:"—"]; })}/></div>
+     </div>}
+  </div>;
+}
+function AdsVariedadeV100(props){
+  const conta=props.conta, lista=props.lista||[], isMob=props.isMob; const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const V=useF2V98Rpc("ads_variedade_conjuntos",acc?{p_conta:acc,p_dias:14}:null,[acc]);
+  if(V.loading) return <AdsLoading t="Contando…"/>;
+  const srv=!V.erro&&V.data&&V.data.conjuntos?V.data:null;
+  let conj;
+  if(srv) conj=srv.conjuntos;
+  else { const m={}; lista.forEach(function(x){ const k=x.adset_id||null; if(!k) return; const o=m[k]||(m[k]={adset_id:k,nome:x.adset_nome||k,criativos:0,ideiasS:{},sem_etiqueta:0}); o.criativos++; const e=x.etiquetas||{}; const id=[e.gancho,e.formato,e.angulo||e.mensagem].filter(Boolean).join("|"); if(id) o.ideiasS[id]=1; else o.sem_etiqueta++; });
+    conj=Object.keys(m).map(function(k){ const o=m[k]; o.ideias=Object.keys(o.ideiasS).length; o.nivel=o.sem_etiqueta===o.criativos?"sem_etiqueta":(o.ideias<10?"pouco":"ok"); return o; }); }
+  return <div data-v100="P2_4_16">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>{(srv&&srv.regra)||"Com o Andromeda (o sistema novo da Meta), a entrega melhora quando cada conjunto tem de 10 a 20 ideias realmente diferentes, com 3 a 5 novas a cada 2 semanas."} Ideia diferente = outra combinação de gancho, formato e ângulo (pelas etiquetas).</div>
+    {!srv&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>🔌 {V.falta?"O contador do servidor ainda não está ligado (ads_variedade_conjuntos): contado aqui só com os criativos do ranking.":"Não deu para ler o servidor: contado aqui."}</div>}
+    {conj.length===0?<F2V100Caixa tipo="atencao">Ainda não dá para contar por conjunto: o ranking não traz o conjunto de cada criativo e há poucos etiquetados. Etiquete os criativos (à mão ou com a IA).</F2V100Caixa>:
+    <div style={{marginTop:8}}><F2V99Tabela minW={isMob?520:0} cab={["Conjunto","Criativos","Ideias diferentes","Novos em 14 dias","Situação"]} dir={[0,1,1,1,0]} linhas={conj.slice(0,15).map(function(c){ const pouco=c.nivel==="pouco"; return [<span style={{display:"block",maxWidth:isMob?180:340,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={c.nome}><b style={{fontSize:12.5}}>{c.nome}</b>{c.texto?<span style={{display:"block",fontSize:11,color:ADS.muted,whiteSpace:"normal"}}>{c.texto}</span>:null}</span>,_adsNum(c.criativos),<b style={{color:pouco?"#b91c1c":"#15803d"}}>{_adsNum(c.ideias)}</b>,c.novos_14d===undefined?"—":_adsNum(c.novos_14d),c.nivel==="ok"?<F2V98Chip cor="#15803d" bg="#dcfce7">ok</F2V98Chip>:c.nivel==="sem_etiqueta"?<F2V98Chip>sem etiqueta</F2V98Chip>:<F2V98Chip cor="#92400e" bg="#fef3c7">pouca variedade{(c.faltam||[]).length?": falta "+c.faltam.slice(0,3).join(", "):""}</F2V98Chip>]; })}/></div>}
+  </div>;
+}
+function AdsPrazoTrocaV100(props){
+  const lista=props.lista||[], P=props.P, isMob=props.isMob, prazo=props.prazo;
+  const R=useF2V98Rpc("ads_ia_rotinas_estado",{},[]);
+  const velhos=lista.filter(function(x){ return Number(x.idade_dias||0)>prazo.dias; }).sort(function(a,b){ return Number(b.idade_dias||0)-Number(a.idade_dias||0); });
+  const lem=R.data&&R.data.lembrete_troca;
+  return <div data-v100="P2_4_17">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>O criativo cansa: o prazo para trocar vai de 1 a 3 semanas, conforme a verba. Quanto mais verba por dia, mais rápido o mesmo público vê o anúncio de novo.</div>
+    <F2V100Cards isMob={isMob} n={3}>
+      <F2V100Card destaque t="Prazo de troca desta conta" v={prazo.dias+" dias"} sub={prazo.txt+(prazo.verba?" (≈ "+_adsBRL0(prazo.verba)+"/dia)":"")}/>
+      <F2V100Card t="Passaram do prazo" v={_adsNum(velhos.length)} sub={velhos.length?"preparar substitutos":"nenhum agora"} cor={velhos.length?"#b91c1c":"#15803d"}/>
+      <F2V100Card t="Lembrete de segunda na pauta" v={lem?(lem.ligado?"ligado":"desligado"):"—"} sub={lem?(lem.proximo?"próximo: "+_adsFmtD(lem.proximo):"um sócio liga"):(R.falta?"ainda não ligado no servidor":"—")}/>
+    </F2V100Cards>
+    {velhos.length>0&&<div style={{marginTop:10}}><F2V99Tabela minW={isMob?420:0} cab={["Criativo","No ar há","Leads","Custo por lead"]} dir={[0,1,1,1]} linhas={velhos.slice(0,12).map(function(x){ return [<b style={{fontSize:12.5}} title={x.nome}>{_adsNomeCurto(x.nome)}</b>,<b style={{color:"#b91c1c"}}>{x.idade_dias} dias</b>,_adsNum(x.leads),_adsBRL(x.custo_lead)]; })}/></div>}
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>No ranking acima, "trocar" aparece quando o criativo passa de {prazo.dias} dias (antes era fixo em 45).</div>
+  </div>;
+}
+function AdsFerramentasCriativosV100(props){
+  const conta=props.conta, lista=props.lista, P=props.P, isMob=props.isMob, prazo=props.prazo; const G=F2V99Gaveta;
+  return <F2V99Ferramentas titulo="Ferramentas dos criativos" isMob={isMob}>
+    <G item="P2_4_07" icone="🏷️" titulo="Que tipo de criativo vence neste cliente" resumo="custo por lead somado por gancho, formato, ângulo, oferta e produto" isMob={isMob}><AdsTipoVenceClienteV100 lista={lista} isMob={isMob}/></G>
+    <G item="P2_4_16" icone="🎨" titulo="Ideias diferentes em cada conjunto" resumo="contador de ideias por conjunto e aviso de pouca variedade" isMob={isMob}><AdsVariedadeV100 conta={conta} lista={lista} isMob={isMob}/></G>
+    <G item="P2_4_17" icone="⏳" titulo="Hora de trocar criativo" resumo={"prazo de "+prazo.dias+" dias pela verba · quem já passou"} isMob={isMob}><AdsPrazoTrocaV100 lista={lista} P={P} isMob={isMob} prazo={prazo}/></G>
+    <G item="P2_4_05" icone="🤖" titulo="Rotinas da IA dos criativos" resumo="etiquetar sozinho cada criativo novo (desligado) e o lembrete de troca de segunda" isMob={isMob}><AdsRotinasIAV100 isMob={isMob}/></G>
+  </F2V99Ferramentas>;
+}
+/* v100 (14/10/2026) P2_4_05 / P2_4_17 (etapa 2): estado das rotinas (ads_ia_rotinas_estado, C5a). Ligar a de IA: só sócio com PIN aberto, PIN 2x (ia_v100b_chave_definir), teto próprio do mês */
+function AdsRotinasIAV100(props){
+  const isMob=props.isMob; const pode=_f2v98Pode();
+  const R=useF2V98Rpc("ads_ia_rotinas_estado",{},[]);
+  const [pin,setPin]=useState(null); const [conf,setConf]=useState(false); const [sal,setSal]=useState(false); const [quer,setQuer]=useState("sim");
+  if(R.loading) return <AdsLoading t="Lendo…"/>;
+  if(R.falta||R.erro) return <F2V98Faltando txt={R.falta?"O estado das rotinas ainda não está ligado no servidor (ads_ia_rotinas_estado).":"Não deu para ler: "+R.erro}/>;
+  const d=R.data||{}; const et=d.etiquetar_novos||{}; const lt=d.lembrete_troca||{};
+  const mudar=async function(){ setSal(true); const r=await _f2v98Rpc("ia_v100b_chave_definir",{p_chave:et.chave||"v100b_etiquetar_auto_ligado",p_valor:quer,p_pin:pin}); setSal(false);
+    if(r.data&&r.data.precisa_confirmar){ setConf(true); setPin(""); _f2v98Toast(true,"Confirme: digite o PIN de novo (em até 5 minutos)."); return; }
+    if(r.erro){ _f2v98Toast(false,r.falta?"Mudar a rotina ainda não está ligado no servidor.":r.erro); return; }
+    setPin(null); setConf(false); _f2v98Toast(true,quer==="sim"?"Rotina ligada (dentro do teto do mês).":"Rotina desligada."); R.reload(); };
+  return <div data-v100="P2_4_05-rotinas">
+    <F2V100Cards isMob={isMob} n={2}>
+      <F2V100Card t="A IA etiqueta cada criativo novo" v={et.ligado?"ligada":"desligada 🔒"} cor={et.ligado?"#15803d":"#92400e"} sub={(et.horario||"")+(et.teto_usd!==undefined&&et.teto_usd!==null?" · teto US$ "+Number(et.teto_usd).toFixed(2)+"/mês"+(et.gasto_mes_usd!==undefined&&et.gasto_mes_usd!==null?" (gasto US$ "+Number(et.gasto_mes_usd).toFixed(2)+")":""):"")}/>
+      <F2V100Card t="Lembrete de troca na pauta" v={lt.ligado?"ligado":"desligado"} cor={lt.ligado?"#15803d":"#92400e"} sub={(lt.horario||"")+(lt.proximo?" · próximo: "+_adsFmtD(lt.proximo):"")+(lt.cria_demanda?" · vira demanda":"")}/>
+    </F2V100Cards>
+    {lt.regra&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>Prazo de troca: {lt.regra}.</div>}
+    <F2V100Caixa>A rotina da IA só gasta dentro do teto do mês e só olha criativo que ainda não tem etiqueta. Etiquetar à mão (no ranking) ou com o botão "🤖 Etiquetar com IA" continua igual.</F2V100Caixa>
+    {pode?(pin===null?<div style={{marginTop:8}}><F2V98Btn small onClick={function(){ setQuer(et.ligado?"nao":"sim"); setConf(false); setPin(""); }}>{et.ligado?"Desligar a rotina (PIN)":"Ligar a rotina (PIN 2x)"}</F2V98Btn></div>:
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8}}><span style={{fontSize:12,color:"#92400e"}}>{conf?"Confirme com o PIN de novo:":(quer==="sim"?"Ligar: isso deixa a IA gastar crédito sozinha, dentro do teto.":"Desligar a rotina:")}</span><input type="password" inputMode="numeric" value={pin} onChange={function(e){ setPin(e.target.value); }} placeholder="PIN" style={Object.assign({},_f2v99Inp,{width:90})}/><F2V98Btn small primary disabled={sal||String(pin).length<4} onClick={mudar}>{sal?"salvando…":"Confirmar"}</F2V98Btn><F2V98Btn small onClick={function(){ setPin(null); setConf(false); }}>Cancelar</F2V98Btn></div>):
+      <div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>🔒 Ligar ou desligar: só sócio com o PIN aberto.{et.como_ligar&&et.teto_usd!==undefined?"":""}</div>}
+  </div>;
+}
+/* P2_4_05 · botão "🤖 Etiquetar com IA" (só sócio com PIN aberto; gasta crédito só no clique; consulta o resultado por até 2 min) */
+function AdsEtiquetarIAV100(props){
+  const conta=props.conta, onPronto=props.onPronto; const pode=_f2v98Pode(); const _ia=(typeof useAdsIaCredito==="function")?useAdsIaCredito():{sem:false};
+  const [st,setSt]=useState(null);
+  const vivo=useRef(true); useEffect(function(){ vivo.current=true; return function(){ vivo.current=false; }; },[]);
+  const pedir=async function(){ if(!pode||!conta) return; setSt({t:"pedindo…"}); const r=await _f2v98Rpc("ads_criativos_etiquetar_ia",{p_conta:String(conta.ad_account_id),p_limite:10});
+    if(r.erro){ setSt(null); _f2v98Toast(false,r.falta?"Etiquetar com IA ainda não está ligado no servidor.":r.erro); return; }
+    const d=r.data||{}; if(d.nada){ setSt(null); _f2v98Toast(true,d.msg||"Todos os criativos já têm etiqueta."); return; }
+    const job=d.job_id||d.id; if(!job){ setSt(null); _f2v98Toast(true,"Pedido enviado."); return; }
+    for(let i=0;i<24&&vivo.current;i++){ setSt({t:"a IA está etiquetando… ("+(i*5)+" s)"}); await new Promise(function(ok){ setTimeout(ok,5000); }); if(!vivo.current) return;
+      const c=await _f2v98Rpc("ads_criativos_etiquetar_ia_colher",{p_job:job}); const cd=c.data||{};
+      if(c.erro&&!cd.status){ setSt(null); _f2v98Toast(false,"Não colheu: "+c.erro); return; }
+      if(cd.status==="pronto"){ setSt(null); _f2v98Toast(true,"A IA etiquetou "+_adsNum(cd.etiquetados)+" criativo"+(Number(cd.etiquetados)===1?"":"s")+(cd.custo_usd?" · US$ "+Number(cd.custo_usd).toFixed(3):"")+". Confira no ranking."); if(onPronto) onPronto(); return; }
+      if(cd.status==="erro"){ setSt(null); _f2v98Toast(false,cd.erro||"A IA não devolveu as etiquetas."); return; } }
+    setSt(null); _f2v98Toast(true,"Ainda gerando: abra de novo daqui a pouco."); };
+  if(!pode) return null;
+  return <F2V98Btn small disabled={!!st||_ia.sem} title={_ia.sem?"Sem crédito de IA.":"A IA sugere gancho, formato e mensagem dos criativos sem etiqueta (até 10). Gasta crédito, dentro do teto do mês."} onClick={pedir}>{st?st.t:"🤖 Etiquetar com IA"}</F2V98Btn>;
+}
+
+/* ─────────── Público › 🧰 · P2_5_02/P2_5_03/P2_5_06 listas viram público · P2_5_08/P2_3_12 sobreposição ─────────── */
+const F2V100_LISTAS=[["compradores","Quem comprou","lista de compradores que o cliente sobe (Leads › 🔁 Clientes antigos)"],["clientes","Já clientes","lista de clientes (Campanhas › 🚫 Já clientes)"],["leads_bons","Leads bons","leads marcados como bons ou além nos últimos 180 dias"]];
+function AdsListasPublicoV100(props){
+  const mc=props.mc, conta=props.conta, isMob=props.isMob; const cu=_f2v98CliUni(mc); const pode=_f2v98Pode(); useX5v100Aprovador();   // v100 (15/10/2026) X5 revisor: só aprovador do servidor vê o botão do Google
+  const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const L=useF2V98Rpc("ads_publicos_lista_ler",cu.cli&&acc?{p_client:cu.cli,p_unidade:cu.uni,p_conta:acc}:null,[cu.cli,cu.uni,acc]);
+  const [env,setEnv]=useState(null); const [pct,setPct]=useState("1");
+  const [gRes,setGRes]=useState(null);   // v100 (15/10/2026) X5 P2_5_06: resultado do "Enviar ao Google"
+  if(L.loading) return <AdsLoading t="Lendo as listas…"/>;
+  const d=(!L.erro&&L.data)||{}; const listas=d.listas||[];
+  const deLista=function(k){ return listas.find(function(x){ return x.lista===k; })||null; };
+  const pedir=async function(k,nome){ setEnv(k); const r=await _f2v98Rpc("ads_publico_lista_pedir",{p_client:cu.cli,p_unidade:cu.uni,p_conta:acc,p_lista:k,p_nome:nome}); setEnv(null);
+    if(r.erro){ _f2v98Toast(false,r.falta?"Subir a lista como público na Meta ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,(r.data&&r.data.aplica_app?"Pedido criado em 🧠 Decisões: o app cria o público na Meta depois do PIN 2x.":"Pedido criado em 🧠 Decisões: o público só nasce na Meta depois do PIN 2x.")); L.reload(); };
+  const parecido=async function(x){ setEnv("lal_"+x.lista); const r=await _f2v98Rpc("ads_publico_parecido_pedir",{p_conta:acc,p_origem:"lista:"+x.lista,p_pct:Number(pct)||1,p_pais:"BR"}); setEnv(null);
+    if(r.erro){ _f2v98Toast(false,r.falta?"Público parecido ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Pedido do público parecido criado em 🧠 Decisões (PIN 2x)."); L.reload(); };
+  /* v100 (15/10/2026) X5 P2_5_06: Google Customer Match (ads_google_lista_pedir) · só sócio · só cria o pedido em 🧠 Decisões; nada vai ao Google sem as chaves + PIN 2x */
+  const gPeds=(d.google&&Array.isArray(d.google.pedidos))?d.google.pedidos:[];
+  const enviarGoogle=async function(k,nomeLbl){ if(!pode||!_x5v100Socio()||env) return;
+    const ok=await _x5v100Confirma("Criar o pedido para enviar a lista \""+nomeLbl+"\" ao Google Ads (Customer Match)? Vai só o código embaralhado (hash) do e-mail e do telefone. Nada é enviado agora: o pedido vai para 🧠 Decisões e só segue com o PIN 2x de um sócio, quando o acesso do Google estiver ligado.","Enviar ao Google","Criar pedido");
+    if(!ok) return; setEnv("g_"+k); const r=await _f2v98Rpc("ads_google_lista_pedir",{p_client:cu.cli,p_unidade:cu.uni,p_lista:k}); setEnv(null);
+    if(r.erro){ setGRes({lista:k,erro:r.falta?"Enviar ao Google ainda não está ligado no servidor.":String(r.erro)}); return; }
+    const x=r.data||{}; setGRes({lista:k,id:x.pedido_id,espera:!!x.esperando_google,msg:x.msg}); _f2v98Toast(true,x.esperando_google?"Pedido criado: esperando acesso do Google. Nada foi enviado.":"Pedido criado em 🧠 Decisões (PIN 2x)."); L.reload(); };
+  const ST={sem_publico:["só no app","#5b21b6","#ede9fe"],pedido:["pedido aguardando PIN","#92400e","#fef3c7"],criado:["público criado na Meta","#15803d","#dcfce7"],vencida:["lista vencida","#b91c1c","#fee2e2"]};
+  return <div data-v100="P2_5_02">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>As listas do cliente (quem comprou, já clientes, leads bons) viram público na Meta para anunciar para quem já confia nele, ou para achar gente <b>parecida com quem comprou</b>. Telefone e e-mail viram código (hash SHA-256) no servidor: nunca viajam abertos.</div>
+    {L.falta&&<F2V98Faltando txt="Mandar a lista para a Meta como público ainda não está ligado no servidor (ads_publicos_lista_ler / ads_publico_lista_pedir). Subir a lista no app (só hash) já funciona."/>}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"repeat(3,minmax(0,1fr))",gap:10,marginTop:10}}>{F2V100_LISTAS.map(function(k){ const x=deLista(k[0]); const st=x?(ST[x.status]||[x.status,ADS.muted,ADS.surface2]):null;
+      return <div key={k[0]} data-v100-lista={k[0]} style={{border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px",minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}><b style={{fontSize:13}}>{k[1]}</b>{st&&<F2V98Chip cor={st[1]} bg={st[2]}>{st[0]}</F2V98Chip>}</div>
+        <div style={{fontSize:11.5,color:ADS.muted,lineHeight:1.4}}>{k[2]}</div>
+        <div style={{fontSize:12.5}}>{x?<span><b>{_adsNum(x.linhas)}</b> pessoas{x.subiu_em?" · subida em "+_adsFmtD(x.subiu_em):""}{x.vence_em?" · vence "+_adsFmtD(x.vence_em):""}{x.tamanho_meta?" · a Meta achou "+_adsNum(x.tamanho_meta):""}{x.publico_nome?<span style={{display:"block",fontSize:11.5,color:ADS.muted}}>Público: {x.publico_nome}</span>:null}{x.erro?<span style={{display:"block",fontSize:11.5,color:"#b91c1c",marginTop:2}}>A Meta recusou: {String(x.erro)}</span>:null}</span>:<span style={{color:ADS.muted}}>{L.falta?"—":"nenhuma lista ainda"}</span>}</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:"auto"}}>
+          <F2V98Btn small primary disabled={!pode||L.falta||!x||!x.linhas||x.status==="pedido"||x.status==="criado"||env===k[0]} title={pode?undefined:"Só sócio aprovador, com o PIN aberto."} onClick={function(){ pedir(k[0],(mc&&mc.name||cu.cli)+" · "+k[1]); }}>{env===k[0]?"criando…":"Criar público na Meta (PIN 2x)"}</F2V98Btn>
+          {k[0]!=="clientes"&&<F2V98Btn small disabled={!pode||L.falta||!x||!x.linhas||(!L.falta&&x.status!=="criado")||env==="lal_"+k[0]} title={x&&x.status!=="criado"?"Primeiro o público da lista precisa estar criado na Meta (PIN 2x); depois o parecido.":"Cria um público parecido (lookalike) com esta lista. Pedido com PIN 2x."} onClick={function(){ parecido(x); }}>{env==="lal_"+k[0]?"criando…":"Parecido "+pct+"%"}</F2V98Btn>}
+          {/* v100 (15/10/2026) X5 P2_5_06: só sócio vê */}
+          {pode&&_x5v100Socio()&&(function(){ const gp=gPeds.find(function(p){ return p.lista===k[0]; }); return <F2V98Btn small disabled={L.falta||!x||!x.linhas||!!gp||env==="g_"+k[0]} title={gp?"Já existe um pedido para o Google desta lista em 🧠 Decisões.":"Cria o pedido em 🧠 Decisões; o Google só recebe (em hash) depois das chaves do Google e do PIN 2x."} onClick={function(){ enviarGoogle(k[0],(mc&&mc.name||cu.cli)+" · "+k[1]); }}>{env==="g_"+k[0]?"criando…":gp?"Google: pedido #"+gp.id+(gp.estado==="aguardando"?" esperando":""):"Enviar ao Google (PIN 2x)"}</F2V98Btn>; })()}
+        </div>
+        {gRes&&gRes.lista===k[0]&&<div data-x5="P2_5_06" style={{fontSize:11.5,lineHeight:1.45,borderRadius:8,padding:"6px 8px",background:gRes.erro?"#fef2f2":gRes.espera?"#fffbeb":"#f0fdf4",color:gRes.erro?"#7f1d1d":gRes.espera?"#92400e":"#14532d"}}>{gRes.erro?gRes.erro:gRes.espera?"Esperando acesso do Google: faltam as 5 chaves. Pedido"+(gRes.id?" #"+gRes.id:"")+" em 🧠 Decisões; nada foi enviado.":(gRes.msg||"Pedido criado em 🧠 Decisões (PIN 2x).")}</div>}
+      </div>; })}</div>
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:10,fontSize:12.5}}>Tamanho do parecido: <select value={pct} onChange={function(e){ setPct(e.target.value); }} style={Object.assign({},_f2v99Inp,{width:150})}>{[["1","1% (mais parecido)"],["2","2%"],["3","3%"],["5","5% (maior)"]].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</select><span style={{fontSize:11.5,color:ADS.muted}}>o parecido feito com quem COMPROU traz mais comprador que o feito com todos os leads</span></div>
+    {/* v100 (15/10/2026) P2_5_02 (revisor): o texto do servidor já começa com "Customer Match"; tira o prefixo repetido e os nomes técnicos */}
+    {(function(){ let gTxt=d.google&&d.google.pronto?"pronto.":((d.google&&d.google.falta||[]).map(_f2v100Humano).join(" ")||"falta o acesso do Google Ads da agência (as 5 chaves). A mesma lista em hash serve quando ligar."); const gPronto=!!(d.google&&d.google.pronto); let jaTem=/^\s*(google\s*)?\(?customer match/i.test(gTxt); if(!gPronto&&!jaTem&&!/^\s*falta/i.test(gTxt)){ gTxt="o que falta: "+gTxt.charAt(0).toLowerCase()+gTxt.slice(1); } return <F2V100Caixa tipo={d.google&&d.google.pronto?"ok":"atencao"}>{jaTem?"Google ("+gTxt.replace(/^\s*(google\s*)?\(?customer match\)?\s*:?\s*/i,"Customer Match): "):"Google (Customer Match): "+gTxt}</F2V100Caixa>; })()}
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>Nada vai para a Meta sem o PIN 2x em 🧠 Decisões. {d.explica||""}</div>
+  </div>;
+}
+function AdsSobreposicaoV100(props){
+  const conta=props.conta, isMob=props.isMob, canEdit=!!props.canEdit; const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const S=useF2V98Rpc("ads_sobreposicao_ler",acc?{p_conta:acc}:null,[acc]);
+  const [lendo,setLendo]=useState(false);
+  const medir=async function(){ setLendo(true); const r=await _f2v98Rpc("ads_sobreposicao_medir",{p_conta:acc}); setLendo(false); if(r.erro){ _f2v98Toast(false,r.falta?"Medir a sobreposição ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Medido na Meta (só leitura)."); S.reload(); };
+  if(S.loading) return <AdsLoading t="Lendo…"/>;
+  const d=(!S.erro&&S.data)||null; const pubs=(d&&d.publicos)||[]; const pares=(d&&d.pares)||[]; const disp=(d&&d.disputas)||[];
+  const pp=function(a,b){ const x=pares.find(function(p){ return (p.a===a&&p.b===b)||(p.a===b&&p.b===a); }); return x?Number(x.pct):null; };
+  const cor=function(v){ if(v===null) return ["#fafafc",ADS.muted]; if(v>=50) return ["#fee2e2","#b91c1c"]; if(v>=25) return ["#fef3c7","#92400e"]; return ["#f0fdf4","#15803d"]; };
+  return <div data-v100="P2_5_08">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Grade com os públicos do cliente lado a lado: quanto cada par tem de pessoas em comum. Dois conjuntos mirando quase as mesmas pessoas disputam o mesmo leilão e o custo sobe.</div>
+    {S.falta?<F2V98Faltando txt="O mapa de sobreposição ainda não está ligado no servidor (ads_sobreposicao_ler). Hoje a 🩺 Auditoria da conta só avisa quando a mesma cidade está em mais de uma campanha."/>:S.erro?<F2V98Faltando txt={"Não deu para ler: "+S.erro}/>:
+    <div>
+      {disp.length>0&&disp.slice(0,5).map(function(x,i){ return <F2V100Caixa key={i} tipo={Number(x.pct)>=50?"erro":"atencao"}>⚠ <b>{x.conjunto_a_nome}</b> e <b>{x.conjunto_b_nome}</b> têm <b>{_adsNum(x.pct)}%</b> das mesmas pessoas. {x.texto||"Junte os dois ou separe as cidades."}</F2V100Caixa>; })}
+      {pubs.length>=2?<div style={{overflowX:"auto",width:0,minWidth:"100%",marginTop:10}} className="scroll-x"><table style={{borderCollapse:"separate",borderSpacing:3,minWidth:Math.max(360,pubs.length*90)}}><thead><tr><th/>{pubs.map(function(p){ return <th key={p.id} style={{fontSize:10.5,color:ADS.muted,fontWeight:800,padding:"4px",maxWidth:110,textAlign:"center"}} title={p.nome}>{String(p.nome).slice(0,18)}</th>; })}</tr></thead>
+        <tbody>{pubs.map(function(a){ return <tr key={a.id}><th style={{fontSize:11,textAlign:"left",padding:"4px 8px 4px 0",maxWidth:160,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={a.nome}>{a.nome}</th>{pubs.map(function(b){ const v=a.id===b.id?null:pp(a.id,b.id); const c=cor(v); return <td key={b.id} style={{background:a.id===b.id?"#ede9fe":c[0],color:c[1],textAlign:"center",fontWeight:800,fontSize:12,borderRadius:6,padding:"8px 4px",minWidth:60}}>{a.id===b.id?"—":v===null?"·":_adsNum(v)+"%"}</td>; })}</tr>; })}</tbody></table></div>
+      :<div style={{fontSize:12.5,color:ADS.muted,marginTop:8}}>{d&&d.lido_em?"Menos de 2 públicos para comparar.":"Ainda não medido: clique em \"Medir agora\"."}</div>}
+      <div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>{d&&d.lido_em?"Medido em "+_f2v98DataHora(d.lido_em)+". ":""}Verde: até 25% · amarelo: 25% a 50% · vermelho: mais de 50%. {d&&d.explica||""}</div>
+    </div>}
+    <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center",flexWrap:"wrap"}}><F2V98Btn small disabled={!canEdit||lendo||S.falta} title={canEdit?undefined:"Só quem edita a mídia pede a medição."} onClick={medir}>{lendo?"medindo…":"↻ Medir agora (só leitura na Meta)"}</F2V98Btn></div>
+  </div>;
+}
+function AdsFerramentasPublicoV100Gavetas(props){
+  const mc=props.mc, conta=props.conta, isMob=props.isMob, canEdit=props.canEdit; const G=F2V99Gaveta;
+  return <Fragment>
+    <G item="P2_5_02" icone="👥" titulo="Listas viram público na Meta" resumo="quem comprou, já clientes e leads bons · parecido com quem comprou (PIN 2x)" isMob={isMob}><AdsListasPublicoV100 mc={mc} conta={conta} isMob={isMob}/></G>
+    <G item="P2_5_08" icone="🔁" titulo="Quanto os públicos se repetem" resumo="grade de sobreposição e aviso de conjuntos que disputam as mesmas pessoas" isMob={isMob}><AdsSobreposicaoV100 conta={conta} isMob={isMob} canEdit={canEdit}/></G>
+  </Fragment>;
+}
+
+/* ─────────── P2_12_04 passos 2 e 4 · lead marcado com cultura e porte + sugestão de verba como pedido com PIN ─────────── */
+function AdsCulturaPorteLeadsV100(props){
+  const mc=props.mc, P=props.P, isMob=props.isMob, canEdit=!!props.canEdit; const cu=_f2v98CliUni(mc); const pode=_f2v98Pode();
+  const args=cu.cli&&P?{p_client:cu.cli,p_unidade:cu.uni,p_de:P.ini,p_ate:P.fim}:null; const dep=[cu.cli,cu.uni,P&&P.key];
+  const L=useF2V98Rpc("lead_cultura_porte_ler",args,dep);
+  const S=useF2V98Rpc("agro_verba_sugerir",args,dep);
+  const [marc,setMarc]=useState(false); const [env,setEnv]=useState(null);
+  const marcar=async function(){ setMarc(true); const r=await _f2v98Rpc("lead_cultura_porte_preencher",{p_client:cu.cli,p_unidade:cu.uni}); setMarc(false); if(r.erro){ _f2v98Toast(false,r.falta?"Marcar os leads ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Olhei "+_adsNum(r.data&&r.data.olhados)+" leads e marquei "+_adsNum(r.data&&r.data.marcados)+" com cultura e porte."); L.reload(); S.reload(); };
+  const pedir=async function(sg,i){ setEnv(i); const r=await _f2v98Rpc("agro_verba_pedir",{p_client:cu.cli,p_itens:(sg.entidades||[]).map(function(e){ return {id:e.id,nivel:e.nivel,acao:sg.acao}; }),p_porque:(sg.grupo?((sg.grupo.cultura_nome||sg.grupo.cultura||"")+" "+(sg.grupo.porte||"")):"")+" · "+(S.data&&S.data.regra||"cultura e porte")}); setEnv(null);
+    if(r.erro){ _f2v98Toast(false,r.falta?"O pedido de verba ainda não está ligado no servidor.":r.erro); return; } const n=((r.data&&r.data.pedidos)||[]).length; _f2v98Toast(true,n+" pedido"+(n===1?"":"s")+" de verba criado"+(n===1?"":"s")+" em 🧠 Decisões (PIN 2x, trava de 20% a cada 72 h)."); S.reload(); };
+  const l=(!L.erro&&L.data)||{}; const grupos=l.grupos||[]; const s=(!S.erro&&S.data)||{}; const sug=s.sugestoes||[];
+  return <div data-v100="P2_12_04" style={{marginTop:14,borderTop:"1px solid "+ADS.line,paddingTop:12}}>
+    <b style={{fontSize:13}}>Passo 2 · cada lead marcado com cultura e porte</b>
+    {L.loading?<AdsLoading t="Lendo…"/>:L.falta?<F2V98Faltando txt="A marcação dos leads ainda não está ligada no servidor."/>:<div>
+      <div style={{fontSize:12,color:ADS.muted,marginTop:4}}>{l.explica||"Cada lead guarda a cultura e o porte (do formulário; se não tiver, da etiqueta ou do nome da campanha)."}{l.sem_marca?" · "+_adsNum(l.sem_marca)+" leads ainda sem marca":""}</div>
+      {grupos.length>0?<div style={{marginTop:8}}><F2V99Tabela minW={isMob?460:0} cab={["Cultura","Porte","Leads","Bons","Vendas","% bom"]} dir={[0,0,1,1,1,1]} linhas={grupos.map(function(g){ return [<b>{g.cultura_nome||g.cultura||"—"}</b>,g.porte||"—",_adsNum(g.leads),_adsNum(g.bons),_adsNum(g.vendas),g.taxa_bom!==null&&g.taxa_bom!==undefined?_adsPct(g.taxa_bom,0):"—"]; })}/></div>:<div style={{fontSize:12.5,color:ADS.muted,marginTop:6}}>Nenhum lead marcado neste período.</div>}
+      <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center",flexWrap:"wrap"}}><F2V98Btn small disabled={!canEdit||marc} title={canEdit?undefined:"Só quem edita a mídia marca os leads."} onClick={marcar}>{marc?"marcando…":"Marcar os leads agora"}</F2V98Btn><span style={{fontSize:11.5,color:ADS.muted}}>não troca o que a equipe marcou à mão</span></div>
+    </div>}
+    <b style={{fontSize:13,display:"block",marginTop:14}}>Passo 4 · onde pôr mais verba (vira pedido com PIN)</b>
+    {S.loading?<AdsLoading t="Lendo…"/>:S.falta?<F2V98Faltando txt="A sugestão de verba ainda não está ligada no servidor."/>:<div>
+      {s.aviso&&<F2V100Caixa tipo="atencao">{s.aviso}</F2V100Caixa>}
+      {s.regra&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>{s.regra}</div>}
+      {sug.map(function(sg,i){ const g=sg.grupo||{}; return <div key={i} style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1fr) auto",gap:10,padding:"9px 0",borderTop:"1px solid "+ADS.line,alignItems:"center"}}>
+        <div style={{minWidth:0,fontSize:12.5}}><F2V98Chip cor={sg.acao==="subir"?"#15803d":"#b91c1c"} bg={sg.acao==="subir"?"#dcfce7":"#fee2e2"}>{sg.acao==="subir"?"▲ subir 20%":"▼ baixar 20%"}</F2V98Chip> <b>{g.cultura_nome||g.cultura} {g.porte||""}</b> · {s.base==="custo_bom"?"custo por lead bom":"custo por lead"} {_adsBRL(sg.custo)}{g.leads?" · "+_adsNum(g.leads)+" leads":""}
+          <div style={{fontSize:11.5,color:ADS.muted,marginTop:2}}>{(sg.entidades||[]).map(function(e){ return (e.nivel==="conjunto"?"conjunto ":"campanha ")+_adsNomeCurto(e.nome)+(e.verba_dia?" ("+_adsBRL0(e.verba_dia)+"/dia)":""); }).join(" · ")}</div></div>
+        <F2V98Btn small primary disabled={!pode||env===i||!(sg.entidades||[]).length} title={pode?undefined:"Só sócio aprovador, com o PIN aberto, cria o pedido."} onClick={function(){ pedir(sg,i); }}>{env===i?"criando…":"Criar pedido (PIN 2x)"}</F2V98Btn>
+      </div>; })}
+      {!s.aviso&&!sug.length&&<div style={{fontSize:12.5,color:ADS.muted,marginTop:6}}>Nenhuma sugestão agora.</div>}
+      <div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>A conta é feita por regra, sem IA. O pedido vai para 🧠 Decisões e só muda na Meta depois do PIN 2x (no máximo 20% a cada 72 h).</div>
+    </div>}
+  </div>;
+}
+
+/* ─────────── Leads › 🧰 · P2_1_17, P2_7_11, P2_7_16, P2_1_06, P2_7_08/P2_1_05, P2_7_19, P2_7_14/P2_7_01, P2_7_20 ─────────── */
+function AdsConciliacaoV100(props){
+  const mc=props.mc, conta=props.conta, isMob=props.isMob; const cu=_f2v98CliUni(mc); const acc=conta&&conta.ad_account_id?String(conta.ad_account_id):null;
+  const hoje=_adsIso(new Date()); const mIni=hoje.slice(0,8)+"01"; const pIni=_adsAddDays(mIni,-1).slice(0,8)+"01"; const pFim=_adsAddDays(mIni,-1);
+  const [mes,setMes]=useState("passado"); const de=mes==="atual"?mIni:pIni, ate=mes==="atual"?hoje:pFim;
+  /* v100 (14/10/2026) P2_1_17 (etapa 2): assinatura NOVA do C5b com p_unidade (repetidos e sem telefone por campanha); a antiga + filtro pela unidade fica de reserva */
+  const CN=useF2V98Rpc("lead_conciliacao",cu.cli?{p_client:cu.cli,p_unidade:cu.uni||null,p_de:de,p_ate:ate}:null,[cu.cli,cu.uni,de]);
+  const C0=useF2V98Rpc("lead_conciliacao",cu.cli&&CN.falta?{p_client:cu.cli,p_de:de,p_ate:ate}:null,[cu.cli,de,!!CN.falta]);
+  const novo=!CN.loading&&!CN.falta; const C=novo?CN:C0;
+  /* conta de unidade: lê a unidade de cada campanha direto (sem o evento global, que recarregaria a aba) */
+  const UC=useF2V98Rpc("ads_unidade_campanhas",acc&&cu.uni&&CN.falta?{p_conta:acc,p_dias:400}:null,[acc,cu.uni,!!CN.falta]);
+  const mapa=(function(){ if(!cu.uni||!UC.data||!UC.data.campanhas) return null; const m={}; UC.data.campanhas.forEach(function(c){ if(c&&c.campaign_id) m[c.campaign_id]=c.unidade; }); return m; })();
+  if(CN.loading||C.loading||UC.loading) return <AdsLoading t="Cruzando…"/>;
+  if(C.falta||C.erro) return <F2V98Faltando txt={C.falta?"O quadro Meta × app ainda não está ligado no servidor (lead_conciliacao).":"Não deu para ler: "+C.erro}/>;
+  let itens=(C.data&&C.data.itens)||[];
+  if(!novo&&cu.uni&&mapa) itens=itens.filter(function(x){ return mapa[x.campaign_id]===cu.uni; });   /* conta de unidade: só as campanhas dela (só na reserva; a nova já filtra no servidor) */
+  const tRep=itens.reduce(function(s,x){ return s+Number(x.repetidos||0); },0), tSem=itens.reduce(function(s,x){ return s+Number(x.sem_telefone||0); },0);
+  const tm=itens.reduce(function(s,x){ return s+Number(x.meta||0); },0), ta=itens.reduce(function(s,x){ return s+Number(x.app||0); },0), tk=itens.reduce(function(s,x){ return s+Number(x.marcados||0); },0), to=itens.reduce(function(s,x){ return s+Number(x.organicos||0); },0);
+  const dif=ta-tm;
+  return <div data-v100="P2_1_17">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Quadro do mês para levar à reunião: quantos leads a Meta conta × quantos chegaram ao app, campanha por campanha, e por que a diferença.</div>
+    <div style={{display:"flex",gap:6,margin:"10px 0"}}><AdsChip on={mes==="passado"} onClick={function(){ setMes("passado"); }}>Mês passado ({_f2v100Mes(pIni)})</AdsChip><AdsChip on={mes==="atual"} onClick={function(){ setMes("atual"); }}>Este mês ({_f2v100Mes(mIni)})</AdsChip></div>
+    <F2V100Cards isMob={isMob} n={4}>
+      <F2V100Card t="A Meta conta" v={_adsNum(tm)} sub="leads de formulário"/>
+      <F2V100Card t="Chegaram ao app" v={_adsNum(ta)} sub={to?_adsNum(to)+" orgânicos/teste":"com Lead ID"}/>
+      <F2V100Card destaque t="Diferença" v={(dif>0?"+":"")+_adsNum(dif)} sub={dif===0?"bate":dif>0?"o app tem mais":"a Meta tem mais"}/>
+      <F2V100Card t="Já marcados pela equipe" v={_adsNum(tk)} sub={ta?_adsPct(_f2v100Pct(tk,ta),0)+" dos que chegaram":"—"}/>
+    </F2V100Cards>
+    {novo&&(tRep>0||tSem>0)&&<F2V100Caixa tipo="atencao">{tRep>0?_adsNum(tRep)+" repetido"+(tRep===1?"":"s")+" (o mesmo telefone já tinha chegado antes neste cliente)":""}{tRep>0&&tSem>0?" · ":""}{tSem>0?_adsNum(tSem)+" sem telefone":""}.</F2V100Caixa>}
+    {itens.length>0?<div style={{marginTop:10}}><F2V99Tabela minW={isMob?620:0} cab={novo?["Campanha","Meta","App","Diferença","Repetidos","Sem telefone","Por quê"]:["Campanha","Meta","App","Diferença","Por quê"]} dir={novo?[0,1,1,1,1,1,0]:[0,1,1,1,0]} linhas={itens.map(function(x){ const d=Number(x.diferenca!==undefined?x.diferenca:(Number(x.app||0)-Number(x.meta||0))); const ln=[<b style={{fontSize:12.5}} title={x.nome}>{_adsNomeCurto(x.nome)}</b>,_adsNum(x.meta),_adsNum(x.app),<b style={{color:d===0?"#15803d":"#c2410c"}}>{(d>0?"+":"")+_adsNum(d)}</b>]; if(novo) ln.push(Number(x.repetidos||0)?<b style={{color:"#c2410c"}}>{_adsNum(x.repetidos)}</b>:"0",Number(x.sem_telefone||0)?<b style={{color:"#c2410c"}}>{_adsNum(x.sem_telefone)}</b>:"0"); ln.push(<span style={{fontSize:12}}>{x.explica||"—"}</span>); return ln; })}/></div>:<div style={{fontSize:12.5,color:ADS.muted,marginTop:8}}>Nenhum lead de formulário neste mês.</div>}
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:6}}>Lead de WhatsApp não entra aqui: a Meta conta conversa, não lead.{novo?" "+((C.data&&C.data.explica_repetidos)||"Repetido = o mesmo telefone já chegou antes neste cliente. Só contagem: nenhum telefone aparece aqui."):" Repetidos e sem telefone aparecem quando o servidor mandar a versão por unidade."}</div>
+  </div>;
+}
+function AdsSafrasV100(props){
+  const mc=props.mc, isMob=props.isMob; const cu=_f2v98CliUni(mc);
+  const S=useF2V98Rpc("lead_safras",cu.cli?{p_client:cu.cli,p_unidade:cu.uni,p_meses:6}:null,[cu.cli,cu.uni]);
+  if(S.loading) return <AdsLoading t="Lendo…"/>;
+  if(S.falta||S.erro) return <F2V98Faltando txt={S.falta?"A visão por mês de chegada ainda não está ligada no servidor (lead_safras).":"Não deu para ler: "+S.erro}/>;
+  const d=S.data||{}; const sf=(d.safras||[]).slice().sort(function(a,b){ return String(b.mes).localeCompare(String(a.mes)); });
+  const maduros=sf.filter(function(x){ return x.maduro; });
+  return <div data-v100="P2_7_11">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>{d.explica||"Cada linha é o mês em que o lead CHEGOU. Lead novo ainda não teve tempo de virar venda: só compare meses maduros."} No agro, a venda leva {d.maturacao_dias_venda||90} dias ou mais (muda em ⚙ Regras).</div>
+    {maduros.length<2&&<F2V100Caixa tipo="atencao">{maduros.length===0?"Nenhum mês maduro ainda: ":"Só 1 mês maduro: "}não compare um mês com o outro pela venda. O próximo amadurece em {(function(){ const p=sf.filter(function(x){ return !x.maduro; }).map(function(x){ return x.julgar_a_partir_de; }).filter(Boolean).sort()[0]; return p?_adsFmtD(p)+"/"+String(p).slice(2,4):"—"; })()}.</F2V100Caixa>}
+    {sf.length?<div style={{marginTop:10}}><F2V99Tabela minW={isMob?640:0} cab={["Chegou em","Leads","Gasto","Lead bom","Visita","Proposta","Venda","Valor","Situação"]} dir={[0,1,1,1,1,1,1,1,0]} linhas={sf.map(function(x){ return [<b>{_f2v100Mes(x.mes)}</b>,_adsNum(x.leads),_adsBRL0(x.gasto),_adsNum(x.qualificados),_adsNum(x.visitas),_adsNum(x.propostas),_adsNum(x.vendas),_adsBRL0(x.valor),x.maduro?<F2V98Chip cor="#15803d" bg="#dcfce7">maduro ✓</F2V98Chip>:<F2V98Chip cor="#92400e" bg="#fef3c7">amadurecendo · comparar a partir de {_adsFmtD(x.julgar_a_partir_de)}</F2V98Chip>]; })}/></div>:<div style={{fontSize:12.5,color:ADS.muted,marginTop:8}}>Sem leads nos últimos 6 meses.</div>}
+  </div>;
+}
+function AdsLinksWhatsV100(props){
+  const mc=props.mc, isMob=props.isMob, canEdit=!!props.canEdit, D=props.D||{}; const cu=_f2v98CliUni(mc);
+  const L=useF2V98Rpc("lead_links_ler",cu.cli?{p_client:cu.cli}:null,[cu.cli]);
+  const [f,setF]=useState({numero:"",mensagem:"Olá! Quero mais informações.",canal:"site",campanha:""}); const [sal,setSal]=useState(false); const [novo,setNovo]=useState(null);
+  if(L.loading) return <AdsLoading t="Lendo…"/>;
+  const d=(!L.erro&&L.data)||{}; const links=d.links||[]; const pode=canEdit&&!!D.pode_ver_contato;
+  const criar=async function(){ setSal(true); const r=await _f2v98Rpc("lead_link_criar",{p_client:cu.cli,p_numero:f.numero,p_mensagem:f.mensagem,p_unidade:cu.uni||"",p_canal:f.canal,p_utm:f.campanha?{utm_campaign:_f2v99Slug(f.campanha)}:{}}); setSal(false);
+    if(r.erro){ _f2v98Toast(false,r.falta?"O gerador de link ainda não está ligado no servidor.":r.erro); return; } setNovo(r.data); _f2v98Toast(true,"Link criado."); L.reload(); };
+  return <div data-v100="P2_7_16">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Link intermediário para o botão de WhatsApp do site, da bio ou do QR da feira: anota de onde a pessoa veio e abre o WhatsApp com a mensagem e um código. A conversa já chega marcada.</div>
+    {L.falta&&<F2V98Faltando txt="O gerador de link ainda não está ligado no servidor."/>}
+    {d.ligado===false&&<F2V100Caixa tipo="atencao">O link rastreável está desligado (um sócio liga em Leads › ⚙ Regras).</F2V100Caixa>}
+    {pode&&!L.falta?<div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1.6fr) minmax(0,.9fr) minmax(0,1fr) auto",gap:8,marginTop:10,alignItems:"end"}}>
+      <label><span style={_f2v99Lbl}>WhatsApp do cliente</span><input inputMode="tel" value={f.numero} onChange={function(e){ setF(Object.assign({},f,{numero:e.target.value})); }} placeholder="(45) 99999-0000" style={_f2v99Inp}/></label>
+      <label><span style={_f2v99Lbl}>Mensagem que chega</span><input value={f.mensagem} onChange={function(e){ setF(Object.assign({},f,{mensagem:e.target.value})); }} style={_f2v99Inp}/></label>
+      <label><span style={_f2v99Lbl}>Onde vai ficar</span><select value={f.canal} onChange={function(e){ setF(Object.assign({},f,{canal:e.target.value})); }} style={_f2v99Inp}>{[["site","botão do site"],["google","anúncio do Google"],["bio","bio do Instagram"],["qr","QR (feira, folheto)"],["email","e-mail"],["outro","outro"]].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</select></label>
+      <label><span style={_f2v99Lbl}>Campanha (opcional)</span><input value={f.campanha} onChange={function(e){ setF(Object.assign({},f,{campanha:e.target.value})); }} placeholder="ex.: feira agroshow" style={_f2v99Inp}/></label>
+      <F2V98Btn primary disabled={sal||String(f.numero).replace(/\D/g,"").length<10} onClick={criar}>{sal?"criando…":"Criar link"}</F2V98Btn>
+    </div>:!L.falta&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>🔒 Criar link: só quem edita a mídia e pode ver contato.</div>}
+    {novo&&<F2V100Caixa tipo="ok"><b>Link pronto:</b> <span style={Object.assign({wordBreak:"break-all"},ADS_MONO)}>{novo.url}</span><div style={{marginTop:4}}>Chega assim: "{novo.texto_que_chega}"</div><div style={{display:"flex",gap:6,marginTop:6}}><F2V98Btn small primary onClick={function(){ _f2v99Copiar(novo.url,"Link copiado."); }}>Copiar link</F2V98Btn></div></F2V100Caixa>}
+    {links.length>0?<div style={{marginTop:10}}><F2V99Tabela minW={isMob?520:0} cab={["Código","Onde","Mensagem","Cliques","Conversas","Criado"]} dir={[0,0,0,1,1,0]} linhas={links.slice(0,20).map(function(x){ return [<b style={ADS_MONO}>{x.codigo}</b>,x.canal||"—",<span style={{fontSize:12}}>{String(x.mensagem||"").slice(0,50)}</span>,_adsNum(x.cliques),_adsNum(x.conversas!==undefined?x.conversas:x.leads),_f2v98Dia(x.criado_em)]; })}/></div>:!L.falta&&<div style={{fontSize:12.5,color:ADS.muted,marginTop:8}}>Nenhum link criado ainda para este cliente.</div>}
+  </div>;
+}
+function AdsOrigemLeadsV100(props){
+  const D=props.D||{}, isMob=props.isMob; const leads=D.leads||[];
+  /* v100 (14/10/2026) P2_1_06 (etapa 2): números do servidor (lead_origem_saude, C5b, cliente todo, 30 dias) com o "falta X" de cada fonte; sem ela, conta pelos leads do período */
+  const cu=_f2v98CliUni(props.mc); const OS=useF2V98Rpc("lead_origem_saude",cu.cli?{p_client:cu.cli,p_dias:30}:null,[cu.cli]);
+  const os=(!OS.loading&&!OS.erro&&OS.data&&OS.data.codigos)?OS.data:null; const n=os?Number(os.leads||0):leads.length;
+  const c=function(f){ return leads.filter(f).length; };
+  const comId=c(function(l){ return l.tem_lead_id; }), comUtm=os?(Number(os.codigos.utm||0)+Number(os.codigos.fbclid||0)+Number(os.codigos.gclid||0)):c(function(l){ return l.utm&&Object.keys(l.utm||{}).length; }), comCtwa=os?Number(os.codigos.ctwa_clid||0):c(function(l){ return l.tem_ctwa; }), comLink=os?Number(os.codigos.link||0):c(function(l){ return l.link_codigo; }), comAd=os?Number(os.codigos.anuncio||0):c(function(l){ return l.ad_id; });
+  const semNada=os?Math.max(0,n-Math.max(comAd,comCtwa,comLink,comUtm)):c(function(l){ return !l.tem_lead_id&&!l.tem_ctwa&&!l.link_codigo&&!(l.utm&&Object.keys(l.utm||{}).length)&&!l.ad_id; });
+  if(OS.loading) return <AdsLoading t="Lendo…"/>;
+  const linha=function(t,v,sub){ const p=_f2v100Pct(v,n); return <div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr) 60px":"minmax(0,1.3fr) minmax(0,2fr) 70px",gap:10,alignItems:"center",padding:"6px 0",borderTop:"1px solid "+ADS.line}}><div><b style={{fontSize:12.5}}>{t}</b><div style={{fontSize:11.5,color:ADS.muted}}>{sub}</div></div>{!isMob&&<span style={{height:8,background:"#eef0f3",borderRadius:99}}><i style={{display:"block",height:"100%",width:Math.min(100,p||0)+"%",background:"#6d28d9",borderRadius:99}}/></span>}<b style={Object.assign({textAlign:"right",fontSize:12.5},ADS_MONO)}>{_adsNum(v)}</b></div>; };
+  return <div data-v100="P2_1_06">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Todo lead guarda de onde veio: anúncio e campanha, Lead ID da Meta, etiquetas do link (UTM), código do clique (fbclid/gclid), código do anúncio de WhatsApp (ctwa) e o código do link rastreável. {os?<span>Últimos 30 dias, cliente todo: <b>{_adsNum(n)}</b> leads.</span>:<span>Neste período: <b>{_adsNum(n)}</b> leads.</span>}</div>
+    {os&&os.por_origem&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{[["formulario","Formulário"],["whatsapp","WhatsApp"],["site","Site"],["ligacao","Ligação"]].map(function(o){ const v=Number(os.por_origem[o[0]]||0); return <F2V98Chip key={o[0]} cor={v?"#5b21b6":ADS.muted} bg={v?"#f5f3ff":ADS.surface2}>{o[1]}: {_adsNum(v)}</F2V98Chip>; })}<F2V98Chip>links ativos: {_adsNum(os.links_ativos)}</F2V98Chip></div>}
+    <div style={{marginTop:8}}>
+      {linha("Com anúncio e campanha",comAd,"formulário da Meta e WhatsApp de anúncio")}
+      {!os&&linha("Com Lead ID da Meta",comId,"formulário: dá para devolver a venda para a Meta")}
+      {linha("Com código do anúncio de WhatsApp (ctwa)",comCtwa,"depende do WhatsApp oficial do cliente")}
+      {linha("Com etiquetas do link (UTM, fbclid, gclid)",comUtm,"lead que veio do site")}
+      {linha("Pelo link rastreável de WhatsApp",comLink,"🔗 gaveta ao lado")}
+      {linha("Sem nenhuma origem",semNada,"ligação, indicação, direto")}
+    </div>
+    {os&&(os.falta||[]).length>0?<F2V100Caixa tipo="atencao"><b>O que falta:</b>{(os.falta||[]).map(function(t,i){ return <div key={i}>• {t}</div>; })}</F2V100Caixa>:
+    (comCtwa===0||comUtm===0)&&<F2V100Caixa tipo="atencao">{comCtwa===0?"WhatsApp: o código do anúncio só chega quando o número do cliente estiver no WhatsApp oficial (API da Meta). ":""}{comUtm===0?"Site: o lead do site ainda não chega ao app (falta a porta de entrada do site, em Acessos › 🛡️). Use os links no padrão (Campanhas › 🔗).":""}</F2V100Caixa>}
+  </div>;
+}
+function AdsDevolucaoMetaV100(props){
+  const mc=props.mc, isMob=props.isMob; const cu=_f2v98CliUni(mc);
+  const CF=useF2V98Rpc("conv_conferencia",cu.cli?{p_client:cu.cli,p_dias:14}:null,[cu.cli]);
+  const AU=useF2V98Rpc("conv_auditoria",cu.cli?{p_client:cu.cli,p_dias:30}:null,[cu.cli]);
+  const [cart,setCart]=useState(false);
+  const CT=useF2V98Rpc("conv_nota_carteira",cart?{p_dias:30}:null,[cart]);
+  if(CF.loading||AU.loading) return <AdsLoading t="Lendo…"/>;
+  const cf=(!CF.erro&&CF.data)||null; const au=(!AU.erro&&AU.data)||{}; const cob=au.cobertura||{}; const tot=Number(au.total||0);
+  const ligM=cf&&cf.envio_ligado?cf.envio_ligado.meta:au.chave_meta==="sim"; const ligG=cf&&cf.envio_ligado?cf.envio_ligado.google:au.chave_google==="sim";
+  const nota=au.nota_estimada!==null&&au.nota_estimada!==undefined?Number(au.nota_estimada):null;
+  const dias=(cf&&cf.dias)||[];
+  const barra=function(t,v){ const p=_f2v100Pct(v,tot); return <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 54px",gap:8,alignItems:"center",fontSize:12,padding:"3px 0"}}><span>{t}<span style={{display:"block",height:6,background:"#eef0f3",borderRadius:99,marginTop:3}}><i style={{display:"block",height:"100%",width:Math.min(100,p||0)+"%",background:p>=80?"#16a34a":p>=40?"#f59e0b":"#dc2626",borderRadius:99}}/></span></span><b style={Object.assign({textAlign:"right"},ADS_MONO)}>{p===null?"—":Math.round(p)+"%"}</b></div>; };
+  return <div data-v100="P2_7_08">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Quando a devolução para a Meta e o Google ligar, o app manda o lead bom e a venda de volta para a plataforma aprender. Aqui fica a conferência: quantos avisos foram, quantos chegaram, quantos voltaram recusados, e a nota de qualidade dos dados (0 a 10).</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}><F2V98Chip cor={ligM?"#15803d":"#92400e"} bg={ligM?"#dcfce7":"#fef3c7"}>Meta: {ligM?"ligado":"desligado 🔒"}</F2V98Chip><F2V98Chip cor={ligG?"#15803d":"#92400e"} bg={ligG?"#dcfce7":"#fef3c7"}>Google: {ligG?"ligado":"desligado 🔒"}</F2V98Chip></div>
+    {cf&&cf.alarme&&<F2V100Caixa tipo={cf.alarme.nivel==="critico"?"erro":"atencao"}>🔔 {cf.alarme.texto}</F2V100Caixa>}
+    <AdsConvDestinoV100 mc={mc} isMob={isMob}/>{/* v100 (15/10/2026) X5 P2_1_04/P2_7_05/P2_7_08: só sócio vê; nada é enviado */}
+    <F2V100Cards isMob={isMob} n={4}>
+      <F2V100Card destaque t="Nota dos dados (estimada)" v={nota===null?"—":_adsNum1(nota)+"/10"} sub={nota===null?"sem eventos ainda":nota>=7?"bom":nota>=5?"médio":"baixo: mande telefone e e-mail junto"}/>
+      <F2V100Card t="Eventos (30 dias)" v={_adsNum(tot)} sub={au.recusados?_adsNum(au.recusados)+" recusados":"0 recusados"}/>
+      <F2V100Card t="Repetidos barrados" v={_adsNum(au.duplicados_barrados)} sub="o app não manda 2 vezes"/>
+      <F2V100Card t="Nota oficial da Meta" v={cf&&cf.nota_meta?_adsNum1(cf.nota_meta):"—"} sub="aparece depois do 1º envio real"/>
+    </F2V100Cards>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"repeat(2,minmax(0,1fr))",gap:14,marginTop:10}}>
+      <div><span style={_f2v99Lbl}>O que cada evento leva</span>{barra("Lead ID da Meta",cob.com_lead_id)}{barra("Telefone (hash)",cob.com_telefone)}{barra("E-mail (hash)",cob.com_email)}{barra("Cidade",cob.com_cidade)}{barra("Código do anúncio de WhatsApp",cob.com_ctwa_clid)}</div>
+      <div><span style={_f2v99Lbl}>Conferência por dia</span>{CF.falta?<F2V98Faltando txt="A conferência diária (enviados × aceitos × recusados) ainda não está ligada no servidor (conv_conferencia). O alarme de 'zerou ou muita recusa' entra junto."/>:dias.length?<F2V99Tabela cab={["Dia","Enviados","Aceitos","Recusados","Repetidos"]} dir={[0,1,1,1,1]} linhas={dias.slice(0,10).map(function(x){ return [_adsFmtD(x.dia),_adsNum(x.enviados),_adsNum(x.aceitos),<b style={{color:Number(x.recusados)>0?"#b91c1c":ADS.ink2}}>{_adsNum(x.recusados)}</b>,_adsNum(x.repetidos)]; })}/>:<div style={{fontSize:12.5,color:ADS.muted}}>Nada enviado nos últimos 14 dias (envio desligado).</div>}
+        {cf&&(cf.motivos||[]).length>0&&<div style={{fontSize:12,color:ADS.ink2,marginTop:6}}>Motivos de recusa: {cf.motivos.map(function(m){ return m.motivo+" ("+m.qtd+")"; }).join(" · ")}</div>}</div>
+    </div>
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>{au.nota_explica||""} Ligar o envio: um sócio, com PIN, em Leads › ⚙ Regras (falta o token da Meta e o Pixel de cada cliente).</div>
+    <div style={{marginTop:8}}><F2V98Btn small onClick={function(){ setCart(!cart); }}>{cart?"esconder a carteira":"Ver a nota de todos os clientes"}</F2V98Btn></div>
+    {cart&&(CT.loading?<AdsLoading t="Lendo…"/>:CT.falta?<F2V98Faltando txt="A nota da carteira ainda não está ligada no servidor (conv_nota_carteira)."/>:CT.erro?<F2V98Faltando txt={"Não deu para ler: "+CT.erro}/>:
+      <div style={{marginTop:8}}><F2V99Tabela minW={isMob?480:0} cab={["Cliente","Eventos","Nota estimada","O que falta"]} dir={[0,1,1,0]} linhas={((CT.data&&CT.data.clientes)||[]).map(function(x){ return [<b>{x.nome||x.client_id}</b>,_adsNum(x.eventos),x.nota_estimada!==null&&x.nota_estimada!==undefined?_adsNum1(x.nota_estimada)+"/10":"—",<span style={{fontSize:12}}>{(x.falta||[]).join(", ")||x.dica||"—"}</span>]; })}/></div>)}
+  </div>;
+}
+const F2V100_NUTRI={padrao:[["30","Dica técnica","Vídeo curto com uma dica de manejo ou manutenção do produto."],["60","Caso de outro produtor","Como um produtor da região resolveu o mesmo problema."],["90","Financiamento","Linhas do Plano Safra e Pronaf do momento, com a parcela estimada (🧮 Simulador)."],["120","Novidade","Lançamento, melhoria ou condição da época."],["150","Visita","Convite para visita técnica ou dia de campo."],["180","Quer o orçamento?","Pergunta direta: \"Chegou a época que você falou. Monto o orçamento?\""]]};
+function AdsNutricaoV100(props){
+  const mc=props.mc, isMob=props.isMob, canEdit=!!props.canEdit; const cu=_f2v98CliUni(mc);
+  const N=useF2V98Rpc("lead_nutrir_listar",cu.cli?{p_client:cu.cli}:null,[cu.cli]);
+  const Q=useF2V98Rpc("lead_nutricao_seq_ler",cu.cli?{p_client:cu.cli}:null,[cu.cli]);
+  const AG=useF2V98Rpc("lead_nutricao_agenda",cu.cli?{p_client:cu.cli,p_dias:30}:null,[cu.cli]);   /* v100 (14/10/2026) P2_7_19 (etapa 2): agenda de quem recebe o quê (C5b); nada é enviado */
+  const [ed,setEd]=useState(null); const [sal,setSal]=useState(false);
+  if(N.loading||Q.loading||AG.loading) return <AdsLoading t="Lendo…"/>;
+  const ag=(!AG.erro&&AG.data)||null; const agIt=(ag&&ag.itens)||[];
+  const nd=(!N.erro&&N.data)||{}; const itens=nd.itens||[]; const q=(!Q.erro&&Q.data)||null;
+  const msgs=ed||(q&&q.mensagens&&q.mensagens.length?q.mensagens:F2V100_NUTRI.padrao.map(function(m,i){ return {n:i+1,quando_dias:Number(m[0]),canal:"whatsapp",titulo:m[1],texto:m[2]}; }));
+  const salvar=async function(){ setSal(true); const r=await _f2v98Rpc("lead_nutricao_seq_salvar",{p_client:cu.cli,p_mensagens:msgs}); setSal(false); if(r.erro){ _f2v98Toast(false,r.falta?"Salvar a sequência ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Sequência salva (nada é enviado)."); setEd(null); Q.reload(); };
+  const podeEd=canEdit&&!!q&&q.pode_editar!==false;
+  return <div data-v100="P2_7_19">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>No agro, muito lead diz "só compro na próxima safra". Quem a equipe marca como <b>compra no futuro</b> entra aqui, com a data. A sequência de mensagens ao longo dos meses fica pronta, mas o envio está <b>desligado</b>: hoje a equipe copia e manda à mão.</div>
+    <F2V100Caixa tipo="atencao">Envio automático: desligado 🔒 (lead_nutricao_ligada = não). Precisa do WhatsApp oficial do cliente e de um sócio ligar com PIN.</F2V100Caixa>
+    <span style={Object.assign({},_f2v99Lbl,{marginTop:10})}>Leads para manter contato ({itens.length})</span>
+    {N.falta?<F2V98Faltando txt="A lista de nutrição ainda não está ligada no servidor."/>:itens.length?<F2V99Tabela minW={isMob?420:0} cab={["Lead","Cidade","Volta a falar em","Etapa"]} linhas={itens.slice(0,20).map(function(l){ return [<b>{_f2v98NomeLead(l)}</b>,(l.cidade||"—")+(l.uf?"/"+l.uf:""),l.nutrir_ate?_adsFmtD(l.nutrir_ate)+"/"+String(l.nutrir_ate).slice(2,4):"—",l.etapa==="perdido"?"fora do funil · compra no futuro":(l.etapa||"—")]; })}/>:<div style={{fontSize:12.5,color:ADS.muted}}>Nenhum lead marcado como "compra no futuro". Marque na janela do lead (👎 Ruim › motivo "compra no futuro").</div>}
+    {ag&&<Fragment><span style={Object.assign({},_f2v99Lbl,{marginTop:12})}>Próximos contatos (30 dias){ag.sequencia&&ag.sequencia.nome?" · "+ag.sequencia.nome:""}</span>
+      {agIt.length?<F2V99Tabela minW={isMob?520:0} cab={["Lead","Quando","Passo","Canal",""]} dir={[0,0,0,0,1]} linhas={agIt.slice(0,20).map(function(x){ return [<span><b>{x.nome||"(contato só para quem edita)"}</b>{x.cidade?<span style={{display:"block",fontSize:11,color:ADS.muted}}>{x.cidade}{x.uf?"/"+x.uf:""}</span>:null}</span>,<span style={{color:x.atrasado?"#b91c1c":ADS.ink2,fontWeight:x.atrasado?700:400}}>{x.quando?_adsFmtD(x.quando):"—"}{x.atrasado?" · atrasado":""}</span>,String(x.passo||"—"),x.canal==="email"?"e-mail":"WhatsApp",x.texto?<F2V98Btn small onClick={function(){ _f2v99Copiar(x.texto,"Mensagem copiada. Nada foi enviado."); }}>Copiar mensagem</F2V98Btn>:"—"]; })}/>:<div style={{fontSize:12.5,color:ADS.muted}}>Ninguém para contatar nos próximos 30 dias.</div>}
+      {ag.explica&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>{ag.explica}</div>}
+    </Fragment>}
+    <span style={Object.assign({},_f2v99Lbl,{marginTop:12})}>Sequência {q&&q.nicho?"· "+q.nicho:"(modelo)"}</span>
+    {q&&(q.variaveis||[]).length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginBottom:4}}>Troca sozinho no texto: {(q.variaveis||[]).join(" ")}</div>}
+    {Q.falta&&<div style={{fontSize:11.5,color:ADS.muted,marginBottom:6}}>🔌 Modelo padrão: salvar uma sequência própria do cliente ainda não está ligado no servidor.</div>}
+    {msgs.map(function(m,i){ return <div key={i} style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"90px minmax(0,1fr) auto",gap:10,padding:"7px 0",borderTop:"1px solid "+ADS.line,alignItems:"start"}}>
+      <F2V98Chip cor="#5b21b6" bg="#f5f3ff">{m.quando_dias} dias</F2V98Chip>
+      {ed?<div style={{display:"flex",flexDirection:"column",gap:4}}><input value={m.titulo||""} onChange={function(e){ const l=msgs.slice(); l[i]=Object.assign({},m,{titulo:e.target.value}); setEd(l); }} style={_f2v99Inp}/><textarea value={m.texto||""} onChange={function(e){ const l=msgs.slice(); l[i]=Object.assign({},m,{texto:e.target.value}); setEd(l); }} rows={2} style={Object.assign({},_f2v99Inp,{resize:"vertical"})}/></div>:<div style={{minWidth:0}}><b style={{fontSize:12.5}}>{m.titulo}</b><div style={{fontSize:12,color:ADS.ink2}}>{m.texto}</div></div>}
+      {!ed&&<F2V98Btn small onClick={function(){ _f2v99Copiar(m.texto,"Texto copiado."); }}>Copiar</F2V98Btn>}
+    </div>; })}
+    {podeEd&&<div style={{display:"flex",gap:8,marginTop:8}}>{ed?<Fragment><F2V98Btn small primary disabled={sal} onClick={salvar}>{sal?"salvando…":"Salvar sequência"}</F2V98Btn><F2V98Btn small onClick={function(){ setEd(null); }}>Cancelar</F2V98Btn></Fragment>:<F2V98Btn small onClick={function(){ setEd(msgs); }}>✎ Editar sequência</F2V98Btn>}</div>}
+  </div>;
+}
+function AdsAvisoVendedorV100(props){
+  const mc=props.mc, D=props.D||{}, isMob=props.isMob; const cu=_f2v98CliUni(mc);
+  const CH=useF2V98Rpc("lead_chaves_ler",{},[]);
+  const R=useF2V98Rpc("lead_regioes_ler",cu.cli?{p_client:cu.cli}:null,[cu.cli]);
+  if(CH.loading||R.loading) return <AdsLoading t="Lendo…"/>;
+  const ch=(CH.data&&CH.data.chaves)||{}; const lig=ch.lead_aviso_vendedor_ligado==="sim"; const reg=(R.data&&R.data.regioes)||[]; const vend=Array.from(new Set(reg.map(function(r){ return r.vendedor_nome; }).filter(Boolean)));
+  const l=(D.leads||[])[0]||null; const resp=l&&l.respostas?Object.keys(l.respostas).filter(function(k){ return !/cidade|estado|nome|telefone|email|phone/i.test(k); }).slice(0,2).map(function(k){ return String(l.respostas[k]).replace(/_/g," "); }).join(", "):"";
+  const msg=l?("Novo lead"+(l.vendedor?" para "+l.vendedor:"")+": "+_f2v98NomeLead(l)+(l.cidade?", "+l.cidade+(l.uf?"/"+l.uf:""):"")+(resp?", "+resp:"")+". Veio do anúncio "+(l.anuncio||"—")+". Telefone: "+(l.telefone?_f2v98Mascara(l.telefone):"—")+"."):null;
+  return <div data-v100="P2_7_14">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>O lead do formulário já fica salvo no app com o Lead ID (coleta de hora em hora) e cai com o vendedor da região (⚙ Regras › região → vendedor). Falta só o envio na hora para o WhatsApp do vendedor, que fica <b>pronto e desligado</b>.</div>
+    <F2V100Cards isMob={isMob} n={3}>
+      <F2V100Card t="Envio ao vendedor" v={lig?"ligado":"desligado 🔒"} sub={lig?"":"um sócio liga com PIN"} cor={lig?"#15803d":"#92400e"}/>
+      <F2V100Card t="Regiões com vendedor" v={_adsNum(reg.length)} sub={vend.length?vend.slice(0,3).join(", ")+(vend.length>3?"…":""):"cadastre em ⚙ Regras"}/>
+      <F2V100Card t="Coleta dos formulários" v={ch.leads_coleta_ligada==="sim"?"ligada":"desligada"} sub="de hora em hora"/>
+    </F2V100Cards>
+    {msg&&<div style={{marginTop:10}}><span style={_f2v99Lbl}>Como chegaria (exemplo com o último lead)</span><div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:"9px 12px",fontSize:12.5,color:"#14532d",lineHeight:1.5}}>{msg}</div></div>}
+    {typeof AdsEntregasV100==="function"&&<AdsEntregasV100 mc={mc} isMob={isMob} canEdit={!!props.canEdit}/>}
+    <F2V100Caixa tipo="atencao">Para ligar: o WhatsApp oficial da agência (ou do cliente) com modelo de mensagem aprovado pela Meta, e um sócio liga a chave com PIN. Nada é enviado hoje. A cobrança de "lead sem resposta em 30 min" foi recusada pelo Vini e não entra.</F2V100Caixa>
+  </div>;
+}
+/* v100 (14/10/2026) P2_7_01 / P2_7_14 / P2_2_14 (etapa 2): registro de entrega de cada lead (lead_entregas_ler, C5b), "entreguei à mão" e o número padrão. Nada é enviado. */
+/* v100 (15/10/2026) P2_7_14 / Q3 (revisor): troca nome de chave e de acesso que vem no texto do servidor por frase simples (nenhum valor de segredo vem do servidor; só os nomes) */
+function _f2v100Humano(t){
+  if(typeof t!=="string") return t; let s=t;
+  if(/GOOGLE_ADS_[A-Z_]+/.test(s)) return "Faltam os 5 acessos do Google Ads da agência (o Vini cadastra no servidor).";
+  s=s.replace(/\s*\(\s*(?:chave\s+)?[a-z0-9]+(?:_[a-z0-9]+)+\s*=\s*n[aã]o\s*\)/gi," até um sócio ligar com PIN");
+  s=s.replace(/\s*\(\s*(?:chave\s+)?[a-z0-9]+(?:_[a-z0-9]+)+\s*=\s*sim\s*\)/gi,"");
+  s=s.replace(/\s*\(\s*chave\s+[a-z0-9]+(?:_[a-z0-9]+)+\s*\)/gi," até um sócio ligar com PIN");
+  s=s.replace(/\s*:?\s*\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b(?:\s*,\s*\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b)*/g,"");
+  s=s.replace(/\bchave\s+[a-z0-9]+(?:_[a-z0-9]+){2,}\b/gi,"chave");
+  s=s.replace(/\b[Ll]igar\s+(?:a\s+)?(?:chave\s+)?[a-z0-9]+(?:_[a-z0-9]+){2,}\b\.?/g,"Depois, um sócio liga com PIN.");
+  s=s.replace(/\b[a-z0-9]+(?:_[a-z0-9]+){2,}\b/g,"a chave");
+  return s.replace(/\s{2,}/g," ").replace(/\s+([.,;])/g,"$1").trim();
+}
+const F2V100_ENTREGA_ST={pronto_desligado:["pronto, desligado","#92400e","#fef3c7"],antigo:["chegou tarde (não avisa)",null,null],sem_destino:["sem vendedor nem número padrão","#b91c1c","#fee2e2"],sem_conversa:["sem conversa aberta","#b91c1c","#fee2e2"],na_fila:["na fila","#5b21b6","#f5f3ff"],enviando:["enviando","#5b21b6","#f5f3ff"],enviado:["enviado","#15803d","#dcfce7"],falhou:["falhou","#b91c1c","#fee2e2"],entregue_manual:["entregue à mão ✓","#15803d","#dcfce7"]};
+function AdsEntregasV100(props){
+  const mc=props.mc, isMob=props.isMob, canEdit=!!props.canEdit; const cu=_f2v98CliUni(mc);
+  const E=useF2V98Rpc("lead_entregas_ler",cu.cli?{p_client:cu.cli,p_dias:7}:null,[cu.cli]);
+  const [ver,setVer]=useState(null); const [pf,setPf]=useState(null); const [sal,setSal]=useState(false);
+  if(E.loading) return <AdsLoading t="Lendo as entregas…"/>;
+  if(E.falta) return <F2V98Faltando txt="O registro de entrega de cada lead ainda não está ligado no servidor (lead_entregas_ler)."/>;
+  if(E.erro) return <F2V98Faltando txt={"Entregas: "+E.erro}/>;
+  const d=E.data||{}; const it=(d.itens||[]).filter(function(x){ return !cu.uni||!x.unidade||x.unidade===cu.uni; }); const pad=(d.padrao||[]).filter(function(x){ return !cu.uni||!x.unidade||x.unidade===cu.uni; });
+  const res={}; it.forEach(function(x){ res[x.status]=(res[x.status]||0)+1; });
+  const marcar=async function(x){ setSal(true); const r=await _f2v98Rpc("lead_entrega_marcar",{p_id:x.id,p_status:"entregue_manual",p_obs:null}); setSal(false); if(r.erro){ _f2v98Toast(false,r.falta?"Marcar ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Marcado como entregue à mão."); E.reload(); };
+  const salvarPad=async function(){ setSal(true); const r=await _f2v98Rpc("lead_entrega_padrao_salvar",{p_client:cu.cli,p_unidade:cu.uni||"",p_nome:pf.nome,p_whats:pf.whats,p_ativo:true}); setSal(false); if(r.erro){ _f2v98Toast(false,r.falta?"Salvar ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Número padrão salvo (nada é enviado)."); setPf(null); E.reload(); };
+  return <div data-v100="P2_2_14" style={{marginTop:12}}>
+    <span style={_f2v99Lbl}>Entregas dos últimos 7 dias {cu.uni?"(esta unidade)":""}</span>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>{Object.keys(res).length?Object.keys(res).map(function(k){ const st=F2V100_ENTREGA_ST[k]||[k]; return <F2V98Chip key={k} cor={st[1]||undefined} bg={st[2]||undefined}>{st[0]}: {_adsNum(res[k])}</F2V98Chip>; }):<span style={{fontSize:12.5,color:ADS.muted}}>Nenhum lead novo nos últimos 7 dias.</span>}</div>
+    {/* v100 (15/10/2026) P2_7_14 (revisor): motivo em português (sem nome de chave) e, no celular, cada entrega vira cartão (situação e motivo embaixo, texto quebra linha) */}
+    {(function(){ if(!it.length) return null;
+      const para=function(x){ return <span style={{minWidth:0,overflowWrap:"anywhere"}}>{x.para_nome||(x.para_tipo==="padrao"?"número padrão":"vendedor da região")}{x.para_whats?<span style={{display:"block",fontSize:11,color:ADS.muted}}>{_f2v98Mascara(x.para_whats)}</span>:null}</span>; };
+      const situ=function(x){ const st=F2V100_ENTREGA_ST[x.status]||[x.status]; return <span style={{minWidth:0}}><F2V98Chip cor={st[1]||undefined} bg={st[2]||undefined}>{st[0]}</F2V98Chip>{x.motivo?<span style={{display:"block",fontSize:11,color:ADS.muted,marginTop:2,whiteSpace:"normal",overflowWrap:"anywhere"}}>{_f2v100Humano(x.motivo)}</span>:null}</span>; };
+      const bts=function(x){ return <span style={{display:"inline-flex",gap:4,flexWrap:"wrap",justifyContent:isMob?"flex-start":"flex-end"}}>{x.texto&&<F2V98Btn small onClick={function(){ setVer(ver===x.id?null:x.id); }}>{ver===x.id?"esconder":"ver texto"}</F2V98Btn>}{canEdit&&x.status!=="entregue_manual"&&x.status!=="enviado"&&<F2V98Btn small disabled={sal} onClick={function(){ marcar(x); }}>Entreguei à mão</F2V98Btn>}</span>; };
+      if(isMob) return <div data-v100-entregas="cartoes" style={{display:"grid",gap:8}}>{it.slice(0,15).map(function(x){ return <div key={x.id} style={{border:"1px solid "+ADS.line,borderRadius:12,padding:"9px 11px",background:"#fff",minWidth:0}}>
+        <div style={{fontSize:11.5,color:ADS.muted}}>{_f2v98DataHora(x.criado_em)}</div>
+        <div style={{fontSize:13,fontWeight:700,color:ADS.ink,marginTop:2}}>Para: {para(x)}</div>
+        <div style={{marginTop:6}}>{situ(x)}</div>
+        <div style={{marginTop:8}}>{bts(x)}</div>
+      </div>; })}</div>;
+      return <F2V99Tabela minW={0} cab={["Chegou","Para","Situação",""]} dir={[0,0,0,1]} linhas={it.slice(0,15).map(function(x){ return [_f2v98DataHora(x.criado_em),para(x),situ(x),bts(x)]; })}/>; })()}
+    {ver&&(function(){ const x=it.find(function(y){ return y.id===ver; }); if(!x||!x.texto) return null; return <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:"9px 12px",fontSize:12.5,color:"#14532d",lineHeight:1.5,whiteSpace:"pre-wrap",marginTop:6}}>{x.texto}<div style={{marginTop:6}}><F2V98Btn small onClick={function(){ _f2v99Copiar(x.texto,"Texto copiado. Nada foi enviado."); }}>Copiar</F2V98Btn></div></div>; })()}
+    <span style={Object.assign({},_f2v99Lbl,{marginTop:10})}>Número padrão (quando nenhuma região casa)</span>
+    {pad.length?pad.map(function(x,i){ return <div key={i} style={{fontSize:12.5,color:ADS.ink2}}>• {x.nome||"—"} {x.whats?"· "+_f2v98Mascara(x.whats):""} {x.ativo===false?"(desligado)":""} {x.unidade?"· "+x.unidade:"· cliente todo"}</div>; }):<div style={{fontSize:12.5,color:ADS.muted}}>Nenhum número padrão: lead de região sem vendedor fica "sem destino".</div>}
+    {canEdit&&(pf?<div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr) auto auto",gap:8,marginTop:6,alignItems:"end"}}>
+      <label><span style={_f2v99Lbl}>Nome</span><input value={pf.nome} onChange={function(e){ setPf(Object.assign({},pf,{nome:e.target.value})); }} style={_f2v99Inp}/></label>
+      <label><span style={_f2v99Lbl}>WhatsApp</span><input inputMode="tel" value={pf.whats} onChange={function(e){ setPf(Object.assign({},pf,{whats:e.target.value})); }} placeholder="(45) 99999-0000" style={_f2v99Inp}/></label>
+      <F2V98Btn primary disabled={sal||String(pf.whats).replace(/\D/g,"").length<10||!pf.nome} onClick={salvarPad}>{sal?"salvando…":"Salvar"}</F2V98Btn><F2V98Btn onClick={function(){ setPf(null); }}>Cancelar</F2V98Btn>
+    </div>:<div style={{marginTop:6}}><F2V98Btn small onClick={function(){ setPf({nome:"",whats:""}); }}>+ Número padrão</F2V98Btn></div>)}
+  </div>;
+}
+function AdsConversaVendaV100(props){
+  const mc=props.mc, D=props.D||{}, isMob=props.isMob, P=props.P; const cu=_f2v98CliUni(mc);
+  /* v100 (14/10/2026) P2_7_20 (etapa 2): lead_conversas_venda (C5b) junta conversa 5+, leads no funil, bons e vendas por anúncio; a leitura antiga fica de reserva */
+  const CV=useF2V98Rpc("lead_conversas_venda",cu.cli&&P?{p_client:cu.cli,p_unidade:cu.uni||null,p_de:P.ini,p_ate:P.fim}:null,[cu.cli,cu.uni,P&&P.key]);
+  const CR=useF2V98Rpc("lead_conversas_reais",cu.cli&&P&&CV.falta?{p_client:cu.cli,p_unidade:cu.uni,p_de:P.ini,p_ate:P.fim}:null,[cu.cli,cu.uni,P&&P.key,!!CV.falta]);
+  if(CV.loading||CR.loading) return <AdsLoading t="Lendo…"/>;
+  const cv=(!CV.erro&&CV.data&&CV.data.itens)?CV.data:null;
+  if(cv){ const iv=cv.itens||[]; const sm=function(k){ return iv.reduce(function(s,x){ return s+Number(x[k]||0); },0); }; const ini2=sm("conversas"), c52=sm("cinco_mais"), nv2=sm("vendas"), vv2=sm("valor_vendas"), fu2=sm("leads_no_funil");
+    return <div data-v100="P2_7_20">
+      <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>A Meta informa quantas conversas de WhatsApp passaram de 5 mensagens (não foi só um "oi"). Aqui o número fica junto do funil: conversa de verdade → lead no funil → venda.</div>
+      <F2V100Cards isMob={isMob} n={4}>
+        <F2V100Card t="Conversas iniciadas" v={_adsNum(ini2)} sub="anúncios de WhatsApp"/>
+        <F2V100Card destaque t="Passaram de 5 mensagens" v={_adsNum(c52)} sub={ini2?_adsPct(_f2v100Pct(c52,ini2),0)+" das conversas":"—"}/>
+        <F2V100Card t="Leads no funil" v={_adsNum(fu2)} sub="ligados ao anúncio"/>
+        <F2V100Card t="Vendas" v={_adsNum(nv2)} sub={vv2?_adsBRL0(vv2):"marcadas pela equipe"}/>
+      </F2V100Cards>
+      {iv.length>0&&<div style={{marginTop:10}}><F2V99Tabela minW={isMob?680:0} cab={["Anúncio","Gasto","Conversas","5+","Custo por 5+","No funil","Bons","Vendas","Custo por venda"]} dir={[0,1,1,1,1,1,1,1,1]} linhas={iv.slice().sort(function(a,b){ return Number(b.cinco_mais||0)-Number(a.cinco_mais||0); }).slice(0,12).map(function(x){ return [<span style={{display:"block",maxWidth:isMob?160:300,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.campanha}><b style={{fontSize:12.5}}>{x.anuncio||"—"}</b><span style={{display:"block",fontSize:11,color:ADS.muted}}>{_adsNomeCurto(x.campanha||"")}</span></span>,_adsBRL0(x.gasto),_adsNum(x.conversas),_adsNum(x.cinco_mais),x.custo_cinco_mais?_adsBRL(x.custo_cinco_mais):"—",_adsNum(x.leads_no_funil),_adsNum(x.bons),<b>{_adsNum(x.vendas)}</b>,x.custo_venda?_adsBRL(x.custo_venda):"—"]; })}/></div>}
+      <F2V100Caixa tipo="atencao">{_f2v100Humano(cv.falta)||"Para cada conversa virar venda sozinha falta o número do cliente no WhatsApp oficial."} A devolução da venda para a Meta está desligada até um sócio ligar com PIN.</F2V100Caixa>
+    </div>; }
+  if(CV.erro&&!CV.falta) return <F2V98Faltando txt={"Não deu para ler: "+CV.erro}/>;
+  if(CR.falta||CR.erro) return <F2V98Faltando txt={CR.falta?"As conversas de 5+ mensagens ainda não estão ligadas no servidor.":"Não deu para ler: "+CR.erro}/>;
+  const it=((CR.data&&CR.data.itens)||[]).filter(function(x){ return x.nivel==="anuncio"; });
+  const vend={}; (D.leads||[]).forEach(function(l){ if(l.etapa==="venda"&&l.ad_id) vend[l.ad_id]=(vend[l.ad_id]||0)+1; });
+  const ini=it.reduce(function(s,x){ return s+Number(x.iniciadas||0); },0), c5=it.reduce(function(s,x){ return s+Number(x.cinco_mais||0); },0), nv=Object.keys(vend).reduce(function(s,k){ return s+vend[k]; },0);
+  return <div data-v100="P2_7_20">
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>A Meta informa quantas conversas de WhatsApp passaram de 5 mensagens (não foi só um "oi"). Aqui o número fica junto do funil: conversa de verdade → venda marcada.</div>
+    <F2V100Cards isMob={isMob} n={3}>
+      <F2V100Card t="Conversas iniciadas" v={_adsNum(ini)} sub="anúncios de WhatsApp"/>
+      <F2V100Card destaque t="Passaram de 5 mensagens" v={_adsNum(c5)} sub={ini?_adsPct(_f2v100Pct(c5,ini),0)+" das conversas":"—"}/>
+      <F2V100Card t="Vendas ligadas ao anúncio" v={_adsNum(nv)} sub="marcadas pela equipe na aba Leads"/>
+    </F2V100Cards>
+    {it.length>0&&<div style={{marginTop:10}}><F2V99Tabela minW={isMob?560:0} cab={["Anúncio","Conversas","5+","% 5+","Custo por conversa 5+","Vendas"]} dir={[0,1,1,1,1,1]} linhas={it.slice().sort(function(a,b){ return Number(b.cinco_mais||0)-Number(a.cinco_mais||0); }).slice(0,12).map(function(x){ return [<b style={{fontSize:12.5}} title={x.campanha}>{x.anuncio||"—"}</b>,_adsNum(x.iniciadas),_adsNum(x.cinco_mais),x.pct_cinco_mais!==null&&x.pct_cinco_mais!==undefined?_adsPct(x.pct_cinco_mais,0):"—",x.custo_cinco_mais?_adsBRL(x.custo_cinco_mais):"—",_adsNum(vend[x.ad_id]||0)]; })}/></div>}
+    <F2V100Caixa tipo="atencao">Para cada conversa virar venda sozinha falta o número do cliente no WhatsApp oficial (a conversa chega com o código do anúncio). A devolução da venda para a Meta está desligada até um sócio ligar com PIN.</F2V100Caixa>
+  </div>;
+}
+function AdsFerramentasLeadsV100Gavetas(props){
+  const mc=props.mc, conta=props.conta, D=props.D, isMob=props.isMob, canEdit=props.canEdit, P=props.P; const G=F2V99Gaveta;
+  return <Fragment>
+    <G item="P2_1_17" icone="⚖️" titulo="Meta × app: o quadro do mês" resumo="leads que a Meta conta × os que chegaram, campanha por campanha" isMob={isMob}><AdsConciliacaoV100 mc={mc} conta={conta} isMob={isMob}/></G>
+    <G item="P2_7_11" icone="🌱" titulo="Leads pelo mês em que chegaram" resumo="só compara mês maduro: lead novo ainda não teve tempo de virar venda" isMob={isMob}><AdsSafrasV100 mc={mc} isMob={isMob}/></G>
+    <G item="P2_1_06" icone="🧭" titulo="De onde veio cada lead" resumo="quantos têm anúncio, Lead ID, UTM, código do WhatsApp e link rastreável" isMob={isMob}><AdsOrigemLeadsV100 mc={mc} D={D} isMob={isMob}/></G>
+    <G item="P2_7_16" icone="🔗" titulo="Link de WhatsApp com origem" resumo="link para o site, a bio e o QR que anota de onde a pessoa veio" isMob={isMob}><AdsLinksWhatsV100 mc={mc} D={D} isMob={isMob} canEdit={canEdit}/></G>
+    <G item="P2_7_08" icone="📮" titulo="O que devolvemos para a Meta e o Google" resumo="conferência do envio e nota de qualidade dos dados (0 a 10)" estado={{t:"desligado",tipo:"falta"}} isMob={isMob}><AdsDevolucaoMetaV100 mc={mc} isMob={isMob}/></G>
+    <G item="P2_7_20" icone="💬" titulo="Conversa de verdade → venda" resumo="conversas com 5+ mensagens ao lado das vendas de cada anúncio" isMob={isMob}><AdsConversaVendaV100 mc={mc} D={D} P={P} isMob={isMob}/></G>
+    <G item="P2_7_19" icone="🌿" titulo="Manter contato com quem compra depois" resumo={'leads de "compra no futuro" e a sequência de mensagens (envio desligado)'} estado={{t:"desligado",tipo:"falta"}} isMob={isMob}><AdsNutricaoV100 mc={mc} isMob={isMob} canEdit={canEdit}/></G>
+    <G item="P2_2_13" icone="📞" titulo="WhatsApp e ligações do cliente" resumo="conversa sem resposta e ligação com origem: o que já está pronto e o que falta" estado={{t:"desligado",tipo:"falta"}} isMob={isMob}><AdsWhatsLigacoesV100 mc={mc} isMob={isMob} canEdit={canEdit}/></G>
+    <G item="P2_7_14" icone="📲" titulo="Aviso do lead ao vendedor" resumo="o lead cai com o vendedor da região; o envio no WhatsApp fica pronto e desligado" estado={{t:"desligado",tipo:"falta"}} isMob={isMob}><AdsAvisoVendedorV100 mc={mc} D={D} isMob={isMob} canEdit={canEdit}/></G>
+  </Fragment>;
+}
+
+/* v100 (14/10/2026) P2_2_13 / P2_7_17 (etapa 2): conversa do cliente sem resposta (whats_sem_resposta_ler) e ligação com origem (lead_ligacoes_ler), C5b. Tudo pronto e desligado; depende de terceiro */
+function AdsWhatsLigacoesV100(props){
+  const mc=props.mc, isMob=props.isMob, canEdit=!!props.canEdit; const cu=_f2v98CliUni(mc); const pode=_f2v98Pode(); useX5v100Aprovador();   // v100 (15/10/2026) X5 revisor: só aprovador do servidor vê "ligar"
+  const W=useF2V98Rpc("whats_sem_resposta_ler",cu.cli?{p_client:cu.cli}:null,[cu.cli]);
+  const LG=useF2V98Rpc("lead_ligacoes_ler",cu.cli?{p_client:cu.cli,p_dias:30}:null,[cu.cli]);
+  const [fw,setFw]=useState(null); const [fn,setFn]=useState(null); const [sal,setSal]=useState(false);
+  if(W.loading||LG.loading) return <AdsLoading t="Lendo…"/>;
+  const w=(!W.erro&&W.data)||null; const lg=(!LG.erro&&LG.data)||null;
+  const salvarW=async function(){ setSal(true); const r=await _f2v98Rpc("whats_cliente_numero_salvar",{p_client:cu.cli,p_unidade:cu.uni||"",p_numero:fw.numero,p_nome:fw.nome}); setSal(false); if(r.erro){ _f2v98Toast(false,r.falta?"Ainda não ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Número do cliente anotado (nada é enviado)."); setFw(null); W.reload(); };
+  const salvarN=async function(){ setSal(true); const r=await _f2v98Rpc("lead_numero_rastreio_salvar",{p_client:cu.cli,p_unidade:cu.uni||"",p_numero:fn.numero,p_origem:fn.origem,p_campanha:fn.campanha||null,p_fornecedor:fn.fornecedor||null,p_ativo:true}); setSal(false); if(r.erro){ _f2v98Toast(false,r.falta?"Ainda não ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Número de rastreio salvo."); setFn(null); LG.reload(); };
+  const inp=function(o,set,k,ph,mode){ return <input inputMode={mode} value={o[k]||""} onChange={function(e){ const x=Object.assign({},o); x[k]=e.target.value; set(x); }} placeholder={ph} style={_f2v99Inp}/>; };
+  return <div data-v100="P2_2_13">
+    <span style={_f2v99Lbl}>💬 Conversa do cliente sem resposta</span>
+    {W.falta?<F2V98Faltando txt="Ainda não ligado no servidor (whats_sem_resposta_ler)."/>:W.erro?<F2V98Faltando txt={"Não deu para ler: "+W.erro}/>:<div>
+      <F2V100Cards isMob={isMob} n={3}>
+        <F2V100Card t="Aviso de conversa parada" v={w.ligado?"ligado":"desligado 🔒"} cor={w.ligado?"#15803d":"#92400e"} sub={"avisa depois de "+(w.horas||2)+" h sem resposta"}/>
+        <F2V100Card t="WhatsApp oficial do cliente" v={w.conectado?"conectado":"não conectado"} cor={w.conectado?"#15803d":"#92400e"} sub={(w.numeros||[]).length?(w.numeros||[]).map(function(n){ return (n.nome||n.unidade||"")+" ••"+(n.final||""); }).join(", "):"nenhum número anotado"}/>
+        <F2V100Card t="Esperando resposta agora" v={_adsNum((w.esperando||[]).length)} sub={(w.esperando||[]).filter(function(x){ return x.do_anuncio; }).length+" vieram do anúncio"}/>
+      </F2V100Cards>
+      {w.falta&&<F2V100Caixa tipo="atencao">{_f2v100Humano(w.falta)}</F2V100Caixa>}
+      {pode&&(fw?<div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr) auto auto",gap:8,marginTop:8,alignItems:"end"}}><label><span style={_f2v99Lbl}>Nome</span>{inp(fw,setFw,"nome","ex.: comercial Chapecó")}</label><label><span style={_f2v99Lbl}>WhatsApp do cliente</span>{inp(fw,setFw,"numero","(45) 99999-0000","tel")}</label><F2V98Btn primary disabled={sal||String(fw.numero||"").replace(/\D/g,"").length<10} onClick={salvarW}>{sal?"salvando…":"Salvar"}</F2V98Btn><F2V98Btn onClick={function(){ setFw(null); }}>Cancelar</F2V98Btn></div>:<div style={{marginTop:6}}><F2V98Btn small onClick={function(){ setFw({nome:"",numero:""}); }}>+ Anotar o número do cliente (sócio)</F2V98Btn></div>)}
+    </div>}
+    <span style={Object.assign({},_f2v99Lbl,{marginTop:14})}>☎ Ligação com origem (número dinâmico)</span>
+    {LG.falta?<F2V98Faltando txt="Ainda não ligado no servidor (lead_ligacoes_ler)."/>:LG.erro?<F2V98Faltando txt={"Não deu para ler: "+LG.erro}/>:<div>
+      <F2V100Cards isMob={isMob} n={3}>
+        <F2V100Card t="Receber ligações no app" v={lg.ligado?"ligado":"desligado 🔒"} cor={lg.ligado?"#15803d":"#92400e"} sub="um sócio liga com PIN"/>
+        <F2V100Card t="Números de rastreio" v={_adsNum((lg.numeros||[]).length)} sub="um por origem (Google, site, Meta)"/>
+        <F2V100Card t="Ligações (30 dias)" v={_adsNum(lg.total)} sub={Object.keys(lg.por_origem||{}).map(function(k){ return k+": "+lg.por_origem[k]; }).join(" · ")||"—"}/>
+      </F2V100Cards>
+      {(lg.numeros||[]).length>0&&<div style={{marginTop:8}}><F2V99Tabela cab={["Número","Origem","Campanha","Fornecedor",""]} linhas={(lg.numeros||[]).map(function(n){ return [<b style={ADS_MONO}>{n.numero}</b>,n.origem||"—",n.campanha||"—",n.fornecedor||"—",n.ativo===false?"desligado":"ativo"]; })}/></div>}
+      {lg.falta&&<F2V100Caixa tipo="atencao">{_f2v100Humano(lg.falta)}</F2V100Caixa>}
+      {pode&&_x5v100Socio()&&<AdsLigacaoLigarV100 ligado={!!lg.ligado} isMob={isMob} onMudou={function(){ LG.reload(); }}/>}{/* v100 (15/10/2026) X5 P2_7_17: só sócio vê */}
+      {canEdit&&(fn?<div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr) auto auto",gap:8,marginTop:8,alignItems:"end"}}><label><span style={_f2v99Lbl}>Número de rastreio</span>{inp(fn,setFn,"numero","(45) 3000-0000","tel")}</label><label><span style={_f2v99Lbl}>Origem</span><select value={fn.origem} onChange={function(e){ setFn(Object.assign({},fn,{origem:e.target.value})); }} style={_f2v99Inp}>{[["google","Google"],["meta","Meta"],["site","site"],["offline","fora da internet"],["outro","outro"]].map(function(o){ return <option key={o[0]} value={o[0]}>{o[1]}</option>; })}</select></label><label><span style={_f2v99Lbl}>Campanha (opcional)</span>{inp(fn,setFn,"campanha","")}</label><label><span style={_f2v99Lbl}>Fornecedor</span>{inp(fn,setFn,"fornecedor","")}</label><F2V98Btn primary disabled={sal||String(fn.numero||"").replace(/\D/g,"").length<8} onClick={salvarN}>{sal?"salvando…":"Salvar"}</F2V98Btn><F2V98Btn onClick={function(){ setFn(null); }}>Cancelar</F2V98Btn></div>:<div style={{marginTop:6}}><F2V98Btn small onClick={function(){ setFn({numero:"",origem:"google",campanha:"",fornecedor:""}); }}>+ Número de rastreio</F2V98Btn></div>)}
+    </div>}
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>Nada disso envia mensagem. O aviso de conversa parada precisa do WhatsApp oficial do cliente; a ligação com origem precisa do serviço de número dinâmico (o Vini contrata).</div>
+  </div>;
+}
+
+/* ═══════════ v100 (15/10/2026) X5: 4 funções do servidor que já existiam e não tinham botão ═══════════
+   P2_5_07 ads_publico_bib_do_conjunto · P2_5_06 ads_google_lista_pedir · P2_7_17 lead_ligacao_ligar · P2_1_04/P2_7_05/P2_7_08 conv_destino_salvar.
+   Tudo só no clique; nada chama a Meta nem o Google; botões de sócio só para aprovador com o PIN aberto (Erick e Hellen não veem). */
+/* v100 (15/10/2026) X5: ticket com o PIN do sócio (mesmo jeito da chave "Visível" de Acessos); o PIN não fica guardado em lugar nenhum */
+const _x5v100Ticket=async function(acao,pin){
+  let t=await _f2v98Rpc("ads_ticket",{p_acao:acao,p_pin:pin});
+  if(t.erro&&/PIN de entrada/i.test(String(t.erro||""))){ const d=await _f2v98Rpc("ads_desbloquear",{p_pin:pin}); if(d.erro) return {erro:d.erro}; t=await _f2v98Rpc("ads_ticket",{p_acao:acao,p_pin:pin}); }
+  if(t.erro) return {erro:t.erro}; const tk=t.data&&t.data.ticket; return tk?{ticket:tk}:{erro:"PIN recusado."};
+};
+/* v100 (15/10/2026) X5: sócio = nível 1 no app (igual ao _v98Socio do 17b) E com o PIN aberto; o PIN aberto sozinho deixava o Erick ver. O servidor confere de novo (aprovador). */
+/* v100 (15/10/2026) X5 revisor: nível 1 sozinho deixava a Ocsana (nível 1 no TEAM) ver os botões, e o servidor recusava. Agora também pergunta
+   1 vez ao servidor se a pessoa está na lista de aprovadores (_px_eh_aprovador_ads, só leitura, só para nível 1, vale 10 min).
+   Enquanto não responde ou se der erro, segue como antes (o servidor confere de novo). */
+let _x5v100AprovCache={v:null,em:0,p:null};
+const _x5v100Nivel1=function(){ try{ return typeof CURRENT_USER!=="undefined"&&!!CURRENT_USER&&Number(CURRENT_USER.level)===1; }catch(_){ return false; } };
+const _x5v100Socio=function(){ return _x5v100Nivel1()&&_x5v100AprovCache.v!==false; };
+function useX5v100Aprovador(){
+  const [,setT]=useState(0); const n1=_x5v100Nivel1();
+  useEffect(function(){ if(!n1) return; let vivo=true; const c=_x5v100AprovCache;
+    const fresco=typeof c.v==="boolean"&&(Date.now()-c.em)<600000;
+    if(!fresco&&!c.p) c.p=_f2v98Rpc("_px_eh_aprovador_ads",{}).then(function(r){ const x=!(r&&!r.erro&&r.data===false); _x5v100AprovCache={v:x,em:Date.now(),p:null}; return x; });
+    Promise.resolve(fresco?c.v:_x5v100AprovCache.p).then(function(){ if(vivo) setT(function(t){ return t+1; }); });
+    return function(){ vivo=false; }; },[n1]);
+  return _x5v100Socio();
+}
+const _x5v100Confirma=async function(txt,tit,okTxt){ try{ if(typeof pixelsConfirm==="function") return !!(await pixelsConfirm(txt,{title:tit,okText:okTxt||"Confirmar",cancelText:"Cancelar"})); }catch(_){ } try{ return !!window.confirm(txt); }catch(_){ return false; } };
+const _x5v100Pin=function(v,set,ph){ return <input type="password" inputMode="numeric" autoComplete="off" maxLength={6} value={v} onChange={function(e){ set(String(e.target.value||"").replace(/\D/g,"").slice(0,6)); }} placeholder={ph||"PIN (6 números)"} style={Object.assign({},_f2v99Inp,{width:150,letterSpacing:".2em"})}/>; };
+
+/* v100 (15/10/2026) X5 P2_5_07: Campanhas › conjunto › "⭐ Guardar na biblioteca de públicos" (ads_publico_bib_do_conjunto; quem edita a mídia) */
+function AdsBibGuardarV100(props){
+  const x=props.conjunto||{}, isMob=props.isMob;
+  const [ab,setAb]=useState(false); const [nichos,setNichos]=useState(null); const [f,setF]=useState(null); const [env,setEnv]=useState(false); const [res,setRes]=useState(null); const [err,setErr]=useState("");
+  const abrir=async function(){ setAb(true); setErr(""); setRes(null); setF({nicho:"",novo:"",nome:x.nome||"",descricao:""});
+    if(nichos===null){ const r=await _f2v98Rpc("ads_publicos_nicho_ler",{p_nicho:null}); setNichos(r.erro?[]:((r.data&&r.data.nichos)||[])); if(r.falta) setErr("A biblioteca de públicos ainda não está ligada no servidor."); } };
+  const nicho=f?(f.nicho==="__novo"?String(f.novo||"").trim():f.nicho):"";
+  const guardar=async function(){ if(!nicho||env) return;
+    const ok=await _x5v100Confirma("Guardar o público do conjunto \""+(f.nome||x.nome||"")+"\" na biblioteca, no nicho \""+nicho+"\"? Fica guardada só a descrição do público (cidades, idade, gênero e interesses) e o custo por resultado que ele teve. Nada vai para a Meta e a campanha não muda.","Guardar na biblioteca de públicos","Guardar");
+    if(!ok) return; setEnv(true); setErr("");
+    const r=await _f2v98Rpc("ads_publico_bib_do_conjunto",{p_conjunto_id:String(x.entidade_id),p_nicho:nicho,p_nome:String(f.nome||"").trim()||null,p_descricao:String(f.descricao||"").trim()||null});
+    if(r.erro){ setEnv(false); setErr(r.falta?"Guardar na biblioteca ainda não está ligado no servidor.":String(r.erro)); return; }
+    const d=r.data||{}; let lido=null;
+    const L=await _f2v98Rpc("ads_publicos_nicho_ler",{p_nicho:nicho});   /* confere que já aparece para o Montador › início */
+    if(!L.erro) lido=((L.data&&L.data.publicos)||[]).find(function(p){ return String(p.id)===String(d.id); })||null;
+    setEnv(false); setRes({id:d.id,publico:d.publico||{},nicho:nicho,nome:String(f.nome||"").trim()||x.nome,lido:lido}); setNichos(null);
+    _f2v98Toast(true,"Público guardado na biblioteca. Nada foi para a Meta."); };
+  if(!ab) return <div data-x5="P2_5_07" style={{marginTop:10}}><F2V98Btn small onClick={abrir} title="Guarda a descrição deste público e o custo que ele teve, para reusar em outro cliente do mesmo nicho. Nada vai para a Meta.">⭐ Guardar na biblioteca de públicos</F2V98Btn></div>;
+  const p=(res&&res.publico)||{}; const ints=(p.interesses||[]).map(function(i){ return typeof i==="string"?i:(i&&i.nome); }).filter(Boolean);
+  return <div data-x5="P2_5_07" style={{marginTop:10,border:"1px dashed "+ADS.line2,borderRadius:12,padding:isMob?"10px 10px":"12px 14px",background:"#fafafc",minWidth:0,maxWidth:isMob?"calc(100vw - 40px)":undefined,boxSizing:"border-box"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8}}><b style={{fontSize:13}}>⭐ Guardar na biblioteca de públicos</b><span onClick={function(){ setAb(false); }} style={{marginLeft:"auto",cursor:"pointer",color:ADS.muted,fontSize:12}}>fechar ✕</span></div>
+    <div style={{fontSize:12,color:ADS.ink2,lineHeight:1.5,marginTop:4}}>Guarda só a <b>descrição do público</b> deste conjunto (cidades, idade, gênero e interesses) e o <b>custo por resultado</b> que ele teve. <b>Nada vai para a Meta</b> e a campanha não muda. Depois ele aparece no Montador › início › 👥 Públicos prontos por nicho.</div>
+    {res?<div style={{marginTop:8}}>
+      <F2V100Caixa tipo="ok">✔ Guardado na biblioteca{res.id?" (nº "+res.id+")":""}: <b>{res.nome}</b> · nicho <b>{res.nicho}</b>.{res.lido?" Já aparece no Montador"+(res.lido.cpl?" com "+_adsBRLc(res.lido.cpl)+" por lead":"")+(res.lido.leads?" ("+_adsNum(res.lido.leads)+" leads)":"")+".":" Aparece no Montador › início."}</F2V100Caixa>
+      <div style={{fontSize:12,color:ADS.ink2,marginTop:6,lineHeight:1.5}}>{[p.genero==="homens"?"Homens":p.genero==="mulheres"?"Mulheres":"Todos",p.idade_min?p.idade_min+" a "+(p.idade_max||65)+" anos":"",(p.cidades||[]).length?(p.cidades||[]).length+" cidade"+((p.cidades||[]).length===1?"":"s"):""].filter(Boolean).join(" · ")}{ints.length?<span style={{display:"block"}}>Interesses: {ints.slice(0,6).join(" · ")}{ints.length>6?" …":""}</span>:null}</div>
+    </div>:<div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr)",gap:8,marginTop:8}}>
+      <label style={{minWidth:0}}><span style={_f2v99Lbl}>Nicho</span><select value={f.nicho} onChange={function(e){ setF(Object.assign({},f,{nicho:e.target.value})); }} style={_f2v99Inp}><option value="">{nichos===null?"lendo…":"Escolha…"}</option>{(nichos||[]).map(function(n){ return <option key={n} value={n}>{n}</option>; })}<option value="__novo">+ outro nicho…</option></select></label>
+      {f.nicho==="__novo"?<label style={{minWidth:0}}><span style={_f2v99Lbl}>Nome do nicho novo</span><input value={f.novo} onChange={function(e){ setF(Object.assign({},f,{novo:e.target.value})); }} placeholder="ex.: Suinocultura" style={_f2v99Inp}/></label>:<span/>}
+      <label style={{minWidth:0}}><span style={_f2v99Lbl}>Nome do público</span><input value={f.nome} onChange={function(e){ setF(Object.assign({},f,{nome:e.target.value})); }} style={_f2v99Inp}/></label>
+      <label style={{minWidth:0}}><span style={_f2v99Lbl}>Por que funcionou (opcional)</span><input value={f.descricao} onChange={function(e){ setF(Object.assign({},f,{descricao:e.target.value})); }} placeholder="ex.: produtor de leite num raio de 40 km" style={_f2v99Inp}/></label>
+      <div style={{gridColumn:"1 / -1",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><F2V98Btn primary disabled={!nicho||env||!x.entidade_id} onClick={guardar}>{env?"guardando…":"Guardar na biblioteca"}</F2V98Btn><F2V98Btn onClick={function(){ setAb(false); }}>Cancelar</F2V98Btn></div>
+    </div>}
+    {err&&<F2V100Caixa tipo="erro">{err}</F2V100Caixa>}
+  </div>;
+}
+
+/* v100 (15/10/2026) X5 P2_7_17: Leads › 🧰 › 📞 "Ligar o recebimento de ligações (PIN)" (lead_ligacao_ligar; só sócio).
+   A chave secreta aparece UMA vez: fica só na memória desta caixa (nunca em localStorage nem em log) e some ao fechar. */
+const X5V100_LIG_URL="https://jffvoojcskwumnphsedq.supabase.co/functions/v1/ligacao-webhook";
+function AdsLigacaoLigarV100(props){
+  const isMob=props.isMob; const [lig,setLig]=useState(null); const [ab,setAb]=useState(false); const [pin,setPin]=useState(""); const [env,setEnv]=useState(false); const [err,setErr]=useState(""); const [url,setUrl]=useState(null); const [chave,setChave]=useState(null); const [semChave,setSemChave]=useState(false);
+  const ligado=lig!==null?lig:!!props.ligado; const end=url||X5V100_LIG_URL;
+  const ligar=async function(){ if(pin.length!==6||env) return; setEnv(true); setErr("");
+    try{
+      const r1=await _f2v98Rpc("lead_ligacao_ligar",{p_ligar:true,p_ticket:null});
+      if(r1.falta) throw new Error("Ligar as ligações ainda não está ligado no servidor.");
+      const acao=(r1.data&&r1.data.acao_ticket)||{tipo:"ligacao_webhook",ligar:true};
+      if(r1.erro&&!(r1.data&&r1.data.precisa_pin)) throw new Error(r1.erro);
+      const t=await _x5v100Ticket(acao,pin); if(t.erro) throw new Error(t.erro);
+      const r2=await _f2v98Rpc("lead_ligacao_ligar",{p_ligar:true,p_ticket:t.ticket}); if(r2.erro) throw new Error(r2.erro);
+      const d=r2.data||{}; setLig(true); setUrl(d.url||null); if(d.chave){ setChave(String(d.chave)); setSemChave(false); } else { setChave(null); setSemChave(true); } setAb(false);
+      _f2v98Toast(true,"Recebimento de ligações ligado.");
+    }catch(e){ setErr(String((e&&e.message)||e)); }
+    setPin(""); setEnv(false); };
+  const desligar=async function(){ if(env) return; const ok=await _x5v100Confirma("Desligar o recebimento de ligações? O endereço passa a recusar as chamadas do fornecedor até um sócio ligar de novo com PIN.","Desligar ligações","Desligar"); if(!ok) return;
+    setEnv(true); setErr(""); const r=await _f2v98Rpc("lead_ligacao_ligar",{p_ligar:false,p_ticket:null}); setEnv(false);
+    if(r.erro){ setErr(r.falta?"Ainda não ligado no servidor.":String(r.erro)); return; } setLig(false); setChave(null); setSemChave(false); setUrl((r.data&&r.data.url)||null); _f2v98Toast(true,"Recebimento de ligações desligado."); if(props.onMudou) props.onMudou(); };
+  const fechar=function(){ setChave(null); setSemChave(false); if(props.onMudou) props.onMudou(); };
+  return <div data-x5="P2_7_17" style={{marginTop:10,border:"1px solid "+ADS.line,borderRadius:12,padding:isMob?"10px 10px":"10px 12px",minWidth:0}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b style={{fontSize:12.5}}>🔐 Receber ligações no app (sócio)</b><F2V98Chip cor={ligado?"#15803d":"#92400e"} bg={ligado?"#dcfce7":"#fef3c7"}>{ligado?"ligado":"desligado"}</F2V98Chip></div>
+    <div style={{fontSize:12,color:ADS.ink2,lineHeight:1.5,marginTop:4}}>Endereço para colar no painel do serviço de número dinâmico (webhook):</div>
+    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:4,minWidth:0}}><code style={Object.assign({fontSize:11.5,background:ADS.surface2,borderRadius:8,padding:"5px 8px",wordBreak:"break-all",minWidth:0,flex:"1 1 220px"},ADS_MONO)}>{end}</code><F2V98Btn small onClick={function(){ _f2v99Copiar(end,"Endereço copiado."); }}>Copiar</F2V98Btn></div>
+    {chave&&<div data-x5-chave="1" style={{marginTop:8,background:"#fffbeb",border:"1.5px solid #f59e0b",borderRadius:10,padding:"9px 11px",fontSize:12.5,color:"#78350f",lineHeight:1.5}}>
+      <b>⚠ Guarde agora: esta chave não aparece de novo.</b> Cole no painel do fornecedor, no cabeçalho <b>x-pixels-chave</b>.
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:6}}><code style={Object.assign({fontSize:12,background:"#fff",border:"1px solid #fde68a",borderRadius:8,padding:"5px 8px",wordBreak:"break-all",minWidth:0,flex:"1 1 220px"},ADS_MONO)}>{chave}</code><F2V98Btn small primary onClick={function(){ _f2v99Copiar(chave,"Chave copiada. Guarde no painel do fornecedor."); }}>Copiar</F2V98Btn></div>
+      <div style={{marginTop:6}}><F2V98Btn small onClick={fechar}>Já guardei, fechar</F2V98Btn></div>
+    </div>}
+    {semChave&&<F2V100Caixa tipo="atencao">A chave secreta já tinha sido criada antes e não aparece de novo. Se ela se perdeu, peça para gerar outra (hoje não há botão para trocar a chave). <span onClick={fechar} style={{cursor:"pointer",fontWeight:800}}>ok</span></F2V100Caixa>}
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8}}>
+      {!ligado&&!ab&&<F2V98Btn small primary onClick={function(){ setAb(true); setErr(""); }}>Ligar o recebimento de ligações (PIN)</F2V98Btn>}
+      {!ligado&&ab&&<Fragment>{_x5v100Pin(pin,setPin)}<F2V98Btn small primary disabled={pin.length!==6||env} onClick={ligar}>{env?"ligando…":"Ligar"}</F2V98Btn><F2V98Btn small onClick={function(){ setAb(false); setPin(""); }}>Cancelar</F2V98Btn></Fragment>}
+      {ligado&&<F2V98Btn small disabled={env} onClick={desligar}>{env?"desligando…":"Desligar"}</F2V98Btn>}
+    </div>
+    {!ligado&&ab&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>Ligue só depois de contratar o serviço de número dinâmico. Ao ligar pela 1ª vez, o app cria uma chave secreta que aparece uma vez só.</div>}
+    {err&&<F2V100Caixa tipo="erro">{err}</F2V100Caixa>}
+  </div>;
+}
+
+/* v100 (15/10/2026) X5 P2_1_04/P2_7_05/P2_7_08: Campanhas › 🧰 › 📮 cadastro do destino da devolução (conv_destino_salvar; só sócio).
+   Nada é enviado: o envio continua desligado (capi_meta_envio_ligado = não). Não existe função que leia os destinos salvos:
+   a tela mostra só o que midia_medicao_ler diz (cadastrado ou não) e o que acabou de ser salvo. */
+const X5V100_ETAPAS_G=[["qualificado","Lead qualificado"],["visita_orcamento","Visita / orçamento"],["proposta","Proposta"],["venda","Venda"]];
+function AdsConvDestinoV100(props){
+  const mc=props.mc, isMob=props.isMob; const cu=_f2v98CliUni(mc); const _x5Ap=useX5v100Aprovador(); const pode=_f2v98Pode()&&_x5Ap;   // v100 (15/10/2026) X5 revisor: aprovador do servidor (hook sempre chamado)
+  const [ab,setAb]=useState(false); const [st,setSt]=useState(null); const [f,setF]=useState(null); const [pin,setPin]=useState(""); const [env,setEnv]=useState(false); const [err,setErr]=useState(""); const [salvo,setSalvo]=useState(null);
+  if(!pode) return null;
+  const abrir=async function(){ setAb(true); setErr(""); setF({unidade:cu.uni||"",ds:"",waba:"",page:"",gcid:"",g:{},ativo:false}); setSt({lendo:true});
+    const r=await _f2v98Rpc("midia_medicao_ler",{p_client:cu.cli,p_unidade:cu.uni||null}); const it=((r.data&&r.data.itens)||[]);
+    setSt({capi:it.find(function(i){ return i.codigo==="capi"; })||null,pixel:it.find(function(i){ return i.codigo==="pixel"; })||null,falta:!!r.falta}); };
+  const set=function(k,v){ const o=Object.assign({},f); o[k]=v; setF(o); };
+  const soNum=function(v){ return String(v||"").replace(/\D/g,""); };
+  const gcid=soNum(f&&f.gcid);
+  const acoes=function(){ const o={}; X5V100_ETAPAS_G.forEach(function(e){ const v=String((f.g||{})[e[0]]||"").trim(); if(!v) return; o[e[0]]=/^\d+$/.test(v)&&gcid?"customers/"+gcid+"/conversionActions/"+v:v; }); return o; };
+  const salvar=async function(){ if(env||!cu.cli) return;
+    const ok=await _x5v100Confirma("Salvar o destino da devolução de "+((mc&&mc.name)||cu.cli)+(f.unidade?" ("+f.unidade+")":"")+"? Isto troca o que estava cadastrado para esta unidade: campo em branco fica vazio. Nada é enviado: o envio para a Meta e o Google continua desligado.","Salvar destino da devolução","Salvar");
+    if(!ok) return; setEnv(true); setErr("");
+    const ga=acoes(); const r=await _f2v98Rpc("conv_destino_salvar",{p_client:cu.cli,p_unidade:String(f.unidade||"").trim(),p_meta_dataset_id:soNum(f.ds)||null,p_meta_waba_id:soNum(f.waba)||null,p_meta_page_id:soNum(f.page)||null,p_google_customer_id:gcid||null,p_google_acoes:Object.keys(ga).length?ga:null,p_ativo:!!f.ativo,p_pin:f.ativo?pin:null});
+    setEnv(false); setPin("");
+    if(r.erro){ setErr(r.falta?"Salvar o destino ainda não está ligado no servidor.":String(r.erro)); return; }
+    setSalvo({ds:soNum(f.ds),gcid:gcid,acoes:Object.keys(ga).length,ativo:!!f.ativo,unidade:String(f.unidade||"").trim(),em:new Date().toISOString()}); setAb(false); _f2v98Toast(true,"Destino salvo. Nada foi enviado."); };
+  const inp=function(k,ph,mode){ return <input inputMode={mode} value={(f&&f[k])||""} onChange={function(e){ set(k,e.target.value); }} placeholder={ph} style={_f2v99Inp}/>; };
+  return <div data-x5="P2_1_04" style={{marginTop:12,border:"1px solid "+ADS.line,borderRadius:12,padding:isMob?"10px 10px":"12px 14px",minWidth:0}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b style={{fontSize:13}}>🎯 Para onde devolver (sócio)</b><span style={{fontSize:11.5,color:ADS.muted}}>Pixel / conjunto de dados da Meta e conversões do Google deste cliente</span>
+      {!ab&&<span style={{marginLeft:isMob?0:"auto"}}><F2V98Btn small onClick={abrir}>{salvo?"Trocar o destino":"Cadastrar o destino"}</F2V98Btn></span>}</div>
+    {salvo&&!ab&&<F2V100Caixa tipo="ok">✔ Salvo agora{salvo.unidade?" ("+salvo.unidade+")":""}: {salvo.ds?"Meta "+salvo.ds:"sem Meta"}{salvo.gcid?" · Google "+salvo.gcid+" ("+salvo.acoes+" conversõ"+(salvo.acoes===1?"ão":"es")+")":""} · {salvo.ativo?"destino pronto":"destino guardado, ainda não pronto"}. O envio continua desligado.</F2V100Caixa>}
+    {ab&&<div style={{marginTop:8}}>
+      {st&&st.lendo?<AdsLoading t="Lendo…"/>:st&&<div style={{fontSize:12,color:ADS.ink2,lineHeight:1.5}}>Hoje: <b>{st.capi&&st.capi.detalhe?st.capi.detalhe:"não deu para conferir"}</b>{st.pixel&&st.pixel.detalhe?" · "+st.pixel.detalhe:""}<span style={{display:"block",fontSize:11.5,color:ADS.muted}}>Campo em branco mantém o que já estava salvo (v100 15/10/2026: o servidor guarda e não apaga o que você não preencher).</span></div>}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"repeat(3,minmax(0,1fr))",gap:8,marginTop:8}}>
+        <label style={{minWidth:0}}><span style={_f2v99Lbl}>Unidade (vazio = todas)</span>{inp("unidade","ex.: chapeco")}</label>
+        <label style={{minWidth:0}}><span style={_f2v99Lbl}>Meta: Pixel / conjunto de dados</span>{inp("ds","número do dataset","numeric")}</label>
+        <label style={{minWidth:0}}><span style={_f2v99Lbl}>Meta: WhatsApp (WABA, opcional)</span>{inp("waba","","numeric")}</label>
+        <label style={{minWidth:0}}><span style={_f2v99Lbl}>Meta: página (opcional)</span>{inp("page","","numeric")}</label>
+        <label style={{minWidth:0}}><span style={_f2v99Lbl}>Google Ads: conta (opcional)</span>{inp("gcid","123-456-7890","numeric")}</label>
+      </div>
+      {gcid&&<div style={{marginTop:8}}><span style={_f2v99Lbl}>Google: ação de conversão por etapa (número ou o nome completo)</span><div style={{display:"grid",gridTemplateColumns:isMob?"minmax(0,1fr)":"repeat(4,minmax(0,1fr))",gap:8}}>{X5V100_ETAPAS_G.map(function(e){ return <label key={e[0]} style={{minWidth:0}}><span style={{fontSize:11.5,color:ADS.muted}}>{e[1]}</span><input value={(f.g||{})[e[0]]||""} onChange={function(ev){ const g=Object.assign({},f.g||{}); g[e[0]]=ev.target.value; set("g",g); }} style={_f2v99Inp}/></label>; })}</div></div>}
+      <label style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:10,fontSize:12.5,lineHeight:1.4}}><input type="checkbox" checked={!!f.ativo} onChange={function(e){ set("ativo",e.target.checked); }} style={{marginTop:2}}/><span>Deixar este destino <b>pronto</b> para quando o envio ligar (pede o seu PIN). O envio em si continua desligado: só um sócio liga, com PIN, em Leads › ⚙ Regras, depois do token da Meta.</span></label>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8}}>{f.ativo&&_x5v100Pin(pin,setPin)}<F2V98Btn primary disabled={env||(!soNum(f.ds)&&!gcid)||(f.ativo&&pin.length!==6)} onClick={salvar}>{env?"salvando…":"Salvar destino"}</F2V98Btn><F2V98Btn onClick={function(){ setAb(false); setPin(""); }}>Cancelar</F2V98Btn></div>
+      {err&&<F2V100Caixa tipo="erro">{err}</F2V100Caixa>}
+    </div>}
+  </div>;
+}
+
+/* ─────────── R15 / Q3 · chave Meta Ads | Google Ads (Visão geral do cliente) ─────────── */
+function AdsPlataformaChaveV100(props){
+  const plat=props.plat, setPlat=props.setPlat, isMob=props.isMob, info=props.info;
+  return <div data-v100="R15" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",margin:"0 0 14px"}}>
+    <span style={{display:"inline-flex",background:"#fff",border:"1px solid "+ADS.line,borderRadius:12,padding:3,boxShadow:"0 1px 2px rgba(0,0,0,.04)"}}>{[["meta","Meta Ads","#1877f2"],["google","Google Ads","#ea4335"]].map(function(o){ const at=plat===o[0]; return <button key={o[0]} data-v100-plat={o[0]} onClick={function(){ setPlat(o[0]); }} style={{border:0,background:at?"#6d28d9":"transparent",color:at?"#fff":ADS.ink2,borderRadius:9,padding:isMob?"7px 12px":"7px 16px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:ADS_FONT,minHeight:0,display:"inline-flex",alignItems:"center",gap:6}}><i style={{width:8,height:8,borderRadius:99,background:at?"#fff":o[2],display:"block"}}/>{o[1]}</button>; })}</span>
+    <span style={{fontSize:11.5,color:ADS.muted}}>{plat==="google"?((info&&info.google&&info.google.acessos_prontos)?"números do Google":"Google: ainda sem coleta automática"):"cada lado com os menus dele"}</span>
+  </div>;
+}
+function AdsGoogleAdsV100(props){
+  const mc=props.mc, isMob=props.isMob, canEdit=!!props.canEdit, info=props.info||{}; const {P}=useAdsPeriodo(); const cid=mc&&mc.client_id;
+  const G=useF2V98Rpc("midia_google_ads_ler",cid&&P?{p_client:cid,p_de:P.ini,p_ate:P.fim}:null,[cid,P&&P.key]);
+  const [num,setNum]=useState(""); const [sal,setSal]=useState(false);
+  const g=info.google||{}; const d=(!G.erro&&G.data)||{}; const t=d.totais||{};
+  const marcar=async function(){ setSal(true); const r=await _f2v98Rpc("midia_google_ads_marcar",{p_client:cid,p_customer_id:num,p_tem:true}); setSal(false); if(r.erro){ _f2v98Toast(false,r.falta?"Anotar a conta Google ainda não está ligado no servidor.":r.erro); return; } _f2v98Toast(true,"Conta Google anotada."); setNum(""); G.reload(); if(props.onMudou) props.onMudou(); };
+  const ids=(d.customer_ids&&d.customer_ids.length?d.customer_ids:g.customer_ids)||[];
+  return <div data-v100="Q3">
+    <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:10}}><b style={{fontSize:isMob?17:18,fontWeight:900,letterSpacing:"-.4px"}}>Google Ads · {mc&&mc.name}</b><span style={{fontSize:12,color:ADS.muted}}>{_adsFmtD(P.ini)} a {_adsFmtD(P.fim)}{d.fonte?" · fonte: "+(d.fonte==="coleta"?"coleta automática":d.fonte==="manual"?"digitado no fechamento da semana":"nenhuma ainda"):""}</span></div>
+    {G.loading?<AdsLoading t="Lendo o Google…"/>:G.falta?<F2V98Faltando txt="Os números do Google ainda não estão ligados no servidor (midia_google_ads_ler)."/>:<div>
+      <F2V100Cards isMob={isMob} n={4}>
+        <F2V100Card destaque t="Gasto" v={_adsBRL0(t.gasto)}/>
+        <F2V100Card t="Cliques" v={_adsNum(t.cliques)} sub={t.impressoes?_adsNum(t.impressoes)+" impressões":""}/>
+        <F2V100Card t="Conversões" v={_adsNum(t.conversoes)}/>
+        <F2V100Card t="Custo por conversão" v={t.cpa?_adsBRL(t.cpa):"—"}/>
+      </F2V100Cards>
+      {(d.campanhas||[]).length>0&&<div style={{marginTop:12}}><F2V99Tabela minW={isMob?560:0} cab={["Campanha","Tipo","Gasto","Cliques","Conversões","Custo/conv."]} dir={[0,0,1,1,1,1]} linhas={d.campanhas.map(function(c){ return [<b style={{fontSize:12.5}}>{c.nome}</b>,c.canal||"—",_adsBRL0(c.gasto),_adsNum(c.cliques),_adsNum(c.conversoes),c.cpa?_adsBRL(c.cpa):"—"]; })}/></div>}
+      {(d.manual||[]).length>0&&<div style={{marginTop:12}}><span style={_f2v99Lbl}>Digitado no fechamento da semana</span><F2V99Tabela cab={["Semana","Investimento","Leads"]} dir={[0,1,1]} linhas={d.manual.map(function(m){ return [_adsFmtD(m.semana),_adsBRL0(m.investimento),_adsNum(m.leads)]; })}/></div>}
+      {d.explica&&<F2V100Caixa tipo={d.fonte==="coleta"?"info":"atencao"}>{_f2v100Humano(d.explica)}</F2V100Caixa>}
+    </div>}
+    {(g.faltam||[]).length>0&&<div style={{marginTop:12}}><span style={_f2v99Lbl}>O que falta para os números virem sozinhos</span><F2V99Passos itens={g.faltam.map(_f2v100Humano)}/></div>}
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}>
+      <span style={{fontSize:12.5}}>Conta Google: {ids.length?<b style={ADS_MONO}>{ids.join(", ")}</b>:<span style={{color:ADS.muted}}>não anotada</span>}</span>
+      {canEdit&&<Fragment><input value={num} onChange={function(e){ setNum(e.target.value); }} placeholder="000-000-0000" style={Object.assign({},_f2v99Inp,{width:150})}/><F2V98Btn small disabled={sal||String(num).replace(/\D/g,"").length!==10} onClick={marcar}>{sal?"anotando…":"Anotar conta"}</F2V98Btn></Fragment>}
+    </div>
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:8}}>Só leitura. O app não mexe em nada no Google. A busca diária fica desligada até os acessos existirem.</div>
   </div>;
 }
 
@@ -71522,7 +74290,9 @@ const _socDiv=function(a,b){ const x=Number(a),y=Number(b); return (isFinite(x)&
 const _socTem=function(v){ return v!==null&&v!==undefined; };
 
 const _socISO=function(d){ return new Date(d).toISOString().slice(0,10); };
-const _socDia=function(iso){ if(!iso) return "—"; const p=String(iso).slice(0,10).split("-"); return p.length<3?String(iso):p[2]+"/"+p[1]; };
+const _socDia=function(iso){ if(!iso) return "—";
+  try{ if(typeof _tiaDM==="function"&&/^\d{4}-\d{2}-\d{2}/.test(String(iso))) return _tiaDM(iso); }catch(_){ }   // v100 (15/10/2026) E5: data dd/mm pelo formatador ÚNICO (_tiaDM, 17e)
+  const p=String(iso).slice(0,10).split("-"); return p.length<3?String(iso):p[2]+"/"+p[1]; };
 const _socDiaLongo=function(iso){ if(!iso) return "—"; const p=String(iso).slice(0,10).split("-"); return p.length<3?String(iso):p[2]+"/"+p[1]+"/"+p[0]; };
 const _socRel=function(iso){
   if(!iso) return "nunca";
@@ -72425,7 +75195,11 @@ const _socThumbT=function(){ const x=window._pxThumbT; if((!x||new Date(x.vale_a
 const _socThumbAd=function(adId){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/ads-thumb?ad="+encodeURIComponent(adId)+_socThumbT(); };   /* v96 S16 */
 const SOC_CTA={WHATSAPP_MESSAGE:"Chamar no WhatsApp",MESSAGE_PAGE:"Enviar mensagem",LEARN_MORE:"Saiba mais",SIGN_UP:"Cadastre-se",CALL_NOW:"Ligar agora",SHOP_NOW:"Comprar agora",CONTACT_US:"Fale conosco",GET_QUOTE:"Pedir orçamento",SEND_MESSAGE:"Enviar mensagem",APPLY_NOW:"Candidatar-se",BOOK_TRAVEL:"Reservar",SUBSCRIBE:"Assinar",DOWNLOAD:"Baixar",GET_DIRECTIONS:"Como chegar",WATCH_MORE:"Assistir mais"};
 const _socCta=function(c){ const k=String(c||"").toUpperCase(); return SOC_CTA[k]||(c?String(c).replace(/_/g," ").toLowerCase():null); };
-const _socBRL=function(v){ const n=Number(v); return isFinite(n)?n.toLocaleString("pt-BR",{style:"currency",currency:"BRL",minimumFractionDigits:n>=100?0:2,maximumFractionDigits:n>=100?0:2}):"—"; };
+/* v100 (15/10/2026) E5: usa o formatador ÚNICO de R$ (_tiaBrl, 17e). A opção "sem centavos a partir de R$ 100" fica aqui (casas = 0 ou 2),
+   com o mesmo espaço fixo e o sinal antes do R$ ("-R$ 50,00") de hoje: a tela de Redes não muda. Sem o 17e, formata como antes. */
+const _socBRL=function(v){ const n=Number(v); if(!isFinite(n)) return "—"; const c=n>=100?0:2;
+  try{ if(typeof _tiaBrl==="function"){ const a=Math.abs(n); const neg=n<0&&Number(a.toFixed(c))>0; return (neg?"-":"")+String(_tiaBrl(a,c)).replace("R$ ","R$\u00a0"); } }catch(_){ }
+  return n.toLocaleString("pt-BR",{style:"currency",currency:"BRL",minimumFractionDigits:c,maximumFractionDigits:c}); };
 
 /* Lê as publicações que rodaram como anúncio neste cliente e soma o desempenho de cada uma.
    Uma publicação pode ter rodado em mais de um anúncio — aqui cada anúncio é uma linha,
@@ -73714,6 +76488,10 @@ const _tcenPedidosOuvir = function (f) { window._tcenPed.ouvintes.push(f); retur
    tela que chamou continua mostrando o jeito antigo — nada some. */
 const _tiaIrCliente = function (conta, unidade, sub) {
   if (!conta) return false;
+  // v100 (15/10/2026) R14 (correção do revisor): a aba "ia" (🧠 Decisões) só existe com o PIN aberto. Sem PIN (Erick, ou sócio
+  //   com o PIN fechado) o lugar dos alarmes da conta é a aba "Alertas" ("estrategia", com "🔔 Alarmes desta conta").
+  //   Com o PIN aberto, o 17b troca "estrategia" por "ia" sozinho; mesmo assim mandamos "ia" direto.
+  if (!sub || sub === "ia") sub = (window._tcli && window._tcli.ok) ? "ia" : "estrategia";
   const det = { conta: conta, unidade: unidade || null, sub: sub || "ia", atendido: false };
   try { window.dispatchEvent(new CustomEvent("pixels:midia-abrir-conta", { detail: det })); } catch (_) { return false; }
   if (!det.atendido) return false;
@@ -73970,12 +76748,21 @@ function TSegAlarmes({ itens, onVisto, onFechar, carregando, erro, onTentar }) {
   //   Aqui a janela só lista e leva até lá. Alarme sem conta (ex.: erro de tela) continua com "Marcar como visto" aqui.
   //   Se o app não conseguir abrir o cliente (versão antiga da Gestão de mídia), o "Marcar como visto" volta, como antes.
   const [semNav, setSemNav] = useState(false);
+  const [agrupado, setAgrupado] = useState(false);   // v100 (14/10/2026) P2_2_20: "um aviso por problema", ordenado pelo dinheiro em jogo
   useTv9Conf(null, (itens || []).map(function (a) { return a.id; }));   // v99 (14/10/2026) 2.10.12: selo de confiança dos alarmes (servidor)
   const irCliente = function (a) { if (_tiaIrCliente(a.ad_account_id, null, "ia")) onFechar(); else setSemNav(true); };
+  // v100 (14/10/2026) R14: o visto é dado SÓ dentro do cliente, para todo mundo (o Erick também). Aqui a janela só lista e leva até lá.
   return (
     <TSegJanela titulo="🔔 Alarmes do tráfego (últimos 14 dias)" onFechar={onFechar}>
-      {equipe && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>Você vê os alarmes e marca "Entendi ✓". Decidir o que fazer fica com os sócios, na 🧠 Decisões.</div>}
-      {!equipe && !semNav && (itens || []).some(function (a) { return a.ad_account_id && !a.visto_em; }) && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>O visto é dado dentro do cliente, na aba 🧠 Decisões. Aqui fica a lista de todos.</div>}
+      {equipe && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>"Ver no cliente ›" abre o cliente na aba Alertas: é lá, em "🔔 Alarmes desta conta", que você dá o visto. Decidir o que fazer fica com os sócios, na 🧠 Decisões.</div>}
+      {(itens || []).length > 1 && <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>{/* v100 (14/10/2026) P2_2_20 */}
+        <button onClick={function () { setAgrupado(false); }} style={{ background: agrupado ? "#f1f5f9" : "#0f172a", color: agrupado ? "#334155" : "#fff", border: "none", borderRadius: 999, padding: "5px 11px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Lista</button>
+        <button onClick={function () { setAgrupado(true); }} style={{ background: agrupado ? "#0f172a" : "#f1f5f9", color: agrupado ? "#fff" : "#334155", border: "none", borderRadius: 999, padding: "5px 11px", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Juntar repetidos (R$ em jogo)</button>
+        <span style={{ fontSize: 11, color: "#94a3b8" }}>grave: ver em 1 h · médio: em 24 h · sem visto no prazo, sobe para o sócio</span>
+        <TV10AlarmesRegras />{/* v100 (14/10/2026) P2_2_18/P2_2_19 etapa 2: níveis, prazos e o que falta em cada canal (ads_alarmes_regras, só no clique) */}
+      </div>}
+      {agrupado ? <TV10Agrupados itens={itens} onIr={function (conta) { if (_tiaIrCliente(conta, null, "ia")) onFechar(); else setSemNav(true); }} /> : <Fragment>
+      {!equipe && !semNav && (itens || []).some(function (a) { return a.ad_account_id && !a.visto_em; }) && <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>O visto é dado dentro do cliente, na aba {window._tcli && window._tcli.ok ? "🧠 Decisões" : "Alertas"}. Aqui fica a lista de todos.</div>}{/* v100 (15/10/2026) R14: sem PIN o "Ver no cliente ›" abre a aba Alertas */}
       {carregando && <div style={{ color: "#64748b", fontSize: 13 }}>Carregando…</div>}
       <TSegErroCarga motivo={erro} onTentar={onTentar} tela="alarmes" />{/* v96 Q6 */}
       {!carregando && !erro && (!itens || !itens.length) && <div style={{ color: "#64748b", fontSize: 13 }}>Nenhum alarme. Tudo certo por aqui.</div>}
@@ -73989,17 +76776,19 @@ function TSegAlarmes({ itens, onVisto, onFechar, carregando, erro, onTentar }) {
               <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{_tsegQuando(a.criado_em)}</div>
             </div>
             <div style={{ fontSize: 13, color: "#334155", marginTop: 4, lineHeight: 1.5 }}>{a.texto}</div>
+            <TV10AlarmeInfo a={a} />{/* v100 (14/10/2026) P2_2_18/P2_2_19/P2_2_20: nível, ×N, R$ em jogo, prazo, responsável e "subiu para o sócio" */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 8, flexWrap: "wrap" }}>
               <div style={{ fontSize: 11, color: "#94a3b8" }}>{via.length ? Array.from(new Set(via)).join(" · ") : "Só aviso no app"}</div>
               {a.visto_em
                 ? <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>✓ visto por {a.visto_por} {_tsegQuando(a.visto_em)}</div>
-                : (a.ad_account_id && !semNav && !equipe)
+                : (a.ad_account_id && !semNav)
                   ? <button onClick={function () { irCliente(a); }} style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Ver no cliente ›</button>
                   : <button onClick={function () { onVisto(a.id); }} style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{equipe ? "Entendi ✓" : "Marcar como visto"}</button>}
             </div>
           </div>
         );
       })}
+      </Fragment>}
     </TSegJanela>
   );
 }
@@ -74136,6 +76925,8 @@ const _TCEN_NUM = {
   custo_7d: ["Custo/resultado 7 dias", "R$"], custo_14d: ["Custo/resultado 14 dias", "R$"], custo_normal: ["Custo normal da conta", "R$"],
   ritmo_mes: ["Ritmo do mês", "R$"], verba_mes: ["Verba do mês", "R$"], gasto_hoje: ["Gasto hoje", "R$"], media_7d: ["Média 7 dias", "R$"],
   saldo: ["Saldo", "R$"], limite: ["Limite", "R$"],
+  teto_atual: ["Teto hoje", "R$"], teto_novo: ["Teto novo", "R$"], gasto_acumulado: ["Gasto acumulado da conta", "R$"], gasto_mes: ["Gasto no mês", "R$"],   // v100 (14/10/2026) P2_6_04
+  pedido_por: ["Pedido por", ""],   // v100 (14/10/2026) etapa 2
 };
 const _tcenBrl = function (v) { return _tiaBrl(v); };   // v96 (13/10/2026) E5: formatador único
 const _tcenNivelUrl = { campanha: ["campaigns", "selected_campaign_ids"], conjunto: ["adsets", "selected_adset_ids"], anuncio: ["ads", "selected_ad_ids"] };
@@ -74150,10 +76941,19 @@ const _tcenAntesDepois = function (a) {
   if (a.tipo === "pausar") return ["Ativo", "Pausado"];
   if (a.tipo === "ativar") return ["Pausado", "Ativo"];
   if (a.tipo === "verba") return [_tcenBrl(a.antes) + "/dia", _tcenBrl(a.depois) + "/dia"];
+  // v100 (14/10/2026) P2_3_09/P2_12_10/P2_6_04/P2_3_22/P2_5_05: tipos novos que o servidor aplica (contrato com o C4b: antes_txt → depois_txt)
+  if (a.resumo_antes || a.resumo_depois) return [a.resumo_antes || "—", a.resumo_depois || "—"];   // v100 (14/10/2026) etapa 2: nome real do C4b (acao.resumo_antes/resumo_depois)
+  if (a.antes_txt || a.depois_txt) return [a.antes_txt || "—", a.depois_txt || "—"];
+  if (a.campo === "spend_cap") return [Number(a.antes) > 0 ? _tcenBrl(a.antes) : "sem teto", _tcenBrl(a.depois)];   // teto da conta (pedido manual de hoje)
   return null;
 };
-const _tcenExecutavel = function (a) { return a && (a.tipo === "pausar" || a.tipo === "ativar" || a.tipo === "verba"); };
-const _TCEN_ORIGEM = { montador: "Montador", ia: "IA (análise)", regra: "Regra (dado real)", alarme: "Alarme", desfazer: "Desfazer", analise: "Análise", usuario: "Pedido de vocês" };
+// v100 (14/10/2026) etapa 2: tipos novos que o ads-aplicar aplica (C4b): horario, publicos_excluir, publico_criar, teto_conta, lance, publico_auto.
+//   Vale "✓ Aprovar com PIN" quando o servidor manda aplica_app = true, ou quando o tipo é um desses e o pedido não diz que é manual.
+const _TCEN_TIPOS_APP = ["horario", "publicos_excluir", "publico_criar", "teto_conta", "lance", "publico_auto"];
+const _tcenExecutavel = function (a) { return !!a && (a.tipo === "pausar" || a.tipo === "ativar" || a.tipo === "verba" || a.aplica_app === true || (_TCEN_TIPOS_APP.indexOf(a.tipo) >= 0 && a.aplica_app !== false && a.manual !== true)); };   // v100 (14/10/2026): + tipos novos
+const _tcenTipoAntigo = function (a) { return !!a && (a.tipo === "pausar" || a.tipo === "ativar" || a.tipo === "verba"); };   // v100 etapa 2: "↩ Desfazer" só nestes
+const _TCEN_ORIGEM = { montador: "Montador", ia: "IA (análise)", regra: "Regra (dado real)", alarme: "Alarme", desfazer: "Desfazer", analise: "Análise", usuario: "Pedido de vocês",
+  chave_campanha: "Chave da campanha", teto_conta: "Teto da conta", publico: "Público", lance: "Custo máximo" };   // v100 (14/10/2026): nomes das origens novas (antes aparecia o código)
 const _TCEN_HIST = {
   criado: "Criado", atualizado: "Números atualizados", aprovado: "Aprovou com PIN", aprovado_1: "1ª aprovação com PIN", aprovado_2: "2ª aprovação com PIN",
   aplicado: "Aplicado na Meta", erro_ao_aplicar: "Erro ao aplicar", barrado: "Barrado pela segurança", ja_estava: "Já estava assim na Meta",
@@ -74187,6 +76987,8 @@ function TCenRevisao({ rev, ad }) {
   return (
     <div>
       {ad && linha("O que muda", ad[0] + "  →  " + ad[1], true)}
+      {(rev.mudancas || []).length > 0 && <div style={{ margin: "2px 0 4px" }}>{rev.mudancas.map(function (t, i) { return <div key={i} style={{ fontSize: 12.5, fontWeight: 700, color: "#0f172a", padding: "2px 0" }}>• {String(t)}</div>; })}</div>}{/* v100 (14/10/2026) etapa 2: revisão dos tipos novos (C4b) */}
+      {(rev.avisos || []).length > 0 && <div style={{ margin: "2px 0 4px" }}>{rev.avisos.map(function (t, i) { return <div key={i} style={{ fontSize: 12, fontWeight: 700, color: "#92400e", padding: "2px 0" }}>⚠️ {String(t)}</div>; })}</div>}
       {rev.verba_dia_atual != null && linha("Valor", _tcenBrl(rev.verba_dia_atual) + "/dia" + (rev.verba_dia_nova != null ? "  →  " + _tcenBrl(rev.verba_dia_nova) + "/dia" : " (não muda)"), true)}
       {rev.verba_confere === false && <div style={{ color: "#b91c1c", fontSize: 12, fontWeight: 800, margin: "2px 0 4px" }}>⚠️ A verba na Meta não é a do pedido. Não envie; amanhã a IA recalcula.</div>}
       {linha(NIV[rev.nivel] || "Item", rev.item || "—")}
@@ -74397,6 +77199,7 @@ function TCenCartao({ p, eu, onMudou }) {
             const m = _TCEN_NUM[k]; const v = p.numeros[k];
             if (v === null || typeof v === "object") return null;
             if (/^regra_|^opcao_escolhida$/.test(k)) return null;   // v98: dados internos da regra (o nome já vai no selo)
+            if (k === "aplica_meta" || typeof v === "boolean") return null;   // v100 (14/10/2026) etapa 2: marca interna dos pedidos novos (o selo já diz "o app aplica")
             return <div key={k} style={{ background: "#f8fafc", border: "1px solid #eef2f7", borderRadius: 8, padding: "3px 7px", fontSize: 11 }}>
               <span style={{ color: "#64748b" }}>{m ? m[0] : k}: </span><b style={{ color: "#0f172a" }}>{m && m[1] === "R$" ? _tcenBrl(v) : String(v)}</b></div>;
           })}
@@ -74420,9 +77223,11 @@ function TCenCartao({ p, eu, onMudou }) {
       </div>}
       {ehVerbaMes && (p.estado === "novo" || p.estado === "aguardando") && <div style={{ marginTop: 7, background: "#f8fafc", border: "1px solid #eef2f7", borderRadius: 9, padding: "7px 10px", fontSize: 11.5, color: "#475569", lineHeight: 1.5 }}>
         {p.origem === "verba_80" ? <span>Se mesmo assim bater 100%, nasce outro pedido: <b>"reduzir ao mínimo até {(function () { const d = new Date(); const n = new Date(d.getFullYear(), d.getMonth() + 1, 1); return "01/" + String(n.getMonth() + 1).padStart(2, "0"); })()}"</b>{nums.minimo ? " (" + _tcenBrl(nums.minimo) + " por conjunto, o menor que a Meta aceita)" : ""}. </span>
-          : <span>Reduzir ao mínimo vai em passos de no máximo 20% (regra de segurança): se ainda precisar, a IA pede o próximo passo em 72 h. </span>}
+          : <span>Reduzir ao mínimo vai em passos de no máximo 20% (regra de segurança): se ainda precisar, a IA pede o próximo passo em 72 h. <b>Reduzir ao mínimo de uma vez</b> (sem os passos) fura essa trava: fica pronto e DESLIGADO até o Vini decidir ligar. <TV10MinimoChave /> </span>}{/* v100 (14/10/2026) P2_6_03 */}
         Conferência no 3º dia ({Array.isArray(nums.conferencia) && nums.conferencia[0] ? _tiaDM(nums.conferencia[0]) : _trgDMfuturo(3)}) e no 7º ({Array.isArray(nums.conferencia) && nums.conferencia[1] ? _tiaDM(nums.conferencia[1]) : _trgDMfuturo(7)}).
       </div>}
+      <TV10PedidoExtra p={p} />{/* v100 (14/10/2026) P2_3_09/P2_12_10/P2_6_04/P2_3_22: tipo do pedido novo + passo a passo */}
+      <TV10HorarioTroca p={p} onMudou={onMudou} />{/* v100 (15/10/2026) P2_12_10: verba diária → oferta de trocar para verba total (PIN 2x) */}
       {a.ideia && (a.ideia.proximo_passo || a.ideia.copy || a.ideia.roteiro) && <div style={{ marginTop: 6, background: "#f0f9ff", borderRadius: 9, padding: "7px 9px", fontSize: 12, lineHeight: 1.5 }}>
         {a.ideia.proximo_passo && <div><b>Próximo passo:</b> {a.ideia.proximo_passo}</div>}
         {a.ideia.copy && <details style={{ marginTop: 3 }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>✍️ Texto sugerido</summary><div style={{ whiteSpace: "pre-wrap" }}>{a.ideia.copy}</div></details>}
@@ -74455,7 +77260,7 @@ function TCenCartao({ p, eu, onMudou }) {
         {(p.estado === "novo" || p.estado === "aguardando") && !exec && btn("✓ Já resolvi", concluir, null, ocupado)}
         {(p.estado === "novo" || p.estado === "aguardando") && btn("👀 Monitorar", function () { setModo(modo === "monitorar" ? null : "monitorar"); }, null, ocupado)}
         {(p.estado === "novo" || p.estado === "aguardando") && btn("✕ Recusar", function () { setModo(modo === "recusar" ? null : "recusar"); }, null, ocupado)}
-        {p.estado === "monitorando" && p.resultado && p.resultado.aplicado_em && exec && btn("↩ Desfazer", desfazer, null, ocupado)}
+        {p.estado === "monitorando" && p.resultado && p.resultado.aplicado_em && exec && _tcenTipoAntigo(a) && btn("↩ Desfazer", desfazer, null, ocupado)}{/* v100 (14/10/2026) etapa 2: tipos novos não têm desfazer automático */}
         {p.estado === "monitorando" && btn("✓ Concluir", concluir, null, ocupado)}
         <button onClick={verHist} style={{ background: "none", border: "none", color: "#2563eb", fontWeight: 700, fontSize: 11.5, cursor: "pointer", marginLeft: "auto" }}>Histórico</button>
       </div>
@@ -74765,11 +77570,14 @@ function TSegCentral({ onFechar, onMudou, contaFixa, embutido, abaInicial, unida
               <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{_tsegQuando(a.criado_em)}</div>
             </div>
             <div style={{ fontSize: 12.5, color: "#334155", marginTop: 3, lineHeight: 1.5 }}>{a.texto}</div>
-            <div style={{ textAlign: "right", marginTop: 6 }}><button onClick={function () { alarmeVisto(a.id); }} style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8,
-              padding: "5px 11px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>Entendi ✓</button></div>
+            <TV10AlarmeInfo a={a} />
+            {/* v100 (14/10/2026) P2_2_18: grave = "Confirmar que vi" (com observação, fica registrado quem e quando); os outros "Entendi ✓" */}
+            <TV10AlarmeAcao a={a} onFeito={function () { lerAlarmesConta(); _tcliCarregar(true); try { window.dispatchEvent(new CustomEvent("pixels:tseg-alarmes-mudou")); } catch (_) {} }} />
           </div>;
         })}
       </div>}
+      {modoCli && aba === "decidir" && contaFixa && <TV10LanceConjuntos conta={contaFixa} onMudou={mudou} />}{/* v100 (14/10/2026) P2_3_22 etapa 2: custo máximo dos conjuntos no ar = pedido com PIN 2x */}
+      {modoCli && aba === "decidir" && contaFixa && clientId && <TV10FichaConferir clientId={clientId} conta={contaFixa} onMudou={mudou} />}{/* v100 (14/10/2026) P2_3_21 etapa 2: anúncios fora da ficha de automáticos */}
       {modoCli && aba === "decidir" && extra}
     </TCenCasca>
   );
@@ -74872,6 +77680,7 @@ function TMonAnuncioNovo({ an, onChange, onTirar, conta }) {
         {an.midia_url && !sub && (an.midia_publico ? <span style={{ fontSize: 11, color: "#92400e" }}>⚠ link público (a pasta privada do servidor ainda não está ligada)</span> : an.midia_bucket ? <span style={{ fontSize: 11, color: "#64748b" }}>🔒 pasta privada · link assinado</span> : null)}{/* v99 (14/10/2026) S17 */}
       </div>
       {msg && <div style={{ fontSize: 12, color: "#b91c1c" }}>{msg}</div>}
+      {an.midia_url && !sub && <TV10ZonaSegura an={an} conta={conta} onMais={(arguments[0] || {}).onMais} />}{/* v100 (14/10/2026) P2_4_15 zona segura + P2_4_14 os 3 tamanhos de uma vez */}
     </TMonRot>
     <TMonRot t={"Texto principal (" + (an.texto || "").length + "/2200) — vazio = usa o texto do anúncio modelo"}>
       <textarea value={an.texto || ""} onChange={function (e) { onChange(Object.assign({}, an, { texto: e.target.value })); }} rows={4} style={Object.assign({}, _tmonInp, { resize: "vertical" })} /></TMonRot>
@@ -74908,9 +77717,11 @@ function TMonRevisao({ d, conta, modeloNome, modelo }) {
 }
 
 function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
+  const _x2ab = !!(arguments[0] && arguments[0].testeAb) && !rasc;   // v100 (15/10/2026) P2_3_16: aberto pelo 🧪 Plano de testes (17c) com teste_ab:true
+  const _x2abId = arguments[0] && typeof arguments[0].testeAb === "number" ? arguments[0].testeAb : null;   // v100 P2_3_16: nº do teste do plano (quando o 17c mandar teste_id)
   const [id, setId] = useState(rasc ? rasc.id : null);
   const [conta, setConta] = useState(rasc ? rasc.ad_account_id : (contaInicial || ""));
-  const [d, setD] = useState(function () { if (rasc) return rasc.dados; const v = _tmonVazio(); if (preset) v.conjunto = Object.assign({}, v.conjunto, preset); return v; });   // v84: público vindo do Diagnóstico
+  const [d, setD] = useState(function () { if (rasc) return rasc.dados; const v = _tmonVazio(); if (preset) v.conjunto = Object.assign({}, v.conjunto, preset); if (_x2ab) v.teste_ab = { versoes: [0, 1], dias: 7, teste_id: _x2abId }; return v; });   // v84: público vindo do Diagnóstico · v100 P2_3_16: já com o teste A/B ligado
   const [estado, setEstado] = useState(rasc ? rasc.estado : "rascunho");
   const [checklist, setChecklist] = useState(rasc ? rasc.checklist : null);
   const [camps, setCamps] = useState(null);
@@ -74931,6 +77742,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
   const [textosProntos, setTextosProntos] = useState(function () { return partida && partida.anuncio ? [partida.anuncio] : []; });
   // v99 (14/10/2026) 2.9.02: conferência final (servidor + tela) — roda no clique de Validar
   const [conf, setConf] = useState(null); const [confAceito, setConfAceito] = useState(false);
+  const [aprovSt, setAprovSt] = useState(null);   // v100 (14/10/2026) P2_9_06: aprovação do cliente (rel_aprov_status); trava_publicar só com a chave do cliente ligada
   const conferir = async function (rid) { if (!rid) return; setConf({ carregando: true }); setConfAceito(false); setConf(await _tv9ConferirSrv(rid)); };
   // v99 (14/10/2026) 2.9.02 (correção do revisor): rascunho que já abre "validado" roda a conferência final sozinho (só leitura),
   //   para a lista aparecer ANTES do PIN e não só depois que o servidor recusar.
@@ -75014,6 +77826,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
     if (pin.length !== 6) return; setOcupado("pin"); setMsg("");
     try { const r = await _tsegRpc("ads_rascunho_aprovar", { p_id: id, p_pin: pin, p_etapa: 1 }); setPin(""); olhaBloq(r);
       if (r && r.conferencia) { setPinModo(null); conferir(id); }   // v99 etapa 2 (14/10/2026) 2.9.02: o servidor recusou pela conferência final → mostra a lista em vermelho
+      if (r && r.aprovacao) { setPinModo(null); setAprovSt(Object.assign({}, aprovSt || {}, { trava_publicar: true, aviso: r.erro })); }   // v100 (14/10/2026) P2_9_06: servidor travou pela aprovação do cliente
       if (!r || !r.ok) throw new Error((r && r.erro) || "Não foi."); setBloq(false); setPinModo("revisar"); await lerSalvo(); }
     catch (e) { setMsg(e.message); } finally { setOcupado(""); }
   };
@@ -75043,12 +77856,15 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
     </div>
     {resultado && <div style={{ border: "2px solid " + (resultado.ok ? "#16a34a" : "#dc2626"), background: resultado.ok ? "#f0fdf4" : "#fef2f2", borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, lineHeight: 1.5 }}>
       {resultado.ok ? <div><b>✅ Publicada PAUSADA.</b> Para ativar: Decisões › "Ativar a campanha nova" (PIN 2 vezes).</div> : <div><b>⚠️ Não publicou.</b> {resultado.erro}</div>}
+      {resultado.meta && resultado.meta.teste_ab && <TV10TesteAbResultado t={resultado.meta.teste_ab} />}{/* v100 (15/10/2026) P2_3_16 */}
       {resultado.meta && resultado.meta.campaign_id && <div style={{ marginTop: 4 }}><a href={linkGer("campanha", resultado.meta.campaign_id)} target="_blank" rel="noopener noreferrer">Abrir no Gerenciador ↗</a></div>}
     </div>}
     {partida && !rasc && <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "#4c1d95", lineHeight: 1.45 }}>
       📚 Partindo de: <b>{partida.nota}</b>. Escolha a campanha modelo desta conta (destino, página e WhatsApp vêm dela) e confira o resto. Sobe pausada, com PIN 2x.</div>}{/* v99 (14/10/2026) 2.9.04/2.9.15/2.12.02 */}
     {preset && !rasc && !partida && <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "#14532d" }}>
       🔬 Público vindo do Diagnóstico: <b>{preset.genero === "mulheres" ? "Mulheres" : preset.genero === "homens" ? "Homens" : "Todos"}, {preset.idade_min}–{preset.idade_max}{Number(preset.idade_max) >= 65 ? "+" : ""}</b>. Escolha o modelo e confira o resto; dá para mudar tudo. Sobe pausada, com PIN 2x.</div>}
+    {_x2ab && <div style={{ background: "#faf8ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "#4c1d95" }}>{/* v100 (15/10/2026) P2_3_16 */}
+      🧪 Aberto pelo Plano de testes: escolha a campanha modelo, ponha os 2 anúncios (A e B) e confira o bloco "5 · Teste A/B" lá embaixo. Sobe pausada, com PIN 2x.</div>}
     {pinModo && !travado && <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "#5b21b6", fontWeight: 700 }}>
       🔒 Edição travada enquanto o PIN está em andamento. Para mudar algo, clique em Cancelar lá embaixo, edite e valide de novo.</div>}{/* v96 (13/10/2026) S10 */}
     <fieldset disabled={travaEdicao} style={{ border: "none", padding: 0, margin: 0 }}>
@@ -75065,6 +77881,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
             </select>}
         </TMonRot>}
         {conta && camps && <TV9ForaPadrao camps={camps} conta={conta} />}{/* v99 (14/10/2026) 2.9.03 */}
+        {conta && camps && !(d.modelo && d.modelo.campanha_id) && <TV10SemModelo conta={conta} d={d} mudar={mudar} partida={partida} />}{/* v100 (14/10/2026) P2_9_15: cliente novo sem campanha boa na conta */}
         {d.modelo && d.modelo.campanha_id && <TMonRot t="Conjunto modelo (destino, otimização e página vêm dele)">
           {!modelo ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Lendo conjuntos…</div> :
             <select value={d.modelo.conjunto_id || ""} onChange={function (e) { escolherConjunto(e.target.value); }} style={_tmonInp}>
@@ -75074,7 +77891,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
         </TMonRot>}
       </TMonSec>
 
-      {d.modelo && d.modelo.conjunto_id && <Fragment>
+      {_tv10ModeloOk(d) && <Fragment>{/* v100 (14/10/2026) P2_9_15: também no caminho "modelo da agência" */}
         <TMonSec n="2" titulo="Campanha">
           <TMonRot t="Nome da campanha"><input value={(d.campanha && d.campanha.nome) || ""} onChange={function (e) { mudar(Object.assign({}, d, { campanha: { nome: e.target.value } })); }} style={_tmonInp} /></TMonRot>
           {/* v99 (14/10/2026) 2.9.03: nome no padrão do servidor ([Pixels] [Unidade] [Produto] [Objetivo] [dd/mm/aa]), o app preenche */}
@@ -75091,6 +77908,10 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
             <TMonRot t="Interesses"><select value={cj.interesses || "modelo"} onChange={function (e) { setCj(Object.assign({}, cj, { interesses: e.target.value })); }} style={_tmonInp}><option value="modelo">Os do modelo</option><option value="nenhum">Nenhum (aberto)</option></select></TMonRot>
           </div>
           {modelo && (function () { const s = (modelo.conjuntos || []).find(function (x) { return x.id === d.modelo.conjunto_id; }); return s && s.interesses && s.interesses.length && cj.interesses !== "nenhum" ? <div style={{ fontSize: 11.5, color: "#64748b" }}>Interesses do modelo: {s.interesses.join(" · ")}{s.advantage ? " · Advantage+ ligado (a idade vira sugestão)" : ""}</div> : null; })()}
+          {(cj.publicos_incluir || []).length > 0 && <div style={{ fontSize: 11.5, color: "#5b21b6", marginTop: 4 }}>🔁 Lembrete: {cj.publicos_incluir.length} público(s) de quem já mostrou interesse entram neste conjunto ao publicar (a Meta mostra só para eles).</div>}{/* v100 P2_5_05 */}
+          <TV10Lance cj={cj} setCj={setCj} />{/* v100 (14/10/2026) P2_3_22 */}
+          <TV10Automaticos conta={conta} contaObj={contas.find(function (c) { return c.id === conta; })} d={d} mudar={mudar} />{/* v100 (14/10/2026) P2_3_21 */}
+          {(function () { const s = modelo && (modelo.conjuntos || []).find(function (x) { return x.id === d.modelo.conjunto_id; }); return (s && s.destino === "ON_AD") || (d.modelo && d.modelo.destino === "form"); })() && <div style={{ marginTop: 8 }}><TV10Perguntas d={d} mudar={mudar} rascunhoId={id} /></div>}{/* v100 (14/10/2026) P2_7_13 */}
         </TMonSec>
         <TMonSec n="4" titulo="Anúncios" dica="reaproveite os que já rodam (♻️) ou crie um novo (✨)">
           {!modelo ? null : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 8 }}>
@@ -75106,6 +77927,7 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
           {(d.anuncios || []).map(function (an, i) {
             if (an.tipo !== "novo") return null;
             return <TMonAnuncioNovo key={"n" + i} an={an} conta={conta}
+              onMais={function (novos) { mudar(Object.assign({}, d, { anuncios: (d.anuncios || []).concat(novos || []) })); }}
               onChange={function (x) { const l = d.anuncios.slice(); l[i] = x; mudar(Object.assign({}, d, { anuncios: l })); }}
               onTirar={function () { mudar(Object.assign({}, d, { anuncios: d.anuncios.filter(function (_, j) { return j !== i; }) })); }} />;
           })}
@@ -75116,6 +77938,10 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
               <button onClick={function () { porTexto(t); setTextosProntos(textosProntos.filter(function (_, j) { return j !== i; })); }} style={{ border: "1px solid #c4b5fd", background: "#fff", color: "#5b21b6", borderRadius: 8, padding: "4px 9px", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>＋ Pôr como anúncio novo</button></div>; })}
           </div>}
           <TV9Vencedores conta={conta} contaObj={contas.find(function (c) { return c.id === conta; })} onUsar={porTexto} destaque={abrirVenc} />{/* v99 (14/10/2026) 2.10.10 */}
+          <TV10VariacaoImg conta={conta} contaObj={contas.find(function (c) { return c.id === conta; })} onPor={function (an) { if (!travaEdicao) mudar(Object.assign({}, d, { anuncios: (d.anuncios || []).concat([an]) })); }} />{/* v100 (14/10/2026) P2_4_13 */}
+        </TMonSec>
+        <TMonSec n="5" titulo="Teste A/B (opcional)" dica="2 versões, o mesmo público, a resposta com % de certeza">{/* v100 (15/10/2026) P2_3_16 */}
+          <TV10TesteAb conta={conta} d={d} mudar={mudar} travado={travaEdicao} />
         </TMonSec>
       </Fragment>}
     </fieldset>
@@ -75133,6 +77959,12 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
     {/* v99 (14/10/2026) 2.9.02: conferência final (link, WhatsApp, UTM, formatos, nome) — com erro, publicar pede o "publicar assim mesmo" */}
     {estado === "validado" && !travado && (conf ? <TV9Conferencia conf={conf} locais={_tv9ConferirLocal(d)} aceito={confAceito} setAceito={setConfAceito} ocupado={!!ocupado || !!pinModo} onRefazer={function () { conferir(id); }} /> :
       <div style={{ marginBottom: 10 }}><button onClick={function () { conferir(id); }} disabled={!id || !!ocupado} style={{ border: "1px solid #c4b5fd", background: "#faf8ff", color: "#5b21b6", borderRadius: 9, padding: "6px 11px", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>✅ Fazer a conferência final (link, WhatsApp, UTM e formatos)</button></div>)}
+    {/* v100 (14/10/2026) antes do PIN: P2_4_19 revisão de texto · P2_1_09 teste de contagem (aviso) · P2_9_06/P2_4_18 aprovação do cliente */}
+    {!travado && conta && _tv10ModeloOk(d) && <div style={{ marginBottom: 4 }}>
+      <TV10RevisaoTexto conta={conta} d={d} />
+      <TV10Contagem conta={conta} />
+      <TV10Aprovacao rascunhoId={id} onStatus={setAprovSt} />
+    </div>}
     {pinModo === "revisar" && <div style={{ border: "2px solid #7c3aed", borderRadius: 12, padding: "12px", background: "#faf8ff", marginBottom: 12 }}>
       <div style={{ fontWeight: 900, fontSize: 14, color: "#5b21b6", marginBottom: 8 }}>🔎 Revise antes de publicar</div>
       {/* v96 (13/10/2026) S10: revisão = versão salva no servidor (a que a Meta vai receber) */}
@@ -75142,6 +77974,8 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
           <div style={{ marginTop: 6 }}><TSegBotao tipo="secundario" onClick={function () { setMsg(""); lerSalvo(); }} desligado={!!ocupado}>↻ Ler de novo</TSegBotao></div>
         </div> :
         <TMonRevisao d={revSrv.dados} conta={(contas.find(function (c) { return c.id === revSrv.conta; }) || {}).nome || revSrv.conta || contaNome} modeloNome={modelo && modelo.campanha ? modelo.campanha.nome : ""} modelo={modelo} />}
+      {revSrv && revSrv.dados && revSrv.dados.teste_ab && <div style={{ marginTop: 6, fontSize: 12.5, color: "#4c1d95", fontWeight: 700 }}>{/* v100 (15/10/2026) P2_3_16 */}
+        🧪 Teste A/B: sobem 2 conjuntos (A = "{((revSrv.dados.anuncios || [])[(revSrv.dados.teste_ab.versoes || [0, 1])[0]] || {}).nome || "versão A"}", B = "{((revSrv.dados.anuncios || [])[(revSrv.dados.teste_ab.versoes || [0, 1])[1]] || {}).nome || "versão B"}"), {_tiaBrl(Number((revSrv.dados.conjunto || {}).verba_dia || 0) / 2)}/dia cada, por {revSrv.dados.teste_ab.dias || 7} dias. Tudo pausado.</div>}
       <div style={{ fontSize: 12, color: "#475569", margin: "10px 0 6px" }}><b>2º PIN</b> — publica (pausada). Vale 10 min.</div>
       <TSegCampoPin valor={pin} onChange={setPin} onEnter={pin2} autoFocus />
       <div style={{ display: "flex", gap: 6 }}><TSegBotao onClick={pin2} desligado={!!ocupado || pin.length !== 6 || !revSrv || !!revSrv.erro}>{ocupado === "publicar" ? "Publicando… (até 2 min com vídeo)" : "✓ Está certo, publicar"}</TSegBotao><TSegBotao tipo="secundario" onClick={function () { setPinModo(null); setPin(""); setRevSrv(null); }}>Cancelar</TSegBotao></div>
@@ -75160,8 +77994,8 @@ function TMonEditor({ rasc, contas, onVoltar, contaInicial, preset }) {
     {bloq && <div style={{ marginBottom: 8 }}><TSegBloqSaida /></div>}{/* v96 (13/10/2026) S11 (revisão RA) */}
     {!travaEdicao && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", position: "sticky", bottom: 0, background: "#fff", padding: "8px 0" }}>{/* v96 (13/10/2026) S10: Salvar/Validar escondidos durante o PIN */}
       <TSegBotao tipo="secundario" onClick={function () { setOcupado("salvar"); setMsg(""); salvar().then(function () { if (typeof pixelsToast !== "undefined") pixelsToast.success("Rascunho salvo.", 2000); }).catch(function (e) { setMsg(e.message); }).finally(function () { setOcupado(""); }); }} desligado={!!ocupado || !conta}>💾 Salvar rascunho</TSegBotao>
-      <TSegBotao onClick={validar} desligado={!!ocupado || !conta || !(d.modelo && d.modelo.conjunto_id)}>{ocupado === "validar" ? "Validando na Meta…" : "🚦 Validar"}</TSegBotao>
-      {estado === "validado" && !pinModo && <TSegBotao onClick={function () { setPinModo("pin1"); setMsg(""); }} desligado={(conf && (conf.carregando || conf.rodando)) || _tv9ConfTrava(conf) || (_tv9TemErroConf(conf) && !confAceito)}>{conf && (conf.carregando || conf.rodando) ? "Conferindo…" : _tv9ConfTrava(conf) || (_tv9TemErroConf(conf) && !confAceito) ? "🧱 Publicar · corrija a conferência" : "🧱 Publicar (PIN 2 vezes)"}</TSegBotao>}{/* v99 2.9.02 · etapa 2: trava do servidor */}
+      <TSegBotao onClick={validar} desligado={!!ocupado || !conta || !_tv10ModeloOk(d)}>{ocupado === "validar" ? "Validando na Meta…" : "🚦 Validar"}</TSegBotao>
+      {estado === "validado" && !pinModo && <TSegBotao onClick={function () { setPinModo("pin1"); setMsg(""); }} desligado={(conf && (conf.carregando || conf.rodando)) || _tv9ConfTrava(conf) || (_tv9TemErroConf(conf) && !confAceito) || !!(aprovSt && aprovSt.trava_publicar)}>{conf && (conf.carregando || conf.rodando) ? "Conferindo…" : aprovSt && aprovSt.trava_publicar ? "🧱 Publicar · falta o cliente aprovar" : _tv9ConfTrava(conf) || (_tv9TemErroConf(conf) && !confAceito) ? "🧱 Publicar · corrija a conferência" : "🧱 Publicar (PIN 2 vezes)"}</TSegBotao>}{/* v100 P2_9_06: trava só com a chave do cliente ligada */}{/* v99 2.9.02 · etapa 2: trava do servidor */}
     </div>}
     {!travaEdicao && <TV9GuardarModelo conta={conta} contaNome={contaNome} d={d} modelo={modelo} />}{/* v99 (14/10/2026) 2.9.15 */}
   </div>;
@@ -75172,7 +78006,8 @@ function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo, preset }) {
   const vencedores = !!(arguments[0] && arguments[0].vencedores);   // v99 (14/10/2026) 2.10.10: aberto pelo ranking de criativos
   const [partida, setPartida] = useState((arguments[0] && arguments[0].partida) || null);   // v99 (14/10/2026) 2.9.04/2.9.15/2.12.02: modelo pronto ou feira escolhidos na tela inicial (ou vindo do 17c: região polo, quem recomenda, reposição)
   const usarPartida = function (p) { setPartida(p); setAberto("novo"); };
-  const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(copiar && !abrirId ? "copiar" : (novo || (arguments[0] && arguments[0].partida)) && !abrirId ? "novo" : null); const [msg, setMsg] = useState("");
+  const testeAb = (arguments[0] && arguments[0].testeAb) || false;   // v100 (15/10/2026) P2_3_16: aberto pelo 🧪 Plano de testes ({painel:"montador", teste_ab:true})
+  const [lista, setLista] = useState(null); const [contas, setContas] = useState([]); const [aberto, setAberto] = useState(copiar && !abrirId ? "copiar" : (novo || (arguments[0] && arguments[0].partida) || testeAb) && !abrirId ? "novo" : null); const [msg, setMsg] = useState("");
   const [erroL, setErroL] = useState(""); const [erroC, setErroC] = useState("");   // v96 Q6
   useEffect(function () {
     if (!abrirId) return;
@@ -75188,7 +78023,7 @@ function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo, preset }) {
     <TSegJanela titulo={"🧱 Montar campanha" + (contaFixa ? " · " + ((contas.find(function (c) { return c.id === contaFixa; }) || {}).nome || "") : "")} onFechar={function () { onFechar(); onMudou && onMudou(); }} largura={900}>
       {aberto === "copiar" ? <TMonCopiar contas={contas} contaInicial={contaFixa} copiar={copiar} onVoltar={function () { setAberto(null); carregar(); }} /> :   /* v98 L9-f */
         aberto ? <TMonEditor rasc={aberto === "novo" ? null : aberto} contas={contas} contaInicial={contaFixa} preset={aberto === "novo" ? (partida ? Object.assign({}, preset || {}, partida.preset || {}) : preset) : null}
-          partida={aberto === "novo" ? partida : null} vencedores={vencedores}
+          partida={aberto === "novo" ? partida : null} vencedores={vencedores} testeAb={aberto === "novo" ? testeAb : false}
           onVoltar={function () { setAberto(null); setPartida(null); carregar(); }} /> :
         <div>
           <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
@@ -75220,6 +78055,9 @@ function TSegMontador({ onFechar, onMudou, abrirId, contaFixa, novo, preset }) {
           <div style={{ marginTop: 16 }}>
             <TV9Modelos conta={contaFixa} onUsar={usarPartida} />
             <TV9Feiras conta={contaFixa} onUsar={usarPartida} />
+            <TV10Publicos conta={contaFixa} onUsar={usarPartida} />{/* v100 (14/10/2026) P2_5_07 */}
+            <TV10Lembrete conta={contaFixa} onUsar={usarPartida} />{/* v100 (14/10/2026) P2_5_05 */}
+            <TV10Planilha conta={contaFixa} lista={lista} />{/* v100 (14/10/2026) P2_3_18 */}
           </div>
         </div>}
     </TSegJanela>
@@ -75444,7 +78282,7 @@ function TCenMercado({ contaFixa }) {
           {(r.concorrentes || []).length > 0 && <div style={{ marginTop: 4, color: "#64748b" }}><b>Concorrentes:</b> {r.concorrentes.join(" · ")}</div>}
         </div>;
       })}</div>}
-    {!contaFixa && <TCenGoogle />}
+    {!contaFixa && <div style={{ marginTop: 12, fontSize: 12, color: "#64748b", border: "1px dashed #e2e8f0", borderRadius: 10, padding: "8px 11px" }}>🔎 O Google Ads saiu daqui: agora fica dentro do cliente, na Visão geral (chave "Meta Ads | Google Ads", só em cliente que anuncia no Google).</div>}{/* v100 (14/10/2026) R15 (pedido do F2): TCenGoogle fora da aba Mercado */}
   </div>;
 }
 
@@ -75628,7 +78466,8 @@ function TCliDecisoes({ mc, conta, isMob, canEdit }) {
   const rr = T.resumo && contaId ? T.resumo[contaId] : null;
   const uni = rr && Array.isArray(rr.unidades) && mc && mc.bioter_unit ? mc.bioter_unit : null;   // v80 M05
   if (!T.ok) return typeof QGAdsEstrategia === "function"   // sem PIN aberto: mostra os alertas de antes, como sempre foi
-    ? <Fragment><TCliAlarmesConta mc={mc} conta={conta} isMob={isMob} /><QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false} /></Fragment>   /* v98 (14/10/2026): alarmes desta conta também aqui, para quem o servidor liberar (some se recusar) */
+    ? <Fragment><TCliAlarmesConta mc={mc} conta={conta} isMob={isMob} /><QGAdsEstrategia mc={mc} conta={conta} isMob={isMob} canEdit={false} />
+        <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 6 }}>Os alertas de antes ficam só para consulta: a baixa é pela 🧠 Decisões, com o PIN.</div></Fragment>   /* v100 (14/10/2026) R3: sem "Feito"/"Ignorar" fora do PIN */   /* v98 (14/10/2026): alarmes desta conta também aqui, para quem o servidor liberar (some se recusar) */
     : <div style={{ padding: 20, color: "#94a3b8", fontSize: 13 }}>Abra a Gestão de mídia com o PIN.</div>;
   return <div data-tcli-alertas="1" style={{ background: "#fff", border: "1px solid #e5e9f0", borderRadius: 18, padding: isMob ? "14px 12px" : "18px 20px", fontFamily: "'Inter',system-ui,sans-serif" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
@@ -75640,8 +78479,7 @@ function TCliDecisoes({ mc, conta, isMob, canEdit }) {
       Esta unidade roda na conta de Toledo junto com outras. Aqui aparecem só as decisões das campanhas de <b>{_tcliUniLbl(uni)}</b> e o ritmo pela verba de {_tcliUniLbl(uni)}.</div>}
     <TSegCentral key={contaId + ":" + (uni || "")} contaFixa={contaId} clientId={mc && mc.client_id} unidade={uni} embutido abaInicial={aba} onMudou={function () { _tcliCarregar(true); }}
       topo={<TMetasNorte clientId={mc && mc.client_id} />}
-      diagnostico={<TCliDiag mc={mc} conta={conta} isMob={isMob} canEdit={canEdit}
-        detalhe={typeof QGAdsDiagnostico === "function" ? <QGAdsDiagnostico mc={mc} conta={conta} isMob={isMob} canEdit={canEdit !== false && (typeof _bl !== "function" || _bl("midia.cerebro"))} /> : null} />}
+      diagnostico={<TCliDiag mc={mc} conta={conta} isMob={isMob} canEdit={canEdit} /* v100 (14/10/2026) R8: o Diagnóstico antigo saiu daqui (a nota do cliente agora grava direto no novo) */ />}
       regras={<TCliRegrasAba mc={mc} conta={conta} isMob={isMob} uni={uni} canEdit={canEdit} />} />{/* v98 (14/10/2026) L9-c: o "📋 Regras automáticas (os alertas de antes)" saiu do fim de "Precisa de vocês" e foi para dentro de ⚙️ Regras, até a data de saída */}
   </div>;
 }
@@ -75973,7 +78811,8 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
       // v96 (13/10/2026) R8 rodada 2: a versão completa traz junto aparelho, o que o cliente falou e o "A IA diz" (antes vinham do Diagnóstico
       //   antigo e da Colinha). Se ela falhar, usa a simples, como antes.
       let r = null;
-      try { r = await _tsegRpc("ads_diag_cliente_completo", { p_client: cli, p_dias: dd }); if (!r || !r.ok) r = null; } catch (_) { r = null; }
+      try { r = await _tsegRpc("ads_diag_cliente_unico", { p_client: cli, p_dias: dd }); if (!r || !r.ok) r = null; } catch (_) { r = null; }   // v100 (14/10/2026) R8 etapa 2: um diagnóstico só (C5a), já com saúde, calendário e colinha
+      if (!r) { try { r = await _tsegRpc("ads_diag_cliente_completo", { p_client: cli, p_dias: dd }); if (!r || !r.ok) r = null; } catch (_) { r = null; } }
       if (!r) r = await _tsegRpc("ads_diag_cliente", { p_client: cli, p_dias: dd });
       if (!r || !r.ok) throw new Error((r && r.erro) || "Não carregou.");
       setD(r); setErro("");
@@ -76000,11 +78839,13 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
     } catch (e) { setErro(e.message); } finally { setCarregando(false); }
   }, [cli]);
   useEffect(function () { carregar(dias); }, [carregar, dias]);
-  useEffect(function () {   // saúde e calendário ainda só vêm da colinha do dia (o "A IA diz" e o placar vêm do ia_diz quando houver)
-    if (!cli || !window._sb) return;
-    setCol(null);
+  // v100 (14/10/2026) R8: a Colinha sai. Saúde e calendário vêm do próprio Diagnóstico (ads_diag_cliente_completo: saude/calendario).
+  //   Só enquanto o servidor ainda não manda esses 2 campos, a tela lê a Colinha (uma vez, e só para eles).
+  const precisaCol = !!(d && d.ok !== false && d.saude === undefined && d.calendario === undefined && d.colinha === undefined);   // v100 etapa 2: com ads_diag_cliente_unico nunca lê a Colinha
+  useEffect(function () {
+    if (!cli || !window._sb || !precisaCol) { setCol(null); return; }
     window._sb.rpc("ads_colinha_ler", { p_client: cli, p_desde: null }).then(function (r) { if (r && r.data && r.data.ok) setCol(r.data); }).catch(function () {});
-  }, [cli]);
+  }, [cli, precisaCol]);
 
   const mudarDias = function (v) { setDias(v); _tdgLs.gravar("px_diag_dias", v); };
   // v96 (13/10/2026) Q14: tudo que abre a Sala daqui (Discutir, Montar plano, Conversar, quadrados de idade/gênero e de horário) avisa na hora se a IA está sem crédito
@@ -76229,6 +79070,10 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
 
   // saúde e calendário (da colinha do dia) + cansaço dos criativos
   const chips = [];
+  if (Array.isArray(d.saude) || Array.isArray(d.calendario)) {   // v100 (14/10/2026) R8: do próprio Diagnóstico
+    (d.saude || []).forEach(function (x) { const t = String((x && x.t) || ""); if (!t) return; const ic = x.sinal === "verde" ? "✅" : (x.sinal === "vermelho" || x.sinal === "amarelo") ? "⚠️" : "ℹ️"; chips.push({ ic: ic, t: t, cor: ic === "⚠️" ? "warn" : "", fonte: x.fonte }); });
+    (d.calendario || []).forEach(function (x) { const t = String((x && x.t) || "").replace(/^Calendário:\s*/i, ""); if (t) chips.push({ ic: "📅", t: t, fonte: x.fonte }); });
+  }
   const fr = (col && col.frentes) || [];
   ["saude", "funil", "mercado"].forEach(function (id) {
     const f = fr.find(function (x) { return x.id === id; }); if (!f) return;
@@ -76243,11 +79088,11 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
   const fmax = Math.max.apply(null, [0].concat((d.criativos || []).map(function (c) { return Number(c.freq7 || 0); })));
   if ((d.criativos || []).length) chips.unshift(cans.length ? { ic: "⚠️", cor: "warn", t: "Criativo cansando: " + cans[0].nome + " (frequência " + _tdgNum(cans[0].freq7, 1) + " e CTR caindo)" } : { ic: "✅", t: "Criativos sem cansaço (frequência até " + _tdgNum(fmax, 1) + ")" });
   const iaDiz = (d && d.ia_diz) || null;   // v96 R8 rodada 2
-  const placar = ((iaDiz && iaDiz.placar && iaDiz.placar.tipos) || (col && col.placar && col.placar.tipos) || []);
+  const placar = ((iaDiz && iaDiz.placar && iaDiz.placar.tipos) || []);   // v100 (14/10/2026) R8: só o placar do Diagnóstico novo (a Colinha não entra mais)
   const medidos = placar.reduce(function (a, t) { return a + Number(t.melhorou || 0) + Number(t.piorou || 0) + Number(t.igual || 0); }, 0);
   if (medidos) chips.push({ ic: "🎯", t: "Placar da IA: " + placar.reduce(function (a, t) { return a + Number(t.melhorou || 0); }, 0) + " de " + medidos + " decisões medidas melhoraram" });
   const nOk = chips.filter(function (c) { return c.ic === "✅"; }).length, nW = chips.filter(function (c) { return c.ic === "⚠️"; }).length, nC = chips.filter(function (c) { return c.ic === "📅"; }).length;
-  const res = (iaDiz && iaDiz.resumo_ia) || (col && col.resumo_ia);
+  const res = (iaDiz && iaDiz.resumo_ia) || null;   // v100 (14/10/2026) R8: um "A IA diz" só (o da Colinha saiu)
 
   const mp = k.meta_leads ? Math.min(100, 100 * Number(k.leads_mes || 0) / Number(k.meta_leads)) : 0;
   const mpe = k.meta_leads ? 100 * Number(k.dia) / Number(k.dias_mes) : 0;
@@ -76333,7 +79178,9 @@ function TCliDiag({ mc, conta, isMob, canEdit, detalhe }) {
     </div>
     <div className="tdg-note">A conversa abre na Sala de estratégia e fica salva: a IA lembra dela nas próximas decisões. Se virar campanha, segue para o Montador.</div>
 
-    {detalhe && <div style={{ marginTop: 14, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
+    {/* v100 (14/10/2026) R8: anotar direto aqui (ads_memoria_anotar), sem abrir o Diagnóstico antigo */}
+    {canEdit !== false && cli && <TV10Anotar cli={cli} onFeito={function () { carregar(dias); }} />}
+    {false && detalhe && <div style={{ marginTop: 14, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
       <button onClick={function () { setVerDet(!verDet); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 800, fontSize: 13, color: "#334155", fontFamily: "inherit" }}>
         {verDet ? "▲" : "▾"} Anotar o que o cliente falou <span style={{ fontWeight: 500, color: "#64748b" }}>(abre o Diagnóstico antigo — é o único lugar que grava as notas)</span></button>{/* v96 (13/10/2026) R8 rodada 2: aparelho e notas já aparecem acima; o antigo fica só para escrever notas */}
       {verDet && <div style={{ marginTop: 10 }}>{detalhe}</div>}
@@ -76466,7 +79313,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
   useEffect(function () {
     const h = function (e) {
       const d = (e && e.detail) || {};
-      setCtx({ conta: d.conta || null, novo: !!d.novo, estrategia: d.estrategia || null, texto: d.texto || null, preset: d.preset || null, copiar: d.copiar || null, vencedores: !!d.vencedores, partida: _tv9PartidaDoEvento(d) });   // v98 L9-f: copiar · v99 2.10.10: vencedores · v99 2.12.03/06/11: ponto de partida vindo do 17c
+      setCtx({ conta: d.conta || null, novo: !!d.novo, estrategia: d.estrategia || null, texto: d.texto || null, preset: d.preset || null, copiar: d.copiar || null, vencedores: !!d.vencedores, partida: _tv9PartidaDoEvento(d), teste_ab: d.teste_ab ? (Number(d.teste_id) || true) : false });   /* v100 (15/10/2026) P2_3_16: teste_ab (e teste_id, se vier) do 🧪 Plano de testes */   // v98 L9-f: copiar · v99 2.10.10: vencedores · v99 2.12.03/06/11: ponto de partida vindo do 17c
       if (d.painel === "montador") setAbrirRasc(d.abrirId || null);
       if (d.painel === "alarmes") lerAlarmes();
       setPainel(d.painel || null);
@@ -76578,7 +79425,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
       </div>}{/* v96 (13/10/2026) Q14 faixa vermelha */}
       {children}
       {painel === "alarmes" && <TSegAlarmes itens={alarmes} carregando={carregandoAl && !alarmes && !erroAl} erro={erroAl} onTentar={lerAlarmes} onVisto={visto} onFechar={function () { setPainel(null); }} />}
-      {painel === "montador" && <TSegMontador abrirId={abrirRasc} contaFixa={ctx.conta} novo={ctx.novo} preset={ctx.preset} copiar={ctx.copiar} vencedores={ctx.vencedores} partida={ctx.partida} onFechar={function () { setPainel(null); setAbrirRasc(null); setCtx({}); _tcliCarregar(true); }} onMudou={lerPend} />}
+      {painel === "montador" && <TSegMontador abrirId={abrirRasc} contaFixa={ctx.conta} novo={ctx.novo} preset={ctx.preset} copiar={ctx.copiar} vencedores={ctx.vencedores} partida={ctx.partida} testeAb={ctx.teste_ab} onFechar={function () { setPainel(null); setAbrirRasc(null); setCtx({}); _tcliCarregar(true); }} onMudou={lerPend} />}
       {painel === "sala" && <TSegSala contaFixa={ctx.conta} abrirEstrategia={ctx.estrategia} textoInicial={ctx.texto} onFechar={function () { setPainel(null); setCtx({}); }} onAbrirMontador={function (id) { setAbrirRasc(id); setCtx(function (c) { return Object.assign({}, c, { novo: false }); }); setPainel("montador"); }} />}
       {painel === "central" && <TSegCentral onFechar={function () { setPainel(null); lerPend(); _tcliCarregar(true); }} onMudou={lerPend} />}
       {painel === "seguranca" && <TSegSeguranca st={st} onFechar={function () { setPainel(null); }} onMudou={carregar} />}
@@ -77032,7 +79879,9 @@ function TCliAlarmesConta({ mc, conta, isMob }) {
           <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{_tsegQuando(a.criado_em)}</div>
         </div>
         <div style={{ fontSize: 12.5, color: "#334155", marginTop: 3, lineHeight: 1.5 }}>{a.texto}</div>
-        <div style={{ textAlign: "right", marginTop: 6 }}><button onClick={function () { entendi(a.id); }} style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "5px 11px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>Entendi ✓</button></div>
+        <TV10AlarmeInfo a={a} />
+        {/* v100 (14/10/2026) P2_2_18: grave = "Confirmar que vi"; os outros "Entendi ✓" (entendi() continua de reserva) */}
+        <TV10AlarmeAcao a={a} onFeito={function () { setVistoMsg(""); ler(); try { window.dispatchEvent(new CustomEvent("pixels:tseg-alarmes-mudou")); } catch (_) {} }} />
       </div>;
     })}
     {vistoMsg && <div style={{ color: "#b91c1c", fontSize: 12, fontWeight: 700 }}>{vistoMsg}</div>}
@@ -77268,6 +80117,7 @@ function TMonCopiar({ contas, contaInicial, copiar, onVoltar }) {
             <button onClick={function () { setVerOrig(!verOrig); }} style={{ width: "100%", margin: "6px 0", border: "1.5px dashed #c4b5fd", background: "#faf8ff", color: "#5b21b6", borderRadius: 10, padding: "7px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>{verOrig ? "esconder o original ▴" : "ver o original em português lado a lado ▾"}</button></div>}
         {PR.map(linhaPrev)}
         {(prev.midia_avisos || []).length > 0 && <div style={{ fontSize: 11.5, color: "#92400e", marginTop: 6 }}>{prev.midia_avisos.map(function (t, i) { return <div key={i}>⚠️ {t}</div>; })}</div>}
+        {idioma !== "pt_BR" && <div style={{ fontSize: 11.5, color: "#92400e", marginTop: 6 }}>🖼️ O que está escrito DENTRO da arte ou do vídeo não é traduzido. Troque a peça pela versão em espanhol (✨ Anúncio novo no rascunho) antes do PIN.</div>}{/* v100 (14/10/2026) P2_3_19 */}
         {dest.length > 0 && <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "7px 10px", fontSize: 12, color: "#92400e", marginTop: 6 }}>
           ✎ Confira: {dest.map(function (d, i) { return <span key={i}>{i > 0 ? "; " : ""}"{d.de}" virou <b>"{d.para}"</b>{d.explica ? " (" + d.explica + ")" : ""}</span>; })}. Clique em qualquer texto em {idioma === "es_PY" ? "espanhol" : "português"} para corrigir antes do PIN.</div>}
       </div>
@@ -77796,7 +80646,7 @@ function TV9Modelos({ conta, onUsar }) {
               <div className="d">{[cj.genero ? (cj.genero === "homens" ? "Homens" : cj.genero === "mulheres" ? "Mulheres" : "Todos") : "", cj.idade_min ? cj.idade_min + "–" + (cj.idade_max || 65) : "", cj.raio_km ? "raio " + cj.raio_km + " km" : "", cj.verba_dia ? _tv9Brl(cj.verba_dia) + "/dia" : ""].filter(Boolean).join(" · ")}</div>
               {Array.isArray(cj.interesses) && cj.interesses.length > 0 && <div className="d">Interesses: {cj.interesses.slice(0, 5).join(" · ")}{cj.interesses.length > 5 ? " +" + (cj.interesses.length - 5) : ""}</div>}{/* v99 etapa 2 (14/10/2026) 2.9.15: o servidor (C4b) manda interesses e cidades do conjunto de origem */}
               {cj.cidades_txt && <div className="d" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }} title={cj.cidades_txt}>Onde: {cj.cidades_txt}</div>}
-              <div className="rod"><button className="tv9-b pri" onClick={function () { onUsar({ nota: "modelo \"" + m.nome + "\"" + (m.origem_conta_nome ? " (" + m.origem_conta_nome + ")" : "") + (cj.raio_km ? " · raio sugerido " + cj.raio_km + " km" : ""), produto: m.nicho, raio: cj.raio_km || null, preset: _tv9PresetDe(cj), anuncio: m.anuncio && (m.anuncio.texto || m.anuncio.titulo) ? Object.assign({ nome: m.nome }, m.anuncio) : null }); }}>Usar este modelo ›</button></div>
+              <div className="rod"><button className="tv9-b pri" onClick={function () { onUsar({ nota: "modelo \"" + m.nome + "\"" + (m.origem_conta_nome ? " (" + m.origem_conta_nome + ")" : "") + (cj.raio_km ? " · raio sugerido " + cj.raio_km + " km" : ""), produto: m.nicho, modelo_id: m.id, raio: cj.raio_km || null, preset: _tv9PresetDe(cj), anuncio: m.anuncio && (m.anuncio.texto || m.anuncio.titulo) ? Object.assign({ nome: m.nome }, m.anuncio) : null }); }}>Usar este modelo ›</button></div>
             </div>;
           })}</div>
         </div>)}
@@ -77969,7 +80819,8 @@ function TV9Vencedores({ conta, onUsar }) {
         <div style={{ whiteSpace: "pre-wrap", fontSize: 12.5, marginTop: 4, color: "#334155" }}>{r.briefing}</div><button className="tv9-b lnk" onClick={function () { copiar(r.briefing); }}>Copiar briefing</button></details>}
       {r.video && (r.video.cenas || []).length > 0 && <details style={{ marginTop: 6 }}><summary style={{ cursor: "pointer", fontWeight: 800, fontSize: 12.5 }}>🎬 Próximo vídeo{r.video.duracao_s ? " (" + r.video.duracao_s + " s)" : ""}</summary>
         {r.video.ideia && <div style={{ fontSize: 12.5, color: "#334155", marginTop: 4 }}>{r.video.ideia}</div>}
-        {r.video.cenas.map(function (c, i) { return <div key={i} style={{ fontSize: 12, color: "#475569", marginTop: 3 }}><b>{c.tempo}</b> · {[c.imagem, c.fala ? "fala: \"" + c.fala + "\"" : "", c.texto_tela ? "na tela: " + c.texto_tela : ""].filter(Boolean).join(" · ")}</div>; })}</details>}
+        {r.video.cenas.map(function (c, i) { return <div key={i} style={{ fontSize: 12, color: "#475569", marginTop: 3 }}><b>{c.tempo}</b> · {[c.imagem, c.fala ? "fala: \"" + c.fala + "\"" : "", c.texto_tela ? "na tela: " + c.texto_tela : ""].filter(Boolean).join(" · ")}</div>; })}
+        <TV10VideoParaEdicao conta={conta} contaObj={contaObj} video={r.video} gancho={r.comum && r.comum.gancho} />{/* v100 (15/10/2026) P2_4_13: leva gancho + roteiro para a Edição de vídeo (card de vídeo) */}</details>}
       {(r.textos || []).map(function (t, i) {
         return <div key={i} style={{ border: "1px solid #e5e9f0", borderRadius: 10, padding: "8px 10px", marginTop: 7, background: "#fff" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b style={{ fontSize: 12.5 }}>{t.titulo || "Texto " + (i + 1)}</b>
@@ -78166,6 +81017,1176 @@ function TV9MetaSugestao({ clientId, mes, onUsar }) {
           <span style={{ fontSize: 11, color: "#94a3b8", alignSelf: "center" }}>Abre a edição já preenchida; só grava no ✓ Salvar metas.</span>
         </div>
       </div>}
+  </div>;
+}
+
+/* =====================================================================================================================
+   v100 (14/10/2026) · F1 · fechar os itens aprovados que ficaram parciais (🧠 Decisões, alarmes, Montador e Sala)
+   Sem aba nova: tudo entra como bloco que retrai (TV9Bloco) ou botão dentro das telas que já existem.
+   Regras: nada escreve na Meta sem pedido + PIN 2x; IA só no clique de sócio (o servidor tem o teto); nada carrega em laço;
+   função do servidor que ainda não existe = "ainda não ligado" (TV9Falta), e a tela continua funcionando como antes.
+   ===================================================================================================================== */
+const _TV10_CSS = `
+.tv10-lin{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.tv10-c{font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;display:inline-block;background:#f1f5f9;color:#475569}
+.tv10-c.grave{background:#fee2e2;color:#b91c1c}.tv10-c.medio{background:#fef3c7;color:#92400e}.tv10-c.leve{background:#dbeafe;color:#1e40af}
+.tv10-c.roxo{background:#ede9fe;color:#5b21b6}.tv10-c.verde{background:#dcfce7;color:#166534}.tv10-c.verm{background:#fee2e2;color:#b91c1c}
+.tv10-c.sobe{background:#7c3aed;color:#fff}
+.tv10-obs{width:100%;font-size:12.5px;padding:6px 9px;border:1.5px solid #cbd5e1;border-radius:9px;font-family:inherit;box-sizing:border-box}
+.tv10-zona{position:relative;display:inline-block;border-radius:10px;overflow:hidden;background:#0f172a;line-height:0}
+.tv10-zona img{display:block;max-width:100%}
+.tv10-zona .z{position:absolute;left:0;right:0;background:rgba(220,38,38,.28);border:1.5px dashed rgba(254,202,202,.95);box-sizing:border-box}
+.tv10-zona .zr{position:absolute;background:rgba(220,38,38,.28);border:1.5px dashed rgba(254,202,202,.95);box-sizing:border-box}
+.tv10-zona .zl{position:absolute;left:6px;font-size:10px;font-weight:800;color:#fff;background:rgba(15,23,42,.7);border-radius:5px;padding:1px 5px;line-height:1.4}
+.tv10-tam{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.tv10-tam figure{margin:0;text-align:center;font-size:10.5px;color:#64748b;font-weight:700}
+.tv10-tam img{display:block;border-radius:7px;border:1px solid #e5e9f0;background:#f1f5f9}
+.tv10-etapa{border:1px solid #e5e9f0;border-radius:12px;padding:9px 11px;margin-top:8px;background:#fff}
+.tv10-etapa.ok{border-color:#bbf7d0;background:#f0fdf4}.tv10-etapa.ajuste{border-color:#fde68a;background:#fffbeb}
+.tv10-faixa{background:#fef9c3;border:1px solid #fde047;color:#713f12;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:800;margin-bottom:8px}
+.tv10-tb{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+.tv10-tb th{font-size:10.5px;color:#64748b;text-align:left;font-weight:800;padding:4px 6px;border-bottom:1px solid #e5e9f0}
+.tv10-tb td{padding:5px 6px;border-bottom:1px solid #f1f5f9}
+@media (max-width:760px){.tv10-tb th:nth-child(4),.tv10-tb td:nth-child(4){display:none}}
+`;
+const _tv10Nivel = function (n) { return n === "critico" ? ["grave", "🔴 grave"] : n === "atencao" ? ["medio", "🟠 médio"] : ["leve", "🔵 leve"]; };
+const _tv10Prazo = function (a) {
+  if (!a || !a.prazo_em || a.visto_em) return null;
+  const p = new Date(a.prazo_em).getTime(); if (!isFinite(p)) return null;
+  const agora = Date.now();
+  if (agora > p) { const h = Math.round((agora - p) / 3600000); return { atrasado: true, t: "⏰ prazo passou " + (h < 1 ? "há pouco" : "há " + h + " h") }; }
+  const d = new Date(p); const hoje = new Date();
+  const mesmoDia = d.toDateString() === hoje.toDateString();
+  return { atrasado: false, t: "⏰ ver até " + (mesmoDia ? "" : _tiaDM(d.toISOString().slice(0, 10)) + " ") + _tiaHora(d.toISOString()) };
+};
+
+/* ---------- P2_2_18 / P2_2_19 / P2_2_20: o que cada alarme mostra (nível, ×N, R$ em jogo, prazo, responsável, "subiu para o sócio") ---------- */
+function TV10AlarmeInfo({ a }) {
+  if (!a) return null;
+  const nv = _tv10Nivel(a.nivel); const pz = _tv10Prazo(a);
+  return <div className="tv10-lin">
+    <span className={"tv10-c " + nv[0]}>{nv[1]}</span>
+    {Number(a.repeticoes) > 1 && <span className="tv10-c" title="O mesmo alarme se repetiu: juntamos em um só">×{a.repeticoes} vezes</span>}
+    {Number(a.valor_risco) > 0 && <span className="tv10-c roxo" title="Dinheiro em jogo, calculado pelo servidor">{_tiaBrl(a.valor_risco)} em jogo</span>}
+    {pz && <span className={"tv10-c " + (pz.atrasado ? "verm" : "")}>{pz.t}</span>}
+    {a.responsavel_nome && !a.visto_em && <span className="tv10-c">👤 {a.responsavel_nome}{a.escalado_em ? "" : " vê primeiro"}</span>}
+    {a.escalado_em && <span className="tv10-c sobe" title={a.escalado_para ? "Avisados: " + a.escalado_para : ""}>⬆ subiu para o sócio {_tsegQuando(a.escalado_em)}</span>}
+    {a.confirmado_obs && <span className="tv10-c verde">✓ {a.confirmado_obs}</span>}
+    <style>{_TV10_CSS}</style>
+  </div>;
+}
+// botão de baixa DENTRO do cliente: grave = "Confirmar que vi" (com observação, fica registrado quem e quando); os outros = "Entendi ✓"
+function TV10AlarmeAcao({ a, onFeito }) {
+  const [ab, setAb] = useState(false); const [obs, setObs] = useState(""); const [msg, setMsg] = useState(""); const [oc, setOc] = useState(false);
+  const grave = a && a.nivel === "critico";
+  const ir = async function (confirmar) {
+    setOc(true); setMsg("");
+    try {
+      let r;
+      if (confirmar) {
+        try { r = await _tsegRpc("ads_alarme_confirmar", { p_id: a.id, p_obs: String(obs || "").trim() || null }); }
+        catch (e) { if (!_trgFalta(e)) throw e; r = await _tsegRpc("ads_alarme_visto", { p_id: a.id }); }   // servidor antigo: vira o visto de sempre
+      } else r = await _tsegRpc("ads_alarme_visto", { p_id: a.id });
+      if (r && r.ok === false) throw new Error(r.bloqueado ? "precisa do PIN" : (r.erro || "sem permissão"));
+      setAb(false); setObs(""); if (onFeito) onFeito(a.id);
+    } catch (e) { setMsg("Não marquei (" + _tsegMotivo(e) + ")."); }
+    finally { setOc(false); }
+  };
+  const bt = { background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "5px 11px", fontSize: 11.5, fontWeight: 800, cursor: oc ? "default" : "pointer", fontFamily: "inherit", opacity: oc ? 0.6 : 1 };
+  return <div style={{ textAlign: "right", marginTop: 6 }}>
+    {!grave ? <button disabled={oc} onClick={function () { ir(false); }} style={bt}>Entendi ✓</button>
+      : !ab ? <button disabled={oc} onClick={function () { setAb(true); }} style={Object.assign({}, bt, { background: "#b91c1c" })}>Confirmar que vi</button>
+        : <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <input className="tv10-obs" style={{ flex: "1 1 200px", maxWidth: 360 }} value={obs} onChange={function (e) { setObs(e.target.value); }} placeholder="O que vai fazer? (opcional, ex.: liguei para o cliente)" autoFocus />
+          <button disabled={oc} onClick={function () { ir(true); }} style={Object.assign({}, bt, { background: "#b91c1c" })}>{oc ? "…" : "Vi, estou resolvendo"}</button>
+          <button onClick={function () { setAb(false); }} style={Object.assign({}, bt, { background: "#fff", color: "#334155", border: "1px solid #cbd5e1" })}>Cancelar</button>
+        </div>}
+    {msg && <div style={{ color: "#b91c1c", fontSize: 11.5, fontWeight: 700, marginTop: 4 }}>{msg}</div>}
+  </div>;
+}
+// P2_2_20: visão agrupada (um aviso por problema, ordenado pelo dinheiro em jogo) — lê ads_alarmes_agrupados só no clique
+function TV10Agrupados({ itens, onIr }) {
+  const [st, setSt] = useState(null);
+  useEffect(function () {
+    let ok = true; setSt({ carregando: true });
+    _tv9Rpc("ads_alarmes_agrupados", { p_dias: 14 }).then(function (r) { if (ok) setSt(_tv9Estado(r)); }).catch(function (e) { if (ok) setSt({ erro: _tsegMotivo(e) }); });
+    return function () { ok = false; };
+  }, []);
+  // sem a função: agrupa na tela pelo título sem o número, só com o que já veio
+  const local = function () {
+    const g = {};
+    (itens || []).forEach(function (a) { const k = (a.tipo || "") + "|" + (a.client_id || a.ad_account_id || "") + "|" + (a.nivel || ""); if (!g[k]) g[k] = { titulo: a.titulo, nivel: a.nivel, vezes: 0, nao_vistos: 0, valor_risco: 0, ids: [], client_id: a.client_id, tipo: a.tipo };
+      g[k].vezes += Number(a.repeticoes || 1); if (!a.visto_em) g[k].nao_vistos++; g[k].valor_risco = Math.max(g[k].valor_risco, Number(a.valor_risco || 0)); g[k].ids.push(a.id); });
+    return Object.keys(g).map(function (k) { return g[k]; });
+  };
+  const peso = function (n) { return n === "critico" ? 3 : n === "atencao" ? 2 : 1; };
+  const grupos = (st && st.grupos ? st.grupos : (st && (st.falta || st.erro) ? local() : [])).slice()
+    .sort(function (x, y) { return (Number(y.peso) || peso(y.nivel)) - (Number(x.peso) || peso(x.nivel)) || Number(y.valor_risco || 0) - Number(x.valor_risco || 0); });
+  // v100 (15/10/2026) P2_2_20 (correção do revisor): 1º a conta que o servidor mandar no grupo (pedido ao C5a); 2º um alarme do grupo
+  //   que já está na lista dos 14 dias; 3º a conta única deste cliente (na lista ou nas contas já carregadas). Se o cliente tiver mais de uma conta, sem botão.
+  const contaDe = function (gr) {
+    const srv = gr.ad_account_id || gr.conta; if (srv) return srv;
+    const a = (itens || []).find(function (x) { return (gr.ids || []).indexOf(x.id) >= 0 && x.ad_account_id; }); if (a) return a.ad_account_id;
+    if (!gr.client_id) return null;
+    const u = {}; (itens || []).forEach(function (x) { if (x.client_id === gr.client_id && x.ad_account_id) u[x.ad_account_id] = 1; });
+    try { (window._pxAdsAccounts || []).forEach(function (x) { if (x && x.client_id === gr.client_id && x.ad_account_id) u[x.ad_account_id] = 1; }); } catch (_) {}
+    const k = Object.keys(u); return k.length === 1 ? k[0] : null;
+  };
+  if (!st || st.carregando) return <div style={{ color: "#64748b", fontSize: 13 }}>Juntando os repetidos…</div>;
+  return <div>
+    {(st.falta || st.erro) && <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 6 }}>Agrupado pela tela ({st.falta ? "o agrupamento do servidor ainda não está ligado" : st.erro}).</div>}
+    {!grupos.length && <div style={{ color: "#64748b", fontSize: 13 }}>Nenhum alarme.</div>}
+    {grupos.map(function (gr, i) {
+      const nv = _tv10Nivel(gr.nivel); const conta = contaDe(gr);
+      return <div key={i} style={{ border: "1px solid #e5e9f0", borderLeft: "4px solid " + (_TSEG_COR[gr.nivel] || "#64748b"), borderRadius: 12, padding: "10px 12px", marginBottom: 8, background: gr.nao_vistos ? "#fff" : "#f8fafc" }}>
+        <div style={{ fontWeight: 800, fontSize: 13.5, color: "#0f172a" }}>{gr.titulo}</div>
+        <div className="tv10-lin">
+          <span className={"tv10-c " + nv[0]}>{nv[1]}</span>
+          <span className="tv10-c">×{gr.vezes || (gr.ids || []).length} vezes</span>
+          {Number(gr.nao_vistos) > 0 ? <span className="tv10-c verm">{gr.nao_vistos} sem ver</span> : <span className="tv10-c verde">todos vistos</span>}
+          {Number(gr.valor_risco) > 0 && <span className="tv10-c roxo">{_tiaBrl(gr.valor_risco)} em jogo</span>}
+          {gr.ultimo_em && <span style={{ fontSize: 11, color: "#94a3b8" }}>último {_tsegQuando(gr.ultimo_em)}</span>}
+          {conta && onIr && <button onClick={function () { onIr(conta); }} style={{ marginLeft: "auto", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "5px 11px", fontSize: 11.5, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>Ver no cliente ›</button>}
+        </div>
+      </div>;
+    })}
+    <style>{_TV10_CSS}</style>
+  </div>;
+}
+
+/* ---------- Decisões: novos tipos de pedido que o servidor aplica com PIN 2x (P2_3_09, P2_12_10, P2_6_04, P2_3_22, P2_5_05) ----------
+   Contrato com o C4b (PENDENCIAS v100): acao.aplica_app = true → "✓ Aprovar com PIN" (revisão do ads-aplicar + 2º PIN);
+   o que muda vem pronto em acao.antes_txt → acao.depois_txt. Os pedidos manuais de hoje continuam iguais. */
+const _TV10_TIPO = { horario: "🕘 Horário programado", spend_cap: "💳 Teto da conta", teto_conta: "💳 Teto da conta", lance: "🎯 Custo máximo por resultado", publico: "👥 Público", publico_criar: "👥 Público novo", parecido: "👥 Público parecido", exclusao: "🚫 Excluir quem já é cliente",
+  publicos_excluir: "🚫 Excluir quem já é cliente", publico_auto: "⚙️ Automáticos da Meta" };   // v100 etapa 2: nomes reais do C4b
+function TV10PedidoExtra({ p }) {
+  const a = (p && p.acao) || {};
+  const passos = Array.isArray(a.passos) ? a.passos : (p && Array.isArray(p.passos) ? p.passos : null);
+  const tipoTxt = _TV10_TIPO[a.tipo] || (a.campo === "spend_cap" ? _TV10_TIPO.spend_cap : null);
+  if (!tipoTxt && !passos) return null;
+  return <div style={{ marginTop: 6, fontSize: 11.5, color: "#475569", lineHeight: 1.45 }}>
+    {tipoTxt && <span className="tv10-c roxo" style={{ marginRight: 6 }}>{tipoTxt}</span>}
+    {_tcenExecutavel(a) && !_tcenTipoAntigo(a) ? <span>O app aplica na Meta depois do <b>PIN 2 vezes</b> (a revisão lê a Meta antes).</span> : tipoTxt ? <span>Por enquanto é feito à mão no Gerenciador (passo a passo abaixo) e depois "Já resolvi".</span> : null}
+    {passos && passos.length > 0 && <details style={{ marginTop: 4 }}><summary style={{ cursor: "pointer", fontWeight: 800, color: "#5b21b6" }}>{_tcenExecutavel(a) ? "Se a Meta recusar, faça à mão" : "Passo a passo no Gerenciador"}</summary>
+      <ol style={{ margin: "4px 0 0 18px", padding: 0 }}>{passos.map(function (t, i) { return <li key={i}>{String(t)}</li>; })}</ol></details>}
+    <style>{_TV10_CSS}</style>
+  </div>;
+}
+
+/* ---------- R8: "Anotar o que o cliente falou" direto no Diagnóstico novo (ads_memoria_anotar; sem IA) ---------- */
+function TV10Anotar({ cli, onFeito }) {
+  const hoje = (function () { const n = new Date(); return n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0") + "-" + String(n.getDate()).padStart(2, "0"); })();
+  const [ab, setAb] = useState(false); const [txt, setTxt] = useState(""); const [quem, setQuem] = useState(""); const [canal, setCanal] = useState("whatsapp"); const [dia, setDia] = useState(hoje);
+  const [oc, setOc] = useState(false); const [msg, setMsg] = useState(null);
+  const salvar = async function () {
+    if (String(txt).trim().length < 3) return;
+    setOc(true); setMsg(null);
+    try {
+      const r = await _tv9Rpc("ads_memoria_anotar", { p_client: cli, p_texto: String(txt).trim(), p_quem_falou: String(quem).trim() || null, p_canal: canal || null, p_data: dia || null });
+      if (r && r.__falta) { setMsg({ falta: true }); return; }
+      if (!r || r.ok === false) throw new Error((r && r.erro) || "não salvou");
+      setTxt(""); setQuem(""); setAb(false); setMsg({ ok: "Anotado. A IA nova passa a ler isto nas próximas decisões." }); if (onFeito) onFeito();
+    } catch (e) { setMsg({ erro: _tsegMotivo(e) }); } finally { setOc(false); }
+  };
+  return <div className="tv9" style={{ marginTop: 14, borderTop: "1px dashed #e2e8f0", paddingTop: 10 }}>
+    {!ab ? <button className="tv9-b" onClick={function () { setAb(true); setMsg(null); }}>📝 Anotar o que o cliente falou</button> : <div>
+      <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>📝 O que o cliente falou</div>
+      <textarea className="tv10-obs" rows={3} value={txt} onChange={function (e) { setTxt(e.target.value); }} placeholder="Ex.: o cliente disse que os leads de Concórdia estão vindo sem interesse em comprar agora" autoFocus />
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+        <input className="tv9-inp" style={{ flex: "1 1 150px" }} value={quem} onChange={function (e) { setQuem(e.target.value); }} placeholder="Quem falou (opcional)" />
+        <select className="tv9-inp" value={canal} onChange={function (e) { setCanal(e.target.value); }}><option value="whatsapp">WhatsApp</option><option value="ligacao">Ligação</option><option value="reuniao">Reunião</option><option value="email">E-mail</option><option value="outro">Outro</option></select>
+        <input className="tv9-inp" type="date" value={dia} onChange={function (e) { setDia(e.target.value); }} />
+        <button className="tv9-b pri" disabled={oc || String(txt).trim().length < 3} onClick={salvar}>{oc ? "Salvando…" : "Salvar a nota"}</button>
+        <button className="tv9-b lnk" onClick={function () { setAb(false); }}>cancelar</button>
+      </div>
+      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Não usa IA. Fica no histórico do cliente e aparece em "O que o cliente falou".</div>
+    </div>}
+    {msg && msg.falta && <div style={{ marginTop: 6 }}><TV9Falta oque="ads_memoria_anotar" /></div>}
+    {msg && msg.erro && <div className="tv9-erro" style={{ marginTop: 6 }}>Não salvei a nota ({msg.erro}).</div>}
+    {msg && msg.ok && <div className="tv9-ok" style={{ marginTop: 6 }}>{msg.ok}</div>}
+    <style>{_TV9_CSS + _TV10_CSS}</style>
+  </div>;
+}
+
+/* ---------- P2_1_09: testar se o lead está sendo contado (AVISO, não trava — decisão do Vini) ---------- */
+function TV10Contagem({ conta }) {
+  const [st, setSt] = useState(null); const [ult, setUlt] = useState(null); const [oc, setOc] = useState(false);
+  const lerUlt = function () {
+    if (!conta) return;
+    _tv9Rpc("ads_contagem_teste_ler", { p_conta: String(conta).replace(/^act_/, ""), p_desde: new Date(Date.now() - 24 * 3600000).toISOString() })
+      .then(function (r) { setUlt(_tv9Estado(r)); }).catch(function (e) { setUlt({ erro: _tsegMotivo(e) }); });
+  };
+  const testar = async function () {
+    setOc(true); setSt(null);
+    try {
+      const inv = await window._sb.functions.invoke("ads-vigia", { body: { modo: "teste_contagem", conta: String(conta).replace(/^act_/, ""), minutos: 30 } });
+      const d = inv && inv.data;
+      if (!d) setSt({ erro: (inv && inv.error && inv.error.message) || "o servidor não respondeu" });
+      else if (!d.ok) setSt({ erro: d.erro || "não testou" });
+      else setSt(d);
+    } catch (e) { setSt({ erro: _tsegMotivo(e) }); } finally { setOc(false); }
+  };
+  const r = st && !st.erro ? st : (ult && !ult.falta && !ult.erro && ((ult.pixels || []).length || ult.leads_form) ? ult : null);
+  const chegou = r && (((r.pixels || []).some(function (p) { return p.disparou_no_teste; })) || Number(r.leads_form_desde || r.leads_form || 0) > 0);
+  return <TV9Bloco titulo="🧪 Testar se o lead está sendo contado" pill={st && !st.erro ? (chegou ? "✓ chegou" : "⚠ não chegou") : "aviso, não trava"} pillRoxo onAbrir={lerUlt} fechadoNoPc
+    dica="Antes de ligar: preencha o formulário de teste (ou mande a mensagem no WhatsApp / faça a ação no site) e clique em Conferir. Só lê a Meta; não muda nada.">
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <button className="tv9-b pri" disabled={oc || !conta} onClick={testar}>{oc ? "Lendo a Meta…" : "🧪 Conferir agora (últimos 30 min)"}</button>
+      <span style={{ fontSize: 11.5, color: "#64748b" }}>Se não chegar nada, a campanha ainda pode ser publicada: é só um aviso.</span>
+    </div>
+    {st && st.erro && <div className="tv9-erro" style={{ marginTop: 8 }}>Não consegui testar ({st.erro}).</div>}
+    {r && <div style={{ marginTop: 8 }}>
+      <div className={chegou ? "tv9-ok" : "tv9-erro"}>{chegou ? "✓ " : "⚠ "}{r.resumo || (chegou ? "Contagem funcionando: a Meta recebeu o evento do teste." : "Ainda não chegou nada do teste. Confira o formulário/pixel antes de ligar a campanha.")}{r === ult ? " (última leitura guardada)" : ""}</div>
+      <table className="tv10-tb"><thead><tr><th>Onde conta</th><th>Último sinal</th><th>No teste?</th><th>Situação</th></tr></thead><tbody>
+        <tr><td>Formulário da Meta</td><td>{_tiaNum(r.leads_form_desde !== undefined ? r.leads_form_desde : r.leads_form)} lead(s) desde {_tsegQuando(r.desde)}</td><td>{Number(r.leads_form_desde || r.leads_form || 0) > 0 ? "✓" : "—"}</td><td>{r.ultimo_lead_em ? "último " + _tsegQuando(r.ultimo_lead_em) : ""}</td></tr>
+        {(r.pixels || []).map(function (p) { return <tr key={p.id}><td>{/^pixel/i.test(String(p.name || "")) ? p.name : "Pixel " + (p.name || p.id)}</td><td>{p.last_fired_time ? _tsegQuando(p.last_fired_time) : "nunca"}</td><td>{p.disparou_no_teste ? "✓" : "—"}</td><td>{p.indisponivel ? "indisponível" : "ok"}</td></tr>; })}
+      </tbody></table>
+    </div>}
+    {!r && ult && ult.falta && <div style={{ marginTop: 8 }}><TV9Falta oque="ads_contagem_teste_ler" /></div>}
+    <style>{_TV10_CSS}</style>
+  </TV9Bloco>;
+}
+
+/* ---------- P2_4_19: revisão de regras da Meta e de português antes de subir ----------
+   1) Conferência LOCAL, sem IA e sem custo (lista fixa): frases que a Meta costuma reprovar e erros comuns de português.
+   2) "✨ Revisar com a IA" (só sócio, no clique; o servidor tem o teto) — ads_texto_revisar (C5a). */
+const _TV10_REGRAS = [
+  [/resultado(s)? garantid\w*|garantimos (o )?resultado|garantia de resultado/i, "promessa de resultado", "Troque por algo que dá para provar (ex.: \"veja o resultado de quem já usa\")."],
+  [/\b100\s?%\s?(garantid|segur|eficaz|efetiv|livre)\w*/i, "promessa absoluta (100%)", "A Meta reprova promessa absoluta. Use número real e a fonte."],
+  [/\bcura(r|mos)?\b|elimina (de vez|100)|nunca mais (terá|vai ter)/i, "promessa de cura", "Evite \"cura\"/\"nunca mais\"; diga o que o produto faz."],
+  [/\b(voc[eê]|vc) (é|está|esta|tem|anda) (doente|endividad|acima do peso|gord|calv|diab[eé]tic|deprimid|soz)\w*/i, "atributo pessoal", "A Meta proíbe dizer o que a pessoa é ou tem. Fale do produto, não da pessoa."],
+  [/antes e depois/i, "antes e depois", "Imagem/texto de antes e depois costuma ser reprovado em saúde e estética."],
+  [/fique rico|dinheiro f[aá]cil|renda extra garantida|ganhe dinheiro r[aá]pido/i, "promessa financeira", "A Meta reprova promessa de ganho fácil."],
+  [/\bo melhor (do|da) (brasil|mundo|regi[aã]o|mercado)\b|\bn[uú]mero 1\b/i, "superlativo sem prova", "Só use \"o melhor\"/\"nº 1\" com a fonte; senão, troque por um fato."],
+  [/\bclique aqui\b|curta e compartilhe|marque um amigo|comente (sim|eu quero)/i, "pedido de engajamento", "A Meta derruba a entrega de anúncio que pede curtida/comentário."],
+];
+const _TV10_ERROS = { "vacinasão": "vacinação", "irrigasão": "irrigação", "produsão": "produção", "orsamento": "orçamento", "excessão": "exceção", "excesão": "exceção", "concerteza": "com certeza", "derrepente": "de repente",
+  "menas": "menos", "previlégio": "privilégio", "beneficiente": "beneficente", "propiedade": "propriedade", "porisso": "por isso", "atravez": "através", "ancioso": "ansioso", "agradesemos": "agradecemos", "concerteza.": "com certeza.",
+  "mais barato possivel": "mais barato possível", "possivel": "possível", "voce": "você", "nao": "não", "tambem": "também", "agua": "água", "manutençao": "manutenção", "instalaçao": "instalação", "informaçoes": "informações",
+  "obrigado(a)": "obrigado(a)", "whatsapp": "WhatsApp", "wpp": "WhatsApp", "zap": "WhatsApp" };
+const _tv10RevisarLocal = function (d) {
+  const out = [];
+  ((d && d.anuncios) || []).forEach(function (an, i) {
+    if (an.tipo !== "novo") return;
+    const nome = an.nome || ("anúncio " + (i + 1));
+    [["texto", an.texto], ["titulo", an.titulo], ["msg_whats", an.msg_whats]].forEach(function (c) {
+      const t = String(c[1] || ""); if (!t.trim()) return;
+      const campo = c[0] === "texto" ? "texto" : c[0] === "titulo" ? "título" : "mensagem do WhatsApp";
+      _TV10_REGRAS.forEach(function (rg) { const m = t.match(rg[0]); if (m) out.push({ anuncio: nome, campo: campo, nivel: "erro", trecho: m[0], regra: rg[1], sugestao: rg[2] }); });
+      (t.match(/[A-Za-zÀ-ÿ()]+/g) || []).forEach(function (w) {
+        const k = w.toLowerCase(); const ok = _TV10_ERROS[k];
+        if (ok && ok !== w && !(k === "whatsapp" && w === "WhatsApp") && !(w.length > 3 && w === w.toUpperCase() && ok.toUpperCase() === w) /* v100: título em maiúsculas não é erro */) out.push({ anuncio: nome, campo: campo, nivel: k.length <= 4 || k === "whatsapp" ? "aviso" : "erro", trecho: w, regra: "português", sugestao: "Escreva \"" + ok + "\"." });
+        else if (/^[a-zà-ÿ]{4,}asão$/i.test(w) && !/^(ocasião|evasão|invasão|persuasão|casão)$/i.test(w)) out.push({ anuncio: nome, campo: campo, nivel: "aviso", trecho: w, regra: "português", sugestao: "Confira: talvez seja \"" + w.replace(/asão$/i, "ação") + "\"." });
+      });
+      const letras = t.replace(/[^A-Za-zÀ-ÿ]/g, ""); const mai = t.replace(/[^A-ZÀ-Ý]/g, "");
+      if (c[0] === "texto" && letras.length > 30 && mai.length / letras.length > 0.6) out.push({ anuncio: nome, campo: campo, nivel: "aviso", trecho: t.slice(0, 30) + "…", regra: "tudo em maiúsculas", sugestao: "Texto todo em maiúsculas parece grito e a Meta pode limitar a entrega." });
+      if (/!{3,}|\?{3,}/.test(t)) out.push({ anuncio: nome, campo: campo, nivel: "aviso", trecho: (t.match(/[!?]{3,}/) || [""])[0], regra: "pontuação repetida", sugestao: "Use um ponto de exclamação só." });
+      if (c[0] === "titulo" && t.length > 40) out.push({ anuncio: nome, campo: campo, nivel: "aviso", trecho: t.slice(0, 40) + "…", regra: "título longo", sugestao: "A Meta corta o título depois de ~40 letras." });
+    });
+  });
+  return out;
+};
+// v100 (15/10/2026) P2_4_19 (correção do revisor): a IA às vezes marca "promessa" num trecho sem palavra de garantia
+//   (ex.: "Água o ano todo na sua propriedade"). Sem garantia/100%/cura/"nunca mais"/"sempre" no trecho, vira só aviso "confira".
+const _TV10_GARANTIA = /garant|100\s?%|\bcura|nunca mais|\bsempre\b|com certeza|sem falhar|sem falta|\bjamais\b|\bpromet/i;
+const _tv10IaAfinar = function (x) {
+  if (!x || !/promessa/i.test(String(x.regra || "")) || _TV10_GARANTIA.test(String(x.trecho || ""))) return x;
+  return Object.assign({}, x, { nivel: "aviso", regra: String(x.regra) + " (talvez não seja)", sugestao: "Não há palavra de garantia no trecho; confira se precisa mudar." + (x.sugestao ? " Ideia da IA: " + x.sugestao : "") });
+};
+function TV10RevisaoTexto({ conta, d }) {
+  const A = arguments[0] || {};
+  const socio = A.socio !== false;
+  const local = _tv10RevisarLocal(d);
+  const [ia, setIa] = useState(null); const vivo = useRef(true);
+  useEffect(function () { vivo.current = true; return function () { vivo.current = false; }; }, []);
+  const textos = []; ((d && d.anuncios) || []).forEach(function (an, i) { if (an.tipo !== "novo") return; ["texto", "titulo", "msg_whats"].forEach(function (k) { if (String(an[k] || "").trim()) textos.push({ campo: k, anuncio: i, texto: String(an[k]) }); }); });
+  // v100 (14/10/2026) P2_4_19 etapa 2: conferido no banco — ads_texto_revisar(p_conta, p_textos) + ads_texto_revisar_colher(p_job), como pedido.
+  //   "repetido" (mesmos textos em 24 h) já volta com os itens e não gasta de novo.
+  const pedir = async function () {
+    setIa({ carregando: true });
+    try {
+      let r = await _tv9Rpc("ads_texto_revisar", { p_conta: conta, p_textos: textos });
+      if (r && r.__falta) { setIa({ falta: true }); return; }
+      if (!r || r.ok === false) throw new Error((r && r.erro) || "não revisou");
+      let n = 0;
+      const jid = r.job_id;
+      while (r && r.status === "gerando" && jid && n < 36 && vivo.current) { await new Promise(function (ok) { setTimeout(ok, 5000); }); n++; r = await _tsegRpc("ads_texto_revisar_colher", { p_job: jid }); }
+      if (!vivo.current) return;
+      if (r && r.status === "gerando") throw new Error("a IA demorou mais de 3 minutos; tente de novo daqui a pouco (não gasta de novo)");
+      if (!r || r.ok === false) throw new Error((r && r.erro) || "a IA não revisou");
+      setIa(Object.assign({}, r, { vazio: !(r.itens || []).length }));
+    } catch (e) { if (vivo.current) setIa({ erro: _tsegMotivo(e) }); }
+  };
+  const lista = local.concat((ia && Array.isArray(ia.itens) ? ia.itens.map(function (x) { return _tv10IaAfinar(Object.assign({ ia: true }, x, { anuncio: typeof x.anuncio === "number" ? (((d.anuncios || [])[x.anuncio] || {}).nome || "anúncio " + (x.anuncio + 1)) : x.anuncio })); }) : []));
+  const nErro = lista.filter(function (x) { return x.nivel === "erro"; }).length;
+  if (!textos.length) return null;
+  return <TV9Bloco titulo="🔤 Revisão de regras da Meta e de português" pill={lista.length ? (nErro ? nErro + " para corrigir" : lista.length + " aviso(s)") : "✓ nada encontrado"} pillRoxo={!!lista.length} fechadoNoPc={!lista.length}
+    dica="A conferência daqui é automática e não usa IA (lista de frases que a Meta reprova e erros comuns). Não trava o Publicar: corrija no anúncio e valide de novo.">
+    {!lista.length ? <div className="tv9-ok">✓ Nenhuma frase de risco nem erro comum nos textos dos anúncios novos.</div> :
+      <table className="tv10-tb"><thead><tr><th>Anúncio</th><th>Trecho</th><th>Por quê</th><th>Como fica melhor</th></tr></thead><tbody>
+        {lista.map(function (x, i) { return <tr key={i}><td>{x.nivel === "erro" ? "🔴" : "🟡"} {x.anuncio}<div style={{ fontSize: 10.5, color: "#94a3b8" }}>{x.campo}{x.ia ? " · IA" : ""}</div></td><td><b>"{x.trecho}"</b></td><td>{x.regra}</td><td style={{ color: "#475569" }}>{x.sugestao}</td></tr>; })}
+      </tbody></table>}
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+      {socio ? <button className="tv9-b" disabled={ia && ia.carregando} onClick={pedir}>{ia && ia.carregando ? "A IA está lendo… (até 3 min)" : "✨ Revisar com a IA (gasta crédito)"}</button> : <span style={{ fontSize: 11.5, color: "#94a3b8" }}>Revisão com IA: só um sócio pede.</span>}
+      {ia && ia.custo_usd ? <span style={{ fontSize: 11, color: "#94a3b8" }}>custo US$ {_tiaUsd(ia.custo_usd)}</span> : null}
+    </div>
+    {ia && ia.falta && <div style={{ marginTop: 6 }}><TV9Falta oque="revisão com IA (ads_texto_revisar)" /></div>}
+    {ia && ia.vazio && <div className="tv9-ok" style={{ marginTop: 6 }}>✓ A IA não achou problema nos textos.</div>}
+    {ia && ia.erro && <div className="tv9-erro" style={{ marginTop: 6 }}>A IA não revisou ({ia.erro}).</div>}
+    <style>{_TV10_CSS}</style>
+  </TV9Bloco>;
+}
+
+/* ---------- P2_9_06 / P2_4_18: aprovação do cliente por partes (briefing → verba → criativo), por link ----------
+   MODO INTERNO (decisão do Vini): o cliente NÃO vê nada até um sócio ligar a chave "Visível para o cliente" com PIN.
+   No modo teste o aviso não trava; com a chave ligada, o Publicar fica desligado enquanto faltar etapa (trava_publicar do servidor). */
+const _TV10_ETAPA = { briefing: ["1", "Briefing", "público, cidades e idade"], verba: ["2", "Verba", "quanto vai gastar"], criativo: ["3", "Criativo", "os anúncios"] };
+const _tv10EstEtapa = function (e) { return e === "aprovado" ? ["verde", "✓ aprovado"] : e === "pediu_ajuste" ? ["medio", "✎ pediu ajuste"] : ["", "⏳ esperando"]; };
+function TV10Aprovacao({ rascunhoId, onStatus }) {
+  const [st, setSt] = useState(null); const [oc, setOc] = useState(false); const [ver, setVer] = useState(false); const [msg, setMsg] = useState("");
+  const ler = function () {
+    if (!rascunhoId) return;
+    setSt({ carregando: true });
+    _tv9Rpc("rel_aprov_status", { p_rascunho: rascunhoId }).then(function (r) { const e = _tv9Estado(r); setSt(e); if (onStatus) onStatus(e); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); });
+  };
+  useEffect(function () { if (rascunhoId && st && !st.carregando) ler(); }, [rascunhoId]);
+  const criar = async function () {
+    setOc(true); setMsg("");
+    try { const r = await _tv9Rpc("rel_aprov_criar", { p_rascunho: rascunhoId }); if (r && r.__falta) { setSt({ falta: true }); return; } if (!r || r.ok === false) throw new Error((r && r.erro) || "não criou"); setSt(r); if (onStatus) onStatus(r); }
+    catch (e) { setMsg(_tsegMotivo(e)); } finally { setOc(false); }
+  };
+  const link = st && st.token ? (window.location.origin + window.location.pathname + "?aprovar=" + st.token) : "";
+  const copiar = function () { try { navigator.clipboard.writeText(link); setMsg("Link copiado. No modo teste ele só abre para quem é da agência."); } catch (_) { setMsg(link); } };
+  const etapas = (st && st.etapas) || [];
+  const pill = !st || st.carregando ? "briefing → verba → criativo" : st.falta ? "ainda não ligado" : st.erro ? "erro" : !st.tem_aprovacao ? "não criada" : (st.faltam || []).length ? "falta " + st.faltam.length + " de 3" : "✓ cliente aprovou";
+  return <TV9Bloco titulo="🤝 Aprovação do cliente" pill={pill} pillRoxo onAbrir={ler} fechadoNoPc
+    dica="O cliente aprova em 3 partes, por um link sem senha, e fica registrado o nome e a hora. Hoje está em MODO INTERNO: o cliente não vê nada até um sócio ligar a chave dele com PIN.">
+    {!rascunhoId ? <div style={{ fontSize: 12.5, color: "#64748b" }}>Salve o rascunho primeiro (💾 Salvar rascunho).</div> :
+      !st || st.carregando ? <div style={{ fontSize: 12.5, color: "#94a3b8" }}>Lendo…</div> : st.falta ? <TV9Falta oque="aprovação do cliente (rel_aprov_status)" /> : st.erro ? <div className="tv9-erro">Não consegui ler a aprovação ({st.erro}). <button className="tv9-b lnk" onClick={ler}>tentar de novo</button></div> :
+      <div>
+        {st.modo !== "valendo" && <div className="tv10-faixa">🧪 Modo interno (teste): o cliente ainda não vê o link e o aviso não trava o Publicar.</div>}
+        {!st.tem_aprovacao ? <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button className="tv9-b pri" disabled={oc} onClick={criar}>{oc ? "Criando…" : "Criar as 3 etapas e o link"}</button>
+          <span style={{ fontSize: 11.5, color: "#64748b" }}>Usa o que está salvo no rascunho (público, verba e anúncios). Nada é enviado ao cliente.</span>
+        </div> : <div>
+          {etapas.map(function (e) {
+            const n = _TV10_ETAPA[e.etapa] || ["•", e.etapa, ""]; const es = _tv10EstEtapa(e.estado);
+            return <div key={e.etapa} className={"tv10-etapa" + (e.estado === "aprovado" ? " ok" : e.estado === "pediu_ajuste" ? " ajuste" : "")}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span className="tv9-n">{n[0]}</span><b style={{ fontSize: 13 }}>{n[1]}</b><span style={{ fontSize: 11.5, color: "#64748b" }}>{n[2]}</span>
+                <span className={"tv10-c " + es[0]} style={{ marginLeft: "auto" }}>{es[1]}</span>
+              </div>
+              {e.quem && <div style={{ fontSize: 11.5, color: "#475569", marginTop: 4 }}>{e.estado === "aprovado" ? "Aprovado" : "Pedido"} por <b>{e.quem}</b> {_tsegQuando(e.em)}{e.via === "teste_agencia" ? " · teste interno (agência)" : " · pelo link"}</div>}
+              {e.obs && <div style={{ fontSize: 12, color: "#92400e", marginTop: 3 }}>"{e.obs}"</div>}
+            </div>;
+          })}
+          {st.aviso && <div className={st.trava_publicar ? "tv9-erro" : "tv9-falta"} style={{ marginTop: 8 }}>{st.trava_publicar ? "🔒 " : "ℹ️ "}{st.aviso}</div>}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            {st.token && <button className="tv9-b" onClick={copiar}>🔗 Copiar o link</button>}
+            {st.token && <button className="tv9-b" onClick={function () { setVer(true); }}>👁 Ver como o cliente vê (teste)</button>}
+            <button className="tv9-b lnk" onClick={ler}>↻ atualizar</button>
+          </div>
+          {(st.historico || []).length > 0 && <details style={{ marginTop: 6 }}><summary style={{ cursor: "pointer", fontSize: 11.5, fontWeight: 800, color: "#5b21b6" }}>Histórico ({st.historico.length})</summary>
+            {st.historico.map(function (h, i) { return <div key={i} style={{ fontSize: 11.5, color: "#475569", padding: "2px 0" }}>{_tsegQuando(h.em)} · {(_TV10_ETAPA[h.etapa] || [, h.etapa])[1]}: {h.de || "—"} → <b>{h.para}</b> · {h.quem}{h.via === "teste_agencia" ? " (teste)" : ""}{h.obs ? " — " + h.obs : ""}</div>; })}</details>}
+        </div>}
+        {msg && <div style={{ fontSize: 12, color: "#475569", marginTop: 6, wordBreak: "break-all" }}>{msg}</div>}
+      </div>}
+    {ver && st && st.token && <TSegJanela titulo="👁 Como o cliente vê o link" onFechar={function () { setVer(false); ler(); }} largura={560}><TV10AprovPagina token={st.token} interno /></TSegJanela>}
+    <style>{_TV10_CSS}</style>
+  </TV9Bloco>;
+}
+// A página do link (o que o cliente vê). Pronta para o coordenador montar na rota pública "?aprovar=<token>" (sem login).
+//   No app (interno) abre como prévia: a decisão fica marcada pelo servidor como "teste_agencia".
+function TV10AprovPagina({ token, interno }) {
+  const [st, setSt] = useState(null); const [nome, setNome] = useState(""); const [obs, setObs] = useState({}); const [oc, setOc] = useState(""); const [msg, setMsg] = useState("");
+  const ler = function () { setSt({ carregando: true }); _tv9Rpc("rel_aprov_link_ler", { p_token: token }).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  useEffect(function () { if (token) ler(); }, [token]);
+  const decidir = async function (etapa, aprovar) {
+    setOc(etapa + aprovar); setMsg("");
+    try {
+      const r = await _tsegRpc("rel_aprov_decidir", { p_token: token, p_etapa: etapa, p_aprovar: aprovar, p_nome: String(nome).trim() || null, p_obs: (obs[etapa] || "").trim() || null });
+      if (!r || r.ok === false) throw new Error((r && r.erro) || "não registrou");
+      ler();
+    } catch (e) { setMsg(_tsegMotivo(e)); } finally { setOc(""); }
+  };
+  if (!st || st.carregando) return <div style={{ fontSize: 13, color: "#94a3b8" }}>Abrindo…</div>;
+  if (st.falta) return <TV9Falta oque="rel_aprov_link_ler" />;
+  if (st.erro) return <div className="tv9-erro">{st.erro === "Link indisponível." ? "Link indisponível." : "Não abriu (" + st.erro + ")."}</div>;
+  const etapas = st.etapas || [];
+  const aprovada = function (e) { const x = etapas.find(function (y) { return y.etapa === e; }); return x && x.estado === "aprovado"; };
+  const pode = function (e) { return e === "briefing" || (e === "verba" && aprovada("briefing")) || (e === "criativo" && aprovada("briefing") && aprovada("verba")); };
+  const marca = st.marca || {};
+  return <div className="tv9">
+    {st.faixa && <div className="tv10-faixa">🧪 {st.faixa}{interno ? " — a decisão fica registrada como teste da agência." : ""}</div>}
+    <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+      {marca.logo_url ? <img src={marca.logo_url} alt="" style={{ height: 28 }} /> : <span style={{ width: 26, height: 26, borderRadius: 7, background: "#6d28d9", display: "inline-block" }} />}
+      <div><div style={{ fontWeight: 900, fontSize: 15 }}>Aprovação da campanha</div><div style={{ fontSize: 12, color: "#64748b" }}>{st.campanha || ""}</div></div>
+    </div>
+    <input className="tv9-inp" style={{ width: "100%" }} value={nome} onChange={function (e) { setNome(e.target.value); }} placeholder="Seu nome (fica registrado em cada aprovação)" />
+    {etapas.map(function (e) {
+      const n = _TV10_ETAPA[e.etapa] || ["•", e.etapa, ""]; const es = _tv10EstEtapa(e.estado); const q = e.o_que || {};
+      return <div key={e.etapa} className={"tv10-etapa" + (e.estado === "aprovado" ? " ok" : e.estado === "pediu_ajuste" ? " ajuste" : "")}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}><span className="tv9-n">{n[0]}</span><b>{n[1]}</b><span className={"tv10-c " + es[0]} style={{ marginLeft: "auto" }}>{es[1]}</span></div>
+        <div style={{ fontSize: 12.5, color: "#334155", marginTop: 5, lineHeight: 1.5 }}>
+          {e.etapa === "briefing" && <span>{q.publico ? <span>Público: <b>{q.publico}</b><br /></span> : null}{(q.cidades || []).length ? <span>Cidades: {q.cidades.join(", ")}<br /></span> : null}{q.idade ? "Idade: " + q.idade + " · " : ""}{q.genero ? (q.genero === "homens" ? "Homens" : q.genero === "mulheres" ? "Mulheres" : "Todos") : ""}</span>}
+          {e.etapa === "verba" && <span>{_tiaBrl(q.verba_dia)} por dia{q.verba_30_dias ? " · cerca de " + _tiaBrl(q.verba_30_dias) + " em 30 dias" : ""}</span>}
+          {e.etapa === "criativo" && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{(q.anuncios || []).map(function (a, i) { return <div key={i} style={{ width: 150, fontSize: 11.5 }}>
+            {a.midia_url && a.midia_tipo !== "video" ? <img src={a.midia_url} alt="" style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 8 }} /> : <div style={{ width: 150, height: 90, borderRadius: 8, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>{a.midia_tipo === "video" ? "🎬" : "🖼️"}</div>}
+            <b>{a.nome}</b>{a.titulo ? <div>{a.titulo}</div> : null}{a.texto ? <div style={{ color: "#64748b" }}>{String(a.texto).slice(0, 120)}</div> : null}</div>; })}</div>}
+        </div>
+        {e.estado !== "aprovado" && <div style={{ marginTop: 6 }}>
+          <input className="tv10-obs" value={obs[e.etapa] || ""} onChange={function (ev) { const o = Object.assign({}, obs); o[e.etapa] = ev.target.value; setObs(o); }} placeholder="Se precisar mudar algo, escreva aqui" />
+          <div style={{ display: "flex", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
+            <button className="tv9-b pri" disabled={!pode(e.etapa) || !!oc} onClick={function () { decidir(e.etapa, true); }}>{oc === e.etapa + "true" ? "…" : "✓ Aprovar"}</button>
+            <button className="tv9-b" disabled={!!oc || !(obs[e.etapa] || "").trim()} onClick={function () { decidir(e.etapa, false); }}>✎ Pedir ajuste</button>
+            {!pode(e.etapa) && <span style={{ fontSize: 11, color: "#94a3b8" }}>aprove a etapa anterior primeiro</span>}
+          </div>
+        </div>}
+      </div>;
+    })}
+    {msg && <div className="tv9-erro" style={{ marginTop: 6 }}>{msg}</div>}
+    <style>{_TV9_CSS + _TV10_CSS}</style>
+  </div>;
+}
+
+/* ---------- P2_4_15: zona segura (onde o texto some no Stories/Reels/Feed) + P2_4_14: os 3 tamanhos de uma vez ----------
+   Tudo no navegador, sem IA e sem gravar nada: desenha a moldura de cada posicionamento sobre a peça e mede (aproximado) se tem
+   letra/detalhe forte dentro da área coberta. "Pôr os 3 no rascunho" só sobe os arquivos com o clique (pasta privada do Montador). */
+const _TV10_ZONAS = {   // frações da altura (t = topo, b = rodapé) e da largura (r = lateral direita, de y0 a y1)
+  "9:16": [{ nome: "Stories", t: 0.14, b: 0.20 }, { nome: "Reels", t: 0.14, b: 0.35, r: 0.15, y0: 0.45, y1: 0.85 }, { nome: "Feed (corta para 4:5)", t: 0.148, b: 0.148 }],
+  "4:5": [{ nome: "Feed", t: 0, b: 0 }, { nome: "Stories (com faixa)", t: 0, b: 0.06 }],
+  "1:1": [{ nome: "Feed", t: 0, b: 0 }],
+};
+const _tv10CarregarImg = function (url) {
+  return new Promise(function (ok, erro) { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = function () { ok(im); }; im.onerror = function () { erro(new Error("não abriu a imagem")); }; im.src = url; });
+};
+const _tv10Detalhe = function (cv, x0, y0, x1, y1) {   // % de pixels com borda forte (letra, logo, preço) na área
+  try {
+    const ctx = cv.getContext("2d"); const w = Math.max(1, Math.round(x1 - x0)), h = Math.max(1, Math.round(y1 - y0));
+    const px = ctx.getImageData(Math.round(x0), Math.round(y0), w, h).data; let fortes = 0, tot = 0;
+    for (let y = 1; y < h - 1; y += 2) for (let x = 1; x < w - 1; x += 2) {
+      const i = (y * w + x) * 4; const l = 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
+      const j = (y * w + x + 1) * 4; const k = ((y + 1) * w + x) * 4;
+      const g = Math.abs(l - (0.3 * px[j] + 0.59 * px[j + 1] + 0.11 * px[j + 2])) + Math.abs(l - (0.3 * px[k] + 0.59 * px[k + 1] + 0.11 * px[k + 2]));
+      if (g > 70) fortes++; tot++;
+    }
+    return tot ? fortes / tot : 0;
+  } catch (_) { return null; }   // imagem sem permissão de leitura (CORS): só a moldura
+};
+const _tv10Analisar = async function (url, prop) {
+  const im = await _tv10CarregarImg(url); const W = 360, H = Math.round(360 * im.naturalHeight / im.naturalWidth);
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H; cv.getContext("2d").drawImage(im, 0, 0, W, H);
+  const zs = _TV10_ZONAS[prop] || []; const res = [];
+  zs.forEach(function (z) {
+    const partes = [];
+    if (z.t) partes.push(["topo", _tv10Detalhe(cv, 0, 0, W, H * z.t)]);
+    if (z.b) partes.push(["rodapé", _tv10Detalhe(cv, 0, H * (1 - z.b), W, H)]);
+    if (z.r) partes.push(["lateral (botões)", _tv10Detalhe(cv, W * (1 - z.r), H * z.y0, W, H * z.y1)]);
+    const ruins = partes.filter(function (p) { return p[1] !== null && p[1] > 0.02; }).map(function (p) { return p[0]; });
+    res.push({ nome: z.nome, ruins: ruins, leu: partes.every(function (p) { return p[1] !== null; }), zona: z });
+  });
+  return res;
+};
+const _tv10Gerar = async function (url, alvo) {   // 1:1 = 1080×1080 · 4:5 = 1080×1350 · 9:16 = 1080×1920 (fundo desfocado + a peça inteira no meio)
+  const im = await _tv10CarregarImg(url);
+  const dims = { "1:1": [1080, 1080], "4:5": [1080, 1350], "9:16": [1080, 1920] }[alvo];
+  const cv = document.createElement("canvas"); cv.width = dims[0]; cv.height = dims[1]; const c = cv.getContext("2d");
+  const cobre = Math.max(dims[0] / im.naturalWidth, dims[1] / im.naturalHeight);
+  try { c.filter = "blur(28px) brightness(0.8)"; } catch (_) {}
+  c.drawImage(im, (dims[0] - im.naturalWidth * cobre) / 2, (dims[1] - im.naturalHeight * cobre) / 2, im.naturalWidth * cobre, im.naturalHeight * cobre);
+  try { c.filter = "none"; } catch (_) {}
+  const util = alvo === "9:16" ? [dims[0], dims[1] * (1 - 0.14 - 0.35)] : [dims[0], dims[1]];   // no 9:16 a peça fica fora da área coberta
+  const cabe = Math.min(util[0] / im.naturalWidth, util[1] / im.naturalHeight);
+  const w = im.naturalWidth * cabe, h = im.naturalHeight * cabe; const y = alvo === "9:16" ? dims[1] * 0.14 + (util[1] - h) / 2 : (dims[1] - h) / 2;
+  c.drawImage(im, (dims[0] - w) / 2, y, w, h);
+  return await new Promise(function (ok, erro) { try { cv.toBlob(function (b) { b ? ok(b) : erro(new Error("não gerou")); }, "image/jpeg", 0.9); } catch (e) { erro(e); } });
+};
+function TV10ZonaSegura({ an, conta, onMais }) {
+  const prop = an && an.midia_w && an.midia_h ? _tv9Prop(an.midia_w, an.midia_h) : null;
+  const img = an && an.midia_url && an.midia_tipo !== "video";
+  const [res, setRes] = useState(null); const [tam, setTam] = useState(null); const [oc, setOc] = useState(""); const [msg, setMsg] = useState("");
+  const conferir = async function () {
+    setRes({ carregando: true });
+    try { setRes({ itens: await _tv10Analisar(an.midia_url, prop) }); } catch (e) { setRes({ erro: _tsegMotivo(e) }); }
+  };
+  const gerar = async function () {
+    setOc("gerar"); setMsg(""); const out = [];
+    try { for (const k of ["1:1", "4:5", "9:16"]) { const b = await _tv10Gerar(an.midia_url, k); out.push({ k: k, blob: b, url: URL.createObjectURL(b) }); } setTam(out); }
+    catch (e) { setMsg("Não consegui gerar os tamanhos (" + _tsegMotivo(e) + "). Se a imagem veio de link sem permissão, suba o arquivo de novo."); }
+    finally { setOc(""); }
+  };
+  const porNoRascunho = async function () {
+    if (!tam || !onMais) return; setOc("subir"); setMsg("");
+    try {
+      const novos = [];
+      for (const t of tam) {
+        const f = new File([t.blob], (String(an.midia_nome || "arte").replace(/\.[a-z0-9]+$/i, "")) + "-" + t.k.replace(":", "x") + ".jpg", { type: "image/jpeg" });
+        const sub = await _tv9Subir(f, conta, false, "jpg");
+        novos.push(Object.assign({ tipo: "novo", nome: (an.nome || "Anúncio") + " · " + t.k, texto: an.texto || "", titulo: an.titulo || "", msg_whats: an.msg_whats || "", midia_tipo: "imagem", midia_nome: f.name }, sub));
+      }
+      onMais(novos); setMsg("✓ Os 3 tamanhos entraram no rascunho como anúncios novos (com o mesmo texto).");
+    } catch (e) { setMsg("Não subi (" + _tsegMotivo(e) + ")."); } finally { setOc(""); }
+  };
+  if (!an || !an.midia_url) return null;
+  const zonas = (prop && _TV10_ZONAS[prop]) || [];
+  const z916 = prop === "9:16" ? _TV10_ZONAS["9:16"][1] : null;
+  return <div style={{ marginTop: 8, borderTop: "1px dashed #ddd6fe", paddingTop: 8 }}>
+    <div style={{ fontWeight: 800, fontSize: 12.5, color: "#5b21b6" }}>📐 Onde o texto da arte pode sumir</div>
+    {!img ? <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 3 }}>Vídeo: confira se nada importante fica nos 14% de cima e nos 35% de baixo (Reels) — a legenda, o nome da página e os botões cobrem essa área.</div> :
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6, alignItems: "flex-start" }}>
+        <div className="tv10-zona" style={{ width: prop === "9:16" ? 120 : 160 }}>
+          <img src={an.midia_url} alt="" style={{ width: "100%" }} />
+          {z916 && <Fragment><div className="z" style={{ top: 0, height: (z916.t * 100) + "%" }} /><div className="z" style={{ bottom: 0, height: (z916.b * 100) + "%" }} /><div className="zr" style={{ right: 0, width: (z916.r * 100) + "%", top: (z916.y0 * 100) + "%", height: ((z916.y1 - z916.y0) * 100) + "%" }} />
+            <span className="zl" style={{ top: 3 }}>coberto</span><span className="zl" style={{ bottom: 3 }}>coberto (Reels)</span></Fragment>}
+        </div>
+        <div style={{ flex: "1 1 220px", fontSize: 12, color: "#334155", lineHeight: 1.45 }}>
+          {prop ? <div>Formato <b>{prop}</b>: {prop === "9:16" ? "nos Stories e no Reels o topo e o rodapé ficam cobertos (vermelho). No Feed a Meta corta para 4:5." : prop === "4:5" || prop === "1:1" ? "no Feed aparece inteira; nos Stories a Meta põe faixa em volta." : "formato fora do padrão da Meta (use 1:1, 4:5 ou 9:16)."}</div> : <div>Sem a medida do arquivo (suba de novo para medir).</div>}
+          {!res ? <button className="tv9-b" style={{ marginTop: 6 }} disabled={!prop || !zonas.length} onClick={conferir}>Conferir as áreas cobertas</button> :
+            res.carregando ? <div style={{ color: "#94a3b8" }}>Conferindo…</div> : res.erro ? <div style={{ color: "#b91c1c" }}>Não consegui ler a imagem ({res.erro}). Confira de olho pela moldura.</div> :
+            <div style={{ marginTop: 4 }}>{res.itens.map(function (z, i) {
+              return <div key={i}>{!z.leu ? "◻️" : z.ruins.length ? "🟡" : "🟢"} <b>{z.nome}</b>: {!z.leu ? "não deu para ler a imagem — confira de olho" : z.ruins.length ? "parece ter texto ou detalhe no " + z.ruins.join(" e no ") + " (área coberta). Confira." : (z.zona.t || z.zona.b ? "nada importante na área coberta." : "aparece inteira.")}</div>; })}
+              <div style={{ fontSize: 10.5, color: "#94a3b8" }}>Conferência aproximada (mede contraste, não lê as letras). Não trava o Publicar.</div></div>}
+        </div>
+      </div>}
+    {img && <div style={{ marginTop: 8 }}>
+      {!tam ? <button className="tv9-b" disabled={oc === "gerar"} onClick={gerar}>{oc === "gerar" ? "Gerando…" : "🖼️ Gerar os 3 tamanhos (1:1, 4:5 e 9:16) desta arte"}</button> :
+        <div>
+          <div className="tv10-tam">{tam.map(function (t) { return <figure key={t.k}><img src={t.url} alt="" style={{ height: 120 }} /><figcaption>{t.k} · <a href={t.url} download={(an.midia_nome || "arte").replace(/\.[a-z0-9]+$/i, "") + "-" + t.k.replace(":", "x") + ".jpg"}>baixar</a></figcaption></figure>; })}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+            {onMais && <button className="tv9-b pri" disabled={oc === "subir" || !conta} onClick={porNoRascunho}>{oc === "subir" ? "Subindo…" : "＋ Pôr os 3 no rascunho"}</button>}
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>A peça fica inteira no meio, com o fundo desfocado; no 9:16 ela fica fora da área coberta.</span>
+          </div>
+        </div>}
+    </div>}
+    {msg && <div style={{ fontSize: 12, color: msg.indexOf("✓") === 0 ? "#166534" : "#b91c1c", marginTop: 5 }}>{msg}</div>}
+    <style>{_TV10_CSS}</style>
+  </div>;
+}
+
+/* ---------- P2_3_22: custo máximo por resultado (lance) no conjunto novo ---------- */
+function TV10Lance({ cj, setCj }) {
+  const l = (cj && cj.lance) || null;
+  const [ab, setAb] = useState(!!l);
+  const mudar = function (o) { setCj(Object.assign({}, cj, { lance: o })); };
+  return <div style={{ marginTop: 6, fontSize: 12.5 }}>
+    {!ab ? <button className="tv9-b lnk" onClick={function () { setAb(true); }}>🎯 Limitar o custo por resultado (opcional)</button> :
+      <div style={{ background: "#faf8ff", border: "1px solid #ede9fe", borderRadius: 10, padding: "8px 10px" }}>
+        <div style={{ fontWeight: 800, color: "#5b21b6", marginBottom: 4 }}>🎯 Custo por resultado</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select className="tv9-inp" value={l ? l.estrategia : ""} onChange={function (e) { const v = e.target.value; mudar(v ? { estrategia: v, valor: (l && l.valor) || "" } : null); }}>
+            <option value="">Sem limite (o mais barato possível, padrão da Meta)</option>
+            <option value="COST_CAP">Meta de custo (a média fica perto do valor)</option>
+            <option value="LOWEST_COST_WITH_BID_CAP">Limite de lance (nunca paga mais que o valor)</option>
+          </select>
+          {l && <span>R$ <input className="tv9-inp" style={{ width: 90 }} inputMode="decimal" value={l.valor === undefined || l.valor === null ? "" : String(l.valor)} onChange={function (e) { const n = _tmetaLer(e.target.value); mudar(Object.assign({}, l, { valor: n === "" ? "" : n })); }} placeholder="25,00" /> por resultado</span>}
+        </div>
+        {l && <div style={{ fontSize: 11.5, color: "#92400e", marginTop: 5 }}>⚠️ Com limite a Meta entrega menos quando o leilão está caro. Comece pelo custo médio dos últimos 30 dias. O app aplica este valor ao publicar (entre R$ 1 e R$ 5.000; o 🚦 Validar confere).</div>}
+      </div>}
+  </div>;
+}
+
+/* ---------- P2_3_21: automáticos da Meta seguindo a ficha do cliente (lida do Cadastro) ---------- */
+const _TV10_AUTO = [["criativo", "Mexer no criativo (música, brilho, texto)"], ["publico", "Ampliar o público sozinha"], ["posicionamento", "Escolher onde o anúncio aparece"]];
+function TV10Automaticos({ conta, contaObj, d, mudar }) {
+  const [st, setSt] = useState(null);
+  const [cliF, setCliF] = useState(null); const [fichaOc, setFichaOc] = useState(false); const [fichaMsg, setFichaMsg] = useState("");   // v100 etapa 2
+  useEffect(function () {
+    if (!conta) return; let ok = true; setSt({ carregando: true });
+    _tv9ClienteDe(conta, contaObj).then(function (cli) {
+      if (!cli) { if (ok) setSt({ erro: "conta sem cliente" }); return; }
+      if (ok) setCliF(cli);
+      return _tv9Rpc("ads_ficha_automaticos_ler", { p_client: cli }).then(function (r) { if (ok) setSt(_tv9Estado(r)); });
+    }).catch(function (e) { if (ok) setSt({ erro: _tsegMotivo(e) }); });
+    return function () { ok = false; };
+  }, [conta]);
+  const atual = d.automaticos || null;
+  const ficha = st && st.ficha ? st.ficha : null;
+  useEffect(function () { if (ficha && st.salva && !atual) mudar(Object.assign({}, d, { automaticos: Object.assign({}, ficha, { fonte: "ficha" }) })); }, [ficha && JSON.stringify(ficha)]);
+  const v = atual || ficha || {};
+  const fichaPode = !!(cliF && st && !st.falta && !st.erro && !st.carregando);
+  const guardarFicha = async function () {
+    setFichaOc(true); setFichaMsg("");
+    try { const r = await _tv9Rpc("ads_ficha_auto_salvar", { p_client: cliF, p_criativo: v.criativo, p_ampliar_publico: v.publico, p_posicionamento: v.posicionamento });
+      if (r && r.__falta) throw new Error("ainda não ligado no servidor"); if (!r || r.ok === false) throw new Error((r && r.erro) || "não guardou");
+      setFichaMsg("✓ Ficha do cliente guardada. A conferência diária passa a usar estas respostas."); setSt(Object.assign({}, st, { salva: true, ficha: { criativo: v.criativo, publico: v.publico, posicionamento: v.posicionamento } })); }
+    catch (e) { setFichaMsg("Não guardei (" + _tsegMotivo(e) + ")."); } finally { setFichaOc(false); }
+  };
+  const trocar = function (k, val) { mudar(Object.assign({}, d, { automaticos: Object.assign({}, v, { fonte: "montador" }, (function () { const o = {}; o[k] = val; return o; })()) })); };
+  return <div style={{ marginTop: 8, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px", fontSize: 12.5 }}>
+    <div style={{ fontWeight: 800, marginBottom: 4 }}>⚙️ Automáticos da Meta neste cliente {st && st.salva ? <span className="tv10-c verde">segue a ficha do Cadastro</span> : null}</div>
+    {st && st.falta && <div style={{ fontSize: 11.5, color: "#64748b", marginBottom: 4 }}>⏳ A ficha do cliente ainda não está ligada no servidor: escolha aqui (fica guardado no rascunho).</div>}
+    {st && st.erro && <div style={{ fontSize: 11.5, color: "#b91c1c", marginBottom: 4 }}>Não li a ficha ({st.erro}).</div>}
+    {st && !st.falta && !st.erro && !st.carregando && !st.salva && <div style={{ fontSize: 11.5, color: "#92400e", marginBottom: 4 }}>Este cliente ainda não tem a ficha no Cadastro. Escolha aqui ou preencha a ficha.</div>}
+    {_TV10_AUTO.map(function (x) {
+      const val = v[x[0]] || ""; const opc = x[0] === "publico" ? [["sim", "Pode"], ["so_alcance", "Só em alcance"], ["nao", "Não"]] : [["sim", "Pode"], ["nao", "Não"]];
+      return <div key={x[0]} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "3px 0" }}>
+        <span style={{ flex: "1 1 200px" }}>{x[1]}</span>
+        <span className="tv9-chips">{opc.map(function (o) { return <button key={o[0]} type="button" className={"tv9-chip" + (val === o[0] ? " on" : "")} onClick={function () { trocar(x[0], o[0]); }}>{o[1]}</button>; })}</span>
+      </div>;
+    })}
+    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>Ao publicar, o app segue esta escolha (sem escolha aqui, segue a ficha do cliente). Criativo e posicionamento só valem para anúncio novo: a Meta não deixa mudar depois.</div>
+    {fichaPode && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 5 }}>{/* v100 (14/10/2026) P2_3_21 etapa 2: guardar como ficha do cliente (ads_ficha_auto_salvar) */}
+      <button type="button" className="tv9-b" disabled={fichaOc || !(v.criativo && v.publico && v.posicionamento)} onClick={guardarFicha}>{fichaOc ? "Guardando…" : st && st.salva ? "💾 Atualizar a ficha do cliente com estas respostas" : "💾 Guardar como ficha do cliente"}</button>
+      {fichaMsg && <span style={{ fontSize: 11.5, color: fichaMsg.indexOf("✓") === 0 ? "#166534" : "#b91c1c" }}>{fichaMsg}</span>}
+    </div>}
+  </div>;
+}
+
+/* ---------- P2_7_13: perguntas do formulário que já filtram o lead ---------- */
+function TV10Perguntas({ d, mudar }) {
+  const rascunhoId = (arguments[0] || {}).rascunhoId;   // v100 (14/10/2026) P2_7_13 etapa 2: para ads_form_perguntas_pedir (prop nova lida por arguments[0])
+  const [ped, setPed] = useState(null);
+  const pedirForm = async function () {
+    setPed({ carregando: true });
+    try { const r = await _tv9Rpc("ads_form_perguntas_pedir", { p_rascunho: rascunhoId }); if (r && r.__falta) { setPed({ falta: true }); return; } if (!r || r.ok === false) throw new Error((r && r.erro) || "não pediu"); setPed(r); }
+    catch (e) { setPed({ erro: _tsegMotivo(e) }); }
+  };
+  const f = d.formulario || {};
+  const [st, setSt] = useState(null); const [nicho, setNicho] = useState(f.nicho || "");
+  const ler = function () { setSt({ carregando: true }); _tv9Rpc("lead_perguntas_ler", { p_nicho: null }).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  const pergs = ((st && st.perguntas) || []).filter(function (p) { return !nicho || p.nicho === nicho || p.nicho === "geral_agro"; }).sort(function (a, b) { return (a.nicho === "geral_agro" ? 1 : 0) - (b.nicho === "geral_agro" ? 1 : 0) || a.ordem - b.ordem; });
+  const sel = f.perguntas || [];
+  const toggle = function (id) { const l = sel.indexOf(id) >= 0 ? sel.filter(function (x) { return x !== id; }) : sel.concat([id]); mudar(Object.assign({}, d, { formulario: { nicho: nicho, perguntas: l } })); };
+  const NOMES = { biodigestor: "Biodigestor", construcao: "Construção", geral_agro: "Agro (geral)", tratamento_agua: "Tratamento de água" };
+  const textoCopia = pergs.filter(function (p) { return sel.indexOf(p.id) >= 0; }).map(function (p, i) { return (i + 1) + ". " + p.pergunta + ((p.opcoes || []).length ? " (" + p.opcoes.join(" / ") + ")" : ""); }).join("\n");
+  return <TV9Bloco titulo="📝 Perguntas do formulário que já filtram o lead" pill={sel.length ? sel.length + " escolhida(s)" : "por nicho"} pillRoxo={!!sel.length} onAbrir={ler} fechadoNoPc
+    dica="O formulário hoje vem do anúncio modelo. Escolha as perguntas de qualificação: ficam guardadas no rascunho para criar o formulário novo (o vendedor recebe o lead já filtrado).">
+    {!st || st.carregando ? <div style={{ fontSize: 12.5, color: "#94a3b8" }}>Lendo as perguntas…</div> : st.falta ? <TV9Falta oque="lead_perguntas_ler" /> : st.erro ? <div className="tv9-erro">Não li as perguntas ({st.erro}).</div> : <div>
+      <div className="tv9-chips" style={{ marginBottom: 6 }}>{(st.nichos || []).filter(function (n) { return n !== "geral_agro"; }).map(function (n) { return <button key={n} type="button" className={"tv9-chip" + (nicho === n ? " on" : "")} onClick={function () { setNicho(n); }}>{NOMES[n] || n}</button>; })}</div>
+      {pergs.map(function (p) { const on = sel.indexOf(p.id) >= 0; return <label key={p.id} className="tv9-li" style={{ cursor: "pointer" }}>
+        <input type="checkbox" checked={on} onChange={function () { toggle(p.id); }} style={{ accentColor: "#6d28d9", marginTop: 3 }} />
+        <span><b>{p.pergunta}</b>{(p.opcoes || []).length ? <span style={{ color: "#64748b" }}> · {p.opcoes.join(" / ")}</span> : null}<div style={{ fontSize: 11, color: "#94a3b8" }}>filtra: {p.filtra}{p.nicho === "geral_agro" ? " · vale para todo agro" : ""}</div></span></label>; })}
+      {sel.length > 0 && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+        <button type="button" className="tv9-b" onClick={function () { try { navigator.clipboard.writeText(textoCopia); } catch (_) {} }}>📋 Copiar as perguntas</button>
+        <button type="button" className="tv9-b pri" disabled={!rascunhoId || (ped && ped.carregando)} onClick={pedirForm} title={rascunhoId ? "" : "Salve o rascunho primeiro"}>{ped && ped.carregando ? "Pedindo…" : "📨 Pedir o formulário (vai para 🧠 Decisões)"}</button>
+        <span style={{ fontSize: 11.5, color: "#64748b" }}>{rascunhoId ? "Vira um pedido com o passo a passo para criar o formulário no Gerenciador. Nada é criado na Meta sozinho." : "Salve o rascunho (💾) e depois peça o formulário."}</span>
+      </div>}
+      {ped && ped.falta && <div style={{ marginTop: 6 }}><TV9Falta oque="ads_form_perguntas_pedir" /></div>}
+      {ped && ped.erro && <div className="tv9-erro" style={{ marginTop: 6 }}>Não pedi ({ped.erro}). Se mudou as perguntas, salve o rascunho antes.</div>}
+      {ped && ped.ok && <div className="tv9-ok" style={{ marginTop: 6 }}>✓ Pedido {ped.pedido_id ? "#" + ped.pedido_id + " " : ""}criado em 🧠 Decisões (feito à mão no Gerenciador).{(ped.passos || []).length ? <ol style={{ margin: "4px 0 0 18px", padding: 0, fontWeight: 600 }}>{ped.passos.map(function (t, i) { return <li key={i}>{String(t)}</li>; })}</ol> : null}</div>}
+    </div>}
+  </TV9Bloco>;
+}
+
+/* ---------- P2_9_15: cliente novo sem campanha boa na própria conta → partir do modelo da agência ---------- */
+function TV10SemModelo({ conta, d, mudar, partida }) {
+  const [st, setSt] = useState(null);
+  const ag = d.modelo && d.modelo.origem === "agencia";
+  const [mods, setMods] = useState(null);   // v100 (14/10/2026) P2_9_15 etapa 2: o ads-montar precisa do modelo_id (biblioteca da agência)
+  const ler = function () {
+    setSt({ carregando: true });
+    _tv9Rpc("ads_montar_sem_modelo_ler", { p_conta: conta }).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); });
+    _tv9Rpc("ads_modelos_ler", { p_nicho: null }).then(function (r) { setMods((r && r.modelos) || []); }).catch(function () { setMods([]); });
+  };
+  useEffect(function () { if (ag && conta) ler(); }, [ag, conta]);
+  // pixel e Instagram da conta entram sozinhos (o ads-montar troca os do modelo por estes)
+  useEffect(function () {
+    if (!ag || !st || st.carregando || st.falta === true || st.erro) return; const m0 = d.modelo || {}; const o = {};   // falta = [] é a lista do que falta na conta
+    if (st.pixel && st.pixel.id && !m0.pixel_id) o.pixel_id = String(st.pixel.id);
+    if (st.instagram && !m0.instagram_id) o.instagram_id = String(st.instagram);
+    if ((st.paginas || []).length === 1 && !m0.pagina_id) o.pagina_id = String(st.paginas[0].id);
+    if (Object.keys(o).length) mudar(Object.assign({}, d, { modelo: Object.assign({}, m0, o) }));
+  }, [st && !st.carregando && JSON.stringify([st.pixel, st.instagram, (st.paginas || []).length])]);
+  const ligar = function () { mudar(Object.assign({}, d, { modelo: { origem: "agencia", modelo_id: (partida && partida.modelo_id) || null, destino: "whats", pagina_id: "", objetivo: (partida && partida.objetivo) || "" } })); };
+  const m = d.modelo || {};
+  const set = function (k, v) { const n = Object.assign({}, m); n[k] = v; mudar(Object.assign({}, d, { modelo: n })); };
+  if (!ag) return <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>A conta não tem uma campanha boa para copiar? <button type="button" className="tv9-b lnk" onClick={ligar}>Montar do modelo da agência (sem campanha modelo) ›</button></div>;
+  return <div style={{ background: "#faf8ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "8px 10px", marginTop: 6, fontSize: 12.5 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}><b style={{ color: "#5b21b6" }}>📚 Sem campanha modelo: usando o modelo da agência</b><button type="button" className="tv9-b lnk" style={{ marginLeft: "auto" }} onClick={function () { mudar(Object.assign({}, d, { modelo: {} })); }}>voltar a copiar da conta</button></div>
+    {!st || st.carregando ? <div style={{ color: "#94a3b8" }}>Lendo página, WhatsApp e pixel da conta…</div> : st.falta === true ? <div style={{ marginTop: 4 }}><TV9Falta oque="montar sem campanha modelo (ads_montar_sem_modelo_ler + ads-montar)" /></div> : st.erro ? <div className="tv9-erro">Não li a conta ({st.erro}).</div> :
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 8, marginTop: 6 }}>
+        <TMonRot t="Modelo da agência (campanha que já funcionou)"><select className="tv9-inp" style={{ width: "100%" }} value={m.modelo_id || ""} onChange={function (e) { set("modelo_id", e.target.value ? Number(e.target.value) : null); }}><option value="">{mods === null ? "Lendo os modelos…" : "Escolha…"}</option>{(mods || []).map(function (x) { return <option key={x.id} value={x.id}>{x.nome}{x.nicho ? " · " + x.nicho : ""}{x.cpl_30d ? " · " + _tv9Brl(x.cpl_30d) + " por lead" : ""}</option>; })}</select></TMonRot>
+        <TMonRot t="Para onde o anúncio leva"><select className="tv9-inp" style={{ width: "100%" }} value={m.destino || "whats"} onChange={function (e) { set("destino", e.target.value); }}><option value="whats">WhatsApp</option><option value="form">Formulário da Meta</option><option value="site">Site</option></select></TMonRot>
+        <TMonRot t="Página"><select className="tv9-inp" style={{ width: "100%" }} disabled={!st.pronto} value={m.pagina_id || ""} onChange={function (e) { set("pagina_id", e.target.value); }}><option value="">Escolha…</option>{(st.paginas || []).map(function (p) { return <option key={p.id} value={p.id}>{p.nome || "Página " + p.id}{p.whatsapp ? " · WhatsApp " + p.whatsapp : ""}</option>; })}</select></TMonRot>
+        {m.destino === "form" && <TMonRot t="Formulário"><select className="tv9-inp" style={{ width: "100%" }} value={m.formulario_id || ""} onChange={function (e) { set("formulario_id", e.target.value); }}><option value="">Escolha…</option>{(st.formularios || []).map(function (f) { return <option key={f.id} value={f.id}>{f.nome || "Formulário " + f.id}{f.leads_90d ? " · " + f.leads_90d + " leads em 90 dias" : ""}</option>; })}</select></TMonRot>}
+        {Array.isArray(st.falta) && st.falta.length > 0 && <div className="tv9-erro" style={{ gridColumn: "1/-1" }}>Falta na conta: {st.falta.join("; ")}.</div>}
+        {!st.pronto && <div style={{ gridColumn: "1/-1", fontSize: 11.5, color: "#92400e" }}>O servidor ainda não monta sem campanha modelo nesta conta: o 🚦 Validar fica desligado.</div>}
+      </div>}
+  </div>;
+}
+const _tv10ModeloOk = function (d) { const m = (d && d.modelo) || {}; return !!m.conjunto_id || (m.origem === "agencia" && !!m.pagina_id && !!m.modelo_id); };   // v100 etapa 2: o ads-montar precisa do modelo_id
+
+/* ---------- P2_5_07: públicos prontos por nicho (com o custo por lead que já tiveram) ---------- */
+function TV10Publicos({ conta, onUsar }) {
+  const [st, setSt] = useState(null); const [nicho, setNicho] = useState("");
+  const ler = async function () {
+    setSt({ carregando: true });
+    try {
+      const r = await _tv9Rpc("ads_publicos_nicho_ler", { p_nicho: null });
+      if (r && !r.__falta) { setSt(_tv9Estado(r)); return; }
+      const m = await _tv9Rpc("ads_modelos_ler", { p_nicho: null });   // reserva: os públicos dos modelos prontos
+      if (m && m.__falta) { setSt({ falta: true }); return; }
+      const pub = ((m && m.modelos) || []).filter(function (x) { return x.conjunto; }).map(function (x) { const c = x.conjunto; return { id: "m" + x.id, nicho: x.nicho, nome: x.nome, idade_min: c.idade_min, idade_max: c.idade_max, genero: c.genero, interesses: c.interesses || [], cidades_txt: c.cidades_txt, raio_km: c.raio_km, cpl: x.cpl_30d, leads: x.leads_30d, origem_cliente: x.origem_conta_nome, doModelo: true }; });
+      setSt({ ok: true, publicos: pub, reserva: true });
+    } catch (e) { setSt({ erro: _tsegMotivo(e) }); }
+  };
+  const pubs = ((st && st.publicos) || []).filter(function (p) { return !nicho || p.nicho === nicho; }).sort(function (a, b) { return Number(a.cpl || 9e9) - Number(b.cpl || 9e9); });
+  const nichos = Array.from(new Set(((st && st.publicos) || []).map(function (p) { return p.nicho; }).filter(Boolean)));
+  return <TV9Bloco titulo="👥 Públicos prontos por nicho" pill={st && st.publicos ? st.publicos.length + " públicos" : "com o custo por lead de cada um"} onAbrir={ler} fechadoNoPc
+    dica="Os públicos que já funcionaram na agência, separados por nicho. Cliente novo começa com eles em vez de testar às cegas.">
+    {!st || st.carregando ? <div style={{ fontSize: 12.5, color: "#94a3b8" }}>Lendo…</div> : st.falta ? <TV9Falta oque="ads_publicos_nicho_ler" /> : st.erro ? <div className="tv9-erro">Não li os públicos ({st.erro}).</div> : <div>
+      {st.reserva && <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 6 }}>Por enquanto vêm dos modelos prontos (a biblioteca própria de públicos ainda não está ligada no servidor).</div>}
+      {nichos.length > 1 && <div className="tv9-chips"><button className={"tv9-chip" + (!nicho ? " on" : "")} onClick={function () { setNicho(""); }}>Todos</button>{nichos.map(function (n) { return <button key={n} className={"tv9-chip" + (nicho === n ? " on" : "")} onClick={function () { setNicho(n); }}>{n}</button>; })}</div>}
+      {!pubs.length ? <div style={{ fontSize: 12.5, color: "#64748b", marginTop: 6 }}>Nenhum público guardado ainda.</div> :
+        <div className="tv9-grid">{pubs.map(function (p) { return <div key={p.id} className="tv9-card">
+          <div className="t">{p.nome}</div>
+          <div className="d"><b>{p.nicho}</b>{p.cpl ? " · " + _tv9Brl(p.cpl) + " por lead" : ""}{p.leads ? " · " + p.leads + " leads" : ""}{p.origem_cliente ? " · " + p.origem_cliente : ""}</div>
+          <div className="d">{[p.genero === "homens" ? "Homens" : p.genero === "mulheres" ? "Mulheres" : "Todos", p.idade_min ? p.idade_min + "–" + (p.idade_max || 65) : "", p.raio_km ? "raio " + p.raio_km + " km" : ""].filter(Boolean).join(" · ")}</div>
+          {(p.interesses || []).length > 0 && <div className="d">Interesses: {p.interesses.slice(0, 5).join(" · ")}</div>}
+          {p.cidades_txt && <div className="d" title={p.cidades_txt} style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>Onde: {p.cidades_txt}</div>}
+          <div className="rod"><button className="tv9-b pri" onClick={function () { onUsar({ nota: "público \"" + p.nome + "\"" + (p.cpl ? " (" + _tv9Brl(p.cpl) + " por lead)" : "") + ((p.interesses || []).length ? " · interesses: " + p.interesses.slice(0, 4).join(", ") : ""), produto: p.nicho || "", raio: p.raio_km || null, preset: _tv9PresetDe(p) }); }}>Usar este público ›</button></div>
+        </div>; })}</div>}
+    </div>}
+  </TV9Bloco>;
+}
+
+/* ---------- P2_5_05: lembrete para quem já mostrou interesse (vídeo, perfil, formulário aberto, conversa) ---------- */
+const _TV10_ENG = { video: "🎬 Viu 50% dos vídeos", perfil: "👤 Visitou o perfil / página", form_aberto: "📝 Abriu o formulário e não enviou", conversa: "💬 Começou conversa e parou", site: "🌐 Visitou o site", instagram: "📸 Interagiu no Instagram" };
+function TV10Lembrete({ conta, onUsar }) {
+  const [st, setSt] = useState(null); const [sel, setSel] = useState([]); const [dias, setDias] = useState(60); const [oc, setOc] = useState(false); const [msg, setMsg] = useState("");
+  const ler = function () { if (!conta) return; setSt({ carregando: true }); _tv9Rpc("ads_publicos_engajamento_ler", { p_conta: conta }).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  useEffect(function () { if (st && conta) ler(); }, [conta]);
+  const pedir = async function () {
+    setOc(true); setMsg("");
+    try { const r = await _tsegRpc("ads_publico_engajamento_pedir", { p_conta: conta, p_tipos: sel, p_dias: dias }); if (!r || r.ok === false) throw new Error((r && r.erro) || "não pediu");
+      setMsg("✓ Pedido criado em 🧠 Decisões › Precisa de vocês. O público só é criado na Meta depois do PIN 2x."); setSel([]); ler(); }
+    catch (e) { setMsg(_trgFalta(e) ? "Pedir o público ainda não está ligado no servidor." : "Não pediu (" + _tsegMotivo(e) + ")."); } finally { setOc(false); }
+  };
+  const existentes = ((st && st.publicos) || []).filter(function (p) { return p.existe && p.id; });
+  return <TV9Bloco titulo="🔁 Lembrete para quem já mostrou interesse" pill="remarketing" onAbrir={ler} fechadoNoPc
+    dica="Quem viu o vídeo, visitou o perfil, abriu o formulário sem enviar ou parou a conversa recebe um 2º anúncio (ex.: “Ficou alguma dúvida? Fale com o técnico”).">
+    {!conta ? <div style={{ fontSize: 12.5, color: "#64748b" }}>Escolha a conta (abra o Montador pelo cliente) para ver os públicos dela.</div> :
+      !st || st.carregando ? <div style={{ fontSize: 12.5, color: "#94a3b8" }}>Lendo os públicos da conta…</div> : st.falta ? <div><TV9Falta oque="públicos de engajamento (ads_publicos_engajamento_ler)" />
+        <div style={{ marginTop: 8 }}><button className="tv9-b" onClick={function () { onUsar({ nota: "lembrete para quem já mostrou interesse (escolha o público de remarketing no Gerenciador antes de ativar)", produto: "Remarketing", preset: { idade_min: 18, idade_max: 65 }, anuncio: { nome: "Lembrete", titulo: "FICOU ALGUMA DÚVIDA?", texto: "Ficou alguma dúvida? Fale com o técnico no WhatsApp e receba a resposta hoje." } }); }}>Montar o lembrete mesmo assim ›</button></div></div> :
+      st.erro ? <div className="tv9-erro">Não li ({st.erro}).</div> : <div>
+        {(function () { const ps = (st.publicos || []).slice(); (st.tipos || []).forEach(function (t) { if (_TV10_ENG[t] && !ps.some(function (p) { return p.tipo === t; })) ps.push({ tipo: t, nome: _TV10_ENG[t], existe: false }); }); return ps; })().map(function (p, i) {   // v100 etapa 2: o servidor manda os tipos possíveis em "tipos"
+          const on = sel.indexOf(p.tipo) >= 0;
+          return <div key={i} className="tv9-li"><span style={{ flex: 1 }}><b>{_TV10_ENG[p.tipo] || p.nome}</b> <span style={{ color: "#64748b" }}>· {p.dias || dias} dias{p.tamanho ? " · ~" + _tiaNum(p.tamanho) + " pessoas" : ""}</span></span>
+            {p.existe ? <span className="tv10-c verde">já existe</span> : p.pedido_id && p.estado !== "erro" ? <span className="tv10-c roxo">pedido #{p.pedido_id} · {p.estado || "esperando o PIN"}</span> : st.pode_pedir ? <label style={{ fontSize: 12, cursor: "pointer" }}><input type="checkbox" checked={on} onChange={function () { setSel(on ? sel.filter(function (x) { return x !== p.tipo; }) : sel.concat([p.tipo])); }} style={{ accentColor: "#6d28d9" }} /> criar</label> : <span className="tv10-c">não existe</span>}</div>;
+        })}
+        {sel.length > 0 && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+          <span style={{ fontSize: 12 }}>Janela:</span><select className="tv9-inp" value={dias} onChange={function (e) { setDias(Number(e.target.value)); }}><option value={30}>30 dias</option><option value={60}>60 dias</option><option value={90}>90 dias</option></select>
+          <button className="tv9-b pri" disabled={oc} onClick={pedir}>{oc ? "…" : "Pedir os " + sel.length + " público(s) (PIN 2x)"}</button></div>}
+        <div style={{ marginTop: 8 }}><button className="tv9-b" disabled={!existentes.length} onClick={function () { onUsar({ nota: "lembrete para " + existentes.map(function (p) { return (_TV10_ENG[p.tipo] || p.nome).replace(/^\S+\s/, "").toLowerCase(); }).join(", "), produto: "Remarketing", preset: { idade_min: 18, idade_max: 65, publicos_incluir: existentes.map(function (p) { return p.id; }) }, anuncio: { nome: "Lembrete", titulo: "FICOU ALGUMA DÚVIDA?", texto: "Ficou alguma dúvida? Fale com o técnico no WhatsApp e receba a resposta hoje." } }); }}>🧱 Montar a campanha de lembrete ›</button>
+          {!existentes.length && <span style={{ fontSize: 11.5, color: "#94a3b8", marginLeft: 6 }}>precisa de pelo menos 1 público criado</span>}</div>
+      </div>}
+    {msg && <div style={{ fontSize: 12, color: msg.indexOf("✓") === 0 ? "#166534" : "#b91c1c", marginTop: 6 }}>{msg}</div>}
+  </TV9Bloco>;
+}
+
+/* ---------- P2_3_18: vários conjuntos de uma vez, por planilha (CSV) — cria RASCUNHOS; cada um segue com Validar + PIN 2x ---------- */
+const _tv10LerCsv = function (txt) {
+  const linhas = String(txt || "").replace(/\r/g, "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+  if (!linhas.length) return [];
+  const sep = linhas[0].indexOf("\t") >= 0 ? "\t" : linhas[0].indexOf(";") >= 0 ? ";" : ",";
+  const cab = linhas[0].split(sep).map(function (c) { return c.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); });
+  const temCab = cab.some(function (c) { return /cidade|verba|raio/.test(c); });
+  const idx = function (re, pad) { const i = cab.findIndex(function (c) { return re.test(c); }); return i >= 0 ? i : (temCab ? -1 : pad); };
+  const iC = idx(/cidade/, 0), iU = idx(/^uf$|estado/, 1), iR = idx(/raio/, 2), iV = idx(/verba/, 3), iN = idx(/conjunto|nome/, 4), iP = idx(/produto/, 5);
+  return (temCab ? linhas.slice(1) : linhas).slice(0, 30).map(function (l, n) {
+    const c = l.split(sep).map(function (x) { return x.trim(); }); const g = function (i) { return i >= 0 ? (c[i] || "") : ""; };
+    const v = _tmetaLer(g(iV)); const r = Number(String(g(iR)).replace(/[^0-9]/g, "") || 0);
+    const e = []; if (!g(iC)) e.push("falta a cidade"); if (!(Number(v) >= 5)) e.push("verba por dia precisa ser R$ 5 ou mais"); if (r && (r < 17 || r > 80)) e.push("raio entre 17 e 80 km");
+    return { linha: n + 1, cidade: g(iC), uf: g(iU).toUpperCase().slice(0, 2), raio_km: r || 40, verba_dia: Number(v) || null, nome_conjunto: g(iN) || null, produto: g(iP) || null, erros: e };
+  });
+};
+function TV10Planilha({ conta, lista }) {
+  const [txt, setTxt] = useState(""); const [base, setBase] = useState(""); const [oc, setOc] = useState(false); const [res, setRes] = useState(null);
+  const [modo, setModo] = useState("varios");   // v100 (14/10/2026) P2_3_18 etapa 2: "varios" = um rascunho por linha · "mesma" = até 10 conjuntos na mesma campanha (ads_rascunho_importar)
+  const linhas = _tv10LerCsv(txt); const boas = linhas.filter(function (l) { return !l.erros.length; });
+  const bases = (lista || []).filter(function (r) { return ["rascunho", "validado", "publicado"].indexOf(r.estado) >= 0 && (!conta || r.ad_account_id === conta); });
+  const arquivo = function (f) { if (!f) return; const rd = new FileReader(); rd.onload = function () { setTxt(String(rd.result || "")); }; rd.readAsText(f); };
+  const importar = async function () {
+    setOc(true); setRes(null);
+    try {
+      const r = modo === "mesma"
+        ? await _tv9Rpc("ads_rascunho_importar", { p_rascunho: Number(base), p_linhas: boas.slice(0, 10).map(function (l) { return { cidade: l.cidade, uf: l.uf, raio: l.raio_km, verba_dia: l.verba_dia, nome: l.nome_conjunto || null }; }) })
+        : await _tv9Rpc("ads_rascunhos_importar", { p_base: Number(base), p_linhas: boas.map(function (l) { return { cidade: l.cidade, uf: l.uf, raio_km: l.raio_km, verba_dia: l.verba_dia, nome_conjunto: l.nome_conjunto, produto: l.produto }; }) });
+      if (r && r.__falta) { setRes({ falta: true }); return; } if (!r || r.ok === false) throw new Error((r && r.erro) || "não importou"); setRes(Object.assign({ modo: modo }, r)); }
+    catch (e) { setRes({ erro: _tsegMotivo(e) }); } finally { setOc(false); }
+  };
+  return <TV9Bloco titulo="📥 Vários conjuntos de uma vez (planilha)" pill="até 30 cidades" fechadoNoPc
+    dica="Mesma campanha em várias cidades: cole a planilha (cidade; UF; raio; verba por dia) ou suba um .csv. O app cria um RASCUNHO por linha a partir de um rascunho base; cada um passa pelo 🚦 Validar e pelo PIN 2x, como sempre.">
+    <div style={{ display: "grid", gap: 8 }}>
+      <div className="tv9-chips">{[["varios", "Um rascunho por cidade (até 30)"], ["mesma", "Tudo numa campanha só (até 10 conjuntos)"]].map(function (o) { return <button key={o[0]} type="button" className={"tv9-chip" + (modo === o[0] ? " on" : "")} onClick={function () { setModo(o[0]); setRes(null); }}>{o[1]}</button>; })}</div>
+      <TMonRot t="Rascunho base (campanha modelo, anúncios e público vêm dele)"><select className="tv9-inp" style={{ width: "100%" }} value={base} onChange={function (e) { setBase(e.target.value); }}><option value="">Escolha…</option>{bases.map(function (r) { return <option key={r.id} value={r.id}>#{r.id} · {r.nome || "(sem nome)"} · {r.conta_nome || ""}</option>; })}</select></TMonRot>
+      <textarea className="tv10-obs" rows={5} value={txt} onChange={function (e) { setTxt(e.target.value); setRes(null); }} placeholder={"cidade;uf;raio;verba\nChapecó;SC;40;30\nConcórdia;SC;25;20\nXanxerê;SC;25;15"} style={{ fontFamily: "ui-monospace,Menlo,monospace" }} />
+      <div><input type="file" accept=".csv,.txt,.tsv,text/csv" onChange={function (e) { arquivo(e.target.files && e.target.files[0]); }} /> <span style={{ fontSize: 11, color: "#94a3b8" }}>Excel: Arquivo › Salvar como › CSV.</span></div>
+    </div>
+    {linhas.length > 0 && <table className="tv10-tb"><thead><tr><th>#</th><th>Cidade</th><th>Raio · verba</th><th>Conjunto</th><th></th></tr></thead><tbody>
+      {linhas.map(function (l) { return <tr key={l.linha}><td>{l.linha}</td><td>{l.cidade}{l.uf ? " - " + l.uf : ""}</td><td>{l.raio_km} km · {_tiaBrl(l.verba_dia)}/dia</td><td>{l.nome_conjunto || "—"}</td><td>{l.erros.length ? <span style={{ color: "#b91c1c" }}>✕ {l.erros.join("; ")}</span> : <span style={{ color: "#166534" }}>✓</span>}</td></tr>; })}
+    </tbody></table>}
+    {linhas.length > 0 && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+      <button className="tv9-b pri" disabled={oc || !base || !boas.length} onClick={importar}>{oc ? "Criando…" : modo === "mesma" ? "Pôr " + Math.min(10, boas.length) + " conjunto(s) no rascunho base" : "Criar " + boas.length + " rascunho(s)"}</button>
+      {modo === "mesma" && boas.length > 10 && <span style={{ fontSize: 11.5, color: "#b91c1c" }}>só as 10 primeiras linhas entram</span>}
+      <span style={{ fontSize: 11.5, color: "#64748b" }}>Total: {_tiaBrl(boas.reduce(function (a, l) { return a + Number(l.verba_dia || 0); }, 0))}/dia · nada vai para a Meta agora.</span></div>}
+    {res && res.falta && <div style={{ marginTop: 6 }}><TV9Falta oque="ads_rascunhos_importar" /></div>}
+    {res && res.erro && <div className="tv9-erro" style={{ marginTop: 6 }}>Não criei ({res.erro}).</div>}
+    {res && res.ok && res.modo === "mesma" && <div className="tv9-ok" style={{ marginTop: 6 }}>✓ {Array.isArray(res.conjuntos) ? res.conjuntos.length : res.conjuntos} conjunto(s) no rascunho #{base}{(res.nao_achei || []).length ? " · cidade não encontrada: " + res.nao_achei.map(function (x) { return "linha " + x.linha + " (" + x.cidade + ")"; }).join("; ") : ""}{res.aviso ? " · " + res.aviso : ""}. Abra o rascunho, valide e publique com PIN (uma campanha, todos pausados).</div>}
+    {res && res.ok && res.modo !== "mesma" && <div className="tv9-ok" style={{ marginTop: 6 }}>✓ {(res.criados || []).length} rascunho(s) criados{(res.erros || []).length ? " · " + res.erros.length + " com erro: " + res.erros.map(function (e) { return "linha " + e.linha + " (" + e.erro + ")"; }).join("; ") : ""}. Abra cada um na lista acima, valide e publique com PIN.</div>}
+    <style>{_TV10_CSS}</style>
+  </TV9Bloco>;
+}
+
+/* ---------- P2_4_13: variações da IMAGEM a partir do anúncio que mais vende (IA só no clique de sócio) ----------
+   v100 (14/10/2026) etapa 2: conferido no banco — ads_ia_variacao_imagem_pedir/_colher (C5a) com os nomes pedidos; teto próprio v100b_img_teto_mes_usd. */
+function TV10VariacaoImg({ conta, contaObj, onPor }) {
+  const semIa = useIaSemCredito().sem;
+  const [venc, setVenc] = useState(null); const [ad, setAd] = useState(""); const [st, setSt] = useState(null); const vivo = useRef(true);
+  useEffect(function () { vivo.current = true; return function () { vivo.current = false; }; }, []);
+  const ler = function () {
+    if (!conta) return; setVenc({ carregando: true });
+    _tv9ClienteDe(conta, contaObj).then(function (cli) { return cli ? _tv9Rpc("ads_vencedores_ler", { p_client: cli }) : { __falta: true }; })
+      .then(function (r) { const e = _tv9Estado(r); setVenc(e); if (e.vencedores_agora && e.vencedores_agora[0]) setAd(e.vencedores_agora[0].ad_id); }).catch(function (e) { setVenc({ erro: _tsegMotivo(e) }); });
+  };
+  const pedir = async function () {
+    if (semIa) { _tiaAvisarSemCredito(); return; }
+    setSt({ carregando: true });
+    try {
+      let r = await _tv9Rpc("ads_ia_variacao_imagem_pedir", { p_conta: conta, p_ad_id: ad, p_qtd: 3 });
+      if (r && r.__falta) { setSt({ falta: true }); return; }
+      if (!r || r.ok === false) throw new Error((r && r.erro) || "não pediu");
+      let n = 0;
+      const jid = r.job_id;   // v100 (14/10/2026) etapa 2: guarda o nº do pedido (a resposta do colher pode vir sem ele)
+      while (r && r.status === "gerando" && jid && n < 36 && vivo.current) { await new Promise(function (ok) { setTimeout(ok, 5000); }); n++; r = await _tsegRpc("ads_ia_variacao_imagem_colher", { p_job: jid }); }
+      if (!vivo.current) return;
+      if (r && r.status === "gerando") throw new Error("demorou mais de 3 minutos; clique de novo daqui a pouco (não gasta de novo)");
+      if (r && r.status === "erro") throw new Error(r.erro || "a IA não gerou");
+      setSt(r);
+    } catch (e) { if (vivo.current) setSt({ erro: _tsegMotivo(e) }); }
+  };
+  const vs = (venc && venc.vencedores_agora) || [];
+  return <TV9Bloco titulo="🖼️ Variações da imagem do anúncio que mais vende" pill="IA · só no clique" onAbrir={ler} fechadoNoPc
+    dica="A IA faz 3 versões da imagem vencedora com outro título, para testar. Nada entra no rascunho sem o seu clique.">
+    {!venc || venc.carregando ? <div style={{ fontSize: 12.5, color: "#94a3b8" }}>Lendo os vencedores…</div> : venc.falta ? <TV9Falta oque="vencedores do cliente" /> : venc.erro ? <div className="tv9-erro">Não li ({venc.erro}).</div> : !vs.length ? <div style={{ fontSize: 12.5, color: "#64748b" }}>Ainda sem anúncio vencedor com dado suficiente.</div> : <div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <select className="tv9-inp" value={ad} onChange={function (e) { setAd(e.target.value); setSt(null); }}>{vs.map(function (v) { return <option key={v.ad_id} value={v.ad_id}>{v.nome}{v.custo_por_resultado ? " · " + _tv9Brl(v.custo_por_resultado) + " por resultado" : ""}</option>; })}</select>
+        {venc.pode_pedir === false ? <span style={{ fontSize: 11.5, color: "#94a3b8" }}>Só um sócio pede à IA.</span> :
+          <button className="tv9-b pri" disabled={!ad || (st && st.carregando)} onClick={pedir}>{st && st.carregando ? "A IA está desenhando… (até 3 min)" : semIa ? "✨ 3 variações · " + _TIA_SEM_TXT : "✨ Fazer 3 variações da imagem"}</button>}
+      </div>
+      {st && st.falta && <div style={{ marginTop: 8 }}><TV9Falta oque="variação de imagem com IA (ads_ia_variacao_imagem_pedir)" /></div>}
+      {st && st.erro && <div className="tv9-erro" style={{ marginTop: 8 }}>Não gerou ({st.erro}).</div>}
+      {st && (st.imagens || []).length > 0 && <div className="tv10-tam" style={{ marginTop: 8 }}>{st.imagens.map(function (im, i) { return <figure key={i}><img src={im.url} alt="" style={{ height: 130 }} /><figcaption>{im.titulo || im.formato || ""}<br />{onPor && <button className="tv9-b" style={{ marginTop: 4 }} onClick={function () { onPor({ tipo: "novo", nome: "Variação " + (i + 1) + (im.titulo ? " · " + im.titulo : ""), titulo: im.titulo || "", texto: "", msg_whats: "", midia_url: im.url, midia_tipo: "imagem", midia_nome: "variacao-" + (i + 1) + ".jpg" }); }}>＋ Pôr no rascunho</button>}</figcaption></figure>; })}
+        {st.custo_usd ? <div style={{ fontSize: 11, color: "#94a3b8", alignSelf: "center" }}>custo US$ {_tiaUsd(st.custo_usd)}</div> : null}</div>}
+      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>A imagem é feita pela <b>OpenAI</b> (fora do saldo da Anthropic e do 💳 Saldo da IA; teto próprio v100b_img_teto_mes_usd). Vídeo: <b>nenhum vídeo é gerado por IA</b> — a IA só escreve o gancho e o roteiro no bloco "✨ Textos a partir dos que mais venderam", e de lá o botão "🎬 Mandar para a Edição de vídeo" cria o card.</div>{/* v100 (15/10/2026) P2_4_13 */}
+    </div>}
+    <style>{_TV10_CSS}</style>
+  </TV9Bloco>;
+}
+
+/* ---------- v100 (14/10/2026) P2_3_22 etapa 2: custo máximo por resultado dos conjuntos que já estão no ar ----------
+   ads_lance_ler(p_conta, p_campanha) só lê o que o app já coletou; "Pedir" = ads_lance_pedir → pedido em 🧠 Decisões com PIN 2x (o ads-aplicar aplica). */
+const _TV10_LANCE = { LOWEST_COST_WITHOUT_CAP: "Sem limite", COST_CAP: "Meta de custo", LOWEST_COST_WITH_BID_CAP: "Limite de lance", meta_custo: "Meta de custo", limite_lance: "Limite de lance", sem_limite: "Sem limite" };
+function TV10LanceConjuntos({ conta, onMudou }) {
+  const [st, setSt] = useState(null); const [ed, setEd] = useState(null); const [oc, setOc] = useState(false); const [msg, setMsg] = useState("");
+  const ler = function () { setSt({ carregando: true }); _tv9Rpc("ads_lance_ler", { p_conta: conta, p_campanha: null }).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  const pedir = async function () {
+    if (!ed) return; setOc(true); setMsg("");
+    try {
+      const r = await _tsegRpc("ads_lance_pedir", { p_conta: conta, p_conjunto: ed.id, p_estrategia: ed.estrategia, p_valor: ed.estrategia === "sem_limite" ? null : Number(ed.valor) });
+      if (!r || r.ok === false) throw new Error((r && r.erro) || "não pediu");
+      setMsg("✓ " + (r.msg || "Pedido criado em 🧠 Decisões: aplica na Meta com PIN 2x.")); setEd(null); if (onMudou) onMudou();
+    } catch (e) { setMsg(_tsegMotivo(e)); } finally { setOc(false); }
+  };
+  const cjs = (st && st.conjuntos) || [];
+  return <div style={{ marginTop: 14 }}><TV9Bloco titulo="🎯 Custo máximo por resultado dos conjuntos" pill="pedido com PIN 2x" onAbrir={ler} fechadoNoPc
+    dica={(st && st.explica) || "Meta de custo: a Meta tenta manter o custo médio perto do valor. Limite de lance: nunca paga mais que isso por leilão (pode entregar menos). Trocar reinicia o aprendizado."}>
+    {!st || st.carregando ? <div style={{ fontSize: 12.5, color: "#94a3b8" }}>Lendo os conjuntos…</div> : st.falta ? <TV9Falta oque="ads_lance_ler" /> : st.erro ? <div className="tv9-erro">Não li ({st.erro}).</div> : !cjs.length ? <div style={{ fontSize: 12.5, color: "#64748b" }}>Nenhum conjunto ativo nesta conta.</div> :
+      <table className="tv10-tb"><thead><tr><th>Conjunto</th><th>Hoje</th><th>Custo por lead (30 dias)</th><th>Campanha</th><th></th></tr></thead><tbody>
+        {cjs.map(function (c) { const ab = ed && ed.id === c.id; return <Fragment key={c.id}><tr>
+          <td><b>{c.nome}</b>{c.verba_dia ? <div style={{ fontSize: 10.5, color: "#94a3b8" }}>{_tiaBrl(c.verba_dia)}/dia</div> : null}</td>
+          <td>{_TV10_LANCE[c.estrategia] || c.estrategia || "—"}{c.valor ? " · " + _tiaBrl(c.valor) : ""}</td>
+          <td>{c.cpl_30d ? _tiaBrl(c.cpl_30d) : "—"}</td>
+          <td style={{ fontSize: 11, color: "#64748b" }}>{c.campanha}</td>
+          <td style={{ textAlign: "right" }}>{c.pode === false ? <span style={{ fontSize: 11, color: "#94a3b8" }} title={c.motivo || ""}>{c.motivo || "não dá"}</span> : !ab ? <button className="tv9-b" onClick={function () { setEd({ id: c.id, estrategia: "meta_custo", valor: c.cpl_30d ? Math.round(Number(c.cpl_30d)) : "" }); setMsg(""); }}>Mudar</button> : null}</td>
+        </tr>{ab && <tr><td colSpan={5} style={{ background: "#faf8ff" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select className="tv9-inp" value={ed.estrategia} onChange={function (e) { setEd(Object.assign({}, ed, { estrategia: e.target.value })); }}><option value="meta_custo">Meta de custo</option><option value="limite_lance">Limite de lance</option><option value="sem_limite">Sem limite</option></select>
+            {ed.estrategia !== "sem_limite" && <span>R$ <input className="tv9-inp" style={{ width: 90 }} inputMode="decimal" value={ed.valor === "" ? "" : String(ed.valor)} onChange={function (e) { const n = _tmetaLer(e.target.value); setEd(Object.assign({}, ed, { valor: n === "" ? "" : n })); }} /> por resultado</span>}
+            <button className="tv9-b pri" disabled={oc || (ed.estrategia !== "sem_limite" && !(Number(ed.valor) >= 1))} onClick={pedir}>{oc ? "…" : "Pedir (PIN 2x em Decisões)"}</button>
+            <button className="tv9-b lnk" onClick={function () { setEd(null); }}>cancelar</button>
+          </div>
+          {c.cpl_30d && ed.estrategia !== "sem_limite" && Number(ed.valor) > 0 && Number(ed.valor) < Number(c.cpl_30d) * 0.7 && <div style={{ fontSize: 11.5, color: "#92400e", marginTop: 4 }}>⚠️ Bem abaixo do custo atual ({_tiaBrl(c.cpl_30d)}): a Meta pode quase parar de entregar.</div>}
+        </td></tr>}</Fragment>; })}
+      </tbody></table>}
+    {msg && <div style={{ fontSize: 12, color: msg.indexOf("✓") === 0 ? "#166534" : "#b91c1c", marginTop: 6 }}>{msg}</div>}
+    <style>{_TV10_CSS}</style>
+  </TV9Bloco></div>;
+}
+
+/* ---------- v100 (14/10/2026) P2_3_21 etapa 2: anúncios no ar fora da ficha de automáticos (ads_ficha_auto_ler / _conferir / _corrigir_pedir) ---------- */
+function TV10FichaConferir({ clientId, conta, onMudou }) {
+  const [st, setSt] = useState(null); const [oc, setOc] = useState(""); const [msg, setMsg] = useState("");
+  const ler = function () { setSt({ carregando: true }); _tv9Rpc("ads_ficha_auto_ler", { p_client: clientId }).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  const conferir = async function () { setOc("conf"); setMsg(""); try { const r = await _tsegRpc("ads_ficha_auto_conferir", { p_client: clientId }); if (!r || r.ok === false) throw new Error((r && r.erro) || "não conferiu"); setSt(r); } catch (e) { setMsg(_tsegMotivo(e)); } finally { setOc(""); } };
+  const corrigir = async function (x) {
+    setOc(x.id); setMsg("");
+    try { const r = await _tsegRpc("ads_ficha_auto_corrigir_pedir", { p_conta: x.conta || conta, p_conjunto: x.id }); if (!r || r.ok === false) throw new Error((r && r.erro) || "não pediu"); setMsg("✓ Pedido criado em 🧠 Decisões: o app desliga com PIN 2x."); if (onMudou) onMudou(); }
+    catch (e) { setMsg(_tsegMotivo(e)); } finally { setOc(""); }
+  };
+  const f = st && st.ficha; const fora = ((st && st.conferencia && st.conferencia.fora) || []).filter(function (x) { return !conta || !x.conta || x.conta === conta; });
+  const RT = { sim: "pode", nao: "não", so_alcance: "só em alcance" };
+  return <div style={{ marginTop: 10 }}><TV9Bloco titulo="⚙️ Automáticos da Meta × ficha do cliente" pill={fora.length ? fora.length + " fora da ficha" : "conferência diária"} pillRoxo={!!fora.length} onAbrir={ler} fechadoNoPc
+    dica={(st && st.explica) || "Uma vez por dia o app confere os anúncios ativos contra a ficha do cliente. Ampliar público fora da ficha vira pedido com PIN 2x."}>
+    {!st || st.carregando ? <div style={{ fontSize: 12.5, color: "#94a3b8" }}>Lendo a ficha…</div> : st.falta ? <TV9Falta oque="ads_ficha_auto_ler" /> : st.erro ? <div className="tv9-erro">Não li ({st.erro}).</div> : <div>
+      {!f ? <div style={{ fontSize: 12.5, color: "#92400e" }}>Este cliente ainda não tem a ficha. Preencha no 🧱 Montador › passo 3 › "⚙️ Automáticos da Meta" › 💾 Guardar como ficha do cliente.</div> :
+        <div style={{ fontSize: 12.5, color: "#334155" }}>Ficha: criativo <b>{RT[f.criativo] || f.criativo}</b> · ampliar público <b>{RT[f.ampliar_publico] || f.ampliar_publico}</b> · posicionamento <b>{RT[f.posicionamento] || f.posicionamento}</b>{f.por ? <span style={{ color: "#94a3b8" }}> · {f.por} {_tsegQuando(f.atualizado_em)}</span> : null}</div>}
+      {f && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+        <button className="tv9-b" disabled={oc === "conf"} onClick={conferir}>{oc === "conf" ? "Conferindo…" : "↻ Conferir agora"}</button>
+        {st.conferencia && st.conferencia.em && <span style={{ fontSize: 11, color: "#94a3b8" }}>última conferência {_tsegQuando(st.conferencia.em)} (só lê o que o app já coletou)</span>}
+      </div>}
+      {f && st.conferencia && !fora.length && <div className="tv9-ok" style={{ marginTop: 6 }}>✓ Os anúncios ativos desta conta seguem a ficha.</div>}
+      {fora.length > 0 && <table className="tv10-tb"><thead><tr><th>Conjunto</th><th>O que está fora</th><th>Ficha</th><th>Campanha</th><th></th></tr></thead><tbody>
+        {fora.map(function (x, i) { return <tr key={i}><td><b>{x.nome}</b></td><td>{x.o_que}</td><td>{RT[x.ficha] || x.ficha}</td><td style={{ fontSize: 11, color: "#64748b" }}>{x.campanha}</td>
+          <td style={{ textAlign: "right" }}>{x.corrigir === "pin" ? <button className="tv9-b" disabled={!!oc} onClick={function () { corrigir(x); }}>{oc === x.id ? "…" : "Pedir correção (PIN 2x)"}</button> : <span style={{ fontSize: 11, color: "#94a3b8" }}>refazer o anúncio</span>}</td></tr>; })}
+      </tbody></table>}
+    </div>}
+    {msg && <div style={{ fontSize: 12, color: msg.indexOf("✓") === 0 ? "#166534" : "#b91c1c", marginTop: 6 }}>{msg}</div>}
+    <style>{_TV10_CSS}</style>
+  </TV9Bloco></div>;
+}
+
+/* ---------- v100 (14/10/2026) P2_6_03 etapa 2: a chave "reduzir ao mínimo de uma vez" (ads_verba_minimo_estado / _definir; sócio + PIN) ---------- */
+function TV10MinimoChave() {
+  const [st, setSt] = useState(null); const [pin, setPin] = useState(""); const [ab, setAb] = useState(false); const [oc, setOc] = useState(false); const [msg, setMsg] = useState("");
+  const ler = function () { setSt({ carregando: true }); _tv9Rpc("ads_verba_minimo_estado", {}).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  const mudar = async function () {
+    if (!st || pin.length !== 6) return; setOc(true); setMsg("");
+    try { const r = await _tsegRpc("ads_verba_minimo_definir", { p_ligar: !st.ligado, p_pin: pin }); if (!r || r.ok === false) throw new Error((r && r.erro) || "não mudou"); setPin(""); setAb(false); ler(); }
+    catch (e) { setMsg(_tsegMotivo(e)); } finally { setOc(false); }
+  };
+  if (!st) return <button type="button" className="tv9-b lnk" style={{ fontSize: 11.5, padding: 0 }} onClick={ler}>ver a chave ›</button>;
+  if (st.carregando) return <span style={{ color: "#94a3b8" }}>lendo…</span>;
+  if (st.falta) return <span style={{ color: "#94a3b8" }}>(a chave ainda não está ligada no servidor)</span>;
+  if (st.erro) return <span style={{ color: "#b91c1c" }}>(não li a chave: {st.erro})</span>;
+  return <span style={{ display: "block", marginTop: 4 }}>
+    <span className={"tv10-c " + (st.ligado ? "medio" : "")}>{st.ligado ? "🟠 LIGADO: reduz ao mínimo de uma vez (com PIN 2x)" : "⚪ DESLIGADO: vai em passos de 20% a cada 72 h"}</span>
+    {st.explica && <span style={{ display: "block", fontSize: 11, color: "#64748b", marginTop: 3 }}>{st.explica}</span>}
+    {st.pode_mudar && !ab && <button type="button" className="tv9-b lnk" style={{ fontSize: 11.5, padding: 0, marginTop: 3 }} onClick={function () { setAb(true); }}>{st.ligado ? "desligar (PIN)" : "ligar (PIN) — decisão do Vini"}</button>}
+    {ab && <span style={{ display: "block", marginTop: 4 }}><TSegPinCaixas valor={pin} onChange={setPin} onEnter={mudar} autoFocus />
+      <button type="button" className="tv9-b pri" disabled={oc || pin.length !== 6} onClick={mudar}>{oc ? "…" : st.ligado ? "Desligar" : "Ligar"}</button> <button type="button" className="tv9-b lnk" onClick={function () { setAb(false); setPin(""); }}>cancelar</button></span>}
+    {msg && <span style={{ display: "block", color: "#b91c1c", fontSize: 11.5 }}>{msg}</span>}
+    <style>{_TV9_CSS + _TV10_CSS}</style>
+  </span>;
+}
+
+/* ---------- v100 (15/10/2026) X2: chaves novas (P2_3_16 teste da Meta · P2_12_10 troca para verba total) ----------
+   v100f_ab_estado(p_conta) só lê; v100f_x2_chave_definir(p_chave, p_ligar, p_pin): só o Vini, ligar = PIN 2x (o servidor pede de novo). Nada muda sem clique. */
+const _TV10X2_CHAVES = {
+  v100f_ab_meta_ligado: ["🧪 Teste A/B da própria Meta", "ab_meta_ligado", "LIGADO: ao publicar, o app pede o teste à Meta", "DESLIGADO: sobe 2 conjuntos e o app mede"],
+  v100f_horario_troca_verba: ["🔁 Trocar para verba total no horário", "troca_verba_ligado", "LIGADO: o pedido de horário pode trocar a verba (PIN 2x)", "DESLIGADO: fica o passo a passo"],
+};
+function TV10ChaveX2({ chave, conta }) {
+  const def = _TV10X2_CHAVES[chave] || [chave, "", "LIGADO", "DESLIGADO"];
+  const [st, setSt] = useState(null); const [pin, setPin] = useState(""); const [ab, setAb] = useState(false); const [oc, setOc] = useState(false); const [msg, setMsg] = useState("");
+  const ler = function () { setSt({ carregando: true }); _tv9Rpc("v100f_ab_estado", { p_conta: conta || null }).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  const lig = !!(st && st[def[1]]);
+  const mudar = async function () {
+    if (!st || pin.length !== 6) return; setOc(true); setMsg("");
+    try {
+      const r = await _tsegRpc("v100f_x2_chave_definir", { p_chave: chave, p_ligar: !lig, p_pin: pin }); setPin("");
+      if (r && r.precisa_confirmar) { setMsg(r.erro || "Digite o PIN de novo para confirmar."); return; }
+      if (!r || r.ok === false) throw new Error((r && r.erro) || "não mudou");
+      setAb(false); ler();
+    } catch (e) { setMsg(_tsegMotivo(e)); } finally { setOc(false); }
+  };
+  if (!st) return <button type="button" className="tv9-b lnk" style={{ fontSize: 11.5, padding: 0 }} onClick={ler}>ver a chave ›</button>;
+  if (st.carregando) return <span style={{ color: "#94a3b8", fontSize: 11.5 }}>lendo…</span>;
+  if (st.falta) return <span style={{ color: "#94a3b8", fontSize: 11.5 }}>(a chave ainda não está no servidor)</span>;
+  if (st.erro) return <span style={{ color: "#b91c1c", fontSize: 11.5 }}>(não li a chave: {st.erro})</span>;
+  return <span style={{ display: "block", marginTop: 4 }}>
+    <span className={"tv10-c " + (lig ? "medio" : "")}>{def[0]} · {lig ? def[2] : def[3]}</span>
+    {st.pode_mudar && !ab && <button type="button" className="tv9-b lnk" style={{ fontSize: 11.5, padding: 0, marginLeft: 6 }} onClick={function () { setAb(true); }}>{lig ? "desligar (PIN)" : "ligar (PIN 2x) — decisão do Vini"}</button>}
+    {!st.pode_mudar && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>só o Vini liga, com PIN 2x</span>}
+    {ab && <span style={{ display: "block", marginTop: 4 }}><TSegPinCaixas valor={pin} onChange={setPin} onEnter={mudar} autoFocus />
+      <button type="button" className="tv9-b pri" disabled={oc || pin.length !== 6} onClick={mudar}>{oc ? "…" : lig ? "Desligar" : "Ligar"}</button> <button type="button" className="tv9-b lnk" onClick={function () { setAb(false); setPin(""); setMsg(""); }}>cancelar</button></span>}
+    {msg && <span style={{ display: "block", color: "#b45309", fontSize: 11.5, marginTop: 3 }}>{msg}</span>}
+    <style>{_TV9_CSS + _TV10_CSS}</style>
+  </span>;
+}
+
+/* ---------- v100 (15/10/2026) X2 P2_3_16: "🧪 Criar teste A/B" no Montador ----------
+   Só nesta campanha e só se o sócio ligar aqui. O rascunho leva dados.teste_ab = {versoes:[iA, iB], dias, teste_id|null} (grava só no Salvar/Validar).
+   O ads-montar (v8) sobe 2 conjuntos iguais com a verba dividida ao meio, A num e B no outro, tudo PAUSADO; com a chave v100f_ab_meta_ligado
+   pede o teste da própria Meta (divide o público ao meio). O % de certeza fica em Campanhas › 🧪 Plano de testes; pausar o perdedor = pedido com PIN. */
+// v100 (15/10/2026) X2 revisor: nome simples do tipo de teste do 🧪 Plano de testes
+const _TV10_TIPO_TESTE = { criativo: "criativo", conjunto_novo: "conjunto novo", publico: "público", copy: "texto", oferta: "oferta", ab_meta: "A/B do Montador" };
+function TV10TesteAb({ conta, d, mudar }) {
+  const A = arguments[0] || {};
+  const t = d && d.teste_ab && typeof d.teste_ab === "object" ? d.teste_ab : null;
+  const ans = (d && d.anuncios) || [];
+  const [est, setEst] = useState(null);
+  const lerEstado = function () { if (!conta) return; setEst({ carregando: true }); _tv9Rpc("v100f_ab_estado", { p_conta: conta }).then(function (r) { setEst(_tv9Estado(r)); }).catch(function (e) { setEst({ erro: _tsegMotivo(e) }); }); };
+  useEffect(function () { if (t && !est) lerEstado(); }, [!!t, conta]);   // 1 leitura quando o teste é ligado (ou o rascunho já vem com ele)
+  const por = function (novo) { const dd = Object.assign({}, d); if (novo) dd.teste_ab = novo; else delete dd.teste_ab; mudar(dd); };
+  const ligar = function (on) { por(on ? { versoes: [0, 1], dias: 7, teste_id: null } : null); };
+  const verba = Number((d && d.conjunto && d.conjunto.verba_dia) || 0); const lado = Math.round(verba / 2 * 100) / 100;
+  const planilha = Array.isArray(d && d.conjuntos) && d.conjuntos.length > 1;
+  const v = t && Array.isArray(t.versoes) && t.versoes.length === 2 ? t.versoes : [0, 1];
+  const nomeAn = function (i) { const a = ans[i]; return a ? (a.nome || (a.tipo === "modelo" ? "anúncio pronto" : "anúncio novo") + " " + (i + 1)) : "—"; };
+  const livres = est && !est.falta && !est.erro ? (est.testes || []).filter(function (x) { return !x.rascunho_id || (t && x.id === t.teste_id); }) : [];
+  return <div style={{ border: "1.5px " + (t ? "solid #7c3aed" : "dashed #c4b5fd"), borderRadius: 12, padding: "10px 12px", background: t ? "#faf8ff" : "#fff" }}>
+    <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: A.travado ? "default" : "pointer" }}>
+      <input type="checkbox" checked={!!t} disabled={!!A.travado} onChange={function (e) { ligar(e.target.checked); }} style={{ accentColor: "#7c3aed", marginTop: 3 }} />
+      <span><b style={{ fontSize: 13.5, color: "#4c1d95" }}>🧪 Criar teste A/B</b> <span style={{ fontSize: 11.5, color: "#64748b" }}>(opcional · só nesta campanha · ninguém fica sujeito sem você ligar aqui)</span>
+        <span style={{ display: "block", fontSize: 12, color: "#475569", lineHeight: 1.45, marginTop: 2 }}>Você escolhe as 2 versões e o tempo. O app sobe <b>2 conjuntos iguais</b> (mesmo público e cidades, a verba dividida ao meio), um com a versão A e outro com a B, tudo <b>PAUSADO</b>. Com o teste da Meta ligado, a própria Meta divide o público ao meio (ninguém vê as duas).</span></span>
+    </label>
+    {t && <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 7, fontSize: 12.5 }}>
+      {ans.length !== 2 ? <div className="tv9-erro">Deixe exatamente <b>2 anúncios</b> no rascunho (hoje: {ans.length}). Cada um vira um lado do teste.</div>
+        : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 8 }}>
+          {["A", "B"].map(function (L, k) {
+            return <label key={L} style={{ display: "block" }}><span style={{ fontSize: 11.5, fontWeight: 800, color: "#475569" }}>Versão {L}</span>
+              <select className="tv9-inp" style={{ width: "100%" }} value={v[k]} disabled={!!A.travado} onChange={function (e) { const i = Number(e.target.value); por(Object.assign({}, t, { versoes: k === 0 ? [i, 1 - i] : [1 - i, i] })); }}>
+                {ans.map(function (_, i) { return <option key={i} value={i}>{nomeAn(i)}</option>; })}
+              </select></label>;
+          })}
+        </div>}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <label><span style={{ fontSize: 11.5, fontWeight: 800, color: "#475569" }}>Tempo do teste </span>
+          <select className="tv9-inp" value={t.dias || 7} disabled={!!A.travado} onChange={function (e) { por(Object.assign({}, t, { dias: Number(e.target.value) })); }}>
+            {[3, 5, 7, 10, 14, 21, 30].map(function (n) { return <option key={n} value={n}>{n} dias</option>; })}
+          </select></label>
+        <span style={{ color: lado >= 5 ? "#166534" : "#b91c1c", fontWeight: 700 }}>{lado >= 5 ? "Cada lado: " + _tiaBrl(lado) + "/dia (total " + _tiaBrl(verba) + "/dia, o mesmo gasto)" : "A verba do conjunto precisa ser R$ 10/dia ou mais (R$ 5 por lado)."}</span>
+      </div>
+      {planilha && <div className="tv9-erro">O teste A/B não junta com a planilha de vários conjuntos: use 1 conjunto.</div>}
+      {est && !est.carregando && !est.falta && !est.erro && livres.length > 0 && <label><span style={{ fontSize: 11.5, fontWeight: 800, color: "#475569" }}>Ligar a um teste do 🧪 Plano de testes (opcional) </span>
+        <select className="tv9-inp" value={t.teste_id || ""} disabled={!!A.travado} onChange={function (e) { por(Object.assign({}, t, { teste_id: e.target.value ? Number(e.target.value) : null })); }}>
+          <option value="">— criar um teste novo no plano —</option>
+          {livres.map(function (x) { return <option key={x.id} value={x.id}>{x.titulo}{x.tipo && x.tipo !== "ab_meta" ? " (" + (_TV10_TIPO_TESTE[x.tipo] || x.tipo) + ")" : ""}{x.dias ? " · " + x.dias + " dias" : ""}</option>; })}
+        </select></label>}
+      {/* v100 (15/10/2026) X2 revisor: teste do plano feito à mão (criativo, conjunto novo...) vira A/B destes 2 conjuntos */}
+      {(function () { const sel = t.teste_id ? livres.filter(function (x) { return x.id === t.teste_id; })[0] : null; if (!sel || !sel.tipo || sel.tipo === "ab_meta") return null;
+        return <div style={{ fontSize: 11.5, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "5px 8px", lineHeight: 1.45 }}>
+          ⚠️ Este teste do plano é do tipo <b>{_TV10_TIPO_TESTE[sel.tipo] || sel.tipo}</b>. Ao publicar, ele passa a ser o A/B deste rascunho: os lados A e B que estavam no plano{sel.a || sel.b ? " (" + [sel.a, sel.b].filter(Boolean).join(" × ") + ")" : ""} são <b>trocados pelos 2 conjuntos</b> que vão subir. Se não quiser isso, escolha "criar um teste novo no plano".</div>; })()}
+      <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.5 }}>
+        {est && est.carregando ? "Lendo a chave do teste da Meta…" : est && est.falta ? "Teste da Meta: ainda não ligado no servidor (as 2 versões sobem e o app mede)." : est && est.erro ? "Não li a chave do teste da Meta (" + est.erro + ")." :
+          est ? <span>{est.ab_meta_ligado ? "✅ Teste da Meta LIGADO: ao publicar, o app pede o teste à Meta (começa amanhã 0h). Se a Meta recusar, a campanha fica pausada e aparece o motivo; nada é ligado." : "⚪ Teste da Meta DESLIGADO: sobem 2 conjuntos e o app mede o % de certeza, mas a Meta não divide o público ao meio. O Vini liga com PIN 2x depois do 1º teste numa conta da Pixels."}</span> : null}
+        {est && !est.falta && !est.erro && !est.carregando && <span> <TV10ChaveX2 chave="v100f_ab_meta_ligado" conta={conta} /></span>}
+        <span style={{ display: "block", marginTop: 3, color: "#64748b" }}>Resultado: Campanhas › 🧪 Plano de testes ("sem certeza ainda" ou "vencedor com X% de certeza"). Pausar o perdedor vira pedido com PIN, como tudo.</span>
+      </div>
+    </div>}
+    <style>{_TV9_CSS + _TV10_CSS}</style>
+  </div>;
+}
+// v100 (15/10/2026) X2 P2_3_16: o que aconteceu com o teste A/B depois de publicar (meta.teste_ab do ads-montar)
+function TV10TesteAbResultado({ t }) {
+  if (!t) return null;
+  const txt = t.estado === "criado" ? "🧪 Teste A/B da Meta criado (nº " + t.id + "), de " + _tiaDM(t.inicio) + " a " + _tiaDM(t.fim) + ". Ative a campanha antes de " + _tiaDM(t.inicio) + " 0h para o teste valer desde o 1º dia."
+    : t.estado === "recusado" ? "🧪 O teste da Meta NÃO foi criado: " + (t.erro || "a Meta recusou") + " A campanha continua PAUSADA; os 2 conjuntos (A e B) ficaram prontos e o app mede o resultado."
+    : "🧪 Teste A/B montado com 2 conjuntos (A e B), pausados. O teste da própria Meta está desligado (o Vini liga com PIN 2x); o app mede o % de certeza.";
+  return <div style={{ marginTop: 6, fontSize: 12.5, color: t.estado === "recusado" ? "#92400e" : "#4c1d95", lineHeight: 1.45 }}>{txt}{t.teste_id ? " Está no 🧪 Plano de testes." : ""}</div>;
+}
+
+/* ---------- v100 (15/10/2026) X2 P2_12_10: horário em campanha de VERBA DIÁRIA, dentro do pedido em 🧠 Decisões ----------
+   A Meta só aceita horário com verba TOTAL. Aqui o sócio vê "como fica" (ads_horario_troca_pedir, p_confirmar=false: só lê) e, se quiser,
+   transforma o pedido em "trocar para verba total com o mesmo gasto (dias × verba diária) até a data de fim + horário" (p_confirmar=true),
+   que o ads-aplicar aplica com PIN 2x. Sem data de fim, verba na campanha (CBO) ou com a chave desligada: continua o passo a passo e a tela diz por quê. */
+function TV10HorarioTroca({ p, onMudou }) {
+  const nums = (p && p.numeros) || {}; const ch = nums.chave || {}; const cfg = ch.config || {}; const a = (p && p.acao) || {};
+  const serve = p && p.origem === "chave_campanha" && ch.tipo === "horario" && !cfg.desligar && (p.estado === "novo" || p.estado === "aguardando") && a.tipo !== "horario";
+  const [st, setSt] = useState(null); const [ate, setAte] = useState((cfg.trocar_para_verba_total && cfg.trocar_para_verba_total.ate) || ""); const [oc, setOc] = useState(false);
+  if (!serve) return null;
+  const ver = async function (confirmar) {
+    setOc(true);
+    try {
+      const r = await _tv9Rpc("ads_horario_troca_pedir", { p_pedido: p.id, p_ate: ate || null, p_confirmar: !!confirmar });
+      if (r && r.__falta) { setSt({ falta: true }); return; }
+      setSt(r || { erro: "resposta vazia" }); if (r && r.ate && !ate) setAte(String(r.ate).slice(0, 10));
+      if (r && r.feito) { if (typeof pixelsToast !== "undefined") pixelsToast.success("Pedido pronto para o PIN 2x.", 2500); onMudou && onMudou(); }
+    } catch (e) { setSt({ ok: false, erro: _tsegMotivo(e) }); } finally { setOc(false); }
+  };
+  const hoje = new Date(); const min = new Date(hoje.getTime() + 2 * 864e5).toISOString().slice(0, 10); const max = new Date(hoje.getTime() + 90 * 864e5).toISOString().slice(0, 10);
+  return <div style={{ marginTop: 7, border: "1px solid #ddd6fe", background: "#faf8ff", borderRadius: 10, padding: "8px 10px", fontSize: 12, color: "#334155", lineHeight: 1.5 }}>
+    <b style={{ color: "#5b21b6" }}>🔁 Verba diária: a Meta só aceita horário com verba total.</b> O app pode <b>trocar para verba total com o mesmo gasto</b> (verba diária × dias até a data de fim) e só então ligar o horário — num envio só, com PIN 2x.
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+      <label>Até <input type="date" className="tv9-inp" min={min} max={max} value={ate} onChange={function (e) { setAte(e.target.value); setSt(null); }} /></label>
+      <button type="button" className="tv9-b" disabled={oc} onClick={function () { ver(false); }}>{oc ? "…" : "Ver como fica"}</button>
+    </div>
+    {st && st.falta && <div style={{ marginTop: 6 }}><TV9Falta oque="troca para verba total (ads_horario_troca_pedir)" /></div>}
+    {st && !st.falta && st.ok === false && !st.pode && <div className="tv9-erro" style={{ marginTop: 6 }}>{st.erro}</div>}
+    {st && !st.falta && st.motivo && <div style={{ marginTop: 6, color: "#92400e" }}><b>Não dá para trocar por aqui:</b> {st.motivo}{/passo a passo/.test(st.motivo) ? "" : " Siga o passo a passo do pedido."}</div>}
+    {st && !st.falta && (st.motivo || st.desligado) && Array.isArray(nums.passos) && nums.passos.length > 0 && !Array.isArray(a.passos) && <details style={{ marginTop: 4 }}><summary style={{ cursor: "pointer", fontWeight: 800, color: "#5b21b6" }}>Passo a passo no Gerenciador</summary>
+      <ol style={{ margin: "4px 0 0 18px", padding: 0 }}>{nums.passos.map(function (x, i) { return <li key={i}>{String(x)}</li>; })}</ol></details>}
+    {st && !st.falta && st.pode && <div style={{ marginTop: 6 }}>
+      {(st.conjuntos || []).map(function (c) { return <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", borderBottom: "1px dashed #ede9fe", padding: "2px 0" }}><span>{c.nome}</span><span>{_tiaBrl(c.verba_dia)}/dia <span style={{ color: "#7c3aed", fontWeight: 900 }}>→</span> <b>{_tiaBrl(c.total)}</b> total até {_tiaDM(st.ate)}</span></div>; })}
+      <div style={{ marginTop: 3 }}>Total: <b>{_tiaBrl(st.total)}</b> em {st.dias} dias · anúncios só <b>{st.horas_txt}</b>. {st.explica}</div>
+      {/* v100 (15/10/2026) X2 revisor: com vários conjuntos a Meta pode aceitar uns e recusar outros */}
+      {(st.conjuntos || []).length > 1 && !st.feito && <div style={{ marginTop: 5, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "5px 8px" }}>
+        ⚠️ São <b>{st.conjuntos.length} conjuntos</b> e a Meta recebe um por vez. Se ela aceitar o 1º e recusar outro, o app para ali e a campanha pode ficar <b>misturada</b> (uns com verba total e horário, outros ainda com verba diária); o pedido mostra "aplicado em parte". Na 1ª vez, prefira uma campanha da Pixels com 1 conjunto só.</div>}
+      {st.feito ? <div style={{ marginTop: 5, color: "#166534", fontWeight: 800 }}>✓ {st.msg}</div>
+        : st.desligado ? <div style={{ marginTop: 5, color: "#92400e" }}>{st.erro} <TV10ChaveX2 chave="v100f_horario_troca_verba" /></div>
+        : <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" className="tv9-b pri" disabled={oc} onClick={function () { ver(true); }}>Trocar para verba total com o mesmo gasto (vira pedido com PIN 2x)</button>
+            {!st.chave_ligada && <span style={{ fontSize: 11.5, color: "#92400e" }}>a troca está desligada até o Vini ligar <TV10ChaveX2 chave="v100f_horario_troca_verba" /></span>}
+          </div>}
+    </div>}
+    <style>{_TV9_CSS + _TV10_CSS}</style>
+  </div>;
+}
+
+/* ---------- v100 (15/10/2026) X2 P2_4_13: "🎬 Mandar para a Edição de vídeo" ----------
+   O vídeo NÃO é gerado por IA: a IA só escreveu o gancho e o roteiro. O botão cria (no clique, depois de confirmar) um card de VÍDEO no quadro,
+   do mesmo jeito que o Conteúdos › Ideias faz (tasks, content_type "video", em Rascunhos — o cliente não vê Rascunhos no Portal),
+   com o gancho e o roteiro no briefing. Quando o card for para "Demanda", aparece na fila da Edição de vídeo (52, sem mexer nele). */
+const _tv10Esc = function (s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>"); };
+function TV10VideoParaEdicao({ conta, contaObj, video, gancho }) {
+  const A = arguments[0] || {};
+  const us = (contaObj && Array.isArray(contaObj.unidades)) ? contaObj.unidades : [];
+  const [ab, setAb] = useState(false); const [uni, setUni] = useState(us[0] ? us[0].unidade : ""); const [oc, setOc] = useState(false); const [st, setSt] = useState(null);
+  const cenas = (video && video.cenas) || [];
+  const roteiro = cenas.map(function (c) { return "[" + (c.tempo || "") + "] " + [c.imagem ? "Imagem: " + c.imagem : "", c.fala ? "Fala: " + c.fala : "", c.texto_tela ? "Na tela: " + c.texto_tela : ""].filter(Boolean).join(" | "); }).join("\n");
+  const titulo = ("🎬 Vídeo de anúncio: " + String((video && video.ideia) || gancho || "roteiro da IA")).slice(0, 120);
+  const criar = async function () {
+    if (!window._sb || oc) return; setOc(true); setSt(null);
+    try {
+      const cli = await _tv9ClienteDe(conta, contaObj, uni);
+      if (!cli) throw new Error("não achei o cliente desta conta");
+      const ehBio = /^bioter_/.test(cli); const client = ehBio ? "bioter" : cli; const unidade = ehBio ? cli.slice(7) : "";
+      const u = await window._sb.auth.getUser(); const uid = (u && u.data && u.data.user && u.data.user.id) || "";
+      const id = "midia-video-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6); const agora = new Date().toISOString();
+      const desc = "<p><strong>• Vídeo de anúncio pedido pela Gestão de mídia (Montador · " + _tv10Esc(A.contaNome || (contaObj && contaObj.nome) || conta) + ")</strong></p>" +
+        (gancho ? "<p><strong>Gancho:</strong> " + _tv10Esc(gancho) + "</p>" : "") + (video && video.ideia ? "<p><strong>Ideia:</strong> " + _tv10Esc(video.ideia) + "</p>" : "") +
+        "<p><strong>Roteiro" + (video && video.duracao_s ? " (" + video.duracao_s + " s)" : "") + ":</strong><br>" + _tv10Esc(roteiro) + "</p>" +
+        "<p><em>Este vídeo NÃO é gerado por IA: precisa gravar (ou usar material do cliente) e editar. A IA só escreveu o gancho e o roteiro.</em></p>";
+      const payload = { id: id, title: titulo, status: "rascunhos", description: desc, priority: "normal", client: client, bioter_unit: unidade,
+        origem: "gestao_midia", content_type: "video", sector: "video", assignee: "", assignees: [], checklist: [], tags: ["Vídeo de anúncio (Montador)"],
+        timeline: [{ type: "created", from: "", to: "rascunhos", fromLabel: "", toLabel: "Rascunhos", at: agora, atFmt: new Date().toLocaleDateString("pt-BR"), user: "Gestão de mídia", label: "Card criado pelo Montador (roteiro de vídeo da IA)" }],
+        created_by: uid, created_at: agora, col_entered_at: agora, comments: [], files: [], watchers: [], cover: null, ajustar: false, is_alteracao: false, score: null,
+        publish_date: null, publish_time: "09:00", deadline_time: "", deleted_at: null };
+      const r = await window._sb.from("tasks").insert(payload);
+      if (r && r.error) throw new Error(r.error.message || "não criou");
+      setSt({ ok: true, id: id }); setAb(false);
+      if (typeof pixelsToast !== "undefined") pixelsToast.success("Card de vídeo criado em Rascunhos.", 3000);
+    } catch (e) { setSt({ erro: _tsegMotivo(e) }); } finally { setOc(false); }
+  };
+  if (!cenas.length && !gancho) return null;
+  return <div style={{ marginTop: 7, borderTop: "1px dashed #e9d5ff", paddingTop: 6 }}>
+    <div style={{ fontSize: 11.5, color: "#92400e", fontWeight: 700 }}>⚠ O vídeo não é gerado por IA: a IA só escreveu o gancho e o roteiro. Alguém grava (ou usa material do cliente) e a Edição de vídeo monta.</div>
+    {st && st.ok ? <div style={{ fontSize: 12, color: "#166534", fontWeight: 800, marginTop: 4 }}>✓ Card de vídeo criado em Rascunhos (o cliente não vê). Quando for para "Demanda", aparece na fila da Edição de vídeo.</div>
+      : !ab ? <button type="button" className="tv9-b" style={{ marginTop: 5 }} onClick={function () { setAb(true); }}>🎬 Mandar para a Edição de vídeo</button>
+      : <div style={{ marginTop: 5, fontSize: 12, color: "#334155", background: "#fff", border: "1px solid #e9d5ff", borderRadius: 9, padding: "7px 9px" }}>
+          <div>Vai criar o card <b>{titulo}</b> (vídeo) em Rascunhos, com o gancho e o roteiro no briefing. Nada vai para o cliente.</div>
+          {us.length > 1 && <label style={{ display: "block", marginTop: 4 }}>Unidade <select className="tv9-inp" value={uni} onChange={function (e) { setUni(e.target.value); }}>{us.map(function (x) { return <option key={x.unidade} value={x.unidade}>{x.nome}</option>; })}</select></label>}
+          <div style={{ display: "flex", gap: 8, marginTop: 6 }}><button type="button" className="tv9-b pri" disabled={oc} onClick={criar}>{oc ? "Criando…" : "Criar o card de vídeo"}</button><button type="button" className="tv9-b lnk" onClick={function () { setAb(false); }}>cancelar</button></div>
+        </div>}
+    {st && st.erro && <div className="tv9-erro" style={{ marginTop: 5 }}>Não criou o card ({st.erro}).</div>}
+  </div>;
+}
+
+/* ---------- v100 (14/10/2026) P2_2_18/P2_2_19 etapa 2: como os alarmes funcionam (ads_alarmes_regras, só no clique) ---------- */
+function TV10AlarmesRegras() {
+  const [st, setSt] = useState(null);
+  const abrir = function () { if (st) { setSt(null); return; } setSt({ carregando: true }); _tv9Rpc("ads_alarmes_regras", {}).then(function (r) { setSt(_tv9Estado(r)); }).catch(function (e) { setSt({ erro: _tsegMotivo(e) }); }); };
+  const CAN = { whatsapp: "WhatsApp", email: "E-mail", celular: "Notificação no celular" };
+  return <div style={{ width: "100%" }}>
+    <button onClick={abrir} style={{ background: "none", border: "none", color: "#5b21b6", fontWeight: 800, fontSize: 11.5, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>{st ? "▾ fechar" : "ⓘ como funcionam os níveis e os avisos"}</button>
+    {st && (st.carregando ? <div style={{ fontSize: 12, color: "#94a3b8" }}>Lendo…</div> : st.falta ? <div style={{ fontSize: 12, color: "#94a3b8" }}>(as regras ainda não estão no servidor)</div> : st.erro ? <div style={{ fontSize: 12, color: "#b91c1c" }}>Não li ({st.erro}).</div> :
+      <div style={{ background: "#f8fafc", border: "1px solid #e5e9f0", borderRadius: 10, padding: "8px 10px", marginTop: 4, fontSize: 12, color: "#334155", lineHeight: 1.5 }}>
+        {(st.niveis || []).slice().reverse().map(function (n) { const nv = _tv10Nivel(n.nivel); return <div key={n.nivel}><span className={"tv10-c " + nv[0]}>{nv[1]}</span> {n.prazo ? <b>{n.prazo}</b> : "sem prazo"} · {n.destino}{n.confirmar ? " · pede \"Confirmar que vi\"" : ""}{n.sobe_para_socio ? " · sem visto, sobe para o sócio" : ""}</div>; })}
+        {st.responsavel && st.responsavel.explica && <div style={{ marginTop: 4 }}>👤 {st.responsavel.explica}</div>}
+        {st.canais && <div style={{ marginTop: 4 }}><b>Por onde avisa:</b> no app ✓{Object.keys(CAN).map(function (k) { const c = st.canais[k]; if (!c) return null; return <div key={k}>{c.ligado ? "✓ " : "⚪ "}{CAN[k]}{c.ligado ? " ligado" : " desligado" + ((c.falta || []).length ? " · falta: " + c.falta.join("; ") : "")}</div>; })}</div>}
+      </div>)}
+    <style>{_TV10_CSS}</style>
   </div>;
 }
 
@@ -84980,6 +89001,52 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
 
 /* Aba Performance — dona do período. Funil e ROI recebem month/year por prop,
    então o seletor único do topo governa a página inteira. */
+/* v100 (15/10/2026) P2_8_07: área "Mídia ao vivo" do Portal (só leitura: leads, custo, meta e relatórios antigos).
+   Quem decide é o servidor (portal_midia_ao_vivo): o cliente só recebe os números com "Visível para o cliente"
+   E "Performance › Tráfego pago" ligadas; hoje todas as "Visível" estão desligadas, então o cliente recebe recusa e
+   esta área não desenha NADA (nem aviso). A agência recebe modo "previa_agencia" e vê com a faixa "Prévia".
+   1 leitura ao abrir (sem repetir, sem gravar). */
+function PortalMidiaAoVivoV100(props){
+  const p=props||{}; const cid=p.clientId||""; const compacto=!!p.compacto;
+  const [d,setD]=useState(null);
+  // v100 (15/10/2026) P2_8_07 (revisor): "pode" junta tudo que decide a leitura. Cliente: espera a configuração do Portal
+  // chegar (cfgOk) e só lê com "Tráfego pago" ligada; se a chave mudar depois, refaz (ou esconde). Agência: lê 1 vez.
+  const pode=!!cid&&(!!p.viewerIsPixels||(p.cfgOk!==false&&!p.semTrafego));
+  useEffect(function(){
+    let vivo=true; setD(null);
+    if(!pode||typeof window==="undefined"||!window._sb||!window._sb.rpc) return;
+    try{ window._sb.rpc("portal_midia_ao_vivo",{p_client:cid}).then(function(r){ if(vivo) setD(r&&!r.error&&r.data?r.data:{ok:false}); },function(){ if(vivo) setD({ok:false}); }); }catch(_){}
+    return function(){ vivo=false; };
+  },[cid,pode]);
+  if(!d||d.ok!==true) return null;
+  const previa=d.modo==="previa_agencia";
+  if(!previa&&!(d.modo==="cliente"&&d.visivel===true)) return null;
+  const m=d.mes||{}; const s7=d.ultimos_7_dias||{};
+  const N=function(v){ return (v===null||v===undefined||!isFinite(Number(v)))?"—":Number(v).toLocaleString("pt-BR"); };
+  const R=function(v,c){ return (v===null||v===undefined||!isFinite(Number(v)))?"—":"R$ "+Number(v).toLocaleString("pt-BR",{minimumFractionDigits:c?2:0,maximumFractionDigits:c?2:0}); };
+  const DM=function(x){ const t=String(x||""); return t.length>=10?t.slice(8,10)+"/"+t.slice(5,7):"—"; };
+  const faixa=previa?<div style={{background:d.visivel?"#ecfdf5":"#fffbeb",border:"1px solid "+(d.visivel?"#a7f3d0":"#fcd34d"),color:d.visivel?"#065f46":"#92400e",borderRadius:10,padding:compacto?"5px 8px":"8px 11px",fontSize:compacto?10.5:12,fontWeight:700}}>
+    {d.visivel?"Prévia da agência: o cliente já vê esta área.":"Prévia: o cliente ainda não vê."}
+    {!compacto&&!d.visivel&&<span style={{fontWeight:500}}> Só a Pixels enxerga isto. Para liberar: Relatórios › "Visível para o cliente"{d.trafego_chave===false?" e a aba \"Performance › Tráfego pago\" (hoje desligada para ele)":""}.</span>}
+  </div>:null;
+  if(compacto) return <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:6}}>
+    {faixa}
+    <div style={{fontSize:11.5,color:"#334155"}}><b>Anúncios no mês:</b> {N(m.leads)} leads · {R(m.gasto)} investidos · {m.cpl?R(m.cpl,1):"—"} por lead{m.tem_meta?" · meta "+N(m.meta_leads):""}</div>
+  </div>;
+  const Box=function(t,big,sub){ return <div style={{flex:"1 1 150px",background:"#fff",border:"1px solid #e8ebf0",borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:10.5,color:"#64748b",fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{t}</div><div style={{fontSize:20,fontWeight:900,color:"#0f172a",marginTop:2}}>{big}</div><div style={{fontSize:11.5,color:"#64748b",marginTop:2}}>{sub}</div></div>; };
+  return <div style={{display:"flex",flexDirection:"column",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:14,padding:p.isMob?12:16}}>
+    {faixa}
+    <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}><b style={{fontSize:15,color:"#0f172a"}}>📈 Seus anúncios ao vivo</b><span style={{fontSize:11.5,color:"#64748b"}}>números até {DM(d.atualizado_ate||m.ate)} · só leitura</span></div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {Box("Leads no mês",N(m.leads),m.tem_meta?"meta "+N(m.meta_leads)+" · "+Math.round(Number(m.feito_pct)||0)+"%":"sem meta cadastrada")}
+      {Box("Investido no mês",R(m.gasto),Number(m.verba_mes)>0?"de "+R(m.verba_mes)+" · "+Math.round(Number(m.verba_pct)||0)+"%":"")}
+      {Box("Custo por lead",m.cpl?R(m.cpl,1):"—",m.ritmo_texto||"")}
+    </div>
+    {m.tem_meta&&<div style={{height:8,background:"#e2e8f0",borderRadius:99}}><div style={{width:Math.min(100,Number(m.barra_pct)||0)+"%",height:"100%",background:"#16a34a",borderRadius:99}}/></div>}
+    <div style={{fontSize:12.5,color:"#334155"}}><b>Últimos 7 dias</b> ({DM(s7.de)} a {DM(s7.ate)}): {N(s7.contatos)} contatos · {R(s7.investido)} investidos · {s7.custo_por_contato?R(s7.custo_por_contato,1)+" por contato":"custo por contato: —"}</div>
+    <div style={{fontSize:12.5,color:"#334155"}}><b>Relatórios anteriores</b>{(d.relatorios||[]).length===0?<div style={{color:"#94a3b8",marginTop:3}}>Nenhum relatório revisado ainda.</div>:(d.relatorios||[]).slice(0,6).map(function(r,i){ return <div key={r.id||i} style={{padding:"4px 0",borderTop:"1px solid #eef2f7"}}>📄 {(r.tipo||"relatório")+" · "+DM(r.de)+" a "+DM(r.ate)}</div>; })}</div>
+  </div>;
+}
 function PortalPerformance({cl, selUnit, isMob, unitId, semTrafego}){
   const _hoje=new Date();
   const [mes,setMes]=useState(_hoje.getMonth()+1);
@@ -86814,6 +90881,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob} selUnit={selUnit}/>}
 
     {/* ── PERFORMANCE ── funil + ROI unificados (cliente preenche etapas, vê resultado) */}
+    {/* v100 (15/10/2026) P2_8_07: mídia ao vivo (o servidor decide quem vê) */}
+    {tab==="performance"&&typeof PortalMidiaAoVivoV100==="function"&&<PortalMidiaAoVivoV100 clientId={isBioter?(function(u){ return u&&u!=="grupo"?"bioter_"+u:"bioter"; })(selUnit==="_minhas_"?(_unitLocked||"grupo"):(selUnit||"grupo")):selCl} isMob={isMob} viewerIsPixels={!lockedClientId} semTrafego={!_abaOn("performance_trafego")} cfgOk={!!portalCfg.ok}/>}
     {tab==="performance"&&<PortalPerformance cl={cl} selUnit={selUnit} isMob={isMob} semTrafego={!_abaOn("performance_trafego")}
       unitId={isBioter ? (selUnit==="_minhas_" ? (_unitLocked || "grupo") : (selUnit || "grupo")) : null}/>}
 
@@ -87120,7 +91189,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         </div>
 
         {/* Widgets personalizáveis do cliente (pedido 2026-09-01) */}
-        {typeof PortalWidgets==="function"&&<PortalWidgets cl={cl} isMob={isMob} onGoTab={setTab}
+        {/* v100 (15/10/2026) P2_8_07 (revisor): widget recebe a mesma chave "Tráfego pago" da aba Performance */}
+        {typeof PortalWidgets==="function"&&<PortalWidgets cl={cl} isMob={isMob} onGoTab={setTab} semTrafego={!_abaOn("performance_trafego")} viewerIsPixels={!lockedClientId} cfgOk={!!portalCfg.ok}
           selUnit={isBioter?(selUnit==="_minhas_"?(_unitLocked||"grupo"):(selUnit==="grupo"?"":(selUnit||""))):""}/>}
 
         {/* Linha do tempo do projeto (o Pacote contratado agora vive na aba Serviços) */}
@@ -87641,6 +91711,8 @@ const PW_DEFS=[
 ];
 
 function PortalWidgets({cl, selUnit, isMob, onGoTab}){
+  // v100 (15/10/2026) P2_8_07 (revisor): props novas por arguments[0] (semTrafego, viewerIsPixels) só para a linha de mídia ao vivo
+  const _pwV100=(arguments&&arguments[0])||{};
   const sb=(typeof window!=="undefined")?window._sb:null;
   const _rootId=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?"bioter":((cl&&cl.id)||"");
   const _unidade=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?cl.id.slice("bioter_".length):(selUnit||"");
@@ -87731,6 +91803,8 @@ function PortalWidgets({cl, selUnit, isMob, onGoTab}){
           </div>
           <div style={{padding:"12px 13px",flex:1}}>
             {d.id==="performance"&&<_PwPerformance rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
+            {/* v100 (15/10/2026) P2_8_07: mídia ao vivo no widget (o servidor decide quem vê) */}
+            {d.id==="performance"&&typeof PortalMidiaAoVivoV100==="function"&&<PortalMidiaAoVivoV100 clientId={_rootId==="bioter"&&_unidade&&_unidade!=="grupo"?"bioter_"+_unidade:((cl&&cl.id)||"")} isMob={isMob} compacto={true} semTrafego={!!_pwV100.semTrafego} viewerIsPixels={!!_pwV100.viewerIsPixels} cfgOk={_pwV100.cfgOk!==false}/>}
             {d.id==="metas"&&<_PwMetas rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
             {d.id==="conquistas"&&<_PwConquistas rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
             {d.id==="demandas"&&<_PwDemandas rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
@@ -95237,10 +99311,7 @@ function PageOperacional(props){
 
   /* ───── Helpers de navegação ───── */
   function goAprovacoes(){
-    if(onNav) onNav("aprovacoes");
-    else if(typeof window!=="undefined" && window.dispatchEvent){
-      window.dispatchEvent(new CustomEvent("pixels:navigate",{detail:{page:"aprovacoes"}}));
-    }
+    if(onNav) onNav("aprovacoes"); // v100 (15/10/2026) M13: o else com o aviso "pixels:navigate" saiu (ninguém escutava)
   }
 
   /* ───── Lista de clientes para filtro ───── */
@@ -104683,10 +108754,7 @@ function _PlanejamentosClientes({isMob}){
       // Strat clientes mantém estado em localStorage; aqui só dispara evento.
       localStorage.setItem("pixels-active-client", clId);
       localStorage.setItem("pixels-cl-tab","planejamento");
-      // Se houver um handler global, navega
-      if(typeof window!=="undefined" && window.dispatchEvent){
-        window.dispatchEvent(new CustomEvent("pixels:navto",{detail:{page:"clientes",clientId:clId,tab:"planejamento"}}));
-      }
+      // v100 (15/10/2026) M13: o aviso "pixels:navto" saiu (nenhum addEventListener no App).
     }catch(_){}
   }
 
@@ -125953,6 +130021,15 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
 
 /* ══════════════════════════════════════════════════════════════════
    CRIAÇÃO › EDIÇÃO DE VÍDEO
+   v28 (15/10/2026) pente fino: (1) quem a IA deixou de fora ANTES de editar (card > 20 vídeos: receita.fora_escolha; triagem do PC: fora_triagem)
+     aparece na Transcrição completa (fala inteira com o servidor v99c — receita.fala_fora —; edição antiga: "transcrição cortada" com o começo),
+     na Cola da fala (sem o falso "(sem fala)") e no IA › Conferir a IA ("Incluir mesmo assim" + "📝 Ver a fala"); (2) card com mais de 20 vídeos:
+     Editar/Refazer com IA vai EM SEGUNDO PLANO (assincrono + RPC criacao_video_ia_execucao a cada 10 s); (3) Girar: "Achar deitados" com certeza
+     baixa não mexe no giro; Esc com giros marcados pergunta antes de fechar.
+   v28 (15/10/2026) transcrição: "📝 Transcrição completa" (editor, celular, Ctrl+K, barra Cortar e card do Estúdio) — toda a fala de todos os vídeos,
+     verde = entrou (parte N), cinza = ficou de fora com o motivo da IA; ▶ ouvir, "＋ Incluir no vídeo" (no lugar dele, no fim ou depois da parte N),
+     "− Tirar do vídeo" (as mesmas funções da Cola da fala, com Desfazer), "✨ Refazer com a IA respeitando minhas escolhas" (só os 3 da lista, custo antes)
+     e "⬇ Baixar transcrição" (.txt [ENTROU]/[FORA]). Componentes: _EvTranscricaoCompleta, _EvTxPlayer, _EvTxEstudio (+ _evtx*).
    vid27 (14/10/2026): GIRAR VÍDEO GRAVADO DEITADO (card Lero Fibras · Starken, câmera Canon deitada) — botão "↻ Girar vídeos" no Estúdio,
      no "Preparar a edição" e "↻ Girar" na barra de cima do editor: ↺/↻ 90° por vídeo, "Girar todos" e "🔎 Achar deitados" (IA barata olha 1
      quadro de cada vídeo numa grade com os 4 giros e já marca; a pessoa confere e salva; só Vinicius, Gustavo e Hellen — edge video-orientacao).
@@ -127908,6 +131985,35 @@ async function _evDesmontar(blob, quadroSeg, prog, rot){       // vid27: rot = g
   } finally { URL.revokeObjectURL(url); }
 }
 
+/* v28 (15/10/2026) pente fino: CARD GRANDE (mais de 20 vídeos) — o Estúdio pede a edição EM SEGUNDO PLANO (assincrono:true), como o PC v26/v28.
+   Sem isso, os 50 vídeos da Starken estouravam o prazo ("a Anthropic não respondeu em 53 s", US$ 0,12 sem edição) e o "Refazer do zero" ia falhar
+   e cobrar. O servidor (video-editar v99 no ar) responde na hora {assincrono, execucao_id} e edita sozinho (2 etapas: escolhe os melhores e edita);
+   aqui pergunta "terminou?" a cada 10 s pela RPC criacao_video_ia_execucao (chave Edição de vídeo) e mostra a etapa e o tempo.
+   Fechar a aba não para a IA: a edição aparece no card quando terminar. Até 20 vídeos: igual a antes (síncrono). */
+const _EV_ASSINC_MIN = 20;
+function _evMMSS(s){ s = Math.max(0, Math.round(Number(s) || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+async function _evEsperarExecucao(eid, setPasso){
+  const T = (typeof window !== "undefined" && window.__EVP_TESTE && window.__evAssincTeste) || {};
+  const passo = T.passo || 10000, ini = Date.now(), maxMs = T.max || 12 * 60000;
+  let limite = ini + (T.prazo || 7 * 60000), ultMsg = "A IA está editando…", falhas = 0, ultErro = "";
+  for(;;){
+    await new Promise(function(r){ setTimeout(r, passo); });
+    let s = null;
+    try{ const r = await window._sb.rpc("criacao_video_ia_execucao", { p_id:eid }); if(r.error) throw new Error(r.error.message || "erro"); s = r.data || null; falhas = 0; }
+    catch(e){ falhas++; ultErro = String((e && e.message) || e).slice(0, 140); }
+    if(s){
+      if(s.ok === false) throw new Error(String(s.erro || "a execução da IA não foi encontrada"));
+      const st = String(s.status || ""), msg = String((s.progresso && s.progresso.msg) || "") || ultMsg; ultMsg = msg;
+      if(st === "pronto"){ const r = s.resultado || {}; if(!r.ok || !r.id) throw new Error("a IA terminou sem devolver a edição"); return r; }
+      if(st === "erro") throw new Error(String(s.erro || "a edição em segundo plano falhou"));
+      setPasso(msg + " · " + _evMMSS((Date.now() - ini) / 1000) + " · card grande: leva de 4 a 12 minutos. Pode fechar esta aba: a IA continua e a edição aparece no card.");
+      const ps = Number(s.prazo_s); if(ps > 0) limite = Math.max(limite, Math.min(ini + maxMs, Date.now() + ps * 1000 + 2 * passo));
+    }
+    if(Date.now() > limite) throw new Error("A IA ainda não terminou depois de " + _evMMSS((Date.now() - ini) / 1000) + " (execução " + String(eid).slice(0, 8) + ")."
+      + " Ela continua no servidor: abra o card daqui a alguns minutos antes de pedir de novo." + (falhas && ultErro ? " Último erro ao perguntar: " + ultErro : ""));
+  }
+}
+
 /* ── preparar os brutos e pedir a edição à IA (v8 · 29/09: a MESMA função serve o Estúdio e o PC do escritório no Guvi editora) ── */
 async function _evPrepararMontar(t, setPasso, extra){
   const narrado = _evVaiNarrar(t, extra);                // v28: a voz vem do texto do card; a fala dos brutos não entra
@@ -127950,11 +132056,14 @@ async function _evPrepararMontar(t, setPasso, extra){
     }
     clipes.push(Object.assign({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg }, rotF ? { rot:rotF } : {}));   // vid27
   }
+  // v28 (15/10/2026) pente fino: mais de 20 vídeos → em segundo plano (arguments[3] = { semAssincrono:true }: a página do PC pelo navegador fica como antes)
+  const assinc = clipes.length > _EV_ASSINC_MIN && !(arguments[3] && arguments[3].semAssincrono);
   setPasso(narrado ? "A IA está gerando a narração e montando os vídeos em cima dela… leva de 1 a 3 minutos. Pode continuar usando o app."
+                   : assinc ? "Pedindo a edição à IA (card grande: " + clipes.length + " vídeos, em 2 etapas)…"
                    : "A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
   const modM = _evpModeloLer();                                   // v20: modelo escolhido no Estúdio (sem = padrão da agência)
   const res = await _evInvocar("video-editar", { body:{ acao:"montar" } }, { chamar:function(o2){      // v48: E2-14 (prazo de 420 s, nova tentativa, erro traduzido)
-    return window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(foraLim ? { fora_limite:foraLim } : {}), ...(modM ? { modelo:modM } : {}), ...(extra || {}) }, signal:o2.signal }); } });
+    return window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes, ...(foraLim ? { fora_limite:foraLim } : {}), ...(modM ? { modelo:modM } : {}), ...(assinc ? { assincrono:true } : {}), ...(extra || {}) }, signal:o2.signal }); } });
   if(res.error){
     // v94 (10/10/2026) C01: sem a nova tentativa, uma queda de rede no montar pode ter deixado a edição nascendo no servidor — diz para conferir
     if(/falar com o servidor/i.test(String(res.error.message || ""))) throw new Error("A conexão caiu enquanto a IA recebia o pedido. Ele pode ter entrado: espere 1 minuto e abra o card de novo antes de pedir outra vez.");
@@ -127962,6 +132071,10 @@ async function _evPrepararMontar(t, setPasso, extra){
   }
   const dOk = res.data || {};
   if(dOk.ja_em_andamento && !dOk.id && dOk.edicao_id) dOk.id = dOk.edicao_id;      // v94 (10/10/2026) C01: o servidor devolveu a edição que já está sendo feita
+  if(dOk.assincrono && dOk.execucao_id){                                           // v28 (15/10/2026) pente fino: a IA edita em segundo plano
+    setPasso("A IA começou a editar em segundo plano (card grande: " + clipes.length + " vídeos). Pode fechar esta aba: a edição aparece no card quando terminar.");
+    return await _evEsperarExecucao(String(dOk.execucao_id), setPasso);
+  }
   return dOk;
 }
 
@@ -128367,13 +132480,18 @@ function _EvGirarPainel({ t, itens, isMob, onFechar, onSalvou }){
     })();
     return function(){ vivo = false; };
   }, [t && t.id, lista.length]);
-  useEffect(function(){ const f = function(e){ if(e.key === "Escape" && !salvando) onFechar(); }; window.addEventListener("keydown", f); return function(){ window.removeEventListener("keydown", f); }; }, [salvando]);
+  const nMudRef = useRef(0);   // v28 (15/10/2026) pente fino: o Esc não descarta giros marcados sem perguntar (clicar fora já era protegido)
+  useEffect(function(){ const f = function(e){ if(e.key !== "Escape" || salvando) return;
+      const n = nMudRef.current;
+      if(n > 0){ let ok = false; try{ ok = window.confirm("Fechar sem salvar " + n + (n === 1 ? " giro" : " giros") + "? Os giros marcados se perdem."); }catch(_){ ok = false; } if(!ok) return; }
+      onFechar(); }; window.addEventListener("keydown", f); return function(){ window.removeEventListener("keydown", f); }; }, [salvando]);
   const salvo = function(c){ return _evGiroDe(c.url); };
   const atual = function(c){ return rasc[c.url] != null ? rasc[c.url] : salvo(c); };
   const girar = function(c, d){ setRasc(function(m){ return Object.assign({}, m, { [c.url]:_evGiroOk(atual(c) + d) }); }); };
   const girarTodos = function(d){ setRasc(function(m){ const n = Object.assign({}, m); lista.forEach(function(c){ n[c.url] = _evGiroOk((m[c.url] != null ? m[c.url] : salvo(c)) + d); }); return n; }); };
   const todosOriginal = function(){ setRasc(function(){ const n = {}; lista.forEach(function(c){ n[c.url] = 0; }); return n; }); setIa({}); };
   const mudancas = lista.filter(function(c){ return rasc[c.url] != null && rasc[c.url] !== salvo(c); });
+  nMudRef.current = mudancas.length;   // v28 (15/10/2026) pente fino
   const girados = lista.filter(function(c){ return atual(c) !== 0; }).length;
   const custoEst = Math.max(0.01, lista.length * 0.0007);
   const acharDeitados = async function(){
@@ -128395,8 +132513,10 @@ function _EvGirarPainel({ t, itens, isMob, onFechar, onSalvou }){
         (d.giros || []).forEach(function(g){ res[g.id] = g; });
       }
       setIa(res);
-      setRasc(function(m){ const n = Object.assign({}, m); Object.keys(res).forEach(function(u){ n[u] = _evGiroOk(res[u].giro); }); return n; });
-      const nd = Object.keys(res).filter(function(u){ return res[u].giro; }).length, dv = Object.keys(res).filter(function(u){ return res[u].certeza !== "alta"; }).length;
+      // v28 (15/10/2026) pente fino: certeza "baixa" = a IA não soube (a edge responde "A" = 0) → NÃO mexe no giro (antes desvirava um vídeo já
+      //   salvo girado: 270 → "como gravou" como mudança pendente). Fica só o selo "confira".
+      setRasc(function(m){ const n = Object.assign({}, m); Object.keys(res).forEach(function(u){ if(String(res[u].certeza || "") !== "baixa") n[u] = _evGiroOk(res[u].giro); }); return n; });
+      const nd = Object.keys(res).filter(function(u){ return res[u].giro && String(res[u].certeza || "") !== "baixa"; }).length, dv = Object.keys(res).filter(function(u){ return res[u].certeza !== "alta"; }).length;
       _evToast("success", "A IA marcou " + nd + " vídeo" + (nd === 1 ? "" : "s") + " para girar" + (dv ? " (" + dv + " com dúvida: confira)" : "") + ". Confira e clique em Salvar. Custou US$ " + custo.toFixed(4).replace(".", ",") + ".");
     }catch(e){ setErro("Achar deitados: " + String((e && e.message) || e)); }
     setOcup(null);
@@ -128484,10 +132604,12 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
   const [erroAjuste, setErroAjuste] = useState(null);   // v48 (06/10/2026): E2-3 — o erro do "Ajustar com IA" aparece DENTRO do assistente (o editor em tela cheia cobria o de fora)
   const [exp, setExp] = useState(null);       // { fase, pct, msg, url }
   const [girarAberto, setGirarAberto] = useState(false);   // vid27: painel "Girar vídeos"
+  const [txAberto, setTxAberto] = useState(false);          // v28 (15/10/2026) transcrição: só para ler, quando o editor não está aberto
   const soVer = !!isMob;
   useEffect(function(){ if(t && t.id) _evGiroCarregar(t.id); }, [t && t.id]);   // vid27: giros do card (vídeos gravados deitados)
 
-  useEffect(function(){ setEd(null); setErro(null); setPedido(""); setExp(null); setErroAjuste(null); }, [taskId]);
+  const taskIdRef = useRef(taskId); taskIdRef.current = taskId;   // v28 (15/10/2026) pente fino 2: o andamento de um card não aparece no outro
+  useEffect(function(){ setEd(null); setErro(null); setPedido(""); setExp(null); setErroAjuste(null); setTxAberto(false); setPasso(null); }, [taskId]);   // v28 (15/10/2026) transcrição: fecha ao trocar de card
   useEffect(function(){
     if(!window._sb || !t) return; let vivo = true;
     window._sb.rpc("criacao_edicao", { p_task:t.id }).then(function(r){
@@ -128561,12 +132683,14 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     /* v94 (10/10/2026) C08: vai editar no navegador com vídeo ainda sem cópia leve (ex.: MP4 pequeno) → pede ao PC a cópia leve (1 vez por arquivo, 00b) */
     try{ if(typeof pxPedirCopiaLevePC === "function") _evBrutos(t).forEach(function(f){ if(!f.previewUrl) pxPedirCopiaLevePC(t.id, f, "estudio"); }); }catch(_){}
     try{
-      const dM = await _evPrepararMontar(t, setPasso, narrLigado === false ? { narrar:false } : (narrLigado ? { narrado:true } : undefined));
+      // v28 (15/10/2026) pente fino 2: a espera em segundo plano leva minutos — se a pessoa trocar de card, o andamento deste NÃO aparece no outro
+      const meu = t.id, aqui = function(){ return taskIdRef.current === meu; }, nomeC = String(t.title || "card").slice(0, 60);
+      const dM = await _evPrepararMontar(t, function(m){ if(aqui()) setPasso(m); }, narrLigado === false ? { narrar:false } : (narrLigado ? { narrado:true } : undefined));
       if(dM && dM.ja_em_andamento){                                         // v94 (10/10/2026) C01: o servidor já tinha uma edição deste card andando → abre ela, sem erro
         setPasso(null); _evToast("info", String(dM.aviso || "Já tinha uma edição deste vídeo sendo feita: abri ela (não foi cobrado de novo).")); setPcRec(function(n){ return n+1; }); setRec(function(n){ return n+1; }); return; }
-      setPasso(null); _evToast("success", "Vídeo editado pela IA. Dê o play!"); setRec(function(n){ return n+1; });
+      setPasso(null); _evToast("success", aqui() ? "Vídeo editado pela IA. Dê o play!" : "A IA terminou de editar \"" + nomeC + "\": abra o card para ver."); setRec(function(n){ return n+1; });
       if(dM && dM.motion_pendente && dM.id) _evmPendente(dM.id, function(){ setRec(function(n){ return n+1; }); });   // v35: motion numa segunda etapa (video-editar v43b)
-    }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(n){ return n+1; }); }
+    }catch(e){ setPasso(null); const em = String((e && e.message) || e); if(taskIdRef.current === t.id) setErro(em); else _evToast("error", "\"" + String(t.title || "card").slice(0, 60) + "\": " + em); setRec(function(n){ return n+1; }); }
   };
 
   const ajustar = async function(texto, extra){
@@ -128592,13 +132716,14 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     }).catch(function(e){ _evToast("error", "Não voltou para a versão " + n + ": " + ((e && e.message) || "sem conexão")); });   // v48 (06/10/2026): E2-17
   };
 
-  const linha = useMemo(function(){ return (ed && ed.receita && kit) ? _evLinha(ed.receita, ed.fala, kit) : null; }, [ed, kit]);
+  const linha = useMemo(function(){ return (ed && ed.receita && kit) ? _evLinha(ed.receita, _evtxFalaTudo(ed.fala, ed.receita), kit) : null; }, [ed, kit]);   // v28 (15/10/2026) pente fino 2: + fala_fora (igual ao editor)
   const musica = useMemo(function(){
     const id = ed && ed.receita && ed.receita.musica && ed.receita.musica.id; if(!id) return null;
     const m = musicas.find(function(x){ return x.id===id; }); return m ? { url:m.url, volume:ed.receita.musica.volume, nome:m.nome, clima:m.clima } : null;
   }, [ed, musicas]);
 
   const caixa = { background:_EVT.painel, border:"1px solid "+_EVT.linha, borderRadius:14, padding:isMob?12:16, marginTop:14 };
+  const editorNaTela = !!(t && ed && ed.existe && ed.receita && linha && kit && (ed.status==="pronto" || ed.status==="exportado" || ed.status==="aprovado") && !passo);   // v28 (15/10/2026) transcrição: a mesma conta que mostra o _EvEditor abaixo
   const btn = function(cor){ return { font:"inherit", padding:"10px 16px", borderRadius:11, border:0, background:cor||_EVT.roxo, color:"#fff", fontWeight:800, fontSize:_evF(13.5,isMob), cursor:"pointer" }; };
   const btn2 = { font:"inherit", padding:"9px 14px", borderRadius:10, border:"1px solid "+_EVT.roxoBorda, background:_EVT.roxoClaro, color:_EVT.roxo, fontWeight:800, fontSize:_evF(13,isMob), cursor:"pointer" };
 
@@ -128615,8 +132740,11 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
           </select>
         </div>
         {t && _evBrutos(t).length > 0 && <button data-abrir-girar="estudio" onClick={function(){ setGirarAberto(true); }} title="Vídeo gravado com a câmera deitada? Gire aqui (o original não muda)" style={btn2}>↻ Girar vídeos</button>}
+        {t && ed && ed.existe && <button data-abrir-transcricao="estudio" onClick={function(){ if(editorNaTela) window.dispatchEvent(new CustomEvent("evp-transcricao")); else setTxAberto(true); }}
+          title="Toda a fala dos vídeos: o que entrou no vídeo e o que ficou de fora" style={btn2}>📝 Transcrição completa</button>}{/* v28 (15/10/2026) transcrição */}
         {t && typeof onAbrirCard==="function" && <button onClick={function(){ onAbrirCard(t); }} style={btn2}>Abrir card</button>}
       </div>
+      {t && ed && ed.existe && txAberto && !editorNaTela && <_EvTxEstudio t={t} ed={ed} isMob={isMob} onFechar={function(){ setTxAberto(false); }}/>}{/* v28 (15/10/2026) transcrição */}
       {t && girarAberto && <_EvGirarPainel t={t} isMob={isMob} onFechar={function(){ setGirarAberto(false); }} onSalvou={function(){ setRec(function(n){ return n+1; }); }}
         itens={_evGiroItens(t, ed)}/>}
       {!soVer && <_EvTravaVideo isMob={isMob}/>}
@@ -128634,7 +132762,7 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
         <div style={Object.assign({}, caixa, {borderColor:_EVT.roxoBorda,background:_EVT.roxoClaro})}>
           <div style={{fontWeight:800,color:_EVT.roxo,fontSize:_evF(14,isMob)}}>🎬 Editando com IA</div>
           <div style={{marginTop:6,fontSize:_evF(13.5,isMob)}}>{passo}</div>
-          <div style={{marginTop:6,fontSize:_evF(12,isMob),color:_EVT.sub}}>Não feche esta aba enquanto os vídeos estão sendo preparados.</div>
+          {!/Pode fechar esta aba|Pode continuar usando o app/.test(String(passo)) && <div style={{marginTop:6,fontSize:_evF(12,isMob),color:_EVT.sub}}>Não feche esta aba enquanto os vídeos estão sendo preparados.</div>}{/* v28 (15/10/2026) pente fino 2: em segundo plano a frase fixa contradizia a de cima */}
         </div>
       )}
 
@@ -138020,9 +142148,16 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   /* v81: a guarda de vídeo do app (00b: gasta 1 vez + trava de 3 voltas) fica de fora do Estúdio — ele tem o próprio cache e o "repetir trecho" é de propósito */
   useEffect(function(){ window.__PXVG_PAUSA = (window.__PXVG_PAUSA || 0) + 1; return function(){ window.__PXVG_PAUSA = Math.max(0, (window.__PXVG_PAUSA || 1) - 1); }; }, []);
   const clipes = ed.clipes || [];
+  /* v28 (15/10/2026) pente fino 2: a fala que o EDITOR usa (linha do tempo, legenda, Tirar/Voltar trechos, gravação) é a MESMA da Transcrição completa:
+     ed.fala + receita.fala_fora (servidor v99c: a fala inteira de quem a etapa 1 deixou de fora). Antes, um trecho de fora incluído pela
+     Transcrição entrava no vídeo SEM LEGENDA (o _evpCalcular não tinha as palavras dele). Só soma o que falta (ed.fala continua valendo). */
+  const falaEd = useMemo(function(){ return _evtxFalaTudo(ed.fala, ed.receita); }, [ed.fala, ed.receita]);
   useMemo(function(){ _evGiroRegistrarClipes(clipes); }, [ed.id, clipes.map(function(c){ return (c && c.rot) || 0; }).join(",")]);   // vid27: vídeo gravado deitado gira no player, nas miniaturas e na gravação
   const giroVer = _evUsarGiro();
   const [girarAberto, setGirarAberto] = useState(false);
+  const [txAberto, setTxAberto] = useState(false);   // v28 (15/10/2026) transcrição: painel "📝 Transcrição completa"
+  const [txFoco, setTxFoco] = useState(null);   // v28 (15/10/2026) pente fino: abrir já no vídeo (📝 Ver a fala do "Conferir a IA")
+  useEffect(function(){ const f = function(e){ setTxFoco(e && e.detail && e.detail.clipe ? { clipe:String(e.detail.clipe), em:Date.now() } : null); setTxAberto(true); }; window.addEventListener("evp-transcricao", f); return function(){ window.removeEventListener("evp-transcricao", f); }; }, []);   // v28 (15/10/2026) transcrição: o card do Estúdio abre o painel do editor
   const infoClipe = useMemo(function(){ const m = {}; clipes.forEach(function(c, i){ m[c.id] = Object.assign({ n:i+1, cor:_EV_CORES_CLIPE[i%12] }, c); }); return m; }, [ed.id]);
   /* versão salva × rascunho salvo sozinho (se o rascunho for mais novo que a última versão, continua dele)
      v48 (06/10/2026): E2-1 + contrato C2 — "mais novo" é rascunho_em > (receita_em || atualizado_em). receita_em = quando a RECEITA mudou de verdade;
@@ -138169,7 +142304,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   }, [t.client]);
   const nomesKit = (dic && dic.nomes && dic.nomes.corrigir) || [];
   const kitN = useMemo(function(){ return Object.assign({}, kit, { _nomes:nomesKit }); }, [kit, nomesKit.join("|")]);
-  const calc = useMemo(function(){ return _evpCalcular(p, ed.fala, kitN); }, [p, ed.fala, kitN]);
+  const calc = useMemo(function(){ return _evpCalcular(p, falaEd, kitN); }, [p, falaEd, kitN]);
+  if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpCalc = calc;   // v28 (15/10/2026) pente fino 2: só nos testes automáticos (legenda do trecho incluído)
 
   /* estabilização: PC do escritório primeiro; o navegador mede o tremido na hora (prévia) e é a reserva */
   const precisaEstab = useMemo(function(){ const s = {}; p.clips.forEach(function(c){ if(c.estab) s[c.clipe] = 1; }); return Object.keys(s); }, [p.clips]);
@@ -138336,7 +142472,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   useEffect(function(){
     let vivo = true; const base = vozesBase, chave = chaveT1;
     const faz = function(){ if(!vivo) return; let outF = base, info = null;
-      if(chave !== "off"){ try{ const r = _evpVozPorPalavra(base, calc, ed.fala || {}, trechosAu); outF = r.vozes; info = r.info; }catch(_){ outF = base; info = null; } }
+      if(chave !== "off"){ try{ const r = _evpVozPorPalavra(base, calc, falaEd || {}, trechosAu); outF = r.vozes; info = r.info; }catch(_){ outF = base; info = null; } }
       if(typeof window !== "undefined" && window.__EVP_TESTE && typeof window.__EVP_SABOTAR === "function"){ try{ outF = window.__EVP_SABOTAR(outF) || outF; }catch(_){} }   // só nos testes (estraga o som de propósito)
       if(typeof window !== "undefined" && window.__EVP_TESTE){ window.__evpVozes = outF; window.__evpVozesBase = base; window.__evpVozPalavra = info; }
       setVozes(outF); setVozPalavra(info); setT1Ok({ base:base, chave:chave }); };
@@ -138404,7 +142540,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(micAutoRef.current || soVer || !_evpPodeMicro() || tratandoAudio) return;
     const arqs = _evpMicArquivos(t); if(!arqs.length || (p.micro && p.micro.em)) return;
     micAutoRef.current = true; let vivo = true; setMicSinc("Achei o áudio do microfone: sincronizando…");
-    _evpMicSincronizar({ p:pRef.current, mics:arqs.map(function(f){ return { id:String(f.id), url:f.url, nome:f.name || "microfone" }; }), infoClipe:infoClipe, fala:ed.fala || {},
+    _evpMicSincronizar({ p:pRef.current, mics:arqs.map(function(f){ return { id:String(f.id), url:f.url, nome:f.name || "microfone" }; }), infoClipe:infoClipe, fala:falaEd || {},
       aviso:function(x){ if(vivo) setMicSinc(x); } })
       .then(function(r){
         mudar(function(np){ np.micro = Object.assign({}, r.micro, { ativo:r.feitos > 0 }); });
@@ -138774,6 +142910,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   })();
   const comandosK = [
     { id:"tocar", grupo:"Tocar", label:"Tocar / pausar", atalho:"Espaço", fn:tocar },
+    { id:"transcricao", grupo:"Fala", label:"Transcrição completa (toda a fala: o que entrou e o que ficou de fora)", fn:function(){ setTxAberto(true); } },   // v28 (15/10/2026) transcrição
     { id:"dividir", grupo:"Editar", label:"Dividir na agulha", atalho:"S", fn:cortar },
     { id:"duplicar", grupo:"Editar", label:"Duplicar o item", atalho:"Ctrl+D", fn:duplicar },
     { id:"copiar", grupo:"Editar", label:"Copiar o item", atalho:"Ctrl+C", fn:copiar },
@@ -138887,7 +143024,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     const ant = pRef.current, np = _evpTirarTrechos(ant, lista, clipes);
     if(np === ant){ _evToast("warning", "Não dá para tirar tudo: o vídeo ficaria vazio."); return 0; }
     if(typeof extra === "function") extra(np);              // v92 (08/10/2026) dúvidas da fala
-    const antes = _evpCalcular(ant, ed.fala, kitN).total, depois = _evpCalcular(np, ed.fala, kitN).total;
+    const antes = _evpCalcular(ant, falaEd, kitN).total, depois = _evpCalcular(np, falaEd, kitN).total;
     confirmar(ant, np); setSel(null);
     _evToast("success", rotulo + ": " + lista.length + " trecho" + (lista.length > 1 ? "s" : "") + " · " + (antes - depois).toFixed(1).replace(".", ",") + " s a menos");
     return lista.length;
@@ -138895,6 +143032,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   /* v11: COLA DA FALA — o que foi cortado VOLTA para o vídeo (no lugar certo, encostado no trecho do mesmo bruto); textos e efeitos depois dele andam junto */
   const voltarTrechos = function(lista){
     const info = arguments[1];               // v13: {texto, motivo_corte, porque} — o porquê de voltar ensina a IA
+    // v28 (15/10/2026) transcrição: arguments[3] opcional = ONDE entra: { onde:"fim" } ou { onde:"depois", parte:N } (N = parte da linha do tempo, 1 = a primeira).
+    //   Sem ele, igual a antes: volta no lugar natural (encostado no trecho do mesmo bruto).
+    const ondeX = arguments[3] && typeof arguments[3] === "object" && (arguments[3].onde === "fim" || arguments[3].onde === "depois") ? arguments[3] : null;
+    let ondePos = null;                      // v28 (15/10/2026) transcrição: posição na lista de clipes onde o próximo trecho entra
     if(!lista || !lista.length){ _evToast("warning", "Marque o que estava riscado para voltar."); return 0; }
     const ant = pRef.current, np = _evpCopia(ant);
     // v13: o que o sócio trouxe de volta (e por quê) ensina a IA o que NÃO cortar
@@ -138911,9 +143052,17 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     Object.keys(grupos).forEach(function(cl){
       const js = []; grupos[cl].sort(function(x, y){ return x.a - y.a; }).forEach(function(x){ const u = js[js.length-1]; if(u && x.a <= u.b + 0.4) u.b = Math.max(u.b, x.b); else js.push({ a:x.a, b:x.b }); });
       js.forEach(function(x){
-        const cc = _evpCalcular(np, ed.fala, kitN).clips;
+        const cc = _evpCalcular(np, falaEd, kitN).clips;
         const a = Math.max(0, x.a - 0.06), b = x.b + 0.08;
         if(np.clips.some(function(c){ return c.clipe === cl && normal(c) && c.ini <= a + 0.05 && c.fim >= b - 0.05; })) return;   // já está no vídeo
+        if(ondeX){                           // v28 (15/10/2026) transcrição: entra no fim ou depois da parte N (um clipe novo, sem emendar no vizinho)
+          if(ondePos == null) ondePos = ondeX.onde === "fim" ? np.clips.length : Math.max(0, Math.min(np.clips.length, Math.round(Number(ondeX.parte) || 0)));
+          const moldeX = np.clips.find(function(c){ return c.clipe === cl && normal(c); }) || null;
+          const novoX = Object.assign(moldeX ? _evpCopia(moldeX) : { vel:1, vol:1, mudo:false, zoom:1, x:0, y:0, rot:0 },
+            { id:_evpId(), clipe:cl, ini:a, fim:b, trans:"corte", fi:0, fo:0, congelar:0, reverso:false, rampa:"nenhuma" });
+          const TX = ondePos > 0 ? cc[ondePos - 1].t1 : 0;
+          np.clips.splice(ondePos, 0, novoX); empurra(TX, (b - a) / (novoX.vel || 1)); ondePos++; n++; return;
+        }
         let idx = -1, melhor = -1;
         np.clips.forEach(function(c, i){ if(c.clipe === cl && normal(c) && c.fim <= x.a + 0.05 && c.fim > melhor){ melhor = c.fim; idx = i; } });
         const cA = idx >= 0 ? np.clips[idx] : null;
@@ -139625,8 +143774,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(clipAg){ abrirFerr("vel"); fecharSub(); return; }
     _evToast("warning", "Selecione um item (ou leve a agulha para cima de um clipe).");
   };
-  const muletasAg = function(){ const m = _evpMuletas(p, ed.fala); if(!m.length){ _evToast("info", "Nenhuma muleta (\"éé\", \"ãã\", \"né\") encontrada na fala."); return; } tirarTrechos(m, "Muletas tiradas"); };
-  const silenciosAg = function(){ const s = _evpSilencios(p, ed.fala, 0.7, 0.12); if(!s.length){ _evToast("info", "Nenhum silêncio maior que 0,7 s. Ajuste a régua em Cortar › Tirar silêncios."); return; } tirarTrechos(s, "Silêncios tirados"); };
+  const muletasAg = function(){ const m = _evpMuletas(p, falaEd); if(!m.length){ _evToast("info", "Nenhuma muleta (\"éé\", \"ãã\", \"né\") encontrada na fala."); return; } tirarTrechos(m, "Muletas tiradas"); };
+  const silenciosAg = function(){ const s = _evpSilencios(p, falaEd, 0.7, 0.12); if(!s.length){ _evToast("info", "Nenhum silêncio maior que 0,7 s. Ajuste a régua em Cortar › Tirar silêncios."); return; } tirarTrechos(s, "Silêncios tirados"); };
   const nComent = comentarios.filter(function(c){ return !(p.revisao || {})[c.chave]; }).length;
   const quadsDe = function(id){
     const Q = function(id2, label, icone, x){ return Object.assign({ id:id2, label:label, icone:icone }, x || {}); };
@@ -139643,7 +143792,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       SEP("a"),
       Q("silencios", "Tirar silêncios", "silencio", { dica:"Régua do tamanho mínimo + botão (painel direito)", sub:"silencios" }),
       Q("muletas", "Tirar \"éé/né\"", "muletas", { dica:"Tira as muletas da fala agora", acao:muletasAg }),
-      Q("ritmo", "Apertar ritmo", "ritmo", { sub:"ritmo" }), Q("cola", "Cola da fala", "cola", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }),
+      Q("ritmo", "Apertar ritmo", "ritmo", { sub:"ritmo" }), Q("cola", "Cola da fala", "cola", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }), Q("transc", "Transcrição completa", "fala2", { dica:"Toda a fala: o que entrou e o que ficou de fora", acao:function(){ setTxAberto(true); } }),   // v28 (15/10/2026) transcrição
+
       Q("ordem", "Ordem das falas", "ordem", { dica:"Reordenar os clipes pela frase + IA na fala", sub:"ordem" }),
       SEP("b"),
       Q("io-a", "Entrada (I)", "entrada", { acao:function(){ marcarIO("a"); } }), Q("io-b", "Saída (O)", "saida", { acao:function(){ marcarIO("b"); } }),
@@ -139719,7 +143869,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       Q("silencios", "Tirar silêncios", "silencio", { dica:"Régua do tamanho mínimo + botão (painel direito)", sub:"silencios" }),
       Q("muletas", "Tirar \"éé/né\"", "muletas", { dica:"Tira as muletas da fala agora", acao:muletasAg }),
       Q("ritmo", "Apertar ritmo", "ritmo", { sub:"ritmo" }), Q("io-a", "Entrada (I)", "entrada", { acao:function(){ marcarIO("a"); } }), Q("io-b", "Saída (O)", "saida", { acao:function(){ marcarIO("b"); } }),
-      Q("cola", "Cola da fala", "cola", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }),
+      Q("cola", "Cola da fala", "cola", { dica:"Editar pelo texto: cortar, voltar, corrigir nome, cor", acao:abrirCola }), Q("transc", "Transcrição completa", "fala2", { dica:"Toda a fala: o que entrou e o que ficou de fora", acao:function(){ setTxAberto(true); } }),   // v28 (15/10/2026) transcrição
+
       Q("marca", "Marcador (M)", "marca", { acao:addMarca }), Q("ordem", "Ordem das falas", "ordem", { dica:"Reordenar os clipes pela frase + IA na fala", sub:"ordem" }),
       Q("comentarios", "Comentários" + (nComent ? " (" + nComent + ")" : ""), "comentario", { dica:"Comentários do cliente na Avaliação", sub:"comentarios" }) ];
     if(id === "vel") return [0.5, 1, 1.5, 2].map(function(v){ return Q("vel-" + v, String(v).replace(".", ",") + "×", "velocidade", { dica:"Velocidade " + String(v).replace(".", ",") + "× no item selecionado (ou no clipe da agulha)", acao:function(){ velSel(v); } }); }).concat([
@@ -139786,7 +143937,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     evm, p, calc, sel, setSel, mudar, irPara, tempo, infoClipe, clipes, driveDe, musicas, musInfo:musInfoN, setMusica, addClipe, addTexto, addSfx, kit, base,
     motivos:(ed.receita && ed.receita.motivos_corte) || [], receita:ed.receita || null, comentarios, cliente:t.client, tagNarr:_evTagNarracao(t), roteiroNarr:_evRoteiroNarracao(t),
     enviarAudioPronto, aplicarCorrecoes, ajustando, marcaCorr, marcarCorrecao, marcarPontoCorr, focoCorr, setFocoCorr, cortar, duplicar, apagar, metodoRuido, tratandoAudio, pedirEstab,
-    onMusicasMudou, setFerr, pRef, setP, confirmar, addImagem, addMarca, tirarTrechos, fala:ed.fala, modelos, salvarModelo, aplicarModelo, voltarTrechos, pintarTrechos, corrigirTexto,
+    onMusicasMudou, setFerr, pRef, setP, confirmar, addImagem, addMarca, tirarTrechos, fala:falaEd, modelos, salvarModelo, aplicarModelo, voltarTrechos, pintarTrechos, corrigirTexto,
     addNome, coresCli, nomesKit, clipesTodos:clipes, addTrilha, gerarCapa, capaUrl, t, edId:ed.id, onRecarregar, tratandoTudo:Object.keys(medindoAcao).length, trat, addSobre, addDesfoque,
     addForma, batidas, encaixarBatida, gravarNarracao, gravando, subindoNarr, locucaoIA, gerandoVoz, traduzirLegenda, traduzindo, baixarSrt, vaMed, tocando, tocar:tocar, edUnidade:ed.unidade || "",
     alterado, salvarVersao:salvar,
@@ -139917,7 +144068,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpInspetor fotosCard={_evpFotosDoCard(t.files).map(function(f){ return { url:f.url, nome:f.arq }; })}
             tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
-            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={ed.fala} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id} dividir={cortar} tocar={tocar} tocando={tocando}/>
+            trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={falaEd} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id} dividir={cortar} tocar={tocar} tocando={tocando}/>
         ) : (
           <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
             ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
@@ -139929,7 +144080,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
           setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
           alt={tlAlt} onAlt={mudarAltTl} desfazer={desfazer} refazer={refazer} podeDesf={desf.length > 0} podeRef={refaz.length > 0}
-          fala={ed.fala} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }} ctxMenu={abrirCtx} io={io} abrirHist={function(){ setHistK(true); }} travarFaixa={travarFaixa} mob={isMob}
+          fala={falaEd} marcaCorr={marcaCorr} onCorrecao={function(id){ setMenu("corrigir"); setFocoCorr(id); }} ctxMenu={abrirCtx} io={io} abrirHist={function(){ setHistK(true); }} travarFaixa={travarFaixa} mob={isMob}
           duvidas={conf.pendentes} onDuvida={abrirConferir}/>;   // v92 (08/10/2026) dúvidas da fala: marcas "?" na régua
   /* v76 (07/10/2026): NO PC, O ESTÚDIO DIZ O QUE ESTÁ ESPERANDO E NUNCA FICA MUDO. A cada 15 s conta para o PC o que falta (som da fala,
      narração, medir tremido, foco, ação, trecho ao contrário, PC). Depois de 2,5 min, o que não é essencial é deixado de lado e a gravação
@@ -139964,6 +144115,18 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
      pcForcar/pcFaltaRef/pcExpRef/useEffect acima; ao abrir, o React via mais hooks que antes). O retorno do celular fechado veio para cá,
      depois de todos os hooks — o resto ficou igual. */
   const elLembrete = lemb ? <div style={_EVP_TEMAS[tema]} data-tema={tema}><_EvpLembreteEnsinar lemb={lemb} onEnsinar={lembEnsinar} onAgoraNao={lembAgoraNao} isMob={!!isMob}/></div> : null;   // v92 (08/10/2026) lembrete de ensinar
+  /* v28 (15/10/2026) transcrição: "Refazer com a IA respeitando minhas escolhas" — o mesmo ajuste do "Pedir à IA" (video-editar "ajustar");
+     salva antes (a IA lê a versão salva), como o aplicarCorrecoes */
+  const refazerTransc = async function(pr){
+    if(!pr || !pr.pedido || ajustando) return false;
+    if(alterado){ const ok = await salvar(); if(!ok) return false; }
+    return await onAjustar(pr.pedido, pr.correcoes && pr.correcoes.length ? { correcoes:pr.correcoes } : {});
+  };
+  const elTx = txAberto ? <_EvTranscricaoCompleta t={t} ed={ed} p={p} calc={calc} clipes={clipes} fala={falaEd} motivos={(ed.receita && ed.receita.motivos_corte) || []} nomesKit={nomesKit}
+      isMob={isMob} soLer={soVer} onAbrirEditor={isMob && !mobAberto ? function(){ setMobAberto(true); } : null} onFechar={function(){ setTxAberto(false); setTxFoco(null); }} irPara={irPara}
+      tirarTrechos={tirarTrechos} voltarTrechos={voltarTrechos} desfazer={desfazer} podeDesf={desf.length > 0} onRefazerIA={pcAuto ? null : refazerTransc} ajustando={ajustando}
+      reeditarNovos={novosIA.length ? reeditarNovos : null} tema={tema} addClipe={soVer ? null : addClipe} focoClipe={txFoco ? txFoco.clipe : null} onRecarregar={onRecarregar}/> : null;   // v28 (15/10/2026) transcrição (tema: o celular fechado fica fora do "raiz" com as cores)
+  const elTxBotao = function(estilo, rot){ return <button data-abrir-transcricao="editor" onClick={function(){ setTxAberto(true); }} title="Toda a fala dos vídeos: o que entrou no vídeo e o que ficou de fora" style={estilo}>{rot}</button>; };   // v28 (15/10/2026) transcrição
   if(isMob && !mobAberto){
     return (
       <div style={{marginTop:14}}>
@@ -139978,6 +144141,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" title="Assistir em tela cheia" style={_evpBtn("icone")}><_EvpIco n="expandir" s={16}/></button>
         </div>
         <button data-mob-abrir="1" onClick={function(){ setMobAberto(true); }} style={Object.assign(_evpBtn("primario"), {marginTop:12,width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14})}><_EvpIco n="celular" s={17}/>Editar no celular</button>
+        {elTxBotao(Object.assign(_evpBtn(), {marginTop:8,width:"100%",justifyContent:"center",padding:"11px 16px",fontSize:13.5}), "📝 Transcrição completa")}{/* v28 (15/10/2026) transcrição */}
+        {elTx}
       </div>
     );
   }
@@ -139990,7 +144155,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
           <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
-            vozesTratadas={vozes} vozPalavra={vozPalavra} tirarTrechos={tirarTrechos} fala={ed.fala} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
+            vozesTratadas={vozes} vozPalavra={vozPalavra} tirarTrechos={tirarTrechos} fala={falaEd} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
             onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
             narrFalha={narrFalha} onExportou={function(){ /* v92 (08/10/2026) lembrete de ensinar: avisa ao exportar */ lembrarEnsinar("exportar"); }}
             prontoPC={!!pcAuto && !pcFalta.essencial.length && (!pcFalta.resto.length || pcForcar)}/>
@@ -140020,6 +144185,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             <div style={{fontWeight:800,fontSize:14,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title || "Estúdio"}</div>
             <div style={{fontSize:11,color:auto && auto.estado === "erro" ? _EV.verm : _EVP_COR.fraco,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{expAtivo ? "Exportando " + (exp.pct || 0) + "%" : autoTxt}</div>
           </div>
+          {elTxBotao(bM({ fontSize:17 }), "📝")}{/* v28 (15/10/2026) transcrição */}
           <button onClick={desfazer} disabled={!desf.length} aria-label="Desfazer" style={bM({ opacity:desf.length ? 1 : 0.35 })}><_EvpIco n="desfazer" s={18}/></button>
           <button onClick={refazer} disabled={!refaz.length} aria-label="Refazer" style={bM({ opacity:refaz.length ? 1 : 0.35 })}><_EvpIco n="refazer" s={18}/></button>
           <button onClick={salvar} disabled={!alterado || salvando} aria-label="Salvar versão" style={Object.assign(_evpBtn(alterado ? "primario" : null, alterado && !salvando), {padding:"8px 11px",marginLeft:2})}><_EvpIco n="salvar" s={15}/>{salvando ? "…" : "Salvar"}</button>
@@ -140061,6 +144227,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             </div>
           </div>)}
         {elExtras}
+        {elTx}{/* v28 (15/10/2026) transcrição */}
       </div>
     );
   }
@@ -140080,6 +144247,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         </div>
         {/* v68: o formato saiu do topo — botão "Formato" (Alt+R) na barra embaixo do vídeo */}
         <button data-abrir-girar="editor" onClick={function(){ setGirarAberto(true); }} title="Vídeo gravado com a câmera deitada? Gire aqui (o original não muda)" style={Object.assign(_evpBtn(), {fontSize:12})}>↻ Girar</button>
+        {elTxBotao(Object.assign(_evpBtn(), {fontSize:12}), "📝 Transcrição completa")}{/* v28 (15/10/2026) transcrição */}
         <button onClick={function(){ setPaleta(true); }} title="Buscar comando ou ferramenta (Ctrl+K)" aria-label="Comandos" style={Object.assign(_evpBtn(), {fontSize:12})}><_EvpIco n="comandos" s={15}/>Comandos {!avisoRasc && <span style={{fontFamily:_EVP_MONO,fontSize:10.5,color:_EVP_COR.fraco}}>Ctrl+K</span>}</button>
         <button onClick={function(){ setBasico(!basico); }} aria-pressed={basico} title={basico ? "Modo básico: só o essencial. Clique para ver todas as ferramentas." : "Modo avançado: todas as ferramentas. Clique para o modo básico."}
           style={Object.assign(_evpBtn(basico ? "suave" : null), {fontSize:12})}>{basico ? "Básico" : "Avançado"}</button>
@@ -140197,6 +144365,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
 
       {/* ── Exportar: janela por cima (fica montada para não parar uma exportação em andamento) ── */}
       {elExtras}
+      {elTx}{/* v28 (15/10/2026) transcrição */}
     </div>
   );
 }
@@ -142686,8 +146855,24 @@ function _evpConferirDados(rec, p, calc, clipes){
       noVideo:!!usados[id], naMidia:!!m, ok:okF[id] || null }; });
   const foraPend = fora.filter(function(x){ return !x.noVideo && !x.ok; });
   const raciocinio = _evpConfLista(r.cortes_raciocinio);
-  return { duvidas:duvidas, pendentes:pendentes, fora:fora, foraPend:foraPend, raciocinio:raciocinio, nAviso:pendentes.length + foraPend.length,
-    tem:duvidas.length > 0 || fora.length > 0 || raciocinio.length > 0 };
+  /* v28 (15/10/2026) pente fino: os vídeos que ficaram de fora ANTES de a IA editar — etapa 1 do card grande (receita.fora_escolha: até 20
+     escolhidos, os outros aqui) e a triagem do PC (receita.fora_triagem). Antes não apareciam em lista nenhuma e não dava para trazer de volta,
+     mas a explicação da IA dizia "Incluir no Estúdio". Não somam no aviso do topo (às vezes são 30+, escolha da própria IA). */
+  const jaF = {}; fora.forEach(function(x){ jaF[x.clipe] = 1; });
+  const porNome = {}; (clipes || []).forEach(function(c){ if(c && c.nome) porNome[String(c.nome).toLowerCase()] = c; });
+  const foraEsc = [];
+  (Array.isArray(r.fora_escolha) ? r.fora_escolha : []).forEach(function(x){
+    if(!x || typeof x !== "object") return; const id = String(x.id || x.clipe || ""); if(!id || jaF[id]) return; jaF[id] = 1;
+    const m = naMidia[id], fe = _evtxForaEtapa(r, id, x.nome);
+    foraEsc.push({ clipe:id, nome:String(x.nome || (m && m.nome) || "Vídeo"), motivo:String(x.motivo || "").trim(), fala:fe ? fe.resumo : "", inteira:!!(fe && fe.inteira), cortada:!!(fe && fe.cortada),
+      etapa:"escolha", noVideo:!!usados[id], naMidia:!!m, ok:okF[id] || null });
+  });
+  (Array.isArray(r.fora_triagem) ? r.fora_triagem : []).forEach(function(x){
+    if(!x || !x.nome) return; const m = porNome[String(x.nome).toLowerCase()], id = m ? m.id : "nome:" + String(x.nome); if(jaF[id]) return; jaF[id] = 1;
+    foraEsc.push({ clipe:id, nome:String(x.nome), motivo:String(x.motivo || "").trim(), fala:"", inteira:false, cortada:false, etapa:"triagem", noVideo:!!(m && usados[m.id]), naMidia:!!m, ok:okF[id] || null });
+  });
+  return { duvidas:duvidas, pendentes:pendentes, fora:fora, foraPend:foraPend, raciocinio:raciocinio, nAviso:pendentes.length + foraPend.length, foraEsc:foraEsc,
+    tem:duvidas.length > 0 || fora.length > 0 || raciocinio.length > 0 || foraEsc.length > 0 };
 }
 function _evpConferirFrase(conf){
   const n = conf.pendentes.length, nf = conf.foraPend.length;
@@ -142746,6 +146931,7 @@ function _EvpRaciocinio({ rec, clipes, calc, irPara }){
 function _EvpConferirIA({ q, incluirVideo, incluindo }){
   const conf = q.conf || { duvidas:[], pendentes:[], fora:[], foraPend:[], raciocinio:[] };
   const [corrK, setCorrK] = useState(null), [txt, setTxt] = useState("");
+  const [verTodosEsc, setVerTodosEsc] = useState(false);   // v28 (15/10/2026) pente fino
   const foco = q.focoDuv;
   useEffect(function(){ if(!foco) return; const tm = setTimeout(function(){ try{ const el = document.querySelector('[data-duv-item="' + foco + '"]'); if(el && el.scrollIntoView) el.scrollIntoView({ block:"nearest" }); }catch(_){} }, 60); return function(){ clearTimeout(tm); }; }, [foco]);
   const lg = (q.p && q.p.legenda) || {};
@@ -142841,6 +147027,26 @@ function _EvpConferirIA({ q, incluirVideo, incluindo }){
             </div>
           </div>
         </div>; })}
+    </div>}
+    {(conf.foraEsc || []).length > 0 && <div data-conf-fora-escolha="1">{/* v28 (15/10/2026) pente fino: quem ficou de fora ANTES de a IA editar */}
+      <div style={_EVP_TIT}>Ficaram de fora antes de editar ({conf.foraEsc.length})</div>
+      <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginBottom:8,lineHeight:1.45}}>Card grande: a IA leu a fala de todos e editou só com os melhores (a triagem do PC também pode tirar alguns). Confira se ficou algo importante: "📝 Ver a fala" abre a Transcrição completa nesse vídeo.</div>
+      {(verTodosEsc ? conf.foraEsc : conf.foraEsc.slice(0, 6)).map(function(x){ const th = x.naMidia ? _evpThumbEm(x.clipe, 1) : null;
+        return <div key={x.clipe} data-fora-escolha-item={x.clipe} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"8px 10px",borderRadius:10,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,marginBottom:6}}>
+          <span style={{width:44,height:44,flex:"none",borderRadius:8,background:th ? "#000 url(" + th + ") center/cover" : _EVP_COR.linha2,display:"grid",placeItems:"center",color:_EVP_COR.fraco}}>{th ? null : <_EvpIco n="midia" s={16}/>}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <b style={{fontSize:12.5,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.nome}>{x.nome}</b>
+            <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:1}}>{x.etapa === "triagem" ? "Triagem do PC: " : ""}{x.motivo || "sem motivo registrado"}</div>
+            {x.fala ? <div style={{fontSize:11.5,color:_EVP_COR.fraco,marginTop:3,lineHeight:1.4}}>“{x.fala.slice(0, 160)}{x.fala.length > 160 || x.cortada ? "…" : ""}”{x.cortada ? <span style={{color:"#b45309",fontWeight:700}}> · transcrição cortada (só o começo)</span> : null}</div>
+              : <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:3}}>{x.etapa === "triagem" ? "não foi transcrito (saiu antes de a IA ouvir)" : (x.inteira ? "" : "a IA ouviu e não achou fala")}</div>}
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6,alignItems:"center"}}>
+              {x.noVideo ? <span style={{fontSize:11.5,fontWeight:700,color:_EVX.verde}}>✓ Está no vídeo</span> : <>
+                <button data-fora-escolha-incluir={x.clipe} onClick={function(){ incluir(x); }} disabled={incluindo != null} style={Object.assign(bP("suave", incluindo == null), { flex:"none" })}>{incluindo === x.clipe ? "Incluindo…" : "Incluir mesmo assim"}</button>
+                {(x.naMidia || x.etapa === "escolha") && <button data-fora-escolha-fala={x.clipe} onClick={function(){ try{ window.dispatchEvent(new CustomEvent("evp-transcricao", { detail:{ clipe:x.clipe } })); }catch(_){} }} style={Object.assign(bP(), { flex:"none" })}>📝 Ver a fala</button>}</>}
+            </div>
+          </div>
+        </div>; })}
+      {conf.foraEsc.length > 6 && <button data-fora-escolha-todos="1" onClick={function(){ setVerTodosEsc(!verTodosEsc); }} style={Object.assign(bP(), { width:"100%" })}>{verTodosEsc ? "Mostrar menos" : "Ver todos os " + conf.foraEsc.length}</button>}
     </div>}
     {conf.raciocinio.length > 0 && <_EvpRaciocinio rec={q.receita} clipes={q.clipesTodos} calc={q.calc} irPara={q.irPara}/>}
   </div>);
@@ -143578,7 +147784,7 @@ function _EvpPainelMenu(q){
       {secoes.map(function(id){ const fn = S[id]; return fn ? <Fragment key={id}>{fn()}</Fragment> : null; })}
       {!secoes.length && <div style={cinza}>Nada para mostrar aqui.</div>}
       {q.papel !== "ferr" && transc && <_EvpTranscricao foco={typeof transc === "object" ? transc : null} motivos={q.motivos} p={p} calc={calc} fala={q.fala} infoClipe={infoClipe} onFechar={function(){ setTransc(false); }} tirarTrechos={q.tirarTrechos} irPara={irPara}
-        voltarTrechos={q.voltarTrechos} pintarTrechos={q.pintarTrechos} corrigirTexto={q.corrigirTexto} addNome={q.addNome} coresCli={q.coresCli} nomesKit={q.nomesKit} clipesTodos={q.clipesTodos} kit={kit}/>}
+        voltarTrechos={q.voltarTrechos} pintarTrechos={q.pintarTrechos} corrigirTexto={q.corrigirTexto} addNome={q.addNome} coresCli={q.coresCli} nomesKit={q.nomesKit} clipesTodos={q.clipesTodos} kit={kit} receita={q.receita}/>}
     </div>
   );
 }
@@ -144695,6 +148901,7 @@ function _evpSoMuletas(ps){ return ps.length > 0 && ps.every(function(w){ return
    guardando o nome no dicionário do cliente) e pintar a legenda só naquele trecho (colab: cada empresa com a sua cor). ─── */
 function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irPara, voltarTrechos, pintarTrechos, corrigirTexto, addNome, coresCli, nomesKit, clipesTodos, kit, foco, motivos }){
   const [marc, setMarc] = useState({});           // chave → item
+  const recCola = arguments[0].receita || null;   // v28 (15/10/2026) pente fino: "(sem fala)" certo para quem ficou de fora antes de editar
   const [porqueVolta, setPorqueVolta] = useState("");     // v13: por que voltou (ensina a IA o que não cortar)
   const [ultimo, setUltimo] = useState(null);
   const [ver, setVer] = useState("tudo");         // tudo | ficou | saiu
@@ -144819,7 +149026,8 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
             return <div key={bb.cid} style={{marginBottom:12}}>
               <div style={{fontSize:11,fontWeight:800,color:_EVP_COR.sub,display:"flex",gap:6,alignItems:"center"}}><span style={{width:10,height:10,borderRadius:3,background:inf.cor}}/>{inf.n ? inf.n + ". " : ""}{inf.nome || bb.cid}
                 <span style={{fontWeight:600,color:_EVP_COR.fraco}}>· fala {f1(bb.fala)} s · no vídeo {f1(bb.ficou)} s</span></div>
-              {!bb.itens.length && <div style={{fontSize:12,color:_EVP_COR.fraco}}>(sem fala)</div>}
+              {!bb.itens.length && (function(){ const fe = _evtxForaEtapa(recCola, bb.cid, inf.nome);   /* v28 (15/10/2026) pente fino: não diz "(sem fala)" quando a fala existe e não ficou guardada */
+                return <div data-cola-semfala={fe ? fe.tipo : "sem"} style={{fontSize:12,color:fe && (fe.resumo || fe.tipo === "triagem") ? "#b45309" : _EVP_COR.fraco,lineHeight:1.5}}>({_evtxSemFalaTxt(fe, Object.prototype.hasOwnProperty.call(fala || {}, bb.cid), !!(inf.incluido && inf.incluido.manual))}{fe && fe.resumo ? ": “" + fe.resumo.slice(0, 120) + "…” · veja em 📝 Transcrição completa" : ""})</div>; })()}
               {vis.map(function(it){ const on = !!marc[it.chave], dentro = !!it.uso;
                 const badge = dentro && (!usoAnt || usoAnt !== it.uso.id) ? <span key={it.chave + "#"} title="Ordem na linha do tempo" style={{fontFamily:_EVP_MONO,fontSize:10,fontWeight:800,color:"#fff",background:_EVP_COR.roxo,borderRadius:6,padding:"0 5px",margin:"0 3px 0 6px"}}>{it.uso.i + 1}</span> : null;
                 if(dentro) usoAnt = it.uso.id; else usoAnt = null;
@@ -144889,6 +149097,412 @@ function _EvpTranscricao({ p, calc, fala, infoClipe, onFechar, tirarTrechos, irP
       </div>
     </div>
   );
+}
+
+/* ═══ v28 (15/10/2026) transcrição: TRANSCRIÇÃO COMPLETA (pedido do Vini: "toda vez que a gente for editar um vídeo, eu preciso ver a transcrição
+   completa… e o que você utilizou do vídeo, para ver se não deixou uma parte importante de fora").
+   • Botão "📝 Transcrição completa" na barra de cima do editor (perto do ↻ Girar), no celular, no Ctrl+K, na barra Cortar e no card do Estúdio.
+   • TODA a fala de TODOS os vídeos do card, em ordem (vídeo 1, 2…), com miniatura (a do Estúdio, já girada), nome e duração.
+   • Verde = trecho que ENTROU no vídeo editado, com "parte N" (= a ordem na linha do tempo, o mesmo número da Cola da fala).
+     Cinza = trecho que FICOU DE FORA, com o motivo da IA: receita.motivos_corte (é o receita.fora da IA já com o tempo de cada frase: abandonada,
+     tempo, repetição, quem_filma…). Sem motivo gravado: "sem motivo registrado".
+   • Em cada trecho: ▶ Ouvir (toca o trecho do bruto aqui mesmo, girado, e leva a agulha para ele quando está no vídeo),
+     "＋ Incluir no vídeo" (no lugar dele, no fim ou depois da parte N) e "− Tirar do vídeo".
+     Usa as MESMAS funções da Cola da fala (tirarTrechos / voltarTrechos): um jeito só de editar, e cada mudança tem Desfazer (Ctrl+Z).
+   • "✨ Refazer com a IA respeitando minhas escolhas": a pessoa marca "precisa entrar" / "não pode entrar" e manda como REGRA OBRIGATÓRIA no ajuste
+     da IA (video-editar "ajustar", o mesmo do "Pedir à IA"; o que está no vídeo e não pode entrar vai também como correção marcada).
+     Só Vinicius, Gustavo e Hellen (video_orientacao_pode → _ia_assistente_ok), só no clique, com o custo antes. Depois, cada escolha mostra ✓/✗.
+   • "⬇ Baixar transcrição": .txt com toda a fala, marcando [ENTROU parte N] / [FORA: motivo].
+   • Vídeo sem fala: "sem fala transcrita". Se a IA ainda não ouviu o vídeo (entrou à mão na Mídia), o botão que já existe: "✨ Reeditar com os vídeos novos". ═══ */
+const _EVTX_FIM = /[.!?…]["')\]]*$/;
+function _evtxT(s){ return _evTempo(s).replace(".", ","); }
+function _evtxDur(s){ s = Math.max(0, Math.round(Number(s) || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function _evtxDurVid(s){ return Number(s) > 0 ? _evtxDur(s) : "—"; }   // v28 (15/10/2026) pente fino 2: vídeo sem a duração guardada (só no card) mostra "—", não "0:00"
+function _evtxDurArq(f){ const d = Number(f && (f.duracao != null ? f.duracao : f.duration != null ? f.duration : f.dur)); return d > 0 && isFinite(d) ? d : 0; }
+function _evtxMotivo(m){ return m ? (m.motivo === "etapa1" ? "a IA deixou o vídeo de fora antes de editar" + (m.nota ? " — " + String(m.nota).slice(0, 90) : "") : _evpMotivoTxt(m)) : "sem motivo registrado"; }   // v28 (15/10/2026) pente fino: + etapa1
+function _evtxRot(c){ return _evGiroOk(c && c.rot != null && c.rot !== "" ? c.rot : _evGiroDe(c && c.url)); }
+/* v28 (15/10/2026) pente fino: o vídeo ficou de fora ANTES de a IA editar? (card com mais de 20 vídeos: a etapa 1 escolhe até 20 →
+   receita.fora_escolha [{id, nome, motivo, fala}]; a triagem do PC → receita.fora_triagem [{nome, motivo}]). Antes a tela mostrava "(sem fala)"
+   para eles, o que era falso: a fala existia, só não ficou guardada. O servidor v99c guarda a fala inteira em receita.fala_fora[id] = [{i,f,p}];
+   edição antiga tem só o começo (200 letras) em fora_escolha[].fala → "transcrição cortada". */
+function _evtxForaEtapa(rec, cid, nome){
+  const r = rec || {}, nm = String(nome || "").toLowerCase();
+  const fe = (Array.isArray(r.fora_escolha) ? r.fora_escolha : []).find(function(x){ return x && typeof x === "object" && (String(x.id || x.clipe || "") === String(cid) || (nm && String(x.nome || "").toLowerCase() === nm)); });
+  if(fe){
+    const pal = r.fala_fora && Array.isArray(r.fala_fora[String(fe.id || cid)]) ? r.fala_fora[String(fe.id || cid)] : null;
+    const resumo = String(fe.fala || "").replace(/\s+/g, " ").trim();
+    return { tipo:"escolha", motivo:String(fe.motivo || "").trim(), resumo:resumo, inteira:!!(pal && pal.length), cortada:!(pal && pal.length) && resumo.length >= 190, palavras:pal && pal.length ? pal : null };
+  }
+  const ft = nm ? (Array.isArray(r.fora_triagem) ? r.fora_triagem : []).find(function(x){ return x && String(x.nome || "").toLowerCase() === nm; }) : null;
+  if(ft) return { tipo:"triagem", motivo:String(ft.motivo || "").trim(), resumo:"", inteira:false, cortada:false, palavras:null };
+  return null;
+}
+/* o texto de "sem fala" certo (Cola da fala e Transcrição completa) */
+function _evtxSemFalaTxt(fe, ouviu, manual, soCard){
+  if(soCard) return "sem fala transcrita · a IA ainda não ouviu este vídeo (está no card, mas não está na edição)";   // v28 (15/10/2026) pente fino 2
+  if(fe && fe.tipo === "triagem") return "não transcrito: a triagem do PC tirou este vídeo antes de a IA ouvir" + (fe.motivo ? " (" + fe.motivo + ")" : "");
+  if(fe && fe.tipo === "escolha" && fe.resumo && fe.cortada) return "transcrição cortada: a IA ouviu, mas só o começo da fala ficou guardado (o vídeo ficou de fora antes de editar)";
+  if(fe && fe.tipo === "escolha" && fe.resumo) return "fala guardada só como texto, sem os tempos (o vídeo ficou de fora antes de editar)";
+  if(fe && fe.tipo === "escolha") return "sem fala: a IA ouviu e não achou fala (ficou de fora antes de editar)";
+  if(manual) return "sem fala transcrita · a IA ainda não ouviu este vídeo (entrou à mão na Mídia)";
+  return ouviu ? "sem fala transcrita · a IA ouviu e não achou fala (vídeo de imagem)" : "sem fala transcrita";
+}
+/* a fala de todos os vídeos: a da edição + a dos que ficaram de fora antes de editar (receita.fala_fora, servidor v99c) — só para LER/mostrar */
+function _evtxFalaTudo(fala, rec){
+  const ff = rec && rec.fala_fora && typeof rec.fala_fora === "object" ? rec.fala_fora : null;
+  if(!ff) return fala || {};
+  const o = Object.assign({}, fala || {});
+  Object.keys(ff).forEach(function(k){ if(!(o[k] && o[k].length) && Array.isArray(ff[k]) && ff[k].length) o[k] = ff[k]; });
+  return o;
+}
+/* os blocos da transcrição: um por vídeo do card (na ordem dos clipes da edição), cada um com os trechos (frases) que entraram e os que ficaram de fora */
+function _evtxBlocos(o){
+  const clipes0 = o.clipes || [], calcC = (o.calc && o.calc.clips) || [], fala = o.fala || {}, rec = o.rec || null;
+  // v28 (15/10/2026) pente fino: quem a etapa 1 deixou de fora e NÃO está nos clipes da edição (ex.: Starken 3Y6A9341/42/43) também aparece, no fim
+  const temC = {}; clipes0.forEach(function(c){ if(c && c.id) temC[c.id] = 1; });
+  const extras = (rec && Array.isArray(rec.fora_escolha) ? rec.fora_escolha : []).filter(function(x){ return x && x.id && !temC[String(x.id)]; }).map(function(x){
+    const f = (o.brutos || []).find(function(y){ return y && (y.id === String(x.id) || (y.name && y.name === x.nome)); }) || null;
+    return { id:String(x.id), nome:String(x.nome || "Vídeo"), duracao:f ? _evtxDurArq(f) : 0, url:f ? f.url : "", preview_url:f ? (f.previewUrl || null) : null, _semClipe:true }; });
+  // v28 (15/10/2026) pente fino 2: vídeo que está no CARD mas não está na edição nem em fora_escolha (subiu depois de editar, passou do limite de 50…)
+  //   também aparece: "sem fala transcrita · a IA ainda não ouviu este vídeo" + "Incluir na edição" (antes o painel dizia "dos N vídeos do card" sem ele)
+  const temX = {}; clipes0.concat(extras).forEach(function(c){ if(c){ if(c.id) temX[String(c.id)] = 1; if(c.url) temX[c.url] = 1; if(c.nome) temX["n:" + String(c.nome).toLowerCase()] = 1; } });
+  const doCard = (o.brutos || []).filter(function(f){ return f && f.id && !temX[String(f.id)] && !(f.url && temX[f.url]) && !(f.name && temX["n:" + String(f.name).toLowerCase()]); }).map(function(f){
+    return { id:String(f.id), nome:String(f.name || "Vídeo"), duracao:_evtxDurArq(f), url:f.url || "", preview_url:f.previewUrl || null, _semClipe:true, _soCard:true, _arq:f }; });
+  const clipes = clipes0.concat(extras, doCard);
+  return clipes.filter(function(c){ return c && c.id; }).map(function(c, idx){
+    const cid = c.id, temChave = Object.prototype.hasOwnProperty.call(fala, cid);
+    const fe0 = rec ? _evtxForaEtapa(rec, cid, c.nome) : null;   // v28 (15/10/2026) pente fino
+    const ws = (_evpFalaDe(fala, cid, o.lg) || []).filter(function(w){ return w && isFinite(Number(w.i)); });
+    const usos = calcC.filter(function(u){ return u.clipe === cid && _evpClipeFalaNormal(u); });
+    const achar = function(x){ return usos.find(function(u){ return x >= u.ini - 0.03 && x < u.fim - 0.03; }) || null; };   // mesma regra da Cola da fala
+    const trechos = [], palavras = []; let cur = null, falaS = 0, usadoS = 0;
+    const fechar = function(){
+      if(!cur) return;
+      const u = cur.u, i0 = Number(cur.ws[0].i), f1 = cur.f;
+      const texto = cur.ws.map(function(w){ const pt = w.pt && !/[.!?,;:…]$/.test(String(w.p)) ? String(w.pt) : ""; return String(w.p) + pt; }).join(" ");
+      const mot = u ? null : (cur.m || (_evpSoMuletas(cur.ws.map(function(w){ return w.p; })) ? { motivo:"vicio" } : null));
+      trechos.push({ k:cid + "@" + i0.toFixed(2), cid:cid, i0:i0, f1:f1, texto:texto, n:cur.ws.length, motivo:mot,
+        u:u ? { id:u.id, parte:u.i + 1, vel:u.vel || 1, t:u.t0 + (Math.max(u.ini, i0) - u.ini) / (u.vel || 1) } : null });
+      cur = null;
+    };
+    ws.forEach(function(w){
+      const i = Number(w.i), f = Math.max(i, Number(w.f) || i);
+      const u = achar(i); let m = u ? null : _evpMotivoDe(o.motivos, cid, i, Math.max(f, i + 0.05));
+      if(m && m.motivo === "outro" && !m.nota) m = null;          // "outro" sem nota = o código não soube dizer: mostra "sem motivo registrado"
+      if(!u && !m && fe0) m = { motivo:"etapa1", nota:fe0.motivo, ini:-1 };   // v28 (15/10/2026) pente fino: o vídeo inteiro ficou de fora antes de editar
+      const mk = u ? "u:" + u.id : "m:" + (m ? m.motivo + "|" + m.ini : "-");
+      falaS += Math.max(0, f - i); if(u) usadoS += Math.max(0, f - i);
+      palavras.push({ i:i, f:f, u:!!u });
+      const ult = cur && cur.ws[cur.ws.length - 1];
+      const fimFrase = !!(ult && (_EVTX_FIM.test(String(ult.p)) || /[.!?]/.test(String(ult.pt || ""))));
+      if(!cur || cur.mk !== mk || i - cur.f > 1.2 || (fimFrase && cur.ws.length >= 4) || cur.ws.length >= 40){ fechar(); cur = { mk:mk, ws:[], u:u, m:m, f:f }; }
+      cur.ws.push(w); cur.f = Math.max(cur.f, f);
+    });
+    fechar();
+    const partes = []; usos.forEach(function(u){ if(partes.indexOf(u.i + 1) < 0) partes.push(u.i + 1); }); partes.sort(function(a, b){ return a - b; });
+    const apoio = (o.imagens || []).filter(function(x){ return x && x.clipe === cid && !x.off; });
+    const fe = fe0;
+    return { cid:cid, n:idx + 1, c:c, nome:c.nome || ("Vídeo " + (idx + 1)), dur:Number(c.duracao) || 0, rot:_evtxRot(c), temFala:ws.length > 0,
+      naoLido:!!(c.incluido && c.incluido.manual) && !ws.length && !fe, fala:falaS, usado:usadoS, partes:partes, apoio:apoio, trechos:trechos, palavras:palavras,
+      foraEtapa:fe, semClipe:!!c._semClipe, soCard:!!c._soCard, arq:c._arq || null, ouviu:temChave };   // v28 (15/10/2026) pente fino 2: + soCard (só no card, fora da edição)
+  });
+}
+/* quanto de um trecho do bruto (cid, i0–f1) está no vídeo agora (0 a 1), pelas palavras */
+function _evtxFracao(blocos, cid, i0, f1){
+  const b = (blocos || []).find(function(x){ return x.cid === cid; }); if(!b) return 0;
+  const ps = b.palavras.filter(function(w){ return w.i >= i0 - 0.02 && w.i <= f1 + 0.02; }); if(!ps.length) return 0;
+  return ps.filter(function(w){ return w.u; }).length / ps.length;
+}
+function _evtxSobrepoe(e, tr){ const o = Math.min(e.f1, tr.f1) - Math.max(e.i0, tr.i0); return e.cid === tr.cid && o >= 0.5 * Math.max(0.05, Math.min(e.f1 - e.i0, tr.f1 - tr.i0)); }
+/* o texto que vai para a IA ("ajustar" do video-editar, pedido de até 1500 letras) + as correções marcadas para o que está no vídeo e não pode entrar */
+function _evtxPedido(esc, blocos){
+  const ent = [], nao = [];
+  (esc || []).forEach(function(e){ const b = (blocos || []).find(function(x){ return x.cid === e.cid; }); if(!b) return; (e.tipo === "entra" ? ent : nao).push({ e:e, b:b }); });
+  if(!ent.length && !nao.length) return null;
+  const f2 = function(x){ return (Math.round(x * 100) / 100).toFixed(2).replace(".", ","); };
+  const corr = [];
+  nao.forEach(function(x){ x.b.trechos.forEach(function(tr){ if(tr.u && corr.length < 20 && _evtxSobrepoe(x.e, tr)){
+    const a = Math.max(x.e.i0, tr.i0), b = Math.min(x.e.f1, tr.f1), t0 = tr.u.t + (a - tr.i0) / tr.u.vel;
+    corr.push({ id:("tx" + Date.now().toString(36).slice(-6) + corr.length).slice(0, 20), t0:Math.round(t0 * 100) / 100, t1:Math.round((t0 + Math.max(0.3, (b - a) / tr.u.vel)) * 100) / 100, tipo:"corte",
+      oque:("TIRAR do vídeo esta fala (o sócio marcou na Transcrição completa: não pode entrar): \"" + tr.texto.slice(0, 160) + "\"").slice(0, 600),
+      porque:"Escolha obrigatória na Transcrição completa: este trecho não pode entrar no vídeo." }); } }); });
+  const monta = function(L, nE, nN){
+    const lin = function(x, j){ return (j + 1) + ") vídeo " + x.b.n + " \"" + String(x.b.nome).slice(0, 24) + "\" (clipe " + x.b.cid + ") de " + f2(x.e.i0) + " a " + f2(x.e.f1) + " s do bruto" + (L > 0 ? ": \"" + String(x.e.texto || "").slice(0, L) + (String(x.e.texto || "").length > L ? "…" : "") + "\"" : ""); };
+    return ["REFAÇA OS CORTES RESPEITANDO AS ESCOLHAS DO SÓCIO NA TRANSCRIÇÃO COMPLETA. É REGRA OBRIGATÓRIA, não descumpra.",
+      nE ? "PRECISA ENTRAR no vídeo (ponha na ordem que fizer sentido; se passar do tempo, tire outra coisa que não esteja nesta lista):\n" + ent.slice(0, nE).map(lin).join("\n") : "",
+      nN ? "NÃO PODE ENTRAR (tire se estiver no vídeo e não use em lugar nenhum" + (corr.length ? "; os que estão no vídeo também vão nas correções marcadas" : "") + "):\n" + nao.slice(0, nN).map(lin).join("\n") : "",
+      "O resto: mantenha a edição como está e mexa só no necessário para cumprir a regra."].filter(Boolean).join("\n");
+  };
+  let nE = ent.length, nN = nao.length, txt = "";
+  for(const L of [140, 90, 50, 24, 0]){ txt = monta(L, nE, nN); if(txt.length <= 1480) break; }
+  while(txt.length > 1480 && (nE + nN) > 1){ if(nE >= nN && nE > 0) nE--; else nN--; txt = monta(0, nE, nN); }
+  return { pedido:txt, correcoes:corr, entra:ent.length, nao:nao.length, fora:(ent.length - nE) + (nao.length - nN) };
+}
+/* o .txt para baixar: toda a fala, [ENTROU parte N] / [FORA: motivo] */
+function _evtxTexto(blocos, titulo){
+  const L = [], br = "\r\n";
+  const fal = blocos.reduce(function(a, b){ return a + b.fala; }, 0), usd = blocos.reduce(function(a, b){ return a + b.usado; }, 0);
+  L.push("TRANSCRIÇÃO COMPLETA" + (titulo ? " — " + titulo : "") + " — " + new Date().toLocaleString("pt-BR"));
+  L.push("Fala nos vídeos: " + _evtxDur(fal) + " · entrou no vídeo editado: " + _evtxDur(usd) + " · ficou de fora: " + _evtxDur(Math.max(0, fal - usd)));
+  L.push("[ENTROU parte N] = está no vídeo editado (N = a ordem na linha do tempo) · [FORA: motivo] = ficou de fora · tempos = segundos do vídeo bruto");
+  blocos.forEach(function(b){
+    L.push(""); L.push("════ VÍDEO " + b.n + " — " + b.nome + " (" + _evtxDurVid(b.dur) + ")" + (b.temFala ? " · fala " + _evtxDur(b.fala) + " · entrou " + _evtxDur(b.usado) + (b.partes.length ? " · partes " + b.partes.join(", ") : "") : "") + (b.apoio.length ? " · usado como apoio por cima " + b.apoio.length + "×" : ""));
+    if(b.foraEtapa) L.push("[FORA ANTES DA EDIÇÃO" + (b.foraEtapa.tipo === "triagem" ? " — triagem do PC" : " — etapa 1 da IA") + ": " + (b.foraEtapa.motivo || "sem motivo registrado") + "]");   // v28 (15/10/2026) pente fino
+    if(!b.temFala && b.foraEtapa && b.foraEtapa.resumo){ L.push((b.foraEtapa.cortada ? "(TRANSCRIÇÃO CORTADA: só o começo ficou guardado) " : "(fala guardada só como texto, sem os tempos) ") + b.foraEtapa.resumo + (b.foraEtapa.cortada ? "…" : "")); return; }
+    if(!b.temFala){ L.push("(" + _evtxSemFalaTxt(b.foraEtapa, b.ouviu, b.naoLido, b.soCard) + ")"); return; }
+    b.trechos.forEach(function(tr){ L.push((tr.u ? "[ENTROU parte " + tr.u.parte + "]" : "[FORA: " + _evtxMotivo(tr.motivo) + "]") + " " + _evtxT(tr.i0) + "–" + _evtxT(tr.f1) + "  " + tr.texto); });
+  });
+  return L.join(br) + br;
+}
+let _evtxPodeProm = null;   // quem pode o "Refazer com a IA" (Vinicius, Gustavo, Hellen): 1 pergunta por sessão
+function _evtxPode(){
+  if(!_evtxPodeProm){
+    _evtxPodeProm = (typeof window !== "undefined" && window._sb ? Promise.resolve(window._sb.rpc("video_orientacao_pode")) : Promise.resolve(null))
+      .then(function(r){ if(!r || r.error){ _evtxPodeProm = null; return false; } return !!(r.data && r.data.pode); }).catch(function(){ _evtxPodeProm = null; return false; });
+  }
+  return _evtxPodeProm;
+}
+/* toca um trecho do BRUTO dentro do painel (cópia guardada no computador, girada como o Estúdio mostra) */
+function _EvTxPlayer({ c, a, b, chave, isMob }){
+  const vRef = useRef(null); const [src, setSrc] = useState(null), [erro, setErro] = useState("");
+  useEffect(function(){ let vivo = true; setErro(""); setSrc(null); if(!c) return;
+    _evUrlLocal(_evLeve(c)).then(function(u){ if(vivo) setSrc(u || null); }).catch(function(e){ if(vivo) setErro(/pesado/.test(String(e && e.message)) ? "Vídeo pesado sem cópia leve: não dá para ouvir aqui (o PC faz a cópia leve)." : "Não consegui abrir este vídeo."); });
+    return function(){ vivo = false; }; }, [c && c.id]);
+  useEffect(function(){ const v = vRef.current; if(!v || !src) return;
+    const ir = function(){ try{ v.currentTime = Math.max(0, a); const pr = v.play(); if(pr && pr.catch) pr.catch(function(){}); }catch(_){} };
+    if(v.readyState >= 1) ir(); else v.addEventListener("loadedmetadata", ir, { once:true });
+  }, [src, chave]);
+  const rot = _evtxRot(c), lado = rot === 90 || rot === 270, H = isMob ? 170 : 210, W = isMob ? 300 : 288;
+  return <div data-tx-player={c ? c.id : ""} style={{position:"relative",width:"100%",height:H,borderRadius:12,background:"#0b0f1c",overflow:"hidden"}}>
+    {src && <video ref={vRef} src={src} playsInline controls={false} onTimeUpdate={function(e){ if(e.currentTarget.currentTime >= b) e.currentTarget.pause(); }}
+      style={{position:"absolute",left:"50%",top:"50%",width:lado ? H : "100%",height:lado ? W : "100%",objectFit:"contain",transform:"translate(-50%,-50%) rotate(" + rot + "deg)"}}/>}
+    {!src && <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#cbd5e1",fontSize:12,padding:12,textAlign:"center"}}>{erro || "Abrindo o vídeo…"}</div>}
+    {src && <div style={{position:"absolute",left:8,bottom:8,display:"flex",gap:6}}>
+      <button onClick={function(){ const v = vRef.current; if(!v) return; v.currentTime = Math.max(0, a); const pr = v.play(); if(pr && pr.catch) pr.catch(function(){}); }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>↺ De novo</button>
+      <button onClick={function(){ const v = vRef.current; if(v){ if(v.paused){ const pr = v.play(); if(pr && pr.catch) pr.catch(function(){}); } else v.pause(); } }} style={Object.assign(_evpBtn(), {padding:"5px 9px",fontSize:11.5})}>⏯</button></div>}
+  </div>;
+}
+function _EvTranscricaoCompleta(q){
+  _evpUsarMidia();                                         // as miniaturas chegam aos poucos
+  const ed = q.ed || {}, isMob = !!q.isMob, soLer = !!q.soLer;
+  const clipes = q.clipes || ed.clipes || [];
+  const fala0 = q.fala !== undefined ? q.fala : ed.fala;
+  const fala = useMemo(function(){ return _evtxFalaTudo(fala0, ed.receita); }, [fala0, ed.receita]);   // v28 (15/10/2026) pente fino: + a fala de quem ficou de fora antes de editar (servidor v99c)
+  const pDer = useMemo(function(){ if(q.p) return q.p; try{ return ed.receita ? _evpProjetoDeReceita(ed.receita, clipes) : null; }catch(_){ return null; } }, [q.p, ed.id, ed.receita_em, ed.atualizado_em]);
+  const calc = useMemo(function(){ if(q.calc) return q.calc; try{ return pDer ? _evpCalcular(pDer, fala, null) : { clips:[], total:0 }; }catch(_){ return { clips:[], total:0 }; } }, [q.calc, pDer, fala]);
+  const motivos = q.motivos || (ed.receita && ed.receita.motivos_corte) || [];
+  const lgN = useMemo(function(){ return Object.assign({}, (pDer && pDer.legenda) || {}, { _nomesKit:q.nomesKit || [] }); }, [pDer && pDer.legenda, (q.nomesKit || []).join("|")]);
+  const blocos = useMemo(function(){ return _evtxBlocos({ clipes:clipes, fala:fala, calc:calc, motivos:motivos, imagens:(pDer && pDer.imagens) || [], lg:lgN,
+    rec:ed.receita || null, brutos:q.t ? _evBrutos(q.t) : [] }); }, [clipes, fala, calc, motivos, pDer, lgN, ed.receita, q.t && q.t.files]);   // v28 (15/10/2026) pente fino: + quem ficou de fora antes de editar
+  const tot = blocos.reduce(function(a, b){ const cort = !b.temFala && !!(b.foraEtapa && b.foraEtapa.resumo), cort2 = cort && !!b.foraEtapa.cortada;
+    return { fala:a.fala + b.fala, usado:a.usado + b.usado, com:a.com + (b.temFala || cort ? 1 : 0), sem:a.sem + (b.temFala || cort ? 0 : 1), cortada:a.cortada + (cort2 ? 1 : 0),
+    antes:a.antes + (b.foraEtapa ? 1 : 0),
+    dentro:a.dentro + b.trechos.filter(function(x){ return x.u; }).length, fora:a.fora + b.trechos.filter(function(x){ return !x.u; }).length + (cort ? 1 : 0) }; }, { fala:0, usado:0, com:0, sem:0, dentro:0, fora:0, cortada:0, antes:0 });
+  /* v28 (15/10/2026) pente fino: veio do "Conferir a IA" (📝 Ver a fala) → abre já no vídeo */
+  useEffect(function(){ if(!q.focoClipe) return; const tm = setTimeout(function(){ try{ const el = document.querySelector('[data-tx-video="' + String(q.focoClipe).replace(/"/g, "") + '"]'); if(el && el.scrollIntoView) el.scrollIntoView({ block:"start" }); }catch(_){} }, 80); return function(){ clearTimeout(tm); }; }, [q.focoClipe]);
+  /* o começo de cada parte da linha do tempo (para escolher "depois da parte N") */
+  const partesTxt = useMemo(function(){ return (calc.clips || []).map(function(u){ const ws = ((fala && fala[u.clipe]) || []).filter(function(w){ return Number(w.i) >= u.ini - 0.03 && Number(w.i) < u.fim; });
+    const inf = clipes.find(function(c){ return c.id === u.clipe; }) || {};
+    return { n:u.i + 1, t0:u.t0, txt:ws.length ? ws.slice(0, 6).map(function(w){ return w.p; }).join(" ") : (inf.nome || "sem fala") }; }); }, [calc, fala]);
+  const [filtro, setFiltro] = useState("tudo");
+  const [abertoK, setAbertoK] = useState(null), [onde, setOnde] = useState({ onde:"lugar", parte:1 });
+  const [tocar, setTocar] = useState(null);
+  const [podeIA, setPodeIA] = useState(null);
+  /* v28 (15/10/2026) pente fino 2: vídeo só no card → "Incluir na edição" (a MESMA RPC do "Vídeos novos no card" da Mídia: criacao_edicao_clipe_incluir) */
+  const [incluindoCard, setIncluindoCard] = useState(null);
+  const incluirDoCard = async function(b){
+    const f = b && b.arq; if(!f || incluindoCard || !ed.id || !window._sb) return; setIncluindoCard(b.cid);
+    try{
+      const dur = await _evDuracao(f.previewUrl || f.url);
+      if(!(dur > 0)) throw new Error("não consegui ler a duração deste vídeo");
+      const r = await window._sb.rpc("criacao_edicao_clipe_incluir", { p_id:ed.id, p_clipe:{ id:f.id, nome:f.name || "Vídeo", url:f.url, preview_url:f.previewUrl || null, duracao:Math.round(dur * 1000) / 1000 } });
+      if(r.error) throw new Error(/clipes|limite/i.test(String(r.error.message || "")) ? "a edição já tem " + _EV_LIMITE_VIDEOS + " vídeos (o limite): tire da edição um que não serve" : (r.error.message || "erro"));
+      _evToast("success", "\"" + (f.name || "Vídeo") + "\" entrou na edição. Para a IA ouvir e usar: ✨ Reeditar com os vídeos novos.");
+      if(q.onRecarregar) q.onRecarregar();
+    }catch(e){ _evToast("error", "Não deu para incluir: " + ((e && e.message) || e)); }
+    setIncluindoCard(null); };
+  useEffect(function(){ let vivo = true; _evtxPode().then(function(v){ if(vivo) setPodeIA(!!v); }); return function(){ vivo = false; }; }, []);
+  const pode = podeIA === null ? null : (podeIA && !soLer && !!q.onRefazerIA);   // a IA só é oferecida no editor aberto (não no "só para ler")
+  const chaveLS = "pxev-tx-esc-" + (ed.id || "x");
+  const [esc, setEsc] = useState(function(){ try{ const v = JSON.parse(localStorage.getItem(chaveLS) || "[]"); return Array.isArray(v) ? v.slice(0, 60) : []; }catch(_){ return []; } });
+  useEffect(function(){ try{ if(esc.length) localStorage.setItem(chaveLS, JSON.stringify(esc)); else localStorage.removeItem(chaveLS); }catch(_){} }, [esc]);
+  const [confIA, setConfIA] = useState(false), [enviando, setEnviando] = useState(false), [mandouEm, setMandouEm] = useState(null);
+  const pedido = useMemo(function(){ return _evtxPedido(esc, blocos); }, [esc, blocos]);
+  const escDe = function(tr){ return esc.find(function(e){ return _evtxSobrepoe(e, tr); }) || null; };
+  const marcar = function(tr, tipo){ const ja = escDe(tr);
+    const resto = esc.filter(function(e){ return !_evtxSobrepoe(e, tr); });
+    setEsc(ja && ja.tipo === tipo ? resto : resto.concat([{ cid:tr.cid, i0:tr.i0, f1:tr.f1, tipo:tipo, texto:tr.texto.slice(0, 200), em:Date.now() }])); };
+  const ouvir = function(tr){ const b = blocos.find(function(x){ return x.cid === tr.cid; }); setTocar({ c:b ? b.c : null, a:Math.max(0, tr.i0 - 0.15), b:tr.f1 + 0.25, k:tr.k + ":" + Date.now(), tr:tr, nome:b ? b.n + ". " + b.nome : "" });
+    if(tr.u && q.irPara) try{ q.irPara(tr.u.t); }catch(_){} };
+  const tirar = function(tr){ if(soLer || !tr.u || !q.tirarTrechos) return; q.tirarTrechos([{ cid:tr.u.id, a:Math.max(0, tr.i0 - 0.03), b:tr.f1 + 0.03 }], "Tirado pela transcrição"); };
+  const incluir = function(tr){ if(soLer || !q.voltarTrechos) return;
+    const r = q.voltarTrechos([{ clipe:tr.cid, a:tr.i0, b:tr.f1 }], { porque:"Incluído pela Transcrição completa", texto:tr.texto.slice(0, 300), motivo_corte:_evtxMotivo(tr.motivo).slice(0, 200) }, null,
+      onde.onde === "lugar" ? undefined : { onde:onde.onde, parte:onde.parte });
+    if(r) setAbertoK(null); };
+  const baixar = function(){
+    const txt = _evtxTexto(blocos, q.t && q.t.title);
+    if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evtxTxt = txt;
+    try{ const bl = new Blob(["﻿" + txt], { type:"text/plain;charset=utf-8" }), a = document.createElement("a");
+      a.href = URL.createObjectURL(bl); a.download = "transcricao-" + String((q.t && q.t.id) || "video") + ".txt"; document.body.appendChild(a); a.click();
+      setTimeout(function(){ try{ URL.revokeObjectURL(a.href); a.remove(); }catch(_){} }, 1500); }catch(e){ _evToast("error", "Não consegui baixar: " + ((e && e.message) || e)); } };
+  const mandarIA = async function(){
+    if(!pode || !pedido || enviando || q.ajustando || !q.onRefazerIA) return;
+    setEnviando(true);
+    try{ const ok = await q.onRefazerIA(pedido); if(ok){ setConfIA(false); setMandouEm(Date.now()); } }
+    catch(e){ _evToast("error", "A IA não refez: " + ((e && e.message) || e)); }
+    setEnviando(false); };
+  const brl = function(v){ return "R$ " + Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 }); };
+  const verde = "var(--evx-verde,#15803d)", cinza = "#94a3b8";
+  const chip = function(on, cor){ return Object.assign(_evpChip(on), { padding:"4px 9px", fontSize:11.5 }, cor && on ? { borderColor:cor, color:cor } : {}); };
+  const bP = function(tipo, ok){ return Object.assign(_evpBtn(tipo, ok), { padding:isMob ? "8px 10px" : "6px 10px", fontSize:12 }); };
+  const visTr = function(tr){ return filtro === "tudo" || (filtro === "entrou" ? !!tr.u : filtro === "fora" ? !tr.u : false); };
+  const visBloco = function(b){ const cort = !b.temFala && !!(b.foraEtapa && b.foraEtapa.resumo);   // v28 (15/10/2026) pente fino: transcrição cortada conta como "ficou de fora", não como "sem fala"
+    if(filtro === "sem") return !b.temFala && !cort; if(filtro === "tudo") return true; if(filtro === "fora" && cort) return true; return b.trechos.some(visTr); };
+  const nParts = (calc.clips || []).length;
+  const raizRef = useRef(null);
+  useEffect(function(){ try{ if(raizRef.current) raizRef.current.focus({ preventScroll:true }); }catch(_){} }, []);   // Esc e Ctrl+Z valem logo que abre (sem cair nos atalhos do editor)
+
+  const elEscolhas = (pode && (esc.length > 0 || mandouEm)) ? (
+    <div data-tx-escolhas="1" style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:10,background:_EVP_COR.faixa,display:"flex",flexDirection:"column",gap:7}}>
+      <div style={{fontSize:12,fontWeight:800,display:"flex",alignItems:"center",gap:6}}>✨ Escolhas para a IA <span style={{fontWeight:600,color:_EVP_COR.sub}}>· {esc.filter(function(e){ return e.tipo === "entra"; }).length} precisam entrar · {esc.filter(function(e){ return e.tipo === "nao"; }).length} não podem</span>
+        {esc.length > 0 && <button onClick={function(){ setEsc([]); setConfIA(false); }} style={Object.assign(chip(false), {marginLeft:"auto"})}>Limpar</button>}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:isMob ? 150 : 210,overflow:"auto"}}>
+        {esc.map(function(e, j){ const fr = _evtxFracao(blocos, e.cid, e.i0, e.f1), ok = e.tipo === "entra" ? fr >= 0.6 : fr <= 0.1, b = blocos.find(function(x){ return x.cid === e.cid; });
+          return <div key={j} data-tx-escolha={e.tipo} data-tx-ok={ok ? "1" : "0"} style={{fontSize:11.5,lineHeight:1.35,display:"flex",gap:6,alignItems:"flex-start"}}>
+            <span style={{fontWeight:800,whiteSpace:"nowrap",color:e.tipo === "entra" ? verde : "#b91c1c"}}>{e.tipo === "entra" ? "✓ entra" : "⛔ não"}</span>
+            <span style={{flex:1,minWidth:0,color:_EVP_COR.sub}}>{b ? "v" + b.n + " · " : ""}{_evtxT(e.i0)} “{String(e.texto || "").slice(0, 60)}{String(e.texto || "").length > 60 ? "…" : ""}”</span>
+            <span title={ok ? "A edição de agora respeita esta escolha" : "A edição de agora ainda não respeita esta escolha"} style={{fontWeight:800,whiteSpace:"nowrap",color:ok ? verde : "#c2410c"}}>{ok ? "✓ ok" : (e.tipo === "entra" ? "fora" : "no vídeo")}</span></div>; })}
+      </div>
+      {mandouEm && <div style={{fontSize:11.5,color:verde,fontWeight:700}}>Mandado para a IA. Quando a versão nova chegar, o "✓ ok" de cada escolha mostra o que ela respeitou.</div>}
+      {esc.length > 0 && !confIA && <button data-tx-refazer-ia="1" onClick={function(){ setConfIA(true); }} disabled={!!q.ajustando || enviando || !q.onRefazerIA || soLer} style={Object.assign(_evpBtn("primario", !q.ajustando && !enviando && !!q.onRefazerIA && !soLer), {justifyContent:"center"})}>✨ Refazer com a IA respeitando minhas escolhas</button>}
+      {esc.length > 0 && confIA && pedido && <div data-tx-confirmar-ia="1" role="alertdialog" aria-label="Confirmar refazer com a IA" style={{padding:"9px 10px",borderRadius:10,border:"1px solid rgba(234,179,8,.55)",background:_EVP_COR.aviso,fontSize:12,lineHeight:1.45}}>
+        <b>Refazer com a IA?</b> A IA ajusta a edição atual cumprindo {pedido.entra + pedido.nao === 1 ? "esta escolha" : "estas " + (pedido.entra + pedido.nao) + " escolhas"} como regra obrigatória{pedido.correcoes.length ? " (" + pedido.correcoes.length + " também como correção marcada)" : ""}. Vira uma versão nova: dá para voltar em Versões.
+        {" "}Custa uns R$ 0,10 a R$ 1,50 (é um ajuste da IA, como o "Pedir à IA").{Number(ed.limite_brl) > 0 ? " No mês: " + brl(ed.gasto_mes_brl) + " de " + brl(ed.limite_brl) + "." : ""}
+        {pedido.fora > 0 && <div style={{color:"#b91c1c",fontWeight:700,marginTop:4}}>Só cabem as primeiras escolhas nesta vez ({pedido.fora} ficam para a próxima).</div>}
+        <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+          <button data-tx-ia-sim="1" onClick={mandarIA} disabled={enviando || !!q.ajustando} style={Object.assign(_evpBtn("primario", !enviando && !q.ajustando), {flex:"1 1 150px",justifyContent:"center"})}>{enviando || q.ajustando ? "A IA está refazendo…" : "Sim, refazer"}</button>
+          <button onClick={function(){ setConfIA(false); }} style={Object.assign(_evpBtn(), {flex:"1 1 100px",justifyContent:"center"})}>Não</button></div></div>}
+    </div>) : (podeIA === false ? <div data-tx-ia-so3="1" style={{fontSize:11.5,color:_EVP_COR.fraco,lineHeight:1.45}}>"Refazer com a IA respeitando as escolhas" é só para Vinicius, Gustavo e Hellen. Incluir e tirar trechos (sem IA) vale para todos.</div>
+      : pode ? <div style={{fontSize:11.5,color:_EVP_COR.fraco,lineHeight:1.45}}>Marque "✓ precisa entrar" ou "⛔ não pode entrar" nos trechos e mande a IA refazer cumprindo isso.</div> : null);
+
+  const elPlayer = tocar ? <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <_EvTxPlayer c={tocar.c} a={tocar.a} b={tocar.b} chave={tocar.k} isMob={isMob}/>
+      <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}><b style={{color:_EVP_COR.ink}}>{tocar.nome}</b> · {_evtxT(tocar.tr.i0)}–{_evtxT(tocar.tr.f1)} do bruto{tocar.tr.u ? " · no vídeo: parte " + tocar.tr.u.parte + " (" + _evtxT(tocar.tr.u.t) + ")" : " · fora do vídeo"}</div>
+      <button onClick={function(){ setTocar(null); }} style={Object.assign(chip(false), {alignSelf:"flex-start"})}>Fechar o player</button></div>
+    : <div style={{fontSize:11.5,color:_EVP_COR.fraco,lineHeight:1.5,padding:"10px 12px",border:"1px dashed " + _EVP_COR.linha,borderRadius:12}}>Clique num trecho (ou em ▶ Ouvir) para ver e ouvir aquele pedaço do vídeo aqui. Se ele está no vídeo, a agulha do editor vai junto.</div>;
+
+  const elTrecho = function(b, tr){
+    const e = escDe(tr), dentro = !!tr.u, aberto = abertoK === tr.k;
+    const acoes = <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:isMob ? "flex-start" : "flex-end",alignItems:"center",flexShrink:0,maxWidth:isMob ? "none" : 300}}>
+      <button onClick={function(){ ouvir(tr); }} aria-label="Ouvir este trecho" style={bP()}>▶ Ouvir</button>
+      {!soLer && dentro && <button data-tx-tirar={tr.k} onClick={function(){ tirar(tr); }} style={bP()}>− Tirar do vídeo</button>}
+      {!soLer && !dentro && !b.semClipe && <button data-tx-incluir={tr.k} onClick={function(){ setAbertoK(aberto ? null : tr.k); setOnde({ onde:"lugar", parte:Math.max(1, nParts) }); }} aria-expanded={aberto} style={bP("suave")}>＋ Incluir no vídeo</button>}
+      {pode && <button data-tx-marca-entra={tr.k} onClick={function(){ marcar(tr, "entra"); }} aria-pressed={!!(e && e.tipo === "entra")} title="Para a IA: este trecho PRECISA entrar" style={chip(!!(e && e.tipo === "entra"), verde)}>✓ Precisa entrar</button>}
+      {pode && <button data-tx-marca-nao={tr.k} onClick={function(){ marcar(tr, "nao"); }} aria-pressed={!!(e && e.tipo === "nao")} title="Para a IA: este trecho NÃO PODE entrar" style={chip(!!(e && e.tipo === "nao"), "#b91c1c")}>⛔ Não pode</button>}
+    </div>;
+    return <div key={tr.k} data-tx-trecho={tr.k} data-tx-estado={dentro ? "entrou" : "fora"} style={{display:"flex",flexDirection:isMob ? "column" : "row",gap:isMob ? 6 : 10,padding:"8px 10px",borderRadius:10,
+        borderLeft:"4px solid " + (dentro ? verde : cinza),background:dentro ? "var(--evp-ok,#e8f6ed)" : _EVP_COR.faixa,marginBottom:6}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",fontSize:11,marginBottom:3}}>
+          <span style={{fontFamily:_EVP_MONO,fontWeight:700,color:_EVP_COR.sub}}>{_evtxT(tr.i0)}–{_evtxT(tr.f1)}</span>
+          {dentro ? <span data-tx-parte={tr.u.parte} title={"Entrou no vídeo editado: parte " + tr.u.parte + " da linha do tempo, em " + _evtxT(tr.u.t)} style={{fontWeight:800,color:"#fff",background:verde,borderRadius:99,padding:"1px 8px"}}>✓ parte {tr.u.parte}</span>
+            : <span data-tx-motivo={tr.motivo ? tr.motivo.motivo : "sem"} title={tr.motivo ? "Por que ficou de fora (o que a IA gravou)" : "A IA não gravou o motivo deste trecho (corte à mão, corte pelo código ou edição antiga)"} style={{fontWeight:700,color:"#475569",background:"#e2e8f0",borderRadius:99,padding:"1px 8px"}}>⏸ ficou de fora: {_evtxMotivo(tr.motivo)}</span>}
+          {e && <span style={{fontWeight:800,color:e.tipo === "entra" ? verde : "#b91c1c"}}>{e.tipo === "entra" ? "· marcado: precisa entrar" : "· marcado: não pode entrar"}</span>}
+        </div>
+        <div onClick={function(){ ouvir(tr); }} title="Ouvir este trecho" style={{fontSize:isMob ? 14 : 14.5,lineHeight:1.5,cursor:"pointer",color:dentro ? _EVP_COR.ink : _EVP_COR.sub,userSelect:"text"}}>{tr.texto}</div>
+        {aberto && <div data-tx-onde="1" style={{marginTop:8,padding:8,borderRadius:10,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,display:"flex",flexWrap:"wrap",gap:6,alignItems:"center",fontSize:12}}>
+          <b style={{marginRight:2}}>Onde entra?</b>
+          <button data-tx-onde-op="lugar" onClick={function(){ setOnde({ onde:"lugar", parte:onde.parte }); }} title="Junto do mesmo vídeo, na ordem em que foi gravado" style={chip(onde.onde === "lugar")}>No lugar dele</button>
+          <button data-tx-onde-op="fim" onClick={function(){ setOnde({ onde:"fim", parte:onde.parte }); }} style={chip(onde.onde === "fim")}>No fim</button>
+          {nParts > 0 && <span style={{display:"inline-flex",gap:5,alignItems:"center"}}>
+            <button data-tx-onde-op="depois" onClick={function(){ setOnde({ onde:"depois", parte:onde.parte }); }} style={chip(onde.onde === "depois")}>Depois da parte</button>
+            <select data-tx-onde-parte="1" value={onde.parte} aria-label="Depois da parte" onChange={function(ev){ setOnde({ onde:"depois", parte:Number(ev.target.value) }); }}
+              style={{font:"inherit",fontSize:12,padding:"4px 6px",borderRadius:8,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink,maxWidth:isMob ? 200 : 260}}>
+              {partesTxt.map(function(x){ return <option key={x.n} value={x.n}>{x.n} · {_evtxT(x.t0)} · {String(x.txt).slice(0, 34)}</option>; })}</select></span>}
+          <span style={{flex:"1 0 8px"}}/>
+          <button data-tx-incluir-ok="1" onClick={function(){ incluir(tr); }} style={bP("primario")}>Incluir</button>
+          <button onClick={function(){ setAbertoK(null); }} style={bP()}>Cancelar</button>
+        </div>}
+      </div>
+      {acoes}
+    </div>;
+  };
+
+  const elLista = <div data-tx-lista="1" style={{flex:1,minHeight:0,overflow:"auto",padding:isMob ? "10px 12px 24px" : "12px 16px 24px"}}>
+    {isMob && <div style={{marginBottom:10}}>{elPlayer}</div>}
+    {isMob && elEscolhas && <div style={{marginBottom:10}}>{elEscolhas}</div>}
+    {blocos.filter(visBloco).map(function(b){
+      const th = _evpThumbEm(b.cid, b.dur > 0 ? b.dur / 2 : 1) || _evpThumbEm(b.cid, 1);
+      const trs = b.trechos.filter(visTr);
+      return <section key={b.cid} data-tx-video={b.cid} data-tx-n={b.n} style={{marginBottom:14,border:"1px solid " + _EVP_COR.linha,borderRadius:14,padding:isMob ? 8 : 10,background:_EVP_COR.painel}}>
+        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:b.temFala && trs.length ? 8 : 0}}>
+          <div style={{width:52,height:52,borderRadius:9,overflow:"hidden",flexShrink:0,background:"#1c2236",display:"grid",placeItems:"center",color:"#94a3b8",fontSize:10}}>
+            {th ? <img src={th} alt="" draggable={false} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : (b.rot ? "↻ " + b.rot + "°" : "vídeo")}</div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontWeight:800,fontSize:13.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={b.nome}>{b.n}. {b.nome}</div>
+            <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}>{_evtxDurVid(b.dur)}{b.temFala ? " · fala " + _evtxDur(b.fala) + " · entrou " + _evtxDur(b.usado) : ""}
+              {b.partes.length ? <span style={{color:verde,fontWeight:700}}> · {b.partes.length > 1 ? "partes " : "parte "}{b.partes.join(", ")}</span> : (b.temFala ? <span> · nada desta fala entrou</span> : null)}
+              {b.apoio.length ? <span> · usado como apoio por cima {b.apoio.length}×</span> : null}</div>
+          </div>
+        </div>
+        {b.foraEtapa && <div data-tx-fora-etapa={b.foraEtapa.tipo} style={{fontSize:11.5,lineHeight:1.45,margin:"0 0 6px",padding:"5px 9px",borderRadius:9,background:"#e2e8f0",color:"#334155"}}>
+          ⏸ <b>{b.foraEtapa.tipo === "triagem" ? "A triagem do PC tirou este vídeo antes de a IA ouvir" : "A IA deixou este vídeo de fora antes de editar (card grande: ela escolhe os melhores)"}</b>{b.foraEtapa.motivo ? ": " + b.foraEtapa.motivo : ""}
+          {b.semClipe ? <span> · não está na edição: para usar, IA › Conferir a IA › "Incluir mesmo assim".</span> : null}</div>}{/* v28 (15/10/2026) pente fino */}
+        {!b.temFala && b.foraEtapa && b.foraEtapa.resumo && <div data-tx-cortada={b.cid} style={{display:"flex",flexDirection:isMob ? "column" : "row",gap:isMob ? 6 : 10,padding:"8px 10px",borderRadius:10,borderLeft:"4px dashed " + cinza,background:_EVP_COR.faixa,marginBottom:6}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#b45309",marginBottom:3}}>{b.foraEtapa.cortada ? "✂ transcrição cortada: só o começo ficou guardado" : "fala guardada só como texto (sem os tempos de cada palavra)"}</div>
+            <div style={{fontSize:isMob ? 14 : 14.5,lineHeight:1.5,color:_EVP_COR.sub,userSelect:"text"}}>“{b.foraEtapa.resumo}{b.foraEtapa.cortada ? "…" : ""}”</div>
+            <div style={{fontSize:11,color:_EVP_COR.fraco,marginTop:3,lineHeight:1.4}}>{b.foraEtapa.cortada ? "A IA ouviu o vídeo inteiro (já foi pago), mas o servidor desta edição guardou só as primeiras 200 letras. Para ver a fala inteira: refazer a edição depois do servidor novo (v99c), que guarda tudo." : "O servidor desta edição guardou a fala só como texto, sem os tempos: dá para ler, mas não para escolher um trecho. O servidor novo (v99c) guarda com os tempos."} Dá para ouvir aqui e incluir o vídeo inteiro.</div>
+          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:isMob ? "flex-start" : "flex-end",alignItems:"center",flexShrink:0}}>
+            {(b.c && b.c.url) ? <button onClick={function(){ setTocar({ c:b.c, a:0, b:Math.max(5, b.dur || 30), k:b.cid + ":todo:" + Date.now(), tr:{ i0:0, f1:Math.max(5, b.dur || 30), u:null }, nome:b.n + ". " + b.nome }); }} style={bP()}>▶ Ouvir</button> : null}
+            {!soLer && b.c && b.c.incluido && b.c.incluido.manual && q.reeditarNovos && podeIA && <button data-tx-reeditar="1" onClick={q.reeditarNovos} title="A IA ouve de novo os vídeos que entraram à mão e refaz a edição com eles" style={bP("suave")}>✨ Reeditar com os vídeos novos</button>}
+            {!soLer && !b.semClipe && q.addClipe && <button data-tx-incluir-video={b.cid} onClick={function(){ q.addClipe(b.cid); _evToast("success", "\"" + b.nome + "\" entrou inteiro na linha do tempo, depois do clipe da agulha (Ctrl+Z desfaz)"); }} style={bP("suave")}>＋ Incluir o vídeo inteiro</button>}
+          </div></div>}
+        {!b.temFala && !(b.foraEtapa && b.foraEtapa.resumo) && <div data-tx-semfala={b.cid} style={{fontSize:12,color:_EVP_COR.fraco,padding:"4px 2px 2px",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <span>{_evtxSemFalaTxt(b.foraEtapa, Object.prototype.hasOwnProperty.call(fala || {}, b.cid), b.naoLido, b.soCard)}</span>
+          {b.soCard && !soLer && ed.id && <button data-tx-incluir-card={b.cid} onClick={function(){ incluirDoCard(b); }} disabled={incluindoCard != null} title="O vídeo entra nos Brutos da edição; depois, ✨ Reeditar com os vídeos novos faz a IA ouvir e usar" style={bP("suave", incluindoCard == null)}>{incluindoCard === b.cid ? "Incluindo…" : "＋ Incluir na edição"}</button>}
+          {b.soCard && soLer && <span>· abra o editor para incluir na edição</span>}
+          {b.naoLido && !soLer && q.reeditarNovos && podeIA && <button data-tx-reeditar="1" onClick={q.reeditarNovos} style={bP("suave")}>✨ Reeditar com os vídeos novos</button>}
+          {b.naoLido && podeIA === false && <span>· quem pode pedir a IA: Vinicius, Gustavo ou Hellen</span>}</div>}
+        {trs.map(function(tr){ return elTrecho(b, tr); })}
+      </section>; })}
+    {!blocos.length && <div style={{padding:24,textAlign:"center",color:_EVP_COR.sub}}>Nenhum vídeo nesta edição ainda.</div>}
+  </div>;
+
+  return (
+    <div ref={raizRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Transcrição completa" data-tx-painel="1" style={Object.assign({position:"fixed",inset:0,zIndex:1400,background:"rgba(11,16,32,.45)",backdropFilter:"blur(3px)",display:"flex",alignItems:"center",justifyContent:"center",padding:isMob ? 0 : 16,outline:"none"},
+        q.tema && _EVP_TEMAS[q.tema] ? _EVP_TEMAS[q.tema] : {})}
+      onPointerDown={function(e){ e.stopPropagation(); if(e.target === e.currentTarget) q.onFechar(); }}
+      onKeyDown={function(e){ e.stopPropagation(); const tg = e.target && e.target.tagName;
+        if(e.key === "Escape"){ e.preventDefault(); q.onFechar(); }
+        else if((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && tg !== "INPUT" && tg !== "TEXTAREA" && q.desfazer && !soLer){ e.preventDefault(); q.desfazer(); } }}>
+      <div style={Object.assign({}, _EVP_PAINEL, {background:_EVP_COR.fundo,color:_EVP_COR.ink,width:isMob ? "100%" : "min(1180px, 100%)",height:isMob ? "100dvh" : "min(92vh, 980px)",display:"flex",flexDirection:"column",overflow:"hidden",
+          borderRadius:isMob ? 0 : 16,paddingTop:isMob ? "env(safe-area-inset-top)" : 0,boxSizing:"border-box"})}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:isMob ? "10px 12px" : "12px 16px",borderBottom:"1px solid " + _EVP_COR.linha,background:_EVP_COR.painel,flexWrap:"wrap"}}>
+          <span style={{width:32,height:32,borderRadius:10,display:"grid",placeItems:"center",color:"#fff",flexShrink:0,background:"linear-gradient(135deg," + _EVP_COR.roxo + "," + _EVP_COR.roxo2 + ")"}}><_EvpIco n="fala2" s={16}/></span>
+          <div style={{minWidth:0,flex:"1 1 260px"}}><b style={{fontSize:15.5}}>📝 Transcrição completa</b>
+            <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}>Toda a fala dos {blocos.length} vídeos do card, em ordem. <b style={{color:verde}}>Verde</b> = entrou no vídeo (parte N = ordem na linha do tempo) · <b>cinza</b> = ficou de fora, com o motivo.</div></div>
+          <button data-tx-baixar="1" onClick={baixar} style={bP()}>⬇ Baixar transcrição</button>
+          {!soLer && q.desfazer && <button data-tx-desfazer="1" onClick={q.desfazer} disabled={!q.podeDesf} title="Desfazer (Ctrl+Z)" style={bP(null, !!q.podeDesf)}><_EvpIco n="desfazer" s={14}/>Desfazer</button>}
+          <button data-tx-fechar="1" onClick={q.onFechar} aria-label="Fechar" style={_evpBtn("icone")}><_EvpIco n="fechar" s={16}/></button>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",padding:isMob ? "8px 12px" : "8px 16px",borderBottom:"1px solid " + _EVP_COR.linha,fontSize:12,background:_EVP_COR.painel}}>
+          {[["tudo","Tudo"],["entrou","Entrou (" + tot.dentro + ")"],["fora","Ficou de fora (" + tot.fora + ")"],["sem","Sem fala (" + tot.sem + ")"]].map(function(o){ return <button key={o[0]} data-tx-filtro={o[0]} onClick={function(){ setFiltro(o[0]); }} style={chip(filtro === o[0])}>{o[1]}</button>; })}
+          <span data-tx-resumo="1" style={{color:_EVP_COR.sub,marginLeft:isMob ? 0 : 6}}>Fala: {_evtxDur(tot.fala)} · entrou {_evtxDur(tot.usado)}{tot.fala > 0 ? " (" + Math.round(tot.usado / tot.fala * 100) + "%)" : ""} · ficou de fora {_evtxDur(Math.max(0, tot.fala - tot.usado))} · {tot.com} de {blocos.length} vídeos com fala{tot.antes ? " · " + tot.antes + " ficaram de fora antes de editar" : ""}{tot.cortada ? " (" + tot.cortada + " com a transcrição cortada)" : ""}</span>
+        </div>
+        {soLer && <div data-tx-soler="1" style={{padding:"8px 16px",fontSize:12,background:_EVP_COR.aviso,borderBottom:"1px solid " + _EVP_COR.linha,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{flex:"1 1 200px"}}>Só para ler. Para incluir ou tirar trechos, abra o editor.</span>
+          {q.onAbrirEditor && <button onClick={q.onAbrirEditor} style={bP("primario")}>Editar no celular</button>}</div>}
+        {isMob ? elLista : <div style={{flex:1,minHeight:0,display:"grid",gridTemplateColumns:"320px minmax(0,1fr)"}}>
+          <div style={{borderRight:"1px solid " + _EVP_COR.linha,padding:12,display:"flex",flexDirection:"column",gap:12,overflow:"auto",background:_EVP_COR.painel}}>{elPlayer}{elEscolhas}</div>
+          {elLista}</div>}
+      </div>
+    </div>);
+}
+/* no card do Estúdio, quando o editor não está aberto (edição ainda sem estar pronta): a mesma transcrição, só para ler */
+function _EvTxEstudio({ t, ed, isMob, onFechar }){
+  return <_EvTranscricaoCompleta t={t} ed={ed} isMob={isMob} soLer={true} tema="claro" onFechar={onFechar}/>;
 }
 
 /* ─── v11 (30/09/2026): MIXER — tudo também à mão (não só pela IA). Canais de áudio A1–A10 e de vídeo V1–V10, em %. ───
@@ -151396,7 +156010,7 @@ function _EvMontarNoPC({ trabalho, onEstado }){
     avisar({ fase:"carregado", msg:"Preparando os brutos no PC" });
     const passoPC = function(m){ if(!vivo) return; setPasso(m); avisar({ fase:"preparando", msg:String(m || "") }); };
     const op = trabalho.opcoes || {};
-    _evPrepararMontar(trabalho.task || {}, passoPC, op.instrucoes ? { instrucoes:String(op.instrucoes).slice(0, 1500) } : null)
+    _evPrepararMontar(trabalho.task || {}, passoPC, op.instrucoes ? { instrucoes:String(op.instrucoes).slice(0, 1500) } : null, { semAssincrono:true })   // v28 (15/10/2026): a página do PC (reserva do ffmpeg) fica síncrona como antes
       .then(function(d){ if(!d || !d.id) throw new Error(d && d.ja_em_andamento && d.aviso ? String(d.aviso) : "a IA não devolveu a edição");
         avisar(Object.assign({ fase:"montado", edicao_id:d.id, custo_brl:d.custo_brl, msg:d.ja_em_andamento ? "A edição deste card já estava sendo feita (não cobrou de novo)" : "A IA montou o vídeo" },
           d.ja_em_andamento ? { ja_em_andamento:true, motivo:d.motivo || null } : {})); })   // v94 (10/10/2026) C01: o servidor devolveu a edição que já estava andando
