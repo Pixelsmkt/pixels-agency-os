@@ -3730,8 +3730,8 @@ function pixelsConfirm(message,opts={}){
     const header=document.createElement("div");
     Object.assign(header.style,{display:"flex",alignItems:"flex-start",gap:"14px",marginBottom:"18px"});
     const icoWrap=document.createElement("div");
-    Object.assign(icoWrap.style,{width:"40px",height:"40px",borderRadius:"12px",flexShrink:"0",background:isDanger?"#fee2e2":"#dbeafe",color:isDanger?"#dc2626":"#2563eb",display:"flex",alignItems:"center",justifyContent:"center"});
-    icoWrap.innerHTML=isDanger?'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>':'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    Object.assign(icoWrap.style,{width:"40px",height:"40px",borderRadius:"12px",flexShrink:"0",background:opts.color?opts.color+"1f":(isDanger?"#fee2e2":"#dbeafe"),color:opts.color||(isDanger?"#dc2626":"#2563eb"),display:"flex",alignItems:"center",justifyContent:"center"});   // (15/10/2026) opts.color/opts.iconSvg: confirmação na cor da ação
+    icoWrap.innerHTML=opts.iconSvg?opts.iconSvg:isDanger?'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>':'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
     const titleBox=document.createElement("div");
     Object.assign(titleBox.style,{flex:"1",minWidth:"0"});
     const titleEl=document.createElement("div");
@@ -3754,7 +3754,7 @@ function pixelsConfirm(message,opts={}){
     cancel.onclick=()=>_close(false);
     const ok=document.createElement("button");
     ok.textContent=opts.okText||"Confirmar";
-    Object.assign(ok.style,{background:isDanger?"#dc2626":"#2563eb",border:"none",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit",boxShadow:isDanger?"0 6px 16px rgba(220,38,38,0.30)":"0 6px 16px rgba(37,99,235,0.30)",transition:"transform .12s, box-shadow .12s"});
+    Object.assign(ok.style,{background:opts.color||(isDanger?"#dc2626":"#2563eb"),border:"none",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit",boxShadow:opts.color?"0 6px 16px "+opts.color+"4d":(isDanger?"0 6px 16px rgba(220,38,38,0.30)":"0 6px 16px rgba(37,99,235,0.30)"),transition:"transform .12s, box-shadow .12s"});
     ok.onmouseenter=()=>{ok.style.transform="translateY(-1px)";};
     ok.onmouseleave=()=>{ok.style.transform="";};
     ok.onclick=()=>_close(true);
@@ -37765,7 +37765,7 @@ function _EditCopyModal({task,onClose,onSave,stripHtml}){
    APROVAR COM O CLIENTE (13/10/2026, Gustavo: "uma nova aba no Avaliações onde aparece tudo que tem aprovado
    internamente — exceto fotos de obra — e com um botão baixa tudo, pra aprovar tudo de uma vez")
    Lista todos os cards em "Aprovado internamente" (a Pixels aprovou, o cliente ainda não), agrupados por cliente.
-   - "Baixar tudo" → um ZIP com as artes finais, uma pasta por cliente, nome = título + data de publicação.
+   - "Baixar tudo" → as artes finais soltas (sem ZIP), nome = unidade + título + data de publicação.
    - "Cliente aprovou" (por card ou por cliente) → status "aprovacao_final" (Aprovado pelo cliente), com histórico.
    Foto de obra não entra: aprovado internamente já é aprovado (regra do mesmo dia).
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -37802,40 +37802,47 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const _podeMarcar=!!(perms&&(perms.aprovar||perms.colAprovado))||(effectiveUser&&(effectiveUser.level===1||effectiveUser.id==="ellen"));
   const _hoje=()=>{ const d=new Date(); return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); };
 
+  /* (15/10/2026, Gustavo: "baixou em zip, pow baixa em arquivos normais, jpeg, vídeo no formato vídeo, não zipado") cada arquivo
+     final desce SOLTO, com o nome certo (unidade - título - data), um atrás do outro. O Chrome pergunta uma vez "permitir vários
+     downloads" na primeira vez; depois vai direto. Nada de ZIP. */
   async function baixar(ts,rotulo){
     if(!ts.length||baixando) return;
     const itens=[]; ts.forEach(function(t){ const fs=_finais(t); fs.forEach(function(f,i){ itens.push({t:t,f:f,nome:_nomeArq(t,f,i,fs.length)}); }); });
     if(!itens.length){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhum arquivo final nesses cards.",4000); return; }
-    setBaixando("preparando "+itens.length+" arquivo(s)…");
+    setBaixando("baixando 1 de "+itens.length+"…");
+    let ok=0; const pulados=[];
     try{
-      const JSZip=await _pbJsZip();
-      const zip=new JSZip(); let ok=0, pulados=[];
       for(let i=0;i<itens.length;i++){
         const it=itens[i]; setBaixando("baixando "+(i+1)+" de "+itens.length+"…");
         try{
           const r=await fetch(it.f.url); if(!r.ok) throw new Error("HTTP "+r.status);
-          const b=await r.blob();
-          if(b.size>150*1024*1024){ pulados.push(it.nome+" (muito grande — baixe pelo card)"); continue; }
-          const cl=CLIENTS.find(function(c){return c.id===it.t.client;}); const pasta=String((cl&&cl.name)||it.t.client||"Cliente").replace(/[\\/:*?"<>|]+/g," ");
-          const sub=(it.t.client==="bioter")?(_unidade(it.t)||"Sem unidade").replace(/[\\/:*?"<>|]+/g," "):"";
-          (sub?zip.folder(pasta).folder(sub):zip.folder(pasta)).file(it.nome,b); ok++;
+          const bl=await r.blob();
+          const u=URL.createObjectURL(bl); const a=document.createElement("a");
+          a.href=u; a.download=it.nome; a.style.display="none"; document.body.appendChild(a); a.click();
+          setTimeout(function(){ try{ a.remove(); URL.revokeObjectURL(u); }catch(_){} },4000);
+          ok++;
+          await new Promise(function(res){ setTimeout(res,450); });   // intervalo pro navegador não engolir download
         }catch(e){ pulados.push(it.nome+" ("+((e&&e.message)||"falhou")+")"); }
       }
       if(!ok) throw new Error("nenhum arquivo pôde ser baixado");
-      setBaixando("compactando…");
-      const out=await zip.generateAsync({type:"blob"});
-      const u=URL.createObjectURL(out); const a=document.createElement("a");
-      a.href=u; a.download="Aprovar com o cliente - "+(rotulo||"tudo")+" - "+new Date().toLocaleDateString("pt-BR").replace(/\//g,"-")+".zip"; a.style.display="none";
-      document.body.appendChild(a); a.click(); setTimeout(function(){ try{ a.remove(); URL.revokeObjectURL(u); }catch(_){} },500);
-      if(typeof pixelsToast!=="undefined") pixelsToast.success(ok+" arquivo(s) no ZIP"+(pulados.length?" · "+pulados.length+" pulado(s)":"")+".",5000);
-      if(pulados.length&&typeof pixelsToast!=="undefined") pixelsToast.warning("Não entraram: "+pulados.slice(0,3).join("; ")+(pulados.length>3?"…":""),9000);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(ok+" arquivo"+(ok>1?"s baixados":" baixado")+(rotulo?" — "+rotulo:"")+(pulados.length?" · "+pulados.length+" pulado(s)":"")+".",5000);
+      if(pulados.length&&typeof pixelsToast!=="undefined") pixelsToast.warning("Não desceram: "+pulados.slice(0,3).join("; ")+(pulados.length>3?"…":""),9000);
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Baixar: "+((e&&e.message)||e),6000); }
     setBaixando("");
   }
   function clienteAprovou(ts){
     if(!_podeMarcar||!setTasks||!ts.length) return;
-    const ok=window.confirm(ts.length===1?"Marcar \""+(ts[0].title||"este card")+"\" como APROVADO PELO CLIENTE?":"Marcar "+ts.length+" cards como APROVADOS PELO CLIENTE?\n\nEles vão pra \"Aprovado pelo cliente\" e ficam prontos pra agendar.");
-    if(!ok) return;
+    /* (15/10/2026, Gustavo: "abre essa janela de confirmação super antiga, melhora") → confirmação do próprio app, na cor da ação */
+    const _msg=ts.length===1
+      ? "“"+(ts[0].title||"este card")+"” vai pra Aprovado pelo cliente e fica pronto pra agendar."
+      : ts.length+" cards vão pra Aprovado pelo cliente e ficam prontos pra agendar:\n"+ts.slice(0,5).map(function(t){ return "• "+(t.title||"(sem título)"); }).join("\n")+(ts.length>5?"\n• e mais "+(ts.length-5)+"…":"");
+    const _conf=(typeof pixelsConfirm==="function")
+      ? pixelsConfirm(_msg,{title:ts.length===1?"O cliente aprovou?":"O cliente aprovou os "+ts.length+"?",okText:"Sim, cliente aprovou",cancelText:"Cancelar",color:"#ec4899",
+          iconSvg:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'})
+      : Promise.resolve(window.confirm(_msg));
+    _conf.then(function(ok){ if(ok) _marcarClienteAprovou(ts); });
+  }
+  function _marcarClienteAprovou(ts){
     const actor=(typeof pxAutorNome==="function")?pxAutorNome(effectiveUser):((effectiveUser&&effectiveUser.name)||"");
     const ids=new Set(ts.map(function(t){return t.id;}));
     const agora=new Date().toISOString();
@@ -37863,7 +37870,7 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
         {baixando&&<span style={{color:"#7c3aed",fontSize:12,fontWeight:700}}>{baixando}</span>}
         {nSel>0&&_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou(selecionados); }} style={btn("#ec4899",true)}>{icoOk} Cliente aprovou os {nSel} selecionados</button>}
         {nSel>0&&<button disabled={!!baixando} onClick={function(){ baixar(selecionados,"selecionados"); }} style={btn("#7c3aed",false)}>{icoDown} Baixar {nSel} selecionado{nSel>1?"s":""}</button>}
-        <button disabled={!!baixando} onClick={function(){ baixar(lista,"tudo"); }} title="Um ZIP com as artes finais de todos os cards, uma pasta por cliente" style={btn("#7c3aed",true)}>{icoDown} Baixar tudo</button>
+        <button disabled={!!baixando} onClick={function(){ baixar(lista,"tudo"); }} title="Baixa as artes finais de todos os cards, arquivo por arquivo (jpg, png, mp4…)" style={btn("#7c3aed",true)}>{icoDown} Baixar tudo</button>
       </div>}
     </div>
 
@@ -37885,24 +37892,35 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
       const _claro=false; void _rgb;
       const txt=_claro?"#0f172a":"#fff", txtSub=_claro?"rgba(15,23,42,0.75)":"rgba(255,255,255,0.88)", borda=_claro?"rgba(15,23,42,0.45)":"rgba(255,255,255,0.75)", fundoBtn=_claro?"rgba(15,23,42,0.08)":"rgba(255,255,255,0.14)";
       const btnBranco=function(cheio){ return {font:"inherit",height:34,boxSizing:"border-box",padding:"0 13px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:12.5,border:cheio?"none":"1.5px solid "+borda,background:cheio?(_claro?"#0f172a":"#fff"):fundoBtn,color:cheio?(_claro?"#fff":cor):txt,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",opacity:baixando?.6:1,boxShadow:cheio?"0 1px 3px rgba(0,0,0,0.18)":"none"}; };
-      return <div key={chave} style={{background:"#fff",border:"1px solid "+cor+"55",borderRadius:16,overflow:"hidden"}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:cor,color:txt,flexWrap:"wrap"}}>
-          <input type="checkbox" checked={todosSel} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); ts.forEach(function(t){ n[String(t.id)]=v; }); return n; }); }} title="Selecionar todos deste cliente" style={{width:17,height:17,cursor:"pointer",accentColor:_claro?"#0f172a":"#fff"}}/>
-          <div style={{background:"#fff",borderRadius:10,padding:"5px 10px",display:"flex",alignItems:"center",justifyContent:"center",minWidth:44,height:44,boxSizing:"border-box",boxShadow:"0 1px 3px rgba(0,0,0,0.18)",flexShrink:0}}>
+      /* (15/10/2026, Gustavo: "essas seções tão feias… o título, as logos, a barra, tá faltando algo") faixa com degradê da cor do
+         cliente, logo maior em caixa branca, nome grande e, embaixo, pílulas com o que importa: quantos cards, próxima publicação
+         e atrasados. O corpo da seção fica num cinza bem claro pra destacar os cartões. */
+      const _escurece=function(hex,f){ const m=String(hex).replace("#","").match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i); if(!m) return hex; let h=m[1]; if(h.length===3) h=h.split("").map(function(c){return c+c;}).join(""); const c=[0,2,4].map(function(i){ return Math.max(0,Math.round(parseInt(h.slice(i,i+2),16)*(1-f))); }); return "#"+c.map(function(v){ return v.toString(16).padStart(2,"0"); }).join(""); };
+      const _datas=ts.map(_dataPub).filter(Boolean).sort(); const _prox=_datas.find(function(d){ return d>=_hojeIso; })||_datas[0]||"";
+      const _nAtr=ts.filter(_atrasado).length; const _nArq=ts.reduce(function(a,t){ return a+_finais(t).length; },0);
+      const pill=function(bg,fg,txt0,title){ return <span title={title||""} style={{background:bg,color:fg,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800,letterSpacing:.2,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>{txt0}</span>; };
+      return <div key={chave} style={{background:"#f8fafc",border:"1px solid "+cor+"44",borderRadius:18,overflow:"hidden",boxShadow:"0 6px 22px "+cor+"1f"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,padding:isMob?"12px 14px":"14px 18px",background:"linear-gradient(100deg, "+cor+" 0%, "+_escurece(cor,0.28)+" 100%)",color:txt,flexWrap:"wrap",position:"relative"}}>
+          <input type="checkbox" checked={todosSel} onChange={function(e){ const v=e.target.checked; setSel(function(p){ const n=Object.assign({},p); ts.forEach(function(t){ n[String(t.id)]=v; }); return n; }); }} title="Selecionar todos deste cliente" style={{width:18,height:18,cursor:"pointer",accentColor:"#fff",flexShrink:0}}/>
+          <div style={{background:"#fff",borderRadius:14,padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"center",minWidth:56,height:56,boxSizing:"border-box",boxShadow:"0 2px 8px rgba(0,0,0,0.22)",flexShrink:0}}>
             <ClientLogo clientId={cid} size="md"/>
           </div>
-          <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
-            <div style={{fontWeight:900,color:txt,fontSize:isMob?16:19,letterSpacing:-.3,textShadow:"0 1px 3px rgba(0,0,0,0.35)",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{_nomeSecao(chave)}</div>
-            <div style={{color:txtSub,fontSize:11.5,fontWeight:600,marginTop:3}}>{ts.length} card{ts.length===1?"":"s"} esperando o OK do cliente</div>
+          <div style={{display:"flex",flexDirection:"column",lineHeight:1.15,gap:6,minWidth:0}}>
+            <div style={{fontWeight:900,color:txt,fontSize:isMob?17:21,letterSpacing:-.4,textShadow:"0 1px 3px rgba(0,0,0,0.35)",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{_nomeSecao(chave)}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+              {pill("rgba(255,255,255,0.18)",txt,ts.length+" card"+(ts.length===1?"":"s")+" · "+_nArq+" arquivo"+(_nArq===1?"":"s"),"Cards esperando o OK do cliente")}
+              {_prox&&pill("rgba(255,255,255,0.18)",txt,"próxima publicação "+_fmtData(_prox),"Data de publicação mais próxima")}
+              {_nAtr>0&&pill("#dc2626","#fff","⚠ "+_nAtr+" atrasado"+(_nAtr===1?"":"s"),"Data de publicação já passou e ainda sem OK")}
+            </div>
           </div>
           <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
-            <button disabled={!!baixando} onClick={function(){ baixar(ts,_nomeSecao(chave)); }} style={btnBranco(false)}>{icoDown} Baixar {unSecao?"da unidade":"do cliente"}</button>
+            <button disabled={!!baixando} onClick={function(){ baixar(ts,_nomeSecao(chave)); }} style={btnBranco(false)} title="Baixa os arquivos finais desses cards, soltos (jpg, png, mp4…)">{icoDown} Baixar {unSecao?"da unidade":"do cliente"}</button>
             {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou(ts); }} style={btnBranco(true)}>{icoOk} Cliente aprovou todos</button>}
           </div>
         </div>
         {/* (13/10 12:02, Gustavo) "tem espaço sobrando no meio — melhor uma visão em que as artes já são abertas e os vídeos
             também, como na Avaliação de design". Grade de cartões: arte inteira (ou player do vídeo), título, data, botões. */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill, minmax(300px, 1fr))",gap:14,padding:14}}>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill, minmax(300px, 1fr))",gap:16,padding:16}}>
         {ts.map(function(t){
           const fs=_finais(t); const capa=fs.find(_ehImg); const vid=fs.find(function(f){ return !_ehImg(f); }); const u=_unidade(t);
           const resps=((Array.isArray(t.assignees)&&t.assignees.length)?t.assignees:(t.assignee?[t.assignee]:[])).map(function(id){ return TEAM.find(function(x){return x.id===id;}); }).filter(Boolean);
