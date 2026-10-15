@@ -94965,6 +94965,7 @@ function ComPropostas({store,update,log,canEdit}){
   }
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {typeof ComPropostaIA==="function"&&<ComPropostaIA store={store} update={update} log={log} canEdit={canEdit}/>}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div style={{color:"#64748b",fontSize:13}}>{propostas.length} proposta{propostas.length!==1?"s":""}</div>
       {canEdit&&<button onClick={newProp}
@@ -95005,6 +95006,119 @@ function ComPropostas({store,update,log,canEdit}){
     </div>
 
     {editing&&<ComPropostaModal prop={editing} onClose={function(){setEditing(null);}} onSave={saveProp}/>}
+  </div>;
+}
+
+/* ─── Criador de proposta com IA (Comercial › Propostas) ─────────────────
+   Mesmo motor da etapa Proposta do Criador de produtos (_propostaGerarCore + deck Pixels + prompt pro Lovable),
+   só que pra clientes específicos (um ou vários), com produto opcional e uma caixa de CONTEXTO livre —
+   ex.: "acréscimo na recorrência mensal via comissão de vendas do digital pra Bioter Chapecó e Bioter Castro". */
+function ComPropostaIA({store,update,log,canEdit}){
+  const [open,setOpen]=useState(function(){ try{ return localStorage.getItem("pixels-com-propia-open")==="1"; }catch(_){ return false; } });
+  const [cliSel,setCliSel]=useState([]);        // ids de CLIENTS
+  const [cliLivre,setCliLivre]=useState("");    // nomes extras (lead / não cliente), separados por vírgula
+  const [nomeNaProposta,setNomeNaProposta]=useState(""); // como o cliente aparece no deck (ex.: "Bioter Chapecó e Bioter Castro")
+  const [prodId,setProdId]=useState("");
+  const [contexto,setContexto]=useState("");
+  const [materiais,setMateriais]=useState("");
+  const [busca,setBusca]=useState("");
+  const [gerando,setGerando]=useState(false);
+  const [aberto,setAberto]=useState(null);
+  const geradas=store.propostasIA||[];
+  const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
+  const produtos=(function(){ try{ return (typeof _prodLoad==="function"?_prodLoad():{produtos:[]}); }catch(_){ return {produtos:[],config:null}; } })();
+  const prodLista=(produtos.produtos||[]).filter(function(x){ return x&&x.ideia&&x.ideia.nome; });
+  const toggleOpen=function(){ const v=!open; setOpen(v); try{ localStorage.setItem("pixels-com-propia-open",v?"1":"0"); }catch(_){ } };
+  const toggleCli=function(id){ setCliSel(function(a){ return a.indexOf(id)>=0?a.filter(function(x){return x!==id;}):a.concat([id]); }); };
+  const nomesSel=cliSel.map(function(id){ const c=clientes.find(function(x){return x.id===id;}); return c?c.name:id; }).concat(cliLivre.split(",").map(function(x){return x.trim();}).filter(Boolean));
+  const cliNomeAuto=nomesSel.length<=1?(nomesSel[0]||""):(nomesSel.slice(0,-1).join(", ")+" e "+nomesSel[nomesSel.length-1]);
+  const cliNome=nomeNaProposta.trim()||cliNomeAuto;
+  const gerar=function(){
+    if(gerando) return;
+    if(!nomesSel.length){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolhe pra quem é a proposta (um ou mais clientes, ou digita o nome)."); return; }
+    if(!contexto.trim()&&!prodId){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um contexto (o que é a proposta) ou escolhe um produto do Criador."); return; }
+    setGerando(true);
+    const prod=prodLista.find(function(x){return x.id===prodId;})||null;
+    const resumo=prod?(_prodResumoPraIA(prod,produtos.config)+(prod.iaEntendimento&&prod.iaEntendimento.texto?("\n\nCOMO O PRODUTO FUNCIONA:\n"+String(prod.iaEntendimento.texto).slice(0,3000)):"")):"";
+    const matsProd=prod?(prod.materiais||[]).filter(function(m){return m&&m.texto;}).map(function(m){ return "— "+m.name+":\n"+String(m.texto).slice(0,5000); }).join("\n\n"):"";
+    const mats=[materiais.trim()?("— Anotações / transcrição colada aqui:\n"+materiais.trim().slice(0,9000)):"", matsProd].filter(Boolean).join("\n\n").slice(0,14000);
+    Promise.all(cliSel.map(function(id){ return (typeof _prodDadosCliente==="function"?_prodDadosCliente(id):Promise.resolve("")).then(function(d){ const c=clientes.find(function(x){return x.id===id;}); return d?("## "+((c&&c.name)||id)+"\n"+d):""; }); }))
+      .then(function(ds){ return _propostaGerarCore({ resumo:resumo, mats:mats, dadosCliente:ds.filter(Boolean).join("\n\n"), cliNome:cliNome, contexto:contexto.trim(), pedidoExtra:"", origem:"comercial_proposta" }); })
+      .then(function(j){
+        const nomeProd=prod?(prod.ideia.nome||"produto"):"";
+        const titulo=(j.titulo_hero?[j.titulo_hero.linha1,j.titulo_hero.linha2,j.titulo_hero.destaque].filter(Boolean).join(" "):"Proposta")+(cliNome?(" · "+cliNome):"");
+        const g={ id:"prpc"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), titulo:titulo, clientes:cliSel.slice(), clienteNome:cliNome, produtoId:prodId||"", produtoNome:nomeProd, contexto:contexto.trim(), json:j, html:_prodPropostaHtml(j,cliNome,nomeProd||contexto.trim().slice(0,60)), prompt:_prodPropostaPromptLovable(j,cliNome,nomeProd||contexto.trim().slice(0,120)), geradoEm:new Date().toISOString(), geradoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"" };
+        // registra também na lista de propostas (rascunho), pra acompanhar status/envio
+        const reg={ id:"pr"+Date.now()+"-"+Math.random().toString(36).slice(2,5), nome:titulo, cliente:cliNome, tipo:"mrr", valorMensal:0, valorPontual:0, servicos:nomeProd, status:"rascunho", dataEnvio:"", validade:"", responsavel:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"", proximaAcao:"Revisar a proposta gerada e enviar", link:"", observacoes:"Gerada com IA em Comercial › Propostas"+(contexto.trim()?(". Contexto: "+contexto.trim()):""), iaId:g.id, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
+        update(function(prev){ return Object.assign({},prev,{ propostasIA:[g].concat(prev.propostasIA||[]).slice(0,30), propostas:[reg].concat(prev.propostas||[]) }); });
+        try{ log(cliNome,"prop_new",titulo); }catch(_){ }
+        setAberto(g.id);
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Proposta gerada no esqueleto do deck Pixels — com o prompt pro Lovable.");
+      })
+      .catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("IA: "+((e&&e.message)||e)); })
+      .finally(function(){ setGerando(false); });
+  };
+  const excluir=function(g){
+    const go=function(){ update(function(prev){ return Object.assign({},prev,{ propostasIA:(prev.propostasIA||[]).filter(function(x){return x.id!==g.id;}) }); }); };
+    if(typeof pixelsConfirm==="function") pixelsConfirm("Excluir a proposta gerada “"+g.titulo+"”? O registro na lista de propostas continua.",{title:"Excluir proposta gerada",okText:"Excluir",cancelText:"Cancelar"}).then(function(ok){ if(ok) go(); });
+    else if(window.confirm("Excluir esta proposta gerada?")) go();
+  };
+  const cliFiltrados=clientes.filter(function(c){ return !busca.trim()||String(c.name||"").toLowerCase().indexOf(busca.toLowerCase())>=0||cliSel.indexOf(c.id)>=0; });
+  const chip=function(on){ return {font:"inherit",fontSize:11.5,fontWeight:700,padding:"6px 11px",borderRadius:99,border:"1.5px solid "+(on?"#0f172a":"#e2e8f0"),background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",cursor:"pointer"}; };
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+    <div onClick={toggleOpen} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",background:"linear-gradient(90deg,#f5f3ff,#fff)"}}>
+      {typeof _PxIco==="function"&&<_PxIco n="sparkles" size={18} color="#7c3aed"/>}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14}}>Criar proposta com IA</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Pra um ou mais clientes, com ou sem produto do Criador. O GPT monta no esqueleto do deck Pixels e entrega a proposta + o prompt pro Lovable.{geradas.length?(" · "+geradas.length+" gerada"+(geradas.length>1?"s":"")):""}</div>
+      </div>
+      <span style={{color:"#7c3aed",fontSize:12,fontWeight:800}}>{open?"fechar ▲":"abrir ▼"}</span>
+    </div>
+    {open&&<div style={{borderTop:"1px solid #e2e8f0",padding:"16px",display:"flex",flexDirection:"column",gap:14}}>
+      {canEdit&&<>
+        <div>
+          <div style={_COM_LBL}>Pra quem é a proposta (pode marcar mais de um)</div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:8}}>
+            <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar cliente…" style={Object.assign({},_COM_INP,{width:220})}/>
+            <input value={cliLivre} onChange={function(e){setCliLivre(e.target.value);}} placeholder="Lead / não cliente: digite o nome (vários: separe por vírgula)" style={Object.assign({},_COM_INP,{flex:1,minWidth:260})}/>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",maxHeight:120,overflowY:"auto"}}>
+            {cliFiltrados.map(function(c){ const on=cliSel.indexOf(c.id)>=0; return <button key={c.id} type="button" onClick={function(){toggleCli(c.id);}} style={chip(on)}>{on?"✓ ":""}{c.name}</button>; })}
+            {!cliFiltrados.length&&<span style={{color:"#94a3b8",fontSize:12}}>nenhum cliente com esse nome — usa o campo de lead ao lado</span>}
+          </div>
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginTop:10}}>
+            <input value={nomeNaProposta} onChange={function(e){setNomeNaProposta(e.target.value);}} placeholder="Como o cliente aparece na proposta (opcional) — ex.: Bioter Chapecó e Bioter Castro" style={Object.assign({},_COM_INP,{flex:1,minWidth:300})}/>
+            {nomesSel.length>0&&<div style={{color:"#475569",fontSize:12}}>Proposta pra: <b style={{color:"#0f172a"}}>{cliNome}</b></div>}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:(typeof _pxMob==="function"&&_pxMob())?"1fr":"1fr 1fr",gap:12}}>
+          <div>
+            <div style={_COM_LBL}>Produto do Criador (opcional)</div>
+            <select value={prodId} onChange={function(e){setProdId(e.target.value);}} style={_COM_INP}>
+              <option value="">— sem produto (só o contexto) —</option>
+              {prodLista.map(function(x){ return <option key={x.id} value={x.id}>{x.ideia.nome}{x.status&&x.status!=="rascunho"?(" · "+x.status):""}</option>; })}
+            </select>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Puxa ideia, fases, entregáveis, preço e a transcrição da reunião que está no produto.</div>
+          </div>
+          <div>
+            <div style={_COM_LBL}>Anotações / transcrição (opcional)</div>
+            <textarea rows={3} value={materiais} onChange={function(e){setMateriais(e.target.value);}} placeholder="Cola aqui o que foi conversado, números, metas, condições…" style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:64})}/>
+          </div>
+        </div>
+        <div>
+          <div style={_COM_LBL}>Contexto da proposta (o que ela é, pra quem, em que condições)</div>
+          <textarea rows={4} value={contexto} onChange={function(e){setContexto(e.target.value);}} placeholder="Ex.: acréscimo na recorrência mensal através de comissão de vendas do digital pra Bioter Chapecó e Bioter Castro — 3% sobre as vendas originadas pelo digital, apurado mês a mês, a partir de novembro." style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:90,lineHeight:1.5})}/>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <button type="button" onClick={gerar} disabled={gerando} style={{background:gerando?"#a78bfa":"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:800,fontSize:13,cursor:gerando?"wait":"pointer",fontFamily:"inherit"}}>{gerando?"O GPT está montando a proposta…":"✦ Gerar proposta"}</button>
+          <span style={{color:"#94a3b8",fontSize:11.5}}>GPT, uns R$ 0,30 por geração · entra também na lista abaixo como rascunho</span>
+        </div>
+      </>}
+      {geradas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={_COM_LBL}>Propostas geradas</div>
+        {geradas.map(function(g){ return <_PropostaGeradaCard key={g.id} g={g} aberto={aberto===g.id} onToggle={function(){ setAberto(aberto===g.id?null:g.id); }} canEdit={canEdit} isMob={typeof _pxMob==="function"&&_pxMob()} nomeBase={"proposta"} onExcluir={function(){ excluir(g); }}/>; })}
+      </div>}
+    </div>}
   </div>;
 }
 
@@ -98558,15 +98672,24 @@ function _ProdEtapaMateriais({p,cfg,set,canEdit,isMob,embutida}){
    caixas de insight e fechamento "Mais X. Mais Y. Mais Z."). O app renderiza esse esqueleto em HTML (pré-visualização e
    download) e monta o prompt pro Lovable com o conteúdo seção por seção — o design não muda, só o conteúdo. */
 async function _prodGerarPropostaIA(p, cfg, dadosCliente, cliNome, pedidoExtra){
-  if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
   const mats=(p.materiais||[]).filter(function(m){ return m&&m.texto; }).map(function(m){ return "— "+m.name+":\n"+String(m.texto).slice(0,6000); }).join("\n\n").slice(0,14000);
   const extra=p.iaEntendimento&&p.iaEntendimento.texto?("\n\nCOMO O PRODUTO FUNCIONA (análise da IA sobre os materiais):\n"+String(p.iaEntendimento.texto).slice(0,3000)):"";
+  return _propostaGerarCore({ resumo:_prodResumoPraIA(p,cfg)+extra, mats:mats, dadosCliente:dadosCliente, cliNome:cliNome, pedidoExtra:pedidoExtra, origem:"produto_proposta" });
+}
+/* Núcleo compartilhado (Criador de produtos e Comercial › Propostas): preenche o esqueleto do deck Pixels.
+   a.resumo = texto do produto/serviço (pode ser vazio quando é um aditivo de contrato, aí o CONTEXTO manda);
+   a.contexto = contexto comercial livre (ex.: "acréscimo na recorrência via comissão de vendas do digital"). */
+async function _propostaGerarCore(a){
+  a=a||{};
+  if(typeof askGPTBlocos!=="function") throw new Error("Pixels IA indisponível");
+  const mats=String(a.mats||""), dadosCliente=a.dadosCliente, cliNome=a.cliNome, pedidoExtra=a.pedidoExtra;
   const esqueleto='{"cliente":"nome do cliente","titulo_hero":{"linha1":"2 a 3 palavras","linha2":"2 a 3 palavras","destaque":"1 a 2 palavras (vão em verde, com ponto final)"},"subtitulo_hero":"Cliente · Produto — frase curta de contexto","chips":["chip 1 (ex.: PROPOSTA · OUTUBRO 2026)","chip 2 (ex.: DURAÇÃO · 90 DIAS)"],"card_hero":{"rotulo":"ROTULO EM CAIXA ALTA","numero":"número ou dado forte","sub":"legenda curta","mini":[{"rotulo":"INVESTIMENTO","valor":"R$ …"},{"rotulo":"PRAZO","valor":"…"}],"bolha":{"valor":"dado curto","rotulo":"legenda"}},"desafio":{"titulo":"O desafio em","destaque":"três pontos","cards":[{"titulo":"…","texto":"1 a 2 frases"},{"titulo":"…","texto":"…"},{"titulo":"…","texto":"…"}],"insight":"1 a 2 frases que amarram o diagnóstico"},"como_funciona":{"titulo":"Como o produto","destaque":"funciona","fases":[{"nome":"Fase 1 — …","prazo":"ex.: dias 1–15","texto":"1 a 2 frases"}],"insight":"…"},"historia":{"usar":false,"titulo":"Um lead.","subtitulo":"Uma história. Um ciclo completo.","intro":"1 frase apresentando o personagem (ex.: Carlos, produtor rural, viu um anúncio…)","passos":[{"n":"01","nome":"CAPTAÇÃO","titulo":"3 a 6 palavras","texto":"1 a 2 frases do que acontece nesta etapa","mock":{"tipo":"instagram|whatsapp|crm|notificacao|kanban|agenda|ligacao","titulo":"título do mockup (ex.: WhatsApp · Nome do cliente)","linhas":["2 a 4 linhas curtas que aparecem no mockup: mensagens, campos do CRM, texto da notificação"]}}]},"entregaveis":{"titulo":"O que você","destaque":"recebe","itens":[{"nome":"…","texto":"1 frase"}],"insight":"…"},"resultado":{"titulo":"Do produto ao","destaque":"resultado","numero_grande":"ex.: 3x","numero_texto":"frase explicando o número grande (sem inventar dado que não exista: use metas e referências do material)","card_escuro":{"rotulo":"ROTULO","valor":"dado ou meta","texto":"1 a 2 frases"},"indicadores":[{"rotulo":"…","valor":"…"}],"frase":"frase de impacto em 2 partes: Parte normal. Parte em destaque."},"investimento":{"titulo":"Investimento e","destaque":"condições","cards":[{"rotulo":"INVESTIMENTO","valor":"R$ …","sub":"forma de pagamento"},{"rotulo":"DURAÇÃO","valor":"…","sub":"…"},{"rotulo":"INÍCIO","valor":"…","sub":"…"}],"insight":"o que está incluso / o que não está"},"pixels":{"titulo":"Por que a","destaque":"Pixels","blocos":[{"titulo":"…","texto":"…"}]},"proximos":{"titulo":"Próximos","destaque":"passos","passos":["…","…","…"],"frase":"Mais alinhamento. Mais eficiência. Mais resultado."},"fechamento":["Mais estratégia.","Mais eficiência.","Mais oportunidades."]}';
-  const r=await askGPTBlocos({ max_tokens:7000, reasoning_effort:"medium", origem:"produto_proposta",
-    system:"Você escreve PROPOSTAS COMERCIAIS da Pixels Marketing Digital (assessoria de marketing e growth, Chapecó/SC, foco em agronegócio B2B). Tom: direto, próximo, moderno, de crescimento/vendas/resultado — nunca 'agência de publicidade'. Você recebe os dados de um PRODUTO da Pixels (e, quando houver, a transcrição da reunião/áudio e o cadastro do cliente) e preenche o ESQUELETO fixo de uma apresentação. Regras: 1) responda SÓ o JSON do esqueleto, com as MESMAS chaves, sem comentários nem ```; 2) escreva curto e forte — títulos de 2 a 6 palavras, textos de 1 a 2 frases; 3) 'destaque' é a parte do título que fica em verde; 4) não invente números: use o preço, a duração, as fases e os entregáveis informados; se um dado não existir, escreva uma meta qualitativa ou deixe [A DEFINIR]; 5) 3 cards no desafio, 3 passos nos próximos passos, 3 linhas no fechamento começando com 'Mais'; fases e entregáveis na quantidade que o produto tem (até 6 cada); 6) fale com o cliente (você/vocês), em português do Brasil; 7) 'historia': só use (usar=true) se o produto for um PROCESSO/JORNADA (atendimento, IA no WhatsApp, CRM, funil comercial, SDR, automação, agenda) — então conte a jornada de UM lead fictício (ex.: Carlos) passando pelo produto, de 6 a 10 passos na ordem real do fluxo, cada passo com um mockup (tipo: instagram = anúncio/DM; whatsapp = conversa; crm = card do cliente; notificacao = alerta pro time; kanban = etapa do funil; agenda = compromisso marcado; ligacao = SDR ligando) com 2 a 4 linhas curtas e realistas usando o nome do cliente; se o produto não for jornada (ex.: identidade visual, site, foto, conteúdo), usar=false e passos=[].",
+  const r=await askGPTBlocos({ max_tokens:7000, reasoning_effort:"medium", origem:a.origem||"produto_proposta",
+    system:"Você escreve PROPOSTAS COMERCIAIS da Pixels Marketing Digital (assessoria de marketing e growth, Chapecó/SC, foco em agronegócio B2B). Tom: direto, próximo, moderno, de crescimento/vendas/resultado — nunca 'agência de publicidade'. Você recebe os dados de um PRODUTO/serviço da Pixels (e, quando houver, a transcrição da reunião/áudio, o cadastro do cliente e um CONTEXTO COMERCIAL) e preenche o ESQUELETO fixo de uma apresentação. A proposta pode ser de um produto novo OU um aditivo/ajuste de contrato que já existe (ex.: acréscimo na recorrência mensal, comissão sobre vendas, renovação) — quando houver CONTEXTO COMERCIAL, ele manda: o desafio, o investimento e os próximos passos têm que refletir exatamente esse contexto, e o 'investimento' descreve a condição proposta (percentual, gatilho, base de cálculo, vigência) em vez de um preço fechado quando for o caso. Regras: 1) responda SÓ o JSON do esqueleto, com as MESMAS chaves, sem comentários nem ```; 2) escreva curto e forte — títulos de 2 a 6 palavras, textos de 1 a 2 frases; 3) 'destaque' é a parte do título que fica em verde; 4) não invente números: use o preço, a duração, as fases e os entregáveis informados; se um dado não existir, escreva uma meta qualitativa ou deixe [A DEFINIR]; 5) 3 cards no desafio, 3 passos nos próximos passos, 3 linhas no fechamento começando com 'Mais'; fases e entregáveis na quantidade que o produto tem (até 6 cada); 6) fale com o cliente (você/vocês), em português do Brasil; 7) 'historia': só use (usar=true) se o produto for um PROCESSO/JORNADA (atendimento, IA no WhatsApp, CRM, funil comercial, SDR, automação, agenda) — então conte a jornada de UM lead fictício (ex.: Carlos) passando pelo produto, de 6 a 10 passos na ordem real do fluxo, cada passo com um mockup (tipo: instagram = anúncio/DM; whatsapp = conversa; crm = card do cliente; notificacao = alerta pro time; kanban = etapa do funil; agenda = compromisso marcado; ligacao = SDR ligando) com 2 a 4 linhas curtas e realistas usando o nome do cliente; se o produto não for jornada (ex.: identidade visual, site, foto, conteúdo), usar=false e passos=[].",
     messages:[{role:"user",content:[
       {type:"text",text:"ESQUELETO (preencha e devolva este JSON):\n"+esqueleto},
-      {type:"text",text:"DADOS DO PRODUTO:\n"+_prodResumoPraIA(p,cfg)+extra},
+      {type:"text",text:a.resumo?("DADOS DO PRODUTO / SERVIÇO:\n"+a.resumo):"(sem produto do Criador vinculado — monte a partir do CONTEXTO COMERCIAL e dos materiais)"},
+      {type:"text",text:a.contexto?("CONTEXTO COMERCIAL (o que esta proposta é, pra quem e em que condições — manda sobre o resto):\n"+a.contexto):"(sem contexto comercial extra)"},
       {type:"text",text:mats?("MATERIAIS / TRANSCRIÇÃO DA REUNIÃO (o que foi conversado com o cliente — use pra contexto, desafio e objetivos):\n"+mats):"(sem materiais transcritos)"},
       {type:"text",text:dadosCliente?("CLIENTE: "+(cliNome||"")+"\n"+dadosCliente):("CLIENTE: "+(cliNome||"[CLIENTE]")+" (sem cadastro no app — use só o que estiver nos materiais)")},
       {type:"text",text:pedidoExtra?("INSTRUÇÕES EXTRAS DE QUEM ESTÁ GERANDO: "+pedidoExtra):"(sem instruções extras)"},
@@ -98630,6 +98753,43 @@ function _prodPropostaPromptLovable(j, cliNome, produtoNome){
   L.push("Produto: "+(produtoNome||"")+". Não resuma nem reescreva os textos — use exatamente como estão acima. Não crie seções novas.");
   return L.join("\n");
 }
+function _propostaCopiar(t,msg){ try{ navigator.clipboard.writeText(t); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado."); }catch(_){ } }
+function _propostaBaixarHtml(g,nomeBase){ const blob=new Blob([g.html],{type:"text/html;charset=utf-8"}); const nome=(nomeBase||"proposta")+(g.clienteNome?("-"+_eaNomeArquivo(g.clienteNome)):"")+".html"; if(typeof _eaBaixarArquivo==="function") return _eaBaixarArquivo(blob,nome); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nome; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },800); }
+function _propostaTextoPlano(g){ const d=document.createElement("div"); d.innerHTML=String(g.html||"").replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<\/(p|h1|h2|div|section|li)>/gi,"$&\n"); return (d.textContent||"").replace(/\n{3,}/g,"\n\n").trim(); }
+/* Card de uma proposta gerada (Pré-visualizar / Prompt pro Lovable / Texto) — usado no Criador de produtos e em Comercial › Propostas */
+function _PropostaGeradaCard({g,aberto,onToggle,canEdit,isMob,nomeBase,onExcluir}){
+  const [aba,setAba]=useState("preview");
+  const ab=!!aberto;
+  return <div style={{border:"1px solid "+_PRD.BORD,borderRadius:14,background:"#fff",overflow:"hidden"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer"}} onClick={onToggle}>
+      {typeof _PxIco==="function"&&<_PxIco n="sparkles" size={16} color={_PRD.PX_DK}/>}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:_PRD.INK,fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.titulo}</div>
+        <div style={{color:_PRD.SOFT,fontSize:10.5}}>{_prodDataBR(String(g.geradoEm||"").slice(0,10))+(g.geradoPor?(" · "+g.geradoPor):"")}</div>
+      </div>
+      <span style={{color:_PRD.PX_DK,fontSize:11,fontWeight:800}}>{ab?"fechar ▲":"abrir ▼"}</span>
+    </div>
+    {ab&&<div style={{borderTop:"1px solid "+_PRD.BORD,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        {[["preview","Pré-visualizar"],["lovable","Prompt pro Lovable"],["texto","Texto"]].map(function(t){ return <button key={t[0]} type="button" onClick={function(){ setAba(t[0]); }} style={{font:"inherit",fontSize:11.5,fontWeight:800,padding:"6px 12px",borderRadius:99,border:"1.5px solid "+(aba===t[0]?_PRD.PX:_PRD.BORD),background:aba===t[0]?"#faf7ff":"#fff",color:aba===t[0]?_PRD.PX_DK:_PRD.SOFT,cursor:"pointer"}}>{t[1]}</button>; })}
+        <span style={{flex:1}}/>
+        <_PrdBtn small onClick={function(){ _propostaCopiar(g.prompt,"Prompt pro Lovable copiado — é só colar lá."); }} ico="copy">Copiar prompt Lovable</_PrdBtn>
+        <_PrdBtn small onClick={function(){ _propostaBaixarHtml(g,nomeBase); }}>Baixar .html</_PrdBtn>
+        <_PrdBtn small onClick={function(){ const w=window.open("","_blank"); if(w){ w.document.open(); w.document.write(g.html); w.document.close(); } }}>Abrir em nova aba</_PrdBtn>
+        {canEdit&&onExcluir&&<_PrdBtn small tone="danger" onClick={onExcluir}>Excluir</_PrdBtn>}
+      </div>
+      {aba==="preview"&&<iframe title="proposta" srcDoc={g.html} style={{width:"100%",height:isMob?520:760,border:"1px solid "+_PRD.BORD,borderRadius:12,background:"#fafafa"}}/>}
+      {aba==="lovable"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{color:_PRD.SOFT,fontSize:11.5}}>Cola isso no chat do projeto do deck no Lovable. Ele já conhece o design; o prompt manda criar uma página nova só trocando o conteúdo.</div>
+        <div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.65,whiteSpace:"pre-wrap",maxHeight:520,overflowY:"auto",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"14px 16px"}}>{g.prompt}</div>
+      </div>}
+      {aba==="texto"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div><_PrdBtn small onClick={function(){ _propostaCopiar(_propostaTextoPlano(g),"Texto da proposta copiado."); }} ico="copy">Copiar texto</_PrdBtn></div>
+        <div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.65,whiteSpace:"pre-wrap",maxHeight:520,overflowY:"auto",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"14px 16px"}}>{_propostaTextoPlano(g)}</div>
+      </div>}
+    </div>}
+  </div>;
+}
 function _ProdEtapaProposta({p,c,cfg,set,canEdit,isMob}){
   const pr=p.propostas||{geradas:[]};
   const [gerando,setGerando]=useState(false);
@@ -98637,7 +98797,6 @@ function _ProdEtapaProposta({p,c,cfg,set,canEdit,isMob}){
   const [clienteSel,setClienteSel]=useState("");
   const [cliLivre,setCliLivre]=useState("");
   const [extra,setExtra]=useState("");
-  const [aba,setAba]=useState("preview");   // preview | lovable | texto
   const setPr=function(fn){ set(function(cur){ const atual=cur.propostas||{geradas:[]}; return Object.assign({},cur,{propostas:typeof fn==="function"?fn(atual):Object.assign({},atual,fn)}); }); };
   const nMat=(p.materiais||[]).filter(function(m){return m&&m.texto;}).length;
   const gerar=function(){
@@ -98650,14 +98809,11 @@ function _ProdEtapaProposta({p,c,cfg,set,canEdit,isMob}){
       const nomeProd=(p.ideia&&p.ideia.nome)||"produto";
       const g={ id:_prodUid("prp-"), titulo:"Proposta — "+nomeProd+(cliNome?(" · "+cliNome):""), cliente:clienteSel||"", clienteNome:cliNome||"", json:j, html:_prodPropostaHtml(j, cliNome, nomeProd), prompt:_prodPropostaPromptLovable(j, cliNome, nomeProd), geradoEm:new Date().toISOString(), geradoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"" };
       setPr(function(a){ return Object.assign({},a,{geradas:[g].concat(a.geradas||[]).slice(0,12)}); });
-      setAberto(g.id); setAba("preview");
+      setAberto(g.id);
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Proposta gerada no esqueleto do deck Pixels — com o prompt pro Lovable.");
     }).catch(function(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("IA: "+((e&&e.message)||e)); })
       .finally(function(){ setGerando(false); });
   };
-  const copiar=function(t,msg){ try{ navigator.clipboard.writeText(t); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado."); }catch(_){ } };
-  const baixarHtml=function(g){ const blob=new Blob([g.html],{type:"text/html;charset=utf-8"}); const nome="proposta-"+_eaNomeArquivo((p.ideia&&p.ideia.nome)||"produto")+(g.clienteNome?("-"+_eaNomeArquivo(g.clienteNome)):"")+".html"; if(typeof _eaBaixarArquivo==="function") return _eaBaixarArquivo(blob,nome); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nome; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1200); };
-  const textoPlano=function(g){ const d=document.createElement("div"); d.innerHTML=String(g.html||"").replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<\/(p|h1|h2|div|section|li)>/gi,"$&\n"); return (d.textContent||"").replace(/\n{3,}/g,"\n\n").trim(); };
   return <>
     <_PrdModHeader num={9} ico="sparkles" title="Proposta" subtitle="O GPT preenche o esqueleto do deck Pixels (o mesmo do relatório feito no Lovable) com o conteúdo DESTE produto e da reunião transcrita. Sai a proposta pronta pra ver e baixar, e o prompt pra colar no Lovable — o design não muda, só o conteúdo." done={(pr.geradas||[]).length>0} isMob={isMob}/>
     {canEdit&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -98674,36 +98830,7 @@ function _ProdEtapaProposta({p,c,cfg,set,canEdit,isMob}){
     {(pr.geradas||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
       <_PrdRotulo>Propostas geradas</_PrdRotulo>
       {(pr.geradas||[]).map(function(g){
-        const ab=aberto===g.id;
-        return <div key={g.id} style={{border:"1px solid "+_PRD.BORD,borderRadius:14,background:"#fff",overflow:"hidden"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer"}} onClick={function(){ setAberto(ab?null:g.id); }}>
-            {typeof _PxIco==="function"&&<_PxIco n="sparkles" size={16} color={_PRD.PX_DK}/>}
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:_PRD.INK,fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.titulo}</div>
-              <div style={{color:_PRD.SOFT,fontSize:10.5}}>{_prodDataBR(String(g.geradoEm||"").slice(0,10))+(g.geradoPor?(" · "+g.geradoPor):"")}</div>
-            </div>
-            <span style={{color:_PRD.PX_DK,fontSize:11,fontWeight:800}}>{ab?"fechar ▲":"abrir ▼"}</span>
-          </div>
-          {ab&&<div style={{borderTop:"1px solid "+_PRD.BORD,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-              {[["preview","Pré-visualizar"],["lovable","Prompt pro Lovable"],["texto","Texto"]].map(function(t){ return <button key={t[0]} type="button" onClick={function(){ setAba(t[0]); }} style={{font:"inherit",fontSize:11.5,fontWeight:800,padding:"6px 12px",borderRadius:99,border:"1.5px solid "+(aba===t[0]?_PRD.PX:_PRD.BORD),background:aba===t[0]?"#faf7ff":"#fff",color:aba===t[0]?_PRD.PX_DK:_PRD.SOFT,cursor:"pointer"}}>{t[1]}</button>; })}
-              <span style={{flex:1}}/>
-              <_PrdBtn small onClick={function(){ copiar(g.prompt,"Prompt pro Lovable copiado — é só colar lá."); }} ico="copy">Copiar prompt Lovable</_PrdBtn>
-              <_PrdBtn small onClick={function(){ baixarHtml(g); }}>Baixar .html</_PrdBtn>
-              <_PrdBtn small onClick={function(){ const w=window.open("","_blank"); if(w){ w.document.open(); w.document.write(g.html); w.document.close(); } }}>Abrir em nova aba</_PrdBtn>
-              {canEdit&&<_PrdBtn small tone="danger" onClick={function(){ setPr(function(a){ return Object.assign({},a,{geradas:(a.geradas||[]).filter(function(x){return x.id!==g.id;})}); }); }}>Excluir</_PrdBtn>}
-            </div>
-            {aba==="preview"&&<iframe title="proposta" srcDoc={g.html} style={{width:"100%",height:isMob?520:760,border:"1px solid "+_PRD.BORD,borderRadius:12,background:"#fafafa"}}/>}
-            {aba==="lovable"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{color:_PRD.SOFT,fontSize:11.5}}>Cola isso no chat do projeto do deck no Lovable. Ele já conhece o design; o prompt manda criar uma página nova só trocando o conteúdo.</div>
-              <div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.65,whiteSpace:"pre-wrap",maxHeight:520,overflowY:"auto",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"14px 16px"}}>{g.prompt}</div>
-            </div>}
-            {aba==="texto"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <div><_PrdBtn small onClick={function(){ copiar(textoPlano(g),"Texto da proposta copiado."); }} ico="copy">Copiar texto</_PrdBtn></div>
-              <div style={{color:_PRD.INK,fontSize:12.5,lineHeight:1.65,whiteSpace:"pre-wrap",maxHeight:520,overflowY:"auto",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"14px 16px"}}>{textoPlano(g)}</div>
-            </div>}
-          </div>}
-        </div>;
+        return <_PropostaGeradaCard key={g.id} g={g} aberto={aberto===g.id} onToggle={function(){ setAberto(aberto===g.id?null:g.id); }} canEdit={canEdit} isMob={isMob} nomeBase={"proposta-"+_eaNomeArquivo((p.ideia&&p.ideia.nome)||"produto")} onExcluir={function(){ setPr(function(a){ return Object.assign({},a,{geradas:(a.geradas||[]).filter(function(x){return x.id!==g.id;})}); }); }}/>;
       })}
     </div>}
   </>;
