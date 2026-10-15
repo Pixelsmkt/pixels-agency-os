@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 53/53 | Nao editar diretamente
+// Modulos: 59/59 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -130447,6 +130447,7 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
   );
 }
 
+// ======= 52a_video_base_ia.jsx ======= (Edição de vídeo, parte 1 de 7: base e IA: Photoshop, preparar os brutos e pedir a edição à IA, tela do Estúdio, player, exportar, análise do take, scopes, rosto, trilha, rastrear, máscaras, ícones, GIF, sons de ambiente, histórico · o juntar.py junta na ordem)
 /* ══════════════════════════════════════════════════════════════════
    CRIAÇÃO › EDIÇÃO DE VÍDEO
    v28 (15/10/2026) pente fino: (1) quem a IA deixou de fora ANTES de editar (card > 20 vídeos: receita.fora_escolha; triagem do PC: fora_triagem)
@@ -133121,6 +133122,29 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
     }catch(e){ setPasso(null); const em = String((e && e.message) || e); if(taskIdRef.current === t.id) setErro(em); else _evToast("error", "\"" + String(t.title || "card").slice(0, 60) + "\": " + em); setRec(function(n){ return n+1; }); }
   };
 
+  /* v29 (15/10/2026) item 16: "✨ Editar em cima deste roteiro" (Mesa do roteiro) — o MESMO preparo do Editar com IA (brutos, quadros e áudio), com o
+     roteiro aprovado. Contrato do S1: {acao:"roteiro", modo:"roteiro"} (ou montar+modo). ATENÇÃO: a v101 no ar IGNORA o modo e faria uma edição inteira nova (≈ R$ 6),
+     então ANTES de qualquer coisa a tela SONDA a versão sem gastar (_evmrSondaV29: a v101 responde "acao inválida") e só manda com a v29 confirmada. */
+  const editarRoteiro = async function(roteiro){
+    if(!t || !ed || !roteiro || !Array.isArray(roteiro.itens) || !roteiro.itens.length || passo || mandandoPc || checando || montando.current) return false;
+    if(_evPrecisaPc(t).length){ _evToast("warning", "Este card tem vídeo pesado ou sem cópia leve: editar pelo roteiro ainda não vai pelo PC do escritório. Peça a cópia leve (Editar com IA) e tente de novo."); return false; }
+    montando.current = true; setErro(null);
+    const meu = t.id, aqui = function(){ return taskIdRef.current === meu; }, nomeC = String(t.title || "card").slice(0, 60);
+    try{
+      setPasso("Conferindo se o servidor já sabe editar pelo roteiro…");
+      const sv = await _evmrSondaV29(ed.id);
+      if(!sv.v29){ setPasso(null); const em = sv.falta ? _EVMR_PARTE2 : "Não editei: " + (sv.msg || "o servidor não respondeu");
+        if(aqui()) setErro(em); else _evToast("error", "\"" + nomeC + "\": " + em); return false; }
+      const dM = await _evPrepararMontar(t, function(m){ if(aqui()) setPasso(m); }, { acao:"roteiro", modo:"roteiro", id:ed.id, roteiro:roteiro, narrar:false });   // S1 aceita acao "roteiro" e "montar"+modo; "roteiro" é o seguro (a v101 recusa sem gastar)
+      setPasso(null);
+      if(dM && dM.ja_em_andamento){ _evToast("info", String(dM.aviso || "Já tinha uma edição deste vídeo sendo feita: abri ela (não foi cobrado de novo).")); }
+      else _evToast("success", aqui() ? "A IA editou em cima do seu roteiro. Dê o play!" : "A IA terminou de editar \"" + nomeC + "\" pelo roteiro: abra o card para ver.");
+      setRec(function(n){ return n+1; }); return true;
+    }catch(e){ setPasso(null); let em = String((e && e.message) || e);
+      if(/acao inv[aá]lida/i.test(em)) em = _EVMR_PARTE2;
+      if(taskIdRef.current === t.id) setErro(em); else _evToast("error", "\"" + nomeC + "\": " + em); setRec(function(n){ return n+1; }); return false; }
+    finally{ montando.current = false; }
+  };
   const ajustar = async function(texto, extra){
     const p = String(typeof texto === "string" ? texto : pedido).trim(); if(!p || !ed || !ed.id || ajustando) return false;
     setAjustando(true); setErro(null); setErroAjuste(null); let ok = false;
@@ -133213,7 +133237,8 @@ function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
           <_EvEditor key={ed.id} t={t} ed={ed} kit={kit} base={base} musicas={musicas} isMob={isMob}
             onRecarregar={function(){ setRec(function(n){ return n+1; }); }} onAjustar={ajustar} ajustando={ajustando}
             erroAjuste={erroAjuste} limparErroAjuste={function(){ setErroAjuste(null); }}
-            onRefazer={montar} onVoltarVersao={voltarVersao} onMusicasMudou={function(){ setRecMus(function(n){ return n+1; }); }}/>
+            onRefazer={montar} onVoltarVersao={voltarVersao} onMusicasMudou={function(){ setRecMus(function(n){ return n+1; }); }}
+            onEditarRoteiro={editarRoteiro}/>{/* v29 (15/10/2026) item 16 */}
         </div>
       )}
     </div>
@@ -135555,6 +135580,7 @@ const _EVP_NOME_CAMPO = { cor:"cor", curva:"curvas", anim:"animação", zoom:"zo
   musica:"música", audio:"limpeza do som", formato:"formato", tela_final:"tela final", abertura:"abertura", logo:"logo", faixas:"faixas", canais:"mixer", travas:"faixas travadas",
   trilhas:"rastros", ajustes_trecho:"correções", volPts:"volume ◆", corte:"recorte", fundo:"fundo", estab:"estabilizar", rampa:"curva de velocidade", tom:"tom da voz", y2:"posição" };
 
+// ======= 52b_video_midia_audio.jsx ======= (Edição de vídeo, parte 2 de 7: mídia e áudio: caminho curvo, nomes, mídia dos brutos, áudio profissional, estabilizar, cortar pela fala, reenquadrar, figurinhas, curvas de cor, ao contrário, recortar a pessoa, volume da música, ritmo, .srt, comentários do cliente · o juntar.py junta na ordem)
 /* ── caminho curvo entre os pontos ◆ (Catmull-Rom: passa por todos os pontos) ── */
 function _evpCatmull(p0, p1, p2, p3, k){
   const k2 = k * k, k3 = k2 * k;
@@ -139097,6 +139123,7 @@ function _evpComentariosVideo(t){
   return out.sort(function(a, b){ return String(b.at).localeCompare(String(a.at)) || a.t - b.t; });
 }
 
+// ======= 52c_video_motor_desenho.jsx ======= (Edição de vídeo, parte 3 de 7: motor de desenho: motor do Estúdio, textos, legenda, manchete, tarja, kinetic, mapa, contadores, fluxo, gráfico, palco, CTA, número, lista, antes/depois, citação, selo, API do Estúdio, ícones, peças do painel · o juntar.py junta na ordem)
 /* ─── MOTOR DO ESTÚDIO PROFISSIONAL: o mesmo desenho e o mesmo som na prévia e no Exportar ───
    Relógio = o áudio (AudioContext). O vídeo segue o relógio (corrige quando escorrega mais de 0,2 s).
    O som de cada clipe vem do áudio tratado (ruído/voz/nível), não do elemento de vídeo (que fica mudo). */
@@ -142495,6 +142522,7 @@ function _EvpMais({ rotulo, aberto, children, id }){
 }
 function _EvpDica({ children, cor }){ return <div style={{fontSize:11.5,color:cor || _EVP_COR.fraco,lineHeight:1.4,marginTop:6}}>{children}</div>; }
 
+// ======= 52d_video_estudio_ia_cor.jsx ======= (Edição de vídeo, parte 4 de 7: estúdio, IA e cor: rank de músicas e o Estúdio, modelo da IA, conversa, prévia, revisor, conta-gotas, auto, LUT, curvas, cor secundária, scopes, desenhar, rastrear, máscaras, chroma, efeitos, formas, volume, limpeza da fala, vocal attacker, efeitos sonoros · o juntar.py junta na ordem)
 /* ─── rank de músicas: quanto a música combina com o objetivo do vídeo ─── */
 const _EVP_OBJ_PERFIL = {
   institucional:{ energia:["media"], clima:["corporativa","inspiradora"], bpm:[85, 120] }, venda:{ energia:["alta"], clima:["animada"], bpm:[110, 140] },
@@ -142585,6 +142613,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [girarAberto, setGirarAberto] = useState(false);
   const [txAberto, setTxAberto] = useState(false);   // v28 (15/10/2026) transcrição: painel "📝 Transcrição completa"
   const [txFoco, setTxFoco] = useState(null);   // v28 (15/10/2026) pente fino: abrir já no vídeo (📝 Ver a fala do "Conferir a IA")
+  const [mesaAberta, setMesaAberta] = useState(false);   // v29 (15/10/2026) item 14: 🎬 Mesa do roteiro (da Transcrição completa e do Ctrl+K)
+  const onEditarRoteiro = arguments[0].onEditarRoteiro || null;   // v29 (15/10/2026) item 16: o Estúdio manda a IA editar em cima do roteiro
   useEffect(function(){ const f = function(e){ setTxFoco(e && e.detail && e.detail.clipe ? { clipe:String(e.detail.clipe), em:Date.now() } : null); setTxAberto(true); }; window.addEventListener("evp-transcricao", f); return function(){ window.removeEventListener("evp-transcricao", f); }; }, []);   // v28 (15/10/2026) transcrição: o card do Estúdio abre o painel do editor
   const infoClipe = useMemo(function(){ const m = {}; clipes.forEach(function(c, i){ m[c.id] = Object.assign({ n:i+1, cor:_EV_CORES_CLIPE[i%12] }, c); }); return m; }, [ed.id]);
   /* versão salva × rascunho salvo sozinho (se o rascunho for mais novo que a última versão, continua dele)
@@ -143339,6 +143369,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const comandosK = [
     { id:"tocar", grupo:"Tocar", label:"Tocar / pausar", atalho:"Espaço", fn:tocar },
     { id:"transcricao", grupo:"Fala", label:"Transcrição completa (toda a fala: o que entrou e o que ficou de fora)", fn:function(){ setTxAberto(true); } },   // v28 (15/10/2026) transcrição
+    { id:"mesa_roteiro", grupo:"Fala", label:"Mesa do roteiro (o que entrou de cada vídeo e por quê; montar o roteiro pelo texto)", fn:function(){ setTxAberto(false); setMesaAberta(true); } },   // v29 (15/10/2026) item 14
     { id:"dividir", grupo:"Editar", label:"Dividir na agulha", atalho:"S", fn:cortar },
     { id:"duplicar", grupo:"Editar", label:"Duplicar o item", atalho:"Ctrl+D", fn:duplicar },
     { id:"copiar", grupo:"Editar", label:"Copiar o item", atalho:"Ctrl+C", fn:copiar },
@@ -144553,7 +144584,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const elTx = txAberto ? <_EvTranscricaoCompleta t={t} ed={ed} p={p} calc={calc} clipes={clipes} fala={falaEd} motivos={(ed.receita && ed.receita.motivos_corte) || []} nomesKit={nomesKit}
       isMob={isMob} soLer={soVer} onAbrirEditor={isMob && !mobAberto ? function(){ setMobAberto(true); } : null} onFechar={function(){ setTxAberto(false); setTxFoco(null); }} irPara={irPara}
       tirarTrechos={tirarTrechos} voltarTrechos={voltarTrechos} desfazer={desfazer} podeDesf={desf.length > 0} onRefazerIA={pcAuto ? null : refazerTransc} ajustando={ajustando}
-      reeditarNovos={novosIA.length ? reeditarNovos : null} tema={tema} addClipe={soVer ? null : addClipe} focoClipe={txFoco ? txFoco.clipe : null} onRecarregar={onRecarregar}/> : null;   // v28 (15/10/2026) transcrição (tema: o celular fechado fica fora do "raiz" com as cores)
+      reeditarNovos={novosIA.length ? reeditarNovos : null} tema={tema} addClipe={soVer ? null : addClipe} focoClipe={txFoco ? txFoco.clipe : null} onRecarregar={onRecarregar} onAbrirMesa={function(){ setTxAberto(false); setTxFoco(null); setMesaAberta(true); }}/> : null;   // v28 (15/10/2026) transcrição (tema: o celular fechado fica fora do "raiz" com as cores)
+  const elMesa = mesaAberta ? <_EvMesaRoteiro t={t} ed={ed} p={p} calc={calc} clipes={clipes} fala={falaEd} motivos={(ed.receita && ed.receita.motivos_corte) || []} nomesKit={nomesKit}
+      isMob={isMob} soLer={soVer} tema={tema} irPara={irPara} onRecarregar={onRecarregar} onFechar={function(){ setMesaAberta(false); }} onAbrirTx={function(){ setMesaAberta(false); setTxAberto(true); }}
+      onEditarRoteiro={pcAuto ? null : onEditarRoteiro}/> : null;   // v29 (15/10/2026) item 14: 🎬 Mesa do roteiro
   const elTxBotao = function(estilo, rot){ return <button data-abrir-transcricao="editor" onClick={function(){ setTxAberto(true); }} title="Toda a fala dos vídeos: o que entrou no vídeo e o que ficou de fora" style={estilo}>{rot}</button>; };   // v28 (15/10/2026) transcrição
   if(isMob && !mobAberto){
     return (
@@ -144571,6 +144605,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <button data-mob-abrir="1" onClick={function(){ setMobAberto(true); }} style={Object.assign(_evpBtn("primario"), {marginTop:12,width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14})}><_EvpIco n="celular" s={17}/>Editar no celular</button>
         {elTxBotao(Object.assign(_evpBtn(), {marginTop:8,width:"100%",justifyContent:"center",padding:"11px 16px",fontSize:13.5}), "📝 Transcrição completa")}{/* v28 (15/10/2026) transcrição */}
         {elTx}
+        {elMesa}{/* v29 (15/10/2026) item 14 */}
       </div>
     );
   }
@@ -144656,6 +144691,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           </div>)}
         {elExtras}
         {elTx}{/* v28 (15/10/2026) transcrição */}
+        {elMesa}{/* v29 (15/10/2026) item 14 */}
       </div>
     );
   }
@@ -144794,6 +144830,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       {/* ── Exportar: janela por cima (fica montada para não parar uma exportação em andamento) ── */}
       {elExtras}
       {elTx}{/* v28 (15/10/2026) transcrição */}
+      {elMesa}{/* v29 (15/10/2026) item 14 */}
     </div>
   );
 }
@@ -145993,6 +146030,7 @@ function _EvpSfxAutoPainel({ p, calc, mudar }){
   </div>);
 }
 
+// ======= 52e_video_telas_visualizador.jsx ======= (Edição de vídeo, parte 5 de 7: telas e visualizador: fase K, banco de mídia e multicâmera, assistente de IA, visualizador 9:16, painel da esquerda, música · o juntar.py junta na ordem)
 /* ── v25: FASE K (parte 1) — telas ── */
 function _EvpCadeado({ on, s }){
   const z = s || 13;
@@ -149312,6 +149350,7 @@ function _EvpLegendaPro({ p, kit, mudar, ctl, cli }){
   );
 }
 
+// ======= 52f_video_fala_mixer_linha.jsx ======= (Edição de vídeo, parte 6 de 7: fala, mixer e linha do tempo: motivo de cada corte, cola da fala (Transcrição completa e Mesa do roteiro), mixer, linha do tempo, motion · o juntar.py junta na ordem)
 /* ─── v13: MOTIVO de cada corte de fala (a IA grava em receita.motivos_corte; o resto o app deduz) ─── */
 const _EVP_MOTIVOS = { repeticao:"Repetição (usou outra tomada)", recomeco:"Recomeço", abandonada:"Frase abandonada", fora_do_assunto:"Fora do assunto/roteiro",
   tempo:"Para caber no tempo", quem_filma:"Fala de quem filma", erro:"Erro ou gaguejo", fraca:"Frase fraca", vicio:"Vício (é, né…)", apoio:"Vídeo de apoio",
@@ -149911,6 +149950,7 @@ function _EvTranscricaoCompleta(q){
           <span style={{width:32,height:32,borderRadius:10,display:"grid",placeItems:"center",color:"#fff",flexShrink:0,background:"linear-gradient(135deg," + _EVP_COR.roxo + "," + _EVP_COR.roxo2 + ")"}}><_EvpIco n="fala2" s={16}/></span>
           <div style={{minWidth:0,flex:"1 1 260px"}}><b style={{fontSize:15.5}}>📝 Transcrição completa</b>
             <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}>Toda a fala dos {blocos.length} vídeos do card, em ordem. <b style={{color:verde}}>Verde</b> = entrou no vídeo (parte N = ordem na linha do tempo) · <b>cinza</b> = ficou de fora, com o motivo.</div></div>
+          {q.onAbrirMesa && <button data-tx-abrir-mesa="1" onClick={q.onAbrirMesa} title="Ver por vídeo o que entrou e por quê, e montar o roteiro pelo texto" style={bP("primario")}>🎬 Mesa do roteiro</button>}{/* v29 (15/10/2026) item 14 */}
           <button data-tx-baixar="1" onClick={baixar} style={bP()}>⬇ Baixar transcrição</button>
           {!soLer && q.desfazer && <button data-tx-desfazer="1" onClick={q.desfazer} disabled={!q.podeDesf} title="Desfazer (Ctrl+Z)" style={bP(null, !!q.podeDesf)}><_EvpIco n="desfazer" s={14}/>Desfazer</button>}
           <button data-tx-fechar="1" onClick={q.onFechar} aria-label="Fechar" style={_evpBtn("icone")}><_EvpIco n="fechar" s={16}/></button>
@@ -149930,7 +149970,803 @@ function _EvTranscricaoCompleta(q){
 }
 /* no card do Estúdio, quando o editor não está aberto (edição ainda sem estar pronta): a mesma transcrição, só para ler */
 function _EvTxEstudio({ t, ed, isMob, onFechar }){
-  return <_EvTranscricaoCompleta t={t} ed={ed} isMob={isMob} soLer={true} tema="claro" onFechar={onFechar}/>;
+  const [mesa, setMesa] = useState(false);   // v29 (15/10/2026) item 14: a Mesa do roteiro também abre daqui (só para ler a edição; o roteiro dá para montar e salvar)
+  if(mesa) return <_EvMesaRoteiro t={t} ed={ed} isMob={isMob} soLer={true} tema="claro" onFechar={onFechar} onAbrirTx={function(){ setMesa(false); }}/>;
+  return <_EvTranscricaoCompleta t={t} ed={ed} isMob={isMob} soLer={true} tema="claro" onFechar={onFechar} onAbrirMesa={function(){ setMesa(true); }}/>;
+}
+
+/* ═══ v29 (15/10/2026) itens 2, 3, 4, 8, 13, 14, 15, 16, 17: 🎬 MESA DO ROTEIRO (pedido do Vini: "transcrever tudo antes de editar; ver por vídeo
+   o que foi usado, do segundo X ao Y; decidir pelo texto; sugestões de gancho e CTA; a IA só edita em cima do roteiro aprovado").
+   Abre do "📝 Transcrição completa" (que continua igual) e do Ctrl+K, numa janela grande por cima do editor (celular: tela cheia), SEM aba nova.
+   • A) VÍDEO POR VÍDEO: um cartão por bruto (ordem do card): miniatura (girada), nome, duração, barra do tempo do vídeo (verde = entrou,
+     cinza = fala que ficou de fora), toda a fala com os trechos usados destacados e a legenda "usou 0:42–1:15 e 3:10–3:28 · 18 s de 1 min 40 (27%)".
+     Clique em qualquer trecho (ou na barra) ouve dali. Vídeo sem transcrição: "a IA não ouviu este vídeo" + "Transcrever este vídeo"
+     (video-editar "transcrever_fala" do S1, só no clique, com o custo antes; o servidor v101 no ar responde "acao inválida" → "falta publicar o servidor v29").
+   • B) POR QUE: receita.plano_editorial (ideia central, a história em etapas, melhores momentos com nota), receita.escolhas (por que cada trecho
+     entrou), receita.fora / motivos_corte (por que ficou de fora, com a nota de força) e receita.conferencia_sobras ("deixei algo bom de fora?").
+     Edição antiga, sem esses campos: mostra o que existe + "esta edição é anterior; refaça para ver o plano".
+   • C) SELO ⭐ "pode ser bom" nos trechos de fora por REGRA GRÁTIS (_evmrSeloGratis, sem IA) + "✨ Avaliar com IA" (video-roteiro "avaliar_sobras",
+     custo antes pelo "estimar", só no clique). Selos de borda grátis nos trechos usados: 🔴 termina sem fechar · 🟠 começa no meio · 🔴 voz de quem grava.
+   • D) ROTEIRO PELO TEXTO: arrastar frases (celular: ＋), mudar a ordem, riscar palavras, duração ao vivo; começa com o que a IA escolheu;
+     salva (criacao_roteiro_salvar) e lê (criacao_roteiro_ler) — S2; Ctrl+Z desfaz.
+   • E) GANCHO E CTA: video-roteiro "ganchos_cta" (custo antes, só no clique): 3 a 5 ganchos e 2 a 4 CTAs com nota, porquê, ouvir e a manchete/tarja (editável).
+   • F) "✨ Editar em cima deste roteiro": confirmação com custo e resumo → video-editar modo roteiro (acao "roteiro", contrato do S1).
+   • G) APRENDER: incluir/tirar na Mesa e os botões "✂ cortou o fim da frase" / "🎙 voz de quem grava" → criacao_aprender_trecho (S2), marcado na hora.
+   Nada grava, chama IA ou servidor sem clique (só LÊ o roteiro salvo ao abrir). ═══ */
+const _EVMR_PEND = /^(de|da|do|das|dos|que|e|a|o|as|os|com|pra|para|em|no|na|nos|nas|num|numa|um|uma|porque|mas|ou|se|como|pelo|pela|ao|sobre|ate|entre|quando|onde|mais|muito|essa|esse|isso|meu|minha|nosso|nossa)$/;
+const _EVMR_ABRE = /^(eu|nos|a|o|as|os|entao|hoje|isso|essa|esse|esta|este|e|quando|porque|mas|sobre|foi|tem|com|no|na|um|uma|la|aqui|se|muito|sempre|de|pra|para|ela|ele|eles|elas|voce|voces|gente|tambem|ja|so|agora|creio|acho|acredito|olha|bom|bem|primeiro|depois|ai|como|quem|nosso|nossa|meu|minha|tudo|todo|toda|cada|por|desde|sim|nao|claro|realmente|certeza|obrigado|obrigada|oi|ola|hoje|aqui|isto|aquilo|o que|qual|quanto|nesses|nessa|nesse|essa|esses|essas|os|vamos|vem|venha|confira|chama|fala)$/;
+const _EVMR_CONT = /^(e|mas|que|porque|ai|pra|para|de|da|do|com|ou|tambem|entao)$/;
+const _EVMR_CONTA = /^(1|2|3|4|5|um|dois|tres|quatro|cinco|e|foi|vai|valendo|gravando|acao|gravou|pronto|ja)$/;
+const _EVMR_CONTA_N = /^(1|2|3|4|5|um|dois|tres|quatro|cinco|valendo|gravando|acao)$/;
+const _EVMR_INTERJ = /^(perfeito|otimo|isso|show|beleza|valeu|corta|cortar|top|maravilha|excelente|legal|joia|boa)$/;
+const _EVMR_ENTREV = /\b(primeira|segunda|terceira|quarta|quinta|sexta|setima|oitava|nona|decima|ultima)s? pergunta\b|\bpode falar\b|\bpode ser\b|\bvamos fazer\b|\bdeixa eu ver\b|\bquer fazer\b|\bla fora\b|\bvalendo\b|\bgravando\b|\bpode comecar\b|\bde novo\b/;
+const _EVMR_PROVA = /(confian|garanti|qualidad|cresc|satisf|entreg|recomend|indic|escut|carater|serio|seria|parceri|seguran|resultado|aument|economi|aberta a mudanc|nao conhecia|comecou|poucos equipamentos|contar com|pilar|forte|melhor|importante)/g;
+const _EVMR_MOT = { quem_filma:"voz de quem grava", tempo:"para caber no tempo", repeticao:"repetição (usou outra tomada)", recomeco:"recomeço", abandonada:"frase abandonada",
+  fora_do_assunto:"fora do assunto", erro:"erro ou gaguejo", fraca:"frase fraca", vicio:"vício (é, né…)", apoio:"vídeo de apoio", etapa1:"a IA deixou o vídeo de fora antes de editar" };
+function _evmrNormTxt(s){ return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9?.!… ]+/g, " ").replace(/\s+/g, " ").trim(); }
+function _evmrPal(w){ const p = String((w && w.p) || ""), pt = w && w.pt ? String(w.pt) : ""; return pt && !/[.!?,;:…]$/.test(p) ? p + pt : p; }
+function _evmrN(w){ return _evNorm(w && w.p); }
+function _evmrFimReal(w){ const s = _evmrPal(w); return /[.!?]["')\]]*$/.test(s) && !/(\.\.|…)["')\]]*$/.test(s); }
+function _evmrAbandonada(w){ return /(\.\.|…)["')\]]*$/.test(_evmrPal(w)); }
+function _evmrDurLonga(s){ s = Math.max(0, Math.round(Number(s) || 0)); if(s < 60) return s + " s"; const m = Math.floor(s / 60), r = s % 60; return m + " min" + (r ? " " + String(r).padStart(2, "0") : ""); }
+function _evmrUSD(v){ const n = Number(v); return isFinite(n) && n >= 0 ? "US$ " + (n < 0.01 && n > 0 ? "0,01" : n.toFixed(2).replace(".", ",")) : "—"; }
+/* os pedaços usados de um vídeo, juntos (ordem do bruto): [[a,b],…] */
+function _evmrIntervalos(L){
+  const xs = (L || []).map(function(x){ return [Number(x[0]), Number(x[1])]; }).filter(function(x){ return x[1] > x[0]; }).sort(function(a, b){ return a[0] - b[0]; });
+  const o = []; xs.forEach(function(x){ const u = o[o.length - 1]; if(u && x[0] <= u[1] + 0.35) u[1] = Math.max(u[1], x[1]); else o.push([x[0], x[1]]); });
+  return o;
+}
+/* "usou 0:42–1:15 e 3:10–3:28 · 18 s de 1 min 40 (27%)" */
+function _evmrLegendaUso(ivs, dur){
+  const tot = ivs.reduce(function(a, x){ return a + (x[1] - x[0]); }, 0);
+  if(!ivs.length) return "não usou nada deste vídeo" + (dur > 0 ? " (" + _evmrDurLonga(dur) + ")" : "");
+  const ls = ivs.map(function(x){ return _evtxDur(x[0]) + "–" + _evtxDur(x[1]); });
+  const tx = ls.length === 1 ? ls[0] : ls.slice(0, -1).join(", ") + " e " + ls[ls.length - 1];
+  return "usou " + tx + " · " + _evmrDurLonga(tot) + (dur > 0 ? " de " + _evmrDurLonga(dur) + " (" + Math.round(tot / dur * 100) + "%)" : "");
+}
+function _evmrForca(x){ if(!x) return null; const a = Number(x.forca), b = Number(x.nota); return isFinite(a) && x.forca !== null && x.forca !== "" ? a : (typeof x.nota === "number" && isFinite(b) ? b : (/^\d+(\.\d+)?$/.test(String(x.nota || "")) ? b : null)); }
+function _evmrSobrepoe(x, cid, a, b){ if(!x || String(x.clipe || x.cid || "") !== String(cid)) return false; const t0 = Number(x.t0 != null ? x.t0 : x.ini), t1 = Number(x.t1 != null ? x.t1 : x.fim);
+  const o = Math.min(t1, b) - Math.max(t0, a); return o > 0 && o >= 0.4 * Math.max(0.1, Math.min(t1 - t0, b - a)); }
+/* SELOS DE BORDA (grátis, pela fala): o pedaço [a,b] do vídeo termina sem fechar, começa no meio ou tem a voz de quem grava?
+   o.antes / o.depois = o pedaço vizinho no vídeo final ({clipe, b} / {clipe, a}): emenda do mesmo vídeo não conta como "no meio". */
+function _evmrBordas(ws, a, b, o){
+  o = o || {}; const S = [];
+  const den = (ws || []).filter(function(w){ return Number(w.i) >= a - 0.03 && Number(w.i) < b - 0.03; });
+  if(!den.length) return S;
+  const cid = o.clipe;
+  // voz de quem grava no começo: "3, 2, 1 e foi!" (2 palavras ou mais de contagem, com número), ou só um número solto
+  let k = 0; while(k < den.length && _EVMR_CONTA.test(_evmrN(den[k]))) k++;
+  const nums = den.slice(0, k).filter(function(w){ return _EVMR_CONTA_N.test(_evmrN(w)) || /^foi$/.test(_evmrN(w)); }).length;
+  if(k < den.length && ((k >= 2 && nums >= 1 && den.slice(0, k).some(function(w){ return _EVMR_CONTA_N.test(_evmrN(w)); })) || (k === 1 && /^[1-5]$/.test(_evmrN(den[0])) && /[,.!]$/.test(_evmrPal(den[0])))))
+    S.push({ tipo:"voz", grave:true, t:Number(den[0].i), txt:"voz de quem grava no começo: \"" + den.slice(0, k).map(_evmrPal).join(" ") + "\"" });
+  // voz de quem grava no fim: "… qualidade. Perfeito."
+  const ult = den[den.length - 1], pen = den[den.length - 2];
+  if(den.length >= 2 && _EVMR_INTERJ.test(_evmrN(ult)) && (_evmrFimReal(pen) || Number(ult.i) - Number(pen.f || pen.i) > 0.3))
+    S.push({ tipo:"voz", grave:true, t:Number(ult.i), txt:"voz de quem grava no fim: \"" + _evmrPal(ult) + "\"" });
+  const txN = _evmrNormTxt(den.map(_evmrPal).join(" "));
+  if(_EVMR_ENTREV.test(txN)) S.push({ tipo:"voz", grave:true, t:Number(den[0].i), txt:"parece fala de quem grava ou do entrevistador (\"" + (txN.match(_EVMR_ENTREV) || [""])[0] + "\")" });
+  // termina sem fechar
+  const fimW = S.some(function(s){ return s.tipo === "voz" && /no fim/.test(s.txt); }) && pen ? pen : ult;
+  const contDepois = !!(o.depois && String(o.depois.clipe) === String(cid) && Number(o.depois.a) >= b - 0.15 && Number(o.depois.a) - b < 1.6);
+  const prox = (ws || []).find(function(w){ return Number(w.i) >= b - 0.03; });
+  if(_evmrAbandonada(fimW)) S.push({ tipo:"fim", grave:true, t:Number(fimW.i), txt:"termina sem fechar: \"…" + _evmrPal(fimW) + "\" (frase abandonada)" });
+  else if(!_evmrFimReal(fimW) && !contDepois){
+    if(_EVMR_PEND.test(_evmrN(fimW)) && !/[,;:]$/.test(_evmrPal(fimW))) S.push({ tipo:"fim", grave:true, t:Number(fimW.i), txt:"termina pendurada em \"" + _evmrPal(fimW) + "\"" });
+    else if(prox && Number(prox.i) - Number(fimW.f || fimW.i) < 0.6) S.push({ tipo:"fim", grave:false, t:Number(fimW.i), txt:"termina no meio da frase (\"" + _evmrPal(fimW) + "\" e a fala continua)" });
+  }
+  // começa no meio
+  const iniW = den[S.some(function(s){ return s.tipo === "voz" && /no começo/.test(s.txt); }) ? Math.min(k, den.length - 1) : 0];
+  const contAntes = !!(o.antes && String(o.antes.clipe) === String(cid) && Number(o.antes.b) <= a + 0.15 && a - Number(o.antes.b) < 1.6);
+  const ant = (ws || []).filter(function(w){ return Number(w.i) < Number(iniW.i) - 0.03; }).pop() || null;
+  const gap = ant ? Number(iniW.i) - Number(ant.f || ant.i) : 99, p0 = String(iniW.p || "");
+  if(!contAntes){
+    if(_EVMR_CONT.test(_evmrN(iniW)) && (p0.charAt(0) === p0.charAt(0).toLowerCase() || gap < 0.3) && !/^entao$/.test(_evmrN(iniW))) S.push({ tipo:"comeco", grave:false, t:Number(iniW.i), txt:"começa com \"" + p0 + "\" (pode faltar o começo da frase)" });
+    else if(ant && !_evmrFimReal(ant) && !/\?$/.test(_evmrPal(ant)) && gap < 0.6) S.push({ tipo:"comeco", grave:false, t:Number(iniW.i), txt:"começa no meio da frase (antes vem \"" + _evmrPal(ant) + "\")" });
+    else if(ant && _evmrFimReal(ant) && !/\?$/.test(_evmrPal(ant)) && gap < 0.45 && !_EVMR_ABRE.test(_evmrN(iniW))) S.push({ tipo:"comeco", grave:false, t:Number(iniW.i), txt:"pode ter começado no meio (\"" + p0 + "\" vem colado em \"" + _evmrPal(ant) + "\")" });
+  }
+  return S;
+}
+/* SELO ⭐ "pode ser bom" (REGRA GRÁTIS, sem IA, R$ 0) num trecho que ficou de fora. v29 (15/10/2026) item 17: a função PURA do S2
+   (/home/claude/vid29/edge_roteiro/selo.js, seloPodeSerBom — a mesma da edge video-roteiro), copiada inteira: número +2, prova/benefício até +3,
+   força até +2, recomendação +1, história +1, frase completa +1, tamanho bom +1, fora só por tempo +1; contra: pendurada, abandonada, curta,
+   repetição, recomeço…; quem entrevista / voz de quem grava nunca. Estrela com 4 pontos ou mais.
+   v29 (15/10/2026) conferência final: recopiada da versão FINAL do S2 (+ toda pergunta "?" menos "…, né?" e "pergunta" = quem entrevista; "lá fora / outro local /
+   deixa eu ver" = bastidor; frase abandonada nunca tem ⭐; "É uma empresa…" é verbo). Pergunta nunca ganha estrela. */
+function _evmrSeloS2(o) {
+  var texto = String((o && o.texto) || "");
+  var t0 = Number(o && o.t0), t1 = Number(o && o.t1);
+  var d = isFinite(t0) && isFinite(t1) ? Math.max(0, t1 - t0) : 0;
+  var motivo = String((o && o.motivo) || "").toLowerCase();
+  var sem = function (s) { return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); };
+  var tx = sem(texto).replace(/\s+/g, " ").trim();
+  var pal = tx.replace(/[^a-z0-9%ñ\s]/g, " ").split(/\s+/).filter(Boolean);
+  var pontos = 0, bom = [], ruim = [];
+  var tem = function (lista) { var achou = []; for (var i = 0; i < lista.length; i++) { if (tx.indexOf(lista[i]) >= 0 && achou.indexOf(lista[i]) < 0) achou.push(lista[i]); } return achou; };
+
+  // quem entrevista / quem grava: nunca
+  var camera = !!(o && o.camera) || motivo === "quem_filma"
+    || /^(\d|um|dois|tres)\b[\s,.]*(\d|um|dois|tres|e|foi|vai|valendo|ja)\b/.test(tx)
+    || /^(pode (falar|ir|comecar)|valendo|gravando|ta gravando|bora|acao|ja foi|foi)[.!,]?$/.test(tx);
+  var entrevistador = !!(o && o.entrevistador)
+    || /^(perfeito|isso ai|beleza|ok|certo|otimo|show)[.!]?$/.test(tx)
+    || /(voces? (me )?(diz|conta|fala|explica)|me (conta|fala|diz|explica)|como e que (era|foi|funciona))/.test(tx)
+    || /\bpergunta\b/.test(tx)                                            // "Segunda pergunta…", "A quarta pergunta vem aqui"
+    || (/\?\s*$/.test(texto.trim()) && !/\b(ne|nao e)\?\s*$/.test(tx));        // pergunta (menos o "…, né?") = quem entrevista
+  if (/\b(la fora|outro local|deixa eu ver)\b/.test(tx)) camera = true;    // combinação de bastidor ("vamos fazer lá fora")
+  if (camera) return { estrela: false, pontos: -10, porque: "voz de quem grava (não é depoimento)" };
+  if (entrevistador) return { estrela: false, pontos: -10, porque: "fala de quem entrevista" };
+
+  // número
+  if (/\d/.test(tx) || /\b(dois|tres|quatro|cinco|seis|sete|oito|nove|dez|vinte|trinta|cem|cento|mil|milhao|milhoes|dobro|metade|por cento)\b/.test(tx)) { pontos += 2; bom.push("tem número"); }
+  // benefício / prova
+  var prova = tem(["qualidade", "garantia", "confianca", "confiavel", "seguranca", "estoque", "pos venda", "pos-venda", "suporte", "atendimento", "entrega", "parceria",
+    "inovacao", "escuta", "aberta a mudanca", "relacionamento", "crescimento", "cresceu", "resultado", "economia", "economiz", "produtividade", "eficien", "durabilidade", "lucro", "aument", "reduz", "solucao", "resolve"]);
+  if (prova.length) { var pp = Math.min(3, prova.length); pontos += pp; bom.push("benefício/prova (" + prova.slice(0, 3).join(", ") + ")"); }
+  // emoção / força
+  var emo = tem(["extremo", "extremamente", "sempre", "nunca", "carater", "satisfeit", "gostei", "gosto", "adoro", "orgulho", "incrivel", "excelente", "serio", "seriedade",
+    "fez a diferenca", "mudou", "transform", "muito"]);
+  if (emo.length) { pontos += Math.min(2, emo.length); bom.push("força (" + emo.slice(0, 2).join(", ") + ")"); }
+  // recomendação (bom para CTA)
+  if (/(recomend|pode contar|vale a pena|procure|indico|confie|de confianca|entregar o que fala)/.test(tx)) { pontos += 1; bom.push("soa como recomendação"); }
+  // história (antes → depois)
+  if (/\b(comecou|comecamos|no comeco|no inicio|nao conhecia|antes|hoje|desde|ha \w+ anos|anos atras|com o passar do tempo)\b/.test(tx)) { pontos += 1; bom.push("conta a história"); }
+
+  // forma da frase
+  var fim = texto.trim(), abandonada = /(\.\.|…)\s*$/.test(fim);
+  if (abandonada) { pontos -= 3; ruim.push("frase abandonada"); }
+  else if (/[.!?]\s*$/.test(fim)) { pontos += 1; bom.push("frase completa"); }
+  var ult = pal.length ? pal[pal.length - 1] : "";
+  if (["a", "o", "as", "os", "um", "uma", "de", "da", "do", "das", "dos", "em", "no", "na", "para", "pra", "por", "com", "que", "e", "mas", "se", "porque", "como"].indexOf(ult) >= 0) { pontos -= 2; ruim.push("termina pendurada"); }
+  var pri = pal.length ? pal[0] : "";
+  if (/^[\s"'«(]*é(?=[\s,.!?]|$)/i.test(texto)) pri = "é";            // "É uma empresa…" é verbo, não o "e" que liga à frase anterior
+  if (["e", "mas", "entao", "que", "porque", "pois", "ou", "isso", "ai", "tipo"].indexOf(pri) >= 0) { pontos -= 1; ruim.push("começa ligada à frase anterior"); }
+  if (d < 1.5 || pal.length < 4) { pontos -= 3; ruim.push("curta demais"); }
+  else if (d >= 3 && d <= 15) { pontos += 1; bom.push("tamanho bom (" + (Math.round(d * 10) / 10) + " s)"); }
+  else if (d > 25) { pontos -= 1; ruim.push("longa (" + Math.round(d) + " s)"); }
+  var vic = pal.filter(function (w) { return w === "ne" || w === "tipo" || w === "ahn" || w === "eh" || w === "hum"; }).length;
+  if (vic >= 2) { pontos -= 1; ruim.push("muito né/tipo"); }
+
+  // motivo do corte
+  if (motivo === "tempo") { pontos += 1; bom.push("ficou fora só por tempo"); }
+  else if (motivo === "repeticao") { pontos -= 2; ruim.push("repete o que já foi dito"); }
+  else if (motivo === "recomeco") { pontos -= 1; ruim.push("marcada como recomeço (confira: pode ser repetição de efeito)"); }
+  else if (motivo === "abandonada" || motivo === "erro") { pontos -= 3; ruim.push(motivo === "erro" ? "tem erro de fala" : "frase abandonada"); }
+  else if (motivo === "fora_do_assunto") { pontos -= 2; ruim.push("fora do assunto"); }
+  else if (motivo === "fraca") { pontos -= 1; ruim.push("marcada como fraca"); }
+
+  var estrela = pontos >= 4 && !abandonada;            // frase que se perde no fim nunca ganha ⭐ inteira (a equipe corta antes, se quiser)
+  var porque = (estrela ? "⭐ " : "") + (bom.length ? bom.join(", ") : "nada que chame atenção") + (ruim.length ? " · contra: " + ruim.join(", ") : "");
+  return { estrela: estrela, pontos: pontos, porque: porque };
+}
+function _evmrSeloGratis(o){
+  o = o || {}; const tx = String(o.texto || "").trim();
+  // pergunta e fala do entrevistador ("Segunda pergunta…", "…essa parceria?", "pode falar", "lá fora") nunca ganham ⭐ (a regra pura só pega "Perfeito.")
+  const entrev = !!o.entrevistador || /\?["')\]]*$/.test(tx) || _EVMR_ENTREV.test(_evmrNormTxt(tx));
+  let r; try{ r = _evmrSeloS2({ texto:tx, t0:o.t0, t1:o.t1, motivo:o.motivo, entrevistador:entrev, camera:!!o.camera }); }catch(_){ r = null; }
+  if(!r) return { estrela:false, pontos:0, porque:"" };
+  return { estrela:!!r.estrela, pontos:Number(r.pontos) || 0, porque:"regra grátis: " + String(r.porque || "").replace(/^⭐\s*/, "") };
+}
+/* o plano editorial da receita (servidor v29), já arrumado para a tela. antiga = edição sem os campos novos. */
+function _evmrPlano(rec){
+  const r = rec || {}, pe = r.plano_editorial && typeof r.plano_editorial === "object" ? r.plano_editorial : null;
+  const arr = function(x){ return Array.isArray(x) ? x.filter(function(y){ return y && typeof y === "object"; }) : []; };
+  const melhores = arr(pe && pe.melhores).map(function(m, i){ return Object.assign({}, m, { id:String(m.id || ("M" + (i + 1))), forca:_evmrForca(m), t0:Number(m.t0), t1:Number(m.t1), clipe:String(m.clipe || "") }); });
+  const escolhas = arr(r.escolhas), fora = arr(r.fora).filter(function(x){ return x.clipe && isFinite(Number(x.t0 != null ? x.t0 : x.ini)); }), sobras = arr(r.conferencia_sobras);
+  return { pe:pe, antiga:!pe && !escolhas.length && !sobras.length && !r.roteiro_usado, ideia:pe ? String(pe.ideia_central || "") : "", publico:pe ? String(pe.publico || "") : "",
+    historia:arr(pe && pe.historia), melhores:melhores, escolhas:escolhas, fora:fora, sobras:sobras, alvo:pe ? Number(pe.duracao_alvo) || 0 : 0, criterio:pe ? String(pe.criterio || "") : "",
+    explicacao:String(r.explicacao || ""), tomadas:typeof r.tomadas === "string" ? r.tomadas : (Array.isArray(r.tomadas) ? r.tomadas.join(" · ") : ""),
+    ganchos:arr(r.gancho_candidatos), licoes:Array.isArray(r.licoes_usadas) ? r.licoes_usadas : [],
+    roteiroUsado:r.roteiro_usado && typeof r.roteiro_usado === "object" ? r.roteiro_usado : null, quemGrava:r.quem_grava && typeof r.quem_grava === "object" ? r.quem_grava : null };
+}
+/* um item do roteiro: o pedaço [t0,t1] do vídeo cid, com o texto da fala */
+function _evmrItem(fala, cid, t0, t1, extra){
+  const ws = ((fala && fala[cid]) || []).filter(function(w){ return Number(w.i) >= t0 - 0.03 && Number(w.i) < t1 - 0.03; });
+  return Object.assign({ k:"r" + Math.random().toString(36).slice(2, 9), clipe:String(cid), t0:Math.round(t0 * 100) / 100, t1:Math.round(t1 * 100) / 100,
+    texto:ws.map(_evmrPal).join(" ").slice(0, 600), tirar:[] }, extra || {});
+}
+/* o que a IA escolheu (a linha do tempo de agora, na ordem do vídeo final) → itens do roteiro */
+function _evmrDaIA(calc, fala){
+  return ((calc && calc.clips) || []).filter(function(u){ return u && u.clipe && _evpClipeFalaNormal(u) && Number(u.fim) - Number(u.ini) > 0.2; })
+    .map(function(u){ return _evmrItem(fala, u.clipe, Number(u.ini), Number(u.fim), { ia:true, parte:u.i + 1 }); });
+}
+/* os pedaços que ficam de um item depois de riscar palavras: [{a,b,texto,ws}] */
+function _evmrSegs(it, fala){
+  const ws = ((fala && fala[it.clipe]) || []).filter(function(w){ return Number(w.i) >= it.t0 - 0.03 && Number(w.i) < it.t1 - 0.03; });
+  const cort = function(w){ return (it.tirar || []).some(function(x){ return Math.abs(Number(x[0]) - Number(w.i)) < 0.011; }); };
+  if(!ws.length) return [{ a:it.t0, b:it.t1, texto:it.texto || "", ws:[] }];
+  const out = []; let cur = null;
+  ws.forEach(function(w, j){
+    if(cort(w)){ if(cur){ cur.b = Math.min(Number(w.i), Number(cur.ws[cur.ws.length - 1].f || w.i) + 0.06); out.push(cur); cur = null; } return; }
+    if(!cur){ const prev = ws[j - 1]; cur = { a:j === 0 ? it.t0 : Math.max(Number(prev.f || prev.i), Number(w.i) - 0.06), ws:[] }; }
+    cur.ws.push(w);
+  });
+  if(cur){ cur.b = it.t1; out.push(cur); }
+  return out.map(function(s){ return { a:Math.round(s.a * 100) / 100, b:Math.round(Math.max(s.a + 0.1, s.b) * 100) / 100, ws:s.ws, texto:s.ws.map(_evmrPal).join(" ") }; });
+}
+function _evmrDurItem(it, fala){ return _evmrSegs(it, fala).reduce(function(a, s){ return a + Math.max(0, s.b - s.a); }, 0); }
+/* o roteiro no formato do servidor (video-editar modo roteiro / criacao_roteiro_salvar): palavras riscadas viram cortes */
+function _evmrParaEdge(rot, fala){
+  const itens = []; (rot && rot.itens || []).forEach(function(it){ _evmrSegs(it, fala).forEach(function(s){ itens.push({ clipe:it.clipe, t0:s.a, t1:s.b, texto:String(s.texto || it.texto || "").slice(0, 400) }); }); });
+  const g = rot && rot.gancho, c = rot && rot.cta;
+  return Object.assign({ itens:itens }, g ? { gancho:{ clipe:g.clipe, t0:g.t0, t1:g.t1, manchete:String(g.manchete || "").slice(0, 80) } } : {}, c ? { cta:{ clipe:c.clipe, t0:c.t0, t1:c.t1, tarja:String(c.tarja || "").slice(0, 80) } } : {});
+}
+/* o que se GUARDA (criacao_roteiro_salvar, formato do S2): os itens como a pessoa montou, com as palavras riscadas em tirar:[{t0,t1}],
+   origem "ia" | "mesa" | "gancho" | "cta", e base_versao (se outra pessoa salvou depois, o banco recusa e nada se perde) */
+function _evmrR2(x){ return Math.round(Number(x) * 100) / 100; }
+function _evmrParaSalvar(rot, fala, base){
+  const g = rot && rot.gancho, c = rot && rot.cta;
+  const itens = ((rot && rot.itens) || []).map(function(it){
+    const tr = (it.tirar || []).map(function(x){ const a = Math.max(Number(it.t0), Number(x[0])), b = Math.min(Number(it.t1), Math.max(Number(x[1]), a + 0.02)); return { t0:_evmrR2(a), t1:_evmrR2(b) }; })
+      .filter(function(x){ return x.t1 > x.t0; });
+    return Object.assign({ clipe:String(it.clipe), t0:_evmrR2(it.t0), t1:_evmrR2(it.t1), texto:String(it.texto || "").slice(0, 2000), origem:it.tag || (it.ia ? "ia" : "mesa") }, tr.length ? { tirar:tr } : {}); });
+  return Object.assign({ itens:itens },
+    g ? { gancho:{ clipe:String(g.clipe), t0:_evmrR2(g.t0), t1:_evmrR2(g.t1), texto:String(g.texto || "").slice(0, 600), manchete:String(g.manchete || "").slice(0, 80) } } : {},
+    c ? { cta:{ clipe:String(c.clipe), t0:_evmrR2(c.t0), t1:_evmrR2(c.t1), texto:String(c.texto || "").slice(0, 600), tarja:String(c.tarja || "").slice(0, 80) } } : {},
+    base ? { base_versao:base } : {});
+}
+function _evmrDeSalvo(r, fala){
+  const ro = r && (r.roteiro || r); if(!ro || typeof ro !== "object") return null;
+  const L = Array.isArray(ro.mesa) && ro.mesa.length ? ro.mesa : (Array.isArray(ro.itens) ? ro.itens : []);
+  const itens = L.filter(function(x){ return x && x.clipe && isFinite(Number(x.t0)) && Number(x.t1) > Number(x.t0); })
+    .map(function(x){ const t0 = Number(x.t0), t1 = Number(x.t1), ws = ((fala && fala[x.clipe]) || []).filter(function(w){ return Number(w.i) >= t0 - 0.03 && Number(w.i) < t1 - 0.03; });
+      // palavras riscadas: [i,f] (tela) ou {t0,t1} (banco) → as palavras da fala nesse pedaço
+      const tir = []; (Array.isArray(x.tirar) ? x.tirar : []).forEach(function(z){ const a = Number(Array.isArray(z) ? z[0] : z && z.t0), b = Number(Array.isArray(z) ? z[1] : z && z.t1); if(!isFinite(a)) return;
+        const ach = ws.filter(function(w){ return Number(w.i) >= a - 0.04 && Number(w.i) < Math.max(a + 0.02, b - 0.01); }); if(!ach.length) tir.push([a, isFinite(b) ? b : a]);
+        ach.forEach(function(w){ if(!tir.some(function(y){ return Math.abs(y[0] - Number(w.i)) < 0.011; })) tir.push([Number(w.i), Number(w.f || w.i)]); }); });
+      const tag = x.tag || (x.origem === "gancho" || x.origem === "cta" ? x.origem : null);
+      return _evmrItem(fala, x.clipe, t0, t1, { tirar:tir, tag:tag, ia:!!x.ia || x.origem === "ia" }); });
+  if(!itens.length) return null;
+  return { itens:itens, gancho:ro.gancho || null, cta:ro.cta || null };
+}
+/* erro do servidor que quer dizer "a função nova ainda não está no ar" */
+function _evmrFaltaServidor(msg, status){ return status === 404 || /acao inv[aá]lida|not found|n[aã]o encontrad|Requested function|does not exist|Could not find the function|PGRST202|42883/i.test(String(msg || "")); }
+async function _evmrChamar(nome, body){
+  const r = await _evInvocar(nome, { body:body });
+  if(r.error){ const m = String(r.error.message || "erro"); return { ok:false, falta:_evmrFaltaServidor(m, r.error.status), msg:m }; }
+  const d = r.data || {}; if(d.ok === false) return { ok:false, falta:_evmrFaltaServidor(d.erro, 0), msg:String(d.erro || d.motivo || "erro"), data:d };
+  return { ok:true, data:d };
+}
+/* qual video-editar está no ar? SEM IA e sem gastar (só no clique): {acao:"versao"} → a v29 (S1) devolve {ok, recursos:["roteiro",…]}, a v101 "acao inválida".
+   Reserva: {acao:"transcrever_fala", clipes:[]} → a v29 responde 400 "nenhum vídeo com áudio…". ENTREGA EM 2 PARTES (coordenador): o modo roteiro só vai
+   com a v29 confirmada (a v101 ignoraria o modo e faria uma edição inteira nova); até lá o botão fica desligado com "chega com o servidor de edição v29 (parte 2)". */
+let _EVMR_V29 = null;
+async function _evmrSondaV29(edId){
+  if(_EVMR_V29 && Date.now() - _EVMR_V29.em < 600000) return _EVMR_V29;
+  const r = await _evmrChamar("video-editar", { acao:"versao" });
+  if(r.ok && r.data && Array.isArray(r.data.recursos)){
+    const rc = r.data.recursos.map(String), o = { v29:rc.indexOf("roteiro") >= 0, recursos:rc, versao:String(r.data.versao || ""), em:Date.now() };
+    if(o.v29){ _EVMR_V29 = o; return o; } return Object.assign(o, { falta:true }); }
+  if(r.falta) return { v29:false, falta:true };
+  if(edId){ const r2 = await _evmrChamar("video-editar", { acao:"transcrever_fala", id:String(edId), clipes:[] });
+    if(/nenhum v[ií]deo com [áa]udio/i.test(String(r2.msg || ""))){ _EVMR_V29 = { v29:true, recursos:["roteiro", "transcrever_fala"], versao:"", em:Date.now() }; return _EVMR_V29; }
+    if(r2.falta) return { v29:false, falta:true }; }
+  return { v29:false, msg:r.ok ? "resposta inesperada do servidor" : r.msg };
+}
+_evmrSondaV29.limpar = function(){ _EVMR_V29 = null; };
+const _EVMR_PARTE2 = "Chega com o servidor de edição v29 (parte 2). Nada foi gasto.";
+async function _evmrRpc(nome, args){
+  try{ const r = await window._sb.rpc(nome, args); if(r.error) return { ok:false, falta:_evmrFaltaServidor(r.error.message + " " + (r.error.code || ""), 0), msg:String(r.error.message || "erro") };
+    const d = r.data; if(d && d.ok === false) return { ok:false, msg:String(d.erro || "erro"), data:d }; return { ok:true, data:d }; }
+  catch(e){ return { ok:false, msg:String((e && e.message) || e) }; }
+}
+/* "Transcrever este vídeo": o mesmo preparo de áudio do Editar com IA (WAV em pedaços no video-leituras) e a fala vai para o servidor:
+   via "roteiro" = video-roteiro {acao:"transcrever"} (S2, grava em video_edicoes.fala) · via "editar" = video-editar "transcrever_fala" (S1, grava em receita.fala_fora) */
+async function _evmrTranscrever(ed, c, passo, via, taskId){
+  const src = c.preview_url || c.url; if(!src) throw new Error("este vídeo não tem endereço no card");
+  passo("Baixando o vídeo…");
+  const blob = await _evBaixar(src, function(p){ passo("Baixando o vídeo… " + p + "%"); });
+  const r = await _evDesmontar(blob, 60, function(m){ passo("Separando o áudio: " + m); }, _evGiroDe(c.url));
+  const bk = window._sb.storage.from("video-leituras"), pasta = "edicao/" + _evUuid() + "/", audio = [];
+  for(let k = 0; k < r.pedacos.length; k++){
+    passo("Enviando o áudio… " + (k + 1) + " de " + r.pedacos.length);
+    const p = pasta + "tx_fala_" + String(k + 1).padStart(2, "0") + ".wav";
+    const u = await bk.upload(p, r.pedacos[k].blob, { contentType:"audio/wav", upsert:false });
+    if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message || "") + ")");
+    audio.push({ path:p, ini:r.pedacos[k].ini, fim:r.pedacos[k].fim });
+  }
+  passo("A IA está ouvindo o vídeo…");
+  const res = via === "roteiro"
+    ? await _evmrChamar("video-roteiro", { acao:"transcrever", task_id:String(taskId || ""), clipe:c.id, audio:audio, duracao:r.duracao })
+    : await _evmrChamar("video-editar", { acao:"transcrever_fala", id:ed.id, clipes:[{ id:c.id, nome:c.nome || "Vídeo", duracao:r.duracao, audio:audio }] });
+  if(!res.ok) throw new Error(res.falta ? "falta publicar o servidor v29 (" + (via === "roteiro" ? "video-roteiro" : "video-editar \"transcrever_fala\"") + "). Nada foi gasto." : res.msg);
+  const d = res.data || {};
+  if(d.sem_fala) d.aviso = "o servidor não achou fala neste vídeo (" + d.sem_fala + ")";
+  return d;
+}
+/* v29 (15/10/2026) conferência final: em vídeo sem fala o whisper às vezes devolve a própria DICA ("Nomes que podem aparecer.") — não é fala.
+   Na Mesa ela some (o vídeo que só tinha isso fica "sem fala"). Mesma regra dos servidores (video-roteiro logica.ts e video-editar editor.ts). Não mexe no banco. */
+function _evmrSemEco(fala){
+  if(!fala || typeof fala !== "object") return fala;
+  const nt = function(w){ return _evNorm(w && w.p).replace(/[^a-z0-9]/g, ""); }, ECO = ["nomes", "que", "podem", "aparecer"];
+  let mudou = false; const out = {};
+  Object.keys(fala).forEach(function(k){ const ws = fala[k]; out[k] = ws;
+    if(!Array.isArray(ws) || ws.length < 4) return;
+    const fora = {}; let n = 0;
+    for(let i = 0; i + 3 < ws.length; i++){
+      if(!ECO.every(function(x, q){ return nt(ws[i + q]) === x; })) continue;
+      let j = i + 3; for(let q = i; q <= j; q++){ fora[q] = 1; n++; }
+      if(/:/.test(String((ws[j] && ws[j].pt) || "") + String((ws[j] && ws[j].p) || ""))){ let m = 0; while(j + 1 < ws.length && m < 40){ j++; m++; fora[j] = 1; n++; if(/[.!?]/.test(String(ws[j].pt || "") + String(ws[j].p || "").slice(-1))) break; } }
+      i = j;
+    }
+    if(n){ mudou = true; out[k] = ws.filter(function(_, q){ return !fora[q]; }); } });
+  return mudou ? out : fala;
+}
+function _EvMesaRoteiro(q){
+  _evpUsarMidia();
+  const ed = q.ed || {}, t = q.t || {}, isMob = !!q.isMob, soLer = !!q.soLer;
+  const clipes = q.clipes || ed.clipes || [];
+  const fala0 = q.fala !== undefined ? q.fala : ed.fala;
+  const fala = useMemo(function(){ return _evmrSemEco(_evtxFalaTudo(fala0, ed.receita)); }, [fala0, ed.receita]);   // v29 conferência final: sem o eco da dica do whisper
+  const pDer = useMemo(function(){ if(q.p) return q.p; try{ return ed.receita ? _evpProjetoDeReceita(ed.receita, clipes) : null; }catch(_){ return null; } }, [q.p, ed.id, ed.receita_em, ed.atualizado_em]);
+  const calc = useMemo(function(){ if(q.calc) return q.calc; try{ return pDer ? _evpCalcular(pDer, fala, null) : { clips:[], total:0 }; }catch(_){ return { clips:[], total:0 }; } }, [q.calc, pDer, fala]);
+  const motivos = q.motivos || (ed.receita && ed.receita.motivos_corte) || [];
+  const lgN = useMemo(function(){ return Object.assign({}, (pDer && pDer.legenda) || {}, { _nomesKit:q.nomesKit || [] }); }, [pDer && pDer.legenda, (q.nomesKit || []).join("|")]);
+  const brutos = useMemo(function(){ return q.t ? _evBrutos(q.t) : []; }, [q.t && q.t.files]);
+  const blocos = useMemo(function(){ return _evtxBlocos({ clipes:clipes, fala:fala, calc:calc, motivos:motivos, imagens:(pDer && pDer.imagens) || [], lg:lgN, rec:ed.receita || null, brutos:brutos }); }, [clipes, fala, calc, motivos, pDer, lgN, ed.receita, brutos]);
+  /* ordem do card (a ordem dos arquivos no card); quem não está no card vai para o fim, na ordem da edição */
+  const ordem = useMemo(function(){ const pos = function(b){ const j = brutos.findIndex(function(f){ return f && (String(f.id) === String(b.cid) || (b.c && b.c.url && f.url === b.c.url) || (f.name && f.name === b.nome)); }); return j < 0 ? 10000 + b.n : j; };
+    return blocos.slice().sort(function(a, b){ return pos(a) - pos(b); }); }, [blocos, brutos]);
+  const plano = useMemo(function(){ return _evmrPlano(ed.receita); }, [ed.receita]);
+  const partes = useMemo(function(){ return ((calc && calc.clips) || []).filter(function(u){ return u && u.clipe && _evpClipeFalaNormal(u); }); }, [calc]);
+  /* selos de borda de cada parte do vídeo de agora (grátis) */
+  const bordasParte = useMemo(function(){ const o = {}; partes.forEach(function(u, j){ const an = partes[j - 1], de = partes[j + 1];
+    o[u.id] = _evmrBordas((fala && fala[u.clipe]) || [], Number(u.ini), Number(u.fim), { clipe:u.clipe, antes:an ? { clipe:an.clipe, b:Number(an.fim) } : null, depois:de ? { clipe:de.clipe, a:Number(de.ini) } : null }); });
+    return o; }, [partes, fala]);
+  const verde = "var(--evx-verde,#15803d)", cinza = "#94a3b8", verm = "var(--evx-verm,#b91c1c)", amar = "var(--evx-amarelo,#a16207)";
+  const chip = function(on, cor){ return Object.assign(_evpChip(on), { padding:"4px 9px", fontSize:11.5 }, cor && on ? { borderColor:cor, color:cor } : {}); };
+  const bP = function(tipo, ok){ return Object.assign(_evpBtn(tipo, ok), { padding:isMob ? "8px 10px" : "6px 10px", fontSize:12 }); };
+  const caixa = { border:"1px solid " + _EVP_COR.linha, borderRadius:12, padding:isMob ? 9 : 10, background:_EVP_COR.painel };
+
+  /* ── tocar ── */
+  const [tocar, setTocar] = useState(null);
+  const ouvirEm = function(cid, a, b, rot){ const bl = blocos.find(function(x){ return x.cid === cid; }); if(!bl || !bl.c) return;
+    setTocar({ c:bl.c, a:Math.max(0, a - 0.15), b:b + 0.25, k:cid + ":" + a + ":" + Date.now(), nome:bl.n + ". " + bl.nome, i0:a, f1:b, rot:rot || "" }); };
+  const ouvir = function(tr){ ouvirEm(tr.cid, tr.i0, tr.f1); if(tr.u && q.irPara) try{ q.irPara(tr.u.t); }catch(_){} };
+
+  /* ── G) aprender ── */
+  const [aprendido, setAprendido] = useState({});
+  const avisouAprender = useRef(false);
+  const aprender = async function(tipo, x, extra){
+    const cid = String(x.clipe || x.cid), t0 = Number(x.t0 != null ? x.t0 : x.i0), t1 = Number(x.t1 != null ? x.t1 : x.f1), kk = tipo + "|" + cid + "|" + t0.toFixed(2);
+    if(aprendido[kk] === "ok" || aprendido[kk] === "…" || !window._sb) return;
+    setAprendido(function(a){ const n = Object.assign({}, a); n[kk] = "…"; return n; });
+    const r = await _evmrRpc("criacao_aprender_trecho", { p_task:String(t.id || ""), p_tipo:tipo, p_dados:Object.assign({ clipe:cid, t0:Math.round(t0 * 100) / 100, t1:Math.round(t1 * 100) / 100, texto:String(x.texto || "").slice(0, 300), origem:"mesa", edicao_id:ed.id || null }, extra || {}) });
+    setAprendido(function(a){ const n = Object.assign({}, a); n[kk] = r.ok ? "ok" : (r.falta ? "falta" : "erro"); return n; });
+    if(!r.ok && !avisouAprender.current){ avisouAprender.current = true; _evToast("warning", r.falta ? "A IA que aprende ainda não guardou: falta publicar o servidor v29 (criacao_aprender_trecho)." : "Não guardei o aprendizado: " + r.msg); }
+    else if(r.ok && (tipo === "fim_cortado" || tipo === "voz_de_quem_grava")) _evToast("success", tipo === "fim_cortado" ? "Anotado: \"cortou o fim da frase\". Vira regra para os próximos vídeos." : "Anotado: \"voz de quem grava\". Vira regra para os próximos vídeos.");
+  };
+  const marcaAp = function(tipo, x){ const cid = String(x.clipe || x.cid), t0 = Number(x.t0 != null ? x.t0 : x.i0); return aprendido[tipo + "|" + cid + "|" + t0.toFixed(2)] || null; };
+
+  /* ── D) o roteiro ── */
+  const [rot, setRotS] = useState(function(){ return { itens:_evmrDaIA(calc, fala), gancho:null, cta:null }; });
+  const hist = useRef([]); const [nHist, setNHist] = useState(0);
+  const [alterado, setAlterado] = useState(false), [fonte, setFonte] = useState({ tipo:"ia" }), [lendo, setLendo] = useState(true), [avisoLer, setAvisoLer] = useState("");
+  const [salvando, setSalvando] = useState(false), [confFechar, setConfFechar] = useState(false);
+  const mudar = function(fn){ const r1 = fn(rot); if(!r1 || r1 === rot) return; hist.current.push(rot); if(hist.current.length > 80) hist.current.shift(); setNHist(hist.current.length); setRotS(r1); setAlterado(true); };
+  const desfazerRot = function(){ const r0 = hist.current.pop(); setNHist(hist.current.length); if(r0){ setRotS(r0); setAlterado(true); } };
+  /* lê o roteiro salvo (só LER: não grava nada) */
+  useEffect(function(){ let vivo = true; if(!window._sb || !t.id){ setLendo(false); return; }
+    _evmrRpc("criacao_roteiro_ler", { p_task:String(t.id) }).then(function(r){ if(!vivo) return; setLendo(false);
+      if(!r.ok){ setAvisoLer(r.falta ? "O roteiro ainda não fica guardado: falta publicar o servidor v29 (criacao_roteiro_ler/salvar). Dá para montar, mas o Salvar avisa." : "Não consegui ler o roteiro salvo (" + r.msg + "). Comecei pelo que a IA escolheu."); return; }
+      const d = r.data || {}, s = _evmrDeSalvo(d, fala);
+      // o que a IA já sugeriu neste card fica guardado pelo S2 (ia.ganchos_cta / ia.avaliar_sobras): reabre sem custo
+      try{ const ia = d.ia || {}, quem = function(x){ return { fase:"pronto", custo:null, guardado:{ em:x.em || null, por:x.por || "" } }; };
+        const g1 = ia.ganchos_cta && (ia.ganchos_cta.resultado || ia.ganchos_cta);
+        if(g1 && (Array.isArray(g1.ganchos) || Array.isArray(g1.ctas))){ setGc({ ganchos:(g1.ganchos || []).slice(0, 5), ctas:(g1.ctas || []).slice(0, 4) }); setIa("ganchos_cta", quem(ia.ganchos_cta)); }
+        const a1 = ia.avaliar_sobras && (ia.avaliar_sobras.resultado || ia.avaliar_sobras);
+        if(a1 && Array.isArray(a1.trechos)){ setAval(a1.trechos.filter(function(x){ return x && x.clipe; })); setIa("avaliar_sobras", quem(ia.avaliar_sobras)); } }catch(_){}
+      if(s){ setRotS(s); setFonte({ tipo:"salvo", versao:d.versao || null, autor:d.autor || d.por || "", em:d.em || d.atualizado_em || null }); } });
+    return function(){ vivo = false; }; }, [t.id, ed.id]);
+  const salvar = async function(){
+    if(salvando || !rot) return false; setSalvando(true);
+    const r = await _evmrRpc("criacao_roteiro_salvar", { p_task:String(t.id || ""), p_roteiro:_evmrParaSalvar(rot, fala, fonte.tipo === "salvo" ? fonte.versao : null) });
+    setSalvando(false);
+    if(!r.ok){ _evToast("error", r.falta ? "Não salvou: falta publicar o servidor v29 (criacao_roteiro_salvar)." : "Não salvou o roteiro: " + r.msg); return false; }
+    setAlterado(false); setFonte({ tipo:"salvo", versao:(r.data && r.data.versao) || null, autor:"você", em:new Date().toISOString() }); _evToast("success", "Roteiro salvo" + (r.data && r.data.versao ? " (versão " + r.data.versao + ")" : "") + ".");
+    return true; };
+  const itemDe = function(x, extra){ return _evmrItem(fala, x.cid || x.clipe, Number(x.i0 != null ? x.i0 : x.t0), Number(x.f1 != null ? x.f1 : x.t1), extra); };
+  const noRoteiro = function(cid, a, b){ return (rot.itens || []).some(function(it){ return _evmrSobrepoe(it, cid, a, b); }); };
+  const usadoIA = function(cid, a, b){ return partes.some(function(u){ return String(u.clipe) === String(cid) && Math.min(b, u.fim) - Math.max(a, u.ini) > 0.4 * Math.max(0.1, b - a); }); };
+  const incluir = function(x, pos){ const it = itemDe(x);
+    mudar(function(r){ const L = r.itens.slice(); const p = pos == null || pos > L.length ? L.length : Math.max(0, pos); const gi = L.length && L[L.length - 1].tag === "cta" && (pos == null) ? L.length - 1 : p; L.splice(gi, 0, it); return Object.assign({}, r, { itens:L }); });
+    if(!usadoIA(it.clipe, it.t0, it.t1)) aprender("incluiu", it, { estava:"fora" }); };
+  const tirarItem = function(j){ const it = rot.itens[j]; if(!it) return;
+    mudar(function(r){ const L = r.itens.slice(); L.splice(j, 1); return Object.assign({}, r, { itens:L }, it.tag === "gancho" ? { gancho:null } : {}, it.tag === "cta" ? { cta:null } : {}); });
+    if(it.ia || usadoIA(it.clipe, it.t0, it.t1)) aprender("tirou", it, { estava:"no_video" }); };
+  const mover = function(de, para){ if(para < 0 || para >= rot.itens.length || de === para) return; mudar(function(r){ const L = r.itens.slice(); const x = L.splice(de, 1)[0]; L.splice(para, 0, x); return Object.assign({}, r, { itens:L }); }); };
+  const riscar = function(j, w){ mudar(function(r){ const L = r.itens.slice(), it = Object.assign({}, L[j]), tr = (it.tirar || []).slice();
+    const ix = tr.findIndex(function(x){ return Math.abs(Number(x[0]) - Number(w.i)) < 0.011; }); if(ix >= 0) tr.splice(ix, 1); else tr.push([Number(w.i), Number(w.f || w.i)]);
+    it.tirar = tr; L[j] = it; return Object.assign({}, r, { itens:L }); }); };
+  const durTot = useMemo(function(){ return (rot.itens || []).reduce(function(a, it){ return a + _evmrDurItem(it, fala); }, 0); }, [rot, fala]);
+  /* arrastar e soltar (computador) */
+  const [arrDe, setArrDe] = useState(null), [arrSobre, setArrSobre] = useState(null);
+  const soltar = function(e, pos){ e.preventDefault(); setArrSobre(null); let d = null; try{ d = JSON.parse(e.dataTransfer.getData("text/plain") || "null"); }catch(_){}
+    if(!d && arrDe) d = arrDe; setArrDe(null); if(!d) return;
+    if(d.de === "rot") mover(d.j, pos > d.j ? pos - 1 : pos); else if(d.de === "fala") incluir(d, pos); };
+
+  /* ── C) e E) IA só no clique, com o custo antes ── */
+  const [iaEst, setIaEst] = useState({}), [gc, setGc] = useState(null), [aval, setAval] = useState(null);
+  const setIa = function(tipo, v){ setIaEst(function(a){ const n = Object.assign({}, a); n[tipo] = v; return n; }); };
+  const estimar = async function(tipo){
+    if(iaEst[tipo] && /estimando|rodando/.test(iaEst[tipo].fase || "")) return;
+    setIa(tipo, { fase:"estimando" });
+    const r = await _evmrChamar("video-roteiro", { acao:"estimar", task_id:String(t.id || ""), tipo:tipo });
+    if(!r.ok){ setIa(tipo, { fase:"erro", msg:r.falta ? "Falta publicar o servidor v29 (função video-roteiro). Nada foi gasto." : r.msg }); return; }
+    const d = r.data || {};
+    if(d.pode === false){ setIa(tipo, { fase:"nao", msg:String(d.motivo || "não pode agora") }); return; }
+    if(d.guardado){ setIa(tipo, { fase:"confirmar", custo:0, motivo:"" }); return rodarIA(tipo, true); }   // já pedido antes com a mesma fala: abre o guardado (R$ 0)
+    setIa(tipo, { fase:"confirmar", custo:d.custo_estimado_usd, motivo:d.motivo || "" }); };
+  const rodarIA = async function(tipo, jaGuardado){
+    if(!jaGuardado && (!iaEst[tipo] || iaEst[tipo].fase !== "confirmar")) return;
+    setIa(tipo, { fase:"rodando" });
+    const r = await _evmrChamar("video-roteiro", { acao:tipo, task_id:String(t.id || "") });
+    if(!r.ok){ setIa(tipo, { fase:"erro", msg:r.falta ? "Falta publicar o servidor v29 (função video-roteiro). Nada foi gasto." : "A IA não respondeu: " + r.msg }); return; }
+    const d = r.data || {};
+    if(tipo === "ganchos_cta") setGc({ ganchos:(Array.isArray(d.ganchos) ? d.ganchos : []).slice(0, 5), ctas:(Array.isArray(d.ctas) ? d.ctas : []).slice(0, 4) });
+    else setAval((Array.isArray(d.trechos) ? d.trechos : []).filter(function(x){ return x && x.clipe; }));
+    setIa(tipo, d.guardado ? { fase:"pronto", custo:null, guardado:{ em:d.em || null, por:d.por || "" } } : { fase:"pronto", custo:d.custo_usd }); };
+  const elIA = function(tipo, rotulo, dica){ const s = iaEst[tipo] || {};
+    return <div data-mr-ia={tipo} style={{display:"flex",flexDirection:"column",gap:6}}>
+      {(!s.fase || s.fase === "pronto" || s.fase === "erro" || s.fase === "nao") && <button data-mr-ia-botao={tipo} onClick={function(){ estimar(tipo); }} title={dica} style={Object.assign(bP("suave"), {justifyContent:"center"})}>{rotulo}{s.fase === "pronto" ? " de novo" : ""}</button>}
+      {s.fase === "estimando" && <div style={{fontSize:12,color:_EVP_COR.sub}}>Vendo quanto custa…</div>}
+      {s.fase === "rodando" && <div style={{fontSize:12,color:_EVP_COR.roxo,fontWeight:700}}>A IA está lendo a fala…</div>}
+      {s.fase === "confirmar" && <div data-mr-ia-confirmar={tipo} role="alertdialog" style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(234,179,8,.55)",background:_EVP_COR.aviso,fontSize:12,lineHeight:1.45}}>
+        <b>{rotulo}?</b> Custa uns {_evmrUSD(s.custo)} (conta no teto de gasto do vídeo).{s.motivo ? " " + s.motivo : ""}
+        <div style={{display:"flex",gap:8,marginTop:7,flexWrap:"wrap"}}>
+          <button data-mr-ia-sim={tipo} onClick={function(){ rodarIA(tipo); }} style={Object.assign(_evpBtn("primario"), {flex:"1 1 120px",justifyContent:"center"})}>Sim, pedir à IA</button>
+          <button onClick={function(){ setIa(tipo, {}); }} style={Object.assign(_evpBtn(), {flex:"1 1 80px",justifyContent:"center"})}>Não</button></div></div>}
+      {(s.fase === "erro" || s.fase === "nao") && <div data-mr-ia-erro={tipo} style={{fontSize:11.5,color:s.fase === "nao" ? amar : verm,lineHeight:1.4}}>{s.msg}</div>}
+      {s.fase === "pronto" && s.custo != null && <div style={{fontSize:11,color:_EVP_COR.fraco}}>Custou {_evmrUSD(s.custo)}.</div>}
+      {s.fase === "pronto" && s.guardado && <div data-mr-ia-guardado={tipo} style={{fontSize:11,color:_EVP_COR.fraco}}>Sugestão guardada{s.guardado.por ? " (pedida por " + s.guardado.por + ")" : ""}: abrir de novo não custa nada.</div>}
+    </div>; };
+
+  /* ── gancho e CTA escolhidos (A/B/C) ── */
+  const usarGancho = function(g){ const it = _evmrItem(fala, g.clipe, Number(g.t0), Number(g.t1), { tag:"gancho" });
+    aprender("gancho_escolhido", it, { manchete:String(g.manchete || "").slice(0, 80), porque:String(g.porque || "").slice(0, 300), nota:_evmrForca(g) });
+    mudar(function(r){ const L = r.itens.filter(function(x){ return x.tag !== "gancho"; }); L.unshift(it); return Object.assign({}, r, { itens:L, gancho:{ clipe:it.clipe, t0:it.t0, t1:it.t1, texto:it.texto, manchete:String(g.manchete || "").slice(0, 80) } }); }); };
+  const usarCta = function(c){ const it = _evmrItem(fala, c.clipe, Number(c.t0), Number(c.t1), { tag:"cta" });
+    aprender("cta_escolhido", it, { tarja:String(c.tarja || "").slice(0, 80), porque:String(c.porque || "").slice(0, 300), nota:_evmrForca(c) });
+    mudar(function(r){ const L = r.itens.filter(function(x){ return x.tag !== "cta"; }); L.push(it); return Object.assign({}, r, { itens:L, cta:{ clipe:it.clipe, t0:it.t0, t1:it.t1, texto:it.texto, tarja:String(c.tarja || "").slice(0, 80) } }); }); };
+  const editarTexto = function(campo, chave, v){ mudar(function(r){ if(!r[campo]) return r; const o = Object.assign({}, r[campo]); o[chave] = String(v).slice(0, 80); const n = Object.assign({}, r); n[campo] = o; return n; }); };
+  const editarSugestao = function(lista, j, chave, v){ setGc(function(g){ if(!g) return g; const n = Object.assign({}, g); n[lista] = n[lista].slice(); n[lista][j] = Object.assign({}, n[lista][j]); n[lista][j][chave] = String(v).slice(0, 80); return n; }); };
+
+  /* ── F) editar em cima do roteiro ── */
+  const [edR, setEdR] = useState(null), [v29, setV29] = useState(function(){ return !!(_EVMR_V29 && _EVMR_V29.v29); });
+  const prepararEditar = async function(){
+    if(!rot.itens.length || (edR && /estimando|indo/.test(edR.fase))) return;
+    if(!q.onEditarRoteiro){ setEdR({ fase:"sem", msg:soLer ? "Abra o editor para mandar a IA editar em cima do roteiro." : "Daqui não dá: abra este card no Estúdio (Criação › Edição de vídeo)." }); return; }
+    setEdR({ fase:"estimando" });
+    // sonda SEM gastar qual video-editar está no ar (a v101 ignoraria o modo roteiro e faria uma edição inteira nova)
+    const sv = await _evmrSondaV29(ed.id);
+    if(sv.falta){ setEdR({ fase:"falta", msg:_EVMR_PARTE2 + " O servidor de edição que está no ar ainda não sabe editar pelo roteiro." }); return; }
+    if(!sv.v29){ setEdR({ fase:"erro", msg:String(sv.msg || "o servidor não respondeu") }); return; }
+    setV29(true);
+    // custo antes (S1: estimar:true, sem IA): o teto reservado de ouvir de novo + montar
+    const r = await _evmrChamar("video-editar", { acao:"roteiro", modo:"roteiro", estimar:true, id:ed.id || null, task_id:String(t.id || ""), roteiro:_evmrParaEdge(rot, fala) });
+    const d = (r.ok && r.data) || {};
+    if(r.ok && d.pode === false){ setEdR({ fase:"erro", msg:String(d.motivo || "não pode agora") }); return; }
+    if(!r.ok && !r.falta && /modo roteiro/i.test(r.msg || "")){ setEdR({ fase:"erro", msg:r.msg }); return; }
+    setEdR({ fase:"confirmar", custo:d.custo_estimado_brl != null ? Number(d.custo_estimado_brl) : null, custoUsd:d.custo_estimado_usd != null ? Number(d.custo_estimado_usd) : null, motivo:d.motivo ? String(d.motivo) : "" }); };
+  const confirmarEditar = async function(){
+    if(!edR || edR.fase !== "confirmar" || !q.onEditarRoteiro) return;
+    setEdR({ fase:"indo" });
+    if(alterado || fonte.tipo !== "salvo"){ const ok = await salvar(); if(!ok){ setEdR({ fase:"erro", msg:"Salve o roteiro antes (o servidor lê o roteiro salvo)." }); return; } }
+    const corpo = _evmrParaEdge(rot, fala);
+    try{ q.onFechar(); }catch(_){}
+    try{ await q.onEditarRoteiro(corpo); }catch(e){ _evToast("error", "Não editou: " + ((e && e.message) || e)); } };
+
+  /* ── A) transcrever um vídeo que a IA não ouviu ── */
+  const [txv, setTxv] = useState(null);
+  const pedirTranscrever = async function(b){
+    if(txv && /estimando|indo/.test(txv.fase)) return;
+    if(!ed.id){ setTxv({ cid:b.cid, fase:"erro", msg:"A edição ainda não existe." }); return; }
+    setTxv({ cid:b.cid, fase:"estimando" });
+    const dur = Number(b.dur) || 60, local = Math.max(0.01, dur / 60 * 0.006);   // fala: ~US$ 0,006 por minuto (só ouvir, sem IA de texto)
+    // 1º a video-roteiro (S2, edge pequena); se ela não estiver no ar, o "transcrever_fala" da video-editar v29 (S1) — sondado sem gastar
+    const r = await _evmrChamar("video-roteiro", { acao:"estimar", task_id:String(t.id || ""), tipo:"transcrever", clipe:b.cid });
+    if(r.ok){ const d = r.data || {}; if(d.pode === false){ setTxv({ cid:b.cid, fase:"erro", msg:String(d.motivo || "não pode agora") }); return; }
+      setTxv({ cid:b.cid, fase:"confirmar", via:"roteiro", custo:d.custo_estimado_usd != null ? Number(d.custo_estimado_usd) : local }); return; }
+    if(!r.falta){ setTxv({ cid:b.cid, fase:"erro", msg:r.msg }); return; }
+    const sv = await _evmrSondaV29(ed.id);
+    if(sv.v29 && (sv.recursos || []).indexOf("transcrever_fala") >= 0){ setTxv({ cid:b.cid, fase:"confirmar", via:"editar", custo:local }); return; }
+    setTxv({ cid:b.cid, fase:sv.falta || sv.v29 ? "falta" : "erro", msg:sv.falta || sv.v29 ? "Ainda não ligado: falta publicar o servidor v29 (video-roteiro ou video-editar \"transcrever_fala\"). Nada foi gasto." : String(sv.msg || "erro") }); };
+  const transcrever = async function(b){
+    if(!txv || txv.fase !== "confirmar") return; const c = b.c || {};
+    const via = txv.via || "editar";
+    setTxv({ cid:b.cid, fase:"indo", via:via, msg:"Começando…" });
+    try{ const d = await _evmrTranscrever(ed, { id:b.cid, nome:b.nome, url:c.url, preview_url:c.preview_url || c.previewUrl || null }, function(m){ setTxv({ cid:b.cid, fase:"indo", via:via, msg:m }); }, via, t.id);
+      setTxv({ cid:b.cid, fase:"ok", msg:(d.aviso ? "Pronto, mas " + d.aviso : "Pronto: a fala deste vídeo chegou") + (d.custo_brl != null ? " (custou R$ " + Number(d.custo_brl).toFixed(2).replace(".", ",") + ")" : "") + "." });
+      if(q.onRecarregar) q.onRecarregar(); }
+    catch(e){ setTxv({ cid:b.cid, fase:"erro", msg:"Não transcreveu: " + ((e && e.message) || e) }); } };
+
+  /* ── por que (B) ── */
+  const porQue = function(cid, a, b, usado){
+    const o = {};
+    o.esc = plano.escolhas.find(function(x){ return _evmrSobrepoe(x, cid, a, b); }) || null;
+    o.melhor = plano.melhores.find(function(x){ return _evmrSobrepoe(x, cid, a, b); }) || null;
+    o.fora = plano.fora.find(function(x){ return _evmrSobrepoe(x, cid, a, b); }) || null;
+    o.sobra = plano.sobras.find(function(x){ return _evmrSobrepoe(x, cid, a, b); }) || null;
+    o.aval = (aval || []).find(function(x){ return _evmrSobrepoe(x, cid, a, b); }) || null;
+    if(usado){ const m = _evpMotivoDe(motivos, cid, a, b); if(m && m.por === "ia" && m.motivo !== "apoio" && m.motivo !== "outro") o.contra = m;
+      if(!o.contra && o.fora) o.contra = o.fora; }
+    o.forca = _evmrForca(o.esc) != null ? _evmrForca(o.esc) : (o.melhor ? o.melhor.forca : (_evmrForca(o.fora) != null ? _evmrForca(o.fora) : _evmrForca(o.sobra)));
+    return o; };
+  const motTxt = function(m){ if(!m) return "sem motivo registrado"; const base = _EVMR_MOT[m.motivo] || (m.motivo === "etapa1" ? _EVMR_MOT.etapa1 : (_EVP_MOTIVOS[m.motivo] || "saiu"));
+    const nt = typeof m.nota === "string" && !/^\d+$/.test(m.nota) ? m.nota : ""; return base + (m.porque ? " — " + String(m.porque).slice(0, 120) : nt ? " — " + nt.slice(0, 100) : ""); };
+  const elForca = function(f){ if(f == null || !isFinite(f)) return null; const v = Math.max(0, Math.min(10, Number(f)));
+    return <span data-mr-forca={v} title="Nota de força (0 a 10): número, benefício, prova, emoção, frase de impacto" style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,fontWeight:800,color:v >= 8 ? verde : v >= 5 ? amar : _EVP_COR.sub}}>
+      <span style={{width:34,height:5,borderRadius:9,background:_EVP_COR.linha,overflow:"hidden",display:"inline-block"}}><span style={{display:"block",height:"100%",width:(v * 10) + "%",background:"currentColor"}}/></span>{String(Math.round(v * 10) / 10).replace(".", ",")}</span>; };
+
+  /* ── A) cartões por vídeo ── */
+  const [soFala, setSoFala] = useState(false), [selK, setSelK] = useState(null), [vista, setVista] = useState("videos"), [verPlano, setVerPlano] = useState(true);
+  const selos = useMemo(function(){ const o = {}; blocos.forEach(function(b){ b.trechos.forEach(function(tr){ if(!tr.u) o[tr.k] = _evmrSeloGratis({ texto:tr.texto, t0:tr.i0, t1:tr.f1, motivo:tr.motivo && tr.motivo.motivo }); }); }); return o; }, [blocos]);
+  const nEstrelas = Object.keys(selos).filter(function(k){ return selos[k].estrela; }).length;
+  const bordasTrecho = function(tr){ if(!tr.u) return []; return (bordasParte[tr.u.id] || []).filter(function(s){ return s.t >= tr.i0 - 0.05 && s.t <= tr.f1 + 0.05; }); };
+  const naoOuviu = function(b){ return !b.temFala && (b.naoLido || b.soCard || (b.foraEtapa && b.foraEtapa.tipo === "triagem") || !b.ouviu || !!(b.foraEtapa && b.foraEtapa.resumo)); };
+  const visB = ordem.filter(function(b){ return !soFala || b.temFala || (b.foraEtapa && b.foraEtapa.resumo); });
+  const tot = blocos.reduce(function(a, b){ return { fala:a.fala + b.fala, usado:a.usado + b.usado, sem:a.sem + (naoOuviu(b) ? 1 : 0) }; }, { fala:0, usado:0, sem:0 });
+
+  const elTrechoSel = function(b, tr){
+    const pq = porQue(tr.cid, tr.i0, tr.f1, !!tr.u), sl = selos[tr.k], bd = bordasTrecho(tr), ja = noRoteiro(tr.cid, tr.i0, tr.f1);
+    return <div data-mr-sel={tr.k} style={{marginTop:6,padding:"8px 10px",borderRadius:10,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa,fontSize:12,lineHeight:1.45,display:"flex",flexDirection:"column",gap:5}}>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontFamily:_EVP_MONO,fontWeight:700,color:_EVP_COR.sub}}>{_evtxT(tr.i0)}–{_evtxT(tr.f1)}</span>
+        {tr.u ? <span style={{fontWeight:800,color:"#fff",background:verde,borderRadius:99,padding:"1px 8px"}}>✓ entrou · parte {tr.u.parte}</span>
+          : <span style={{fontWeight:700,color:"#475569",background:"#e2e8f0",borderRadius:99,padding:"1px 8px"}}>⏸ ficou de fora</span>}
+        {elForca(pq.forca)}
+        {pq.melhor && <span title={pq.melhor.porque || ""} style={{fontSize:11,fontWeight:800,color:_EVP_COR.roxo}}>★ melhor momento {pq.melhor.id}{pq.melhor.tipo ? " (" + pq.melhor.tipo + ")" : ""}</span>}
+      </div>
+      {tr.u && <div data-mr-porque="entrou"><b>Por que entrou:</b> {pq.esc ? String(pq.esc.porque || "—") + (pq.esc.etapa ? " · etapa: " + pq.esc.etapa : "") : (pq.melhor && pq.melhor.porque ? pq.melhor.porque : <span style={{color:_EVP_COR.fraco}}>a IA não disse (edição anterior ao plano)</span>)}</div>}
+      {!tr.u && <div data-mr-porque="fora"><b>Por que ficou de fora:</b> {pq.fora && pq.fora.porque ? String(pq.fora.porque) + (pq.fora.motivo ? " (" + (_EVMR_MOT[pq.fora.motivo] || pq.fora.motivo) + ")" : "") : motTxt(tr.motivo)}</div>}
+      {pq.contra && <div data-mr-contradicao="1" style={{color:"#c2410c",fontWeight:700}}>⚠ A IA tinha deixado este trecho de fora ({motTxt(pq.contra)}), mas a regra de "frase inteira" do código pôs de volta.</div>}
+      {pq.sobra && <div data-mr-sobra={pq.sobra.decisao || ""} style={{color:_EVP_COR.sub}}>🔎 Conferência "deixei algo bom de fora?": {pq.sobra.decisao === "incluido_auto" ? "a IA voltou e incluiu" : pq.sobra.decisao === "sugerido" ? "a IA sugere incluir" : "a IA conferiu e descartou"}{pq.sobra.porque ? " — " + pq.sobra.porque : ""}</div>}
+      {!tr.u && sl && <div data-mr-selo={sl.estrela ? "1" : "0"} style={{color:sl.estrela ? amar : _EVP_COR.fraco}}>{sl.estrela ? "⭐ pode ser bom" : "sem ⭐"} · {sl.porque}</div>}
+      {pq.aval && <div data-mr-aval="1" style={{color:_EVP_COR.roxo}}>✨ IA: {elForca(_evmrForca(pq.aval))} {String(pq.aval.porque || "")}</div>}
+      {bd.map(function(s, j){ return <div key={j} data-mr-borda={s.tipo} style={{color:s.grave ? verm : "#c2410c",fontWeight:700}}>{s.grave ? "🔴" : "🟠"} {s.txt}</div>; })}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:2}}>
+        <button onClick={function(){ ouvir(tr); }} style={bP()}>▶ Ouvir</button>
+        <button data-mr-add={tr.k} onClick={function(){ incluir({ de:"fala", cid:tr.cid, i0:tr.i0, f1:tr.f1 }); }} disabled={ja} title={ja ? "Já está no roteiro" : "Põe esta frase no fim do roteiro"} style={bP("suave", !ja)}>{ja ? "✓ no roteiro" : "＋ No roteiro"}</button>
+        {tr.u && ["fim_cortado", "voz_de_quem_grava"].map(function(tp){ const st = marcaAp(tp, tr);
+          return <button key={tp} data-mr-aprender={tp} onClick={function(){ aprender(tp, tr); }} aria-pressed={st === "ok"} title="A IA que aprende guarda este caso e não repete nos próximos vídeos"
+            style={chip(st === "ok", tp === "fim_cortado" ? "#c2410c" : verm)}>{tp === "fim_cortado" ? "✂ cortou o fim da frase" : "🎙 voz de quem grava"}{st === "ok" ? " ✓" : st === "…" ? " …" : st === "falta" || st === "erro" ? " (não guardou)" : ""}</button>; })}
+        {!tr.u && sl && sl.estrela && <button data-mr-aprender="trecho_bom_de_fora" onClick={function(){ aprender("trecho_bom_de_fora", tr); }} style={chip(marcaAp("trecho_bom_de_fora", tr) === "ok", amar)}>⭐ era bom mesmo{marcaAp("trecho_bom_de_fora", tr) === "ok" ? " ✓" : ""}</button>}
+        <button onClick={function(){ setSelK(null); }} style={Object.assign(chip(false), {marginLeft:"auto"})}>Fechar</button>
+      </div></div>; };
+
+  const elVideo = function(b){
+    const th = _evpThumbEm(b.cid, b.dur > 0 ? b.dur / 2 : 1) || _evpThumbEm(b.cid, 1);
+    const ivs = _evmrIntervalos(partes.filter(function(u){ return u.clipe === b.cid; }).map(function(u){ return [u.ini, u.fim]; }));
+    const D = Math.max(b.dur || 0, b.trechos.length ? b.trechos[b.trechos.length - 1].f1 : 0, 1);
+    const nao = naoOuviu(b), sel = b.trechos.find(function(x){ return x.k === selK; }) || null, tv = txv && txv.cid === b.cid ? txv : null;
+    return <section key={b.cid} data-mr-video={b.cid} data-mr-n={b.n} style={Object.assign({}, caixa, {marginBottom:12})}>
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <div style={{width:56,height:56,borderRadius:9,overflow:"hidden",flexShrink:0,background:"#1c2236",display:"grid",placeItems:"center",color:"#94a3b8",fontSize:10}}>
+          {th ? <img src={th} alt="" draggable={false} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : (b.rot ? "↻ " + b.rot + "°" : "vídeo")}</div>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontWeight:800,fontSize:13.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={b.nome}>{b.nome} <span style={{fontWeight:600,color:_EVP_COR.fraco}}>· {_evtxDurVid(b.dur)}{b.rot ? " · ↻ " + b.rot + "°" : ""}</span></div>
+          <div data-mr-uso={b.cid} style={{fontSize:12,color:ivs.length ? verde : _EVP_COR.sub,fontWeight:ivs.length ? 700 : 500,lineHeight:1.4}}>{b.temFala || ivs.length ? _evmrLegendaUso(ivs, b.dur) : (nao ? "sem transcrição" : "sem fala (vídeo de imagem)")}</div>
+        </div>
+      </div>
+      <div data-mr-barra={b.cid} title="O tempo do vídeo: verde = entrou · cinza = fala que ficou de fora · clique para ouvir dali"
+        onClick={function(e){ const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / Math.max(1, r.width) * D;
+          const tr = b.trechos.find(function(z){ return x >= z.i0 - 0.3 && x <= z.f1 + 0.3; }); if(tr){ setSelK(tr.k); ouvirEm(b.cid, Math.max(tr.i0, x - 0.2), tr.f1); } else if(b.c && b.c.url) ouvirEm(b.cid, x, Math.min(D, x + 6)); }}
+        style={{position:"relative",height:12,borderRadius:6,background:_EVP_COR.linha2,margin:"8px 0 6px",cursor:"pointer",overflow:"hidden",border:"1px solid " + _EVP_COR.linha}}>
+        {b.trechos.map(function(tr){ return <span key={tr.k} style={{position:"absolute",top:0,bottom:0,left:(tr.i0 / D * 100) + "%",width:Math.max(0.4, (tr.f1 - tr.i0) / D * 100) + "%",background:tr.u ? "transparent" : "#cbd5e1"}}/>; })}
+        {ivs.map(function(x, j){ return <span key={"u" + j} data-mr-barra-verde="1" style={{position:"absolute",top:0,bottom:0,left:(x[0] / D * 100) + "%",width:Math.max(0.5, (x[1] - x[0]) / D * 100) + "%",background:"#16a34a"}}/>; })}
+        {tocar && tocar.c && tocar.c.id === b.cid && <span style={{position:"absolute",top:-2,bottom:-2,left:(tocar.i0 / D * 100) + "%",width:2,background:_EVP_COR.playhead}}/>}
+      </div>
+      {nao && <div data-mr-semtx={b.cid} style={{padding:"8px 10px",borderRadius:10,background:_EVP_COR.aviso,fontSize:12,lineHeight:1.45,display:"flex",flexDirection:"column",gap:6}}>
+        <div><b>🔇 A IA não ouviu este vídeo.</b> {_evtxSemFalaTxt(b.foraEtapa, b.ouviu, b.naoLido, b.soCard)}{b.foraEtapa && b.foraEtapa.resumo ? ": “" + b.foraEtapa.resumo + (b.foraEtapa.cortada ? "…" : "") + "”" : ""}</div>
+        {(!tv || tv.fase === "erro" || tv.fase === "falta") && <button data-mr-transcrever={b.cid} onClick={function(){ pedirTranscrever(b); }} style={Object.assign(bP("suave"), {alignSelf:"flex-start"})}>🎧 Transcrever este vídeo</button>}
+        {tv && tv.fase === "estimando" && <span>Conferindo o servidor…</span>}
+        {tv && tv.fase === "confirmar" && <div data-mr-tx-confirmar={b.cid} style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><span>Transcrever {_evmrDurLonga(b.dur)} de vídeo? Custa uns {_evmrUSD(tv.custo)} (só a fala, sem editar nada).</span>
+          <button data-mr-tx-sim={b.cid} onClick={function(){ transcrever(b); }} style={bP("primario")}>Sim, transcrever</button><button onClick={function(){ setTxv(null); }} style={bP()}>Não</button></div>}
+        {tv && (tv.fase === "indo" || tv.fase === "ok") && <span style={{color:tv.fase === "ok" ? verde : _EVP_COR.roxo,fontWeight:700}}>{tv.msg}</span>}
+        {tv && (tv.fase === "erro" || tv.fase === "falta") && <span data-mr-tx-erro={b.cid} style={{color:tv.fase === "falta" ? amar : verm,fontWeight:700}}>{tv.msg}</span>}
+      </div>}
+      {b.temFala && <div data-mr-texto={b.cid} style={{fontSize:isMob ? 14 : 14.5,lineHeight:1.75,userSelect:"text"}}>
+        {b.trechos.map(function(tr){ const sl = selos[tr.k], bd = bordasTrecho(tr), ativo = selK === tr.k, noR = noRoteiro(tr.cid, tr.i0, tr.f1);
+          return <span key={tr.k} data-mr-trecho={tr.k} data-mr-estado={tr.u ? "entrou" : "fora"} data-mr-estrela={sl && sl.estrela ? "1" : "0"} draggable={!isMob}
+            onDragStart={function(e){ const d = { de:"fala", cid:tr.cid, i0:tr.i0, f1:tr.f1 }; setArrDe(d); try{ e.dataTransfer.setData("text/plain", JSON.stringify(d)); e.dataTransfer.effectAllowed = "copy"; }catch(_){} }}
+            onDragEnd={function(){ setArrDe(null); setArrSobre(null); }}
+            onClick={function(){ setSelK(tr.k); ouvir(tr); }} title={(tr.u ? "Entrou (parte " + tr.u.parte + ")" : "Ficou de fora: " + motTxt(tr.motivo)) + " · clique para ouvir · arraste para o roteiro"}
+            style={{cursor:"pointer",padding:"1px 3px",margin:"0 1px",borderRadius:5,boxDecorationBreak:"clone",WebkitBoxDecorationBreak:"clone",
+              background:tr.u ? "rgba(22,163,74,.16)" : "transparent",color:tr.u ? _EVP_COR.ink : _EVP_COR.sub,outline:ativo ? "2px solid " + _EVP_COR.roxo : "none",
+              borderBottom:noR ? "2px solid " + _EVP_COR.roxo : "none"}}>
+            {tr.u && <sup style={{fontSize:9.5,fontWeight:800,color:verde,marginRight:2}}>p{tr.u.parte}</sup>}
+            {sl && sl.estrela && <span data-mr-estrela-ico="1" title={"⭐ pode ser bom (" + sl.porque + ")"}>⭐</span>}
+            {bd.length > 0 && <span title={bd.map(function(s){ return s.txt; }).join(" · ")}>{bd.some(function(s){ return s.grave; }) ? "🔴" : "🟠"}</span>}
+            {tr.texto}{" "}</span>; })}
+      </div>}
+      {sel && elTrechoSel(b, sel)}
+    </section>; };
+
+  /* ── B) o plano editorial ── */
+  const elPlano = <div data-mr-plano={plano.antiga ? "antiga" : "v29"} style={Object.assign({}, caixa, {marginBottom:12,display:"flex",flexDirection:"column",gap:8})}>
+    <div style={{display:"flex",alignItems:"center",gap:8}}><b style={{fontSize:13.5}}>🧭 Por que: o plano da IA</b>
+      {!isMob && <button onClick={function(){ setVerPlano(!verPlano); }} style={Object.assign(chip(false), {marginLeft:"auto"})}>{verPlano ? "Esconder" : "Mostrar"}</button>}</div>
+    {(verPlano || isMob) && <div style={{display:"flex",flexDirection:"column",gap:8,fontSize:12.5,lineHeight:1.5}}>
+      {plano.antiga && <div data-mr-antiga="1" style={{padding:"7px 10px",borderRadius:9,background:_EVP_COR.aviso,fontWeight:700}}>Esta edição é anterior: a IA não escreveu o plano (ideia central, história, melhores momentos com nota). Refaça para ver o plano. Abaixo, o que ela deixou registrado.</div>}
+      {plano.roteiroUsado && <div data-mr-roteiro-usado="1" style={{padding:"7px 10px",borderRadius:9,background:_EVP_COR.roxoSoft,fontWeight:700}}>📜 Esta edição seguiu o roteiro da equipe ({(Array.isArray(plano.roteiroUsado.itens) ? plano.roteiroUsado.itens.length : 0)} frases): a IA não escolheu de novo.{Array.isArray(plano.roteiroUsado.avisos) && plano.roteiroUsado.avisos.length ? " Avisos: " + plano.roteiroUsado.avisos.slice(0, 4).join(" · ") : ""}</div>}
+      {plano.quemGrava && Number(plano.quemGrava.tirados || 0) + Number(plano.quemGrava.aparados || 0) + Number(plano.quemGrava.partidos || 0) > 0 && <div data-mr-quem-grava="1" style={{color:_EVP_COR.sub}}>🎙 Voz de quem grava tirada sozinha: {Number(plano.quemGrava.tirados || 0)} trecho(s) tirado(s), {Number(plano.quemGrava.aparados || 0)} aparado(s){Number(plano.quemGrava.partidos || 0) ? ", " + Number(plano.quemGrava.partidos) + " partido(s)" : ""}.</div>}
+      {plano.ideia && <div data-mr-ideia="1"><b>Ideia central:</b> {plano.ideia}</div>}
+      {plano.publico && <div><b>Para quem:</b> {plano.publico}</div>}
+      {(plano.alvo > 0 || plano.criterio) && <div style={{color:_EVP_COR.sub}}>{plano.alvo > 0 ? "Duração alvo: " + _evmrDurLonga(plano.alvo) + ". " : ""}{plano.criterio}</div>}
+      {plano.historia.length > 0 && <div data-mr-historia="1"><b>A história:</b>
+        <div style={{display:"flex",flexDirection:isMob ? "column" : "row",gap:6,marginTop:4,flexWrap:"wrap"}}>
+          {plano.historia.map(function(h, j){ const refs = (Array.isArray(h.trechos) ? h.trechos : []).map(function(r){ return typeof r === "string" ? plano.melhores.find(function(m){ return m.id === r; }) : r; }).filter(Boolean);
+            return <div key={j} data-mr-etapa={h.etapa || ""} style={{flex:"1 1 160px",padding:"6px 8px",borderRadius:9,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.faixa}}>
+              <div style={{fontSize:11,fontWeight:800,color:_EVP_COR.roxo,textTransform:"uppercase"}}>{j + 1}. {({ problema:"Problema", solucao:"Solução", resultado:"Resultado", prova:"Prova", recomendacao:"Recomendação", outro:"Outro" })[h.etapa] || h.etapa || "etapa"}</div>
+              <div style={{fontSize:12}}>{h.resumo || ""}</div>
+              {refs.map(function(m, i){ return <button key={i} onClick={function(){ if(m.clipe) ouvirEm(String(m.clipe), Number(m.t0), Number(m.t1)); }} style={Object.assign(chip(false), {marginTop:4,marginRight:4,fontSize:11})}>▶ {m.id || ""} {_evtxT(Number(m.t0))}</button>; })}</div>; })}
+        </div></div>}
+      {plano.melhores.length > 0 && <div data-mr-melhores="1"><b>Melhores momentos ({plano.melhores.length}):</b>
+        {plano.melhores.slice().sort(function(a, b){ return (b.forca || 0) - (a.forca || 0); }).map(function(m){ const usou = usadoIA(m.clipe, m.t0, m.t1), noR = noRoteiro(m.clipe, m.t0, m.t1);
+          const bl = blocos.find(function(x){ return x.cid === m.clipe; });
+          return <div key={m.id} data-mr-melhor={m.id} data-mr-usou={usou ? "1" : "0"} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"6px 0",borderTop:"1px solid " + _EVP_COR.linha2,flexWrap:isMob ? "wrap" : "nowrap"}}>
+            <span style={{minWidth:68}}>{elForca(m.forca)}</span>
+            <div style={{flex:1,minWidth:0}}><div>“{String(m.texto || "").slice(0, 220)}”</div>
+              <div style={{fontSize:11.5,color:_EVP_COR.sub}}>{m.id} · {m.tipo || "—"} · {bl ? bl.nome : "vídeo"} {_evtxT(m.t0)}–{_evtxT(m.t1)} · {m.porque || ""}</div></div>
+            <span style={{fontSize:11,fontWeight:800,whiteSpace:"nowrap",color:usou ? verde : amar}}>{usou ? "✓ entrou" : "⏸ ficou de fora"}</span>
+            <button onClick={function(){ ouvirEm(m.clipe, m.t0, m.t1); }} style={bP()}>▶</button>
+            <button onClick={function(){ incluir({ de:"fala", cid:m.clipe, i0:m.t0, f1:m.t1 }); }} disabled={noR} style={bP("suave", !noR)}>{noR ? "✓" : "＋"}</button></div>; })}</div>}
+      {plano.sobras.length > 0 && <div data-mr-sobras="1"><b>Conferência “deixei algo bom de fora?”</b>
+        {plano.sobras.map(function(s, j){ return <div key={j} style={{fontSize:12,padding:"4px 0",color:_EVP_COR.sub}}>{s.decisao === "incluido_auto" ? "✓ incluído" : s.decisao === "sugerido" ? "💡 sugerido" : "✗ descartado"} {elForca(_evmrForca(s))} “{String(s.texto || "").slice(0, 140)}” — {s.porque || ""}
+          <button onClick={function(){ ouvirEm(String(s.clipe), Number(s.t0), Number(s.t1)); }} style={Object.assign(chip(false), {marginLeft:6,fontSize:11})}>▶</button></div>; })}</div>}
+      {plano.antiga && plano.explicacao && <div><b>O que a IA explicou:</b> {plano.explicacao.slice(0, 600)}</div>}
+      {plano.antiga && plano.tomadas && <div><b>Tomadas:</b> {plano.tomadas.slice(0, 400)}</div>}
+      {plano.antiga && plano.ganchos.length > 0 && <div><b>Ganchos que ela pensou:</b> {plano.ganchos.slice(0, 3).map(function(g){ return "“" + String(g.texto || "").slice(0, 70) + "” (" + (g.porque || "") + ")"; }).join(" · ")}</div>}
+      <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>⭐ {nEstrelas} trecho{nEstrelas === 1 ? "" : "s"} de fora “pode ser bom” pela regra grátis (sem IA). Clique num trecho para ver por que entrou ou ficou de fora.</div>
+      {elIA("avaliar_sobras", "✨ Avaliar com IA o que ficou de fora", "A IA lê o que ficou de fora e dá nota de 0 a 10 (só no clique, com o custo antes)")}
+      {aval && <div data-mr-aval-lista="1" style={{fontSize:12}}>{aval.length ? aval.slice(0, 8).map(function(x, j){ const bl = blocos.find(function(z){ return z.cid === x.clipe; });
+        return <div key={j} style={{padding:"3px 0"}}>{elForca(_evmrForca(x))} “{String(x.texto || "").slice(0, 120)}” <span style={{color:_EVP_COR.sub}}>({bl ? bl.nome : "vídeo"} {_evtxT(Number(x.t0))}) {x.porque || ""}</span>
+          <button onClick={function(){ incluir({ de:"fala", cid:x.clipe, i0:Number(x.t0), f1:Number(x.t1) }); }} style={Object.assign(chip(false), {marginLeft:6,fontSize:11})}>＋</button></div>; }) : "A IA não achou nada forte que ficou de fora."}</div>}
+    </div>}
+  </div>;
+
+  /* ── D) coluna Roteiro ── */
+  const elRoteiro = <div data-mr-roteiro="1" style={{display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <b style={{fontSize:14}}>📜 Roteiro</b>
+      <span data-mr-total="1" style={{fontFamily:_EVP_MONO,fontWeight:800,fontSize:13,color:plano.alvo > 0 && durTot > plano.alvo * 1.1 ? "#c2410c" : _EVP_COR.ink}}>{_evtxDur(durTot)}</span>
+      <span style={{fontSize:11.5,color:_EVP_COR.sub}}>{rot.itens.length} frase{rot.itens.length === 1 ? "" : "s"}{plano.alvo > 0 ? " · alvo " + _evmrDurLonga(plano.alvo) : ""}</span>
+      <span style={{flex:1}}/>
+      <button data-mr-limpar="1" onClick={function(){ mudar(function(){ return { itens:[], gancho:null, cta:null }; }); }} disabled={!rot.itens.length} style={chip(false)}>Limpar</button>
+      <button data-mr-voltar-ia="1" onClick={function(){ mudar(function(){ return { itens:_evmrDaIA(calc, fala), gancho:null, cta:null }; }); }} title="Começar de novo pelo que a IA escolheu" style={chip(false)}>O da IA</button>
+    </div>
+    <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}>{lendo ? "Lendo o roteiro salvo…" : fonte.tipo === "salvo" ? "Roteiro salvo" + (fonte.versao ? " · versão " + fonte.versao : "") + (fonte.autor ? " · " + fonte.autor : "") + (alterado ? " · com mudanças não salvas" : "") : "Começou pelo que a IA escolheu (a edição de agora)." + (alterado ? " Mudanças não salvas." : "")}
+      {" "}{isMob ? "Toque em ＋ nas frases para pôr aqui." : "Arraste frases dos vídeos para cá; clique numa palavra para riscar."}</div>
+    {avisoLer && <div data-mr-aviso-ler="1" style={{fontSize:11.5,color:amar,lineHeight:1.4}}>{avisoLer}</div>}
+    <div onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ soltar(e, rot.itens.length); }} style={{display:"flex",flexDirection:"column",gap:6,minHeight:60}}>
+      {rot.itens.map(function(it, j){ const segs = _evmrSegs(it, fala), du = segs.reduce(function(a, s){ return a + s.b - s.a; }, 0);
+        const ws = ((fala && fala[it.clipe]) || []).filter(function(w){ return Number(w.i) >= it.t0 - 0.03 && Number(w.i) < it.t1 - 0.03; });
+        const an = rot.itens[j - 1], de = rot.itens[j + 1];
+        const bd = _evmrBordas((fala && fala[it.clipe]) || [], segs[0] ? segs[0].a : it.t0, segs.length ? segs[segs.length - 1].b : it.t1, { clipe:it.clipe, antes:an ? { clipe:an.clipe, b:an.t1 } : null, depois:de ? { clipe:de.clipe, a:de.t0 } : null });
+        const bl = blocos.find(function(x){ return x.cid === it.clipe; }), corte = function(w){ return (it.tirar || []).some(function(x){ return Math.abs(Number(x[0]) - Number(w.i)) < 0.011; }); };
+        return <div key={it.k} data-mr-item={j} draggable={!isMob}
+          onDragStart={function(e){ const d = { de:"rot", j:j }; setArrDe(d); try{ e.dataTransfer.setData("text/plain", JSON.stringify(d)); e.dataTransfer.effectAllowed = "move"; }catch(_){} }}
+          onDragEnd={function(){ setArrDe(null); setArrSobre(null); }}
+          onDragOver={function(e){ e.preventDefault(); e.stopPropagation(); if(arrSobre !== j) setArrSobre(j); }} onDrop={function(e){ e.stopPropagation(); soltar(e, j); }}
+          style={{padding:"7px 9px",borderRadius:10,border:"1px solid " + (it.tag ? _EVP_COR.roxo : _EVP_COR.linha),background:_EVP_COR.painel,borderTop:arrSobre === j ? "3px solid " + _EVP_COR.roxo : undefined}}>
+          <div style={{display:"flex",gap:6,alignItems:"center",fontSize:11,color:_EVP_COR.sub,marginBottom:3,flexWrap:"wrap"}}>
+            {!isMob && <span title="Arraste para mudar a ordem" style={{cursor:"grab",fontWeight:800}}>⠿</span>}
+            <b style={{color:_EVP_COR.ink}}>{j + 1}</b>
+            {it.tag && <span style={{fontWeight:800,color:"#fff",background:_EVP_COR.roxo,borderRadius:99,padding:"0 7px"}}>{it.tag === "gancho" ? "GANCHO" : "CTA"}</span>}
+            <span title={bl ? bl.nome : ""} style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:"0 1 auto",maxWidth:isMob ? 96 : 104}}>{bl ? String(bl.nome).replace(/\.(mp4|mov|m4v)$/i, "") : "vídeo"}</span>
+            <span style={{fontFamily:_EVP_MONO}}>{_evtxT(it.t0)}–{_evtxT(it.t1)}</span>
+            <span data-mr-item-dur={j} style={{fontFamily:_EVP_MONO,fontWeight:800,color:_EVP_COR.ink}}>{(Math.round(du * 10) / 10).toFixed(1).replace(".", ",")} s</span>
+            <span style={{flex:1}}/>
+            <button onClick={function(){ ouvirEm(it.clipe, segs[0] ? segs[0].a : it.t0, segs.length ? segs[segs.length - 1].b : it.t1); }} aria-label="Ouvir" style={Object.assign(chip(false), {padding:"2px 7px"})}>▶</button>
+            <button data-mr-subir={j} onClick={function(){ mover(j, j - 1); }} disabled={j === 0} aria-label="Subir" style={Object.assign(chip(false), {padding:"2px 7px",opacity:j === 0 ? 0.4 : 1})}>↑</button>
+            <button data-mr-descer={j} onClick={function(){ mover(j, j + 1); }} disabled={j === rot.itens.length - 1} aria-label="Descer" style={Object.assign(chip(false), {padding:"2px 7px",opacity:j === rot.itens.length - 1 ? 0.4 : 1})}>↓</button>
+            <button data-mr-tirar={j} onClick={function(){ tirarItem(j); }} aria-label="Tirar do roteiro" style={Object.assign(chip(false), {padding:"2px 7px",color:verm})}>✕</button>
+          </div>
+          <div style={{fontSize:13.5,lineHeight:1.55}}>{ws.length ? ws.map(function(w, i){ const c = corte(w);
+            return <span key={i} data-mr-palavra={j + ":" + i} data-mr-riscada={c ? "1" : "0"} onClick={function(){ riscar(j, w); }} title={c ? "Voltar esta palavra" : "Riscar (cortar) esta palavra"}
+              style={{cursor:"pointer",textDecoration:c ? "line-through" : "none",color:c ? _EVP_COR.fraco : _EVP_COR.ink,background:c ? "rgba(239,68,68,.1)" : "transparent",borderRadius:3}}>{_evmrPal(w)}{" "}</span>; }) : <i style={{color:_EVP_COR.fraco}}>{it.texto || "(sem fala)"}</i>}</div>
+          {it.tag === "gancho" && rot.gancho && <label style={{display:"flex",gap:6,alignItems:"center",fontSize:11.5,marginTop:5}}>Manchete na tela:
+            <input data-mr-manchete="1" value={rot.gancho.manchete || ""} onChange={function(e){ editarTexto("gancho", "manchete", e.target.value); }} style={{flex:1,minWidth:0,font:"inherit",padding:"4px 7px",borderRadius:7,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink}}/></label>}
+          {it.tag === "cta" && rot.cta && <label style={{display:"flex",gap:6,alignItems:"center",fontSize:11.5,marginTop:5}}>Tarja na tela:
+            <input data-mr-tarja="1" value={rot.cta.tarja || ""} onChange={function(e){ editarTexto("cta", "tarja", e.target.value); }} style={{flex:1,minWidth:0,font:"inherit",padding:"4px 7px",borderRadius:7,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink}}/></label>}
+          {bd.map(function(s, i){ return <div key={i} data-mr-item-borda={s.tipo} style={{fontSize:11.5,color:s.grave ? verm : "#c2410c",fontWeight:700,marginTop:3}}>{s.grave ? "🔴" : "🟠"} {s.txt}{s.tipo === "voz" || s.tipo === "fim" ? " · clique na palavra para riscar" : ""}</div>; })}
+        </div>; })}
+      {!rot.itens.length && <div style={{padding:14,borderRadius:10,border:"2px dashed " + _EVP_COR.linha,color:_EVP_COR.fraco,fontSize:12.5,textAlign:"center"}}>{isMob ? "Roteiro vazio: toque numa frase e em ＋ No roteiro." : "Roteiro vazio: arraste frases dos vídeos para cá."}</div>}
+      {!isMob && rot.itens.length > 0 && <div onDragOver={function(e){ e.preventDefault(); e.stopPropagation(); setArrSobre("fim"); }} onDrop={function(e){ e.stopPropagation(); soltar(e, rot.itens.length); }}
+        style={{padding:6,borderRadius:8,border:"1px dashed " + (arrSobre === "fim" ? _EVP_COR.roxo : _EVP_COR.linha),fontSize:11,color:_EVP_COR.fraco,textAlign:"center"}}>solte aqui para pôr no fim</div>}
+    </div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      <button data-mr-salvar="1" onClick={salvar} disabled={salvando || !alterado} style={Object.assign(bP("primario", !salvando && alterado), {flex:"1 1 130px",justifyContent:"center"})}>{salvando ? "Salvando…" : "💾 Salvar roteiro"}</button>
+      <button data-mr-desfazer="1" onClick={desfazerRot} disabled={!nHist} title="Desfazer (Ctrl+Z)" style={bP(null, !!nHist)}>↶ Desfazer</button>
+    </div>
+    {/* E) gancho e CTA */}
+    <div style={Object.assign({}, caixa, {display:"flex",flexDirection:"column",gap:6})}>
+      <b style={{fontSize:13}}>🪝 Gancho e CTA</b>
+      <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}>Frases faladas no próprio vídeo, com o texto curto para a tela (manchete no gancho, tarja no CTA). Você escolhe.</div>
+      {elIA("ganchos_cta", "✨ Sugerir gancho e CTA", "A IA lê a fala e sugere 3 a 5 ganchos e 2 a 4 CTAs (só no clique, com o custo antes)")}
+      {gc && ["ganchos", "ctas"].map(function(lista){ const L = gc[lista] || [];
+        return <div key={lista} data-mr-sugestoes={lista} style={{display:"flex",flexDirection:"column",gap:5}}>
+          <div style={{fontSize:12,fontWeight:800}}>{lista === "ganchos" ? "Ganchos (começo)" : "CTAs (fim)"}</div>
+          {!L.length && <div style={{fontSize:11.5,color:_EVP_COR.fraco}}>Nenhum.</div>}
+          {L.map(function(s, j){ const letra = String.fromCharCode(65 + j), esc = lista === "ganchos" ? (rot.gancho && _evmrSobrepoe(rot.gancho, s.clipe, Number(s.t0), Number(s.t1))) : (rot.cta && _evmrSobrepoe(rot.cta, s.clipe, Number(s.t0), Number(s.t1)));
+            return <div key={j} data-mr-opcao={lista + ":" + letra} style={{padding:"6px 8px",borderRadius:9,border:"1px solid " + (esc ? _EVP_COR.roxo : _EVP_COR.linha),background:esc ? _EVP_COR.roxoSoft : _EVP_COR.faixa,fontSize:12,lineHeight:1.45}}>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}><b>{letra}</b>{elForca(_evmrForca(s))}<span style={{flex:1}}/>
+                <button onClick={function(){ ouvirEm(String(s.clipe), Number(s.t0), Number(s.t1)); }} style={Object.assign(chip(false), {padding:"2px 7px"})}>▶</button>
+                <button data-mr-usar={lista + ":" + letra} onClick={function(){ if(lista === "ganchos") usarGancho(s); else usarCta(s); }} style={Object.assign(bP(esc ? "primario" : "suave"), {padding:"4px 9px"})}>{esc ? "✓ escolhido" : (lista === "ganchos" ? "Usar no começo" : "Usar no fim")}</button></div>
+              <div>“{String(s.texto || "").slice(0, 200)}”</div>
+              <div style={{color:_EVP_COR.sub}}>{s.porque || ""}</div>
+              <label style={{display:"flex",gap:6,alignItems:"center",marginTop:3}}>{lista === "ganchos" ? "Manchete:" : "Tarja:"}
+                <input value={String((lista === "ganchos" ? s.manchete : s.tarja) || "")} onChange={function(e){ editarSugestao(lista, j, lista === "ganchos" ? "manchete" : "tarja", e.target.value); }}
+                  style={{flex:1,minWidth:0,font:"inherit",fontSize:12,padding:"3px 7px",borderRadius:7,border:"1px solid " + _EVP_COR.linha,background:_EVP_COR.campo,color:_EVP_COR.ink}}/></label>
+            </div>; })}</div>; })}
+    </div>
+    {/* F) editar em cima */}
+    <div data-mr-editar="1" style={Object.assign({}, caixa, {display:"flex",flexDirection:"column",gap:6})}>
+      {(!edR || /sem|falta|erro/.test(edR.fase)) && <button data-mr-editar-botao="1" data-mr-editar-ligado={v29 ? "1" : "0"} onClick={prepararEditar} disabled={!rot.itens.length}
+        title={v29 ? "A IA monta o vídeo com estas frases, nesta ordem (pede confirmação com o custo)" : "Chega com o servidor de edição v29 (parte 2). Clique para conferir se já chegou (não gasta nada)."}
+        style={Object.assign(_evpBtn(v29 ? "primario" : null, rot.itens.length > 0), {justifyContent:"center",padding:"10px 12px"}, v29 ? {} : {opacity:0.75})}>✨ Editar em cima deste roteiro</button>}
+      {!v29 && !edR && <div data-mr-editar-parte2="1" style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}>Desligado por enquanto: chega com o servidor de edição v29 (parte 2). Clique para conferir se já chegou (não gasta nada). Até lá, salve o roteiro.</div>}
+      {edR && edR.fase === "estimando" && <div style={{fontSize:12,color:_EVP_COR.sub}}>Conferindo o servidor e o custo…</div>}
+      {edR && edR.fase === "indo" && <div style={{fontSize:12,color:_EVP_COR.roxo,fontWeight:700}}>Salvando o roteiro e mandando para a IA…</div>}
+      {edR && /sem|falta|erro/.test(edR.fase) && <div data-mr-editar-msg={edR.fase} style={{fontSize:12,color:edR.fase === "falta" ? amar : verm,fontWeight:700,lineHeight:1.4}}>{edR.msg}</div>}
+      {edR && edR.fase === "confirmar" && <div data-mr-editar-confirmar="1" role="alertdialog" style={{padding:"9px 10px",borderRadius:10,border:"1px solid rgba(234,179,8,.55)",background:_EVP_COR.aviso,fontSize:12,lineHeight:1.5}}>
+        <b>Editar em cima deste roteiro?</b> A IA monta o vídeo com estas {rot.itens.length} frases, NESTA ordem e com estes cortes ({_evtxDur(durTot)}){rot.gancho ? ", gancho “" + String(rot.gancho.manchete || rot.gancho.texto || "").slice(0, 40) + "”" : ""}{rot.cta ? ", CTA “" + String(rot.cta.tarja || rot.cta.texto || "").slice(0, 40) + "”" : ""}. Ela não escolhe de novo: só ajusta a borda para não cortar palavra.
+        {" "}Vira uma versão nova (dá para voltar em Versões). Custa {edR.custo != null ? "até R$ " + edR.custo.toFixed(2).replace(".", ",") : edR.custoUsd != null ? "até " + _evmrUSD(edR.custoUsd) : "uns R$ 0,50 a R$ 3 (como o Editar com IA)"}{Number(ed.limite_brl) > 0 ? " · no mês: R$ " + Number(ed.gasto_mes_brl || 0).toFixed(2).replace(".", ",") + " de R$ " + Number(ed.limite_brl).toFixed(2).replace(".", ",") : ""}.
+        {alterado && <div style={{marginTop:4,fontWeight:700}}>O roteiro será salvo antes.</div>}
+        <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+          <button data-mr-editar-sim="1" onClick={confirmarEditar} style={Object.assign(_evpBtn("primario"), {flex:"1 1 150px",justifyContent:"center"})}>Sim, editar</button>
+          <button onClick={function(){ setEdR(null); }} style={Object.assign(_evpBtn(), {flex:"1 1 90px",justifyContent:"center"})}>Não</button></div></div>}
+    </div>
+  </div>;
+
+  const elPlayer = tocar ? <div data-mr-player="1" style={{display:"flex",flexDirection:"column",gap:5}}>
+      <_EvTxPlayer c={tocar.c} a={tocar.a} b={tocar.b} chave={tocar.k} isMob={isMob}/>
+      <div style={{display:"flex",gap:6,alignItems:"center",fontSize:11.5,color:_EVP_COR.sub}}><b style={{color:_EVP_COR.ink,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tocar.nome}</b> · {_evtxT(tocar.i0)}–{_evtxT(tocar.f1)}
+        <button onClick={function(){ setTocar(null); }} style={Object.assign(chip(false), {marginLeft:"auto",padding:"2px 8px"})}>Fechar</button></div></div> : null;
+
+  const elVideos = <div>
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:8,fontSize:12}}>
+      <b style={{fontSize:13.5}}>🎞 Vídeo por vídeo</b>
+      <label style={{display:"inline-flex",gap:5,alignItems:"center",cursor:"pointer"}}><input data-mr-sofala="1" type="checkbox" checked={soFala} onChange={function(e){ setSoFala(e.target.checked); }}/>só os que têm fala</label>
+      <span data-mr-resumo="1" style={{color:_EVP_COR.sub}}>na ordem do card · fala {_evtxDur(tot.fala)} · entrou {_evtxDur(tot.usado)}{tot.fala > 0 ? " (" + Math.round(tot.usado / tot.fala * 100) + "%)" : ""}{tot.sem ? " · " + tot.sem + " sem transcrição" : ""}</span>
+    </div>
+    {visB.map(elVideo)}
+    {!visB.length && <div style={{padding:20,textAlign:"center",color:_EVP_COR.sub}}>Nenhum vídeo com fala.</div>}
+  </div>;
+
+  const fechar = function(){ if(alterado) setConfFechar(true); else q.onFechar(); };
+  const raizRef = useRef(null);
+  useEffect(function(){ try{ if(raizRef.current) raizRef.current.focus({ preventScroll:true }); }catch(_){} }, []);
+  return (
+    <div ref={raizRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Mesa do roteiro" data-mr-painel="1" style={Object.assign({position:"fixed",inset:0,zIndex:1450,background:"rgba(11,16,32,.5)",backdropFilter:"blur(3px)",display:"flex",alignItems:"center",justifyContent:"center",padding:isMob ? 0 : 14,outline:"none"},
+        q.tema && _EVP_TEMAS[q.tema] ? _EVP_TEMAS[q.tema] : {})}
+      onPointerDown={function(e){ e.stopPropagation(); if(e.target === e.currentTarget) fechar(); }}
+      onKeyDown={function(e){ e.stopPropagation(); const tg = e.target && e.target.tagName;
+        if(e.key === "Escape"){ e.preventDefault(); fechar(); }
+        else if((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && tg !== "INPUT" && tg !== "TEXTAREA"){ e.preventDefault(); desfazerRot(); } }}>
+      <div style={Object.assign({}, _EVP_PAINEL, {background:_EVP_COR.fundo,color:_EVP_COR.ink,width:isMob ? "100%" : "min(1440px, 100%)",height:isMob ? "100dvh" : "min(94vh, 1020px)",display:"flex",flexDirection:"column",overflow:"hidden",
+          borderRadius:isMob ? 0 : 16,paddingTop:isMob ? "env(safe-area-inset-top)" : 0,boxSizing:"border-box"})}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:isMob ? "10px 12px" : "11px 16px",borderBottom:"1px solid " + _EVP_COR.linha,background:_EVP_COR.painel,flexWrap:"wrap"}}>
+          <div style={{minWidth:0,flex:"1 1 260px"}}><b style={{fontSize:15.5}}>🎬 Mesa do roteiro</b>
+            <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.4}}>{t.title || "Vídeo"} · veja o que a IA usou de cada vídeo e por quê, e monte o roteiro pelo texto. A decisão final é sua.</div></div>
+          {q.onAbrirTx && <button data-mr-abrir-tx="1" onClick={function(){ if(alterado) setConfFechar(true); else q.onAbrirTx(); }} style={bP()}>📝 Transcrição completa</button>}
+          <button data-mr-fechar="1" onClick={fechar} aria-label="Fechar" style={_evpBtn("icone")}><_EvpIco n="fechar" s={16}/></button>
+        </div>
+        {confFechar && <div data-mr-conf-fechar="1" role="alertdialog" style={{padding:"8px 16px",background:_EVP_COR.aviso,borderBottom:"1px solid " + _EVP_COR.linha,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12.5}}>
+          <span style={{flex:"1 1 200px"}}>O roteiro tem mudanças não salvas.</span>
+          <button data-mr-salvar-fechar="1" onClick={async function(){ const ok = await salvar(); if(ok){ setConfFechar(false); q.onFechar(); } }} style={bP("primario")}>Salvar e fechar</button>
+          <button data-mr-fechar-sem="1" onClick={function(){ setConfFechar(false); q.onFechar(); }} style={bP()}>Fechar sem salvar</button>
+          <button onClick={function(){ setConfFechar(false); }} style={bP()}>Voltar</button></div>}
+        {isMob && <div style={{display:"flex",gap:6,padding:"7px 10px",borderBottom:"1px solid " + _EVP_COR.linha,background:_EVP_COR.painel}}>
+          {[["videos", "Vídeos"], ["porque", "Por que"], ["roteiro", "Roteiro · " + _evtxDur(durTot)]].map(function(o){ return <button key={o[0]} data-mr-vista={o[0]} onClick={function(){ setVista(o[0]); }} style={Object.assign(chip(vista === o[0]), {flex:1,justifyContent:"center",padding:"8px 6px",fontSize:12.5})}>{o[1]}</button>; })}</div>}
+        {isMob ? <div data-mr-corpo="1" style={{flex:1,minHeight:0,overflow:"auto",padding:"10px 12px 28px"}}>
+            {elPlayer && <div style={{position:"sticky",top:-10,zIndex:2,background:_EVP_COR.fundo,paddingBottom:8}}>{elPlayer}</div>}
+            {vista === "videos" ? elVideos : vista === "porque" ? elPlano : elRoteiro}</div>
+          : <div data-mr-corpo="1" style={{flex:1,minHeight:0,display:"grid",gridTemplateColumns:"minmax(0,1fr) 420px"}}>
+            <div style={{overflow:"auto",padding:"12px 16px 24px"}}>{elPlano}{elVideos}</div>
+            <div style={{borderLeft:"1px solid " + _EVP_COR.linha,overflow:"auto",padding:12,background:_EVP_COR.faixa,display:"flex",flexDirection:"column",gap:10}}>{elPlayer}{elRoteiro}</div>
+          </div>}
+      </div>
+    </div>);
 }
 
 /* ─── v11 (30/09/2026): MIXER — tudo também à mão (não só pela IA). Canais de áudio A1–A10 e de vídeo V1–V10, em %. ───
@@ -151681,6 +152517,7 @@ function _EvpSlider(q){
   );
 }
 
+// ======= 52g_video_paineis_exportar.jsx ======= (Edição de vídeo, parte 7 de 7: painéis e exportar: animar, transição, legenda, altura e área segura, assistir, cor completa, teste de velocidade, painel da direita, corrigir edição, galeria, exportar, legenda boa, revisor, conferência · o juntar.py junta na ordem)
 /* ─── v17: ANIMAR — painel do clipe (prontos, pontos ◆ na agulha, curva, lista, tremor, batida, copiar) ─── */
 function _EvpAnimar({ c, p, calc, ctl, mudar, tempo, irPara, ga, agDentro, tauAg, Vag }){
   const pts = _evpAnimTem(c) ? c.anim.pts : [], n = pts.length;
