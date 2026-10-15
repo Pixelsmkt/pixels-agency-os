@@ -95015,40 +95015,49 @@ function ComPropostas({store,update,log,canEdit}){
    ex.: "acréscimo na recorrência mensal via comissão de vendas do digital pra Bioter Chapecó e Bioter Castro". */
 function ComPropostaIA({store,update,log,canEdit}){
   const [open,setOpen]=useState(function(){ try{ return localStorage.getItem("pixels-com-propia-open")==="1"; }catch(_){ return false; } });
-  const [cliSel,setCliSel]=useState([]);        // ids de CLIENTS
-  const [cliLivre,setCliLivre]=useState("");    // nomes extras (lead / não cliente), separados por vírgula
-  const [nomeNaProposta,setNomeNaProposta]=useState(""); // como o cliente aparece no deck (ex.: "Bioter Chapecó e Bioter Castro")
+  const [cliSel,setCliSel]=useState([]);        // ids de CLIENTS (tags)
+  const [nomeLivre,setNomeLivre]=useState("");  // lead sem cadastro OU como o cliente aparece na proposta
   const [prodId,setProdId]=useState("");
   const [contexto,setContexto]=useState("");
-  const [materiais,setMateriais]=useState("");
-  const [busca,setBusca]=useState("");
+  const [grav,setGrav]=useState(null);          // {name, texto, status:"transcrevendo"|"ok"|"erro", msg, pct}
   const [gerando,setGerando]=useState(false);
   const [aberto,setAberto]=useState(null);
+  const inRef=useRef(null);
   const geradas=store.propostasIA||[];
   const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
   const produtos=(function(){ try{ return (typeof _prodLoad==="function"?_prodLoad():{produtos:[]}); }catch(_){ return {produtos:[],config:null}; } })();
   const prodLista=(produtos.produtos||[]).filter(function(x){ return x&&x.ideia&&x.ideia.nome; });
   const toggleOpen=function(){ const v=!open; setOpen(v); try{ localStorage.setItem("pixels-com-propia-open",v?"1":"0"); }catch(_){ } };
   const toggleCli=function(id){ setCliSel(function(a){ return a.indexOf(id)>=0?a.filter(function(x){return x!==id;}):a.concat([id]); }); };
-  const nomesSel=cliSel.map(function(id){ const c=clientes.find(function(x){return x.id===id;}); return c?c.name:id; }).concat(cliLivre.split(",").map(function(x){return x.trim();}).filter(Boolean));
+  const nomesSel=cliSel.map(function(id){ const c=clientes.find(function(x){return x.id===id;}); return c?c.name:id; });
   const cliNomeAuto=nomesSel.length<=1?(nomesSel[0]||""):(nomesSel.slice(0,-1).join(", ")+" e "+nomesSel[nomesSel.length-1]);
-  const cliNome=nomeNaProposta.trim()||cliNomeAuto;
+  const cliNome=nomeLivre.trim()||cliNomeAuto;
+  const pegarArquivo=function(file){
+    if(!file) return;
+    const ehMidia=(typeof _prodEhAudio==="function"&&_prodEhAudio(file.name,file.type))||(typeof _prodEhVideo==="function"&&_prodEhVideo(file.name,file.type));
+    if(!ehMidia){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Manda a gravação da reunião: mkv, mp4, mov, mp3, m4a, wav…"); return; }
+    if(typeof _prodTranscrever!=="function"){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Transcrição indisponível nesta versão."); return; }
+    setGrav({name:file.name, texto:"", status:"transcrevendo", msg:"preparando…", pct:0});
+    _prodTranscrever(file, function(m,pct){ setGrav(function(g){ return Object.assign({},g||{},{msg:m,pct:pct}); }); })
+      .then(function(texto){ setGrav({name:file.name, texto:String(texto||""), status:"ok", msg:"", pct:100}); if(typeof pixelsToast!=="undefined") pixelsToast.success("Reunião transcrita ("+String(texto||"").length.toLocaleString("pt-BR")+" caracteres)."); })
+      .catch(function(e){ setGrav({name:file.name, texto:"", status:"erro", msg:(e&&e.message)||String(e), pct:0}); if(typeof pixelsToast!=="undefined") pixelsToast.error("Transcrição: "+((e&&e.message)||e)); });
+  };
   const gerar=function(){
     if(gerando) return;
-    if(!nomesSel.length){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolhe pra quem é a proposta (um ou mais clientes, ou digita o nome)."); return; }
-    if(!contexto.trim()&&!prodId){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um contexto (o que é a proposta) ou escolhe um produto do Criador."); return; }
+    if(grav&&grav.status==="transcrevendo"){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Espera a transcrição terminar."); return; }
+    if(!cliNome){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Marca o cliente (ou digita o nome)."); return; }
+    if(!contexto.trim()&&!prodId&&!(grav&&grav.texto)){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um contexto, joga a gravação da reunião ou escolhe um produto."); return; }
     setGerando(true);
     const prod=prodLista.find(function(x){return x.id===prodId;})||null;
     const resumo=prod?(_prodResumoPraIA(prod,produtos.config)+(prod.iaEntendimento&&prod.iaEntendimento.texto?("\n\nCOMO O PRODUTO FUNCIONA:\n"+String(prod.iaEntendimento.texto).slice(0,3000)):"")):"";
     const matsProd=prod?(prod.materiais||[]).filter(function(m){return m&&m.texto;}).map(function(m){ return "— "+m.name+":\n"+String(m.texto).slice(0,5000); }).join("\n\n"):"";
-    const mats=[materiais.trim()?("— Anotações / transcrição colada aqui:\n"+materiais.trim().slice(0,9000)):"", matsProd].filter(Boolean).join("\n\n").slice(0,14000);
+    const mats=[grav&&grav.texto?("— Gravação da reunião ("+grav.name+"):\n"+String(grav.texto).slice(0,12000)):"", matsProd].filter(Boolean).join("\n\n").slice(0,14000);
     Promise.all(cliSel.map(function(id){ return (typeof _prodDadosCliente==="function"?_prodDadosCliente(id):Promise.resolve("")).then(function(d){ const c=clientes.find(function(x){return x.id===id;}); return d?("## "+((c&&c.name)||id)+"\n"+d):""; }); }))
       .then(function(ds){ return _propostaGerarCore({ resumo:resumo, mats:mats, dadosCliente:ds.filter(Boolean).join("\n\n"), cliNome:cliNome, contexto:contexto.trim(), pedidoExtra:"", origem:"comercial_proposta" }); })
       .then(function(j){
         const nomeProd=prod?(prod.ideia.nome||"produto"):"";
         const titulo=(j.titulo_hero?[j.titulo_hero.linha1,j.titulo_hero.linha2,j.titulo_hero.destaque].filter(Boolean).join(" "):"Proposta")+(cliNome?(" · "+cliNome):"");
-        const g={ id:"prpc"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), titulo:titulo, clientes:cliSel.slice(), clienteNome:cliNome, produtoId:prodId||"", produtoNome:nomeProd, contexto:contexto.trim(), json:j, html:_prodPropostaHtml(j,cliNome,nomeProd||contexto.trim().slice(0,60)), prompt:_prodPropostaPromptLovable(j,cliNome,nomeProd||contexto.trim().slice(0,120)), geradoEm:new Date().toISOString(), geradoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"" };
-        // registra também na lista de propostas (rascunho), pra acompanhar status/envio
+        const g={ id:"prpc"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), titulo:titulo, clientes:cliSel.slice(), clienteNome:cliNome, produtoId:prodId||"", produtoNome:nomeProd, contexto:contexto.trim(), gravacao:grav&&grav.texto?{name:grav.name,texto:grav.texto}:null, json:j, html:_prodPropostaHtml(j,cliNome,nomeProd||contexto.trim().slice(0,60)), prompt:_prodPropostaPromptLovable(j,cliNome,nomeProd||contexto.trim().slice(0,120)), geradoEm:new Date().toISOString(), geradoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"" };
         const reg={ id:"pr"+Date.now()+"-"+Math.random().toString(36).slice(2,5), nome:titulo, cliente:cliNome, tipo:"mrr", valorMensal:0, valorPontual:0, servicos:nomeProd, status:"rascunho", dataEnvio:"", validade:"", responsavel:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"", proximaAcao:"Revisar a proposta gerada e enviar", link:"", observacoes:"Gerada com IA em Comercial › Propostas"+(contexto.trim()?(". Contexto: "+contexto.trim()):""), iaId:g.id, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
         update(function(prev){ return Object.assign({},prev,{ propostasIA:[g].concat(prev.propostasIA||[]).slice(0,30), propostas:[reg].concat(prev.propostas||[]) }); });
         try{ log(cliNome,"prop_new",titulo); }catch(_){ }
@@ -95063,60 +95072,62 @@ function ComPropostaIA({store,update,log,canEdit}){
     if(typeof pixelsConfirm==="function") pixelsConfirm("Excluir a proposta gerada “"+g.titulo+"”? O registro na lista de propostas continua.",{title:"Excluir proposta gerada",okText:"Excluir",cancelText:"Cancelar"}).then(function(ok){ if(ok) go(); });
     else if(window.confirm("Excluir esta proposta gerada?")) go();
   };
-  const cliFiltrados=clientes.filter(function(c){ return !busca.trim()||String(c.name||"").toLowerCase().indexOf(busca.toLowerCase())>=0||cliSel.indexOf(c.id)>=0; });
   const chip=function(on){ return {font:"inherit",fontSize:11.5,fontWeight:700,padding:"6px 11px",borderRadius:99,border:"1.5px solid "+(on?"#0f172a":"#e2e8f0"),background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",cursor:"pointer"}; };
+  const isMob=(typeof _pxMob==="function"&&_pxMob());
   return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
     <div onClick={toggleOpen} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",cursor:"pointer",background:"linear-gradient(90deg,#f5f3ff,#fff)"}}>
       {typeof _PxIco==="function"&&<_PxIco n="sparkles" size={18} color="#7c3aed"/>}
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:14}}>Criar proposta com IA</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Pra um ou mais clientes, com ou sem produto do Criador. O GPT monta no esqueleto do deck Pixels e entrega a proposta + o prompt pro Lovable.{geradas.length?(" · "+geradas.length+" gerada"+(geradas.length>1?"s":"")):""}</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Marca o cliente, joga a gravação da reunião, diz o contexto. Sai a proposta no deck Pixels + o prompt pro Lovable.{geradas.length?(" · "+geradas.length+" gerada"+(geradas.length>1?"s":"")):""}</div>
       </div>
       <span style={{color:"#7c3aed",fontSize:12,fontWeight:800}}>{open?"fechar ▲":"abrir ▼"}</span>
     </div>
     {open&&<div style={{borderTop:"1px solid #e2e8f0",padding:"16px",display:"flex",flexDirection:"column",gap:14}}>
       {canEdit&&<>
         <div>
-          <div style={_COM_LBL}>Pra quem é a proposta (pode marcar mais de um)</div>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:8}}>
-            <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar cliente…" style={Object.assign({},_COM_INP,{width:220})}/>
-            <input value={cliLivre} onChange={function(e){setCliLivre(e.target.value);}} placeholder="Lead / não cliente: digite o nome (vários: separe por vírgula)" style={Object.assign({},_COM_INP,{flex:1,minWidth:260})}/>
-          </div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",maxHeight:120,overflowY:"auto"}}>
-            {cliFiltrados.map(function(c){ const on=cliSel.indexOf(c.id)>=0; return <button key={c.id} type="button" onClick={function(){toggleCli(c.id);}} style={chip(on)}>{on?"✓ ":""}{c.name}</button>; })}
-            {!cliFiltrados.length&&<span style={{color:"#94a3b8",fontSize:12}}>nenhum cliente com esse nome — usa o campo de lead ao lado</span>}
-          </div>
-          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginTop:10}}>
-            <input value={nomeNaProposta} onChange={function(e){setNomeNaProposta(e.target.value);}} placeholder="Como o cliente aparece na proposta (opcional) — ex.: Bioter Chapecó e Bioter Castro" style={Object.assign({},_COM_INP,{flex:1,minWidth:300})}/>
-            {nomesSel.length>0&&<div style={{color:"#475569",fontSize:12}}>Proposta pra: <b style={{color:"#0f172a"}}>{cliNome}</b></div>}
+          <div style={_COM_LBL}>Cliente (pode marcar mais de um)</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            {clientes.map(function(c){ const on=cliSel.indexOf(c.id)>=0; return <button key={c.id} type="button" onClick={function(){toggleCli(c.id);}} style={chip(on)}>{on?"✓ ":""}{c.name}</button>; })}
+            <input value={nomeLivre} onChange={function(e){setNomeLivre(e.target.value);}} placeholder={cliSel.length?"Como aparece na proposta (ex.: Bioter Chapecó e Bioter Castro)":"ou o nome de um lead sem cadastro"} style={Object.assign({},_COM_INP,{width:"auto",flex:1,minWidth:260,padding:"6px 11px",fontSize:12.5})}/>
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:(typeof _pxMob==="function"&&_pxMob())?"1fr":"1fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+          <div>
+            <div style={_COM_LBL}>Gravação da reunião (mkv, mp4, mp3…) — transcrevo aqui, de graça</div>
+            <input ref={inRef} type="file" accept="audio/*,video/*,.mkv,.mp4,.mov,.m4a,.mp3,.wav,.webm" style={{display:"none"}} onChange={function(e){ pegarArquivo(e.target.files&&e.target.files[0]); e.target.value=""; }}/>
+            {!grav&&<div onClick={function(){ inRef.current&&inRef.current.click(); }} onDragOver={function(e){e.preventDefault();}} onDrop={function(e){ e.preventDefault(); pegarArquivo(e.dataTransfer.files&&e.dataTransfer.files[0]); }}
+              style={{border:"1.5px dashed #c4b5fd",background:"#faf5ff",borderRadius:10,padding:"14px",textAlign:"center",color:"#6d28d9",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>⤓ Arrasta o vídeo/áudio aqui ou clica pra escolher</div>}
+            {grav&&<div style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:12.5,display:"flex",flexDirection:"column",gap:4}}>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <b style={{color:"#0f172a",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{grav.name}</b>
+                {grav.status!=="transcrevendo"&&<button type="button" onClick={function(){ setGrav(null); }} style={{font:"inherit",fontSize:11,fontWeight:700,border:"none",background:"transparent",color:"#94a3b8",cursor:"pointer"}}>trocar</button>}
+              </div>
+              {grav.status==="transcrevendo"&&<><div style={{color:"#6d28d9"}}>{grav.msg}</div><div style={{height:5,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}><div style={{width:(grav.pct||0)+"%",height:"100%",background:"#7c3aed",transition:"width .4s"}}/></div></>}
+              {grav.status==="ok"&&<div style={{color:"#16a34a",fontWeight:700}}>✓ transcrita · {String(grav.texto||"").length.toLocaleString("pt-BR")} caracteres</div>}
+              {grav.status==="erro"&&<div style={{color:"#dc2626"}}>{grav.msg}</div>}
+            </div>}
+          </div>
           <div>
             <div style={_COM_LBL}>Produto do Criador (opcional)</div>
             <select value={prodId} onChange={function(e){setProdId(e.target.value);}} style={_COM_INP}>
-              <option value="">— sem produto (só o contexto) —</option>
-              {prodLista.map(function(x){ return <option key={x.id} value={x.id}>{x.ideia.nome}{x.status&&x.status!=="rascunho"?(" · "+x.status):""}</option>; })}
+              <option value="">— nenhum —</option>
+              {prodLista.map(function(x){ return <option key={x.id} value={x.id}>{x.ideia.nome}</option>; })}
             </select>
-            <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Puxa ideia, fases, entregáveis, preço e a transcrição da reunião que está no produto.</div>
-          </div>
-          <div>
-            <div style={_COM_LBL}>Anotações / transcrição (opcional)</div>
-            <textarea rows={3} value={materiais} onChange={function(e){setMateriais(e.target.value);}} placeholder="Cola aqui o que foi conversado, números, metas, condições…" style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:64})}/>
           </div>
         </div>
         <div>
-          <div style={_COM_LBL}>Contexto da proposta (o que ela é, pra quem, em que condições)</div>
-          <textarea rows={4} value={contexto} onChange={function(e){setContexto(e.target.value);}} placeholder="Ex.: acréscimo na recorrência mensal através de comissão de vendas do digital pra Bioter Chapecó e Bioter Castro — 3% sobre as vendas originadas pelo digital, apurado mês a mês, a partir de novembro." style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:90,lineHeight:1.5})}/>
+          <div style={_COM_LBL}>Contexto (o que é a proposta, condições, o que você quer que apareça)</div>
+          <textarea rows={3} value={contexto} onChange={function(e){setContexto(e.target.value);}} placeholder="Ex.: acréscimo na recorrência mensal através de comissão de vendas do digital pra Bioter Chapecó e Bioter Castro — 3% sobre as vendas originadas pelo digital, apurado mês a mês, a partir de novembro." style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:76,lineHeight:1.5})}/>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           <button type="button" onClick={gerar} disabled={gerando} style={{background:gerando?"#a78bfa":"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:800,fontSize:13,cursor:gerando?"wait":"pointer",fontFamily:"inherit"}}>{gerando?"O GPT está montando a proposta…":"✦ Gerar proposta"}</button>
-          <span style={{color:"#94a3b8",fontSize:11.5}}>GPT, uns R$ 0,30 por geração · entra também na lista abaixo como rascunho</span>
+          <span style={{color:"#94a3b8",fontSize:11.5}}>GPT, uns R$ 0,30 · entra na lista abaixo como rascunho</span>
         </div>
       </>}
       {geradas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
         <div style={_COM_LBL}>Propostas geradas</div>
-        {geradas.map(function(g){ return <_PropostaGeradaCard key={g.id} g={g} aberto={aberto===g.id} onToggle={function(){ setAberto(aberto===g.id?null:g.id); }} canEdit={canEdit} isMob={typeof _pxMob==="function"&&_pxMob()} nomeBase={"proposta"} onExcluir={function(){ excluir(g); }}/>; })}
+        {geradas.map(function(g){ return <_PropostaGeradaCard key={g.id} g={g} aberto={aberto===g.id} onToggle={function(){ setAberto(aberto===g.id?null:g.id); }} canEdit={canEdit} isMob={isMob} nomeBase={"proposta"} onExcluir={function(){ excluir(g); }}/>; })}
       </div>}
     </div>}
   </div>;
