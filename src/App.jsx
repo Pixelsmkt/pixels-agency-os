@@ -50104,6 +50104,17 @@ function _cardPodeSerResp(u){
   const sanitizeRichText=(html)=>{
     if(typeof html!=="string"||!html)return "";
     const cleaned=html
+      /* (15/10/2026, Gustavo: "colei do Word e ficou todo bugado" — aparecia "Normal 0 21 false…") o HTML do Word traz <head>,
+         <xml>, comentários condicionais <!--[if gte mso 9]>…--> e tags com prefixo (o:p, w:…). O filtro de tags tirava a TAG e
+         deixava o CONTEÚDO dessas coisas. Agora some tudo isso inteiro antes. */
+      .replace(/<!--[\s\S]*?-->/g,"")
+      .replace(/<!\[(if[^\]]*|endif)\]>/gi,"")
+      .replace(/<head\b[\s\S]*?<\/head>/gi,"")
+      .replace(/<xml\b[\s\S]*?<\/xml>/gi,"")
+      .replace(/<title\b[\s\S]*?<\/title>/gi,"")
+      .replace(/<\/?[a-z]+:[a-z0-9]+\b[^>]*>/gi,"")
+      .replace(/<span[^>]*mso-list\s*:\s*Ignore[^>]*>\s*[·o§\u00b7\uf0b7]?([\s\S]*?)<\/span>/gi,"• ")
+      .replace(/\s(class|lang|style)\s*=\s*[^\s"'>]+/gi,"")
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"")
       .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi,"")
@@ -50124,7 +50135,9 @@ function _cardPodeSerResp(u){
       .replace(/\s(face|size|color|align|bgcolor|width|height)\s*=\s*"[^"]*"/gi,"")
       .replace(/\s(face|size|color|align|bgcolor|width|height)\s*=\s*'[^']*'/gi,"")
       // remove span vazios depois de strip de styles
-      .replace(/<span\s*>([\s\S]*?)<\/span>/gi,"$1");
+      .replace(/<span\s*>([\s\S]*?)<\/span>/gi,"$1")
+      .replace(/<\/?span\s*>/gi,"")   // (15/10) span sem atributo não formata nada — sobra de aninhamento do Word
+      .replace(/<p>\s*(&nbsp;|\s)*\s*<\/p>/gi,"");
     // AUTO-LINKIFY: converte URLs em <a> clicáveis (preservando <a> existentes)
     return autoLinkifyHTML(cleaned);
   };
