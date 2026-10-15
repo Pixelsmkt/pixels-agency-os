@@ -164299,9 +164299,18 @@ function PageReunioes({isMob}){
   const [selId,setSelId]=useState("");
   const [novo,setNovo]=useState(false);
   const [busca,setBusca]=useState("");
+  const [sync,setSync]=useState(false);
+  const sincronizarMeet=function(){
+    const sb=window._sb; if(!sb||sync) return; setSync(true);
+    sb.functions.invoke("reunioes-sync",{body:{}}).then(function(r){
+      const d=(r&&r.data)||{}; if(r.error||d.error){ _reToast("error","Meet: "+((d.error)||(r.error&&r.error.message)||"falhou")); return; }
+      if(d.novas>0){ _reToast("success",d.novas+" reuni"+(d.novas>1?"ões":"ão")+" do Meet importada"+(d.novas>1?"s":"")+(d.restantes?(" · "+d.restantes+" na próxima rodada"):"")+"."); recarregar(); }
+      else _reToast("info",d.aviso||("Nada novo no Meet ("+(d.encontradas||0)+" transcrição(ões), todas já importadas)."));
+    }).catch(function(e){ _reToast("error","Meet: "+((e&&e.message)||e)); }).finally(function(){ setSync(false); });
+  };
   const recarregar=useCallback(function(){
     const sb=window._sb; if(!sb){ setErro("sem conexão"); return; }
-    sb.from(RE_TABELA).select("id,criado_em,quem,titulo,data_reuniao,participantes,cliente,arquivo_nome,duracao_min,ata,ata_editada_em,ata_editada_por").is("deleted_at",null).order("data_reuniao",{ascending:false}).order("criado_em",{ascending:false}).limit(300)
+    sb.from(RE_TABELA).select("id,criado_em,quem,titulo,data_reuniao,participantes,cliente,arquivo_nome,duracao_min,ata,ata_editada_em,ata_editada_por,origem").is("deleted_at",null).order("data_reuniao",{ascending:false}).order("criado_em",{ascending:false}).limit(300)
       .then(function(r){ if(r.error){ setErro(/does not exist|relation/i.test(r.error.message)?"A tabela de reuniões ainda não foi criada no Supabase (precisa rodar a migração reunioes_socios).":r.error.message); setLista([]); } else { setErro(""); setLista(r.data||[]); } });
   },[]);
   useEffect(function(){ recarregar(); },[recarregar]);
@@ -164311,9 +164320,12 @@ function PageReunioes({isMob}){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:14,flexWrap:"wrap"}}>
       <div>
         <div style={{color:RE_INK,fontWeight:800,fontSize:24,letterSpacing:-.5}}>Reuniões</div>
-        <div style={{color:RE_MUTE,fontSize:12,marginTop:3}}>Joga a gravação (mkv, mp4, áudio) ou puxa a transcrição do Google Meet — sai a ata organizada, tudo editável. Só sócios.</div>
+        <div style={{color:RE_MUTE,fontSize:12,marginTop:3}}>As transcrições do Google Meet (conta pixels@) entram sozinhas a cada 30 min, já com a ata. Também dá pra jogar uma gravação (mkv, mp4, áudio) ou colar texto. Tudo editável. Só sócios.</div>
       </div>
-      <_ReBtn tone="primary" onClick={function(){ setNovo(true); setSelId(""); }}>+ Nova reunião</_ReBtn>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <_ReBtn onClick={sincronizarMeet} disabled={sync} title="Puxa agora as transcrições novas do Google Meet (o robô faz isso sozinho a cada 30 min)">{sync?"buscando no Meet…":"↻ Sincronizar Meet"}</_ReBtn>
+        <_ReBtn tone="primary" onClick={function(){ setNovo(true); setSelId(""); }}>+ Nova reunião</_ReBtn>
+      </div>
     </div>
     {erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:10,padding:"10px 14px",fontSize:12.5}}>{erro}</div>}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"300px 1fr",gap:14,alignItems:"start"}}>
@@ -164324,7 +164336,7 @@ function PageReunioes({isMob}){
         <div style={{maxHeight:isMob?280:"70vh",overflowY:"auto"}}>
           {filtrada.map(function(r){ const on=r.id===selId; const a=_reAtaParse(r.ata); return <div key={r.id} onClick={function(){ setSelId(r.id); setNovo(false); }} style={{padding:"11px 14px",borderBottom:"1px solid #f1f5f9",cursor:"pointer",background:on?"#f5f3ff":"transparent",borderLeft:"3px solid "+(on?RE_COR:"transparent")}}>
             <div style={{color:RE_INK,fontWeight:700,fontSize:13,lineHeight:1.3}}>{r.titulo||"(sem título)"}</div>
-            <div style={{color:RE_MUTE,fontSize:11,marginTop:3}}>{_reDataBR(r.data_reuniao)}{r.cliente?(" · "+r.cliente):""}{r.duracao_min?(" · "+r.duracao_min+" min"):""}</div>
+            <div style={{color:RE_MUTE,fontSize:11,marginTop:3}}>{_reDataBR(r.data_reuniao)}{r.cliente?(" · "+r.cliente):""}{r.duracao_min?(" · ~"+r.duracao_min+" min"):""}{r.origem==="meet"&&<span style={{marginLeft:6,background:"#ecfdf5",color:"#047857",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800}}>Meet</span>}</div>
             {a.resumo&&<div style={{color:RE_SOFT,fontSize:11,marginTop:4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{a.resumo}</div>}
           </div>; })}
         </div>
@@ -164478,7 +164490,7 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
         <div style={{flex:1,minWidth:240}}>
           <div style={{color:RE_INK,fontWeight:800,fontSize:19,letterSpacing:-.3,lineHeight:1.25}}>{r.titulo||"(sem título)"}</div>
           <div style={{color:RE_MUTE,fontSize:12.5,marginTop:4}}>{_reDataBR(r.data_reuniao)}{r.cliente?(" · "+r.cliente):" · interna"}{r.participantes?(" · "+r.participantes):""}{r.duracao_min?(" · "+r.duracao_min+" min"):""}</div>
-          <div style={{color:RE_SOFT,fontSize:11,marginTop:3}}>{r.arquivo_nome?("origem: "+r.arquivo_nome+" · "):""}salva por {r.quem||"—"}{r.ata_editada_em?(" · ata editada por "+(r.ata_editada_por||"—")+" em "+_reDataBR(String(r.ata_editada_em).slice(0,10))):""}</div>
+          <div style={{color:RE_SOFT,fontSize:11,marginTop:3}}>{r.origem==="meet"?"Google Meet · ":""}{r.arquivo_nome?("origem: "+r.arquivo_nome+" · "):""}salva por {r.quem||"—"}{r.ata_editada_em?(" · ata editada por "+(r.ata_editada_por||"—")+" em "+_reDataBR(String(r.ata_editada_em).slice(0,10))):""}</div>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {temAta&&!editAta&&<_ReBtn small onClick={comecarEdicao}>✎ Editar ata</_ReBtn>}
