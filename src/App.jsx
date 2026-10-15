@@ -1,10 +1,11 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 59/59 | Nao editar diretamente
+// Modulos: 69/69 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
 import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
 
+// ======= 00_clientes_data_p1.jsx ======= (00_clientes_data.jsx, parte 1 de 2 · o juntar.py junta na ordem) Helper global de mobile; 1. usePxMob() — o detector reativo; 2. pxSe(computador, celular) — escolhe um valor ou o outro; 3. pxCols(desktop, celular) — a grade; 
 // Dados dos clientes: contratos, métricas, metas, contatos, logos
 // ─── Helper global de mobile ───────────────────────────────────────────
 // Avaliado a cada render (celular não muda de largura no meio do uso).
@@ -2880,7 +2881,7 @@ function formatRefMonth(refMonth){
   return meses[m-1]+"/"+String(y).slice(-2);
 }
 
-
+// ======= 00_clientes_data_p2.jsx ======= (00_clientes_data.jsx, parte 2 de 2 · o juntar.py junta na ordem) FreelancerPaymentsBlock — card consolidado com pagamentos de todos os ; SAFE STORAGE — wrapper localStorage com quota check; TOAST/NOTIFICATION SYSTEM — substit
 /* ─── FreelancerPaymentsBlock — card consolidado com pagamentos de todos os freelancers
        (André + Maria + Guilherme) por tipo de conteúdo no mês de referência selecionado.
        Reutilizado em DashPartner e em PageGestaoFinanceiro.                        ─── */
@@ -16745,6 +16746,7 @@ function CDrive({cl}){
 
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
 
+// ======= 03_clientes2_p1.jsx ======= (03_clientes2.jsx, parte 1 de 3 · o juntar.py junta na ordem) CLIENT DASHBOARD — 30 MELHORIAS; CLIENT DASHBOARD — 30 MELHORIAS; Helper global: normaliza cl.since pra "MM/YY" (compact display); NOVO CLIENTE MODAL; CAnalises
 const _CP_MOSTRA_LEGENDA=false;   // (13/10/2026) legenda de status no topo do Calendário de publicações — Gustavo pediu pra tirar
 /* (13/10/2026, Gustavo) card de vídeo do 🤖 Agente de IA = etiqueta "Edição pela IA" (a mesma do interruptor do card e do Guvi) */
 function _pxEhCardAgenteIA(t){
@@ -20966,6 +20968,8 @@ function _pxCasMovivel(t,hoje,novoId){
   if(_pxCasFixo(t)) return false;
   return true;
 }
+
+// ======= 03_clientes2_p2.jsx ======= (03_clientes2.jsx, parte 2 de 3 · o juntar.py junta na ordem) BRINDE É UM (22/09/2026, Rodrigo); TRILHAS (17/09/2026, 2ª versão); FASE DO PROJETO (Starter 3 meses) pro "Gerar plano do mês" · funções: _pxCasBrindeFora, _pxC
 /* ── BRINDE É UM (22/09/2026, Rodrigo) ──────────────────────────────────────────────
    "criei um card da VetService e arrastou o 'Seu lote mudou' pra semana em que já tinha
     2 posts no feed. Por que isso?"
@@ -24547,6 +24551,8 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard,
     </div>
   </div>;
 }
+
+// ======= 03_clientes2_p3.jsx ======= (03_clientes2.jsx, parte 3 de 3 · o juntar.py junta na ordem) ProgressoDoMes — widget moderno com seletor de mês; SCAN MODAL — 3D infographic; QUICK CREATE — seletor rápido de responsável; PAGE: DEMANDAS · funções: PageCal
 function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs, perms}){
   // Social media (Luiza) nunca exclui — regra fixa, independe de Acessos
   const _calUser=(viewingAs&&(TEAM||[]).find(function(u){return u.id===viewingAs;}))||CURRENT_USER;
@@ -49239,6 +49245,8 @@ function PageSprintConfig({isMob}){
   </div>;
 }
 
+// ======= 10_radar_entrega_p1.jsx ======= (10_radar_entrega.jsx, parte 1 de 3 · o juntar.py junta na ordem) Constantes e helpers de módulo — CardModal; AUTO-LINKIFY; (03/10/2026, Frente D) ENVIAR PARA EDIÇÃO (IA) DENTRO DO CARD · funções: _pxRevisorUser, _pxParseTs, _
+
 // Foto de quem pediu o ajuste (revisor interno): acha o usuário do TEAM pelo id ou nome
 function _pxRevisorUser(nome){
   try{ const n=String(nome||"").trim().toLowerCase(); if(!n||typeof TEAM==="undefined") return null;
@@ -50329,6 +50337,8 @@ function PxDriveStatusChip({user}){
   return <a href={st.url_autorizar} target="_blank" rel="noopener noreferrer" onClick={function(){ setTimeout(function(){ pxDriveEditavel.status(true).then(setSt); },15000); }} title="Abre o Google pra autorizar a conta pixels@ (uma vez só)"
     style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,#1a73e8,#4285f4)",color:"#fff",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",textDecoration:"none"}}>Conectar Drive</a>;
 }
+
+// ======= 10_radar_entrega_p2.jsx ======= (10_radar_entrega.jsx, parte 2 de 3 · o juntar.py junta na ordem) sem títulos de seção · funções: CardModal, _cardPodeSerResp
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
   // ═══ Detecção de viewport mobile ═══
   const [isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
@@ -56301,6 +56311,7 @@ function _cardPodeSerResp(u){
   </div>;
 }
 
+// ======= 10_radar_entrega_p3.jsx ======= (10_radar_entrega.jsx, parte 3 de 3 · o juntar.py junta na ordem) OrientacoesView — read-only no card modal · funções: ContatosView, _OVProjeto, OrientacoesView, _pxBtnAcaoSt, _pxIaOrigemNome, _pxBRL …
 /* ─── OrientacoesView — read-only no card modal ───
    Mostra logos, paleta, fontes, voz, hashtags e contatos do cliente vinculado.
    Designer/social só consultam (edição vai pela página do cliente). */
@@ -66645,6 +66656,7 @@ function _f3a100LtDias(it){
   </div>;
 }
 
+// ======= 17c_qg_ads_p1.jsx ======= (17c_qg_ads.jsx, parte 1 de 3 · o juntar.py junta na ordem) 17c_qg_ads.jsx; tokens; formatadores; OBJETIVO em português (objetivo da campanha + otimização/destino dos c; contas; PERÍODO (global pra todas as abas) … · fun
 // ======= 17c_qg_ads.jsx =======
 // TRÁFEGO PAGO (Meta) — cliente › Visão geral · Campanhas · Criativos · Público · Leads · Histórico.
 // v2 (08/09/2026): redesenho "claro premium" (mockup claude/mockup-trafego-v2.html) + período selecionável +
@@ -69483,6 +69495,7 @@ function AdsBlocoT({t,s,primeiro}){
 
 /* v96 (13/10/2026) M4: removido AdsCorteLinha (só o AdsPublicoDim usava) — nunca era exibido em tela nenhuma (código original em mods/orig/) */
 
+// ======= 17c_qg_ads_p2.jsx ======= (17c_qg_ads.jsx, parte 2 de 3 · o juntar.py junta na ordem) gráfico de colunas de uma dimensão (19/09): igual ao da aba Público, d; os números num cartão só, com fio de cabelo entre as células; horário: 24 colunas, o pic
 /* ── gráfico de colunas de uma dimensão (19/09): igual ao da aba Público, dentro do painel ── */
 /* ── os números num cartão só, com fio de cabelo entre as células ──
    20/09: eram números soltos no branco (ou caixinhas separadas competindo entre si).
@@ -72222,6 +72235,7 @@ function AdsLeadsRegrasV98({cu,nomeCli,isMob,canEdit,etapasR,chavesR,onVoltar}){
   </div>;
 }
 
+// ======= 17c_qg_ads_p3.jsx ======= (17c_qg_ads.jsx, parte 3 de 3 · o juntar.py junta na ordem) L9-d / L10-k2 · "Chaves desta campanha"; L9-g · plano de testes da semana + resultado A×B; L10-h · ranking de criativos (etiquetas, 3 s, nota, motivo da queda, 
 /* ─────────────────── L9-d / L10-k2 · "Chaves desta campanha" ─────────────────── */
 /* estado das duas chaves de cada campanha (servidor). Sem a função: tudo desligado, e o pedido avisa que falta o servidor. */
 function useAdsChavesV98(conta){ return useF2V98Rpc("ads_chaves_campanha_ler",conta&&conta.ad_account_id?{p_conta:conta.ad_account_id}:null,[conta&&conta.ad_account_id]); }
@@ -76290,6 +76304,7 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
   </SocWrap>;
 }
 
+// ======= 17e_trafego_seguranca_p1.jsx ======= (17e_trafego_seguranca.jsx, parte 1 de 2 · o juntar.py junta na ordem) 17e_trafego_seguranca.jsx; v96 (13/10/2026) E5: UM formatador de R$, número e data para o arquivo; v96 (13/10/2026) G6: rotinas pausam com a aba do navegador es
 // ======= 17e_trafego_seguranca.jsx =======
 /* IA DE TRÁFEGO — ETAPA 0, 1 e 2 (09/10/2026): portão do PIN da Gestão de mídia, alarmes, painel de segurança e CENTRAL DE DECISÕES.
    v76/77: 🧠 CÉREBRO (mercado com fonte + análise com número real) e 🎙️ SALA DE ESTRATÉGIA (áudio → estratégia → montador).
@@ -79440,6 +79455,7 @@ function TSegPortao({ currentUser, viewUser, children }) {
   );
 }
 
+// ======= 17e_trafego_seguranca_p2.jsx ======= (17e_trafego_seguranca.jsx, parte 2 de 2 · o juntar.py junta na ordem) v98 (14/10/2026) L9-f: 🧱 Montador › 🌎 Copiar campanha para outra regiã; 2.10.12 selo de confiança em cada sugestão; 2.9.03 nome de campanha no padrão (blocos fi
 /* ====================================================================================================================
    v98 (14/10/2026) — Lote 9 (L9-c Regras, L9-e corta-perda, L9-f copiar campanha), L6-a2 (pedido "reduzir o ritmo") e
    alarmes para a equipe (decisão do Vini em 14/10: o Erick VÊ os alarmes e dá "Entendi ✓"; não decide, não usa PIN nem IA).
@@ -82965,6 +82981,7 @@ function _numFloat(v){ const n = parseFloat(String(v||"").replace(",",".")); ret
 function _fmtNum(n){ if(!n && n!==0) return "—"; n = Number(n); if(!isFinite(n)) return "—"; if(n>=1000000) return (n/1000000).toFixed(1).replace(/\.0$/,"")+"M"; if(n>=1000) return (n/1000).toFixed(1).replace(/\.0$/,"")+"k"; return String(n); }
 function _fmtDatePT(d){ if(!d) return "—"; const p = String(d).split("-"); if(p.length!==3) return d; return p[2]+"/"+p[1]+"/"+p[0].slice(2); }
 
+// ======= 13_novidades_p1.jsx ======= (13_novidades.jsx, parte 1 de 2 · o juntar.py junta na ordem) SPRINT SEMANAL; RELATÓRIO DO CLIENTE; Helpers de gráfico — módulo; ANÁLISES 360; GANTT VIEW (inside Demandas); CONQUISTAS (BADGES) … · funções: PageSprint, Page
 // ── Helpers de módulo ─────────────────────────────────────────
 const _fmtShort = d => d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
 const MONTHS_ABBR = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -87120,6 +87137,7 @@ function PortalTimeline({cl, clTasks, isMob}){
   </div>;
 }
 
+// ======= 13_novidades_p2.jsx ======= (13_novidades.jsx, parte 2 de 2 · o juntar.py junta na ordem) PORTAL DEMANDAS CLIENTE — central de pedidos do próprio cliente; MODAL NOVA DEMANDA; ENTREGAS TIMELINE — visualização anual de tudo que foi entregue; REGISTRAR 
 /* ─── PORTAL DEMANDAS CLIENTE — central de pedidos do próprio cliente ───
    Kanban simples (4 colunas) + botão "+ Nova demanda" com a cor do cliente.
    Quando cria Arte/Vídeo: vai pro Rascunhos da Hellen no fluxo interno.
@@ -157709,6 +157727,7 @@ function PxBotaoLinkDrive({task}){
   </span>;
 }
 
+// ======= 54_edicao_arte_p1.jsx ======= (54_edicao_arte.jsx, parte 1 de 2 · o juntar.py junta na ordem) utilidades; bibliotecas (só quando precisa); FONTES (07/10, Gustavo: "o template abriu em Times, tamanhos errados"); ícones de linha (mesma pegada do Estúdio); 
 /* ══════════════════════════════════════════════════════════════════
    CRIAÇÃO › EDIÇÃO DE ARTE  (v1 — 29/09/2026, Bloco 5)
    Pedido do usuário: editor de artes "tipo Photoshop + Illustrator + IA" dentro do app, com modelos inteligentes,
@@ -161443,6 +161462,8 @@ function _eaCidadeDoCard(task, copy, opcoesTemplate){
   for(const f of fontes){ const r = f[1].match(re); if(r){ let nome = r[1].trim(); for(let i = 0; i < 3 && soltas.test(nome); i++) nome = nome.replace(soltas, ""); return { cidade:nome + "/" + r[2].toUpperCase(), origem:f[0] }; } }
   return { cidade:"", origem:"" };
 }
+
+// ======= 54_edicao_arte_p2.jsx ======= (54_edicao_arte.jsx, parte 2 de 2 · o juntar.py junta na ordem) PIN NO MAPA PARA CIDADE NOVA (08/10): o template já tem dezenas de cid; FOTO DE OBRA: a IA olha a foto e devolve horizonte, inclinação, a caix; BANCO DE FOTOS D
 /* ── PIN NO MAPA PARA CIDADE NOVA (08/10): o template já tem dezenas de cidades com pin; aprendemos o mapa com elas.
    lat/lon de cada cidade (Nominatim/OpenStreetMap, com IA de reserva) → ajuste afim lon/lat → x/y pelos pins do
    template (mínimos quadrados) → pin da cidade nova. Fica guardado em Identidade visual › Pins pra próxima. ── */
