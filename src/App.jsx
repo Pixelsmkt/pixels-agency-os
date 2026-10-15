@@ -53299,7 +53299,6 @@ function _cardPodeSerResp(u){
             {/* (30/09/2026, Gustavo) "feios, tão diferentes": os botões de ação agora são UMA família — lado a lado, altura 36
                 (a mesma dos ícones do topo), raio 10, Inter 13/650, ícone à esquerda. Estilo em _pxBtnAcaoSt (fim do arquivo). */}
             <div style={{display:"flex",flexDirection:"row",gap:8,alignItems:"center",flex:isMobile?"1 1 100%":undefined,flexWrap:"wrap"}}>
-              {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={_pxBtnAcaoSt("#0f172a","15,23,42",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span style={{display:"block",lineHeight:1}}>Salvar</span></button>}
               {/* Concluir p/ avaliação — designer/editor envia card de execução/ajustes pra aprovação interna */}
               {canEdit&&_bl("acao.concluir")&&(task.status==="execucao"||task.status==="ajustes")&&<button
                 onClick={()=>setConclusionStep(1)}
@@ -53421,6 +53420,8 @@ function _cardPodeSerResp(u){
                   Abrir pasta no Drive
                 </a>);
               })()}
+              {/* (15/10/2026, Gustavo) "o Gerar arte tá ocupando o lugar do Salvar": o Salvar fica SEMPRE por último, colado no Fechar; as outras ações (Gerar arte, Concluir…) ficam à esquerda */}
+              {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={_pxBtnAcaoSt("#0f172a","15,23,42",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span style={{display:"block",lineHeight:1}}>Salvar</span></button>}
             </div>
             {!isMobile&&<button onClick={handleClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",flexShrink:0}}><Ico n="x" size={18}/></button>}
           </div>
