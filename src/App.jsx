@@ -4522,9 +4522,9 @@ function pxStoryRespVinicius(t){
   if(!t||!(t.somenteStory||t.somente_story)) return null;
   const st=String(t.status||""); if(st==="publicado"||st==="reprovado") return null;
   const ids=Array.isArray(t.assignees)&&t.assignees.length?t.assignees:(t.assignee?[t.assignee]:[]);
-  if(ids.length===1&&ids[0]==="vinicius") return null;
-  const temExecutor=ids.some(function(id){ const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===id;}); return u&&u.level===3; });
-  if(temExecutor) return null;
+  // (15/10/2026, Gustavo) "quando já tem outras pessoas marcadas também não mudar pra só Vinicius quando
+  // marca Somente story" — quem está marcado fica. Só preenche o Vinicius quando o card está SEM ninguém.
+  if(ids.length) return null;
   return ["vinicius"];
 }
 const PX_CORACAO_FIXO={arabuta:"❤️"};
@@ -21350,8 +21350,8 @@ async function _pxCascataComemorativaViraStory(novo){
     if(!_pxColAlvos(t).some(function(a){ return alvos.indexOf(a)>=0; })) continue;
     const tags=(Array.isArray(t.tags)?t.tags:[]).filter(function(x){ return String(x)!=="Somente story"; }).concat(["Somente story"]);
     const tl=(Array.isArray(t.timeline)?t.timeline:[]).concat([{type:"edit",user:"Claude",atFmt:fmt,label:"Virou Somente story: a feira/evento \""+String(novo.title||"").slice(0,60)+"\" publica no feed neste mesmo dia"}]);
-    // (25/09/2026) story = só o Vinicius responsável, em qualquer status (regra de 17/09)
-    const u=await sb.from("tasks").update({somente_story:true,tags:tags,timeline:tl,assignee:"vinicius",assignees:["vinicius"]}).eq("id",t.id);
+    // (15/10/2026, Gustavo) virar Somente story não troca mais os responsáveis (quem está marcado fica)
+    const u=await sb.from("tasks").update({somente_story:true,tags:tags,timeline:tl}).eq("id",t.id);
     if(u&&u.error){ console.warn("[cascata story]",t.id,u.error.message); continue; }
     n++;
     _pxApRegistrar("Comemorativa virou Somente story: feira/evento no mesmo dia",[],[{id:t.id,antes:{somente_story:false},depois:{somente_story:true}}]);
@@ -22124,10 +22124,10 @@ function pxAutoComSyncStory(eventId, story){
         if(!story&&temTag) patch.tags=tags.filter(function(x){ return x!==TAG; });
         const as=Array.isArray(t.assignees)?t.assignees:(t.assignee?[t.assignee]:[]);
         const soVini=as.length===1&&as[0]==="vinicius";
-        // (17/09, Vinicius) "Somente story" = desmarca todo mundo e deixa SÓ o Vinicius, em
-        // qualquer status — story não passa pela produção. Desmarcou story: se estava só com
-        // o Vinicius, volta pra Hellen (só em Rascunhos; em produção mantém quem está).
-        if(story&&!soVini){ patch.assignee="vinicius"; patch.assignees=["vinicius"]; }
+        // (15/10/2026, Gustavo) "tira aquela regra de quando acionar o Somente story pelo calendário mudar pra só
+        // Vinicius" — marcar story NÃO mexe mais em quem está marcado (regra de 17/09 derrubada). Card sem ninguém
+        // ganha o Vinicius; desmarcou story só com o Vinicius em Rascunhos → volta pra Hellen (como antes).
+        if(story&&!as.length){ patch.assignee="vinicius"; patch.assignees=["vinicius"]; }
         if(!story&&soVini&&String(t.status||"")==="rascunhos"){ patch.assignee="ellen"; patch.assignees=["ellen"]; }
         if(String(t.status||"")!=="rascunhos"&&Object.keys(patch).length) emProducao++;
         if(!Object.keys(patch).length) return;
@@ -22347,7 +22347,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           if(!res||!res.alterados||typeof pixelsToast==="undefined") return;
           const n=res.alterados, m=res.emProducao;
           pixelsToast.info((_savedRow.somente_story?"Somente story aplicado":"Somente story retirado")+" em "+n+" card"+(n>1?"s":"")+" já criado"+(n>1?"s":"")+
-            (_savedRow.somente_story?" — responsável agora é só o Vinicius":"")+".",5000);
+            " (quem estava marcado continua).",5000);
         }).catch(function(e){ console.warn("[autocom story]",e); });
       }
       // Sincronizar marco vinculado (se aplicável)
@@ -22560,7 +22560,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           </span>
           <span style={{minWidth:0,flex:1}}>
             <span style={{display:"block",fontSize:13,fontWeight:800,color:somenteStory?"#92400e":"#0f172a",letterSpacing:-.2}}>Somente story</span>
-            <span style={{display:"block",fontSize:11,color:somenteStory?"#b45309":"#94a3b8",marginTop:2,fontWeight:500,lineHeight:1.4}}>Sem arte pra produzir: o card nasce só com o Vinicius, leva a tag SOMENTE STORY no calendário e não entra na cota de conteúdos do plano.</span>
+            <span style={{display:"block",fontSize:11,color:somenteStory?"#b45309":"#94a3b8",marginTop:2,fontWeight:500,lineHeight:1.4}}>Sem arte pra produzir: se ninguém for marcado, o card nasce com o Vinicius; leva a tag SOMENTE STORY no calendário e não entra na cota de conteúdos do plano.</span>
           </span>
         </label>
       </div>
@@ -51305,7 +51305,7 @@ function _cardPodeSerResp(u){
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
       const _vpNum = String(valorPers||"").replace(/\./g,"").replace(",",".").trim();
       const nextValorPers = canEditContentType ? ((nextContentType==="folder"&&_vpNum!==""&&!isNaN(Number(_vpNum)))?Number(_vpNum):null) : (t.valorPersonalizado!=null?t.valorPersonalizado:null);
-      const _asFinal=somenteStory?["vinicius"]:assignees;   // (25/09/2026) story = só o Vinicius
+      const _asFinal=(somenteStory&&!(assignees||[]).length)?["vinicius"]:(assignees||[]);   // (15/10/2026) story só preenche o Vinicius se ninguém foi marcado
       return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:_asFinal[0],assignees:_asFinal,watchers,sector,client,priority,contentType:nextContentType,valorPersonalizado:nextValorPers,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:_pxArqFinal(t.files),timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
@@ -51339,8 +51339,8 @@ function _cardPodeSerResp(u){
           col_entered_at: _prevTask.colEnteredAt || task.colEnteredAt || new Date().toISOString(),
           created_at: _prevTask.createdAt || task.createdAt || null,
           created_by: _prevTask.createdBy || task.createdBy || (user&&user.name) || null,
-          assignee: (somenteStory?["vinicius"]:(assignees||[]))[0] || "",      // (06/10/2026 · A-6) igual ao estado
-          assignees: somenteStory?["vinicius"]:(assignees || []),
+          assignee: ((somenteStory&&!(assignees||[]).length)?["vinicius"]:(assignees||[]))[0] || "",      // (15/10/2026) igual ao estado: story não derruba quem está marcado
+          assignees: (somenteStory&&!(assignees||[]).length)?["vinicius"]:(assignees || []),
           watchers: watchers || [],
           priority: priority || null,
           content_type: (typeof canEditContentType!=="undefined" && canEditContentType) ? (contentType||null) : (_prevTask.contentType||null),
