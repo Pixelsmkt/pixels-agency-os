@@ -53354,7 +53354,14 @@ function _cardPodeSerResp(u){
                   let toInsert;
                   if(html){
                     // Sanitiza HTML colado (remove style/class/font/etc — vira Inter 13.5 via CSS)
-                    toInsert=sanitizeRichText(html);
+                    /* (15/10 07:49, Gustavo: "ainda tá todo espaçadão") o HTML do Word quebra linha DENTRO do texto e entre os <p>; o editor
+                       mostra quebra de linha como linha nova (pre-wrap) → "1.1" numa linha, título na outra e linhas em branco entre itens.
+                       Na colagem as quebras do código viram espaço e os parágrafos viram linhas simples. */
+                    toInsert=sanitizeRichText(String(html).replace(/\r?\n/g," ").replace(/<span[^>]*mso-tab-count[^>]*>[\s\S]*?<\/span>/gi," "))
+                      .replace(/(&nbsp;|\u00a0)/g," ").replace(/[ \t]{2,}/g," ")
+                      .replace(/<p>\s*/gi,"").replace(/\s*<\/p>\s*/gi,"<br>")
+                      .replace(/<br>\s*(<(b|strong)>)/gi,"<br><br>$1")   // linha em branco só antes de título em negrito
+                      .replace(/(<br>\s*){3,}/gi,"<br><br>").replace(/^(\s*<br>)+|(<br>\s*)+$/gi,"").trim();
                   }else{
                     // Texto puro — preserva quebras de linha
                     toInsert=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
