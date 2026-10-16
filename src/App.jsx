@@ -37987,6 +37987,7 @@ function _EditCopyModal({task,onClose,onSave,stripHtml}){
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const [openCard,setOpenCard]=useState(null);
+  const [ajusteTask,setAjusteTask]=useState(null);   // (16/10, Gustavo) "Solicitar ajuste" direto aqui — mesma tela da Avaliação (arte: riscar; vídeo: comentário no tempo)
   const [baixando,setBaixando]=useState("");
   const [sel,setSel]=useState({});                 // id → true (seleção manual)
   const _ehFO=(t)=>(typeof pxSemAprovacaoCliente==="function")?pxSemAprovacaoCliente(t):((typeof pxEhFotoDeObra==="function")&&pxEhFotoDeObra(t));
@@ -38075,7 +38076,21 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
   const icoOk=<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>;
   const selecionados=lista.filter(function(t){ return sel[String(t.id)]; });
 
+  /* Cliente pediu ajuste: o card sai de Aprovado e volta pra Ajustes com as anotações/comentários — igual ao
+     "Solicitar ajuste" da Avaliação de design/vídeo. */
+  function _clientePediuAjuste(task,feedback,drawingFiles,audioFiles,comments){
+    const actor=(typeof pxAutorNome==="function")?pxAutorNome(effectiveUser):((effectiveUser&&effectiveUser.name)||"");
+    const agora=new Date().toISOString();
+    const tl=[].concat(task.timeline||[],[{type:"status",fromLabel:"Aprovado internamente",toLabel:"Ajustes",from:task.status,to:"ajustes",at:agora,atFmt:nowFmt(),user:actor,note:"Ajuste pedido pelo cliente (tela Aprovar com o cliente)"}]);
+    if(setTasks) setTasks(function(p){ return p.map(function(t){ return t.id===task.id?Object.assign({},t,{
+      status:"ajustes", isAlteracao:true, ajustar:true, ajusteOrigin:"cliente", priority:"alta", colEnteredAt:agora,
+      files:[].concat(t.files||[],drawingFiles||[],audioFiles||[]), comments:[].concat(t.comments||[],comments||[]), timeline:tl,
+    }):t; }); });
+    setAjusteTask(null);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("“"+(task.title||"Card")+"” voltou pra Ajustes com o pedido do cliente.");
+  }
   return (<div style={{display:"flex",flexDirection:"column",gap:56,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {ajusteTask&&typeof PublicacaoEditModal==="function"&&(<PublicacaoEditModal task={ajusteTask} onClose={function(){ setAjusteTask(null); }} onReject={_clientePediuAjuste}/>)}
     {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(function(){})} onClose={function(){ setOpenCard(null); }} currentUser={effectiveUser} canDelete={false} cardPerms={perms}/>)}
     <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
@@ -38170,9 +38185,11 @@ function PageAprovarComCliente({isMob, tasks, setTasks, perms, effectiveUser}){
                   {resps.length>0&&<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>{resps.slice(0,3).map(function(r){ return <UserAvatar key={r.id} user={r} size={18}/>; })}</span>}
                 </div>
               </div>
-              <div style={{display:"flex",gap:8,marginTop:"auto"}}>   {/* (15/10 07:17) "Cliente aprovou" sempre na mesma altura entre os cards */}
+              <div style={{display:"flex",gap:6,marginTop:"auto"}}>   {/* (15/10 07:17) "Cliente aprovou" sempre na mesma altura entre os cards */}
                 <button disabled={!!baixando||!fs.length} onClick={function(){ baixar([t],String(t.title||"card").slice(0,30)); }} style={Object.assign(btn("#64748b",false),{flex:"0 0 auto",opacity:(!fs.length||baixando)?.45:1})}>{icoDown}</button>
-                {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou([t]); }} style={Object.assign(btn("#ec4899",true),{flex:1,justifyContent:"center"})}>{icoOk} Cliente aprovou</button>}
+                {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ setAjusteTask(t); }} title={"O cliente pediu ajuste: "+(fs.some(function(f){ return !_ehImg(f); })?"comenta no tempo do vídeo":"risca/comenta na arte")+" e o card volta pra Ajustes"} style={Object.assign(btn("#ea580c",false),{flex:1,minWidth:0,justifyContent:"center",padding:"0 8px",gap:5,fontSize:12,whiteSpace:"nowrap"})}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Pedir ajuste</button>}
+                {_podeMarcar&&<button disabled={!!baixando} onClick={function(){ clienteAprovou([t]); }} style={Object.assign(btn("#ec4899",true),{flex:1,minWidth:0,justifyContent:"center",padding:"0 8px",gap:5,fontSize:12,whiteSpace:"nowrap"})}>{icoOk} Cliente aprovou</button>}
               </div>
             </div>
           </div>;
