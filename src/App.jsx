@@ -125869,6 +125869,22 @@ async function _rtMapaEs(sb){
   _RT_ES_MAP=m; _RT_ES_EM=Date.now(); return m;
 }
 function _rtTagProduto(r,mapa){ const p=String((r&&r.produto)||"").trim(); if(!p||!mapa||String((r&&r.unidade)||"")!=="paraguay") return p; return mapa[p.toLowerCase()]||p; }
+/* Título grande de seção (Roteiros gerais / Roteiros específicos) — separação clara entre as duas partes */
+function _RtSecao({titulo,sub,n,cor,topo}){
+  const c=cor||_RT_AC;
+  return <div style={{display:"flex",alignItems:"flex-end",gap:14,flexWrap:"wrap",marginTop:topo?22:4,paddingTop:topo?22:0,borderTop:topo?"2px solid #e8ebf0":"none"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12}}>
+      <span style={{width:6,height:34,borderRadius:99,background:c,flexShrink:0}}/>
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.6,lineHeight:1.1}}>{titulo}</span>
+          {typeof n==="number"&&<span style={{background:c+"14",color:c,border:"1px solid "+c+"44",borderRadius:99,padding:"2px 10px",fontSize:12,fontWeight:800}}>{n}</span>}
+        </div>
+        {sub&&<div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>{sub}</div>}
+      </div>
+    </div>
+  </div>;
+}
 function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob, onGravado, onEditar}){
   const [aberto,setAberto]=useState(true);
   /* (16/10/2026, Gustavo) "tem que ter um botão editar do lado de ajustar.. pra gente editar manualmente" */
@@ -125884,7 +125900,13 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
   const partes=[["a",L[0],r.abertura],["d",L[1],r.desenvolvimento],["f",L[2],r.fechamento]]
     .filter(function(p){ return String(p[2]||"").trim(); });
   const _c=cor||_RT_AC;
-  const _pill=function(on,c){ return {background:on?c:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?c:"#e2e8f0"),borderRadius:99,padding:"6px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}; };
+  /* (16/10/2026, Gustavo: "a disposição de botões tem que ser a mesma [nos dois cards]… essa com menos parece melhor, mais moderno")
+     Na agência os botões seguem o padrão das propostas: sem ícone, cantos 9, Portal à esquerda, ação principal verde cheia,
+     Excluir vermelho cheio. No portal do cliente ficam as pílulas de sempre. */
+  const _pill=function(on,c){ return agencia
+    ? {background:on?c:"#fff",color:on?"#fff":"#334155",border:"1px solid "+(on?c:"#e2e8f0"),borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}
+    : {background:on?c:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?c:"#e2e8f0"),borderRadius:99,padding:"6px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}; };
+  const _ico=function(svg){ return agencia?null:svg; };
   const dt=r.created_at?new Date(r.created_at):null;
   return <div style={{background:"#fff",border:"1px solid "+(r.visivel_portal?_c+"66":"#e8ebf0"),borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)",borderTop:"4px solid "+_c}}>
     <div style={{padding:"12px 12px 8px",display:"flex",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
@@ -125904,40 +125926,35 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
         </div>
         <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~{r.duracao_seg||60} segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
       </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%"}}>
-        <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-          {agencia?"WhatsApp":"Copiar"}
-        </button>
-        {agencia&&<button type="button" title={r.visivel_portal?"Está no portal do cliente (Roteiros). Clique pra tirar.":"Mostrar no portal do cliente, em Roteiros"} onClick={onPortal} style={_pill(!!r.visivel_portal,"#0ea5e9")}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%",justifyContent:agencia?"flex-end":"flex-start",borderTop:agencia?"1px solid #f1f5f9":"none",paddingTop:agencia?10:0}}>
+        {agencia&&<button type="button" title={r.visivel_portal?"Está no portal do cliente (Roteiros). Clique pra tirar.":"Mostrar no portal do cliente, em Roteiros"} onClick={onPortal} style={Object.assign({},_pill(!!r.visivel_portal,_c),{marginRight:"auto"})}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           {r.visivel_portal?"No portal":"Portal"}
         </button>}
-        {/* (23/09/2026, Vinicius) "um check quando tal roteiro for gravado — a gente registra quais o cliente gravou" */}
-        {onGravado&&<button type="button" title={r.gravado_em?"Desmarcar gravado":(agencia?"Marcar: o cliente já gravou este roteiro":"Marque quando gravar este vídeo — a agência fica sabendo na hora")} onClick={onGravado} style={_pill(!!r.gravado_em,"#16a34a")}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-          {r.gravado_em?"Gravado":(agencia?"Gravado?":"Já gravei")}
-        </button>}
-        {agencia&&<button type="button" title={r.status==="enviado"?"Voltar pra sugestão":"Marcar como enviado pro cliente"} onClick={onEnviado} style={_pill(r.status==="enviado","#7c3aed")}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          {r.status==="enviado"?"Enviado":"Enviar"}
-        </button>}
+        <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
+          {_ico(<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>)}
+          {agencia?"WhatsApp":"Copiar"}
+        </button>
         {agencia&&onEditar&&<button type="button" title="Editar o texto à mão (falas, cenas e título)"
           onClick={function(){ setAjuste(null); setAberto(true); setEd(ed?null:{assunto:r.assunto||"",abertura:r.abertura||"",desenvolvimento:r.desenvolvimento||"",fechamento:r.fechamento||"",cenas:r.cenas||""}); }} style={_pill(!!ed,"#334155")}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
           Editar
         </button>}
         {agencia&&onAjustar&&<button type="button" title="Diz o que não ficou bom — a IA ajusta ESTE roteiro e mantém o resto"
           onClick={function(){ setEd(null); setAjuste(ajuste===null?"":null); }} style={_pill(ajuste!==null,"#d97706")}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8Z"/></svg>
           Ajustar com IA
+        </button>}
+        {/* (23/09/2026, Vinicius) "um check quando tal roteiro for gravado — a gente registra quais o cliente gravou" */}
+        {onGravado&&<button type="button" title={r.gravado_em?"Desmarcar gravado":(agencia?"Marcar: o cliente já gravou este roteiro":"Marque quando gravar este vídeo — a agência fica sabendo na hora")} onClick={onGravado} style={_pill(!!r.gravado_em,"#16a34a")}>
+          {_ico(<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>)}
+          {r.gravado_em?"Gravado":(agencia?"Gravado?":"Já gravei")}
+        </button>}
+        {agencia&&<button type="button" title={r.status==="enviado"?"Voltar pra sugestão":"Marcar como enviado pro cliente"} onClick={onEnviado} style={_pill(r.status==="enviado","#7c3aed")}>
+          {r.status==="enviado"?"Enviado":"Enviar"}
         </button>}
         {/* (22/09/2026) O excluir era um ícone #e2b3b3 sem fundo: "quase não dá pra ver".
             Agora é pílula vermelha vazada, do mesmo tamanho das outras, e enche no hover. */}
         {agencia&&onExcluir&&<button type="button" title="Excluir este roteiro" onClick={onExcluir}
-          style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:99,padding:"6px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}>
+          style={Object.assign({},_pill(true,"#dc2626"))}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
           Excluir
         </button>}
@@ -126101,6 +126118,8 @@ function PageRoteiros({isMob, perms, viewingAs}){
       return a.i-b.i;
     }).map(function(x){ return x.r; });
   })();
+  const gerais=visiveis.filter(function(r){ return !String(r.pedido||"").trim(); });
+  const especificos=visiveis.filter(function(r){ return !!String(r.pedido||"").trim(); });
 
   /* 21/09/2026 — BUG: o botao "Gerar 5 roteiros" chamava _gerar(null) sem unidade, entao uId
      caia sempre em "" (Grupo). A IA nao recebia as regras/memorias da unidade (claude_contexto_copy
@@ -126434,20 +126453,33 @@ function PageRoteiros({isMob, perms, viewingAs}){
         Lendo o playbook, o foco do mês, as regras aprendidas e os vídeos já aprovados de <b>{_nomeCl(clId,unit)}</b>… Os 5 roteiros vão sair sobre 5 assuntos diferentes dos {doCliente.length} que já existem aqui. Leva uns 30 a 60 segundos.
       </div>}
       {loading&&<div style={{padding:"40px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
-      {!loading&&visiveis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"44px 24px",textAlign:"center"}}>
+      {!loading&&visiveis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"28px 24px",textAlign:"center"}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:15,marginBottom:6}}>Nenhum roteiro pra {_nomeCl(clId,unit)} ainda</div>
         <div style={{color:"#64748b",fontSize:12.5}}>Clica em "Gerar 5 roteiros". A IA escreve com base no playbook, no foco do mês e no que já foi aprovado pra esse cliente.</div>
       </div>}
-      {!loading&&visiveis.length>0&&<div style={{overflowX:isMob?"visible":"auto",paddingBottom:6}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
-        {visiveis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
+      {/* (16/10/2026, Gustavo: "nomeia a seção Roteiros gerais e a seção inferior Roteiros específicos… títulos grandes e destacados")
+          Gerais = os 5 por vez (sem pedido). Específicos = roteiros que saíram de um Pedido + artes/carrosséis/pedidos do cliente. */}
+      {!loading&&<_RtSecao cor={_cor} n={gerais.length} titulo="Roteiros gerais" sub="Cinco por vez, em cima do playbook, do foco do mês e do que já foi aprovado."/>}
+      {!loading&&visiveis.length>0&&gerais.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"22px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>Nenhum roteiro geral — clica em <b>Gerar 5 roteiros</b>.</div>}
+      {!loading&&gerais.length>0&&<div style={{overflowX:isMob?"visible":"auto",paddingBottom:6}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
+        {gerais.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
           onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
           onGravado={function(){ const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Agência"; _patch(r, r.gravado_em?{gravado_em:null,gravado_por:null}:{gravado_em:new Date().toISOString(),gravado_por:quem}); }}
           onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined}
           onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
-      {/* Artes, carrosséis e pedidos por WhatsApp (a antiga aba Solicitações), embaixo dos roteiros — só aparece quando tem algo */}
-      {_bl("aba.solicitacoes")&&<SolicitacoesWhatsapp embutido apiRef={solRef} isMob={isMob} lista={_lista} unidades={_unidades} clId={clId} setClId={setClId} unit={unit} setUnit={setUnit} nomeCl={_nomeCl} bl={function(k){ return _bl(k); }}/>}
+      {!loading&&<_RtSecao cor={_cor} n={especificos.length||undefined} titulo="Roteiros específicos" sub="O que saiu de um Pedido: roteiros sob encomenda, áudio do cliente, artes e carrosséis." topo/>}
+      {!loading&&especificos.length>0&&<div style={{overflowX:isMob?"visible":"auto",paddingBottom:6}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
+        {especificos.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
+          onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
+          onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
+          onGravado={function(){ const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Agência"; _patch(r, r.gravado_em?{gravado_em:null,gravado_por:null}:{gravado_em:new Date().toISOString(),gravado_por:quem}); }}
+          onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined}
+          onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
+      </div></div>}
+      {/* Artes, carrosséis e pedidos por WhatsApp (a antiga aba Solicitações), dentro de Roteiros específicos */}
+      {_bl("aba.solicitacoes")&&<SolicitacoesWhatsapp embutido vazioAviso={!loading&&especificos.length===0} apiRef={solRef} isMob={isMob} lista={_lista} unidades={_unidades} clId={clId} setClId={setClId} unit={unit} setUnit={setUnit} nomeCl={_nomeCl} bl={function(k){ return _bl(k); }}/>}
     </div>}
 
     {aba==="trends"&&<>
@@ -127399,7 +127431,7 @@ function SwRolagemDupla({children,style,cor,mob}){
 }
 
 /* ─── A ABA ───────────────────────────────────────────────────────────── */
-function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setUnit, nomeCl, bl, embutido, apiRef}){
+function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setUnit, nomeCl, bl, embutido, apiRef, vazioAviso}){
   const sb=(typeof window!=="undefined")?window._sb:null;
   const _bl=bl||function(){ return true; };
   const isBioter=clId==="bioter";
@@ -127913,14 +127945,14 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     </div>;
   };
 
-  if(embutido&&!pautas.length&&!passo) return null;
-  return <div style={{display:"flex",flexDirection:"column",gap:14,marginTop:embutido?10:0}}>
-    {/* (16/10/2026) embutido nos Roteiros: a barra de clientes é a de cima; aqui só o título da parte e o "Pedir mais" */}
-    {embutido&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",borderTop:"1px solid #e8ebf0",paddingTop:14}}>
-      <div style={{flex:1,minWidth:200}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>Pedidos do cliente · artes, carrosséis e WhatsApp</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>O que veio pelo Pedido com áudio, print, arte ou carrossel. As propostas aceitas viram card em Copys.</div>
-      </div>
+  if(embutido&&!pautas.length&&!passo){
+    if(!vazioAviso) return null;
+    return <div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"22px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>Nenhum pedido ainda — clica em <b>Pedido específico</b>, escreve o que quer ou solta o áudio do cliente, e escolhe os formatos.</div>;
+  }
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* (16/10/2026) embutido nos Roteiros (seção "Roteiros específicos"): a barra de clientes e o título são os de cima; aqui só o "Pedir mais" */}
+    {embutido&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:200,color:"#64748b",fontSize:12.5}}>Pedidos com áudio, print, arte ou carrossel. As propostas aceitas viram card em Copys.</div>
       {_bl("solic.nova")&&aberta&&<button type="button" disabled={!!passo||!!ocupado} onClick={function(){ setMaisForm(maisForm?null:{texto:"",grupo:"arte"}); setForm(null); }}
         title="Gera mais propostas a partir desta mesma solicitação — você descreve o que quer (quantos, formato, enfoque)"
         style={Object.assign({},_btn(!!passo||!!ocupado),{background:maisForm?"#0f172a":"#fff",color:maisForm?"#fff":_SW_AC,border:"1.5px solid "+(maisForm?"#0f172a":_SW_AC),boxShadow:"none"})}>
