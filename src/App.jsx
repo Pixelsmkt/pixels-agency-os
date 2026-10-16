@@ -22111,15 +22111,18 @@ function PxSeloMaterialCliente({size,claro,cor}){
    - só os que ainda estão em Rascunhos trocam o responsável (story → Vinicius; desmarcou e
      estava só com o Vinicius → volta pra Hellen). Card que já entrou na produção mantém
      quem está nele.                                                                        */
-function pxAutoComSyncStory(eventId, story){
+function pxAutoComSyncStory(eventId, storyGeral, storyClients){
   const sb=window._sb; if(!sb||!eventId) return Promise.resolve({alterados:0,emProducao:0});
   const TAG="Somente story";
-  return sb.from("tasks").select("id,status,assignee,assignees,tags,somente_story")
+  const L=Array.isArray(storyClients)?storyClients:[];
+  return sb.from("tasks").select("id,status,assignee,assignees,tags,somente_story,client,bioter_unit")
     .like("id","autocom-"+String(eventId)+"-%").is("deleted_at",null).then(function(r){
       if(!r||r.error||!Array.isArray(r.data)) return {alterados:0,emProducao:0};
       let alterados=0, emProducao=0;
       const jobs=[];
       r.data.forEach(function(t){
+        // (16/10/2026) story por cliente: geral OU o cliente (ou cliente_unidade) está na lista do evento
+        const story=!!storyGeral||L.indexOf(String(t.client||""))>=0||(t.bioter_unit&&L.indexOf(String(t.client||"")+"_"+String(t.bioter_unit))>=0);
         const tags=Array.isArray(t.tags)?t.tags.slice():[];
         const temTag=tags.indexOf(TAG)>=0;
         const patch={};
@@ -22169,6 +22172,8 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   // "Somente story": a data vira só post de story — card nasce só com o Vinicius e fica
   // fora da cota de conteúdos do plano (10/09/2026).
   const [somenteStory,setSomenteStory]=useState(!!(initial&&initial.somente_story));
+  // (16/10/2026) Somente story só pra alguns clientes (lista de ids; "bioter_chapeco" = unidade)
+  const [storyClients,setStoryClients]=useState(function(){ let L=initial&&initial.somente_story_clients; if(typeof L==="string"){ try{ L=JSON.parse(L); }catch(_){ L=[]; } } return Array.isArray(L)?L.slice():[]; });
   const [endDate,setEndDate]=useState((initial&&initial.end_date)||"");
   const [responsibleIds,setResponsibleIds]=useState(function(){
     try{
@@ -22265,6 +22270,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       end_date:(endDate&&endDate>date)?endDate:null,
       responsibles:(responsibleIds&&responsibleIds.length)?responsibleIds:null,
       somente_story:!!somenteStory,
+      somente_story_clients:somenteStory?[]:storyClients.filter(function(id){ return clientIds.indexOf(id)>=0; }),
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -22279,7 +22285,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         if(r&&r.error){
           const _msg=(r.error.message||"").toLowerCase();
           // Detecta colunas opcionais que ainda não foram migradas (SQL não rodado)
-          const _optionalCols=["city","client_ids","end_date","responsibles","recurrence_until"];
+          const _optionalCols=["city","client_ids","end_date","responsibles","recurrence_until","somente_story_clients"];
           let _retryPayload=null;
           for(let _i=0;_i<_optionalCols.length;_i++){
             const _col=_optionalCols[_i];
@@ -22345,9 +22351,11 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         }catch(_e){ console.warn("[autoev limpar]",_e); }
       })();
       // (11/09) Somente story mudou (ou está ligado) num evento que já tinha cards → acerta os cards
+      const _scAntes=(function(){ let L=initial&&initial.somente_story_clients; if(typeof L==="string"){ try{ L=JSON.parse(L); }catch(_){ L=[]; } } return Array.isArray(L)?L:[]; })();
+      const _scDepois=Array.isArray(_savedRow&&_savedRow.somente_story_clients)?_savedRow.somente_story_clients:[];
       if(isEdit&&_savedRow&&String(_savedRow.category||"")==="comemorativa"
-         &&(!!_savedRow.somente_story||!!(initial&&initial.somente_story))&&typeof pxAutoComSyncStory==="function"){
-        pxAutoComSyncStory(_savedRow.id,!!_savedRow.somente_story).then(function(res){
+         &&(!!_savedRow.somente_story||!!(initial&&initial.somente_story)||_scAntes.length||_scDepois.length)&&typeof pxAutoComSyncStory==="function"){
+        pxAutoComSyncStory(_savedRow.id,!!_savedRow.somente_story,_scDepois).then(function(res){
           if(!res||!res.alterados||typeof pixelsToast==="undefined") return;
           const n=res.alterados, m=res.emProducao;
           pixelsToast.info((_savedRow.somente_story?"Somente story aplicado":"Somente story retirado")+" em "+n+" card"+(n>1?"s":"")+" já criado"+(n>1?"s":"")+
@@ -22567,6 +22575,20 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             <span style={{display:"block",fontSize:11,color:somenteStory?"#b45309":"#94a3b8",marginTop:2,fontWeight:500,lineHeight:1.4}}>Sem arte pra produzir: se ninguém for marcado, o card nasce com o Vinicius; leva a tag SOMENTE STORY no calendário e não entra na cota de conteúdos do plano.</span>
           </span>
         </label>
+        {/* (16/10/2026, Gustavo) story só pra alguns clientes: chips dos clientes marcados no evento */}
+        {!somenteStory&&category==="comemorativa"&&clientIds.length>0&&<div style={{marginTop:8,border:"1px solid "+(storyClients.length?"#fde68a":"#e2e8f0"),background:storyClients.length?"#fffbeb":"#fff",borderRadius:12,padding:"9px 12px"}}>
+          <div style={{fontSize:11,fontWeight:800,color:storyClients.length?"#92400e":"#64748b",letterSpacing:.3,textTransform:"uppercase",marginBottom:6}}>Somente story só pra <span style={{textTransform:"none",letterSpacing:0,fontWeight:500,color:"#94a3b8"}}>· clica no cliente; pros outros a data continua sendo post</span></div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {clientIds.map(function(id){
+              const on=storyClients.indexOf(id)>=0;
+              const _c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){ return x.id===id; });
+              const _u=(typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]).find(function(x){ return x&&x.id===id; });
+              const nome=_c?_c.name:(_u?(_u.name||id):id);
+              return <button key={id} type="button" onClick={function(){ setStoryClients(on?storyClients.filter(function(x){ return x!==id; }):storyClients.concat([id])); }}
+                style={{font:"inherit",fontSize:11.5,fontWeight:on?800:600,padding:"4px 10px",borderRadius:99,border:"1px solid "+(on?"#f59e0b":"#e2e8f0"),background:on?"#f59e0b":"#fff",color:on?"#fff":"#475569",cursor:"pointer"}}>{nome}{on?" ✓":""}</button>;
+            })}
+          </div>
+        </div>}
       </div>
 
       {/* Cliente(s) vinculados (opcional, multi-select) */}
@@ -98446,7 +98468,9 @@ function _prodTranscreverNoWorker(audio, diz, minTot){
    memória), joga fora o vídeo e devolve só o som em 16 kHz mono, com % de verdade.
    Teste: mkv de 1,1 GB / 60 min → 54 s. O núcleo (32 MB) fica em /ffmpeg/ no próprio app (cacheado depois
    da 1ª vez); se não carregar, tenta o jsdelivr; se nada der, cai no caminho antigo (decodeAudioData). */
-const _PROD_FFMPEG_WORKER_SRC='self.onmessage=async(e)=>{const d=e.data||{};try{let ok=false,ult="";for(const b of d.bases){try{importScripts(b+"ffmpeg-core.js");self.__b=b;ok=true;break;}catch(x){ult=String(x&&x.message||x);}}if(!ok)throw new Error("não carregou o ffmpeg ("+ult+")");self.postMessage({tipo:"carregando"});const M=await self.createFFmpegCore({mainScriptUrlOrBlob:self.__b+"ffmpeg-core.js#"+btoa(JSON.stringify({wasmURL:self.__b+"ffmpeg-core.wasm",workerURL:""}))});let dur=0,ultPct=-1;M.setLogger(function(l){const s=String((l&&l.message)||"");let m=s.match(/Duration:\\s*(\\d+):(\\d+):([\\d.]+)/);if(m&&!dur){dur=(+m[1])*3600+(+m[2])*60+(+m[3]);self.postMessage({tipo:"dur",dur:dur});}m=s.match(/time=\\s*(\\d+):(\\d+):([\\d.]+)/);if(m&&dur){const t=(+m[1])*3600+(+m[2])*60+(+m[3]);const p=Math.min(100,Math.round(100*t/dur));if(p!==ultPct){ultPct=p;self.postMessage({tipo:"prog",pct:p});}}});M.FS.mkdir("/in");M.FS.mount(M.FS.filesystems.WORKERFS,{files:[d.file]},"/in");M.exec("-nostdin","-i","/in/"+d.file.name,"-vn","-sn","-dn","-ac","1","-ar","16000","-f","s16le","/out.pcm");const ret=M.ret;let u8;try{u8=M.FS.readFile("/out.pcm");}catch(_){u8=new Uint8Array(0);}if(!u8.length)throw new Error("o ffmpeg não achou áudio no arquivo (código "+ret+")");const i16=new Int16Array(u8.buffer,u8.byteOffset,u8.byteLength>>1);const f=new Float32Array(i16.length);for(let i=0;i<i16.length;i++)f[i]=i16[i]/32768;self.postMessage({tipo:"fim",audio:f},[f.buffer]);}catch(err){self.postMessage({tipo:"erro",msg:String((err&&err.message)||err)});}};';
+const _PROD_FFMPEG_WORKER_SRC='self.onmessage=async(e)=>{const d=e.data||{};try{let ok=false,ult="";for(const b of d.bases){try{importScripts(b+"ffmpeg-core.js");self.__b=b;ok=true;break;}catch(x){ult=String(x&&x.message||x);}}if(!ok)throw new Error("não carregou o ffmpeg ("+ult+")");self.postMessage({tipo:"carregando"});const M=await self.createFFmpegCore({mainScriptUrlOrBlob:self.__b+"ffmpeg-core.js#"+btoa(JSON.stringify({wasmURL:self.__b+"ffmpeg-core.wasm",workerURL:""}))});let dur=0,ultPct=-1,base=0;M.setLogger(function(l){const s=String((l&&l.message)||"");let m=s.match(/Duration:\\s*(\\d+):(\\d+):([\\d.]+)/);if(m&&!dur){dur=(+m[1])*3600+(+m[2])*60+(+m[3]);self.postMessage({tipo:"dur",dur:dur});}m=s.match(/time=\\s*(\\d+):(\\d+):([\\d.]+)/);if(m&&dur){const t=base+(+m[1])*3600+(+m[2])*60+(+m[3]);const p=Math.min(100,Math.round(100*t/dur));if(p!==ultPct){ultPct=p;self.postMessage({tipo:"prog",pct:p});}}});M.FS.mkdir("/in");M.FS.mount(M.FS.filesystems.WORKERFS,{files:[d.file]},"/in");const IN="/in/"+d.file.name;'+
+ 'if(d.modo==="opus"){ M.exec("-nostdin","-i",IN); if(!dur){ M.exec("-nostdin","-i",IN,"-vn","-sn","-dn","-f","null","-"); } const PED=Math.max(60,Number(d.pedacoSeg)||1200); const n=Math.max(1,Math.ceil((dur||PED)/PED)); for(let i=0;i<n;i++){ base=i*PED; const out="/p"+i+".ogg"; M.exec("-nostdin","-ss",String(base),"-t",String(PED),"-i",IN,"-vn","-sn","-dn","-ac","1","-ar","16000","-c:a","libopus","-b:a","24k","-application","voip",out); let u8; try{ u8=M.FS.readFile(out); }catch(_){ u8=new Uint8Array(0); } try{ M.FS.unlink(out); }catch(_){ } if(!u8.length&&i===0) throw new Error("o ffmpeg não achou áudio no arquivo"); const seg=Math.max(0,Math.min(PED,(dur||PED)-base)); self.postMessage({tipo:"pedaco",i:i,n:n,seg:seg,bytes:u8},[u8.buffer]); } self.postMessage({tipo:"fim",dur:dur}); return; }'+
+ 'M.exec("-nostdin","-i",IN,"-vn","-sn","-dn","-ac","1","-ar","16000","-f","s16le","/out.pcm");const ret=M.ret;let u8;try{u8=M.FS.readFile("/out.pcm");}catch(_){u8=new Uint8Array(0);}if(!u8.length)throw new Error("o ffmpeg não achou áudio no arquivo (código "+ret+")");const i16=new Int16Array(u8.buffer,u8.byteOffset,u8.byteLength>>1);const f=new Float32Array(i16.length);for(let i=0;i<i16.length;i++)f[i]=i16[i]/32768;self.postMessage({tipo:"fim",audio:f},[f.buffer]);}catch(err){self.postMessage({tipo:"erro",msg:String((err&&err.message)||err)});}};';
 function _prodExtrairAudioFfmpeg(file, diz){
   if(typeof Worker==="undefined") return Promise.reject(new Error("sem worker"));
   return new Promise(function(res,rej){
@@ -98465,6 +98489,59 @@ function _prodExtrairAudioFfmpeg(file, diz){
     w.postMessage({file:file,bases:[location.origin+"/ffmpeg/","https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/"]});
   });
 }
+/* Áudio em pedaços .ogg (opus 24 kbps mono) de até 20 min — pra mandar pra IA da OpenAI (limite 25 MB por pedido).
+   Devolve {pedacos:[{blob,seg}], dur}. */
+function _prodExtrairOpusFfmpeg(file, diz, pedacoSeg){
+  if(typeof Worker==="undefined") return Promise.reject(new Error("sem worker"));
+  return new Promise(function(res,rej){
+    let w; try{ w=new Worker(URL.createObjectURL(new Blob([_PROD_FFMPEG_WORKER_SRC],{type:"text/javascript"}))); }catch(e){ return rej(e); }
+    const mb=Math.round((file.size||0)/1024/1024);
+    let minTot=0; const pedacos=[];
+    w.onmessage=function(m){ const d=m.data||{};
+      if(d.tipo==="carregando"){ diz("preparando a extração do áudio ("+mb+" MB)…",2); return; }
+      if(d.tipo==="dur"){ minTot=Math.max(1,Math.round(d.dur/60)); diz("etapa 1 de 2 · separando o áudio ("+minTot+" min de reunião)…",3); return; }
+      if(d.tipo==="prog"){ diz("etapa 1 de 2 · separando o áudio"+(minTot?(" ("+minTot+" min de reunião)"):"")+"…", 3+22*(d.pct/100)); return; }
+      if(d.tipo==="pedaco"){ pedacos.push({blob:new Blob([d.bytes],{type:"audio/ogg"}),seg:d.seg,i:d.i,n:d.n}); return; }
+      try{ w.terminate(); }catch(_){ }
+      if(d.tipo==="fim") res({pedacos:pedacos,dur:d.dur||0}); else rej(new Error(d.msg||"ffmpeg falhou"));
+    };
+    w.onerror=function(e){ try{ w.terminate(); }catch(_){ } rej(new Error((e&&e.message)||"worker do ffmpeg falhou")); };
+    diz("carregando o extrator de áudio (1ª vez baixa ~30 MB)…",1);
+    w.postMessage({file:file,modo:"opus",pedacoSeg:pedacoSeg||1200,bases:[location.origin+"/ffmpeg/","https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/"]});
+  });
+}
+/* (16/10/2026, Gustavo: "não tem como colocar leitores melhores? tá tendo muito erro") — TRANSCRIÇÃO PELA IA DA OPENAI
+   (gpt-4o-transcribe-diarize: bem mais precisa em português e diz QUEM FALOU — "Falante A: …").
+   Fluxo: áudio em pedaços .ogg no navegador → sobe cada pedaço em agency-files/reunioes-tmp/ → edge function
+   transcrever-audio manda pra OpenAI, apaga o pedaço e registra o custo em ia_uso (≈ US$ 0,006/min ≈ R$ 0,035/min). */
+const PX_TRANSCRICAO_BRL_MIN=0.035;
+async function _prodTranscreverOpenAI(file, onProgress, opts){
+  const diz=function(m,p){ if(onProgress) onProgress(m, p==null?null:Math.max(0,Math.min(100,Math.round(p)))); };
+  const sb=window._sb; if(!sb) throw new Error("sem conexão");
+  const ext=await _prodExtrairOpusFfmpeg(file, diz, 1200);
+  const peds=ext.pedacos; if(!peds.length) throw new Error("não saiu áudio do arquivo");
+  const minTot=Math.max(1,Math.round((ext.dur||peds.reduce(function(a,p){return a+p.seg;},0))/60));
+  const custo="~R$ "+(minTot*PX_TRANSCRICAO_BRL_MIN).toFixed(2).replace(".",",");
+  const base="reunioes-tmp/"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
+  const textos=[]; let modelo="", diarizado=false;
+  for(let i=0;i<peds.length;i++){
+    const pct=25+73*(i/peds.length);
+    diz("etapa 2 de 2 · transcrevendo com a IA · parte "+(i+1)+" de "+peds.length+" ("+minTot+" min · "+custo+")", pct);
+    const path=base+"-"+i+".ogg";
+    const up=await sb.storage.from("agency-files").upload(path,peds[i].blob,{contentType:"audio/ogg",upsert:true});
+    if(up.error) throw new Error("não subiu o áudio: "+up.error.message);
+    const r=await sb.functions.invoke("transcrever-audio",{body:{path:path,duracao_seg:Math.round(peds[i].seg||0),dica:(opts&&opts.dica)||"",origem:(opts&&opts.origem)||"reuniao_transcricao"}});
+    let d=r.data||{};
+    if(r.error){ let j=null; try{ if(r.error.context&&typeof r.error.context.json==="function") j=await r.error.context.json(); }catch(_){ } d=j||{}; }
+    if(r.error||d.error){ const msg=(d&&d.error)||(r.error&&r.error.message)||"falhou"; throw new Error("IA da OpenAI: "+msg+(d&&d.sem_credito?" — sem crédito na OpenAI (platform.openai.com › Billing)":"")); }
+    modelo=d.modelo||modelo; diarizado=!!d.diarizado;
+    const t=String(d.texto||"").trim();
+    if(t) textos.push(peds.length>1&&diarizado?("[parte "+(i+1)+" de "+peds.length+"]\n"+t):t);
+  }
+  diz("finalizando…",99);
+  const texto=_prodLimparRepeticoes(textos.join("\n\n"));
+  return texto;
+}
 /* (16/10/2026, Gustavo: "q porra de transcrição é essa. eu eu eu eu eu, já já já já") — o Whisper do navegador
    entra em LOOP quando pega silêncio, barulho ou duas pessoas falando junto. Três travas:
    1) trecho em silêncio nem vai pro modelo (_prodRms);
@@ -98482,7 +98559,8 @@ function _prodLimparRepeticoes(txt){
   }
   return s.replace(/[ \t]{2,}/g," ").trim();
 }
-async function _prodTranscrever(file, onProgress){
+async function _prodTranscrever(file, onProgress, opts){
+  if(opts&&opts.motor==="openai") return _prodTranscreverOpenAI(file, onProgress, opts);
   const diz=function(m,p){ if(onProgress) onProgress(m, p==null?null:Math.max(0,Math.min(100,Math.round(p)))); };
   const mb = Math.round((file.size||0)/1024/1024);
   let audio=null;
@@ -111585,6 +111663,18 @@ function pxDataValeNoParaguay(ev, ids){
   return false;
 }
 
+/* (16/10/2026, Gustavo: "coloca todas as datas comemorativas da Climaves sendo somente story, exceto as principais")
+   Somente story POR CLIENTE: além do interruptor geral do evento (somente_story), o evento guarda em
+   somente_story_clients a lista de clientes pra quem a data é só story. Ex.: Carnaval é post pra todo mundo e
+   story pra Climaves. Entrada "bioter_chapeco" vale pra client bioter + unidade chapeco. */
+function pxEvStoryPara(ev, client, unit){
+  if(!ev) return false;
+  if(ev.somente_story) return true;
+  let L=ev.somente_story_clients; if(typeof L==="string"){ try{ L=JSON.parse(L); }catch(_){ L=[]; } }
+  if(!Array.isArray(L)||!L.length) return false;
+  const c=String(client||""), u=String(unit||"");
+  return L.indexOf(c)>=0||(u&&L.indexOf(c+"_"+u)>=0);
+}
 async function pxGerarCardsComemorativos(opts){
   const sb=window._sb; if(!sb) return 0;
   const getTasks=opts.getTasks, setTasks=opts.setTasks;
@@ -111666,15 +111756,15 @@ async function pxGerarCardsComemorativos(opts){
       title:(typeof smartFormatTitle==="function"?smartFormatTitle(_tituloBase||"Data comemorativa"):(_tituloBase||"Data comemorativa")),
       desc:c.ev.description||"",
       // "Somente story": sem arte pra produzir — vai só pro Vinicius, sem Hellen nem designer.
-      assignee:(c.ev.somente_story?"vinicius":"ellen"), assignees:[c.ev.somente_story?"vinicius":"ellen"], watchers:[],
+      assignee:(pxEvStoryPara(c.ev,c.client,c.unit)?"vinicius":"ellen"), assignees:[pxEvStoryPara(c.ev,c.client,c.unit)?"vinicius":"ellen"], watchers:[],
       client:c.client, sector:"", priority:"", status:"rascunhos",
       startDate:_f(now), deadline:c.date,
       publishDate:c.date, publish_date:c.date, publishTime:"11:00",
       contentType:null,
-      completedAt:null, score:null, tags:(c.unit==="paraguay"?["Data comemorativa","Español"]:["Data comemorativa"]).concat(c.ev.somente_story?["Somente story"]:[]), comments:[], files:[], cover:null, checklist:[],
+      completedAt:null, score:null, tags:(c.unit==="paraguay"?["Data comemorativa","Español"]:["Data comemorativa"]).concat(pxEvStoryPara(c.ev,c.client,c.unit)?["Somente story"]:[]), comments:[], files:[], cover:null, checklist:[],
       deletedAt:null,
       bioterUnit:c.unit||null,
-      somenteStory:!!c.ev.somente_story,
+      somenteStory:pxEvStoryPara(c.ev,c.client,c.unit),
       referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():""),
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt, createdBy:"Automático",
@@ -165894,13 +165984,15 @@ function _reJobSet(patch){ _RE_JOB.atual=_RE_JOB.atual?Object.assign({},_RE_JOB.
 function _reJobMeta(meta){ if(_RE_JOB.atual&&_RE_JOB.atual.status==="transcrevendo") _RE_JOB.atual=Object.assign({},_RE_JOB.atual,{meta:Object.assign({},_RE_JOB.atual.meta||{},meta)}); }
 function _reAntesDeSair(e){ e.preventDefault(); e.returnValue="A transcrição da reunião ainda está rodando. Se sair, perde."; return e.returnValue; }
 function useReJob(){ const [j,setJ]=useState(_RE_JOB.atual); useEffect(function(){ const f=function(x){ setJ(x); }; _RE_JOB.ouvintes.add(f); return function(){ _RE_JOB.ouvintes.delete(f); }; },[]); return j; }
-function _reJobComecar(file, meta){
+function _reMotor(){ try{ return localStorage.getItem("pixels-reunioes-motor")||"openai"; }catch(_){ return "openai"; } }
+function _reDica(meta){ const m=meta||{}; return "Reunião da Pixels Marketing Digital (assessoria de marketing e growth, Chapecó/SC)"+(m.cliente?(" com o cliente "+m.cliente):"")+(m.participantes?(". Participantes: "+m.participantes):"")+". Termos comuns: CRM, tráfego pago, Meta Ads, Google Ads, lead, SDR, comissão, recorrência, Pixels, Bioter."; }
+function _reJobComecar(file, meta, motor){
   if(_RE_JOB.atual&&_RE_JOB.atual.status==="transcrevendo"){ _reToast("warning","Já tem uma gravação sendo transcrita. Espera ela terminar."); return; }
   const t0=Date.now();
   _reJobSet(null); _RE_JOB.atual={name:file.name,status:"transcrevendo",msg:"preparando…",pct:0,duracao:0,meta:meta||{},t0:t0}; _reJobAvisa();
   try{ window.addEventListener("beforeunload",_reAntesDeSair); }catch(_){ }
   const solta=function(){ try{ window.removeEventListener("beforeunload",_reAntesDeSair); }catch(_){ } };
-  _prodTranscrever(file,function(m,pct){ const mm=String(m||"").match(/(\d+) min/); _reJobSet(Object.assign({msg:m,pct:pct==null?(_RE_JOB.atual&&_RE_JOB.atual.pct)||0:pct},mm?{duracao:Number(mm[1])}:{})); })
+  _prodTranscrever(file,function(m,pct){ const mm=String(m||"").match(/(\d+) min/); _reJobSet(Object.assign({msg:m,pct:pct==null?(_RE_JOB.atual&&_RE_JOB.atual.pct)||0:pct},mm?{duracao:Number(mm[1])}:{})); },{motor:motor||_reMotor(),dica:_reDica(meta),origem:"reuniao_transcricao"})
     .then(function(texto){
       solta();
       const j=_RE_JOB.atual||{}; const meta=j.meta||{}; const sb=window._sb;
@@ -166065,6 +166157,8 @@ function _ReNova({isMob,onCancel,onSalvo}){
   const [cliente,setCliente]=useState(m0.cliente||"");
   const [participantes,setParticipantes]=useState(m0.participantes||"");
   const [fonte,setFonte]=useState("gravacao");   // gravacao | meet | texto
+  const [motor,setMotorSt]=useState(_reMotor());  // openai (IA, precisa, diz quem falou) | local (grátis no navegador)
+  const setMotor=function(v){ setMotorSt(v); try{ localStorage.setItem("pixels-reunioes-motor",v); }catch(_){ } };
   const job=useReJob();                          // transcrição da gravação = job global (sobrevive a trocar de menu)
   const [usaJob,setUsaJob]=useState(!!job0);
   const grav=usaJob?job:null;
@@ -166090,7 +166184,7 @@ function _ReNova({isMob,onCancel,onSalvo}){
     const tit=titulo||String(file.name).replace(/\.[^.]+$/,"").replace(/[-_]+/g," ");
     setArquivoNome(file.name); if(!titulo) setTitulo(tit);
     setUsaJob(true);
-    _reJobComecar(file,{titulo:tit,data:data,cliente:cliente,participantes:participantes});
+    _reJobComecar(file,{titulo:tit,data:data,cliente:cliente,participantes:participantes},motor);
   };
   const listarMeet=function(){ setMeetBusy(true); setMeetErro(""); _reMeetListar().then(function(d){ setMeetDocs(d); if(!d.length) setMeetErro("Nenhuma transcrição do Meet encontrada no Drive da pixels@. A transcrição precisa estar ligada na reunião (Meet › Atividades › Transcrição) e a reunião criada pela conta pixels@."); }).catch(function(e){ setMeetErro((e&&e.message)||String(e)); }).finally(function(){ setMeetBusy(false); }); };
   const usarMeet=function(doc){ setMeetBusy(true); _reMeetTexto(doc.id).then(function(d){ setTranscricao(String(d.texto||"")); setArquivoNome(doc.name||""); if(!titulo) setTitulo(String(doc.name||"").replace(/^(Transcri[çc][ãa]o|Transcript|Notas|Notes)\s*[-–—:]?\s*/i,"").trim()); if(d.data&&!data) setData(d.data); _reToast("success","Transcrição do Meet importada ("+String(d.texto||"").length.toLocaleString("pt-BR")+" caracteres)."); }).catch(function(e){ _reToast("error","Meet: "+((e&&e.message)||e)); }).finally(function(){ setMeetBusy(false); }); };
@@ -166121,8 +166215,13 @@ function _ReNova({isMob,onCancel,onSalvo}){
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{tab("gravacao","Gravação (mkv, mp4, áudio)")}{tab("meet","Transcrição do Google Meet")}{tab("texto","Colar texto")}</div>
       {fonte==="gravacao"&&<div>
         <input ref={inRef} type="file" accept="audio/*,video/*,.mkv,.mp4,.mov,.m4a,.mp3,.wav,.webm" style={{display:"none"}} onChange={function(e){ pegarArquivo(e.target.files&&e.target.files[0]); e.target.value=""; }}/>
+        {!grav&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+          <span style={{color:RE_SOFT,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginRight:2}}>Transcrever com</span>
+          {[{id:"openai",l:"IA da OpenAI",sub:"precisa · diz quem falou · ~R$ 0,035/min (90 min ≈ R$ 3)"},{id:"local",l:"Grátis no navegador",sub:"sem custo · mais erros · sem quem falou"}].map(function(o){ const on=motor===o.id; return <button key={o.id} type="button" onClick={function(){ setMotor(o.id); }} style={{font:"inherit",fontFamily:RE_FF,display:"inline-flex",flexDirection:"column",alignItems:"flex-start",gap:1,padding:"6px 12px",borderRadius:10,border:"1.5px solid "+(on?RE_COR:RE_BORD),background:on?"#f5f3ff":"#fff",cursor:"pointer",textAlign:"left"}}>
+            <span style={{color:on?"#4c1d95":RE_INK,fontSize:12.5,fontWeight:700}}>{on?"● ":"○ "}{o.l}</span><span style={{color:RE_SOFT,fontSize:10.5}}>{o.sub}</span></button>; })}
+        </div>}
         {!grav&&<div onClick={function(){ inRef.current&&inRef.current.click(); }} onDragOver={function(e){e.preventDefault();}} onDrop={function(e){ e.preventDefault(); pegarArquivo(e.dataTransfer.files&&e.dataTransfer.files[0]); }}
-          style={{border:"1.5px dashed #c4b5fd",background:"#faf5ff",borderRadius:12,padding:"22px",textAlign:"center",color:"#6d28d9",fontSize:13,fontWeight:700,cursor:"pointer"}}>⤓ Arrasta a gravação aqui ou clica pra escolher<div style={{color:RE_SOFT,fontSize:11,fontWeight:500,marginTop:4}}>transcrevo no seu navegador, de graça · o arquivo não fica salvo, só o texto</div></div>}
+          style={{border:"1.5px dashed #c4b5fd",background:"#faf5ff",borderRadius:12,padding:"22px",textAlign:"center",color:"#6d28d9",fontSize:13,fontWeight:700,cursor:"pointer"}}>⤓ Arrasta a gravação aqui ou clica pra escolher<div style={{color:RE_SOFT,fontSize:11,fontWeight:500,marginTop:4}}>{motor==="openai"?"o áudio vai pra IA da OpenAI só pra transcrever e é apagado em seguida · o vídeo não sai do seu PC":"transcrevo no seu navegador, de graça"} · o arquivo não fica salvo, só o texto</div></div>}
         {grav&&<div style={{border:"1px solid "+RE_BORD,borderRadius:12,padding:"12px 14px",fontSize:12.5,display:"flex",flexDirection:"column",gap:6}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}><b style={{color:RE_INK,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{grav.name}</b>{grav.status!=="transcrevendo"&&<button type="button" onClick={function(){ _RE_JOB.atual=null; _reJobAvisa(); setUsaJob(false); }} style={{font:"inherit",fontSize:11,fontWeight:700,border:"none",background:"transparent",color:RE_SOFT,cursor:"pointer"}}>trocar</button>}</div>
           {grav.status==="transcrevendo"&&<><div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"baseline"}}><span style={{color:"#6d28d9"}}>{grav.msg}</span><b style={{color:"#4c1d95",fontSize:15}}>{Math.round(grav.pct||0)}%</b></div><div style={{height:7,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}><div style={{width:(grav.pct||0)+"%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",transition:"width .4s"}}/></div><div style={{color:RE_SOFT,fontSize:11}}>pode ir pra outros menus do app — quando terminar, a reunião fica salva sozinha aqui em Reuniões. Só não fecha nem atualiza esta aba.</div></>}
