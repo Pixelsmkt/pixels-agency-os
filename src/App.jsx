@@ -127150,13 +127150,23 @@ function SwBriefing({txt,cor,limite}){
   </div>;
 }
 /* Legenda separada do briefing: caixa com a cor da linha e rótulo "Legenda do post" (v5) */
+/* (16/10/2026, Gustavo: "a legenda não deixa abertona assim, coloca um botão que exibe ela") — fechada por padrão;
+   o botão abre/fecha e tem o Copiar do lado. */
 function SwLegenda({txt,cor}){
-  if(!String(txt||"").trim()) return null;
-  return <div style={{background:cor+"0d",border:"1px solid "+cor+"33",borderRadius:12,padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
-    <div style={{display:"flex",alignItems:"center",gap:6,color:cor,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>
-      Legenda do post</div>
-    <div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{txt}</div>
+  const [ab,setAb]=useState(false);
+  const t=String(txt||"").trim(); if(!t) return null;
+  const nPal=t.split(/\s+/).length;
+  return <div style={{background:cor+"0d",border:"1px solid "+cor+"33",borderRadius:12,padding:"8px 12px",display:"flex",flexDirection:"column",gap:6}}>
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <button type="button" onClick={function(){ setAb(!ab); }} title={ab?"Esconder a legenda":"Ver a legenda do post"}
+        style={{flex:1,display:"flex",alignItems:"center",gap:6,color:cor,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:_RT_FF,textAlign:"left"}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>
+        Legenda do post<span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· {nPal} palavras</span>
+        <span style={{marginLeft:"auto",fontSize:10}}>{ab?"▲":"▼"}</span>
+      </button>
+      {ab&&<button type="button" onClick={function(){ _rtCopiar(t,"Legenda copiada"); }} style={{background:"#fff",color:cor,border:"1px solid "+cor+"55",borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Copiar</button>}
+    </div>
+    {ab&&<div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{t}</div>}
   </div>;
 }
 const _SW_GRUPOS=[
