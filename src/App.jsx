@@ -125818,8 +125818,11 @@ async function _rtMapaEs(sb){
   _RT_ES_MAP=m; _RT_ES_EM=Date.now(); return m;
 }
 function _rtTagProduto(r,mapa){ const p=String((r&&r.produto)||"").trim(); if(!p||!mapa||String((r&&r.unidade)||"")!=="paraguay") return p; return mapa[p.toLowerCase()]||p; }
-function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob, onGravado}){
+function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob, onGravado, onEditar}){
   const [aberto,setAberto]=useState(true);
+  /* (16/10/2026, Gustavo) "tem que ter um botão editar do lado de ajustar.. pra gente editar manualmente" */
+  const [ed,setEd]=useState(null);          // {assunto,abertura,desenvolvimento,fechamento,cenas} em edição
+  const [salvando,setSalvando]=useState(false);
   /* (22/09/2026, Rodrigo) Ajustar o roteiro sem reescrever outro: `ajuste` é o texto do
      pedido (null = painel fechado). Quem sabe falar com a IA é a página — aqui só coleta. */
   const [ajuste,setAjuste]=useState(null);
@@ -125868,10 +125871,15 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           {r.status==="enviado"?"Enviado":"Enviar"}
         </button>}
+        {agencia&&onEditar&&<button type="button" title="Editar o texto à mão (falas, cenas e título)"
+          onClick={function(){ setAjuste(null); setAberto(true); setEd(ed?null:{assunto:r.assunto||"",abertura:r.abertura||"",desenvolvimento:r.desenvolvimento||"",fechamento:r.fechamento||"",cenas:r.cenas||""}); }} style={_pill(!!ed,"#334155")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Editar
+        </button>}
         {agencia&&onAjustar&&<button type="button" title="Diz o que não ficou bom — a IA ajusta ESTE roteiro e mantém o resto"
-          onClick={function(){ setAjuste(ajuste===null?"":null); }} style={_pill(ajuste!==null,"#d97706")}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21l9-9"/><path d="M15 3.5V1.5M15 10.5V8.5M11 6h2M19 6h2M17.6 8.4L19 9.8M17.6 3.6L19 2.2M12.4 3.6L11 2.2"/></svg>
-          Ajustar
+          onClick={function(){ setEd(null); setAjuste(ajuste===null?"":null); }} style={_pill(ajuste!==null,"#d97706")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8Z"/></svg>
+          Ajustar com IA
         </button>}
         {/* (22/09/2026) O excluir era um ícone #e2b3b3 sem fundo: "quase não dá pra ver".
             Agora é pílula vermelha vazada, do mesmo tamanho das outras, e enche no hover. */}
@@ -125887,6 +125895,29 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg></button>
       </div>
     </div>
+    {ed&&(function(){
+      const campo=function(k,rot,rows){ return <div key={k} style={{display:"flex",flexDirection:"column",gap:4}}>
+        <span style={{color:"#475569",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{rot}</span>
+        <textarea value={ed[k]} rows={rows} disabled={salvando} onChange={function(e){ const v=e.target.value; setEd(function(c){ return Object.assign({},c,{[k]:v}); }); }}
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 9px",fontSize:12.5,lineHeight:1.55,fontFamily:_RT_FF,color:"#0f172a",resize:"vertical",outline:"none",background:"#fff"}}/>
+      </div>; };
+      return <div style={{margin:"0 12px 11px",background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:12,padding:"10px 11px",display:"flex",flexDirection:"column",gap:9}}>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <span style={{color:"#475569",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Título</span>
+          <input value={ed.assunto} disabled={salvando} onChange={function(e){ const v=e.target.value; setEd(function(c){ return Object.assign({},c,{assunto:v}); }); }} style={{width:"100%",boxSizing:"border-box",border:"1px solid #cbd5e1",borderRadius:9,padding:"7px 9px",fontSize:12.5,fontFamily:_RT_FF,color:"#0f172a",outline:"none",background:"#fff"}}/>
+        </div>
+        {campo("abertura",L[0],3)}{campo("desenvolvimento",L[1],6)}{campo("fechamento",L[2],3)}
+        {(String(r.cenas||"").trim()||String(ed.cenas||"").trim())?campo("cenas",py?"Escenas":"Cenas",6):null}
+        <div style={{display:"flex",gap:7,justifyContent:"flex-end",alignItems:"center"}}>
+          <button type="button" disabled={salvando} onClick={function(){ setEd(null); }} style={{background:"transparent",border:"none",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,padding:"6px 8px"}}>Cancelar</button>
+          <button type="button" disabled={salvando} onClick={function(){
+              setSalvando(true);
+              Promise.resolve(onEditar({assunto:String(ed.assunto||"").trim()||r.assunto,abertura:ed.abertura,desenvolvimento:ed.desenvolvimento,fechamento:ed.fechamento,cenas:String(ed.cenas||"").trim()||null}))
+                .then(function(){ setEd(null); }).catch(function(){}).then(function(){ setSalvando(false); });
+            }} style={{background:salvando?"#e2e8f0":"#0f172a",color:salvando?"#94a3b8":"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF}}>{salvando?"Salvando…":"Salvar"}</button>
+        </div>
+      </div>;
+    })()}
     {ajuste!==null&&<div style={{margin:"0 12px 11px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 11px",display:"flex",flexDirection:"column",gap:8}}>
       <div style={{color:"#92400e",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>O que ajustar neste roteiro</div>
       <textarea value={ajuste} onChange={function(e){setAjuste(e.target.value);}} rows={3} autoFocus disabled={ajustando}
@@ -125909,7 +125940,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
         </button>
       </div>
     </div>}
-    {aberto&&<div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:7}}>
+    {aberto&&!ed&&<div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:7}}>
       {partes.map(function(p,i){
         return <div key={p[0]} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
@@ -126308,7 +126339,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
           onGravado={function(){ const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Agência"; _patch(r, r.gravado_em?{gravado_em:null,gravado_por:null}:{gravado_em:new Date().toISOString(),gravado_por:quem}); }}
-          onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined}
+          onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined}
           onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
     </>}
@@ -126368,7 +126399,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           {gerados.length>0&&<div style={{padding:12,background:"#fafbfc",overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
             {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
               return <div key={r.id}><div style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
-                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
+                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
           </div></div>}
         </div>;
       })}
