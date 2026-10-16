@@ -165942,9 +165942,29 @@ function _ReParticipantes({value,onChange,cliente}){
   </div>;
 }
 
-function _ReBtn({children,onClick,tone,small,disabled,title}){
+/* (16/10/2026, Gustavo: "esses botões estão feios, fontes pequenas, sem ícones… simétricos, fonte maior, não negrito;
+   o salvar transcrição no hover fica um carregando azul") — um só tamanho (38px), peso 600, ícone em todos,
+   desligado = cinza claro com cursor normal (nada de "wait"). */
+const _RE_ICOS={
+  sync:<path d="M21 12a9 9 0 11-2.6-6.4M21 3v6h-6"/>, plus:<path d="M12 5v14M5 12h14"/>, sparkles:<><path d="M12 3l1.9 4.6 4.6 1.9-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8Z"/></>,
+  save:<><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></>, x:<path d="M18 6L6 18M6 6l12 12"/>,
+  edit:<><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4Z"/></>, copy:<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></>,
+  download:<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></>, trash:<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6M10 11v6M14 11v6"/></>,
+  search:<><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></>, check:<path d="M5 12.5l4.5 4.5L19 7.5"/>, doc:<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></>,
+};
+function _ReIco({n,size}){ const p=_RE_ICOS[n]; if(!p) return null; return <svg width={size||15} height={size||15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>{p}</svg>; }
+function _ReBtn({children,onClick,tone,small,disabled,title,ico,busy}){
   const prim=tone==="primary", dang=tone==="danger";
-  return <button type="button" onClick={onClick} disabled={disabled} title={title} style={{font:"inherit",fontFamily:RE_FF,fontSize:small?11.5:12.5,fontWeight:800,padding:small?"6px 11px":"9px 16px",borderRadius:10,cursor:disabled?"wait":"pointer",border:"1.5px solid "+(prim?RE_COR:dang?"#fecaca":RE_BORD),background:prim?(disabled?"#a78bfa":RE_COR):dang?"#fff":"#fff",color:prim?"#fff":dang?"#dc2626":RE_INK,whiteSpace:"nowrap"}}>{children}</button>;
+  const off=!!disabled;
+  const st={font:"inherit",fontFamily:RE_FF,fontSize:small?12.5:13,fontWeight:600,height:small?34:38,padding:small?"0 13px":"0 16px",borderRadius:10,cursor:off?"default":"pointer",display:"inline-flex",alignItems:"center",gap:8,whiteSpace:"nowrap",boxSizing:"border-box",transition:"all .12s",
+    border:"1px solid "+(off?"#eef2f7":prim?RE_COR:dang?"#fecaca":RE_BORD),
+    background:off?"#f8fafc":prim?RE_COR:"#fff",
+    color:off?"#b4bccb":prim?"#fff":dang?"#dc2626":RE_INK,
+    boxShadow:prim&&!off?"0 4px 12px rgba(124,58,237,.22)":"0 1px 2px rgba(15,23,42,.04)"};
+  return <button type="button" onClick={onClick} disabled={off} title={title} style={st}
+    onMouseEnter={function(e){ if(off) return; if(prim) e.currentTarget.style.background="#6d28d9"; else if(dang){ e.currentTarget.style.background="#fef2f2"; } else { e.currentTarget.style.borderColor="#c4b5fd"; e.currentTarget.style.color=RE_COR; } }}
+    onMouseLeave={function(e){ if(off) return; e.currentTarget.style.background=prim?RE_COR:"#fff"; e.currentTarget.style.borderColor=prim?RE_COR:dang?"#fecaca":RE_BORD; e.currentTarget.style.color=prim?"#fff":dang?"#dc2626":RE_INK; }}>
+    {busy?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{animation:"pxspin 1s linear infinite",flexShrink:0}}><path d="M21 12a9 9 0 11-6.2-8.56"/></svg>:(ico?<_ReIco n={ico}/>:null)}{children}</button>;
 }
 function _ReSecao({titulo,cor,children,vazio}){
   return <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,padding:"14px 16px"}}>
@@ -165979,14 +165999,15 @@ function PageReunioes({isMob}){
   const sel=(lista||[]).find(function(x){return x.id===selId;})||null;
   const filtrada=(lista||[]).filter(function(r){ const b=busca.trim().toLowerCase(); if(!b) return true; return [r.titulo,r.cliente,r.participantes,_reDataBR(r.data_reuniao)].join(" ").toLowerCase().indexOf(b)>=0; });
   return <div style={{fontFamily:RE_FF,display:"flex",flexDirection:"column",gap:14}}>
+    <style>{"@keyframes pxspin{to{transform:rotate(360deg)}}"}</style>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:14,flexWrap:"wrap"}}>
       <div>
         <div style={{color:RE_INK,fontWeight:800,fontSize:24,letterSpacing:-.5}}>Reuniões</div>
         <div style={{color:RE_MUTE,fontSize:12,marginTop:3}}>As transcrições do Google Meet (conta pixels@) entram sozinhas a cada 30 min, já com a ata. Também dá pra jogar uma gravação (mkv, mp4, áudio) ou colar texto. Tudo editável. Só sócios.</div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-        <_ReBtn onClick={sincronizarMeet} disabled={sync} title="Puxa agora as transcrições novas do Google Meet (o robô faz isso sozinho a cada 30 min)">{sync?"buscando no Meet…":"↻ Sincronizar Meet"}</_ReBtn>
-        <_ReBtn tone="primary" onClick={function(){ setNovo(true); setSelId(""); }}>+ Nova reunião</_ReBtn>
+        <_ReBtn ico="sync" busy={sync} onClick={sincronizarMeet} disabled={sync} title="Puxa agora as transcrições novas do Google Meet (o robô faz isso sozinho a cada 30 min)">{sync?"Buscando no Meet…":"Sincronizar Meet"}</_ReBtn>
+        <_ReBtn ico="plus" tone="primary" onClick={function(){ setNovo(true); setSelId(""); }}>Nova reunião</_ReBtn>
       </div>
     </div>
     {job&&job.status==="transcrevendo"&&!novo&&<div onClick={function(){ setNovo(true); setSelId(""); }} style={{background:"#faf5ff",border:"1px solid #ddd6fe",borderRadius:12,padding:"10px 14px",fontSize:12.5,cursor:"pointer",display:"flex",flexDirection:"column",gap:6}}>
@@ -166092,12 +166113,12 @@ function _ReNova({isMob,onCancel,onSalvo}){
       </div>}
       {fonte==="meet"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
         <div style={{color:RE_MUTE,fontSize:12.5}}>Lê os Docs “Transcrição – …” que o Meet salva no Drive da pixels@ (vem com quem falou o quê). Precisa da transcrição ligada na reunião e da reunião criada pela conta pixels@.</div>
-        <div><_ReBtn onClick={listarMeet} disabled={meetBusy}>{meetBusy?"buscando…":"Buscar transcrições no Drive"}</_ReBtn></div>
+        <div><_ReBtn ico="search" busy={meetBusy} onClick={listarMeet} disabled={meetBusy}>{meetBusy?"Buscando…":"Buscar transcrições no Drive"}</_ReBtn></div>
         {meetErro&&<div style={{color:"#b45309",fontSize:12.5,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"8px 12px"}}>{meetErro}</div>}
         {meetDocs&&meetDocs.length>0&&<div style={{border:"1px solid "+RE_BORD,borderRadius:12,overflow:"hidden",maxHeight:260,overflowY:"auto"}}>
           {meetDocs.map(function(d){ return <div key={d.id} style={{display:"flex",gap:10,alignItems:"center",padding:"9px 12px",borderBottom:"1px solid #f1f5f9"}}>
             <div style={{flex:1,minWidth:0}}><div style={{color:RE_INK,fontWeight:700,fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div><div style={{color:RE_SOFT,fontSize:11}}>{_reDataBR(String(d.modifiedTime||"").slice(0,10))}</div></div>
-            <_ReBtn small onClick={function(){ usarMeet(d); }} disabled={meetBusy}>Usar</_ReBtn>
+            <_ReBtn small ico="check" onClick={function(){ usarMeet(d); }} disabled={meetBusy}>Usar</_ReBtn>
           </div>; })}
         </div>}
       </div>}
@@ -166106,12 +166127,12 @@ function _ReNova({isMob,onCancel,onSalvo}){
     <div>
       <div style={_RE_LBL}>Transcrição (editável — corrige o que o reconhecimento errou antes de gerar a ata)</div>
       <textarea rows={8} value={transcricao} onChange={function(e){setTranscricao(e.target.value);}} placeholder="A transcrição aparece aqui…" style={Object.assign({},_RE_INP,{resize:"vertical",minHeight:140,lineHeight:1.55,fontFamily:RE_FF})}/>
-      {transcricao&&<div style={{color:RE_SOFT,fontSize:11,marginTop:4,display:"flex",gap:10,alignItems:"center"}}>{transcricao.length.toLocaleString("pt-BR")} caracteres<button type="button" onClick={function(){ const novo=_reLimpar(transcricao); if(novo===transcricao){ _reToast("info","Não achei repetições em loop."); return; } _reToast("success","Tirei "+(transcricao.length-novo.length).toLocaleString("pt-BR")+" caracteres de repetição."); setTranscricao(novo); }} style={{font:"inherit",fontSize:11,fontWeight:800,color:RE_COR,background:"transparent",border:"none",cursor:"pointer",padding:0}}>✂ limpar repetições</button></div>}
+      {transcricao&&<div style={{color:RE_SOFT,fontSize:11,marginTop:4}}>{transcricao.length.toLocaleString("pt-BR")} caracteres</div>}
     </div>
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-      <_ReBtn tone="primary" onClick={function(){ salvar(true); }} disabled={gerando||salvando}>{gerando?"O GPT está escrevendo a ata…":"✦ Gerar ata e salvar"}</_ReBtn>
-      <_ReBtn onClick={function(){ salvar(false); }} disabled={gerando||salvando}>Salvar sem ata</_ReBtn>
-      <_ReBtn onClick={onCancel} disabled={gerando||salvando}>Cancelar</_ReBtn>
+      <_ReBtn ico="sparkles" busy={gerando} tone="primary" onClick={function(){ salvar(true); }} disabled={gerando||salvando}>{gerando?"O GPT está escrevendo a ata…":"Gerar ata e salvar"}</_ReBtn>
+      <_ReBtn ico="save" onClick={function(){ salvar(false); }} disabled={gerando||salvando}>Salvar sem ata</_ReBtn>
+      <_ReBtn ico="x" onClick={onCancel} disabled={gerando||salvando}>Cancelar</_ReBtn>
       <span style={{color:RE_SOFT,fontSize:11.5}}>ata: GPT, uns R$ 0,20 a R$ 0,60 conforme o tamanho da reunião</span>
     </div>
   </div>;
@@ -166165,11 +166186,11 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
           <div style={{color:RE_SOFT,fontSize:11,marginTop:3}}>{r.origem==="meet"?"Google Meet · ":""}{r.arquivo_nome?("origem: "+r.arquivo_nome+" · "):""}salva por {r.quem||"—"}{r.ata_editada_em?(" · ata editada por "+(r.ata_editada_por||"—")+" em "+_reDataBR(String(r.ata_editada_em).slice(0,10))):""}</div>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {temAta&&!editAta&&<_ReBtn small onClick={comecarEdicao}>✎ Editar ata</_ReBtn>}
-          <_ReBtn small onClick={regerar} disabled={busy}>{temAta?"↻ Regerar ata":"✦ Gerar ata"}</_ReBtn>
-          {temAta&&<_ReBtn small onClick={copiar}>Copiar</_ReBtn>}
-          <_ReBtn small onClick={baixar}>Baixar .txt</_ReBtn>
-          <_ReBtn small tone="danger" onClick={excluir} disabled={busy}>Excluir</_ReBtn>
+          {temAta&&!editAta&&<_ReBtn ico="edit" onClick={comecarEdicao}>Editar ata</_ReBtn>}
+          <_ReBtn ico={temAta?"sync":"sparkles"} busy={busy} tone={temAta?undefined:"primary"} onClick={regerar} disabled={busy}>{temAta?"Regerar ata":"Gerar ata"}</_ReBtn>
+          {temAta&&<_ReBtn ico="copy" onClick={copiar}>Copiar</_ReBtn>}
+          <_ReBtn ico="download" onClick={baixar}>Baixar .txt</_ReBtn>
+          <_ReBtn ico="trash" tone="danger" onClick={excluir} disabled={busy}>Excluir</_ReBtn>
         </div>
       </div>
       {meta&&<details style={{marginTop:10}}><summary style={{color:RE_COR,fontSize:12,fontWeight:700,cursor:"pointer"}}>editar título, data, cliente, participantes</summary>
@@ -166178,7 +166199,7 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
           <input type="date" value={meta.data_reuniao} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{data_reuniao:v});}); }} style={_RE_INP}/>
           <select value={meta.cliente} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{cliente:v});}); }} style={_RE_INP}><option value="">Interna / nenhum</option>{clientes.map(function(c){ return <option key={c.id} value={c.name}>{c.name}</option>; })}{meta.cliente&&!clientes.some(function(c){return c.name===meta.cliente;})&&<option value={meta.cliente}>{meta.cliente}</option>}</select>
           <div style={{gridColumn:"1 / -1"}}><div style={_RE_LBL}>Participantes</div><_ReParticipantes value={meta.participantes} onChange={function(v){ setMeta(function(c){return Object.assign({},c,{participantes:v});}); }} cliente={meta.cliente}/></div>
-          <div><_ReBtn small tone="primary" onClick={salvarMeta} disabled={busy}>Salvar dados</_ReBtn></div>
+          <div><_ReBtn small ico="save" tone="primary" onClick={salvarMeta} disabled={busy}>Salvar dados</_ReBtn></div>
         </div></details>}
     </div>
 
@@ -166205,7 +166226,7 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
         <div><div style={_RE_LBL}>Pontos de atenção</div>{area("atencao",3)}</div>
       </div>
       <div><div style={_RE_LBL}>Próximos passos</div>{area("proximos",3)}</div>
-      <div style={{display:"flex",gap:8}}><_ReBtn tone="primary" onClick={salvarAta} disabled={busy}>Salvar ata</_ReBtn><_ReBtn onClick={function(){ setEditAta(false); }}>Cancelar</_ReBtn></div>
+      <div style={{display:"flex",gap:8}}><_ReBtn ico="save" tone="primary" onClick={salvarAta} disabled={busy}>Salvar ata</_ReBtn><_ReBtn ico="x" onClick={function(){ setEditAta(false); }}>Cancelar</_ReBtn></div>
     </div>}
 
     <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,overflow:"hidden"}}>
@@ -166216,9 +166237,8 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
       {verTrans&&<div style={{borderTop:"1px solid "+RE_BORD,padding:"12px 16px",display:"flex",flexDirection:"column",gap:8}}>
         <textarea rows={14} value={trans} onChange={function(e){ setTrans(e.target.value); setTransDirty(true); }} style={Object.assign({},_RE_INP,{resize:"vertical",lineHeight:1.6,fontFamily:RE_FF,minHeight:220})}/>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          <_ReBtn small tone="primary" onClick={salvarTrans} disabled={!transDirty||busy}>Salvar transcrição</_ReBtn>
-          <_ReBtn small onClick={function(){ const novo=_reLimpar(trans); if(novo===trans){ _reToast("info","Não achei repetições em loop nessa transcrição."); return; } _reToast("success","Tirei "+(trans.length-novo.length).toLocaleString("pt-BR")+" caracteres de repetição. Confere e clica em Salvar transcrição."); setTrans(novo); setTransDirty(true); }} disabled={busy} title="Tira os loops do reconhecimento de voz (eu eu eu…, já já já…)">✂ Limpar repetições</_ReBtn>
-          <_ReBtn small onClick={regerar} disabled={busy}>↻ Regerar ata com essa transcrição</_ReBtn>
+          <_ReBtn ico="save" tone="primary" onClick={salvarTrans} disabled={!transDirty||busy} title={transDirty?"Guardar as correções que você fez no texto":"Nada mudou na transcrição ainda"}>Salvar transcrição</_ReBtn>
+          {temAta&&<_ReBtn ico="sync" busy={busy} onClick={regerar} disabled={busy}>Regerar ata com essa transcrição</_ReBtn>}
           {transDirty&&<span style={{color:"#b45309",fontSize:11.5}}>alterações não salvas</span>}
         </div>
       </div>}
