@@ -8226,6 +8226,56 @@ window.loadDynamicClientsFromSupabase = async function(){
   }catch(_){}
 })();
 
+
+
+/* ═══ (16/10/2026, Gustavo) "CLIENTE APROVOU" FORA DA TELA DE APROVAÇÕES ═══════════════════════════════════
+   "dentro do cartão quando aberto pelo calendário e em Aprovado internamente, deve ter um botão ao lado do salvar…
+   ou quando passa o mouse no ícone vermelho [da capa] pode dar um check e vira rosa".
+   Mesma regra da tela Aprovar com o cliente: Aprovado internamente → Aprovado pelo cliente (aprovacao_final),
+   com linha no histórico. Quem pode: sócios, Hellen, ou quem tem perm aprovar/colAprovado. */
+function pxPodeMarcarClienteAprovou(user,perms){
+  return !!(perms&&(perms.aprovar||perms.colAprovado))||!!(user&&(user.level===1||user.id==="ellen"));
+}
+function pxCardAguardaCliente(t){
+  return !!t&&t.status==="aprovado"&&!(typeof pxSemAprovacaoCliente==="function"&&pxSemAprovacaoCliente(t));
+}
+function pxMarcarClienteAprovou(task,setTasks,user,origem){
+  if(!task||typeof setTasks!=="function") return Promise.resolve(false);
+  const _msg="“"+(task.title||"este card")+"” vai pra Aprovado pelo cliente e fica pronto pra agendar.";
+  const _conf=(typeof pixelsConfirm==="function")
+    ? pixelsConfirm(_msg,{title:"O cliente aprovou?",okText:"Sim, cliente aprovou",cancelText:"Cancelar",color:"#ec4899",
+        iconSvg:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'})
+    : Promise.resolve(window.confirm(_msg));
+  return _conf.then(function(ok){
+    if(!ok) return false;
+    const actor=(typeof pxAutorNome==="function")?pxAutorNome(user):((user&&user.name)||"");
+    const agora=new Date();
+    const atFmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    setTasks(function(p){ return (p||[]).map(function(t){
+      if(t.id!==task.id) return t;
+      const tl=[].concat(t.timeline||[],[{type:"status",fromLabel:"Aprovado internamente",toLabel:"Aprovado pelo cliente",from:t.status,to:"aprovacao_final",at:agora.toISOString(),atFmt:atFmt,user:actor,note:"Aprovação do cliente registrada pela equipe ("+(origem||"calendário")+")"}]);
+      return Object.assign({},t,{status:"aprovacao_final",timeline:tl});
+    }); });
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("“"+(task.title||"Card")+"” aprovado pelo cliente — pronto pra agendar.",4000);
+    return true;
+  });
+}
+/* Selo vermelho da capa do card no calendário: passa o mouse → vira rosa com check; clica → Cliente aprovou */
+function PxSeloAprovInterno({task,setTasks,user,pode}){
+  const [hov,setHov]=useState(false);
+  const ativo=!!pode&&typeof setTasks==="function";
+  const on=ativo&&hov;
+  return <span title={ativo?"Aprovado internamente — clique quando o cliente aprovar":"Aprovado internamente — falta aprovar com o cliente"}
+    onMouseEnter={function(){ setHov(true); }} onMouseLeave={function(){ setHov(false); }}
+    onMouseDown={function(e){ if(ativo) e.stopPropagation(); }}
+    onClick={function(e){ if(!ativo) return; e.stopPropagation(); e.preventDefault(); pxMarcarClienteAprovou(task,setTasks,user,"capa do card no calendário"); }}
+    style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:on?"#ec4899":"#ff1a1a",color:"#fff",flexShrink:0,boxShadow:on?"0 0 0 2px #fff,0 2px 6px rgba(236,72,153,.55)":"0 1px 2px rgba(0,0,0,0.20)",cursor:ativo?"pointer":"default",transition:"all .12s",transform:on?"scale(1.12)":"none"}}>
+    {on
+      ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>}
+  </span>;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // 00b_preview_util.jsx — Compactação de vídeo (versão leve 720p) GLOBAL
 // Fonte única usada pelo upload (10_radar_entrega), pelo botão manual
@@ -26174,6 +26224,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               const isAprovInterno = t.status==="aprovado"&&!(typeof pxSemAprovacaoCliente==="function"&&pxSemAprovacaoCliente(t));   // Foto de obra e Short: aprovado internamente = aprovado (rosa)
                               const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : (isAprovInterno ? "#ff1a1a" : pubColor.bg));
                               const _title = isReprovada ? "Reprovada" : (isPausada ? "Pausada" : (isShortFromDrive ? "Vídeo short (do Drive)" : (isAprovInterno ? "Aprovado internamente — falta aprovar com o cliente" : (pubColor.label||t.status))));
+                              if(isAprovInterno&&!isShortFromDrive&&typeof PxSeloAprovInterno==="function"){
+                                const _u=(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null);
+                                return <PxSeloAprovInterno task={t} setTasks={setTasks} user={_u} pode={typeof pxPodeMarcarClienteAprovou==="function"&&pxPodeMarcarClienteAprovou(_u,perms)}/>;
+                              }
                               return <span title={_title} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:_bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
                                 {isReprovada
                                   ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
@@ -53473,6 +53527,8 @@ function _cardPodeSerResp(u){
                 </a>);
               })()}
               {/* (15/10/2026, Gustavo) "o Gerar arte tá ocupando o lugar do Salvar": o Salvar fica SEMPRE por último, colado no Fechar; as outras ações (Gerar arte, Concluir…) ficam à esquerda */}
+              {/* (16/10/2026, Gustavo) card em Aprovado internamente: "Cliente aprovou" ao lado do Salvar */}
+              {canEdit&&typeof pxCardAguardaCliente==="function"&&pxCardAguardaCliente(task)&&typeof pxPodeMarcarClienteAprovou==="function"&&pxPodeMarcarClienteAprovou(currentUser,cardPerms)&&<button onClick={function(){ pxMarcarClienteAprovou(task,setTasks,currentUser,"card aberto").then(function(ok){ if(ok&&typeof _onClose==="function") _onClose(); }); }} title="O cliente aprovou: vai pra Aprovado pelo cliente e fica pronto pra agendar" style={_pxBtnAcaoSt("#ec4899","236,72,153",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg><span style={{display:"block",lineHeight:1}}>Cliente aprovou</span></button>}
               {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={_pxBtnAcaoSt("#0f172a","15,23,42",isMobile)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0}}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span style={{display:"block",lineHeight:1}}>Salvar</span></button>}
             </div>
             {!isMobile&&<button onClick={handleClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",flexShrink:0}}><Ico n="x" size={18}/></button>}
