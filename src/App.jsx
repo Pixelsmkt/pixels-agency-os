@@ -98412,7 +98412,7 @@ async function _prodWhisper(onProgress){
    velho), cai no caminho antigo (thread principal). */
 const _PROD_WHISPER_WORKER_SRC = 'let pipe=null,carregando=null;'+
  'async function carregar(){ if(pipe) return pipe; if(!carregando){ carregando=(async()=>{ const tx=await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2"); tx.env.allowLocalModels=false; tx.env.useBrowserCache=true; pipe=await tx.pipeline("automatic-speech-recognition","Xenova/whisper-base",{quantized:true,progress_callback:(d)=>{ if(d&&d.status==="progress"&&d.file&&typeof d.progress==="number") self.postMessage({tipo:"baixando",file:d.file,pct:d.progress}); }}); return pipe; })(); } return carregando; }'+
- 'self.onmessage=async(e)=>{ const d=e.data||{}; if(d.tipo!=="transcrever") return; const id=d.id; try{ const p=await carregar(); const audio=d.audio; const SR=16000,PASSO=30*SR,SOBRA=2*SR; const n=Math.max(1,Math.ceil(audio.length/PASSO)); const partes=[]; for(let i=0;i<n;i++){ self.postMessage({tipo:"progresso",id:id,i:i,n:n}); const ini=Math.max(0,i*PASSO-SOBRA), fim=Math.min(audio.length,(i+1)*PASSO+SOBRA); const res=await p(audio.subarray(ini,fim),{language:"portuguese",task:"transcribe"}); const t=((res&&res.text)||"").trim(); if(t) partes.push(t); } self.postMessage({tipo:"fim",id:id,texto:partes.join(" ").replace(/\\s+/g," ").trim()}); }catch(err){ self.postMessage({tipo:"erro",id:id,msg:String((err&&err.message)||err)}); } };';
+ 'self.onmessage=async(e)=>{ const d=e.data||{}; if(d.tipo!=="transcrever") return; const id=d.id; try{ const p=await carregar(); const audio=d.audio; const SR=16000,PASSO=30*SR,SOBRA=2*SR; const n=Math.max(1,Math.ceil(audio.length/PASSO)); const partes=[]; for(let i=0;i<n;i++){ self.postMessage({tipo:"progresso",id:id,i:i,n:n}); const ini=Math.max(0,i*PASSO-SOBRA), fim=Math.min(audio.length,(i+1)*PASSO+SOBRA); const pedaco=audio.subarray(ini,fim); let en=0; for(let k=0;k<pedaco.length;k+=16) en+=pedaco[k]*pedaco[k]; if(Math.sqrt(en/Math.max(1,pedaco.length/16))<0.004) continue; const res=await p(pedaco,{language:"portuguese",task:"transcribe",no_repeat_ngram_size:6}); const t=((res&&res.text)||"").trim(); if(t) partes.push(t); } self.postMessage({tipo:"fim",id:id,texto:partes.join(" ").replace(/\\s+/g," ").trim()}); }catch(err){ self.postMessage({tipo:"erro",id:id,msg:String((err&&err.message)||err)}); } };';
 function _prodWhisperWorker(){
   if(window.__pxWhisperWorker) return window.__pxWhisperWorker;
   if(typeof Worker==="undefined") return null;
@@ -98465,6 +98465,23 @@ function _prodExtrairAudioFfmpeg(file, diz){
     w.postMessage({file:file,bases:[location.origin+"/ffmpeg/","https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/"]});
   });
 }
+/* (16/10/2026, Gustavo: "q porra de transcrição é essa. eu eu eu eu eu, já já já já") — o Whisper do navegador
+   entra em LOOP quando pega silêncio, barulho ou duas pessoas falando junto. Três travas:
+   1) trecho em silêncio nem vai pro modelo (_prodRms);
+   2) no_repeat_ngram_size:6 — o modelo não pode repetir a mesma sequência de 6 pedaços dentro do trecho;
+   3) _prodLimparRepeticoes — qualquer palavra/frase curta repetida 3+ vezes seguidas vira uma só
+      (também tem botão "Limpar repetições" nas transcrições já salvas). */
+function _prodRms(a){ let en=0,n=0; for(let k=0;k<a.length;k+=16){ en+=a[k]*a[k]; n++; } return Math.sqrt(en/Math.max(1,n)); }
+function _prodLimparRepeticoes(txt){
+  let s=String(txt||"");
+  for(let rodada=0;rodada<2;rodada++){
+    for(let n=1;n<=8;n++){
+      const re=new RegExp("((?:[^\\s]+[\\s,.;:!?…-]+){"+n+"})(?:\\1){2,}","giu");
+      s=s.replace(re,"$1");
+    }
+  }
+  return s.replace(/[ \t]{2,}/g," ").trim();
+}
 async function _prodTranscrever(file, onProgress){
   const diz=function(m,p){ if(onProgress) onProgress(m, p==null?null:Math.max(0,Math.min(100,Math.round(p)))); };
   const mb = Math.round((file.size||0)/1024/1024);
@@ -98486,7 +98503,7 @@ async function _prodTranscrever(file, onProgress){
   }
   const SR=16000, dur=audio.length/SR, minTot=Math.max(1,Math.round(dur/60));
   // 1º: no worker (tela livre). Se o worker falhar ANTES de começar a transcrever, cai no caminho antigo.
-  try{ diz("áudio separado · começando a transcrever "+minTot+" min…", 16); return await _prodTranscreverNoWorker(audio, diz, minTot); }
+  try{ diz("áudio separado · começando a transcrever "+minTot+" min…", 16); return _prodLimparRepeticoes(await _prodTranscreverNoWorker(audio, diz, minTot)); }
   catch(e){ if(e&&!e.__semProgresso&&!/sem worker/.test(String(e.message||""))) throw e; console.warn("[transcrever] worker não rolou, indo pela thread principal:",e&&e.message); }
   const pipe = await _prodWhisper(function(m){ const mm=String(m||"" ); const pm=mm.match(/(\d+)%/); diz(mm, 15+(pm?Number(pm[1])*0.03:0)); });
   // pedaços de 30s com 2s de sobra de cada lado (emenda não corta palavra); barra anda por pedaço
@@ -98496,13 +98513,15 @@ async function _prodTranscrever(file, onProgress){
     const ini=Math.max(0,i*PASSO-SOBRA), fim=Math.min(audio.length,(i+1)*PASSO+SOBRA);
     const feito=Math.round(i*30/60);
     diz("etapa 2 de 2 · transcrevendo… "+Math.min(feito,minTot)+" de "+minTot+" min", 18+78*(i/n));
-    const res=await pipe(audio.subarray(ini,fim), { language:"portuguese", task:"transcribe" });
+    const pedaco=audio.subarray(ini,fim);
+    if(_prodRms(pedaco)<0.004) continue;                                      // silêncio: o Whisper inventa loop ("eu eu eu…")
+    const res=await pipe(pedaco, { language:"portuguese", task:"transcribe", no_repeat_ngram_size:6 });
     const t=((res&&res.text)||"").trim();
     if(t) partes.push(t);
     await new Promise(function(r){ setTimeout(r,0); });                      // respiro pra UI atualizar
   }
   diz("finalizando…", 98);
-  return partes.join(" ").replace(/\s+/g," ").trim();
+  return _prodLimparRepeticoes(partes.join(" ").replace(/\s+/g," ").trim());
 }
 /* (09/10, Gustavo: "cliquei e deu erro, falou que não tinha nada no arquivo — mas tem, é o Contrato
    Clem + Pixels Marketing [.docx]") LEITOR DE .DOCX NO NAVEGADOR: docx é um zip; a gente acha o
@@ -165677,6 +165696,7 @@ function _reAtaParse(t){ if(!t) return Object.assign({},RE_ATA_VAZIA); if(typeof
 function _reLinhas(arr){ return (arr||[]).map(function(x){ return typeof x==="string"?x:[x.o_que,x.quem?("— "+x.quem):"",x.prazo?("· "+x.prazo):""].filter(Boolean).join(" "); }).join("\n"); }
 function _reDeLinhas(txt){ return String(txt||"").split("\n").map(function(l){return l.trim();}).filter(Boolean); }
 function _reAcoesDeLinhas(txt){ return _reDeLinhas(txt).map(function(l){ const m=l.match(/^(.*?)(?:\s+[—-]\s+([^·]+?))?(?:\s*·\s*(.+))?$/); return m?{o_que:(m[1]||l).trim(),quem:(m[2]||"").trim(),prazo:(m[3]||"").trim()}:{o_que:l,quem:"",prazo:""}; }); }
+function _reLimpar(t){ return typeof _prodLimparRepeticoes==="function"?_prodLimparRepeticoes(t):String(t||""); }
 function _reToast(tipo,msg){ if(typeof pixelsToast!=="undefined"&&pixelsToast[tipo]) pixelsToast[tipo](msg); }
 
 /* Ata em texto (copiar / baixar) */
@@ -165965,7 +165985,7 @@ function _ReNova({isMob,onCancel,onSalvo}){
     <div>
       <div style={_RE_LBL}>Transcrição (editável — corrige o que o reconhecimento errou antes de gerar a ata)</div>
       <textarea rows={8} value={transcricao} onChange={function(e){setTranscricao(e.target.value);}} placeholder="A transcrição aparece aqui…" style={Object.assign({},_RE_INP,{resize:"vertical",minHeight:140,lineHeight:1.55,fontFamily:RE_FF})}/>
-      {transcricao&&<div style={{color:RE_SOFT,fontSize:11,marginTop:4}}>{transcricao.length.toLocaleString("pt-BR")} caracteres</div>}
+      {transcricao&&<div style={{color:RE_SOFT,fontSize:11,marginTop:4,display:"flex",gap:10,alignItems:"center"}}>{transcricao.length.toLocaleString("pt-BR")} caracteres<button type="button" onClick={function(){ const novo=_reLimpar(transcricao); if(novo===transcricao){ _reToast("info","Não achei repetições em loop."); return; } _reToast("success","Tirei "+(transcricao.length-novo.length).toLocaleString("pt-BR")+" caracteres de repetição."); setTranscricao(novo); }} style={{font:"inherit",fontSize:11,fontWeight:800,color:RE_COR,background:"transparent",border:"none",cursor:"pointer",padding:0}}>✂ limpar repetições</button></div>}
     </div>
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
       <_ReBtn tone="primary" onClick={function(){ salvar(true); }} disabled={gerando||salvando}>{gerando?"O GPT está escrevendo a ata…":"✦ Gerar ata e salvar"}</_ReBtn>
@@ -165990,7 +166010,7 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
   const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
   useEffect(function(){
     const sb=window._sb; if(!sb) return;
-    sb.from(RE_TABELA).select("*").eq("id",id).maybeSingle().then(function(x){ if(x.error){ setErro(x.error.message); return; } setR(x.data); setTrans(String((x.data&&x.data.transcricao)||"")); setMeta({titulo:x.data.titulo||"",data_reuniao:String(x.data.data_reuniao||"").slice(0,10),cliente:x.data.cliente||"",participantes:x.data.participantes||""}); });
+    sb.from(RE_TABELA).select("*").eq("id",id).maybeSingle().then(function(x){ if(x.error){ setErro(x.error.message); return; } setR(x.data); setTrans(String((x.data&&x.data.transcricao)||"")); if(x.data&&!x.data.ata) setVerTrans(true); setMeta({titulo:x.data.titulo||"",data_reuniao:String(x.data.data_reuniao||"").slice(0,10),cliente:x.data.cliente||"",participantes:x.data.participantes||""}); });
   },[id]);
   if(erro) return <div style={{color:"#991b1b",fontSize:12.5}}>{erro}</div>;
   if(!r) return <div style={{color:RE_SOFT,fontSize:12.5,padding:20}}>carregando…</div>;
@@ -166076,6 +166096,7 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
         <textarea rows={14} value={trans} onChange={function(e){ setTrans(e.target.value); setTransDirty(true); }} style={Object.assign({},_RE_INP,{resize:"vertical",lineHeight:1.6,fontFamily:RE_FF,minHeight:220})}/>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <_ReBtn small tone="primary" onClick={salvarTrans} disabled={!transDirty||busy}>Salvar transcrição</_ReBtn>
+          <_ReBtn small onClick={function(){ const novo=_reLimpar(trans); if(novo===trans){ _reToast("info","Não achei repetições em loop nessa transcrição."); return; } _reToast("success","Tirei "+(trans.length-novo.length).toLocaleString("pt-BR")+" caracteres de repetição. Confere e clica em Salvar transcrição."); setTrans(novo); setTransDirty(true); }} disabled={busy} title="Tira os loops do reconhecimento de voz (eu eu eu…, já já já…)">✂ Limpar repetições</_ReBtn>
           <_ReBtn small onClick={regerar} disabled={busy}>↻ Regerar ata com essa transcrição</_ReBtn>
           {transDirty&&<span style={{color:"#b45309",fontSize:11.5}}>alterações não salvas</span>}
         </div>
