@@ -125869,6 +125869,24 @@ async function _rtMapaEs(sb){
   _RT_ES_MAP=m; _RT_ES_EM=Date.now(); return m;
 }
 function _rtTagProduto(r,mapa){ const p=String((r&&r.produto)||"").trim(); if(!p||!mapa||String((r&&r.unidade)||"")!=="paraguay") return p; return mapa[p.toLowerCase()]||p; }
+/* (16/10/2026, Gustavo: "todos terem as mesmas funções, tanto as de cima quanto as de baixo… organizadinhas")
+   GRADE ÚNICA DE BOTÕES dos cards de roteiro e de proposta: 2 linhas × 3, mesma largura, mesma ordem.
+   Linha 1: Portal · WhatsApp · Virar card   Linha 2: Editar · Ajustar com IA · Excluir
+   itens = [{label, onClick, tone:"on"|"primary"|"outline"|"danger"|undefined, cor, title, disabled}] */
+function _RtBotoes({itens,cor}){
+  const c=cor||_RT_AC;
+  const st=function(it){
+    const base={font:"inherit",fontFamily:_RT_FF,fontSize:11.5,fontWeight:700,height:32,padding:"0 4px",borderRadius:9,cursor:it.disabled?"default":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",boxSizing:"border-box",minWidth:0,transition:"all .12s",opacity:it.disabled?.55:1};
+    if(it.tone==="primary") return Object.assign(base,{background:"#16a34a",color:"#fff",border:"1px solid #16a34a"});
+    if(it.tone==="outline") return Object.assign(base,{background:"#f0fdf4",color:"#15803d",border:"1px solid #86efac"});
+    if(it.tone==="danger")  return Object.assign(base,{background:"#dc2626",color:"#fff",border:"1px solid #dc2626"});
+    if(it.tone==="on")      return Object.assign(base,{background:it.cor||c,color:"#fff",border:"1px solid "+(it.cor||c)});
+    return Object.assign(base,{background:"#fff",color:"#334155",border:"1px solid #e2e8f0"});
+  };
+  return <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6,width:"100%",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
+    {itens.filter(Boolean).map(function(it,i){ return <button key={i} type="button" title={it.title} disabled={!!it.disabled} onClick={it.onClick} style={st(it)}>{it.ico}{it.label}</button>; })}
+  </div>;
+}
 /* Título grande de seção (Roteiros gerais / Roteiros específicos) — separação clara entre as duas partes */
 function _RtSecao({titulo,sub,n,cor,topo}){
   const c=cor||_RT_AC;
@@ -125885,7 +125903,7 @@ function _RtSecao({titulo,sub,n,cor,topo}){
     </div>
   </div>;
 }
-function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob, onGravado, onEditar}){
+function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob, onGravado, onEditar, onVirarCard}){
   const [aberto,setAberto]=useState(true);
   /* (16/10/2026, Gustavo) "tem que ter um botão editar do lado de ajustar.. pra gente editar manualmente" */
   const [ed,setEd]=useState(null);          // {assunto,abertura,desenvolvimento,fechamento,cenas} em edição
@@ -125918,49 +125936,38 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
           {agencia&&r.origem==="guvi"&&<span title={"Pedido pelo WhatsApp"+(r.created_by?(" — "+r.created_by):"")} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Guvi</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
-          {r.gravado_em&&<span title={"Gravado"+(r.gravado_por?(" por "+r.gravado_por):"")+" em "+new Date(r.gravado_em).toLocaleDateString("pt-BR")} style={{background:"#16a34a",color:"#fff",border:"1px solid #16a34a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:4}}>
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Gravado {new Date(r.gravado_em).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span>}
+          {(r.gravado_em||(agencia&&onGravado))&&<button type="button" onClick={onGravado} title={r.gravado_em?("Gravado"+(r.gravado_por?(" por "+r.gravado_por):"")+" em "+new Date(r.gravado_em).toLocaleDateString("pt-BR")+" — clique pra desmarcar"):"Marcar: o cliente já gravou este roteiro"}
+            style={{background:r.gravado_em?"#16a34a":"#fff",color:r.gravado_em?"#fff":"#64748b",border:"1px solid "+(r.gravado_em?"#16a34a":"#cbd5e1"),borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:4,cursor:onGravado?"pointer":"default",fontFamily:_RT_FF}}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>{r.gravado_em?("Gravado "+new Date(r.gravado_em).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})):"Gravado?"}</button>}
           {Array.isArray(r.ajustes)&&r.ajustes.length>0&&<span title={"Último ajuste pedido: "+String((r.ajustes[r.ajustes.length-1]||{}).feedback||"")}
             style={{background:"#fffbeb",color:"#b45309",border:"1px solid #fde68a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
             Ajustado{r.ajustes.length>1?(" "+r.ajustes.length+"x"):""}</span>}
         </div>
         <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~{r.duracao_seg||60} segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
       </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%",justifyContent:agencia?"flex-end":"flex-start",borderTop:agencia?"1px solid #f1f5f9":"none",paddingTop:agencia?10:0}}>
-        {agencia&&<button type="button" title={r.visivel_portal?"Está no portal do cliente (Roteiros). Clique pra tirar.":"Mostrar no portal do cliente, em Roteiros"} onClick={onPortal} style={Object.assign({},_pill(!!r.visivel_portal,_c),{marginRight:"auto"})}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          {r.visivel_portal?"No portal":"Portal"}
-        </button>}
+      {agencia&&<button type="button" onClick={function(){setAberto(!aberto);}} title={aberto?"Recolher":"Abrir"} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:4,display:"inline-flex",alignSelf:"flex-start"}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+      </button>}
+      {agencia&&<_RtBotoes cor={_c} itens={[
+        {label:r.visivel_portal?"No portal":"Portal",tone:r.visivel_portal?"on":undefined,cor:_c,onClick:onPortal,title:r.visivel_portal?"Está no portal do cliente (Roteiros). Clique pra tirar.":"Mostrar no portal do cliente, em Roteiros"},
+        {label:"WhatsApp",tone:"primary",title:"Copia o roteiro formatado pro WhatsApp"+(r.status==="enviado"?"":" (e marca como enviado)"),onClick:function(){ _rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp"); if(onEnviado&&r.status!=="enviado") onEnviado(); }},
+        {label:r.task_id?"Card criado":"Virar card",tone:"outline",disabled:!!r.task_id||!onVirarCard,title:r.task_id?"Este roteiro já virou card em Copys":"Vira card em Copys (demanda de vídeo) com este roteiro",onClick:function(){ if(onVirarCard&&!r.task_id) onVirarCard(); }},
+        {label:"Editar",tone:ed?"on":undefined,cor:"#334155",disabled:!onEditar,title:"Editar o texto à mão (falas, cenas e título)",onClick:function(){ setAjuste(null); setAberto(true); setEd(ed?null:{assunto:r.assunto||"",abertura:r.abertura||"",desenvolvimento:r.desenvolvimento||"",fechamento:r.fechamento||"",cenas:r.cenas||""}); }},
+        {label:"Ajustar IA",tone:ajuste!==null?"on":undefined,cor:"#d97706",disabled:!onAjustar,title:"Diz o que não ficou bom — a IA ajusta ESTE roteiro e mantém o resto",onClick:function(){ setEd(null); setAjuste(ajuste===null?"":null); }},
+        {label:"Excluir",tone:"danger",disabled:!onExcluir,title:"Excluir este roteiro",onClick:onExcluir},
+      ]}/>}
+      <div style={{display:agencia?"none":"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%"}}>
         <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
-          {_ico(<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>)}
-          {agencia?"WhatsApp":"Copiar"}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar
         </button>
-        {agencia&&onEditar&&<button type="button" title="Editar o texto à mão (falas, cenas e título)"
-          onClick={function(){ setAjuste(null); setAberto(true); setEd(ed?null:{assunto:r.assunto||"",abertura:r.abertura||"",desenvolvimento:r.desenvolvimento||"",fechamento:r.fechamento||"",cenas:r.cenas||""}); }} style={_pill(!!ed,"#334155")}>
-          Editar
-        </button>}
-        {agencia&&onAjustar&&<button type="button" title="Diz o que não ficou bom — a IA ajusta ESTE roteiro e mantém o resto"
-          onClick={function(){ setEd(null); setAjuste(ajuste===null?"":null); }} style={_pill(ajuste!==null,"#d97706")}>
-          Ajustar com IA
-        </button>}
-        {/* (23/09/2026, Vinicius) "um check quando tal roteiro for gravado — a gente registra quais o cliente gravou" */}
-        {onGravado&&<button type="button" title={r.gravado_em?"Desmarcar gravado":(agencia?"Marcar: o cliente já gravou este roteiro":"Marque quando gravar este vídeo — a agência fica sabendo na hora")} onClick={onGravado} style={_pill(!!r.gravado_em,"#16a34a")}>
-          {_ico(<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>)}
-          {r.gravado_em?"Gravado":(agencia?"Gravado?":"Já gravei")}
-        </button>}
-        {agencia&&<button type="button" title={r.status==="enviado"?"Voltar pra sugestão":"Marcar como enviado pro cliente"} onClick={onEnviado} style={_pill(r.status==="enviado","#7c3aed")}>
-          {r.status==="enviado"?"Enviado":"Enviar"}
-        </button>}
-        {/* (22/09/2026) O excluir era um ícone #e2b3b3 sem fundo: "quase não dá pra ver".
-            Agora é pílula vermelha vazada, do mesmo tamanho das outras, e enche no hover. */}
-        {agencia&&onExcluir&&<button type="button" title="Excluir este roteiro" onClick={onExcluir}
-          style={Object.assign({},_pill(true,"#dc2626"))}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-          Excluir
+        {onGravado&&<button type="button" title={r.gravado_em?"Desmarcar gravado":"Marque quando gravar este vídeo — a agência fica sabendo na hora"} onClick={onGravado} style={_pill(!!r.gravado_em,"#16a34a")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          {r.gravado_em?"Gravado":"Já gravei"}
         </button>}
         <span style={{flex:1}}/>
-        <button type="button" onClick={function(){setAberto(!aberto);}} title={aberto?"Recolher":"Abrir"} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg></button>
+        {!agencia&&<button type="button" onClick={function(){setAberto(!aberto);}} title={aberto?"Recolher":"Abrir"} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg></button>}
       </div>
     </div>
     {ed&&(function(){
@@ -126227,6 +126234,30 @@ function PageRoteiros({isMob, perms, viewingAs}){
       throw e;
     }
   };
+  /* (16/10/2026) Roteiro → card em Copys (mesma função que "Virar card" das propostas): demanda de vídeo com o
+     roteiro na descrição; gestora + editor de vídeo do padrão (team_data pautas_padrao). Marca task_id no roteiro. */
+  const _rtVirarCard=async function(r){
+    if(!sb||r.task_id) return;
+    const vai=async function(){
+      let padrao=(typeof _SW_PADRAO_FALLBACK!=="undefined")?_SW_PADRAO_FALLBACK:{gestora:"ellen",editor_video:"guilherme",designer:"andre"};
+      try{ const q=await sb.from("team_data").select("dados").eq("tipo","pautas_padrao").maybeSingle(); if(q.data&&q.data.dados) padrao=Object.assign({},padrao,q.data.dados); }catch(_){}
+      const u=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER:null; const quem=(u&&u.name)||"Pixels";
+      const id="roteiro-"+Date.now()+"-"+Math.random().toString(36).slice(2,7);
+      const now=new Date().toISOString();
+      const assignees=[padrao.gestora].concat(padrao.editor_video&&padrao.editor_video!==padrao.gestora?[padrao.editor_video]:[]).filter(Boolean);
+      const txt=_rtTexto(r,true).replace(/\*/g,"");
+      const html=(typeof _pxTextoParaHtml==="function")?_pxTextoParaHtml(txt):("<p>"+txt.replace(/\n/g,"<br/>")+"</p>");
+      const payload={id:id,title:r.assunto||"Roteiro de vídeo",status:"demanda",description:html,caption:"",priority:"normal",client:r.client_id||clId,bioter_unit:String(r.unidade||""),
+        origem:"roteiro",content_type:"video",assignee:padrao.gestora||"",assignees:assignees,checklist:[],tags:["Roteiro"],
+        timeline:[{type:"created",from:"",to:"demanda",fromLabel:"",toLabel:"Copys",at:now,atFmt:new Date().toLocaleDateString("pt-BR"),user:quem,label:"Card criado a partir do roteiro \""+(r.assunto||"")+"\" (por "+quem+")"}],
+        created_by:(u&&u.id)||"",created_at:now,col_entered_at:now,comments:[],files:[],watchers:[],cover:null,ajustar:false,is_alteracao:false,score:null,publish_date:null,publish_time:"09:00",deadline_time:"",deleted_at:null};
+      const ins=await sb.from("tasks").insert(payload);
+      if(ins.error){ pixelsToast.error("Não criou o card: "+ins.error.message,6000); return; }
+      await _patch(r,{task_id:id});
+      pixelsToast.success("Card \""+payload.title+"\" criado em Copys — sem data, na fila da Avaliação de copys.",4500);
+    };
+    if(typeof pixelsConfirm==="function") pixelsConfirm("Virar card em Copys com o roteiro \u201c"+(r.assunto||"")+"\u201d?",{okText:"Virar card",cancelText:"Cancelar"}).then(function(ok){ if(ok) vai(); }); else vai();
+  };
   const _excluir=async function(r){
     const ok=(typeof pixelsConfirm==="function")?await pixelsConfirm({title:"Excluir roteiro?",message:'"'+(r.assunto||"Roteiro")+'" sai da lista e do portal.',confirmLabel:"Excluir",danger:true}):window.confirm("Excluir?");
     if(!ok) return;
@@ -126467,7 +126498,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
           onGravado={function(){ const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Agência"; _patch(r, r.gravado_em?{gravado_em:null,gravado_por:null}:{gravado_em:new Date().toISOString(),gravado_por:quem}); }}
           onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined}
-          onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
+          onVirarCard={_bl("roteiros.gerar")?function(){ _rtVirarCard(r); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
       {!loading&&<_RtSecao cor={_cor} n={especificos.length||undefined} titulo="Roteiros específicos" sub="O que saiu de um Pedido: roteiros sob encomenda, áudio do cliente, artes e carrosséis." topo/>}
       {!loading&&especificos.length>0&&<div style={{overflowX:isMob?"visible":"auto",paddingBottom:6}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
@@ -126476,7 +126507,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
           onGravado={function(){ const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Agência"; _patch(r, r.gravado_em?{gravado_em:null,gravado_por:null}:{gravado_em:new Date().toISOString(),gravado_por:quem}); }}
           onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined}
-          onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
+          onVirarCard={_bl("roteiros.gerar")?function(){ _rtVirarCard(r); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
       {/* Artes, carrosséis e pedidos por WhatsApp (a antiga aba Solicitações), dentro de Roteiros específicos */}
       {_bl("aba.solicitacoes")&&<SolicitacoesWhatsapp embutido vazioAviso={!loading&&especificos.length===0} apiRef={solRef} isMob={isMob} lista={_lista} unidades={_unidades} clId={clId} setClId={setClId} unit={unit} setUnit={setUnit} nomeCl={_nomeCl} bl={function(k){ return _bl(k); }}/>}
@@ -126537,7 +126568,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           {gerados.length>0&&<div style={{padding:12,background:"#fafbfc",overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
             {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
               return <div key={r.id}><div style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
-                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
+                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined} onVirarCard={_bl("roteiros.gerar")?function(){ _rtVirarCard(r); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
           </div></div>}
         </div>;
       })}
@@ -127927,31 +127958,19 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           {p.visivel_portal?"No portal":"Portal"}</button>
       </div>}
-      {!ed&&!rf&&!aceita&&<div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
-        {desc?<button type="button" onClick={function(){ _voltar(p); }} style={_mini}>Voltar pra lista</button>:<>
-          {/* v4 (28/09): olho = aparece no portal do cliente, em Sugestões de conteúdo (igual Roteiros) */}
-          {_bl("solic.nova")&&<button type="button" onClick={function(){ _togglePortal(p); }}
-            title={p.visivel_portal?"Está no portal do cliente (Roteiros). Clique pra tirar.":"Mostrar no portal do cliente, em Roteiros"}
-            style={Object.assign({},_mini,{display:"inline-flex",alignItems:"center",gap:5,marginRight:"auto",background:p.visivel_portal?corOrig:"#fff",color:p.visivel_portal?"#fff":"#475569",borderColor:p.visivel_portal?corOrig:"#e2e8f0"})}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            {p.visivel_portal?"No portal":"Portal"}</button>}
-          {_bl("solic.aceitar")&&<button type="button" disabled={!!ocupado} onClick={function(){ _aceitar([p]); }} title="O cliente aprovou por fora do portal? Vira card em Copys agora" style={Object.assign({},_mini,{background:"#16a34a",color:"#fff",borderColor:"#16a34a"})}>{busy?"Criando…":"✓ Virar card"}</button>}
-          <button type="button" disabled={!!ocupado} onClick={function(){ setEditando({id:p.id,titulo:p.titulo,content_type:p.content_type||"arte",briefing:p.briefing||"",legenda:p.legenda||""}); }} style={_mini}>Editar</button>
-          <button type="button" disabled={!!ocupado} onClick={function(){ setRefazendo({id:p.id,pedido:""}); }} style={_mini}>Refazer essa</button>
-          {_bl("solic.nova")?<button type="button" disabled={!!ocupado} onClick={function(){ _trocar(p); }} title="Descarta esta e a IA escreve outra ideia do mesmo formato no lugar" style={Object.assign({},_mini,{color:"#b91c1c"})}>{busy?"Trocando…":"Trocar"}</button>
-            :<button type="button" disabled={!!ocupado} onClick={function(){ _descartar(p); }} style={Object.assign({},_mini,{color:"#b91c1c"})}>Descartar</button>}
-          {/* (06/10/2026, Gustavo) "Excluir" — tira a proposta da tela sem gerar outra no lugar. Regra do app:
-               nada é apagado do banco — vai pras descartadas (sai do portal também) e dá pra voltar em "Ver descartadas". */}
-          {_bl("solic.nova")&&<button type="button" disabled={!!ocupado} title="Exclui esta proposta (sai da tela e do portal; fica em Ver descartadas)"
-            onClick={function(){
+      {!ed&&!rf&&!aceita&&desc&&<div style={{display:"flex",gap:6,justifyContent:"flex-end",borderTop:"1px solid #f1f5f9",paddingTop:10}}><button type="button" onClick={function(){ _voltar(p); }} style={_mini}>Voltar pra lista</button></div>}
+      {!ed&&!rf&&!aceita&&!desc&&<_RtBotoes cor={corOrig} itens={[
+        {label:p.visivel_portal?"No portal":"Portal",tone:p.visivel_portal?"on":undefined,cor:corOrig,disabled:!_bl("solic.nova"),onClick:function(){ _togglePortal(p); },title:p.visivel_portal?"Está no portal do cliente (Roteiros). Clique pra tirar.":"Mostrar no portal do cliente, em Roteiros"},
+        {label:"WhatsApp",tone:"primary",title:"Copia título, briefing e legenda formatados pro WhatsApp",onClick:function(){ _rtCopiar("*"+String(p.titulo||"").toUpperCase()+"*\n\n"+String(p.briefing||"").trim()+(String(p.legenda||"").trim()?("\n\n*LEGENDA*\n"+String(p.legenda).trim()):""),"Proposta copiada — é só colar no WhatsApp"); }},
+        {label:busy&&ocupado===p.id?"Criando…":"Virar card",tone:"outline",disabled:!!ocupado||!_bl("solic.aceitar"),title:"O cliente aprovou por fora do portal? Vira card em Copys agora",onClick:function(){ _aceitar([p]); }},
+        {label:"Editar",disabled:!!ocupado,onClick:function(){ setEditando({id:p.id,titulo:p.titulo,content_type:p.content_type||"arte",briefing:p.briefing||"",legenda:p.legenda||""}); }},
+        {label:"Ajustar IA",disabled:!!ocupado,title:"Diz o que mudar — a IA reescreve esta proposta (a anterior fica nas descartadas)",onClick:function(){ setRefazendo({id:p.id,pedido:""}); }},
+        {label:"Excluir",tone:"danger",disabled:!!ocupado||!_bl("solic.nova"),title:"Exclui esta proposta (sai da tela e do portal; fica em Ver descartadas)",onClick:function(){
               const _ok=function(){ _descartar(p); _toast("success","Proposta excluída. Se precisar, ela está em \"Ver descartadas\".",3000); };
               if(typeof pixelsConfirm==="function") pixelsConfirm("Excluir \u201c"+(p.titulo||"esta proposta")+"\u201d?",{danger:true,okText:"Excluir",cancelText:"Cancelar"}).then(function(y){ if(y) _ok(); });
               else _ok();
-            }}
-            style={Object.assign({},_mini,{color:"#fff",background:"#b91c1c",borderColor:"#b91c1c",display:"inline-flex",alignItems:"center",gap:5})}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>Excluir</button>}
-        </>}
-      </div>}
+            }},
+      ]}/>}
     </div>;
   };
 
