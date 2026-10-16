@@ -52643,12 +52643,14 @@ function _cardPodeSerResp(u){
   const vidAdj=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isAdj(a));
   const adjItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a);});
   const vidMat=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isMat(a));
+  // v30 (16/10/2026) item 6: os ÁUDIOS de Materiais (lapela, gravador) aparecem em Materiais — antes ficavam só lá embaixo em "Áudios", longe dos vídeos
+  const audMat=attachments.filter(a=>isAud(a)&&!isVid(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isMat(a));
   const antItems=attachments.filter(a=>(isVid(a)||isImg(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isAnt(a))
     .sort(function(x,y){ return String(y.substituido_em||"").localeCompare(String(x.substituido_em||"")); });   // (v48 · F-12)
   // Compat: agregados (usados em outros lugares — carrossel, contagens)
   const imgAttachments=[...imgRef,...imgFin];
   const vidAttachments=[...vidRef,...vidFin];
-  const audAttachments=attachments.filter(a=>isAud(a)&&!a.uploading&&a.url);
+  const audAttachments=attachments.filter(a=>isAud(a)&&!a.uploading&&a.url&&!(isMat(a)&&!isVid(a)&&!a.isAnnotation));   // v30 (16/10/2026) item 6: o áudio de Materiais aparece em Materiais (não 2 vezes)
   const otherAttachments=attachments.filter(a=>!isEdt(a)&&!isImg(a)&&!isVid(a)&&!isAud(a)&&!a.isAnnotation&&!a.uploading&&a.url);
   const edtItems=attachments.filter(a=>isEdt(a)&&!a.isAnnotation&&(a.url||a.uploading));
   const filesCount=attachments.filter(a=>!a.isAnnotation).length; // don't count annotated corrections in badge
@@ -54917,8 +54919,8 @@ function _cardPodeSerResp(u){
               })()}
 
               {/* ── SEÇÃO 2: MATERIAIS — imagens/vídeos brutos, takes crus, base pra edição ── */}
-              {_bl("arq.materiais")&&(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
-                const totalMat=imgMat.length+vidMat.length;
+              {_bl("arq.materiais")&&(imgMat.length>0||vidMat.length>0||audMat.length>0||canEditRef||canEdit)&&(()=>{
+                const totalMat=imgMat.length+vidMat.length+audMat.length;   // v30 (16/10/2026) item 6: + áudios
                 const _matActive=dragOverSection==="mat";
                 const _matCanEdit=canEditRef||canEdit;
                 return(<div
@@ -54954,7 +54956,7 @@ function _cardPodeSerResp(u){
                       <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Materiais {totalMat>0&&<span style={{background:"#cffafe",color:"#0e7490",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalMat}</span>}</div>
                       <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivos brutos — takes, fotos originais, base pra edição</div>
                     </div>
-                    {totalMat>0&&<button onClick={function(){downloadAll([].concat(imgMat,vidMat),"Materiais");}} title="Baixa todos os materiais"
+                    {totalMat>0&&<button onClick={function(){downloadAll([].concat(imgMat,vidMat,audMat),"Materiais");}} title="Baixa todos os materiais"
                       style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
                       onMouseEnter={function(e){e.currentTarget.style.background="#ecfeff";e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.color="#0891b2";}}
                       onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
@@ -55058,6 +55060,33 @@ function _cardPodeSerResp(u){
                       {sizeMB&&<div style={{position:"absolute",bottom:36,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
                     </div>);
                   })}</div>}
+                  {/* v30 (16/10/2026) item 6: ÁUDIOS de Materiais — nome, tamanho, ouvir (preload="none": só baixa quando dá play), baixar e remover */}
+                  {audMat.length>0&&<div data-mat-audios="1" style={{display:"flex",flexDirection:"column",gap:8,marginTop:(imgMat.length>0||vidMat.length>0)?12:0}}>
+                    {audMat.map(function(a){ const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
+                      return(<div key={a.id} data-mat-audio={a.id} style={{background:"#ecfeff",border:"0.5px solid #a5f3fc",borderRadius:10,padding:"8px 10px",display:"flex",gap:10,alignItems:"center",flexWrap:_pxMob()?"wrap":"nowrap"}}>
+                        <span style={{fontSize:18,flexShrink:0}}>🎙️</span>
+                        <div style={{flex:"1 1 150px",minWidth:0}}>
+                          <div title={a.name||""} style={{color:"#0f172a",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label||a.name||"áudio"}</div>
+                          <div style={{color:"#64748b",fontSize:10.5,fontFeatureSettings:"'tnum'"}}>{sizeMB?sizeMB+" MB":"áudio"}{a.addedBy?" · "+a.addedBy:""}{a.addedAt?" · "+a.addedAt:""}</div>
+                        </div>
+                        <audio src={a.previewUrl||a.preview_url||a.url} controls preload="none" style={{height:32,flex:"1 1 220px",minWidth:0,maxWidth:_pxMob()?"100%":320}}/>
+                        <div style={{display:"flex",gap:4,flexShrink:0}}>
+                          <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar áudio"
+                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
+                            onMouseEnter={function(e){e.currentTarget.style.background="rgba(8,145,178,0.85)";}}
+                            onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.55)";}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {_matCanEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
+                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
+                            onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
+                            onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.55)";}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
+                        </div>
+                      </div>);
+                    })}
+                  </div>}
                 </div>);
               })()}
 
@@ -55327,7 +55356,7 @@ function _cardPodeSerResp(u){
             {/* Inputs file ocultos — disparados pelos botões "+ adicionar" de cada seção */}
             <input id={"pixels-pick-final-"+task.id} type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
             <input id={"pixels-pick-ref-"+task.id} type="file" ref={fileInputRefRef} onChange={e=>handleFileUpload(e,"referencia")} multiple style={{display:"none"}} accept="image/*,video/*"/>
-            <input id={"pixels-pick-mat-"+task.id} type="file" ref={matFileInputRef} onChange={e=>handleFileUpload(e,"material")} multiple style={{display:"none"}} accept="image/*,video/*"/>
+            <input id={"pixels-pick-mat-"+task.id} type="file" ref={matFileInputRef} onChange={e=>handleFileUpload(e,"material")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*"/>{/* v30 (16/10/2026) item 6: + áudio do microfone */}
             <input id={"pixels-pick-edt-"+task.id} type="file" onChange={e=>handleFileUpload(e,"editavel")} multiple style={{display:"none"}}/>
           </div>}
 
@@ -135756,7 +135785,8 @@ function _evpSincronizarSom(bufA, bufB, maxS){
      3) CONFERE — ponto que fica mais de 1 quadro fora da reta, ou com encaixe fraco, vira aviso: "ressincronize de 12 a 20 s".
      A fala da câmera (a transcrição que a edição já tem) diz onde tem voz: as janelas de conferência ficam onde a pessoa está falando. */
 const _EVP_MIC_EXT = /\.(wav|mp3|m4a|aac|ogg|oga|opus|flac|amr)(\?|#|$)/i;
-const _EVP_MIC = { passoG:0.05, passoM:0.01, janela:3, salto:6, buscaG:0.35, buscaF:0.05, ondaMin:0.06, nitidez:1.2, quadro:1 / 30, confMin:0.35, folgaMin:0.1, velMax:0.002 };
+const _EVP_MIC = { passoG:0.05, passoM:0.01, janela:3, salto:6, buscaG:0.35, buscaF:0.05, ondaMin:0.06, nitidez:1.2, quadro:1 / 30, confMin:0.35, folgaMin:0.1, velMax:0.002,
+  dicaMin:0.25, dicaRaio:6 };   // v30 (16/10/2026) item 3: com o lugar dado pelas PALAVRAS, a onda procura só ±6 s em volta e basta c ≥ 0,25 (sem exigir "folga")
 function _evpMicEhAudio(f){
   if(!f || f.isAnnotation === true) return false;
   const tp = String(f.type || "").toLowerCase();
@@ -135814,7 +135844,10 @@ function _evpMicGeral(bufCam, bufMic, a, b){
   if(fim - ini < 1.5) return null;
   const ec = _evpMicNorm(_evpMicEnv(bufCam, P, ini, fim)), em = _evpMicEnv(bufMic, P, 0, null);
   if(ec.length < 20 || em.length < ec.length) return null;
-  const r = _evpMicPearson(ec, em, 0, em.length - ec.length);
+  // v30 (16/10/2026) item 3: 5º parâmetro opcional { off, raio } = o lugar que as PALAVRAS deram (micT = camT + off): a onda só procura ±raio s em volta
+  const jan = arguments[4] && isFinite(Number(arguments[4].off)) ? arguments[4] : null, rj = jan ? Number(jan.raio) || _EVP_MIC.dicaRaio : 0;
+  const r = jan ? _evpMicPearson(ec, em, Math.max(0, Math.floor((ini + Number(jan.off) - rj) / P)), Math.min(em.length - ec.length, Math.ceil((ini + Number(jan.off) + rj) / P)))
+                : _evpMicPearson(ec, em, 0, em.length - ec.length);
   if(!isFinite(r.c)) return null;
   const seg = _evpMicSegundo(r, Math.round(0.6 / P));
   // afina em 10 ms em volta
@@ -135822,7 +135855,7 @@ function _evpMicGeral(bufCam, bufMic, a, b){
   const em2 = _evpMicEnv(bufMic, P2, Math.max(0, t0), Math.max(0, t0) + (fim - ini) + 0.6, 0.02);
   const r2 = em2.length >= ec2.length ? _evpMicPearson(ec2, em2, 0, em2.length - ec2.length) : null;
   const micIni = r2 && isFinite(r2.c) ? Math.max(0, t0) + r2.L * P2 : r.L * P;
-  return { off:Math.round((micIni - ini) * 1000) / 1000, c:Math.round(r.c * 1000) / 1000, folga:Math.round((r.c - Math.max(0, seg)) * 1000) / 1000 };
+  return { off:Math.round((micIni - ini) * 1000) / 1000, c:Math.round(r.c * 1000) / 1000, folga:Math.round((r.c - Math.max(0, seg)) * 1000) / 1000, ...(jan ? { dica:true } : {}) };
 }
 /* 2) em vários pontos do trecho [a, b] do vídeo: afina em 1 ms e tira a reta (encaixe + escorregar do relógio) */
 function _evpMicPontos(bufCam, bufMic, off0, a, b, falas){
@@ -135863,9 +135896,13 @@ function _evpMicReta(pts){
 }
 /* encaixe de um trecho [a, b] do vídeo: { off (no começo do trecho), vel, conf, ruins:[{t0,t1}] (segundos do vídeo) } */
 function _evpMicEncaixe(bufCam, bufMic, a, b, falas, geral){
-  const g = geral || _evpMicGeral(bufCam, bufMic, Math.max(0, a - 2), Math.min(bufCam.duration, b + 2));
-  if(!g || g.c < _EVP_MIC.confMin || g.folga < _EVP_MIC.folgaMin) return { ok:false, motivo:"não achei este vídeo no áudio do microfone", geral:g };
+  // v30 (16/10/2026) item 3: 7º parâmetro opcional "dica" { off, raio } (o lugar já veio pelas PALAVRAS): sem exigir folga, mas a onda tem de afinar (c ≥ 0,25 e ao menos 1 ponto bom)
+  const dica = arguments[6] && isFinite(Number(arguments[6].off)) ? arguments[6] : null;
+  const g = geral || _evpMicGeral(bufCam, bufMic, Math.max(0, a - 2), Math.min(bufCam.duration, b + 2), dica || undefined);
+  if(dica){ if(!g || g.c < _EVP_MIC.dicaMin) return { ok:false, motivo:"achei pelas palavras, mas a onda do som não confirmou", geral:g }; }
+  else if(!g || g.c < _EVP_MIC.confMin || g.folga < _EVP_MIC.folgaMin) return { ok:false, motivo:"não achei este vídeo no áudio do microfone", geral:g };
   const pts = _evpMicPontos(bufCam, bufMic, g.off, a, b, falas), reta = _evpMicReta(pts);
+  if(dica && !reta) return { ok:false, motivo:"achei pelas palavras, mas a onda do som não afinou", geral:g };
   const A = reta ? reta.a : g.off, B = reta ? reta.b : 0;
   const ruins = pts.filter(function(q){ return !q.bom || Math.abs(q.off - (A + B * q.t)) > _EVP_MIC.quadro; }).map(function(q){ return { t0:q.x0, t1:q.x1 }; });
   return { ok:true, off:Math.round((A + B * a) * 1000) / 1000, vel:Math.round((1 + B) * 1e6) / 1e6, conf:g.c, pontos:pts.length, bons:reta ? reta.usados : 0, ruins:ruins };
@@ -135900,48 +135937,279 @@ function _evpMicLimpo(m){
   if(!m || typeof m !== "object" || !Array.isArray(m.mics) || !m.mics.length) return null;
   const n3 = function(v){ return Math.round(_evpNum(v, 0) * 10000) / 10000; };
   const enc = function(e){ if(!e || !e.mic) return null; return { mic:String(e.mic).slice(0, 80), A:n3(e.A), B:Math.max(-0.002, Math.min(0.002, _evpNum(e.B, 0))), c:Math.round(_evpNum(e.c, 0) * 1000) / 1000,
-    ruins:(Array.isArray(e.ruins) ? e.ruins : []).slice(0, 20).map(function(q){ return [Math.round(_evpNum(q[0], 0) * 100) / 100, Math.round(_evpNum(q[1], 0) * 100) / 100]; }), em:String(e.em || "").slice(0, 30) }; };
+    ruins:(Array.isArray(e.ruins) ? e.ruins : []).slice(0, 20).map(function(q){ return [Math.round(_evpNum(q[0], 0) * 100) / 100, Math.round(_evpNum(q[1], 0) * 100) / 100]; }), em:String(e.em || "").slice(0, 30),
+    ...(e.como === "onda" || e.como === "fala" ? { como:e.como } : {}) }; };   // v30 (16/10/2026) item 3: como achou o lugar ("onda" | "fala" = pelas palavras e afinado pela onda)
   const mapa = function(o){ const r = {}; Object.keys(o || {}).slice(0, 200).forEach(function(k){ const e = enc(o[k]); if(e) r[String(k).slice(0, 80)] = e; }); return r; };
+  // v30 (16/10/2026) itens 1/8: sem = { [bruto]: "motivo" } — já tentado e não achou (não tenta de novo sozinho; só com microfone novo ou Ressincronizar)
+  const sem = {}; if(m.sem && typeof m.sem === "object") Object.keys(m.sem).slice(0, 200).forEach(function(k){ sem[String(k).slice(0, 80)] = String(m.sem[k] || "não achou").slice(0, 120); });
   return { ativo:m.ativo !== false, mics:m.mics.slice(0, 6).filter(function(x){ return x && x.id && x.url; }).map(function(x){ return { id:String(x.id).slice(0, 80), url:String(x.url), nome:String(x.nome || "microfone").slice(0, 80), dur:Math.round(_evpNum(x.dur, 0) * 100) / 100 }; }),
-    brutos:mapa(m.brutos), clips:mapa(m.clips), ...(m.falhas ? { falhas:(m.falhas || []).slice(0, 30).map(function(x){ return String(x).slice(0, 160); }) } : {}), em:String(m.em || "").slice(0, 30) };
+    brutos:mapa(m.brutos), clips:mapa(m.clips), ...(Object.keys(sem).length ? { sem:sem } : {}), ...(m.falhas ? { falhas:(m.falhas || []).slice(0, 30).map(function(x){ return String(x).slice(0, 160); }) } : {}), em:String(m.em || "").slice(0, 30) };
 }
 const _EVP_MIC_MAX_SEG = 40 * 60;     // microfone de até 40 min (mais que isso pesa demais no navegador)
+
+/* ══ v30 (16/10/2026) SOM DO MICROFONE com barra, palavras e reaproveitamento (pedido do Vini, card Starken - Lero Air) ══
+   item 5/6: cópia leve (preview_url que o PC do escritório grava) e a mensagem certa quando o áudio é grande demais (≠ "não casa").
+   item 1/8: só os vídeos que FALTAM sincronizam sozinhos; microfone desligado pela equipe não religa sozinho.
+   item 3:   o lugar de cada vídeo pelas MESMAS PALAVRAS (microfone transcrito uma vez, no clique) e a onda afina.
+   item 5:   barra da sincronização e do carregamento, sem travar a tela. */
+const _EVP_MIC_LEVE = {};    // v30 (16/10/2026) item 5: id do áudio → { leve (cópia leve), tam (bytes), nome } — vem dos arquivos do card
+function _evpMicDoCard(t){
+  return _evpMicArquivos(t).map(function(f){ const id = String(f.id), lv = f.previewUrl || f.preview_url || null, leve = lv && lv !== f.url ? String(lv) : null, tam = Number(f.size || 0) || 0;
+    _EVP_MIC_LEVE[id] = { leve:leve, tam:tam, nome:String(f.name || "microfone") };
+    return { id:id, url:f.url, nome:f.name || "microfone", leve:leve, tam:tam }; });
+}
+function _evpMicMMSS(s){ return _evMMSS(Math.floor(Math.max(0, Number(s) || 0))); }   // v30: minuto do microfone como o player mostra (18:19)
+function _evpMicNoPC(){ try{ return !!(typeof window !== "undefined" && window.__CFG); }catch(_){ return false; } }
+/* o endereço para ABRIR o som: no PC o original (abre qualquer tamanho); no navegador a cópia leve, se o PC já fez */
+function _evpMicUrlAbrir(id, url){ if(_evpMicNoPC()) return url; const x = _EVP_MIC_LEVE[String(id)]; return (x && x.leve) || url; }
+function _evpMicGrande(id){ const x = _EVP_MIC_LEVE[String(id)]; return !_evpMicNoPC() && !!x && !x.leve && x.tam > _EV_NAV_MAX; }
+function _evpMicNomeCurto(n){ n = String(n || "microfone"); if(n.length <= 22) return n; const k = n.lastIndexOf("."), ext = k > 0 && n.length - k <= 6 ? n.slice(k) : ""; return n.slice(0, 6) + "…" + ext; }
+/* v30 (16/10/2026) item 5: o aviso diz o que aconteceu de verdade (nunca "não casa com os vídeos" quando nem abriu) */
+function _evpMicErroAbrir(nome, tam, erro){
+  // o tamanho em MB como o card mostra (1 MB = 1024 × 1024): o WAV de 180.222.524 bytes aparece como 172 MB
+  const nc = _evpMicNomeCurto(nome), e = String(erro || ""), m = /\((\d+)\s*MB\)/.exec(e), mb = Number(tam) > 0 ? Math.round(Number(tam) / 1048576) : (m ? Number(m[1]) : 0);
+  if(Number(tam) > _EV_NAV_MAX || /pesado/i.test(e)) return "Não consegui abrir " + nc + (mb ? " (" + mb + " MB)" : "") + ": o navegador abre até " + Math.round(_EV_NAV_MAX / 1e6) + " MB. Suba em MP3 ou M4A (a voz fica igual) — ou espere a cópia leve do PC do escritório.";
+  if(/decod|EncodingError|formato|unable/i.test(e)) return "Não consegui abrir " + nc + ": o navegador não lê este tipo de áudio. Suba em MP3 ou M4A (a voz fica igual).";
+  if(/HTTP|fetch|network|Failed/i.test(e)) return "Não consegui baixar " + nc + " (" + e.slice(0, 60) + "). Confira a internet e abra de novo.";
+  return "Não consegui abrir " + nc + (e ? " (" + e.slice(0, 80) + ")" : "") + ".";
+}
+/* v30 (16/10/2026) item 3: o desvio aproximado pelas PALAVRAS (função pura). Trincas de palavras normalizadas (sem acento) iguais no microfone e
+   na câmera votam em off = micT − camT, em caixas de 0,5 s (cada caixa soma as vizinhas). Aceita com ≥ 4 votos e se o 2º grupo longe (> 1 s) tiver ≤ metade.
+   → { ok, off (s, mediana do grupo), votos, seg } ou null (sem palavras) */
+function _evpMicDesvioFala(palMic, palCam){
+  const lim = function(L){ const o = []; (Array.isArray(L) ? L : []).forEach(function(w){ const k = _evNorm(w && w.p), t = Number(w && w.i); if(k && isFinite(t)) o.push({ k:k, t:t }); }); return o; };
+  const nm = lim(palMic), nc = lim(palCam); if(nm.length < 3 || nc.length < 3) return null;
+  const idx = {}; for(let i = 0; i + 2 < nm.length; i++){ const k = nm[i].k + " " + nm[i + 1].k + " " + nm[i + 2].k; (idx[k] = idx[k] || []).push(nm[i].t); }
+  const caixa = {}, offs = {};
+  for(let j = 0; j + 2 < nc.length; j++){ const L = idx[nc[j].k + " " + nc[j + 1].k + " " + nc[j + 2].k]; if(!L || L.length > 6) continue;      // trinca comum demais ("que que que") não vota
+    for(let q = 0; q < L.length; q++){ const off = L[q] - nc[j].t, b = Math.round(off / 0.5); caixa[b] = (caixa[b] || 0) + 1; (offs[b] = offs[b] || []).push(off); } }
+  const ks = Object.keys(caixa).map(Number); if(!ks.length) return { ok:false, votos:0, seg:0 };
+  const grupo = function(b){ return (caixa[b - 1] || 0) + (caixa[b] || 0) + (caixa[b + 1] || 0); };
+  let best = ks[0]; ks.forEach(function(b){ const g = grupo(b), gb = grupo(best); if(g > gb || (g === gb && (caixa[b] || 0) > (caixa[best] || 0))) best = b; });
+  const votos = grupo(best); let seg = 0; ks.forEach(function(b){ if(Math.abs(b - best) > 2) seg = Math.max(seg, grupo(b)); });
+  if(votos < 4 || seg > votos / 2) return { ok:false, votos:votos, seg:seg };
+  const L = [].concat(offs[best - 1] || [], offs[best] || [], offs[best + 1] || []).sort(function(x, y){ return x - y; });
+  return { ok:true, off:Math.round(L[Math.floor(L.length / 2)] * 1000) / 1000, votos:votos, seg:seg };
+}
+/* v30 (16/10/2026) itens 1/8: o que sincronizar SOZINHO ao abrir (função pura). mics = áudios do card (_evpMicDoCard), brutos = vídeos da linha do tempo.
+   → { modo:"tudo" (1ª vez) | "faltam" (só os sem encaixe e fora de "sem") | "novoMic" (microfone novo: tenta de novo os de "sem") | "nada", brutos:[…] } */
+function _evpMicPlano(p, mics, brutos){
+  const m = p && p.micro; mics = Array.isArray(mics) ? mics : []; brutos = Array.isArray(brutos) ? brutos : [];
+  if(!mics.length || !brutos.length) return { modo:"nada", brutos:[] };
+  if(!m || !m.em) return { modo:"tudo", brutos:brutos.slice() };
+  const bt = m.brutos || {}, sem = m.sem || {};
+  if(m.ativo === false && Object.keys(bt).length) return { modo:"nada", brutos:[], porque:"desligado pela equipe" };        // item 8: não religa sozinho
+  const ids = {}; (m.mics || []).forEach(function(x){ if(x && x.id) ids[String(x.id)] = x; });
+  const cab = mics.filter(function(x){ return x && x.id && x.url; }).slice(0, 6);       // v30 revisor N2: o p.micro guarda até 6 microfones — o 7º em diante não conta como "novo" toda vez
+  const novo = cab.some(function(x){ return !ids[String(x.id)]; });
+  const reabrir = cab.some(function(x){ const v = ids[String(x.id)]; return !!v && !(Number(v.dur) > 0) && !!x.leve; });         // não abriu antes e agora tem cópia leve
+  if(novo || reabrir){ const L = brutos.filter(function(b){ return !bt[b]; }); return L.length ? { modo:"novoMic", brutos:L } : { modo:"nada", brutos:[] }; }
+  if(m.ativo === false) return { modo:"nada", brutos:[] };
+  const L = brutos.filter(function(b){ return !bt[b] && !sem[b]; });
+  return L.length ? { modo:"faltam", brutos:L } : { modo:"nada", brutos:[] };
+}
+/* v30 (16/10/2026) item 1: junta o resultado de uma sincronização PARCIAL (só alguns brutos) no p.micro que está na tela agora (pode ter mudado no meio) */
+function _evpMicJuntar(atual, novo, brutos){
+  if(!atual || !atual.mics || !novo) return novo || atual || null;
+  const out = _evpMicLimpo(Object.assign({}, atual, { mics:(novo.mics && novo.mics.length) ? novo.mics : atual.mics })) || novo;
+  out.brutos = Object.assign({}, out.brutos); out.clips = Object.assign({}, out.clips); const sem = Object.assign({}, out.sem || {}); let achou = 0;
+  (brutos || []).forEach(function(b){ if(novo.brutos && novo.brutos[b]){ out.brutos[b] = novo.brutos[b]; delete sem[b]; achou++; } else if(novo.sem && novo.sem[b]) sem[b] = novo.sem[b]; });
+  if(Object.keys(sem).length) out.sem = sem; else delete out.sem;
+  out.ativo = atual.ativo !== false ? true : achou > 0;
+  // v30 revisor N1: nada mudou (mesmos encaixes, "sem", microfones e ligado) → devolve igual, sem trocar "em" (não grava o rascunho de novo à toa)
+  const chave = function(m){ return JSON.stringify([m.ativo !== false, m.brutos || {}, m.sem || {}, (m.mics || []).map(function(x){ return [x.id, x.url, x.dur]; })]); };
+  const antes = _evpMicLimpo(atual) || atual;
+  if(chave(out) === chave(antes)) return antes;
+  if(novo.falhas) out.falhas = novo.falhas; out.em = novo.em || out.em;
+  return out;
+}
+/* v30 revisor G1: qual microfone TRANSCREVER — o mais usado nos encaixes que abre no navegador; senão o 1º que abre; nenhum abre → { mic:null, motivo } */
+function _evpMicEscolherTx(mics, micro){
+  const L = Array.isArray(mics) ? mics.filter(function(x){ return x && x.id; }) : []; if(!L.length) return { mic:null, abrem:[], motivo:"" };
+  const abrem = L.filter(function(x){ return !_evpMicGrande(x.id); }), uso = {};
+  Object.keys((micro && micro.brutos) || {}).forEach(function(b){ const e = micro.brutos[b]; if(e && e.mic) uso[String(e.mic)] = (uso[String(e.mic)] || 0) + 1; });
+  const ord = abrem.slice().sort(function(a, b){ return (uso[String(b.id)] || 0) - (uso[String(a.id)] || 0); });
+  if(ord.length) return { mic:ord[0], abrem:ord, motivo:"" };
+  const x = L[0], lv = _EVP_MIC_LEVE[String(x.id)] || {};
+  return { mic:null, abrem:[], motivo:_evpMicErroAbrir(x.nome, lv.tam, "") };
+}
+/* v30 (16/10/2026) item 5: um "quadro de avisos" pequeno do microfone (sincronização, palavras e transcrição), por card — o painel e a faixa do Estúdio leem o mesmo */
+const _EVP_MIC_ST = { sinc:{}, falas:{}, tx:{} };
+const _evpMicOuv = [];
+function _evpMicPor(k, task, v){ _EVP_MIC_ST[k][String(task || "")] = v; _evpMicOuv.slice().forEach(function(f){ try{ f(); }catch(_){} }); }
+function _evpUsarMicSt(){
+  const par = useState(0), setN = par[1];
+  useEffect(function(){ const f = function(){ setN(function(n){ return n + 1; }); }; _evpMicOuv.push(f); return function(){ const i = _evpMicOuv.indexOf(f); if(i >= 0) _evpMicOuv.splice(i, 1); }; }, []);
+  return _EVP_MIC_ST;
+}
+/* palavras do microfone já transcrito (RPC criacao_mic_fala_ler, só leitura) — uma vez por card */
+function _evpMicFalasLer(task, forcar){
+  const k = String(task || ""); if(!k || typeof window === "undefined" || !window._sb) return;
+  if(!forcar && _EVP_MIC_ST.falas[k] !== undefined) return;
+  _EVP_MIC_ST.falas[k] = null; let feito = false;
+  setTimeout(function(){ if(!feito && _EVP_MIC_ST.falas[k] === null) _evpMicPor("falas", k, { mics:{}, erro:"sem resposta" }); }, 8000);
+  const fim = function(v){ feito = true; _evpMicPor("falas", k, v); };
+  try{ window._sb.rpc("criacao_mic_fala_ler", { p_task:k }).then(function(r){
+      if(r && r.error) fim({ mics:{}, erro:String(r.error.message || "erro"), falta:_evmrFaltaServidor(String(r.error.message || "") + " " + (r.error.code || ""), 0) });
+      else { const d = (r && r.data) || {}; fim(d.ok === false ? { mics:{}, erro:String(d.erro || "sem permissão") } : { mics:(d.mics && typeof d.mics === "object") ? d.mics : {} }); } },
+    function(e){ fim({ mics:{}, erro:String((e && e.message) || e) }); }); }catch(e){ fim({ mics:{}, erro:String((e && e.message) || e) }); }
+}
+/* roda a sincronização avisando o quadro (barra %, vídeo 12 de 50, ✓/⚠ por vídeo). o = { task, …o mesmo do _evpMicSincronizar } */
+async function _evpMicRodar(o){
+  const k = String(o.task || ""), ini = Date.now();
+  if(_EVP_MIC_ST.sinc[k] && _EVP_MIC_ST.sinc[k].rodando) throw new Error("o microfone já está sincronizando");
+  let st = { rodando:true, ini:ini, i:0, n:0, nome:"", feitos:[], fase:"abrindo", msg:"Começando…", modo:o.modo || "tudo" };
+  _evpMicPor("sinc", k, st);
+  try{
+    const r = await _evpMicSincronizar(Object.assign({}, o, {
+      aviso:function(x){ if(o.aviso) o.aviso(x); st = Object.assign({}, st, { msg:x }); _evpMicPor("sinc", k, st); },
+      progresso:function(pg){ st = Object.assign({}, st, pg); _evpMicPor("sinc", k, st); } }));
+    _evpMicPor("sinc", k, { rodando:false, ini:ini, fim:Date.now(), i:r.itens.length, n:r.itens.length, feitos:r.itens, falhas:r.falhas, naoAbriu:r.naoAbriu, modo:o.modo || "tudo" });
+    return r;
+  }catch(e){ _evpMicPor("sinc", k, { rodando:false, ini:ini, fim:Date.now(), erro:String((e && e.message) || e), feitos:st.feitos || [], modo:o.modo || "tudo" }); throw e; }
+}
+/* resumo do fim: "Microfone em 14 vídeos · 2 ficaram com o som da câmera" (função pura) */
+function _evpMicResumo(itens){
+  const L = Array.isArray(itens) ? itens : [], ok = L.filter(function(x){ return x && x.ok; }).length, nao = L.length - ok;
+  if(!L.length) return "";
+  return "Microfone em " + ok + (ok === 1 ? " vídeo" : " vídeos") + (nao ? " · " + nao + (nao === 1 ? " ficou" : " ficaram") + " com o som da câmera" : "");
+}
+/* "falta ~1 min" (função pura): ms desde o começo, quantos já foram e quantos são */
+function _evpMicFalta(ms, i, n){
+  if(!(i > 0) || !(n > i)) return ""; const s = ms / 1000 / i * (n - i);
+  return s < 50 ? "falta ~" + Math.max(5, Math.round(s / 5) * 5) + " s" : "falta ~" + Math.max(1, Math.round(s / 60)) + " min";
+}
+
 /* acha o encaixe. o = { p, mics, infoClipe, fala, so:{ clipes:Set de ids da linha } | null, de/ate (trecho do vídeo final), aviso(texto) }
-   Devolve { micro (novo p.micro), feitos, falhas:[texto], semMic:[nome] } */
+   Devolve { micro (novo p.micro), feitos, falhas:[texto], semMic:[nome] }
+   v30 (16/10/2026) (opcionais novos, quem já chamava continua igual): brutos:Set (só esses vídeos, nível bruto, junta no que já existe) ·
+   micFalas:{ [id do microfone]: { palavras:[{i,f,p}] } } (o lugar pelas palavras) · progresso({ fase, i, n, nome, feitos:[{ bruto, nome, ok, quando, motivo, como }] }).
+   Devolve também itens (o ✓/⚠ por vídeo) e naoAbriu:[{ id, nome, msg }]. */
 async function _evpMicSincronizar(o){
-  const p = o.p, calcC = _evpCalcular(p, o.fala || {}, null).clips, aviso = o.aviso || function(){}, pausa = function(){ return new Promise(function(r){ setTimeout(r, 0); }); };
+  const p = o.p, calcC = _evpCalcular(p, o.fala || {}, null).clips, aviso = o.aviso || function(){}, prog = o.progresso || function(){}, pausa = function(){ return new Promise(function(r){ setTimeout(r, 0); }); };
   const micro = _evpMicLimpo(Object.assign({}, p.micro || {}, { mics:o.mics, ativo:true })) || { ativo:true, mics:[], brutos:{}, clips:{} };
-  const bufs = {}, falhas = [], semMic = [];
-  for(const m of micro.mics){ aviso("Abrindo o áudio do microfone: " + m.nome); const b = await _evpAudio("mic:" + m.id, m.url);
-    if(!b){ falhas.push("não consegui abrir " + m.nome); continue; } if(b.duration > _EVP_MIC_MAX_SEG){ falhas.push(m.nome + " tem mais de 40 min: corte o áudio em partes"); continue; } m.dur = Math.round(b.duration * 100) / 100; bufs[m.id] = b; }
-  if(!Object.keys(bufs).length) return { micro:micro, feitos:0, falhas:falhas, semMic:semMic };
+  micro.sem = Object.assign({}, micro.sem || {});
+  const bufs = {}, falhas = [], semMic = [], naoAbriu = [], itens = [];
+  for(const m of micro.mics){
+    const lv = _EVP_MIC_LEVE[m.id] || {};
+    if(_evpMicGrande(m.id)){ const tx = _evpMicErroAbrir(m.nome, lv.tam, ""); falhas.push(tx); naoAbriu.push({ id:m.id, nome:m.nome, msg:tx }); continue; }   // v30 item 5: nem tenta baixar (o navegador não abre)
+    const url = _evpMicUrlAbrir(m.id, m.url), mm = _evpM("mic:" + m.id);
+    if(mm.audioErro && !mm.audio){ mm.audioProm = null; mm.audioErro = null; }       // v30: deu erro antes (internet, cópia leve nova) → tenta de novo
+    aviso("Abrindo o áudio do microfone: " + m.nome); prog({ fase:"abrindo", nome:m.nome, url:url });
+    const b = await _evpAudio("mic:" + m.id, url);
+    if(!b){ const tx = _evpMicErroAbrir(m.nome, lv.tam, mm.audioErro); falhas.push(tx); naoAbriu.push({ id:m.id, nome:m.nome, msg:tx }); continue; }
+    if(b.duration > _EVP_MIC_MAX_SEG){ falhas.push(m.nome + " tem mais de 40 min: corte o áudio em partes"); naoAbriu.push({ id:m.id, nome:m.nome, msg:m.nome + " tem mais de 40 min: corte o áudio em partes" }); continue; }
+    m.dur = Math.round(b.duration * 100) / 100; bufs[m.id] = b; }
+  if(!Object.keys(bufs).length){ micro.em = new Date().toISOString(); micro.falhas = falhas.slice(0, 30); if(!Object.keys(micro.sem).length) delete micro.sem;
+    prog({ fase:"fim", i:0, n:0, feitos:[] }); return { micro:micro, feitos:0, falhas:falhas, semMic:semMic, naoAbriu:naoAbriu, itens:itens }; }
   const parcial = !!(o.so || o.de != null);
-  const usa = calcC.filter(function(c){ if(!c.clipe || c.off) return false; if(o.so && !o.so.has(c.id)) return false; if(o.de != null && (c.t1 <= o.de || c.t0 >= o.ate)) return false; return true; });
+  const usa = calcC.filter(function(c){ if(!c.clipe || c.off) return false; if(o.brutos && !o.brutos.has(c.clipe)) return false; if(o.so && !o.so.has(c.id)) return false; if(o.de != null && (c.t1 <= o.de || c.t0 >= o.ate)) return false; return true; });
   const porBruto = {}; usa.forEach(function(c){ (porBruto[c.clipe] = porBruto[c.clipe] || []).push(c); });
+  const lista = Object.keys(porBruto), N = lista.length;
   let feitos = 0, i = 0; const em = new Date().toISOString();
-  for(const bid of Object.keys(porBruto)){
-    i++; const nomeB = (o.infoClipe[bid] || {}).nome || bid; aviso("Acertando o vídeo " + i + " de " + Object.keys(porBruto).length + " com o microfone: " + nomeB);
+  prog({ fase:"sincronizando", i:0, n:N, nome:"", feitos:[] });
+  for(const bid of lista){
+    i++; const nomeB = (o.infoClipe[bid] || {}).nome || bid; aviso("Acertando o vídeo " + i + " de " + N + " com o microfone: " + nomeB);
+    prog({ fase:"sincronizando", i:i - 1, n:N, nome:nomeB, feitos:itens.slice() });
     await pausa();
-    const cam = await _evpAudio(bid, _evAudioDe(o.infoClipe[bid] || {})); if(!cam){ falhas.push(nomeB + ": sem som para comparar"); continue; }
+    const cam = await _evpAudio(bid, _evAudioDe(o.infoClipe[bid] || {}));
+    if(!cam){ falhas.push(nomeB + ": sem som para comparar"); if(!parcial) micro.sem[bid] = "o som deste vídeo não abriu para comparar";   // v30 revisor N1: não tenta de novo a cada abertura (Ressincronizar tenta)
+      itens.push({ bruto:bid, nome:nomeB, ok:false, motivo:"o som deste vídeo não abriu para comparar" }); continue; }
     const fl = (o.fala || {})[bid] || null;
     const pedacos = parcial ? porBruto[bid].map(function(c){ let a = c.ini, b = c.fim; if(o.de != null){ const v = _evpNum(c.vel, 1) || 1; a = c.ini + Math.max(0, o.de - c.t0) * v; b = c.ini + (Math.min(c.t1, o.ate) - c.t0) * v; } return { c:c, a:a, b:b }; })
                             : [{ a:Math.min.apply(null, porBruto[bid].map(function(c){ return c.ini; })), b:Math.max.apply(null, porBruto[bid].map(function(c){ return c.fim; })) }];
-    // qual microfone tem este vídeo (o de encaixe mais forte)
-    let melhor = null;
-    for(const mid of Object.keys(bufs)){ const g = _evpMicGeral(cam, bufs[mid], Math.max(0, pedacos[0].a - 2), Math.min(cam.duration, pedacos[pedacos.length - 1].b + 2)); await pausa();
-      if(g && g.c >= _EVP_MIC.confMin && g.folga >= _EVP_MIC.folgaMin && (!melhor || g.c > melhor.g.c)) melhor = { mid:mid, g:g }; }
-    if(!melhor){ semMic.push(nomeB); continue; }
+    // qual microfone tem este vídeo: com palavras dos dois lados, o lugar vem pelas PALAVRAS (v30) e a onda só confirma ±6 s em volta; senão, a onda procura no áudio inteiro
+    let melhor = null, temPal = false, dicaAchada = null;
+    const a0 = Math.max(0, pedacos[0].a - 2), b0 = Math.min(cam.duration, pedacos[pedacos.length - 1].b + 2);
+    for(const mid of Object.keys(bufs)){
+      const pal = o.micFalas && o.micFalas[mid] && Array.isArray(o.micFalas[mid].palavras) ? o.micFalas[mid].palavras : null;
+      let dica = null; if(pal && pal.length && Array.isArray(fl) && fl.length){ temPal = true; const d = _evpMicDesvioFala(pal, fl); if(d && d.ok) dica = { off:d.off, raio:_EVP_MIC.dicaRaio }; }
+      if(dica){ dicaAchada = dicaAchada || dica; const g = _evpMicGeral(cam, bufs[mid], a0, b0, dica); await pausa();
+        if(g && g.c >= _EVP_MIC.dicaMin && (!melhor || 1 + g.c > melhor.nota)){ melhor = { mid:mid, g:g, como:"fala", dica:dica, nota:1 + g.c }; continue; } }
+      const g = _evpMicGeral(cam, bufs[mid], a0, b0); await pausa();
+      if(g && g.c >= _EVP_MIC.confMin && g.folga >= _EVP_MIC.folgaMin && (!melhor || g.c > melhor.nota)) melhor = { mid:mid, g:g, como:"onda", dica:null, nota:g.c }; }
+    if(!melhor){
+      const mot = dicaAchada ? "achei pelas palavras (aos " + _evpMicMMSS(a0 + dicaAchada.off) + " do microfone), mas a onda do som não confirmou"
+        : temPal ? "não achei nem pelas palavras nem pela onda do som" : "não achei no microfone (vídeo curto ou sem fala: transcrever o microfone ajuda)";
+      semMic.push(nomeB); if(!parcial) micro.sem[bid] = mot; itens.push({ bruto:bid, nome:nomeB, ok:false, motivo:mot }); continue; }
+    let okB = false, quando = "", motB = "";
     for(const pd of pedacos){
-      const e = _evpMicEncaixe(cam, bufs[melhor.mid], pd.a, pd.b, fl, parcial ? null : melhor.g); await pausa();
-      if(!e.ok){ falhas.push(nomeB + ": " + e.motivo); continue; }
+      const e = _evpMicEncaixe(cam, bufs[melhor.mid], pd.a, pd.b, fl, parcial ? null : melhor.g, melhor.dica); await pausa();
+      if(!e.ok){ falhas.push(nomeB + ": " + e.motivo); motB = e.motivo; continue; }
       const k = e.vel, A = e.off - (k - 1) * pd.a;
-      const reg = { mic:melhor.mid, A:Math.round(A * 10000) / 10000, B:Math.round((k - 1) * 1e6) / 1e6, c:e.conf, ruins:e.ruins.map(function(q){ return [q.t0, q.t1]; }), em:em };
+      const reg = { mic:melhor.mid, A:Math.round(A * 10000) / 10000, B:Math.round((k - 1) * 1e6) / 1e6, c:e.conf, ruins:e.ruins.map(function(q){ return [q.t0, q.t1]; }), em:em, como:melhor.como };
       if(parcial && pd.c){ micro.clips[pd.c.id] = reg; } else { micro.brutos[bid] = reg; porBruto[bid].forEach(function(c){ delete micro.clips[c.id]; }); }
-      feitos++;
+      if(!quando) quando = _evpMicMMSS(e.off + pd.a);
+      okB = true; feitos++;
     }
+    if(okB) delete micro.sem[bid]; else if(!parcial) micro.sem[bid] = motB || "não encaixou";
+    itens.push({ bruto:bid, nome:nomeB, ok:okB, quando:quando, motivo:okB ? "" : (motB || "não encaixou"), como:okB ? melhor.como : undefined, mic:melhor.mid });
   }
+  prog({ fase:"fim", i:N, n:N, nome:"", feitos:itens.slice() });
   micro.em = em; micro.falhas = falhas.concat(semMic.map(function(n){ return n + ": não está no áudio do microfone (fica o som da câmera)"; }));
-  return { micro:micro, feitos:feitos, falhas:falhas, semMic:semMic };
+  if(!Object.keys(micro.sem).length) delete micro.sem;
+  return { micro:micro, feitos:feitos, falhas:falhas, semMic:semMic, naoAbriu:naoAbriu, itens:itens };
+}
+/* v30 (16/10/2026) item 3: TRANSCREVER O MICROFONE (só no clique, custo antes) — o mesmo caminho do "Transcrever este vídeo" da Mesa:
+   WAV 16 kHz mono em pedaços de até 30 s (corta no silêncio), sobe no video-leituras e a video-roteiro {acao:"transcrever_mic"} ouve, em lotes de até 24.
+   Microfone já transcrito em parte → só manda o que falta. */
+const _EVP_MIC_USD_MIN = 0.006, _EVP_MIC_BRL_USD = 5.6;
+function _evpMicCustoLocal(seg){ return Math.max(0.01, Number(seg || 0) / 60 * _EVP_MIC_USD_MIN * _EVP_MIC_BRL_USD); }
+function _evpMicBRL(v){ return "R$ " + Number(v || 0).toFixed(2).replace(".", ","); }
+/* os trechos [a,b] que ainda faltam transcrever (função pura): partes = [[ini,fim]…] já feitas, em segundos do microfone; buraco < 1 s não conta */
+function _evpMicFaltam(dur, partes){
+  const L = (Array.isArray(partes) ? partes : []).map(function(x){ return [Number(x && x[0]), Number(x && x[1])]; }).filter(function(x){ return isFinite(x[0]) && isFinite(x[1]) && x[1] > x[0]; }).sort(function(x, y){ return x[0] - y[0]; });
+  const out = []; let pos = 0;
+  L.forEach(function(x){ if(x[0] - pos >= 1) out.push([Math.round(pos * 100) / 100, Math.round(x[0] * 100) / 100]); pos = Math.max(pos, x[1]); });
+  if(dur - pos >= 1) out.push([Math.round(pos * 100) / 100, Math.round(dur * 100) / 100]);
+  return out;
+}
+/* pedaços de até 30 s dentro dos trechos que faltam, cortando no silêncio entre 12 e 30 s (como o Editar com IA) — função pura sobre o pcm */
+function _evpMicPedacos(pcm, SR, faltam){
+  const out = [], B = Math.round(SR / 10), rms = function(a, b){ let s = 0; for(let i = a; i < b; i++) s += pcm[i] * pcm[i]; return Math.sqrt(s / Math.max(1, b - a)); };
+  (faltam || []).forEach(function(tr){
+    let pos = Math.max(0, Math.round(tr[0] * SR)); const fimT = Math.min(pcm.length, Math.round(tr[1] * SR));
+    while(fimT - pos >= SR * 0.5){
+      let fim;
+      if(fimT - pos <= 30 * SR) fim = fimT;
+      else { let melhor = pos + 30 * SR, menor = Infinity; for(let c = pos + 12 * SR; c + B <= pos + 30 * SR; c += B){ const r = rms(c, c + B); if(r < menor){ menor = r; melhor = c; } } fim = melhor; }
+      out.push({ ini:Math.round(pos / SR * 100) / 100, fim:Math.round(fim / SR * 100) / 100, i0:pos, i1:fim }); pos = fim;
+    }
+  });
+  return out;
+}
+/* o = { task, mic:{ id, url, nome }, partes, passo(texto, feitos, total) } → { ok, total, completo, custo_brl, pedacos } */
+async function _evpMicTranscrever(o){
+  const mic = o.mic, passo = o.passo || function(){}, lv = _EVP_MIC_LEVE[mic.id] || {};
+  if(_evpMicGrande(mic.id)) throw new Error(_evpMicErroAbrir(mic.nome, lv.tam, ""));
+  passo("Abrindo o áudio do microfone…", 0, 0);
+  const buf = await _evpAudio("mic:" + mic.id, _evpMicUrlAbrir(mic.id, mic.url));
+  if(!buf) throw new Error(_evpMicErroAbrir(mic.nome, lv.tam, (_evpM("mic:" + mic.id) || {}).audioErro));
+  passo("Preparando o áudio do microfone…", 0, 0);
+  const SR = 16000, off = new OfflineAudioContext(1, Math.max(1, Math.ceil(buf.duration * SR)), SR), src = off.createBufferSource();
+  src.buffer = buf; src.connect(off.destination); src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const ped = _evpMicPedacos(pcm, SR, _evpMicFaltam(buf.duration, o.partes));
+  if(!ped.length) return { ok:true, nada:true, pedacos:0 };
+  const bk = window._sb.storage.from("video-leituras"), pasta = "edicao/" + _evUuid() + "/", id8 = String(mic.id).replace(/[^A-Za-z0-9]/g, "").slice(0, 8) || "mic";
+  let feitos = 0, ult = null, custo = 0, falhou = 0;
+  for(let L = 0; L < ped.length; L += 24){
+    const lote = ped.slice(L, L + 24), audio = [];
+    for(let j = 0; j < lote.length; j++){
+      const kk = L + j + 1; passo("Enviando o áudio do microfone: " + kk + " de " + ped.length + " pedaços", feitos, ped.length);
+      const path = pasta + "mic_" + id8 + "_" + kk + ".wav";
+      const u = await bk.upload(path, _evWav(pcm.subarray(lote[j].i0, lote[j].i1), SR), { contentType:"audio/wav", upsert:false });
+      if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message || "") + ")" + (feitos ? ". O que já foi transcrito fica guardado." : ". Nada foi gasto."));
+      audio.push({ path:path, ini:lote[j].ini, fim:lote[j].fim });
+    }
+    passo("Transcrevendo o microfone: " + feitos + " de " + ped.length + " pedaços", feitos, ped.length);
+    const r = await _evmrChamar("video-roteiro", { acao:"transcrever_mic", task_id:String(o.task || ""), arquivo_id:String(mic.id), dur:Math.round(buf.duration * 100) / 100, audio:audio });
+    if(!r.ok) throw new Error(r.falta ? "falta publicar o servidor v30 (video-roteiro \"transcrever_mic\"). Nada foi gasto."
+      : "a transcrição parou no pedaço " + (feitos + 1) + " de " + ped.length + ": " + r.msg + (feitos ? " (o que já foi fica guardado: clique de novo para continuar)" : ""));
+    feitos += lote.length; ult = r.data || {}; custo += Number(ult.custo_brl || 0); if(Array.isArray(ult.falhas)) falhou += ult.falhas.length;   // v30: pedaço que falhou fica de fora (o próximo clique manda só ele)
+    passo("Transcrevendo o microfone: " + feitos + " de " + ped.length + " pedaços", feitos, ped.length);
+  }
+  return { ok:true, total:ult && ult.total, completo:!!(ult && ult.completo), custo_brl:custo, pedacos:ped.length, falhou:falhou };
 }
 /* os trechos do vídeo final que ficaram fora (> 1 quadro) — viram aviso "ressincronize de X a Y s" */
 function _evpMicRuins(p, calcC){
@@ -135954,29 +136222,99 @@ function _evpMicRuins(p, calcC){
 /* PAINEL (Áudio › Som do microfone) */
 function _EvpMicPainel({ p, mudar, infoClipe, fala, t, sel, tempo, calc }){
   const [rodando, setRodando] = useState(null), [de, setDe] = useState(""), [ate, setAte] = useState("");
+  const [micEsc, setMicEsc] = useState("");                                // v30 revisor G1: microfone escolhido para transcrever (com 2+ que abrem)
+  const st = _evpUsarMicSt(), tk = String((t && t.id) || "");            // v30 (16/10/2026) itens 1/3/5: progresso, palavras e transcrição do quadro do microfone
+  useEffect(function(){ if(tk && _evpPodeMicro() && _evpMicArquivos(t).length) _evpMicFalasLer(tk); }, [tk]);
   const arqs = _evpMicArquivos(t), ativo = _evpMicAtivo(p);
   if(!_evpPodeMicro() || (!arqs.length && !(p.micro && p.micro.mics && p.micro.mics.length))) return null;
-  const mics = arqs.length ? arqs.map(function(f){ return { id:String(f.id), url:f.url, nome:f.name || "microfone" }; }) : p.micro.mics;
+  const mics = arqs.length ? _evpMicDoCard(t) : p.micro.mics;
   const selClip = sel && sel.tipo === "clip" ? (calc.clips || []).find(function(c){ return c.id === sel.id; }) : null;
   const ruins = _evpMicRuins(p, calc.clips), nCom = (calc.clips || []).filter(function(c){ return c._mic; }).length;
+  const sinc = st.sinc[tk] || null, falas = st.falas[tk], tx = st.tx[tk] || null, ocupado = !!rodando || !!(sinc && sinc.rodando);
   const rodar = async function(opc){
-    if(rodando) return; setRodando("Começando…");
+    if(ocupado) return; setRodando("Começando…");
+    const soB = opc && opc.brutos ? Array.from(opc.brutos) : null;
     try{
-      const r = await _evpMicSincronizar(Object.assign({ p:p, mics:mics, infoClipe:infoClipe, fala:fala, aviso:setRodando }, opc || {}));
-      mudar(function(np){ np.micro = r.micro; });
-      const tx = r.feitos ? "Microfone sincronizado (" + r.feitos + (r.feitos > 1 ? " partes" : " parte") + "). O som da câmera ficou mudo." : "Não consegui sincronizar com o microfone.";
-      _evToast(r.feitos ? (r.falhas.length || r.semMic.length ? "warning" : "success") : "error", tx + (r.semMic.length ? " Sem microfone: " + r.semMic.slice(0, 3).join(", ") + "." : "") + (r.falhas.length ? " " + r.falhas[0] : ""));
+      const r = await _evpMicRodar(Object.assign({ task:tk, p:p, mics:mics, infoClipe:infoClipe, fala:fala, aviso:setRodando, micFalas:(falas && falas.mics) || null, modo:soB ? "faltam" : "tudo" }, opc || {}));
+      mudar(function(np){ np.micro = soB ? _evpMicJuntar(np.micro, r.micro, soB) : r.micro; });
+      const txt = r.feitos ? "Microfone sincronizado (" + r.feitos + (r.feitos > 1 ? " partes" : " parte") + "). O som da câmera ficou mudo."
+        : r.naoAbriu.length && r.naoAbriu.length >= mics.length ? r.naoAbriu[0].msg : "Não consegui sincronizar com o microfone.";
+      _evToast(r.feitos ? (r.falhas.length || r.semMic.length ? "warning" : "success") : "error", txt + (r.feitos && r.semMic.length ? " Sem microfone: " + r.semMic.slice(0, 3).join(", ") + "." : "") + (r.feitos && r.falhas.length ? " " + r.falhas[0] : ""));
     }catch(e){ _evToast("error", "Microfone: " + ((e && e.message) || e)); }
     setRodando(null);
   };
+  /* v30 (16/10/2026) item 3: 📝 Transcrever o microfone — custo antes (video-roteiro "estimar"), confirmação, lotes de até 24 pedaços com barra */
+  const escTx = _evpMicEscolherTx(mics, p.micro), micTx = (micEsc && escTx.abrem.find(function(m){ return m.id === micEsc; })) || escTx.mic, falaMic = micTx && falas && falas.mics ? falas.mics[micTx.id] || null : null;
+  const durMic = (function(){ const x = micTx && ((p.micro && p.micro.mics) || []).find(function(m){ return m.id === micTx.id; }); return Number((x && x.dur) || (falaMic && falaMic.dur) || 0); })();
+  const falta = Math.max(0, durMic - Number((falaMic && falaMic.segundos) || 0)), transcrito = !!(falaMic && (falaMic.completo || (durMic > 0 && falta < 2)));
+  const setTx = function(v){ _evpMicPor("tx", tk, v); };
+  const pedirTx = async function(){
+    if(!micTx || (tx && /estimando|indo/.test(tx.fase))) return;
+    setTx({ fase:"estimando", msg:"Vendo quanto custa…" });
+    try{
+      let seg = durMic; if(!(seg > 0)){ setTx({ fase:"estimando", msg:"Abrindo o áudio do microfone para medir…" });
+        if(_evpMicGrande(micTx.id)) throw new Error(_evpMicErroAbrir(micTx.nome, (_EVP_MIC_LEVE[micTx.id] || {}).tam, ""));
+        const b = await _evpAudio("mic:" + micTx.id, _evpMicUrlAbrir(micTx.id, micTx.url)); if(!b) throw new Error(_evpMicErroAbrir(micTx.nome, (_EVP_MIC_LEVE[micTx.id] || {}).tam, (_evpM("mic:" + micTx.id) || {}).audioErro)); seg = b.duration; }
+      // só o que FALTA (partes já transcritas vêm da leitura do banco)
+      const resta = _evpMicFaltam(seg, (falaMic && falaMic.partes) || []).reduce(function(a, x){ return a + (x[1] - x[0]); }, 0);
+      if(resta < 2){ setTx({ fase:"ok", msg:"O microfone já está transcrito: nada a pagar." }); _evpMicFalasLer(tk, true); return; }
+      const r = await _evmrChamar("video-roteiro", { acao:"estimar", task_id:tk, tipo:"transcrever_mic", arquivo_id:String(micTx.id), segundos:Math.round(resta) });
+      if(!r.ok){ setTx({ fase:"erro", msg:r.falta ? "Ainda não ligado: falta publicar o servidor v30 (video-roteiro \"transcrever_mic\"). Nada foi gasto." : r.msg }); return; }
+      const d = r.data || {};
+      if(d.pode === false){ setTx({ fase:"erro", msg:String(d.motivo || "não pode agora") }); return; }
+      if(d.completo === true){ setTx({ fase:"ok", msg:"O microfone já está transcrito: nada a pagar." }); _evpMicFalasLer(tk, true); return; }
+      setTx({ fase:"confirmar", seg:seg, resta:resta, custo:d.custo_estimado_brl != null ? Number(d.custo_estimado_brl) : _evpMicCustoLocal(resta), ja:Math.max(0, seg - resta), motivo:d.motivo ? String(d.motivo) : "" });
+    }catch(e){ setTx({ fase:"erro", msg:String((e && e.message) || e) }); }
+  };
+  const fazerTx = async function(){
+    if(!tx || tx.fase !== "confirmar" || !micTx) return;
+    setTx({ fase:"indo", msg:"Começando…", feitos:0, total:0 });
+    try{
+      const r = await _evpMicTranscrever({ task:tk, mic:micTx, partes:(falaMic && falaMic.partes) || [], passo:function(m, f, n){ setTx({ fase:"indo", msg:m, feitos:f, total:n }); } });
+      if(r.falhou) setTx({ fase:"erro", msg:r.falhou + " pedaço(s) do microfone não foram ouvidos (o resto ficou guardado" + (r.custo_brl ? ", custou " + _evpMicBRL(r.custo_brl) : "") + "). Clique de novo para mandar só esses." });
+      else setTx({ fase:"ok", msg:(r.nada ? "Nada faltava transcrever." : "Microfone transcrito" + (r.total ? " (" + Number(r.total).toLocaleString("pt-BR") + " palavras)" : "") + (r.custo_brl ? " · custou " + _evpMicBRL(r.custo_brl) : "") + ".") + " Agora o lugar de cada vídeo sai pelas palavras." });
+      _evpMicFalasLer(tk, true);
+    }catch(e){ setTx({ fase:"erro", msg:"Não transcreveu: " + ((e && e.message) || e) }); }
+  };
+  /* último resultado guardado no projeto: ✓ (minuto do microfone) e ⚠ (motivo) por vídeo */
+  const ult = (function(){ const m = p.micro; if(!m) return [];
+    const L = [], nomeDe = function(b){ return (infoClipe[b] || {}).nome || String(b).slice(0, 8); };
+    Object.keys(m.brutos || {}).forEach(function(b){ const e = m.brutos[b], cs = (calc.clips || []).filter(function(c){ return c.clipe === b; });
+      const i0 = cs.length ? Math.min.apply(null, cs.map(function(c){ return _evpNum(c.ini, 0); })) : 0;
+      L.push({ b:b, ok:true, nome:nomeDe(b), quando:_evpMicMMSS(_evpNum(e.A, 0) + (1 + _evpNum(e.B, 0)) * i0), como:e.como, naLinha:cs.length > 0 }); });
+    Object.keys(m.sem || {}).forEach(function(b){ if(!(m.brutos || {})[b]) L.push({ b:b, ok:false, nome:nomeDe(b), motivo:m.sem[b], naLinha:(calc.clips || []).some(function(c){ return c.clipe === b; }) }); });
+    return L.filter(function(x){ return x.naLinha; }); })();
+  const nSem = ult.filter(function(x){ return !x.ok; }).length;
   const N = function(v){ return String(v).replace(".", ","); };
+  const corOk = "#16a34a", corAv = "#d97706";
+  const linhaVid = function(x, k){ return (<div key={x.b || k} data-mic-vid={x.ok ? "ok" : "sem"} style={{display:"flex",gap:6,fontSize:11.5,lineHeight:1.4,padding:"2px 0"}}>
+    <span style={{color:x.ok ? corOk : corAv,fontWeight:800,flexShrink:0}}>{x.ok ? "✓" : "⚠"}</span>
+    <span style={{minWidth:0,overflowWrap:"anywhere"}}><b style={{fontWeight:700}}>{x.nome}</b>{x.ok ? " · encaixou aos " + (x.quando || "—") + " do microfone" + (x.como === "fala" ? " (pelas palavras)" : "") : " · " + (x.motivo || "não achou") + " · fica o som da câmera"}</span></div>); };
+  const bar = function(pc){ return (<div style={{height:6,borderRadius:99,background:_EVP_COR.linha,overflow:"hidden",margin:"5px 0 4px"}}><div style={{width:Math.max(3, Math.min(100, pc)) + "%",height:"100%",background:_EVP_COR.roxoFixo,transition:"width .3s"}}/></div>); };
+  const prog = sinc && sinc.rodando ? sinc : null, fimS = sinc && !sinc.rodando && (sinc.feitos || sinc.naoAbriu || sinc.erro) ? sinc : null;
   return (<div data-mic-painel="1" style={{border:"1px solid " + _EVP_COR.linha,borderRadius:12,padding:"10px 10px 8px",background:_EVP_COR.faixa,marginTop:10}}>
     <div style={{fontWeight:800,fontSize:13,marginBottom:4}}>🎙️ Som do microfone</div>
     <div style={{fontSize:11.5,color:_EVP_COR.sub,lineHeight:1.45,marginBottom:6}}>{mics.map(function(m){ return m.nome; }).join(", ")} · {ativo ? nCom + " clipe(s) com o som do microfone (a câmera fica muda)" : "o vídeo usa o som da câmera"}</div>
-    {rodando ? <div data-mic-rodando="1" style={{fontSize:12,color:_EVP_COR.roxo,fontWeight:700}}>{rodando}</div> : (<div style={{display:"flex",flexDirection:"column",gap:6}}>
+    {prog ? (<div data-mic-progresso="1" role="status" style={{fontSize:12,lineHeight:1.4}}>
+      <div style={{color:_EVP_COR.roxo,fontWeight:700}}>{prog.fase === "abrindo" || !prog.n ? (prog.msg || "Abrindo o áudio do microfone…") : "Sincronizando: vídeo " + Math.min(prog.n, prog.i + 1) + " de " + prog.n}
+        {prog.n && prog.i ? <span style={{color:_EVP_COR.sub,fontWeight:500}}> · {_evpMicFalta(Date.now() - prog.ini, prog.i, prog.n)}</span> : null}</div>
+      {bar(prog.n ? prog.i / prog.n * 100 : 4)}
+      {prog.nome && <div style={{fontSize:11,color:_EVP_COR.fraco}}>agora: {prog.nome} · pode continuar mexendo na edição</div>}
+      {(prog.feitos || []).length > 0 && <div style={{maxHeight:150,overflowY:"auto",marginTop:4}}>{prog.feitos.slice().reverse().map(linhaVid)}</div>}
+    </div>) : rodando ? <div data-mic-rodando="1" style={{fontSize:12,color:_EVP_COR.roxo,fontWeight:700}}>{rodando}</div> : (<div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {fimS && (<div data-mic-resumo="1" style={{fontSize:12,lineHeight:1.45,padding:"6px 8px",borderRadius:9,background:_EVP_COR.campo,border:"1px solid " + _EVP_COR.linha}}>
+        {(fimS.naoAbriu || []).map(function(x){ return <div key={x.id} data-mic-nao-abriu="1" style={{color:corAv,fontWeight:700}}>⚠ {x.msg}</div>; })}
+        {fimS.erro && <div style={{color:corAv,fontWeight:700}}>⚠ {fimS.erro}</div>}
+        {(fimS.feitos || []).length > 0 && <div style={{fontWeight:800}}>{_evpMicResumo(fimS.feitos)}</div>}
+        {(fimS.feitos || []).filter(function(x){ return !x.ok; }).slice(0, 4).map(function(x){ return <div key={x.bruto} style={{fontSize:11,color:_EVP_COR.sub}}>⚠ {x.nome}: {x.motivo}</div>; })}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:5}}>
+          <button data-mic-acao="ressinc" onClick={function(){ rodar(null); }} style={Object.assign(_evpBtn("suave"), { padding:"4px 10px", fontSize:11.5 })}>Ressincronizar</button>
+          {(fimS.feitos || []).some(function(x){ return !x.ok; }) && micTx && !transcrito && <button data-mic-acao="tx-dica" onClick={pedirTx} style={Object.assign(_evpBtn(), { padding:"4px 10px", fontSize:11.5, textAlign:"left", whiteSpace:"normal", maxWidth:"100%", height:"auto" })}>📝 Transcrever o microfone ajuda a achar os vídeos curtos</button>}
+          <button onClick={function(){ _evpMicPor("sinc", tk, null); }} aria-label="Fechar o resumo" style={Object.assign(_evpBtn("icone"), { padding:4, marginLeft:"auto" })}><_EvpIco n="fechar" s={12}/></button></div>
+      </div>)}
       <button data-mic-acao="tudo" onClick={function(){ rodar(null); }} style={Object.assign(_evpBtn(ativo ? "suave" : "primario"), { width:"100%", justifyContent:"center" })}>{ativo ? "Ressincronizar tudo" : "Sincronizar e usar o microfone"}</button>
       {ativo && selClip && <button data-mic-acao="clipe" onClick={function(){ rodar({ so:new Set([selClip.id]) }); }} style={Object.assign(_evpBtn("suave"), { width:"100%", justifyContent:"center" })}>Ressincronizar o clipe selecionado</button>}
-      {ativo && <div style={{display:"flex",gap:4,alignItems:"center",fontSize:11.5}}>
+      {ativo && <div style={{display:"flex",gap:4,alignItems:"center",fontSize:11.5,flexWrap:"wrap"}}>
         <span>Trecho de</span><input data-mic-de="1" value={de} onChange={function(e){ setDe(e.target.value); }} placeholder={N(Math.max(0, Math.round((tempo || 0) - 5)))} style={Object.assign({}, _EVP_CAMPO_K, { width:52 })}/>
         <span>a</span><input data-mic-ate="1" value={ate} onChange={function(e){ setAte(e.target.value); }} placeholder={N(Math.round((tempo || 0) + 5))} style={Object.assign({}, _EVP_CAMPO_K, { width:52 })}/><span>s</span>
         <button data-mic-acao="trecho" onClick={function(){ const a = Number(String(de || Math.max(0, Math.round((tempo || 0) - 5))).replace(",", ".")), b = Number(String(ate || Math.round((tempo || 0) + 5)).replace(",", "."));
@@ -135985,9 +136323,84 @@ function _EvpMicPainel({ p, mudar, infoClipe, fala, t, sel, tempo, calc }){
       {!ativo && p.micro && p.micro.brutos && Object.keys(p.micro.brutos).length > 0 && <button data-mic-acao="religar" onClick={function(){ mudar(function(np){ np.micro.ativo = true; }); }} style={Object.assign(_evpBtn(), { width:"100%", justifyContent:"center", fontSize:11.5 })}>Usar o microfone de novo</button>}
     </div>)}
     {ativo && ruins.length > 0 && <div data-mic-ruins="1" style={{marginTop:8,fontSize:11.5,color:_EVP_COR.aviso}}>⚠️ Confira o encaixe: {ruins.map(function(r){ return (<button key={r.t0} onClick={function(){ setDe(N(r.t0)); setAte(N(r.t1)); }} style={{border:"none",background:"none",color:_EVP_COR.roxo,cursor:"pointer",textDecoration:"underline",fontSize:11.5,padding:"0 3px"}}>{N(r.t0) + "–" + N(r.t1) + " s"}</button>); })}</div>}
-    {p.micro && Array.isArray(p.micro.falhas) && p.micro.falhas.length > 0 && <div style={{marginTop:6,fontSize:11,color:_EVP_COR.fraco}}>{p.micro.falhas.slice(0, 3).join(" · ")}</div>}
+    {!prog && ult.length > 0 && <details data-mic-ultimo="1" style={{marginTop:8}} open={nSem > 0 && ult.length <= 6}>
+      <summary style={{cursor:"pointer",fontSize:11.5,fontWeight:700,color:_EVP_COR.sub}}>Vídeo por vídeo ({ult.length - nSem} com microfone{nSem ? " · " + nSem + " com o som da câmera" : ""})</summary>
+      <div style={{maxHeight:180,overflowY:"auto",marginTop:4}}>{ult.map(linhaVid)}</div></details>}
+    {/* v30 (16/10/2026) item 3: transcrever o microfone (só no clique, custo antes) */}
+    {!micTx && escTx.motivo && <div data-mic-tx-nao="1" style={{marginTop:8,paddingTop:8,borderTop:"1px dashed " + _EVP_COR.linha,fontSize:11.5,lineHeight:1.45,color:corAv}}>📝 Transcrever o microfone: {escTx.motivo}</div>}{/* v30 revisor G1 */}
+    {micTx && (<div data-mic-tx="1" style={{marginTop:8,paddingTop:8,borderTop:"1px dashed " + _EVP_COR.linha,fontSize:11.5,lineHeight:1.45}}>
+      {escTx.abrem.length > 1 && (!tx || /erro|ok/.test(tx.fase)) && <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:5,flexWrap:"wrap"}}><span style={{color:_EVP_COR.sub}}>Microfone:</span>
+        <select data-mic-tx-escolher="1" value={micTx.id} onChange={function(e){ setMicEsc(e.target.value); setTx(null); }} style={Object.assign({}, _EVP_CAMPO_K, { flex:"1 1 160px", minWidth:0 })}>
+          {escTx.abrem.map(function(m){ return <option key={m.id} value={m.id}>{_evpMicNomeCurto(m.nome)}</option>; })}</select></div>}{/* v30 revisor G1: 2+ que abrem → a pessoa escolhe */}
+      {transcrito && (!tx || tx.fase === "ok") ? <div data-mic-tx-pronto="1" style={{color:_EVP_COR.sub}}>✓ Microfone transcrito{falaMic && Array.isArray(falaMic.palavras) ? " (" + falaMic.palavras.length.toLocaleString("pt-BR") + " palavras)" : ""}: o lugar de cada vídeo sai pelas palavras e a onda afina.</div>
+      : (!tx || tx.fase === "erro" || tx.fase === "ok") ? <button data-mic-acao="transcrever" onClick={pedirTx} title="Ouve o microfone uma vez (IA de fala) e acha cada vídeo pelas mesmas palavras — ajuda os vídeos curtos" style={Object.assign(_evpBtn(), { width:"100%", justifyContent:"center", fontSize:11.5 })}>
+          📝 Transcrever o microfone{durMic > 0 ? " (≈ " + _evpMicBRL(_evpMicCustoLocal(falta || durMic)) + ")" : ""}{falaMic && Number(falaMic.segundos) > 0 && !transcrito ? " · continuar de onde parou" : ""}</button> : null}
+      {tx && tx.fase === "estimando" && <div style={{color:_EVP_COR.sub}}>{tx.msg || "Vendo quanto custa…"}</div>}
+      {tx && tx.fase === "confirmar" && <div data-mic-tx-confirmar="1" role="alertdialog" style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(234,179,8,.55)",background:_EVP_COR.aviso,fontSize:12}}>
+        <b>Transcrever o microfone?</b> Custa uns {_evpMicBRL(tx.custo)} ({Math.max(1, Math.round((tx.resta || tx.seg) / 60))} min de áudio{tx.ja >= 2 ? "; o que já foi transcrito não paga de novo" : ""}; conta no teto de gasto do vídeo).{tx.motivo ? " " + tx.motivo : ""}
+        <div style={{display:"flex",gap:8,marginTop:7,flexWrap:"wrap"}}>
+          <button data-mic-tx-sim="1" onClick={fazerTx} style={Object.assign(_evpBtn("primario"), {flex:"1 1 120px",justifyContent:"center"})}>Sim, transcrever</button>
+          <button onClick={function(){ setTx(null); }} style={Object.assign(_evpBtn(), {flex:"1 1 80px",justifyContent:"center"})}>Não</button></div></div>}
+      {tx && tx.fase === "indo" && <div data-mic-tx-indo="1" role="status"><div style={{color:_EVP_COR.roxo,fontWeight:700}}>{tx.msg}</div>{tx.total ? bar(tx.feitos / tx.total * 100) : bar(3)}</div>}
+      {tx && (tx.fase === "erro" || (tx.fase === "ok" && !transcrito)) && <div data-mic-tx-msg={tx.fase} style={{marginTop:4,color:tx.fase === "erro" ? corAv : _EVP_COR.sub}}>{tx.msg}</div>}
+      {tx && tx.fase === "ok" && nSem > 0 && !ocupado && <button data-mic-acao="ressinc-sem" onClick={function(){ rodar({ brutos:new Set(ult.filter(function(x){ return !x.ok; }).map(function(x){ return x.b; })) }); }} style={Object.assign(_evpBtn("suave"), { width:"100%", justifyContent:"center", fontSize:11.5, marginTop:5 })}>Procurar de novo os {nSem} vídeo(s) sem microfone (pelas palavras)</button>}
+    </div>)}
+    {!fimS && p.micro && Array.isArray(p.micro.falhas) && p.micro.falhas.length > 0 && <div style={{marginTop:6,fontSize:11,color:_EVP_COR.fraco}}>{p.micro.falhas.slice(0, 3).join(" · ")}</div>}
   </div>);
 }
+
+/* v30 (16/10/2026) item 1/5: FAIXA DO MICROFONE no Estúdio — "🎙️ Carregando o áudio do microfone: 23 de 50 MB (46%)" com barra; o play que espera;
+   a sincronização com "vídeo 12 de 50 · falta ~1 min"; o áudio que não abriu (com o motivo certo). No celular fica numa linha só (toque abre). */
+function _evpMicCarga(mics){
+  let rec = 0, tot = 0, todosAbertos = true, baixando = false, chegou = false;
+  (mics || []).forEach(function(x){ const u = _evpMicUrlAbrir(x.id, x.url), pg = _evProg[u], m = _evpMidia["mic:" + x.id] || {};
+    if(pg){ rec += pg.rec || 0; tot += pg.tot || 0; if(!pg.tot || pg.rec < pg.tot) baixando = true; else chegou = true; }
+    if(!m.audio) todosAbertos = false; });
+  const pc = tot > 0 ? Math.min(99, Math.floor(rec * 100 / tot)) : null;
+  return { rec:rec, tot:tot, pc:pc, fase:todosAbertos ? "preparando" : baixando ? "baixando" : chegou ? "lendo" : "abrindo" };
+}
+function _EvpMicFaixa({ task, mics, carregando, falhou, quer, isMob, onSemEsperar, onCancelar, erro }){
+  const st = _evpUsarMicSt(), sinc = st.sinc[String(task || "")] || null, rodando = !!(sinc && sinc.rodando);
+  const [, setTick] = useState(0), [mostrar, setMostrar] = useState(false), [aberto, setAberto] = useState(false), [fechou, setFechou] = useState("");
+  useEffect(function(){ if(!carregando && !rodando) return; const iv = setInterval(function(){ setTick(function(n){ return n + 1; }); }, 400); return function(){ clearInterval(iv); }; }, [carregando, rodando]);
+  useEffect(function(){ if(!carregando){ setMostrar(false); return; } const tm = setTimeout(function(){ setMostrar(true); }, 700); return function(){ clearTimeout(tm); }; }, [carregando]);   // trocas rápidas (já guardado) não piscam
+  const mb = function(b){ const m = Math.max(0, b / 1048576); return m < 10 ? m.toLocaleString("pt-BR", { maximumFractionDigits:1, minimumFractionDigits:1 }) : Math.round(m).toLocaleString("pt-BR"); };   // MB como o card mostra
+  const caixa = function(cor, filhos, extra){ return (<div data-mic-faixa={extra} role="status" style={Object.assign({}, _EVP_PAINEL, { padding:isMob ? "5px 9px" : "7px 12px", display:"flex", flexDirection:"column", gap:3, fontSize:isMob ? 11.5 : 12.5, fontWeight:600, flexShrink:0, borderColor:cor })}>{filhos}</div>); };
+  const barra = function(pc){ return (<div style={{height:isMob ? 4 : 5,borderRadius:99,background:_EVP_COR.linha,overflow:"hidden"}}><div data-mic-barra={pc == null ? "" : String(pc)} style={{width:(pc == null ? 8 : Math.max(3, pc)) + "%",height:"100%",background:_EVP_COR.roxoFixo,transition:"width .35s"}}/></div>); };
+  if(rodando){
+    const n = sinc.n || 0, i = sinc.i || 0, falta = n ? _evpMicFalta(Date.now() - sinc.ini, i, n) : "";
+    const tx = !n ? (sinc.msg || "Abrindo o áudio do microfone…") : "🎙️ Sincronizando o microfone: vídeo " + Math.min(n, i + 1) + " de " + n + (falta ? " · " + falta : "");
+    const ok = (sinc.feitos || []).filter(function(x){ return x.ok; }).length, nao = (sinc.feitos || []).length - ok;
+    return caixa("rgba(139,92,246,.45)", [<div key="t" style={{display:"flex",gap:8,alignItems:"center"}}><span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:isMob ? "nowrap" : "normal"}}>{tx}</span>
+        {!isMob && (ok || nao) ? <span style={{fontSize:11.5,color:_EVP_COR.sub,fontWeight:500,whiteSpace:"nowrap"}}>✓ {ok}{nao ? " · ⚠ " + nao : ""}</span> : null}</div>,
+      <div key="b">{barra(n ? Math.round(i * 100 / n) : null)}</div>,
+      !isMob && <div key="d" style={{fontSize:11,color:_EVP_COR.fraco,fontWeight:500}}>Pode continuar mexendo · vídeo por vídeo em Áudio › Som do microfone</div>], "sinc");
+  }
+  if(falhou){
+    const x = (mics || []).find(function(m){ return _evpMicGrande(m.id) || (_evpMidia["mic:" + m.id] || {}).audioErro; }) || (mics || [])[0]; if(!x) return null;
+    const lv = _EVP_MIC_LEVE[x.id] || {}, aErr = (_evpMidia["mic:" + x.id] || {}).audioErro;
+    const msg = _evpMicGrande(x.id) || aErr ? _evpMicErroAbrir(x.nome, lv.tam, aErr) : "Não consegui preparar o som do microfone" + (erro ? " (" + String(erro).slice(0, 90) + ")" : "") + ". Abra o Estúdio de novo para tentar.";   // v30 revisor N3
+    if(fechou === msg) return null;
+    return caixa("rgba(234,179,8,.55)", [<div key="t" style={{display:"flex",gap:8,alignItems:"flex-start"}}><span style={{flex:1,minWidth:0}}>🎙️ {msg}<span style={{color:_EVP_COR.sub,fontWeight:500}}> Enquanto isso, toca o som da câmera.</span></span>
+      <button onClick={function(){ setFechou(msg); }} aria-label="Fechar aviso" title="Fechar" style={Object.assign(_evpBtn("icone"), {padding:4})}><_EvpIco n="fechar" s={12}/></button></div>], "erro");
+  }
+  if(!carregando || (!mostrar && !quer)) return null;
+  const cg = _evpMicCarga(mics), pcTx = cg.pc != null ? " (" + cg.pc + "%)" : "";
+  const tx = cg.fase === "baixando" && cg.tot ? "🎙️ Carregando o áudio do microfone: " + mb(cg.rec) + " de " + mb(cg.tot) + " MB" + pcTx
+    : cg.fase === "baixando" ? "🎙️ Carregando o áudio do microfone: " + mb(cg.rec) + " MB"
+    : cg.fase === "preparando" ? "🎙️ Preparando o som do microfone (limpando a voz)…" : cg.fase === "lendo" ? "🎙️ O áudio do microfone chegou: abrindo…" : "🎙️ Abrindo o áudio do microfone…";
+  const curto = isMob && !aberto && !quer;
+  return caixa(quer ? "rgba(234,179,8,.6)" : "rgba(139,92,246,.45)", [
+    <div key="t" onClick={isMob ? function(){ setAberto(function(a){ return !a; }); } : undefined} style={{display:"flex",gap:8,alignItems:"center",cursor:isMob ? "pointer" : "default"}}>
+      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:curto ? "nowrap" : "normal"}}>{tx}</span>{isMob && !quer ? <span style={{color:_EVP_COR.fraco,fontSize:11}}>{aberto ? "▴" : "▾"}</span> : null}</div>,
+    <div key="b">{barra(cg.fase === "preparando" || cg.fase === "lendo" ? 99 : cg.pc)}</div>,
+    quer && <div key="q" data-mic-espera="1" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:2}}>
+      <span style={{flex:"1 1 220px",minWidth:0,color:_EVP_COR.ink}}>O som do microfone ainda está carregando{pcTx}… o vídeo começa a tocar sozinho quando chegar.</span>
+      <button data-mic-sem-esperar="1" onClick={onSemEsperar} style={Object.assign(_evpBtn(), {padding:"4px 10px",fontSize:11.5})}>Tocar sem esperar (som da câmera)</button>
+      <button onClick={onCancelar} style={Object.assign(_evpBtn("icone"), {padding:"4px 8px",fontSize:11.5})}>Cancelar</button></div>,
+    !curto && !quer && <div key="d" style={{fontSize:11,color:_EVP_COR.fraco,fontWeight:500}}>O vídeo usa o som do microfone de lapela: ele baixa uma vez por computador.</div>], quer ? "espera" : "carregando");
+}
+
 
 /* QUALIDADE (R$ 0): quadros pequenos (64×64) → luz, contraste, estouro, cor puxada, nitidez, cenas e "impressão digital" (repetidos) */
 function _evpNotaQuadros(datas){
@@ -142979,7 +143392,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       }
       const micBuf = {};                                                        // v88 F3: cada microfone é aberto e limpo UMA vez e serve a todos os clipes
       for(const n of micItens){
-        if(!(n._mic in micBuf)){ const a = await _evpAudio("mic:" + n._mic, n.url);
+        if(!(n._mic in micBuf)){ const a = _evpMicGrande(n._mic) ? null : await _evpAudio("mic:" + n._mic, _evpMicUrlAbrir(n._mic, n.url));   // v30 (16/10/2026) item 5: a cópia leve, se o PC já fez
           micBuf[n._mic] = a ? await _evpTratar("mic:" + n._mic, { ruido:!!p.audio.ruido, voz:!!p.audio.voz, eco:!!p.audio.eco, ecoForca:p.audio.ecoForca, nivelar:!!p.audio.nivelar,
             hum:p.audio.hum, cliques:!!p.audio.cliques, pops:!!p.audio.pops, eq:p.audio.eq }) : null;
           if(!micBuf[n._mic]) falhas.push("som do microfone"); }
@@ -143008,25 +143421,68 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       .then(function(){ vivo = false; setCam3d(null); });     // sempre libera (o próximo texto pendente começa)
   }, [cam3dPend.map(function(x){ return x.id; }).join(","), cam3d]);
   /* v88 F3: SOM DO MICROFONE — o card tem áudio (lapela, gravador, WhatsApp) e vídeos → sincroniza sozinho UMA vez e usa só o microfone
-     (chave criacao.som_microfone). Depois fica a decisão guardada no projeto (p.micro): ligado, ou desligado pela equipe. */
+     (chave criacao.som_microfone). Depois fica a decisão guardada no projeto (p.micro): ligado, ou desligado pela equipe.
+     v30 (16/10/2026) itens 1/3/8: depois da 1ª vez, sincroniza SOZINHO só os vídeos da linha do tempo que FALTAM (sem encaixe e fora de p.micro.sem),
+     e com microfone NOVO no card tenta de novo os de p.micro.sem. Microfone desligado pela equipe não religa. Usa as palavras do microfone (se já transcrito).
+     Grátis (sem IA). O progresso aparece na faixa do Estúdio e no painel Áudio › Som do microfone, sem travar a tela. */
   const [micSinc, setMicSinc] = useState(null);
-  const micPendente = !soVer && _evpPodeMicro() && _evpMicArquivos(t).length > 0 && !(p.micro && p.micro.em);
+  const micCard = useMemo(function(){ return _evpPodeMicro() ? _evpMicDoCard(t) : []; }, [t && t.files]);
+  const micBrutosLinha = useMemo(function(){ const u = {}; (calc.clips || []).forEach(function(c){ if(c && c.clipe && !c.off) u[c.clipe] = 1; }); return Object.keys(u); }, [calc]);
+  const micSt = _evpUsarMicSt(), micTk = String((t && t.id) || ""), micFalasSt = micSt.falas[micTk];
+  useEffect(function(){ if(micCard.length && !soVer) _evpMicFalasLer(micTk); }, [micTk, micCard.length, soVer]);
+  const micTentouRef = useRef({}), micVivoRef = useRef(true);
+  const [micRodadas, setMicRodadas] = useState(0);
+  useEffect(function(){ micVivoRef.current = true; return function(){ micVivoRef.current = false; }; }, []);
+  const micPlano = useMemo(function(){
+    const pl = _evpMicPlano(p, micCard, micBrutosLinha), T = micTentouRef.current;
+    if(pl.modo === "tudo") return T["*"] ? { modo:"nada", brutos:[] } : pl;
+    const L = pl.brutos.filter(function(b){ return !T[b]; }); return L.length ? Object.assign({}, pl, { brutos:L }) : { modo:"nada", brutos:[] };
+  }, [p.micro, micCard, micBrutosLinha.join(","), micRodadas]);
+  const micPendente = !soVer && _evpPodeMicro() && micPlano.modo !== "nada";
   const micAutoRef = useRef(false);
   useEffect(function(){
-    if(micAutoRef.current || soVer || !_evpPodeMicro() || tratandoAudio) return;
-    const arqs = _evpMicArquivos(t); if(!arqs.length || (p.micro && p.micro.em)) return;
-    micAutoRef.current = true; let vivo = true; setMicSinc("Achei o áudio do microfone: sincronizando…");
-    _evpMicSincronizar({ p:pRef.current, mics:arqs.map(function(f){ return { id:String(f.id), url:f.url, nome:f.name || "microfone" }; }), infoClipe:infoClipe, fala:falaEd || {},
-      aviso:function(x){ if(vivo) setMicSinc(x); } })
+    if(soVer || !_evpPodeMicro() || tratandoAudio || micSinc || micPlano.modo === "nada") return;
+    if(micFalasSt === undefined || micFalasSt === null) return;                       // v30: espera as palavras do microfone (1 leitura, até 8 s)
+    if(micSt.sinc[micTk] && micSt.sinc[micTk].rodando) return;
+    const plano = micPlano, mics = micCard, todo = plano.modo === "tudo", T = micTentouRef.current;
+    if(todo){ if(T["*"]) return; T["*"] = 1; } plano.brutos.forEach(function(b){ T[b] = 1; });
+    micAutoRef.current = true;
+    setMicSinc(todo ? "Achei o áudio do microfone: sincronizando…" : "Sincronizando o microfone só nos " + plano.brutos.length + " vídeo(s) que faltam…");
+    _evpMicRodar({ task:micTk, modo:plano.modo, p:pRef.current, mics:mics, infoClipe:infoClipe, fala:falaEd || {}, micFalas:(micFalasSt && micFalasSt.mics) || null,
+      brutos:todo ? null : new Set(plano.brutos), aviso:function(x){ if(micVivoRef.current) setMicSinc(x); } })
       .then(function(r){
-        mudar(function(np){ np.micro = Object.assign({}, r.micro, { ativo:r.feitos > 0 }); });
-        if(!pcAuto) _evToast(r.feitos ? "success" : "warning", r.feitos ? "🎙️ Usando o som do microfone (" + r.feitos + " parte(s)); a câmera ficou muda. Confira em Áudio › Som do microfone." : "Achei um áudio no card, mas ele não casa com os vídeos: fica o som da câmera.");
+        const mNovo = todo ? Object.assign({}, r.micro, { ativo:r.feitos > 0 }) : _evpMicJuntar(pRef.current.micro, r.micro, plano.brutos);
+        const igual = !todo && JSON.stringify(mNovo) === JSON.stringify(_evpMicLimpo(pRef.current.micro) || pRef.current.micro);   // v30 revisor N1: nada mudou → não mexe no projeto
+        if(!igual) mudar(function(np){ np.micro = todo ? mNovo : _evpMicJuntar(np.micro, r.micro, plano.brutos); });
+        if(!pcAuto && !igual){ const nSem = r.itens.filter(function(x){ return !x.ok; }).length, semAbrir = r.itens.filter(function(x){ return !x.ok && /não abriu/.test(x.motivo || ""); }).length;
+          _evToast(r.feitos ? (nSem ? "warning" : "success") : "warning", r.feitos ? "🎙️ " + (todo ? "Usando o som do microfone" : "Microfone sincronizado nos vídeos que faltavam") + ": " + _evpMicResumo(r.itens) + ". Confira em Áudio › Som do microfone."
+            : r.naoAbriu.length && r.naoAbriu.length >= mics.length ? r.naoAbriu[0].msg                // v30 item 5: não abriu ≠ não casa
+            : semAbrir && semAbrir === nSem ? "O som de " + semAbrir + " vídeo(s) não abriu para comparar com o microfone: fica o som da câmera (Ressincronizar tenta de novo)."   // v30 revisor N1
+            : todo ? "Achei um áudio no card, mas ele não casa com os vídeos: fica o som da câmera." : "Os vídeos que faltavam não estão no áudio do microfone: fica o som da câmera neles."); }
       })
       .catch(function(e){ console.warn("[microfone]", e);   // deu erro: fica o som da câmera e a decisão guardada (o PC não espera para sempre)
-        mudar(function(np){ np.micro = { ativo:false, mics:arqs.map(function(f){ return { id:String(f.id), url:f.url, nome:f.name || "microfone" }; }), brutos:{}, clips:{}, falhas:["erro ao sincronizar: " + String((e && e.message) || e).slice(0, 120)], em:new Date().toISOString() }; }); })
-      .then(function(){ if(vivo) setMicSinc(null); });
-    return function(){ vivo = false; };
-  }, [tratandoAudio, t && t.files, ed && ed.id]);
+        if(todo) mudar(function(np){ np.micro = { ativo:false, mics:mics.map(function(m){ return { id:m.id, url:m.url, nome:m.nome }; }), brutos:{}, clips:{}, falhas:["erro ao sincronizar: " + String((e && e.message) || e).slice(0, 120)], em:new Date().toISOString() }; }); })
+      .then(function(){ if(micVivoRef.current){ setMicSinc(null); setMicRodadas(function(n){ return n + 1; }); } });
+  }, [tratandoAudio, micPlano, micFalasSt, soVer, micSinc]);
+  /* v30 (16/10/2026) item 1: BARRA DE CARREGANDO o áudio do microfone e o play que ESPERA (nunca toca mudo calado).
+     Começa a baixar assim que o Estúdio abre. Play antes de chegar → avisa e toca sozinho quando chegar (ou "tocar sem esperar" = som da câmera).
+     Áudio que não abre → toca o som da câmera e a faixa diz por quê. */
+  const micUsados = useMemo(function(){ const u = {}, L = [];
+    (calc.narracoes || []).forEach(function(n){ if(n && n.micro && n._mic && !u[n._mic]){ u[n._mic] = 1; const m = ((p.micro && p.micro.mics) || []).find(function(x){ return x.id === n._mic; }); L.push({ id:n._mic, url:n.url, nome:(m && m.nome) || "microfone" }); } });
+    return L; }, [calc, p.micro]);
+  const micChave = micUsados.map(function(x){ return x.id + "@" + x.url; }).join("|");
+  useEffect(function(){ micUsados.forEach(function(x){ if(_evpMicGrande(x.id)) return; _evpAudio("mic:" + x.id, _evpMicUrlAbrir(x.id, x.url)).then(function(){}, function(){}); }); }, [micChave]);
+  const micNarrOk = (calc.narracoes || []).every(function(n){ return !(n && n.micro) || !!narr[n.id]; });
+  const micFalhou = micUsados.length > 0 && (micUsados.some(function(x){ return _evpMicGrande(x.id); }) || (!narrCarregando && /som do microfone/.test(String(narrFalha || "")))
+    || (!narrCarregando && !!narrFalha && !micNarrOk));     // v30 revisor N3: o tratamento do microfone deu erro (narrFalha "erro ao abrir: …") → aviso de erro e som da câmera, nunca "Carregando…" sem fim
+  const micCarregando = micUsados.length > 0 && !micNarrOk && !micFalhou;
+  const [micSemEsperar, setMicSemEsperar] = useState(false), [micQuer, setMicQuer] = useState(false);
+  useEffect(function(){ if(!micCarregando && micSemEsperar) setMicSemEsperar(false); }, [micCarregando]);   // v30 revisor N3: se o microfone falhar, o play que esperava toca com o som da câmera (efeito do play)
+  const micCamera = micUsados.length > 0 && (micFalhou || (micSemEsperar && micCarregando));
+  const calcMotor = useMemo(function(){ if(!micCamera) return calc; try{ return _evpCalcular(Object.assign({}, p, { micro:Object.assign({}, p.micro, { ativo:false }) }), falaEd, kitN); }catch(_){ return calc; } }, [calc, micCamera]);
+  const micSegura = function(){ if(!micCarregando || micSemEsperar) return false; setMicQuer(true); return true; };   // true = o play espera o microfone
+  const elMicFaixa = (micUsados.length > 0 || (micSt.sinc[micTk] && micSt.sinc[micTk].rodando)) ? <_EvpMicFaixa task={micTk} mics={micUsados} carregando={micCarregando} falhou={micFalhou} quer={micQuer} isMob={isMob} erro={narrFalha}
+      onSemEsperar={function(){ setMicSemEsperar(true); }} onCancelar={function(){ setMicQuer(false); }}/> : null;
   /* ao contrário: guarda os quadros do trecho (uma vez) */
   const [prepRev, setPrepRev] = useState({});
   const chaveRev = p.clips.filter(function(c){ return c.reverso; }).map(function(c){ return _evpChaveRev(c); }).join(",");
@@ -143081,7 +143537,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const chaveMotor = ed.id + "|" + (musicaUrl || "") + "|" + Object.keys(tratados).sort().join(",") + "|" + (p.formato || "9x16");
   useEffect(function(){
     const cv = cvRef.current; if(!cv) return;
-    const m = _evpMotor(cv, { calc:calc, projeto:p, kit:kit, base:base, clipes:clipes, original:false, logoUrl:_evLogoKit(kit, t.client), musicaUrl:musicaUrl, vozes:vozes, narr:narr, tratados:tratados,
+    const m = _evpMotor(cv, { calc:calcMotor, projeto:p, kit:kit,   // v30 (16/10/2026) item 1: calcMotor = o som da câmera enquanto o microfone não chega (só se a pessoa pediu "tocar sem esperar") ou se ele não abriu
+      base:base, clipes:clipes, original:false, logoUrl:_evLogoKit(kit, t.client), musicaUrl:musicaUrl, vozes:vozes, narr:narr, tratados:tratados,
       onTempo:function(tt, toc, esp){       // tocando: a tela (linha do tempo, painéis) atualiza 20×/s — o vídeo continua a 60
         const agora = performance.now(), ult = tempoUi.current;
         if(!toc || !ult.toc || agora - ult.em > 50 || !!esp !== ult.esp){ tempoUi.current = { em:agora, toc:toc, esp:!!esp }; setTempo(tt); setTocando(toc); setEsperando(!!esp); } },
@@ -143089,7 +143546,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     motorRef.current = m; m.seek(tempo); setVaMed(m.vocal && m.vocal.med);
     return function(){ m.destruir(); motorRef.current = null; };
   }, [chaveMotor, kit]);
-  useEffect(function(){ if(motorRef.current) motorRef.current.atualizar(calc, p, vozes, narr); }, [calc, vozes, narr]);
+  useEffect(function(){ if(motorRef.current) motorRef.current.atualizar(calcMotor, p, vozes, narr); }, [calcMotor, vozes, narr]);   // v30 (16/10/2026) item 1: calcMotor
+  /* v30 (16/10/2026) item 1: o play que esperava o microfone começa sozinho quando ele chega (depois do motor receber o som) */
+  useEffect(function(){ if(!micQuer || (micCarregando && !micSemEsperar)) return; setMicQuer(false);
+    const m = motorRef.current; if(m && !m.tocando){ m.play(); setTocando(true); } }, [micQuer, micCarregando, micSemEsperar, calcMotor, narr]);
   /* corte no ritmo: acha onde caem as batidas da música escolhida (uma vez por música) */
   useEffect(function(){
     const mu = p.musica; if(!mu || !musInfo || !musInfo.bpm || (mu.beat && mu.beat.bpm === musInfo.bpm && mu.beat.id === mu.id)) return;
@@ -143125,7 +143585,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const refazer = function(){ setRefaz(function(r){ if(!r.length) return r; const ult = r[r.length-1]; setDesf(function(d){ return d.concat([pRef.current]); }); setP(ult); return r.slice(0, -1); }); };
   const irPara = function(x){ const tt = _evClamp(x, 0, calc.total); if(motorRef.current) motorRef.current.seek(tt); setTempo(tt); };
   if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpIrPara = irPara;          // v78: só nos testes automáticos
-  const tocar = function(){ const m = motorRef.current; if(!m) return; if(m.tocando){ m.pause(); setTocando(false); } else { m.play(); setTocando(true); } };
+  const tocar = function(){ const m = motorRef.current; if(!m) return; if(m.tocando){ m.pause(); setTocando(false); } else { if(micQuer){ setMicQuer(false); return; } if(micSegura()) return; m.play(); setTocando(true); } };   // v30 (16/10/2026) item 1: espera o microfone
 
   /* v18: DIVIDIR A LEGENDA na agulha — a próxima palavra começa um pedaço novo (cada pedaço com cor e estilo próprios) */
   const dividirLegenda = function(){
@@ -143363,7 +143823,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(tirarTrechos(lst, "Trecho " + _evTempo(a) + "–" + _evTempo(b))){ setIo(null); setLoopIO(false); }
   };
   useEffect(function(){ if(loopIO && io && tocando && tempo >= io.b - 0.02) irPara(io.a); }, [tempo, loopIO, io, tocando]);
-  const tocarIO = function(){ if(!io){ _evToast("warning", "Marque a entrada (I) e a saída (O) primeiro."); return; } setLoopIO(true); irPara(io.a); const m = motorRef.current; if(m && !m.tocando){ m.play(); setTocando(true); } };
+  const tocarIO = function(){ if(!io){ _evToast("warning", "Marque a entrada (I) e a saída (O) primeiro."); return; } setLoopIO(true); irPara(io.a); const m = motorRef.current; if(m && !m.tocando){ if(micSegura()) return; m.play(); setTocando(true); } };   // v30 item 1
   const voltarAte = function(i){
     setDesf(function(d){ if(i < 0 || i >= d.length) return d; const alvo = d[i], futuros = d.slice(i + 1).concat([pRef.current]);
       setRefaz(function(r){ return r.concat(futuros.slice().reverse()); }); setP(alvo); return d.slice(0, i); });
@@ -143624,7 +144084,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const pararEmRef = useRef(null);
   const ouvirTrecho = function(t0, t1){          // leva ao trecho e toca; para sozinho no fim do trecho
     const m = motorRef.current, de = Math.max(0, t0 - 0.3); irPara(de); pararEmRef.current = { de:de, ate:t1 + 0.25 };
-    if(m && !m.tocando){ m.play(); setTocando(true); }
+    if(m && !m.tocando){ if(micSegura()) return; m.play(); setTocando(true); }   // v30 (16/10/2026) item 1: espera o microfone
   };
   useEffect(function(){
     const pe = pararEmRef.current; if(pe == null) return;
@@ -143952,7 +144412,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       else if(k === "ArrowRight"){ e.preventDefault(); irPara(tempo + (e.shiftKey ? 1 : 1/30)); }
       else if(k === "j" || k === "J"){ irPara(tempo - 2); }
       else if(k === "k" || k === "K"){ const m = motorRef.current; if(m && m.tocando){ m.pause(); setTocando(false); } }
-      else if(k === "l" || k === "L"){ const m = motorRef.current; if(m && !m.tocando){ m.play(); setTocando(true); } }
+      else if(k === "l" || k === "L"){ const m = motorRef.current; if(m && !m.tocando){ if(micSegura()) return; m.play(); setTocando(true); } }   // v30 item 1
       else if(k === "+" || k === "="){ setPxs(function(z){ return Math.min(400, z * 1.25); }); }
       else if(k === "-"){ setPxs(function(z){ return Math.max(6, z / 1.25); }); }
       else if(!ctl && !e.altKey && _EVP_FERR_TECLA[k.length === 1 ? k.toLowerCase() : k]){ e.preventDefault(); ferrGlobalClique(_EVP_FERR_TECLA[k.toLowerCase()]); }   // v41: 1 V A T G X (teclas livres)
@@ -144564,7 +145024,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
      começa (com aviso). O que é essencial (som da fala e narração) segura até 5 min e então falha COM O MOTIVO — antes ficava 10 min mudo
      e o PC desistia com "parou de responder", sem dizer por quê. */
   const pcFalta = (function(){ const e = [], r = [];
-    if(tratandoAudio) e.push("som da fala"); else if(!(t1Ok.base === vozesBase && t1Ok.chave === chaveT1)) e.push("voz por palavra");   // v94 (10/10/2026) T1 if(narrCarregando || narrChaveOk.current !== chaveNarr) e.push("narração");
+    if(tratandoAudio) e.push("som da fala"); else if(!(t1Ok.base === vozesBase && t1Ok.chave === chaveT1)) e.push("voz por palavra");   // v94 (10/10/2026) T1
+    if(narrCarregando || narrChaveOk.current !== chaveNarr) e.push("narração");   // v30 (16/10/2026) item 1: esta conta tinha ficado DENTRO do comentário da v94 (o PC podia gravar antes da narração/microfone chegar)
     if(micSinc || micPendente) e.push("sincronizar o microfone");   // v88 F3: nada de gravar com a câmera e trocar para o microfone no meio
     if(cam3d || (p.imagens || []).some(function(x){ return x && x.camada === "texto3d" && x.cam && x.cam.pendente && !x.off; })) e.push("rastrear a câmera (texto 3D)");   // v88 F4
     if(!dicPronto) r.push("dicionário do cliente"); const nA = Object.keys(analisando).length; if(nA) r.push("medir tremido (" + nA + ")");
@@ -144634,11 +145095,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:"center",justifyContent:"center",padding:16}}>
         <div ref={expRef} style={{width:"min(620px, 100%)",maxHeight:"90vh",overflow:"auto",position:"relative"}}>
           <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
-          <_EvExportar t={t} ed={ed} projeto={p} calc={calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
+          <_EvExportar t={t} ed={ed} projeto={p} calc={micFalhou ? calcMotor : calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
             vozesTratadas={vozes} vozPalavra={vozPalavra} tirarTrechos={tirarTrechos} fala={falaEd} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
             onFeito={function(){ if(onRecarregar) onRecarregar(); }} isMob={isMob} pcAuto={pcAuto}
-            narrFalha={narrFalha} onExportou={function(){ /* v92 (08/10/2026) lembrete de ensinar: avisa ao exportar */ lembrarEnsinar("exportar"); }}
+            narrFalha={narrFalha} /* v30 (16/10/2026) item 5: microfone que não abriu → grava com o som da câmera (nunca mudo) */ onExportou={function(){ /* v92 (08/10/2026) lembrete de ensinar: avisa ao exportar */ lembrarEnsinar("exportar"); }}
             prontoPC={!!pcAuto && !pcFalta.essencial.length && (!pcFalta.resto.length || pcForcar)}/>
         </div>
       </div>
@@ -144673,6 +145134,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <button onClick={function(){ setVerExp(true); }} aria-label="Exportar" style={Object.assign(_evpBtn("verde"), {padding:"8px 10px",marginLeft:4})}><_EvpIco n="exportar" s={16}/></button>
         </div>
         {elNovos && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elNovos}</div>}
+        {elMicFaixa && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elMicFaixa}</div>}{/* v30 (16/10/2026) item 1 */}
         {elConferir && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elConferir}</div>}{/* v92 (08/10/2026) dúvidas da fala */}
         {/* vídeo */}
         <div ref={palcoRef} style={{flex:"1 1 auto",minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative",background:_EVP_COR.palco}}>
@@ -144796,6 +145258,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <div style={{position:"absolute",top:0,left:0,right:0,maxHeight:"62vh",overflowY:"auto",borderRadius:14,boxShadow:"0 18px 50px rgba(15,10,40,.28)"}}>
             <_EvpResumoIA ed={ed} p={p} calc={calc} irPara={irPara} modo="painel" aberto={true} alternar={alternarResumo}/></div></div>)}
       {elNovos}{/* v71d */}
+      {elMicFaixa}{/* v30 (16/10/2026) item 1: carregando / sincronizando o microfone */}
       {elConferir}{/* v92 (08/10/2026) dúvidas da fala */}
       {outros.length > 0 && <div data-presenca="1" role="status" style={Object.assign({}, _EVP_PAINEL, {padding:"6px 12px",display:"flex",gap:8,alignItems:"center",fontSize:12.5,fontWeight:600,flexShrink:0,borderColor:"rgba(234,179,8,.55)",background:_EVP_COR.aviso})}>
         <span style={{color:_EVX.amarelo}}><_EvpIco n="pessoa" s={16}/></span>
@@ -144916,20 +145379,56 @@ function _EvpModeloIA({ ocupado }){
 }
 
 /* ─── v20: CONVERSA — cada pedido à IA, o que ela respondeu, o que mudou de verdade, modelo e custo; voltar com um clique ─── */
+/* v30 (16/10/2026) item 7: "Nada mudou no projeto" numa v3 que MUDOU (Starken: o 1º clipe trocou de 84,34–101,08 para 114,85–119,78).
+   Por quê: a RPC criacao_edicao manda as versões SEM a receita ({n, pedido, em, por}) → a conta comparava vazio com vazio. Agora a Conversa lê os projetos
+   das versões (RPC criacao_edicao_versoes_mudou, só leitura, 1 vez) e, sem eles, diz "não consegui comparar" (nunca mais "nada mudou" sem saber).
+   O resumo diz o que mudou de verdade: "Mudou: o começo (gancho) e 2 cortes" (função pura). */
+function _evpMudouResumo(a, b){
+  if(!a || !b) return null;
+  const ca = Array.isArray(a.clips) ? a.clips : [], cb = Array.isArray(b.clips) ? b.clips : [];
+  const igual = function(x, y){ return !!x && !!y && x.clipe === y.clipe && Math.abs((Number(x.ini) || 0) - (Number(y.ini) || 0)) <= 0.05 && Math.abs((Number(x.fim) || 0) - (Number(y.fim) || 0)) <= 0.05; };
+  const partes = [], gancho = (ca.length > 0 || cb.length > 0) && !igual(ca[0], cb[0]);
+  if(gancho) partes.push("o começo (gancho)");
+  const ra = gancho ? ca.slice(1) : ca, rb = gancho ? cb.slice(1) : cb;
+  const novos = rb.filter(function(y){ return !ra.some(function(x){ return igual(x, y); }); }).length, tirados = ra.filter(function(x){ return !rb.some(function(y){ return igual(x, y); }); }).length, nC = Math.max(novos, tirados);
+  if(nC) partes.push(nC + (nC > 1 ? " cortes" : " corte"));
+  else if(ra.length === rb.length && ra.some(function(x, i){ return !igual(x, rb[i]); })) partes.push("a ordem dos cortes");
+  const NOME = [["Textos", "textos"], ["Imagens e apoio", "imagens e apoio"], ["Efeitos sonoros", "efeitos sonoros"], ["Narrações", "narração"], ["Legenda", "legenda"], ["Música", "música"], ["Volume da música", "música"],
+    ["Formato", "formato"], ["Abertura", "abertura"], ["Tela final", "tela final"], ["Logo", "logo"], ["Tratamento do áudio", "o áudio"], ["Mixer", "o mixer"], ["Cor em", "cor"], ["Transição em", "transições"],
+    ["Velocidade em", "velocidade"], ["Animação em", "animação"], ["Zoom em", "zoom"], ["Volume em", "volume"], ["Movimento em", "movimento"], ["Rampa", "rampa de velocidade"], ["Fundo em", "fundo"], ["Recorte em", "recorte"], ["Estabilização em", "estabilização"]];
+  _evpOQueMudou(a, b).forEach(function(l){ const k = NOME.find(function(q){ return l.indexOf(q[0]) === 0; }); if(k && partes.indexOf(k[1]) < 0) partes.push(k[1]); });
+  if(!partes.length) return null;
+  return "Mudou: " + (partes.length === 1 ? partes[0] : partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1]);
+}
 function _EvpConversa({ ed, onVoltarVersao }){
   const vs = (ed && ed.versoes) || [];
+  // v30 (16/10/2026) item 7: os projetos das versões (a lista que vem com a edição não traz a receita)
+  const precisa = vs.length > 1 && vs.slice(1).some(function(v){ return !(v && v.receita && v.receita.projeto); });
+  const [vproj, setVproj] = useState(null);     // null = lendo · { mapa:{ n: {projeto, modelo, custo_brl, explicacao} } } · { erro }
+  useEffect(function(){
+    if(!precisa || !ed || !ed.id || typeof window === "undefined" || !window._sb){ setVproj(null); return; }
+    let vivo = true; setVproj(null);
+    try{ window._sb.rpc("criacao_edicao_versoes_mudou", { p_id:ed.id }).then(function(r){ if(!vivo) return;
+        if(r && r.error){ setVproj({ erro:String(r.error.message || "erro") }); return; }
+        const d = (r && r.data) || {}, mapa = {}; (Array.isArray(d.versoes) ? d.versoes : []).forEach(function(x){ if(x && x.n != null) mapa[String(x.n)] = x; });
+        setVproj(d.ok === false ? { erro:String(d.erro || "erro") } : { mapa:mapa }); },
+      function(e){ if(vivo) setVproj({ erro:String((e && e.message) || e) }); }); }catch(e){ setVproj({ erro:String((e && e.message) || e) }); }
+    return function(){ vivo = false; };
+  }, [ed && ed.id, vs.length, precisa]);
   const itens = useMemo(function(){
-    const out = [];
+    const out = [], mapa = (vproj && vproj.mapa) || {};
+    const projDe = function(v){ return (v && v.receita && v.receita.projeto) || (v && mapa[String(v.n)] && mapa[String(v.n)].projeto) || null; };
     vs.forEach(function(v, i){
       if(i === 0) return;
       const ant = vs[i - 1], ped = String(v.pedido || "");
-      const manual = ped === "Edição manual na linha do tempo";
-      out.push({ n:v.n, ant:ant && ant.n, pedido:ped, manual:manual, por:v.por || "", em:v.em, modelo:v.modelo || "", custo:v.custo_brl, previa:!!v.previa,
-        explicacao:manual ? "" : String((v.receita && v.receita.explicacao) || ""),
-        mudou:_evpOQueMudou(ant && ant.receita && ant.receita.projeto, v.receita && v.receita.projeto) });
+      const manual = ped === "Edição manual na linha do tempo", x = mapa[String(v.n)] || {};
+      const pa = projDe(ant), pb = projDe(v), sabe = !!(pa && pb);
+      out.push({ n:v.n, ant:ant && ant.n, pedido:ped, manual:manual, por:v.por || "", em:v.em, modelo:v.modelo || x.modelo || "", custo:v.custo_brl != null ? v.custo_brl : x.custo_brl, previa:!!v.previa,
+        explicacao:manual ? "" : String((v.receita && v.receita.explicacao) || x.explicacao || ""),
+        mudou:sabe ? _evpOQueMudou(pa, pb) : [], resumo:sabe ? _evpMudouResumo(pa, pb) : null, sabe:sabe });
     });
     return out.slice(-8);
-  }, [vs.length, ed && ed.id]);
+  }, [vs.length, ed && ed.id, vproj]);
   const fim = useRef(null);
   useEffect(function(){ if(fim.current && fim.current.scrollIntoView) fim.current.scrollIntoView({ block:"nearest" }); }, [itens.length]);
   if(!itens.length) return <div style={{fontSize:11.5,color:_EVP_COR.fraco,margin:"2px 0 8px"}}>Converse com a IA: peça, veja o que ela mudou e volte se não gostar.</div>;
@@ -144947,8 +145446,10 @@ function _EvpConversa({ ed, onVoltarVersao }){
               {it.custo != null && <span style={{color:_EVP_COR.fraco,fontWeight:700}}>· R$ {Number(it.custo).toLocaleString("pt-BR", { minimumFractionDigits:2 })}</span>}
               {it.previa && <span style={{color:_EVP_COR.fraco,fontWeight:700}}>· aprovado na prévia</span>}</div>
             {it.explicacao && <div style={{color:_EVP_COR.ink}}>{it.explicacao}</div>}
+            {it.resumo && <div data-conversa-mudou="1" style={{marginTop:4,fontSize:12,fontWeight:700,color:_EVP_COR.ink}}>{it.resumo}</div>}{/* v30 (16/10/2026) item 7 */}
             {it.mudou.length > 0 && <ul style={{margin:"4px 0 0",paddingLeft:16,color:_EVP_COR.sub,fontSize:11.5}}>{it.mudou.slice(0, 8).map(function(m, k){ return <li key={k}>{m}</li>; })}</ul>}
-            {!it.mudou.length && <div style={{color:_EVP_COR.fraco,fontSize:11.5,marginTop:2}}>Nada mudou no projeto.</div>}
+            {it.sabe && !it.mudou.length && !it.resumo && <div style={{color:_EVP_COR.fraco,fontSize:11.5,marginTop:2}}>Nada mudou no projeto.</div>}
+            {!it.sabe && <div data-conversa-sem-comparar="1" style={{color:_EVP_COR.fraco,fontSize:11.5,marginTop:2}}>{precisa && vproj === null ? "Comparando com a versão anterior…" : "Não consegui comparar com a versão anterior" + (vproj && vproj.erro && _evmrFaltaServidor(vproj.erro, 0) ? " (falta publicar no banco a leitura das versões)" : "") + "."}</div>}
             {it.ant && <div style={{marginTop:6}}>
               <button onClick={function(){ onVoltarVersao(it.ant); }} title={"Volta para a versão " + it.ant + " (esta continua guardada nas versões)"}
                 style={Object.assign(_evpBtn(), {padding:"3px 9px",fontSize:11})}>{it.n === ultimo ? "Desfazer (voltar à v" + it.ant + ")" : "Voltar para antes deste (v" + it.ant + ")"}</button></div>}
