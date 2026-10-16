@@ -98431,39 +98431,71 @@ function _prodTranscreverNoWorker(audio, diz, minTot){
     const id="t"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     let avisou=false;
     w.__ouvintes[id]=function(d){
-      if(d.tipo==="baixando"){ diz("baixando o modelo de transcrição (só na 1ª vez) · "+Math.round(d.pct||0)+"%", 2+Math.round((d.pct||0)*0.12)); return; }
-      if(d.tipo==="progresso"){ avisou=true; const feito=Math.round(d.i*30/60); const pct=18+78*(d.i/d.n); diz("transcrevendo… "+Math.min(feito,minTot)+" de "+minTot+" min · "+Math.round(pct)+"%", pct); return; }
+      if(d.tipo==="baixando"){ diz("etapa 2 de 2 · baixando o modelo de transcrição (só na 1ª vez)…", 15+Math.round((d.pct||0)*0.03)); return; }
+      if(d.tipo==="progresso"){ avisou=true; const feito=Math.round(d.i*30/60); const pct=18+78*(d.i/d.n); diz("etapa 2 de 2 · transcrevendo… "+Math.min(feito,minTot)+" de "+minTot+" min", pct); return; }
       delete w.__ouvintes[id];
       if(d.tipo==="fim"){ res(String(d.texto||"")); } else { const er=new Error(d.msg||"worker falhou"); er.__semProgresso=!avisou; rej(er); }
     };
     try{ w.postMessage({tipo:"transcrever",id:id,audio:audio}); }catch(e){ delete w.__ouvintes[id]; rej(e); }
   });
 }
+/* (16/10/2026, Gustavo: "arrastei o arquivo [mkv de 1 GB], já começou em 12%.. q é isso")
+   O 12% era fixo: o decodeAudioData do navegador lê o ARQUIVO INTEIRO na memória (1 GB) e só depois devolve
+   o som — sem progresso e com risco de derrubar a aba. Agora a trilha de áudio sai pelo FFMPEG no navegador
+   (ffmpeg.wasm, num worker): ele lê o arquivo em pedaços direto do disco (WORKERFS — não copia o 1 GB pra
+   memória), joga fora o vídeo e devolve só o som em 16 kHz mono, com % de verdade.
+   Teste: mkv de 1,1 GB / 60 min → 54 s. O núcleo (32 MB) fica em /ffmpeg/ no próprio app (cacheado depois
+   da 1ª vez); se não carregar, tenta o jsdelivr; se nada der, cai no caminho antigo (decodeAudioData). */
+const _PROD_FFMPEG_WORKER_SRC='self.onmessage=async(e)=>{const d=e.data||{};try{let ok=false,ult="";for(const b of d.bases){try{importScripts(b+"ffmpeg-core.js");self.__b=b;ok=true;break;}catch(x){ult=String(x&&x.message||x);}}if(!ok)throw new Error("não carregou o ffmpeg ("+ult+")");self.postMessage({tipo:"carregando"});const M=await self.createFFmpegCore({mainScriptUrlOrBlob:self.__b+"ffmpeg-core.js#"+btoa(JSON.stringify({wasmURL:self.__b+"ffmpeg-core.wasm",workerURL:""}))});let dur=0,ultPct=-1;M.setLogger(function(l){const s=String((l&&l.message)||"");let m=s.match(/Duration:\\s*(\\d+):(\\d+):([\\d.]+)/);if(m&&!dur){dur=(+m[1])*3600+(+m[2])*60+(+m[3]);self.postMessage({tipo:"dur",dur:dur});}m=s.match(/time=\\s*(\\d+):(\\d+):([\\d.]+)/);if(m&&dur){const t=(+m[1])*3600+(+m[2])*60+(+m[3]);const p=Math.min(100,Math.round(100*t/dur));if(p!==ultPct){ultPct=p;self.postMessage({tipo:"prog",pct:p});}}});M.FS.mkdir("/in");M.FS.mount(M.FS.filesystems.WORKERFS,{files:[d.file]},"/in");M.exec("-nostdin","-i","/in/"+d.file.name,"-vn","-sn","-dn","-ac","1","-ar","16000","-f","s16le","/out.pcm");const ret=M.ret;let u8;try{u8=M.FS.readFile("/out.pcm");}catch(_){u8=new Uint8Array(0);}if(!u8.length)throw new Error("o ffmpeg não achou áudio no arquivo (código "+ret+")");const i16=new Int16Array(u8.buffer,u8.byteOffset,u8.byteLength>>1);const f=new Float32Array(i16.length);for(let i=0;i<i16.length;i++)f[i]=i16[i]/32768;self.postMessage({tipo:"fim",audio:f},[f.buffer]);}catch(err){self.postMessage({tipo:"erro",msg:String((err&&err.message)||err)});}};';
+function _prodExtrairAudioFfmpeg(file, diz){
+  if(typeof Worker==="undefined") return Promise.reject(new Error("sem worker"));
+  return new Promise(function(res,rej){
+    let w; try{ w=new Worker(URL.createObjectURL(new Blob([_PROD_FFMPEG_WORKER_SRC],{type:"text/javascript"}))); }catch(e){ return rej(e); }
+    const mb=Math.round((file.size||0)/1024/1024);
+    let minTot=0;
+    w.onmessage=function(m){ const d=m.data||{};
+      if(d.tipo==="carregando"){ diz("preparando a extração do áudio ("+mb+" MB)…",2); return; }
+      if(d.tipo==="dur"){ minTot=Math.max(1,Math.round(d.dur/60)); diz("etapa 1 de 2 · separando o áudio do vídeo ("+minTot+" min de reunião)…",3); return; }
+      if(d.tipo==="prog"){ diz("etapa 1 de 2 · separando o áudio do vídeo"+(minTot?(" ("+minTot+" min de reunião)"):"")+"…", 3+12*(d.pct/100)); return; }
+      try{ w.terminate(); }catch(_){ }
+      if(d.tipo==="fim") res(d.audio); else rej(new Error(d.msg||"ffmpeg falhou"));
+    };
+    w.onerror=function(e){ try{ w.terminate(); }catch(_){ } rej(new Error((e&&e.message)||"worker do ffmpeg falhou")); };
+    diz("carregando o extrator de áudio (1ª vez baixa ~30 MB)…",1);
+    w.postMessage({file:file,bases:[location.origin+"/ffmpeg/","https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/"]});
+  });
+}
 async function _prodTranscrever(file, onProgress){
   const diz=function(m,p){ if(onProgress) onProgress(m, p==null?null:Math.max(0,Math.min(100,Math.round(p)))); };
   const mb = Math.round((file.size||0)/1024/1024);
-  diz("extraindo o áudio do "+(_prodEhVideo(file.name,file.type)?"vídeo":"arquivo")+" ("+mb+" MB — essa parte o navegador faz de uma vez, sem % · ~"+Math.max(1,Math.ceil(mb/80))+" min)…", 12);
-  const ab = await file.arrayBuffer();
-  const AC = window.AudioContext||window.webkitAudioContext; const ac = new AC();
-  let buf;
-  try{ buf = await ac.decodeAudioData(ab); }
-  catch(e){ try{ ac.close(); }catch(_){ } throw new Error("o navegador não conseguiu decodificar o áudio deste arquivo ("+String(file.name||"").split(".").pop()+") — o arquivo ficou guardado; pra transcrever, converte pra .mp4 ou .mp3 e sobe de novo"); }
-  let audio = buf.getChannelData(0);
-  if(buf.numberOfChannels>1){ const a=buf.getChannelData(0), b=buf.getChannelData(1); const m=new Float32Array(a.length); for(let i=0;i<a.length;i++) m[i]=(a[i]+b[i])/2; audio=m; }
-  if(buf.sampleRate!==16000){ const r=buf.sampleRate/16000, n=Math.floor(audio.length/r); const o=new Float32Array(n); for(let i=0;i<n;i++) o[i]=audio[Math.floor(i*r)]; audio=o; }
-  try{ ac.close(); }catch(_){ }
+  let audio=null;
+  try{ audio=await _prodExtrairAudioFfmpeg(file, diz); }
+  catch(e){ console.warn("[transcrever] ffmpeg não rolou, indo pelo decodeAudioData:",e&&e.message); if(/não achou áudio/.test(String(e&&e.message))) throw e; }
+  if(!audio){
+    if(mb>500) throw new Error("não consegui abrir o extrator de áudio, e esse arquivo ("+mb+" MB) é grande demais pro caminho antigo — atualiza a página (Ctrl+Shift+R) e tenta de novo, ou manda só o áudio (.mp3/.m4a)");
+    diz("extraindo o áudio ("+mb+" MB)…", 5);
+    const ab = await file.arrayBuffer();
+    const AC = window.AudioContext||window.webkitAudioContext; const ac = new AC();
+    let buf;
+    try{ buf = await ac.decodeAudioData(ab); }
+    catch(e){ try{ ac.close(); }catch(_){ } throw new Error("o navegador não conseguiu decodificar o áudio deste arquivo ("+String(file.name||"").split(".").pop()+") — converte pra .mp4 ou .mp3 e sobe de novo"); }
+    audio = buf.getChannelData(0);
+    if(buf.numberOfChannels>1){ const a=buf.getChannelData(0), b=buf.getChannelData(1); const m=new Float32Array(a.length); for(let i=0;i<a.length;i++) m[i]=(a[i]+b[i])/2; audio=m; }
+    if(buf.sampleRate!==16000){ const r=buf.sampleRate/16000, n=Math.floor(audio.length/r); const o=new Float32Array(n); for(let i=0;i<n;i++) o[i]=audio[Math.floor(i*r)]; audio=o; }
+    try{ ac.close(); }catch(_){ }
+  }
   const SR=16000, dur=audio.length/SR, minTot=Math.max(1,Math.round(dur/60));
   // 1º: no worker (tela livre). Se o worker falhar ANTES de começar a transcrever, cai no caminho antigo.
-  try{ diz("preparando a transcrição ("+minTot+" min de áudio)…", 16); return await _prodTranscreverNoWorker(audio, diz, minTot); }
+  try{ diz("áudio separado · começando a transcrever "+minTot+" min…", 16); return await _prodTranscreverNoWorker(audio, diz, minTot); }
   catch(e){ if(e&&!e.__semProgresso&&!/sem worker/.test(String(e.message||""))) throw e; console.warn("[transcrever] worker não rolou, indo pela thread principal:",e&&e.message); }
-  const pipe = await _prodWhisper(function(m){ const mm=String(m||"" ); const pm=mm.match(/(\d+)%/); diz(mm, pm?Number(pm[1])*0.10:2); });
+  const pipe = await _prodWhisper(function(m){ const mm=String(m||"" ); const pm=mm.match(/(\d+)%/); diz(mm, 15+(pm?Number(pm[1])*0.03:0)); });
   // pedaços de 30s com 2s de sobra de cada lado (emenda não corta palavra); barra anda por pedaço
   const PASSO=30*SR, SOBRA=2*SR, partes=[];
   const n=Math.max(1,Math.ceil(audio.length/PASSO));
   for(let i=0;i<n;i++){
     const ini=Math.max(0,i*PASSO-SOBRA), fim=Math.min(audio.length,(i+1)*PASSO+SOBRA);
     const feito=Math.round(i*30/60);
-    diz("transcrevendo… "+Math.min(feito,minTot)+" de "+minTot+" min (pode seguir mexendo no app)", 18+78*(i/n));
+    diz("etapa 2 de 2 · transcrevendo… "+Math.min(feito,minTot)+" de "+minTot+" min", 18+78*(i/n));
     const res=await pipe(audio.subarray(ini,fim), { language:"portuguese", task:"transcribe" });
     const t=((res&&res.text)||"").trim();
     if(t) partes.push(t);
@@ -165691,6 +165723,84 @@ async function _reMeetTexto(fileId){
   return r.data||{};
 }
 
+/* ── TRANSCRIÇÃO EM SEGUNDO PLANO DE VERDADE (16/10/2026, Gustavo: "ele disse que posso continuar usando,
+   é verdade?") — antes o trabalho vivia dentro da tela "Nova reunião": saindo de Reuniões, perdia tudo.
+   Agora é um job global (fora do React): dá pra ir pra qualquer menu do app; quando termina, a reunião
+   é SALVA SOZINHA (com título/cliente/participantes do formulário, sem ata) e aparece um aviso.
+   Só não dá pra fechar/atualizar a aba (o navegador avisa antes). ── */
+const _RE_JOB={atual:null,ouvintes:new Set()};
+function _reJobAvisa(){ _RE_JOB.ouvintes.forEach(function(f){ try{ f(_RE_JOB.atual); }catch(_){ } }); }
+function _reJobSet(patch){ _RE_JOB.atual=_RE_JOB.atual?Object.assign({},_RE_JOB.atual,patch):patch; _reJobAvisa(); }
+function _reJobMeta(meta){ if(_RE_JOB.atual&&_RE_JOB.atual.status==="transcrevendo") _RE_JOB.atual=Object.assign({},_RE_JOB.atual,{meta:Object.assign({},_RE_JOB.atual.meta||{},meta)}); }
+function _reAntesDeSair(e){ e.preventDefault(); e.returnValue="A transcrição da reunião ainda está rodando. Se sair, perde."; return e.returnValue; }
+function useReJob(){ const [j,setJ]=useState(_RE_JOB.atual); useEffect(function(){ const f=function(x){ setJ(x); }; _RE_JOB.ouvintes.add(f); return function(){ _RE_JOB.ouvintes.delete(f); }; },[]); return j; }
+function _reJobComecar(file, meta){
+  if(_RE_JOB.atual&&_RE_JOB.atual.status==="transcrevendo"){ _reToast("warning","Já tem uma gravação sendo transcrita. Espera ela terminar."); return; }
+  const t0=Date.now();
+  _reJobSet(null); _RE_JOB.atual={name:file.name,status:"transcrevendo",msg:"preparando…",pct:0,duracao:0,meta:meta||{},t0:t0}; _reJobAvisa();
+  try{ window.addEventListener("beforeunload",_reAntesDeSair); }catch(_){ }
+  const solta=function(){ try{ window.removeEventListener("beforeunload",_reAntesDeSair); }catch(_){ } };
+  _prodTranscrever(file,function(m,pct){ const mm=String(m||"").match(/(\d+) min/); _reJobSet(Object.assign({msg:m,pct:pct==null?(_RE_JOB.atual&&_RE_JOB.atual.pct)||0:pct},mm?{duracao:Number(mm[1])}:{})); })
+    .then(function(texto){
+      solta();
+      const j=_RE_JOB.atual||{}; const meta=j.meta||{}; const sb=window._sb;
+      const reg={ id:"re-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), criado_em:new Date().toISOString(), quem:_reQuem(), titulo:String(meta.titulo||"").trim()||String(file.name).replace(/\.[^.]+$/,""), data_reuniao:meta.data||_reHoje(), participantes:String(meta.participantes||"").trim(), cliente:meta.cliente||"", arquivo_nome:file.name, duracao_min:j.duracao||null, transcricao:String(texto||""), ata:null };
+      const min=Math.max(1,Math.round((Date.now()-t0)/60000));
+      if(!sb){ _reJobSet({status:"ok",pct:100,texto:reg.transcricao,salvoId:""}); return; }
+      sb.from(RE_TABELA).insert(reg).then(function(r){
+        if(r.error){ _reJobSet({status:"ok",pct:100,texto:reg.transcricao,salvoId:""}); _reToast("error","Transcreveu, mas não salvou: "+r.error.message+" — o texto está na tela de Nova reunião."); return; }
+        _reJobSet({status:"ok",pct:100,texto:reg.transcricao,salvoId:reg.id});
+        _reToast("success","Reunião “"+reg.titulo+"” transcrita em "+min+" min e salva em Gestão › Reuniões. Confere o texto e gera a ata.");
+      });
+    })
+    .catch(function(e){ solta(); _reJobSet({status:"erro",msg:(e&&e.message)||String(e),pct:0}); _reToast("error","Transcrição: "+((e&&e.message)||e)); });
+}
+
+/* ── Participantes: fotos da equipe pra clicar + contatos do portal do cliente escolhido + nome solto ── */
+let _RE_PORTAL_CACHE=null;
+function _rePortalContatos(){
+  if(_RE_PORTAL_CACHE) return _RE_PORTAL_CACHE;
+  const sb=window._sb; if(!sb) return Promise.resolve([]);
+  _RE_PORTAL_CACHE=sb.from("profiles").select("id,name,team_id,av,color").eq("user_type","client").then(function(r){ return (r&&r.data)||[]; },function(){ return []; });
+  return _RE_PORTAL_CACHE;
+}
+function _reSemAcento(t){ return String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,""); }
+function _reListaNomes(v){ return String(v||"").split(/\s*[,;]\s*/).map(function(x){return x.trim();}).filter(Boolean); }
+function _ReParticipantes({value,onChange,cliente}){
+  const [portal,setPortal]=useState([]);
+  const [novo,setNovo]=useState("");
+  useEffect(function(){ let vivo=true; _rePortalContatos().then(function(d){ if(vivo) setPortal(d); }); return function(){ vivo=false; }; },[]);
+  const nomes=_reListaNomes(value);
+  const tem=function(n){ const k=_reSemAcento(n); return nomes.some(function(x){ return _reSemAcento(x)===k; }); };
+  const alterna=function(n){ onChange((tem(n)?nomes.filter(function(x){ return _reSemAcento(x)!==_reSemAcento(n); }):nomes.concat([n])).join(", ")); };
+  const add=function(){ const n=novo.trim(); if(!n) return; if(!tem(n)) onChange(nomes.concat([n]).join(", ")); setNovo(""); };
+  const equipe=(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){ return u&&u.name; });
+  const socios=equipe.filter(function(u){ return u.id==="vinicius"||u.id==="gustavo"; });
+  const resto=equipe.filter(function(u){ return u.id!=="vinicius"&&u.id!=="gustavo"; });
+  // contatos do portal: team_id = "client_<id do cliente>[_unidade]"
+  const cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){ return c&&(c.name===cliente||c.id===cliente); });
+  const chaveCli=cli?_reSemAcento(cli.id||cli.name):"";
+  const doCliente=chaveCli?portal.filter(function(p){ const t=String(p.team_id||"").replace(/^client_/,""); return t===chaveCli||t.indexOf(chaveCli+"_")===0; }):[];
+  const avatar=function(u,on,size){ return typeof UserAvatar==="function"?<UserAvatar user={u} size={size} border={false}/>:<span style={{width:size,height:size,borderRadius:99,background:u.color||RE_COR,color:"#fff",fontSize:size*.45,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{u.av||String(u.name||"?")[0]}</span>; };
+  const chip=function(key,label,on,onClick,icone,sub){ return <button key={key} type="button" onClick={onClick} style={{font:"inherit",fontFamily:RE_FF,display:"inline-flex",alignItems:"center",gap:7,padding:icone?"4px 11px 4px 4px":"5px 11px",borderRadius:99,border:"1.5px solid "+(on?RE_COR:RE_BORD),background:on?"#f5f3ff":"#fff",color:on?"#4c1d95":RE_MUTE,fontSize:12,fontWeight:on?800:600,cursor:"pointer"}}>{icone}{label}{sub&&<span style={{color:RE_SOFT,fontWeight:500,fontSize:10.5}}>{sub}</span>}{on&&<span style={{color:RE_COR,fontWeight:900}}>✓</span>}</button>; };
+  const extras=nomes.filter(function(n){ const k=_reSemAcento(n); return !equipe.some(function(u){ return _reSemAcento(u.name)===k; })&&!doCliente.some(function(p){ return _reSemAcento(p.name)===k; }); });
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      {socios.map(function(u){ const on=tem(u.name); return chip(u.id,u.name,on,function(){ alterna(u.name); },avatar(u,on,24)); })}
+      {resto.map(function(u){ const on=tem(u.name); return chip(u.id,u.name,on,function(){ alterna(u.name); },avatar(u,on,20)); })}
+    </div>
+    {cliente&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      <span style={{color:RE_SOFT,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{cliente}:</span>
+      {doCliente.map(function(p){ const on=tem(p.name); const un=String(p.team_id||"").replace(/^client_/,"").slice(chaveCli.length+1).replace(/_/g," ").replace(/^chapeco$/,"Chapecó").replace(/^./,function(c){ return c.toUpperCase(); }); return chip(p.id,p.name,on,function(){ alterna(p.name); },avatar(Object.assign({},p,{color:"#16a34a"}),on,20),un?("· "+un):"portal"); })}
+      {!doCliente.length&&<span style={{color:RE_SOFT,fontSize:11.5}}>ninguém desse cliente com acesso ao portal — digita o nome abaixo</span>}
+    </div>}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      {extras.map(function(n){ return chip("x-"+n,n,true,function(){ alterna(n); }); })}
+      <input value={novo} onChange={function(e){ setNovo(e.target.value); }} onKeyDown={function(e){ if(e.key==="Enter"||e.key===","){ e.preventDefault(); add(); } }} onBlur={add} placeholder="+ outro participante (Enter)" style={Object.assign({},_RE_INP,{width:220,padding:"6px 11px",borderRadius:99,fontSize:12})}/>
+    </div>
+  </div>;
+}
+
 function _ReBtn({children,onClick,tone,small,disabled,title}){
   const prim=tone==="primary", dang=tone==="danger";
   return <button type="button" onClick={onClick} disabled={disabled} title={title} style={{font:"inherit",fontFamily:RE_FF,fontSize:small?11.5:12.5,fontWeight:800,padding:small?"6px 11px":"9px 16px",borderRadius:10,cursor:disabled?"wait":"pointer",border:"1.5px solid "+(prim?RE_COR:dang?"#fecaca":RE_BORD),background:prim?(disabled?"#a78bfa":RE_COR):dang?"#fff":"#fff",color:prim?"#fff":dang?"#dc2626":RE_INK,whiteSpace:"nowrap"}}>{children}</button>;
@@ -165709,6 +165819,7 @@ function PageReunioes({isMob}){
   const [novo,setNovo]=useState(false);
   const [busca,setBusca]=useState("");
   const [sync,setSync]=useState(false);
+  const job=useReJob();
   const sincronizarMeet=function(){
     const sb=window._sb; if(!sb||sync) return; setSync(true);
     sb.functions.invoke("reunioes-sync",{body:{}}).then(function(r){
@@ -165723,6 +165834,7 @@ function PageReunioes({isMob}){
       .then(function(r){ if(r.error){ setErro(/does not exist|relation/i.test(r.error.message)?"A tabela de reuniões ainda não foi criada no Supabase (precisa rodar a migração reunioes_socios).":r.error.message); setLista([]); } else { setErro(""); setLista(r.data||[]); } });
   },[]);
   useEffect(function(){ recarregar(); },[recarregar]);
+  useEffect(function(){ if(job&&job.status==="ok"&&job.salvoId) recarregar(); },[job&&job.salvoId]);
   const sel=(lista||[]).find(function(x){return x.id===selId;})||null;
   const filtrada=(lista||[]).filter(function(r){ const b=busca.trim().toLowerCase(); if(!b) return true; return [r.titulo,r.cliente,r.participantes,_reDataBR(r.data_reuniao)].join(" ").toLowerCase().indexOf(b)>=0; });
   return <div style={{fontFamily:RE_FF,display:"flex",flexDirection:"column",gap:14}}>
@@ -165736,6 +165848,10 @@ function PageReunioes({isMob}){
         <_ReBtn tone="primary" onClick={function(){ setNovo(true); setSelId(""); }}>+ Nova reunião</_ReBtn>
       </div>
     </div>
+    {job&&job.status==="transcrevendo"&&!novo&&<div onClick={function(){ setNovo(true); setSelId(""); }} style={{background:"#faf5ff",border:"1px solid #ddd6fe",borderRadius:12,padding:"10px 14px",fontSize:12.5,cursor:"pointer",display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{color:"#6d28d9"}}><b>{job.name}</b> · {job.msg}</span><b style={{color:"#4c1d95"}}>{Math.round(job.pct||0)}%</b></div>
+      <div style={{height:6,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}><div style={{width:(job.pct||0)+"%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",transition:"width .4s"}}/></div>
+    </div>}
     {erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:10,padding:"10px 14px",fontSize:12.5}}>{erro}</div>}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"300px 1fr",gap:14,alignItems:"start"}}>
       <div style={{background:"#fff",border:"1px solid "+RE_BORD,borderRadius:14,overflow:"hidden"}}>
@@ -165761,15 +165877,19 @@ function PageReunioes({isMob}){
 
 /* ── Nova reunião: fonte (gravação / Meet / texto) → transcrição → ata ── */
 function _ReNova({isMob,onCancel,onSalvo}){
-  const [titulo,setTitulo]=useState("");
-  const [data,setData]=useState(_reHoje());
-  const [cliente,setCliente]=useState("");
-  const [participantes,setParticipantes]=useState("");
+  const job0=(_RE_JOB.atual&&_RE_JOB.atual.status==="transcrevendo")?_RE_JOB.atual:null;
+  const m0=(job0&&job0.meta)||{};
+  const [titulo,setTitulo]=useState(m0.titulo||"");
+  const [data,setData]=useState(m0.data||_reHoje());
+  const [cliente,setCliente]=useState(m0.cliente||"");
+  const [participantes,setParticipantes]=useState(m0.participantes||"");
   const [fonte,setFonte]=useState("gravacao");   // gravacao | meet | texto
-  const [grav,setGrav]=useState(null);           // {name,status,msg,pct}
+  const job=useReJob();                          // transcrição da gravação = job global (sobrevive a trocar de menu)
+  const [usaJob,setUsaJob]=useState(!!job0);
+  const grav=usaJob?job:null;
   const [transcricao,setTranscricao]=useState("");
-  const [arquivoNome,setArquivoNome]=useState("");
-  const [duracao,setDuracao]=useState(0);
+  const [arquivoNome,setArquivoNome]=useState(job0?job0.name:"");
+  const duracao=(grav&&grav.duracao)||0;
   const [meetDocs,setMeetDocs]=useState(null);
   const [meetErro,setMeetErro]=useState("");
   const [meetBusy,setMeetBusy]=useState(false);
@@ -165778,24 +165898,25 @@ function _ReNova({isMob,onCancel,onSalvo}){
   const inRef=useRef(null);
   const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
 
+  useEffect(function(){ _reJobMeta({titulo:titulo,data:data,cliente:cliente,participantes:participantes}); },[titulo,data,cliente,participantes]);
+  useEffect(function(){ if(!usaJob||!job) return; if(job.status==="ok"){ if(job.salvoId){ const id=job.salvoId; _RE_JOB.atual=null; onSalvo(id); } else if(job.texto&&!transcricao) setTranscricao(job.texto); } },[job&&job.status]);
   const pegarArquivo=function(file){
     if(!file) return;
     const ehMidia=(typeof _prodEhAudio==="function"&&_prodEhAudio(file.name,file.type))||(typeof _prodEhVideo==="function"&&_prodEhVideo(file.name,file.type));
     if(!ehMidia){ _reToast("warning","Manda a gravação: mkv, mp4, mov, mp3, m4a, wav…"); return; }
     if(typeof _prodTranscrever!=="function"){ _reToast("error","Transcrição indisponível nesta versão."); return; }
-    setArquivoNome(file.name); if(!titulo) setTitulo(String(file.name).replace(/\.[^.]+$/,"").replace(/[-_]+/g," "));
-    setGrav({name:file.name,status:"transcrevendo",msg:"preparando…",pct:0});
-    const t0=Date.now();
-    _prodTranscrever(file,function(m,pct){ setGrav(function(g){ return Object.assign({},g||{},{msg:m,pct:pct}); }); const mm=String(m||"").match(/de (\d+) min/); if(mm) setDuracao(Number(mm[1])); })
-      .then(function(texto){ setTranscricao(String(texto||"")); setGrav({name:file.name,status:"ok",msg:"",pct:100}); _reToast("success","Transcrita em "+Math.round((Date.now()-t0)/60000)+" min. Confere o texto e manda gerar a ata."); })
-      .catch(function(e){ setGrav({name:file.name,status:"erro",msg:(e&&e.message)||String(e),pct:0}); _reToast("error","Transcrição: "+((e&&e.message)||e)); });
+    if(_RE_JOB.atual&&_RE_JOB.atual.status==="transcrevendo"){ _reToast("warning","Já tem uma gravação sendo transcrita. Espera ela terminar."); return; }
+    const tit=titulo||String(file.name).replace(/\.[^.]+$/,"").replace(/[-_]+/g," ");
+    setArquivoNome(file.name); if(!titulo) setTitulo(tit);
+    setUsaJob(true);
+    _reJobComecar(file,{titulo:tit,data:data,cliente:cliente,participantes:participantes});
   };
   const listarMeet=function(){ setMeetBusy(true); setMeetErro(""); _reMeetListar().then(function(d){ setMeetDocs(d); if(!d.length) setMeetErro("Nenhuma transcrição do Meet encontrada no Drive da pixels@. A transcrição precisa estar ligada na reunião (Meet › Atividades › Transcrição) e a reunião criada pela conta pixels@."); }).catch(function(e){ setMeetErro((e&&e.message)||String(e)); }).finally(function(){ setMeetBusy(false); }); };
   const usarMeet=function(doc){ setMeetBusy(true); _reMeetTexto(doc.id).then(function(d){ setTranscricao(String(d.texto||"")); setArquivoNome(doc.name||""); if(!titulo) setTitulo(String(doc.name||"").replace(/^(Transcri[çc][ãa]o|Transcript|Notas|Notes)\s*[-–—:]?\s*/i,"").trim()); if(d.data&&!data) setData(d.data); _reToast("success","Transcrição do Meet importada ("+String(d.texto||"").length.toLocaleString("pt-BR")+" caracteres)."); }).catch(function(e){ _reToast("error","Meet: "+((e&&e.message)||e)); }).finally(function(){ setMeetBusy(false); }); };
 
   const salvar=function(comAta){
     if(!transcricao.trim()){ _reToast("warning","Precisa da transcrição (gravação, Meet ou texto colado)."); return; }
-    if(grav&&grav.status==="transcrevendo"){ _reToast("warning","Espera a transcrição terminar."); return; }
+    if(grav&&grav.status==="transcrevendo"){ _reToast("warning","Espera a transcrição terminar — quando acabar, ela já fica salva sozinha."); return; }
     const sb=window._sb; if(!sb){ _reToast("error","sem conexão"); return; }
     const base={ id:"re-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), criado_em:new Date().toISOString(), quem:_reQuem(), titulo:titulo.trim()||("Reunião "+_reDataBR(data)), data_reuniao:data||_reHoje(), participantes:participantes.trim(), cliente:cliente, arquivo_nome:arquivoNome, duracao_min:duracao||null, transcricao:transcricao, ata:null };
     const fim=function(reg){ setSalvando(true); sb.from(RE_TABELA).insert(reg).then(function(r){ setSalvando(false); if(r.error){ _reToast("error","Não salvou: "+r.error.message); return; } _reToast("success",reg.ata?"Reunião salva com a ata.":"Reunião salva — gera a ata quando quiser."); onSalvo(reg.id); }); };
@@ -165813,7 +165934,7 @@ function _ReNova({isMob,onCancel,onSalvo}){
       <div><div style={_RE_LBL}>Data</div><input type="date" value={data} onChange={function(e){setData(e.target.value);}} style={_RE_INP}/></div>
       <div><div style={_RE_LBL}>Cliente</div><select value={cliente} onChange={function(e){setCliente(e.target.value);}} style={_RE_INP}><option value="">Interna / nenhum</option>{clientes.map(function(c){ return <option key={c.id} value={c.name}>{c.name}</option>; })}</select></div>
     </div>
-    <div><div style={_RE_LBL}>Participantes (opcional)</div><input value={participantes} onChange={function(e){setParticipantes(e.target.value);}} placeholder="Gustavo, Vinicius, Sid (Bioter)…" style={_RE_INP}/></div>
+    <div><div style={_RE_LBL}>Participantes (clica em quem estava)</div><_ReParticipantes value={participantes} onChange={setParticipantes} cliente={cliente}/></div>
     <div>
       <div style={_RE_LBL}>De onde vem a transcrição</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{tab("gravacao","Gravação (mkv, mp4, áudio)")}{tab("meet","Transcrição do Google Meet")}{tab("texto","Colar texto")}</div>
@@ -165822,9 +165943,9 @@ function _ReNova({isMob,onCancel,onSalvo}){
         {!grav&&<div onClick={function(){ inRef.current&&inRef.current.click(); }} onDragOver={function(e){e.preventDefault();}} onDrop={function(e){ e.preventDefault(); pegarArquivo(e.dataTransfer.files&&e.dataTransfer.files[0]); }}
           style={{border:"1.5px dashed #c4b5fd",background:"#faf5ff",borderRadius:12,padding:"22px",textAlign:"center",color:"#6d28d9",fontSize:13,fontWeight:700,cursor:"pointer"}}>⤓ Arrasta a gravação aqui ou clica pra escolher<div style={{color:RE_SOFT,fontSize:11,fontWeight:500,marginTop:4}}>transcrevo no seu navegador, de graça · o arquivo não fica salvo, só o texto</div></div>}
         {grav&&<div style={{border:"1px solid "+RE_BORD,borderRadius:12,padding:"12px 14px",fontSize:12.5,display:"flex",flexDirection:"column",gap:6}}>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}><b style={{color:RE_INK,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{grav.name}</b>{grav.status!=="transcrevendo"&&<button type="button" onClick={function(){ setGrav(null); }} style={{font:"inherit",fontSize:11,fontWeight:700,border:"none",background:"transparent",color:RE_SOFT,cursor:"pointer"}}>trocar</button>}</div>
-          {grav.status==="transcrevendo"&&<><div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"baseline"}}><span style={{color:"#6d28d9"}}>{grav.msg}</span><b style={{color:"#4c1d95",fontSize:15}}>{Math.round(grav.pct||0)}%</b></div><div style={{height:7,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}><div style={{width:(grav.pct||0)+"%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",transition:"width .4s"}}/></div><div style={{color:RE_SOFT,fontSize:11}}>pode seguir mexendo no app — a transcrição roda em segundo plano</div></>}
-          {grav.status==="ok"&&<div style={{color:"#16a34a",fontWeight:700}}>✓ transcrita · {transcricao.length.toLocaleString("pt-BR")} caracteres{duracao?(" · ~"+duracao+" min"):""}</div>}
+          <div style={{display:"flex",gap:8,alignItems:"center"}}><b style={{color:RE_INK,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{grav.name}</b>{grav.status!=="transcrevendo"&&<button type="button" onClick={function(){ _RE_JOB.atual=null; _reJobAvisa(); setUsaJob(false); }} style={{font:"inherit",fontSize:11,fontWeight:700,border:"none",background:"transparent",color:RE_SOFT,cursor:"pointer"}}>trocar</button>}</div>
+          {grav.status==="transcrevendo"&&<><div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"baseline"}}><span style={{color:"#6d28d9"}}>{grav.msg}</span><b style={{color:"#4c1d95",fontSize:15}}>{Math.round(grav.pct||0)}%</b></div><div style={{height:7,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}><div style={{width:(grav.pct||0)+"%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",transition:"width .4s"}}/></div><div style={{color:RE_SOFT,fontSize:11}}>pode ir pra outros menus do app — quando terminar, a reunião fica salva sozinha aqui em Reuniões. Só não fecha nem atualiza esta aba.</div></>}
+          {grav.status==="ok"&&<div style={{color:"#16a34a",fontWeight:700}}>✓ transcrita · {String(grav.texto||transcricao).length.toLocaleString("pt-BR")} caracteres{duracao?(" · ~"+duracao+" min"):""}</div>}
           {grav.status==="erro"&&<div style={{color:"#dc2626"}}>{grav.msg}</div>}
         </div>}
       </div>}
@@ -165883,6 +166004,7 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
   const salvarAta=function(){ const nova={resumo:f.resumo.trim(),decisoes:_reDeLinhas(f.decisoes),acoes:_reAcoesDeLinhas(f.acoes),pendencias:_reDeLinhas(f.pendencias),atencao:_reDeLinhas(f.atencao),proximos:_reDeLinhas(f.proximos)}; salvarCampos({ata:JSON.stringify(nova),ata_editada_em:new Date().toISOString(),ata_editada_por:_reQuem()},"Ata salva.").then(function(ok){ if(ok) setEditAta(false); }); };
   const regerar=function(){
     const vai=function(){ setBusy(true); _reGerarAta(Object.assign({},r,{transcricao:trans})).then(function(g){ const patch={ata:JSON.stringify(g.ata),ata_editada_em:null,ata_editada_por:null}; if(transDirty) patch.transcricao=trans; return salvarCampos(patch,"Ata regerada a partir da transcrição."+(transDirty?" Transcrição salva.":"")).then(function(){ setTransDirty(false); setEditAta(false); }); }).catch(function(e){ _reToast("error","Ata: "+((e&&e.message)||e)); }).finally(function(){ setBusy(false); }); };
+    if(!temAta){ vai(); return; }
     if(typeof pixelsConfirm==="function") pixelsConfirm("Regerar a ata a partir da transcrição"+(transDirty?" (com as suas correções)":"")+"? O que você editou na ata atual é substituído. Custa uns R$ 0,20 a R$ 0,60 de GPT.",{title:"Regerar ata",okText:"Regerar",cancelText:"Cancelar"}).then(function(ok){ if(ok) vai(); }); else if(window.confirm("Regerar a ata?")) vai();
   };
   const salvarTrans=function(){ salvarCampos({transcricao:trans},"Transcrição salva.").then(function(ok){ if(ok) setTransDirty(false); }); };
@@ -165914,7 +166036,7 @@ function _ReDetalhe({id,isMob,onMudou,onExcluiu}){
           <input value={meta.titulo} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{titulo:v});}); }} style={_RE_INP} placeholder="Título"/>
           <input type="date" value={meta.data_reuniao} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{data_reuniao:v});}); }} style={_RE_INP}/>
           <select value={meta.cliente} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{cliente:v});}); }} style={_RE_INP}><option value="">Interna / nenhum</option>{clientes.map(function(c){ return <option key={c.id} value={c.name}>{c.name}</option>; })}{meta.cliente&&!clientes.some(function(c){return c.name===meta.cliente;})&&<option value={meta.cliente}>{meta.cliente}</option>}</select>
-          <input value={meta.participantes} onChange={function(e){ const v=e.target.value; setMeta(function(c){return Object.assign({},c,{participantes:v});}); }} style={Object.assign({},_RE_INP,{gridColumn:isMob?"auto":"span 2"})} placeholder="Participantes"/>
+          <div style={{gridColumn:"1 / -1"}}><div style={_RE_LBL}>Participantes</div><_ReParticipantes value={meta.participantes} onChange={function(v){ setMeta(function(c){return Object.assign({},c,{participantes:v});}); }} cliente={meta.cliente}/></div>
           <div><_ReBtn small tone="primary" onClick={salvarMeta} disabled={busy}>Salvar dados</_ReBtn></div>
         </div></details>}
     </div>
