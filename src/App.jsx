@@ -126035,7 +126035,11 @@ function PageRoteiros({isMob, perms, viewingAs}){
   const [filtro,setFiltro]=useState("todos"); // todos | sugestao | enviado
   const [trendForm,setTrendForm]=useState(null);
   // 21/09/2026: "Roteiro especifico" — briefing livre + quantos (1 a 5)
-  const [pedidoForm,setPedidoForm]=useState(null); // {texto,quantos}
+  const [pedidoForm,setPedidoForm]=useState(null); // {texto,quantos,files,formatos:{video,arte,carrossel}}
+  const [pedidoPasso,setPedidoPasso]=useState("");  // andamento do pedido com áudio/arte/carrossel (lendo, transcrevendo…)
+  const pedidoFileRef=useRef(null);
+  const solRef=useRef(null);                        // API da parte de solicitações (criar pauta com arquivos/formatos)
+  const _pedidoAddFiles=function(fl){ const arr=Array.prototype.slice.call(fl||[]); if(!arr.length) return; setPedidoForm(function(f){ const b=f||{texto:"",quantos:0,files:[],formatos:{video:true}}; return Object.assign({},b,{files:(b.files||[]).concat(arr)}); }); };
   // IDEIAS DA PIXELS (17/09/2026): trends/referências que o cliente aprova no portal
   const [ideias,setIdeias]=useState([]);
   const [ideiaForm,setIdeiaForm]=useState(null); // {titulo,descricao,link,trend_id,alvos:[{client,unit}]}
@@ -126105,6 +126109,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
   /* (23/09/2026, Vinicius) "não é pra inferir nada, é pra fazer quantos forem pedidos (limita a 20)".
      Sem número marcado, a quantidade é LIVRE: vai quantos=0 pro gerador e a IA soma o que o pedido
      pede ("3 de cada" × 4 produtos = 12). */
+  const podeSolic=_bl("aba.solicitacoes")&&_bl("solic.nova");
   const _gerar=async function(trend,clientAlvo,unitAlvo,pedidoTxt,quantosPedido){
     const _ped=String(pedidoTxt||"").trim();
     const _livre=!!_ped&&(quantosPedido===0||quantosPedido==="livre");
@@ -126123,6 +126128,27 @@ function PageRoteiros({isMob, perms, viewingAs}){
       if(trend){ setAba("roteiros"); setClId(cId); if(cId==="bioter") setUnit(uId); }
     }catch(e){ pixelsToast.error("Não deu: "+((e&&e.message)||e),5000); }
     setGerando("");
+  };
+  /* (16/10/2026) PEDIDO UNIFICADO: texto + (opcional) áudio/print do cliente + formatos.
+     Vídeo → os Roteiros de sempre (pxGerarRoteiros), com a transcrição do áudio entrando no pedido.
+     Arte/carrossel (ou qualquer arquivo) → vira uma solicitação (pauta) na parte de baixo, com as propostas de card. */
+  const _gerarPedido=async function(){
+    const f=pedidoForm||{}; const files=f.files||[]; const fm=f.formatos||{video:true};
+    const texto=String(f.texto||"").trim(); const q=f.quantos||0;
+    const grupos=["arte","carrossel"].filter(function(g){ return !!fm[g]; });
+    if(!texto&&!files.length){ pixelsToast.warning("Escreve o pedido ou solta o áudio do cliente."); return; }
+    let transcricao="";
+    if(files.length||grupos.length){
+      const api=solRef.current;
+      if(!api||!api.criar){ pixelsToast.error("A parte de solicitações não carregou — atualiza a página (Ctrl+Shift+R)."); return; }
+      const r=await api.criar({titulo:texto?texto.slice(0,90):"",texto:texto,files:files,grupos:grupos,quantos:q||0,onPasso:setPedidoPasso});
+      setPedidoPasso("");
+      if(!r) return;                          // deu erro (já avisou) — não gera vídeo em cima de pedido quebrado
+      transcricao=String(r.transcricao||"");
+      if(!fm.video){ setPedidoForm(null); return; }
+    }
+    const pedido=texto+(transcricao?("\n\nO QUE O CLIENTE MANDOU NO WHATSAPP (transcrição do áudio — use como fonte do assunto, dos detalhes e dos nomes):\n"+transcricao.slice(0,12000)):"");
+    await _gerar(null,clId,isBioter?unit:"",pedido,q);
   };
   const _salvarIdeia=async function(f){
     if(!sb) return;
@@ -126220,11 +126246,13 @@ function PageRoteiros({isMob, perms, viewingAs}){
         <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:21,letterSpacing:-.5}}>Conteúdos</div>
         {/* Celular: a frase que explica a tela sai — quem abre no celular já sabe o que é
             e ela sozinha come 2 linhas do alto. No computador continua igual. */}
-        <div style={{display:isMob?"none":undefined,color:"#64748b",fontSize:13,marginTop:3}}>{aba==="solicitacoes"?"O áudio (ou a mensagem) que o cliente mandou no WhatsApp vira propostas de card com briefing e legenda. As aceitas vão pra Copys.":"Roteiros de vídeo de 60 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo."}</div>
+        <div style={{display:isMob?"none":undefined,color:"#64748b",fontSize:13,marginTop:3}}>{"Roteiros de vídeo de 60 segundos pro cliente gravar. Pelo botão Pedido dá pra mandar o áudio ou a mensagem do cliente e pedir também artes e carrosséis. O que for marcado com o olho aparece no portal."}</div>
       </div>
       {/* Celular: as 3 abas ocupam a largura, uma do lado da outra */}
       <div style={{display:isMob?"flex":"inline-flex",width:isMob?"100%":undefined,background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
-        {[{id:"roteiros",l:isMob?"Roteiros":"Roteiros"},{id:"trends",l:"Trends"},/* (16/10/2026, Gustavo: "esconde essa merda de ideias pro cliente.. fica um monte de coisa perdida") — aba escondida, código e dados intactos */{id:"solicitacoes",l:isMob?"WhatsApp":"Solicitações por WhatsApp"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"8px 6px":"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:pxFonte(10,isMob),fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
+        {/* (16/10/2026, Gustavo: "fica duas coisas com mesmo sentido… unifica") — Solicitações por WhatsApp virou parte de Roteiros:
+            o pedido (texto + áudio/print do cliente) escolhe os formatos — vídeo (padrão), arte, carrossel. Ideias pro cliente: escondida. */}
+        {[{id:"roteiros",l:"Roteiros"},{id:"trends",l:"Trends"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"8px 6px":"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:pxFonte(10,isMob),fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
       </div>
       {/* (13/10/2026, Gustavo: "essas abas do Conteúdos tão me irritando… ter só uma seção, não duas") — a barra de
           cliente + filtro + botões entrou AQUI, na mesma caixa do título, separada por uma linha fina. */}
@@ -126320,11 +126348,12 @@ function PageRoteiros({isMob, perms, viewingAs}){
         {isBioter&&<div style={{display:isMob?"none":"flex",gap:5,flexWrap:"wrap",width:"100%",alignItems:"center"}}><span style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginRight:4}}>Unidade</span>
           {[{id:"",label:"Grupo"}].concat(_unidades.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){ const on=(unit||"")===u.id; return <button key={u.id||"g"} type="button" onClick={function(){setUnit(u.id);}} style={{background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 12px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{u.label}</button>; })}
         </div>}
-        <div style={{display:"flex",gap:isMob?9:10,alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,marginLeft:isMob?undefined:"auto",width:isMob?"100%":undefined,flexWrap:"wrap"}}>
+        {/* (16/10/2026, Gustavo: "coloca os botões todo no canto esquerdo… numa linha abaixo da linha dos clientes") */}
+        <div style={{display:"flex",gap:isMob?9:10,alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,width:"100%",flexWrap:"wrap",justifyContent:"flex-start",borderTop:"1px solid #f1f5f9",paddingTop:isMob?10:12}}>
         {/* Celular: o filtro ocupa a largura */}
         {/* (13/10/2026, Gustavo) "pra que aba Sugestões? pra que Enviados? só Gravados faria sentido" → um interruptor só */}
         {(function(){ const on=filtro==="gravado"; return <button type="button" onClick={function(){ setFiltro(on?"todos":"gravado"); }} title={on?"Mostrando só os que o cliente marcou como gravados — clique pra ver todos":"Mostrar só os roteiros já gravados pelo cliente"}
-          style={{display:"inline-flex",alignItems:"center",gap:7,height:40,boxSizing:"border-box",background:on?"#ecfdf5":"#fff",color:on?"#047857":"#475569",border:"1.5px solid "+(on?"#6ee7b7":"#e2e8f0"),borderRadius:12,padding:"0 13px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,width:isMob?"100%":undefined,justifyContent:"center"}}>
+          style={{order:3,display:"inline-flex",alignItems:"center",gap:7,height:40,boxSizing:"border-box",background:on?"#ecfdf5":"#fff",color:on?"#047857":"#475569",border:"1.5px solid "+(on?"#6ee7b7":"#e2e8f0"),borderRadius:12,padding:"0 13px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,width:isMob?"100%":undefined,justifyContent:"center"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
           {on?"Só gravados":"Gravados"}
         </button>; })()}
@@ -126333,34 +126362,57 @@ function PageRoteiros({isMob, perms, viewingAs}){
             de enviar; no celular, não. Some no celular — lá se copia um por um, no card. */}
         {!isMob&&_bl("roteiros.copiar_todos")&&<button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela numa mensagem só, agrupados pela tag de produto e formatados pro WhatsApp"
           onClick={function(){ if(visiveis.length) _rtCopiar(_rtTextoTodos(visiveis,_nomeCl(clId,isBioter?unit:"")),visiveis.length+" roteiros copiados — é só colar no WhatsApp"); }}
-          style={_btnSec(!visiveis.length,_cor)}>
+          style={Object.assign({order:2},_btnSec(!visiveis.length,_cor))}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={visiveis.length?_cor:"#cbd5e1"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar todos{visiveis.length?(" ("+visiveis.length+")"):""}
         </button>}
-        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} title="Você escreve o briefing e escolhe quantos" onClick={function(){setPedidoForm(pedidoForm?null:{texto:"",quantos:0});}}
-          style={Object.assign({},_btnSec(!!gerando,_cor),isMob?{width:"100%",justifyContent:"center"}:{})}>
+        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} title="Você escreve o pedido (ou manda o áudio/print do cliente) e escolhe os formatos: vídeo, arte, carrossel" onClick={function(){setPedidoForm(pedidoForm?null:{texto:"",quantos:0,files:[],formatos:{video:true,arte:false,carrossel:false}});}}
+          style={Object.assign({order:1},_btnSec(!!gerando,_cor),isMob?{width:"100%",justifyContent:"center"}:{},pedidoForm?{borderColor:_cor,color:_cor}:{})}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={gerando?"#cbd5e1":_cor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Roteiro específico
+          {pedidoForm?"Fechar pedido":"Pedido específico"}
         </button>}
-        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={Object.assign({},_btnGerar("",true,!!gerando,_cor),isMob?{width:"100%",justifyContent:"center"}:{})}>
+        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={Object.assign({order:0},_btnGerar("",true,!!gerando,_cor),isMob?{width:"100%",justifyContent:"center"}:{})}>
           {gerando==="ia"?<><Spin/> Escrevendo 5 roteiros…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar 5 roteiros</>}
         </button>}
         </div>
       </div>}
     </div>
 
-    {aba==="roteiros"&&<>
+    {aba==="roteiros"&&<div style={{display:"flex",flexDirection:"column",gap:14,marginTop:isMob?6:12}}>
       {pedidoForm&&<div style={{background:"#fff",border:"1px solid "+_cor+"3d",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:13,boxShadow:"0 8px 24px rgba(15,23,42,.06)"}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Roteiro específico pra {_nomeCl(clId,isBioter?unit:"")}</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Pedido pra {_nomeCl(clId,isBioter?unit:"")}</div>
         <div>
-          <div style={_lbl}>Do que você quer o roteiro</div>
-          <textarea value={pedidoForm.texto} onChange={function(e){setPedidoForm(Object.assign({},pedidoForm,{texto:e.target.value}));}} rows={5} autoFocus
-            placeholder={"Escreve como você explicaria pra equipe: o produto, o assunto, o ângulo, o que não pode faltar.\n\nex: 3 roteiros sobre cisterna inflada pra quem já perdeu produção na estiagem — falar da instalação rápida e da manutenção, sem citar preço."}
+          <div style={_lbl}>Do que você quer o conteúdo</div>
+          <textarea value={pedidoForm.texto} onChange={function(e){setPedidoForm(Object.assign({},pedidoForm,{texto:e.target.value}));}} rows={4} autoFocus
+            placeholder={"Escreve como você explicaria pra equipe: o produto, o assunto, o ângulo, o que não pode faltar. Ou cola a mensagem do cliente.\n\nex: 3 roteiros sobre cisterna inflada pra quem já perdeu produção na estiagem — falar da instalação rápida e da manutenção, sem citar preço."}
             style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.55})}/>
           <div style={{color:"#94a3b8",fontSize:pxFonte(11.5,isMob),marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 60 segundos continuam valendo — o pedido manda no assunto.</div>
         </div>
+        {podeSolic&&<div>
+          <div style={_lbl}>Áudio ou print do WhatsApp do cliente <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· opcional — a IA transcreve e usa junto com o texto</span></div>
+          <div onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ e.preventDefault(); _pedidoAddFiles(e.dataTransfer&&e.dataTransfer.files); }} onClick={function(){ if(pedidoFileRef.current) pedidoFileRef.current.click(); }}
+            style={{border:"1.5px dashed "+_cor+"66",background:_cor+"08",borderRadius:12,padding:isMob?"12px":"13px 16px",textAlign:"center",cursor:"pointer",color:"#475569",fontSize:12.5}}>
+            <b style={{color:"#0f172a"}}>Solta aqui</b> o áudio (.ogg, .opus, .mp3), vídeo, print, PDF ou texto — ou clica pra escolher. Vídeo vira só o áudio.
+            <input ref={pedidoFileRef} type="file" multiple style={{display:"none"}} onChange={function(e){ _pedidoAddFiles(e.target.files); e.target.value=""; }}/>
+          </div>
+          {(pedidoForm.files||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:5,marginTop:6}}>
+            {pedidoForm.files.map(function(f,i){ return <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:"#f8fafc",borderRadius:10,padding:"6px 10px",fontSize:12.5}}>
+              <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:700}}>{f.name}</span>
+              <span style={{color:"#94a3b8"}}>{typeof _pbMatTamanho==="function"?_pbMatTamanho(f.size):""}</span>
+              <button type="button" onClick={function(){ setPedidoForm(Object.assign({},pedidoForm,{files:pedidoForm.files.filter(function(_x,j){return j!==i;})})); }} style={{background:"none",border:"none",color:"#b91c1c",cursor:"pointer",fontWeight:800,fontFamily:_RT_FF}}>tirar</button>
+            </div>; })}
+          </div>}
+        </div>}
+        {podeSolic&&<div>
+          <div style={_lbl}>Formatos <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· vídeo é o padrão; arte e carrossel saem como propostas de card (briefing + legenda) pra virar Copys</span></div>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {_SW_GRUPOS.map(function(g){ const fm=pedidoForm.formatos||{video:true}; const on=!!fm[g.id]; return <button key={g.id} type="button" onClick={function(){ const n=Object.assign({},fm); n[g.id]=!on; if(!n.video&&!n.arte&&!n.carrossel) n.video=true; setPedidoForm(Object.assign({},pedidoForm,{formatos:n})); }}
+              style={{display:"inline-flex",alignItems:"center",gap:7,background:on?g.cor:"#fff",color:on?"#fff":"#334155",border:"1.5px solid "+(on?g.cor:"#e2e8f0"),borderRadius:99,padding:"7px 14px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>
+              <span style={{display:"inline-flex",transform:"scale(.8)"}}>{g.icone}</span>{g.id==="video"?"Roteiros de vídeo":g.id==="arte"?"Artes estáticas":"Carrosséis"}{on&&<span style={{fontWeight:900}}>✓</span>}</button>; })}
+          </div>
+        </div>}
         <div>
-          <div style={_lbl}>Quantos roteiros <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· opcional — sem marcar, a IA faz quantos o pedido somar (até 20)</span></div>
+          <div style={_lbl}>Quantos{podeSolic?" de cada formato":" roteiros"} <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· opcional — sem marcar, a IA faz quantos o pedido somar (vídeo até 20; arte e carrossel 5)</span></div>
           <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
             {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(function(n){ const on=(pedidoForm.quantos||0)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:on?0:n}));}}
               style={{minWidth:44,background:on?_cor:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?_cor:"#e2e8f0"),borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{n}</button>; })}
@@ -126368,9 +126420,10 @@ function PageRoteiros({isMob, perms, viewingAs}){
         </div>
         <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center"}}>
           <button type="button" disabled={!!gerando} onClick={function(){setPedidoForm(null);}} style={Object.assign({},_btnSec(!!gerando,_cor),{color:gerando?"#94a3b8":"#475569"})}>Cancelar</button>
-          {(function(){ const _q=pedidoForm.quantos||0, _vazio=!String(pedidoForm.texto||"").trim(), _off=!!gerando||_vazio;
-            return <button type="button" disabled={_off} onClick={function(){ _gerar(null,clId,isBioter?unit:"",pedidoForm.texto,_q); }} style={_btnGerar("",true,_off,_cor)}>
-              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> {_q?("Gerar "+_q+" roteiro"+(_q>1?"s":"")):"Gerar"}</>}
+          {(function(){ const _q=pedidoForm.quantos||0, _vazio=!String(pedidoForm.texto||"").trim()&&!(pedidoForm.files||[]).length, _off=!!gerando||!!pedidoPasso||_vazio;
+            const fm=pedidoForm.formatos||{video:true}; const nomes=[fm.video?"roteiros":"",fm.arte?"artes":"",fm.carrossel?"carrosséis":""].filter(Boolean).join(" + ");
+            return <button type="button" disabled={_off} onClick={_gerarPedido} style={_btnGerar("",true,_off,_cor)}>
+              {(gerando==="pedido"||pedidoPasso)?<><Spin/> {pedidoPasso||"Escrevendo…"}</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> {_q?("Gerar "+_q+" "+nomes):("Gerar "+nomes)}</>}
             </button>; })()}
         </div>
       </div>}
@@ -126393,7 +126446,9 @@ function PageRoteiros({isMob, perms, viewingAs}){
           onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onEditar={_bl("roteiros.gerar")?function(patch){ return _patch(r,patch); }:undefined}
           onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
-    </>}
+      {/* Artes, carrosséis e pedidos por WhatsApp (a antiga aba Solicitações), embaixo dos roteiros — só aparece quando tem algo */}
+      {_bl("aba.solicitacoes")&&<SolicitacoesWhatsapp embutido apiRef={solRef} isMob={isMob} lista={_lista} unidades={_unidades} clId={clId} setClId={setClId} unit={unit} setUnit={setUnit} nomeCl={_nomeCl} bl={function(k){ return _bl(k); }}/>}
+    </div>}
 
     {aba==="trends"&&<>
       <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -126456,7 +126511,6 @@ function PageRoteiros({isMob, perms, viewingAs}){
       })}
     </>}
 
-    {aba==="solicitacoes"&&<SolicitacoesWhatsapp isMob={isMob} lista={_lista} unidades={_unidades} clId={clId} setClId={setClId} unit={unit} setUnit={setUnit} nomeCl={_nomeCl} bl={function(k){ return _bl(k); }}/>}
     {aba==="ideias"&&<>
       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{color:"#64748b",fontSize:12.5,flex:1,minWidth:220}}>Trends e referências que o cliente aprova ou recusa no portal, em <b>Estratégia › Roteiros</b>. O que ele aprova vira card com um clique.</div>
@@ -127345,7 +127399,7 @@ function SwRolagemDupla({children,style,cor,mob}){
 }
 
 /* ─── A ABA ───────────────────────────────────────────────────────────── */
-function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setUnit, nomeCl, bl}){
+function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setUnit, nomeCl, bl, embutido, apiRef}){
   const sb=(typeof window!=="undefined")?window._sb:null;
   const _bl=bl||function(){ return true; };
   const isBioter=clId==="bioter";
@@ -127514,15 +127568,21 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     return novas;
   };
 
-  /* NOVA SOLICITAÇÃO: guarda tudo primeiro (o que não pode se perder), depois lê, depois gera. */
-  const _criar=async function(){
-    if(!sb) return;
-    const f=form||{}; const files=(f.files||[]);
+  /* NOVA SOLICITAÇÃO: guarda tudo primeiro (o que não pode se perder), depois lê, depois gera.
+     (16/10/2026) `opts` = chamada pelo Pedido unificado dos Roteiros: {titulo,texto,files,grupos,quantos,onPasso}.
+     grupos vazio = só guarda e lê (os vídeos saem pelos Roteiros). Devolve {pauta,transcricao,novas} ou null se deu erro. */
+  const _criar=async function(opts){
+    if(!sb) return null;
+    const viaApi=!!(opts&&typeof opts==="object"&&("files" in opts||"texto" in opts));
+    const f=viaApi?opts:(form||{}); const files=(f.files||[]);
     const texto=String(f.texto||"").trim();
-    if(!clId){ _toast("warning","Escolhe o cliente."); return; }
-    if(!files.length&&texto.length<10){ _toast("warning","Sobe o áudio do cliente ou cola a mensagem dele."); return; }
+    const gruposPedidos=viaApi?(opts.grupos||[]):null;
+    const _passo=function(m){ setPasso(m); if(viaApi&&typeof opts.onPasso==="function") opts.onPasso(m); };
+    if(!clId){ _toast("warning","Escolhe o cliente."); return null; }
+    if(!files.length&&texto.length<10){ _toast("warning","Sobe o áudio do cliente ou cola a mensagem dele."); return null; }
     const u=_swUser();
-    setPasso("criando a solicitação…");
+    let resultado=null;
+    _passo("criando a solicitação…");
     let pauta=null;
     try{
       const ins=await sb.from("pautas").insert({client_id:clId,unidade:isBioter?String(unit||""):"",titulo:String(f.titulo||"").trim()||("Pedido de "+_swDataCurta(new Date().toISOString())),
@@ -127550,15 +127610,24 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       const transcricao=trs.join("\n\n");
       await _upd("pautas",pauta.id,{transcricao:transcricao});
       pauta=Object.assign({},pauta,{transcricao:transcricao});
-      const novas=await _gerarPara(pauta,{transcricao:transcricao,fichas:fichas},1);
-      setPropostas(novas);
-      _toast("success",novas.length+(novas.length===1?" proposta pronta":" propostas prontas")+" pra "+_nome()+". Escolha as que viram card.",4000);
+      let novas=[];
+      if(gruposPedidos&&!gruposPedidos.length){
+        await _upd("pautas",pauta.id,{status:"pronta",erro:null});   // só vídeo: os roteiros saem na parte de cima
+      }else{
+        if(viaApi) _passo("IA escrevendo "+gruposPedidos.map(function(g){ return g==="arte"?"artes":"carrosséis"; }).join(" e ")+"…");
+        novas=await _gerarPara(pauta,{transcricao:transcricao,fichas:fichas},1,gruposPedidos,viaApi?(opts.quantos||undefined):undefined);
+        setPropostas(novas);
+        _toast("success",novas.length+(novas.length===1?" proposta pronta":" propostas prontas")+" pra "+_nome()+". Escolha as que viram card.",4000);
+      }
+      resultado={pauta:pauta,transcricao:transcricao,novas:novas};
     }catch(e){
       if(pauta){ try{ await _upd("pautas",pauta.id,{status:"erro",erro:String((e&&e.message)||e).slice(0,500)}); }catch(_){} }
       _toast("error","Não deu: "+((e&&e.message)||e),7000);
     }
     setPasso(""); _carregarPautas(); if(pauta) _carregarAberta(pauta.id);
+    return resultado;
   };
+  if(apiRef) apiRef.current={criar:_criar};
   /* Tentar de novo (pauta com erro) ou "Gerar mais" (nova rodada, sem repetir as que existem). */
   /* grupo = "video" | "arte" | "carrossel" → +5 só daquela linha; vazio → as três linhas */
   const _gerarDeNovo=async function(grupo,qtd,extra){
@@ -127844,10 +127913,20 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     </div>;
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {/* Cliente + nova solicitação */}
-    {/* v2: clientes pelas logos, igual Roteiros (no celular a fileira rola pro lado) */}
-    <div style={Object.assign({},_card,{display:"flex",alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,gap:10,flexWrap:"wrap"})}>
+  if(embutido&&!pautas.length&&!passo) return null;
+  return <div style={{display:"flex",flexDirection:"column",gap:14,marginTop:embutido?10:0}}>
+    {/* (16/10/2026) embutido nos Roteiros: a barra de clientes é a de cima; aqui só o título da parte e o "Pedir mais" */}
+    {embutido&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",borderTop:"1px solid #e8ebf0",paddingTop:14}}>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>Pedidos do cliente · artes, carrosséis e WhatsApp</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>O que veio pelo Pedido com áudio, print, arte ou carrossel. As propostas aceitas viram card em Copys.</div>
+      </div>
+      {_bl("solic.nova")&&aberta&&<button type="button" disabled={!!passo||!!ocupado} onClick={function(){ setMaisForm(maisForm?null:{texto:"",grupo:"arte"}); setForm(null); }}
+        title="Gera mais propostas a partir desta mesma solicitação — você descreve o que quer (quantos, formato, enfoque)"
+        style={Object.assign({},_btn(!!passo||!!ocupado),{background:maisForm?"#0f172a":"#fff",color:maisForm?"#fff":_SW_AC,border:"1.5px solid "+(maisForm?"#0f172a":_SW_AC),boxShadow:"none"})}>
+        <Ico n="plus" size={14} color={maisForm?"#fff":_SW_AC}/> {maisForm?"Fechar":"Pedir mais desta solicitação"}</button>}
+    </div>}
+    {!embutido&&<div style={Object.assign({},_card,{display:"flex",alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,gap:10,flexWrap:"wrap"})}>
       <div style={{display:"flex",gap:6,flexWrap:isMob?"nowrap":"wrap",overflowX:isMob?"auto":undefined,alignItems:"center",flex:1,minWidth:0,paddingBottom:isMob?4:0}}>
         {lista.map(function(c){
           const on=c.id===clId;
@@ -127873,7 +127952,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       {isBioter&&<div style={{display:"flex",gap:5,flexWrap:isMob?"nowrap":"wrap",overflowX:isMob?"auto":undefined,width:"100%",alignItems:"center"}}><span style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginRight:4,flexShrink:0}}>Unidade</span>
         {[{id:"",label:"Grupo"}].concat(unidades.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){ const on=(unit||"")===u.id; return <button key={u.id||"g"} type="button" onClick={function(){setUnit(u.id);}} style={{background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 12px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,flexShrink:0,whiteSpace:"nowrap"}}>{u.label}</button>; })}
       </div>}
-    </div>
+    </div>}
 
     {form&&<div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:12,borderColor:"#99f6e4"})}>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Nova solicitação — {_nome()}</div>
@@ -127928,7 +128007,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       {/* Histórico */}
       <div style={{width:isMob?"100%":240,flexShrink:0,display:"flex",flexDirection:"column",gap:8}}>
         <div style={_lbl}>Solicitações de {_nome()}</div>
-        {!pautas.length&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Nenhuma ainda. Clique em "Nova solicitação" e suba o áudio do cliente.</div>}
+        {!pautas.length&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Nenhuma ainda. {embutido?"Clica em Pedido específico e solta o áudio do cliente.":"Clique em \"Nova solicitação\" e suba o áudio do cliente."}</div>}
         {pautas.map(function(pt){
           const st=_SW_STATUS[pt.status]||_SW_STATUS.rascunho; const on=pt.id===abertaId;
           return <button key={pt.id} type="button" onClick={function(){ setAbertaId(on?null:pt.id); }}
