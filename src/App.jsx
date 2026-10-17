@@ -137774,6 +137774,8 @@ function _evGiroRegistrarClipes(lista){
   });
   if(mudou) _evGiroAvisar();
 }
+/* v31 (17/10/2026): vídeo ESTABILIZADO no PC (…-trat.mp4) sai do original sem girar → gira igual ao bruto de onde veio (antes: respiro/apoio estabilizado saía deitado) */
+function _evGiroTratado(trat, orig){ if(!trat || !orig) return; try{ _evGiroAlias(trat, orig); const tr = _evTroca(trat); if(tr && tr !== trat) _evGiroAlias(tr, orig); }catch(_){} }
 function _evGiroAvisar(){ _EV_GIRO.ouvintes.forEach(function(f){ try{ f(_EV_GIRO.ver); }catch(_){} }); try{ if(typeof _evpAvisar === "function") _evpAvisar(); }catch(_){} }
 function _evUsarGiro(){ const [, setN] = useState(0); useEffect(function(){ const f = function(){ setN(function(n){ return n + 1; }); }; _EV_GIRO.ouvintes.add(f); return function(){ _EV_GIRO.ouvintes.delete(f); }; }, []); return _EV_GIRO.ver; }
 /* giro de um <video>: v._pxGiro (quem criou sabe) ou pelo endereço (com memória por elemento) */
@@ -141882,7 +141884,7 @@ function _evpMotor(canvas, o){
   }
 
   function urlClipe(id){ const c = (o.clipes||[]).find(function(x){ return x.id===id; }) || {};
-    if(o.tratados && o.tratados[id]) return _evTroca(o.tratados[id]);
+    if(o.tratados && o.tratados[id]){ _evGiroTratado(o.tratados[id], c.url); return _evTroca(o.tratados[id]); }   // v31: o estabilizado gira igual ao bruto
     return _evTroca(o.original ? c.url : _evLeve(c)); }
   function el(c){
     if(els[c.id] && els[c.id]._src === urlClipe(c.clipe)) return els[c.id];
@@ -142545,6 +142547,7 @@ function _evpMotor(canvas, o){
   /* imagens e figurinhas por cima do vídeo */
   function imagem(url){ if(!imgs[url]){ const im = new Image(); if(!/^data:/.test(url)) im.crossOrigin = "anonymous"; im.src = url; imgs[url] = im; } return imgs[url]; }
   function el2(x){
+    if(o.tratados && o.tratados[x.clipe]){ const cT = (o.clipes||[]).find(function(q){ return q.id === x.clipe; }); if(cT) _evGiroTratado(o.tratados[x.clipe], cT.url); }   // v31: apoio estabilizado gira igual ao bruto
     const url = _evTroca((o.tratados && o.tratados[x.clipe]) || (function(){ const c = (o.clipes||[]).find(function(q){ return q.id === x.clipe; }) || {}; return o.original ? c.url : _evLeve(c); })());
     if(els2[x.id] && els2[x.id]._src === url) return els2[x.id];
     const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true; v._src = url; _evSrcGuardado(v, url);   // v41
