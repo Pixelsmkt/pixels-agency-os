@@ -137675,7 +137675,7 @@ let _evAvisouPesado = 0;
 function _evSrcGuardado(v, url){
   if(!url) return;
   if((typeof window !== "undefined" && window.__CFG) || /^(blob:|data:|\/)/.test(url) || !/^https?:/.test(url)){ v.src = url; return; }
-  if(_evObjUrls[url]){ v.src = _evObjUrls[url]; return; }
+  if(_evObjUrls[url]){ _evGiroAlias(_evObjUrls[url], url); v.src = _evObjUrls[url]; return; }   // v31 (17/10/2026): giro garantido também na cópia já guardada
   _evUrlLocal(url).then(function(u){ if(v._src === url || v._srcOrig === url) v.src = u; })
     .catch(function(e){ if(/pesado/.test(String(e && e.message)) && Date.now() - _evAvisouPesado > 20000){ _evAvisouPesado = Date.now(); try{ _evToast("warning", "Vídeo pesado sem cópia leve: o navegador não abre o original. O PC do escritório faz a cópia leve."); }catch(_){} } });
 }
@@ -137718,7 +137718,7 @@ async function _evUrlRapida(url){                 // v41: cópia guardada para a
 }
 async function _evUrlLocal(url){                 // <video> com a cópia guardada no computador (no PC: o arquivo local)
   if((typeof window !== "undefined" && window.__CFG) || !url || /^(blob:|data:)/.test(url)) return url;
-  if(_evObjUrls[url]) return _evObjUrls[url];
+  if(_evObjUrls[url]){ _evGiroAlias(_evObjUrls[url], url); return _evObjUrls[url]; }   // v31 (17/10/2026): a cópia já guardada também gira (podia ter nascido em _evJaGuardado sem o giro)
   try{ const b = await _evBuscar(url); const ob = (_evObjUrls[url] = URL.createObjectURL(b)); _evGiroAlias(ob, url); return ob; }catch(e){ if(/pesado/.test(String(e && e.message))) throw e; return url; }   // vid27: a cópia guardada gira junto com o arquivo
 }
 
@@ -138044,6 +138044,7 @@ async function _evpMiniaturas(clipe, url){
       await _evEsperar(v, "loadedmetadata", 30000);
       const d = v.duration; if(!isFinite(d) || d <= 0) return;
       m.dur = d; m.w = v.videoWidth; m.h = v.videoHeight;
+      try{ const vb = window.__pxVideoBruto && window.__pxVideoBruto(v); if(vb && vb.w && vb.h){ m.wb = vb.w; m.hb = vb.h; } }catch(_){}   // v31 (17/10/2026): medida crua (m.w/m.h podem vir já giradas pelo motor de giro) — a conferência gira uma vez só
       const n = Math.max(6, Math.min(60, Math.ceil(d / 1.0)));
       const cv = document.createElement("canvas"); const H = 96, W = Math.max(40, Math.round(H * (v.videoWidth || 9) / (v.videoHeight || 16)));
       cv.width = W; cv.height = H; const cx = cv.getContext("2d");
@@ -138093,7 +138094,7 @@ function _evJaGuardado(url){
   if(!url || (typeof window !== "undefined" && window.__CFG) || !/^https?:/.test(url) || typeof caches === "undefined") return Promise.resolve(null);
   if(_evObjUrls[url]) return Promise.resolve(_evObjUrls[url]);
   return caches.open(_EV_CACHE).then(function(c){ return c.match(url); }).then(function(h){ return h ? h.blob() : null; })
-    .then(function(b){ return b && b.size ? (_evObjUrls[url] || (_evObjUrls[url] = URL.createObjectURL(b))) : null; }).catch(function(){ return null; });
+    .then(function(b){ if(!b || !b.size) return null; const ob = _evObjUrls[url] || (_evObjUrls[url] = URL.createObjectURL(b)); _evGiroAlias(ob, url); return ob; }).catch(function(){ return null; });   // v31 (17/10/2026): a cópia guardada gira junto (antes: apoio por cima e respiro com cor saíam deitados/em faixa no Estúdio)
 }
 function _EvVideo(props){
   const src = String(props.src || ""), base = src.split("#")[0], frag = src.indexOf("#") >= 0 ? src.slice(src.indexOf("#")) : "";
@@ -143490,6 +143491,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const giroVer = _evUsarGiro();
   const [girarAberto, setGirarAberto] = useState(false);
   const [txAberto, setTxAberto] = useState(false);   // v28 (15/10/2026) transcrição: painel "📝 Transcrição completa"
+  const [confAuto, setConfAuto] = useState(false);   // v36 (17/10/2026) conferência automática (grátis, sem IA): painel "✅ Conferir"
   const [txFoco, setTxFoco] = useState(null);   // v28 (15/10/2026) pente fino: abrir já no vídeo (📝 Ver a fala do "Conferir a IA")
   const [mesaAberta, setMesaAberta] = useState(false);   // v29 (15/10/2026) item 14: 🎬 Mesa do roteiro (da Transcrição completa e do Ctrl+K)
   const onEditarRoteiro = arguments[0].onEditarRoteiro || null;   // v29 (15/10/2026) item 16: o Estúdio manda a IA editar em cima do roteiro
@@ -143641,6 +143643,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const nomesKit = (dic && dic.nomes && dic.nomes.corrigir) || [];
   const kitN = useMemo(function(){ return Object.assign({}, kit, { _nomes:nomesKit }); }, [kit, nomesKit.join("|")]);
   const calc = useMemo(function(){ return _evpCalcular(p, falaEd, kitN); }, [p, falaEd, kitN]);
+  /* v36 (17/10/2026) conferência automática: só dados (sem IA, sem gasto), instantânea; medidas do bruto = as do vídeo carregado + o giro do card */
+  const confA = useMemo(function(){ const info = {}; clipes.forEach(function(c){ const m = c && _evpMidia[c.id]; if(m && m.wb && m.hb) info[c.id] = { w:m.wb, h:m.hb, rot:_evtxRot(c) }; else if(m && m.w && m.h && !(typeof window !== "undefined" && window.__pxVideoBruto)) info[c.id] = { w:m.w, h:m.h, rot:_evtxRot(c) }; });   /* medida crua (m.wb/m.hb): m.w/m.h podem vir já giradas → sem a crua, não julga (evita falso "apoio em faixa") */
+    const D = _evpDim(p.formato), an = p.anuncio; return _evcConferir({ p:p, calc:calc, fala:falaEd, infoClipe:info, W:D.w, H:D.h, galeria:kit && kit._galeria, teto:an && an.ligado !== false && an.alvo ? Number(an.alvo) : 0 }); }, [p, calc, falaEd, clipes, kit, confAuto]);
   if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpCalc = calc;   // v28 (15/10/2026) pente fino 2: só nos testes automáticos (legenda do trecho incluído)
 
   /* estabilização: PC do escritório primeiro; o navegador mede o tremido na hora (prévia) e é a reserva */
@@ -144294,6 +144299,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const comandosK = [
     { id:"tocar", grupo:"Tocar", label:"Tocar / pausar", atalho:"Espaço", fn:tocar },
     { id:"transcricao", grupo:"Fala", label:"Transcrição completa (toda a fala: o que entrou e o que ficou de fora)", fn:function(){ setTxAberto(true); } },   // v28 (15/10/2026) transcrição
+    { id:"conferir_auto", grupo:"Projeto", label:"Conferir (grátis, sem IA): palavra cortada, frase sem fim, batida, apoios, textos", fn:function(){ setVerVersoes(false); setConfAuto(true); } },   // v36 (17/10/2026)
     { id:"mesa_roteiro", grupo:"Fala", label:"Mesa do roteiro (o que entrou de cada vídeo e por quê; montar o roteiro pelo texto)", fn:function(){ setTxAberto(false); setMesaAberta(true); } },   // v29 (15/10/2026) item 14
     { id:"dividir", grupo:"Editar", label:"Dividir na agulha", atalho:"S", fn:cortar },
     { id:"duplicar", grupo:"Editar", label:"Duplicar o item", atalho:"Ctrl+D", fn:duplicar },
@@ -145569,6 +145575,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:isMob ? "flex-end" : "center",justifyContent:"center",padding:isMob ? 0 : 16}}>{/* mob (16/10/2026) celular como app: sobe de baixo, largura toda */}
         <div ref={expRef} style={{width:isMob ? "100%" : "min(620px, 100%)",maxHeight:isMob ? "92dvh" : "90vh",overflow:"auto",position:"relative",paddingBottom:isMob ? "env(safe-area-inset-bottom)" : undefined}}>
           <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
+          {confA.resumo.graves > 0 && <div data-conferir-exportar="1" role="status" style={Object.assign({}, _EVP_PAINEL, {display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:"9px 44px 9px 12px",marginBottom:8,fontSize:12.5,fontWeight:700,color:_EVC_COR.grave})}>{/* v36 (17/10/2026) conferência automática */}
+            ✅ {confA.resumo.graves} {confA.resumo.graves > 1 ? "graves" : "grave"} — confira antes de exportar{!isMob && <button onClick={function(){ setVerExp(false); setVerVersoes(false); setConfAuto(true); }} style={Object.assign(_evpBtn(), {padding:"4px 10px",fontSize:11.5})}>Ver a lista</button>}</div>}
           <_EvExportar t={t} ed={ed} projeto={p} calc={micFalhou ? calcMotor : calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
             vozesTratadas={vozes} vozPalavra={vozPalavra} tirarTrechos={tirarTrechos} fala={falaEd} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
@@ -145706,6 +145714,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         {/* v68: o formato saiu do topo — botão "Formato" (Alt+R) na barra embaixo do vídeo */}
         <button data-abrir-girar="editor" onClick={function(){ setGirarAberto(true); }} title="Vídeo gravado com a câmera deitada? Gire aqui (o original não muda)" style={Object.assign(_evpBtn(), {fontSize:12})}>↻ Girar</button>
         {elTxBotao(Object.assign(_evpBtn(), {fontSize:12}), "📝 Transcrição completa")}{/* v28 (15/10/2026) transcrição */}
+        <button data-conferir-auto-abrir="1" onClick={function(){ setVerVersoes(false); setConfAuto(!confAuto); }} aria-pressed={confAuto} title={"Conferência automática (grátis, sem IA): " + confA.resumo.frase}
+          style={Object.assign(_evpBtn(), {fontSize:12}, confAuto ? { background:_EVP_COR.roxoSoft, color:_EVP_COR.roxo } : {})}>✅ Conferir{(function(s){ return s ? <span style={{minWidth:18,padding:"1px 6px",borderRadius:99,background:s.cor,color:"#fff",fontSize:10.5,fontWeight:800,textAlign:"center"}}>{s.n}</span> : null; })(_evcSelo(confA))}</button>{/* v36 (17/10/2026) conferência automática */}
         <button onClick={function(){ setPaleta(true); }} title="Buscar comando ou ferramenta (Ctrl+K)" aria-label="Comandos" style={Object.assign(_evpBtn(), {fontSize:12})}><_EvpIco n="comandos" s={15}/>Comandos {!avisoRasc && <span style={{fontFamily:_EVP_MONO,fontSize:10.5,color:_EVP_COR.fraco}}>Ctrl+K</span>}</button>
         <button onClick={function(){ setBasico(!basico); }} aria-pressed={basico} title={basico ? "Modo básico: só o essencial. Clique para ver todas as ferramentas." : "Modo avançado: todas as ferramentas. Clique para o modo básico."}
           style={Object.assign(_evpBtn(basico ? "suave" : null), {fontSize:12})}>{basico ? "Básico" : "Avançado"}</button>
@@ -145728,6 +145738,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <button onClick={function(){ setVerExp(true); }} style={_evpBtn("verde")}><_EvpIco n="exportar" s={16}/>Exportar</button>
         <button onClick={trocarTema} title={tema === "escuro" ? "Modo claro" : "Modo escuro"} aria-label={tema === "escuro" ? "Modo claro" : "Modo escuro"} style={bTopo(false)}><_EvpIco n={tema === "escuro" ? "sol" : "lua"} s={17}/></button>
         <button onClick={trocarCheia} title={cheia ? "Tela normal" : "Tela cheia"} aria-label={cheia ? "Tela normal" : "Tela cheia"} style={bTopo(false)}><_EvpIco n={cheia ? "recolher" : "expandir"} s={16}/></button>
+        {confAuto && <_EvcPainelConferir res={confA} onIr={irPara} onFechar={function(){ setConfAuto(false); }}/>}{/* v36 (17/10/2026) conferência automática */}
         {verVersoes && (
           <div role="dialog" aria-label="Versões" style={Object.assign({}, _EVP_PAINEL, {position:"absolute",right:10,top:"calc(100% + 8px)",width:420,maxHeight:"60vh",overflow:"auto",zIndex:40,padding:14})}>
             <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="versoes"/></span>Versões
@@ -153547,6 +153558,263 @@ function _EvpSlider(q){
       <input type="range" className="evp-r" min={q.min} max={q.max} step={q.step} value={q.v} aria-label={q.rotulo || "valor"}
         onChange={function(e){ const x = Number(e.target.value); c.vivo(function(np){ q.aplicar(np, x); }); }}
         onPointerUp={c.fim} onKeyUp={c.fim} onBlur={c.fim} style={{"--p":pc + "%"}}/>
+    </div>
+  );
+}
+
+
+/* ─── v36 (17/10/2026) CONFERÊNCIA AUTOMÁTICA (grátis, sem IA): olha a edição só pelos dados (cortes, fala, batida, apoios, textos)
+   e lista o que costuma escapar: palavra cortada, frase sem fim, "então / então", voz de quem grava, respiro fora da batida,
+   trecho longo só de rosto, apoio em faixa, manchete partida. Instantânea: roda ao abrir o painel "✅ Conferir".
+   As funções entre os marcadores abaixo são PURAS (sem React, sem window): o teste _testes/conferir.test.js recorta e roda. ─── */
+/* ==== CONFERENCIA PURA ==== */
+/* limiares (segundos, salvo dito):
+   folga 0,08 = menos que isso entre o corte e a palavra soa "comido" (o certo é 0,1–0,25);
+   cola 0,6 = a próxima palavra do bruto vem logo depois do fim → a frase continuava;
+   fragil 0,06 = palavra com duração menor que isso na transcrição tem tempo incerto (o alinhador não achou onde ela está);
+   borda 0,08 = palavra de tempo incerto a menos disso do corte → provavelmente o corte come um pedaço dela;
+   batida 0,25 = desvio maior que 25% do intervalo da batida; rosto 6 = trecho de fala sem apoio por 6 s ou mais;
+   apoioIni 1 / apoioGap 0,5 = dois apoios do mesmo bruto, colados (até 0,5 s), começando a menos de 1 s um do outro no bruto. */
+const _EVC_LIM = { folga:0.08, cola:0.6, fragil:0.06, borda:0.08, tol:0.03, batida:0.25, rosto:6, apoioIni:1, apoioGap:0.5, cobre:0.005 };
+const _EVC_MULETAS = ["ne", "entao", "ai", "tipo", "bom", "olha", "enfim", "assim", "pois"];
+const _EVC_CONECTORES = ["entao", "ai", "tipo", "ne", "bom", "olha", "enfim"];
+function _evcNum(x, d){ const n = Number(x); return isFinite(n) ? n : d; }
+function _evcNorm(s){ return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, ""); }
+function _evcTempo(t){ t = Math.max(0, _evcNum(t, 0)); const m = Math.floor(t / 60), s = t - m * 60; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(1).replace(".", ","); }
+function _evcFimFrase(w){ return !!w && (/[.!?…]/.test(String(w.pt || "")) || /[.!?…]$/.test(String(w.p || ""))); }
+function _evcTxt(ws){ return ws.map(function(w){ return String(w.p || "").trim() + (/^[.,!?…;:]+$/.test(String(w.pt || "")) ? String(w.pt).slice(0, 1) : ""); }).filter(Boolean).join(" ").replace(/[.;:]$/, ""); }
+/* palavras de um bruto, em ordem, com "fragil" (tempo incerto) marcado */
+function _evcPalavras(fala, id){
+  const l = (fala && Array.isArray(fala[id]) ? fala[id] : []).filter(function(w){ return w && isFinite(Number(w.i)) && String(w.p || "").trim(); })
+    .map(function(w){ const i = Number(w.i), f = Math.max(i, _evcNum(w.f, i)); return { i:i, f:f, p:String(w.p).trim(), pt:w.pt || "", n:_evcNorm(w.p), fragil:(f - i) < _EVC_LIM.fragil }; });
+  l.sort(function(a, b){ return a.i - b.i; });
+  return l;
+}
+/* onde cada palavra do bruto fica em relação a um clip (ini/fim no bruto):
+   dentro = todas que tocam o clip (inclusive as de tempo incerto na borda); seguras = dentro, sem as cortadas e sem as incertas na borda;
+   cortaIni/cortaFim = palavra que o corte parte no meio; fragIni/fragFim = palavra de tempo incerto colada no corte; depois = 1ª palavra depois do fim */
+function _evcFalaDoClip(ws, ini, fim){
+  const L = _EVC_LIM, r = { dentro:[], seguras:[], cortaIni:null, cortaFim:null, fragIni:null, fragFim:null, antes:null, depois:null };
+  /* palavra de tempo incerto só conta "colada no corte" se não houver outra palavra entre ela e o corte */
+  const solta = function(){ if(r.fragFim){ r.seguras.push(r.fragFim); r.fragFim = null; } };
+  ws.forEach(function(w){
+    if(w.fragil){
+      if(!r.dentro.length && (Math.abs(w.i - ini) <= L.borda || Math.abs(w.f - ini) <= L.borda)){ r.fragIni = w; r.dentro.push(w); return; }
+      if(!r.depois && w.i < fim + L.borda && (Math.abs(w.i - fim) <= L.borda || Math.abs(w.f - fim) <= L.borda)){ solta(); r.fragFim = w; r.dentro.push(w); return; }
+      if(w.i > ini && w.i < fim){ solta(); r.dentro.push(w); r.seguras.push(w); return; }
+      if(w.f <= ini){ if(!r.dentro.length) r.antes = w; } else if(w.i >= fim && !r.depois) r.depois = w;
+      return;
+    }
+    if(w.f <= ini + L.tol){ r.antes = w; return; }
+    if(w.i >= fim - L.tol){ if(!r.depois) r.depois = w; return; }
+    if(w.i < ini - L.tol && w.f > ini + L.tol){ r.cortaIni = w; r.dentro.push(w); return; }
+    solta();
+    if(w.i < fim - L.tol && w.f > fim + L.tol){ r.cortaFim = w; r.dentro.push(w); if(!r.depois) r.depois = w; return; }
+    r.dentro.push(w); r.seguras.push(w);
+  });
+  if(r.fragFim && (!r.depois || r.fragFim.i < r.depois.i)) r.depois = r.fragFim;
+  return r;
+}
+/* desvio (s) de um tempo da linha do tempo até a batida mais perto — mesma grade do _evpBatidas (fase em segundos da música) */
+function _evcDesvioBatida(t, mu){
+  if(!mu || mu.mudo || !mu.beat || !(_evcNum(mu.beat.bpm, 0) > 0)) return null;
+  const P = 60 / Number(mu.beat.bpm), t0 = _evcNum(mu.t0, 0), ini = _evcNum(mu.ini, 0);
+  let m = _evcNum(mu.beat.fase, 0); while(m < ini) m += P;
+  const T1 = t0 + (m - ini); if(t < T1 - P) return null;
+  const k = Math.round((t - T1) / P), d = t - (T1 + k * P);
+  return { d:d, P:P, frac:Math.abs(d) / P };
+}
+/* medidas do apoio já giradas (em pé/deitado como aparece). info = { w, h, rot, girado } · null = sem medidas */
+function _evcMedidas(info){
+  if(!info) return null;
+  const w = _evcNum(info.w, 0), h = _evcNum(info.h, 0); if(!(w > 0 && h > 0)) return null;
+  const r = ((Math.round(_evcNum(info.rot, 0) / 90) * 90) % 360 + 360) % 360;
+  return !info.girado && (r === 90 || r === 270) ? { w:h, h:w } : { w:w, h:h };
+}
+/* o modelo de texto desenha a linha2 MENOR e EM CIMA do texto? true/false · null = não dá para saber (sem o modelo) */
+function _evcLinha2EmCima(galeria, id){
+  if(!id || id === "app") return false;
+  const it = (Array.isArray(galeria) ? galeria : []).find(function(x){ return x && x.id === id; });
+  const cs = it && it.dados && Array.isArray(it.dados.campos) ? it.dados.campos : null; if(!cs) return null;
+  const iT = cs.findIndex(function(c){ return c && c.id === "texto"; }), iL = cs.findIndex(function(c){ return c && c.id === "linha2"; });
+  if(iT < 0 || iL < 0) return false;
+  const T = cs[iT], L2 = cs[iL];
+  const acima = (L2.y != null && T.y != null) ? Number(L2.y) < Number(T.y) : iL < iT;
+  const menor = (L2.tam != null && T.tam != null) ? Number(L2.tam) < Number(T.tam) : (L2.h != null && T.h != null ? Number(L2.h) < Number(T.h) : true);
+  return acima && menor;
+}
+/* a conferência. o = { p, calc, fala, infoClipe, teto, W, H, galeria } → { itens:[{ t, tipo, grau, texto, como }], resumo } */
+function _evcConferir(o){
+  o = o || {}; const p = o.p || {}, L = _EVC_LIM, itens = [];
+  const clips = Array.isArray(p.clips) ? p.clips : [], imgs = Array.isArray(p.imagens) ? p.imagens : [];
+  const add = function(t, tipo, grau, texto, como){ itens.push({ t:Math.max(0, Math.round(_evcNum(t, 0) * 100) / 100), tipo:tipo, grau:grau, texto:texto, como:como || "" }); };
+  /* tempo de cada clip na linha do tempo: o calc (quando vem) ou a soma de (fim-ini)/vel */
+  const cc = (o.calc && Array.isArray(o.calc.clips)) ? o.calc.clips : [];
+  let soma = 0;
+  const tl = clips.map(function(c, i){
+    const vel = _evcNum(c.vel, 1) || 1, dur = Math.max(0, (_evcNum(c.fim, 0) - _evcNum(c.ini, 0)) / vel);
+    const k = cc[i]; const t0 = k && isFinite(Number(k.t0)) ? Number(k.t0) : soma, t1 = k && isFinite(Number(k.t1)) ? Number(k.t1) : t0 + dur;
+    soma = t1; return { t0:t0, t1:t1, vel:vel };
+  });
+  const total = o.calc && isFinite(Number(o.calc.total)) ? Number(o.calc.total) : soma;
+  const naLinha = function(i, b){ return tl[i].t0 + (b - _evcNum(clips[i].ini, 0)) / tl[i].vel; };
+  const cache = {}; const palavras = function(id){ if(!(id in cache)) cache[id] = _evcPalavras(o.fala, id); return cache[id]; };
+  const aspas = function(s){ return "“" + s + "”"; };
+
+  /* ── FALA ── */
+  const falados = [];
+  clips.forEach(function(c, i){
+    if(c.mudo) return;
+    const ws = palavras(c.clipe); if(!ws.length) return;
+    const ini = _evcNum(c.ini, 0), fim = _evcNum(c.fim, 0), r = _evcFalaDoClip(ws, ini, fim);
+    if(!r.dentro.length) return;
+    falados.push({ i:i, r:r });
+    const tIni = tl[i].t0, tFim = tl[i].t1;
+    /* 1. palavra cortada */
+    if(r.cortaIni) add(tIni, "palavra_cortada", "grave", "O começo do trecho corta a palavra " + aspas(r.cortaIni.p) + " no meio.", "Puxe o início do trecho para antes da palavra (uns 0,15 s antes de " + aspas(r.cortaIni.p) + ") ou para depois dela.");
+    else if(r.fragIni) add(tIni, "palavra_cortada", "grave", "O começo do trecho está colado na palavra " + aspas(r.fragIni.p) + " — a transcrição não sabe o tempo exato dela, então o corte provavelmente come um pedaço.", "Ouça o começo e puxe o início uns 0,2 s para trás (para a palavra entrar inteira) ou para depois dela.");
+    if(r.cortaFim) add(tFim, "palavra_cortada", "grave", "O fim do trecho corta a palavra " + aspas(r.cortaFim.p) + " no meio.", "Puxe o fim do trecho até depois de " + aspas(r.cortaFim.p) + " (uns 0,15 s de sobra) ou tire a palavra inteira.");
+    else if(r.fragFim) add(tFim, "palavra_cortada", "grave", "O fim do trecho está colado na palavra " + aspas(r.fragFim.p) + " — a transcrição não sabe o tempo exato dela, então o corte provavelmente come um pedaço.", "Ouça o fim e puxe o corte uns 0,2–0,3 s para frente (para a palavra entrar inteira) ou tire a palavra.");
+    /* 2. corte sem folga (só onde não há palavra cortada) */
+    const seg = r.seguras;
+    if(seg.length){
+      const a = seg[0], z = seg[seg.length - 1];
+      if(!r.cortaIni && !r.fragIni && a.i - ini < L.folga) add(tIni, "sem_folga", "medio", "O trecho começa colado na fala (" + Math.round(Math.max(0, a.i - ini) * 1000) + " ms antes de " + aspas(a.p) + "): a 1ª sílaba pode sumir.", "Deixe 0,1–0,25 s antes da 1ª palavra.");
+      if(!r.cortaFim && !r.fragFim && fim - z.f < L.folga) add(tFim, "sem_folga", "medio", "O trecho termina colado na fala (" + Math.round(Math.max(0, fim - z.f) * 1000) + " ms depois de " + aspas(z.p) + "): o fim da palavra pode sumir.", "Deixe 0,1–0,25 s depois da última palavra.");
+    }
+    /* 3. frase sem fim: a última palavra inteira não fecha a frase e o bruto continua logo depois */
+    if(seg.length){
+      const z = seg[seg.length - 1], nx = r.depois;
+      const prox = clips[i + 1], continua = prox && !prox.mudo && prox.clipe === c.clipe && Math.abs(_evcNum(prox.ini, 0) - fim) < 0.3;
+      if(!_evcFimFrase(z) && nx && nx.i - fim <= L.cola && !continua && !r.cortaFim){   // com palavra partida no fim, o item 1 já avisa
+        add(Math.max(tIni, naLinha(i, z.i)), "frase_sem_fim", "grave", "A frase fica sem fim: termina em " + aspas(_evcTxt(seg.slice(-4))) + " — a próxima palavra no vídeo é " + aspas(nx.p) + ".",
+          "Estenda o trecho até o fim da frase (até a palavra com ponto) ou corte antes, num ponto final.");
+      }
+    }
+    /* 5. voz de quem grava */
+    const D = r.dentro;
+    const sozinha = function(k){ const w = D[k], idx = ws.indexOf(w), pv = idx > 0 ? ws[idx - 1] : null, nx = idx >= 0 && idx < ws.length - 1 ? ws[idx + 1] : null;
+      const antesOk = !pv || _evcFimFrase(pv) || w.i - pv.f >= 0.5, depoisOk = _evcFimFrase(w) || /[,!]/.test(String(w.pt || "")) || !nx || nx.i - w.f >= 0.5; return antesOk && depoisOk; };
+    for(let k = 0; k < D.length; k++){
+      const w = D[k], n = w.n, n2 = D[k + 1] ? D[k + 1].n : "", n3 = D[k + 2] ? D[k + 2].n : "";
+      let achou = "";
+      if((n === "3" || n === "tres") && (n2 === "2" || n2 === "dois")) achou = _evcTxt(D.slice(k, k + 3));
+      else if((n === "2" || n === "dois") && (n2 === "1" || n2 === "um") && D[k + 1].i - w.f < 1.2) achou = _evcTxt(D.slice(k, k + 2));
+      else if(n === "valendo" || n === "gravando") achou = w.p;
+      else if(n === "pode" && n2 === "falar") achou = w.p + " " + D[k + 1].p;
+      else if(n === "deixa" && n2 === "eu" && n3 === "ver") achou = _evcTxt(D.slice(k, k + 3));
+      else if((n === "foi" && (/!/.test(String(w.pt || "")) || sozinha(k))) || (n === "vai" && sozinha(k))) achou = w.p;
+      else if(n === "perfeito" && (sozinha(k) || (k > 0 && D[k - 1].n === "ta" && (k < 2 || _evcFimFrase(D[k - 2]))))) achou = (k > 0 && D[k - 1].n === "ta" ? D[k - 1].p + " " : "") + w.p;
+      else if(n === "vamos" && n2 === "la" && _evcFimFrase(D[k + 1]) && (k === 0 || _evcFimFrase(D[k - 1]))) achou = w.p + " " + D[k + 1].p;
+      if(achou){ add(naLinha(i, w.i), "voz_de_quem_grava", "grave", "Fala de quem está gravando dentro do vídeo: " + aspas(achou) + ".", "Corte esse pedaço (Tirar trecho) ou ajuste o início/fim do trecho para deixá-lo de fora."); break; }
+    }
+    /* 6. começo com muleta ou sobra de resposta */
+    const a0 = D[0];
+    if(a0 && _EVC_MULETAS.indexOf(a0.n) >= 0) add(tIni, "muleta", "leve", "O trecho começa com " + aspas(a0.p) + " (" + aspas(_evcTxt(D.slice(0, 5))) + "…).", "Puxe o início para depois de " + aspas(a0.p) + ", se a frase continuar fazendo sentido.");
+    else { const kNe = D.slice(1, 7).findIndex(function(w){ return w.n === "ne"; });
+      if(kNe >= 0 && D[kNe + 1].i - ini < 3) add(tIni, "muleta", "leve", "O trecho começa com sobra de resposta: " + aspas(_evcTxt(D.slice(0, kNe + 2))) + ".", "Comece o trecho na frase seguinte (depois do " + aspas("né") + ").");
+    }
+  });
+  /* 4. palavra repetida na emenda (e "então / então" abrindo dois trechos seguidos) */
+  for(let k = 1; k < falados.length; k++){
+    const A = falados[k - 1], B = falados[k];
+    if(tl[B.i].t0 - tl[A.i].t1 > 2) continue;
+    const ultA = A.r.dentro[A.r.dentro.length - 1], priB = B.r.dentro[0], priA = A.r.dentro[0], tE = tl[B.i].t0;
+    if(ultA && priB && ultA.n && ultA.n === priB.n) add(tE, "repeticao", "medio", "Palavra repetida na emenda: " + aspas(ultA.p + " / " + priB.p) + ".", "Tire a palavra de um dos lados (puxe o fim do trecho de antes ou o início do próximo).");
+    else if(priA && priB && priA.n === priB.n && _EVC_CONECTORES.indexOf(priB.n) >= 0) add(tE, "repeticao", "medio", "Dois trechos seguidos começam com " + aspas(priB.p) + ": " + aspas(priA.p + " … / " + priB.p + " …") + " — soa repetido.", "Puxe o início do 2º trecho para depois de " + aspas(priB.p) + ".");
+  }
+
+  /* ── RITMO / TEMPO ── */
+  /* 7. respiro (sequência de clips mudo) começando longe da batida */
+  for(let i = 0; i < clips.length; i++){
+    if(!clips[i].mudo || (i > 0 && clips[i - 1].mudo)) continue;
+    if(tl[i].t0 < 0.05) continue;                 // o começo do vídeo não conta
+    const b = _evcDesvioBatida(tl[i].t0, p.musica);
+    if(b && b.frac > L.batida) add(tl[i].t0, "batida", "leve", "Respiro começa " + Math.round(Math.abs(b.d) * 1000) + " ms " + (b.d > 0 ? "depois" : "antes") + " da batida da música (" + Math.round(b.frac * 100) + "% do intervalo).",
+      "Mova o corte uns " + Math.round(Math.abs(b.d) * 1000) + " ms para " + (b.d > 0 ? "trás" : "frente") + " para cair na batida.");
+  }
+  /* 8. acima do teto */
+  const teto = _evcNum(o.teto, 0);
+  if(teto > 0 && total > teto + 0.05) add(teto, "teto", "grave", "O vídeo tem " + _evcTempo(total) + " — passa do limite de " + _evcTempo(teto) + " em " + (total - teto).toFixed(1).replace(".", ",") + " s.", "Tire trechos ou acelere respiros até caber.");
+  /* 9. trecho longo só de rosto: fala contínua sem nenhum apoio por cima */
+  const cob = imgs.filter(function(x){ return x && _evcNum(x.t1, 0) > _evcNum(x.t0, 0); }).map(function(x){ return [_evcNum(x.t0, 0), _evcNum(x.t1, 0)]; }).sort(function(a, b){ return a[0] - b[0]; });
+  const zonas = [];
+  clips.forEach(function(c, i){ if(c.mudo) return; const z = zonas[zonas.length - 1]; if(z && Math.abs(z[1] - tl[i].t0) < 0.05) z[1] = tl[i].t1; else zonas.push([tl[i].t0, tl[i].t1]); });
+  zonas.forEach(function(z){
+    let cur = z[0];
+    const fecha = function(ate){ if(ate - cur >= L.rosto - 0.05) add(cur, "so_rosto", "leve", "Trecho de " + (ate - cur).toFixed(1).replace(".", ",") + " s só de rosto (" + _evcTempo(cur) + "–" + _evcTempo(ate) + "), sem nenhum apoio por cima.", "Coloque um apoio (vídeo, foto ou texto grande) no meio desse trecho."); };
+    cob.forEach(function(q){ if(q[1] <= cur || q[0] >= z[1]) return; if(q[0] > cur) fecha(Math.min(q[0], z[1])); cur = Math.max(cur, q[1]); });
+    if(cur < z[1]) fecha(z[1]);
+  });
+
+  /* ── IMAGEM ── */
+  /* 10. apoio que devia cobrir a tela e aparece como faixa */
+  const W = _evcNum(o.W, 1080), H = _evcNum(o.H, 1920), info = o.infoClipe || {};
+  imgs.forEach(function(x){
+    if(!x || x.camada !== "video" || x.cheia || x.soFundo || _evcNum(x.escala, 0) < 0.9) return;   // fundo do chroma não é apoio
+    const md = _evcMedidas(info[x.clipe]); if(!md) return;
+    const r = ((Math.round(_evcNum(x.rot, 0) / 90) * 90) % 360 + 360) % 360; if(Math.abs(_evcNum(x.rot, 0) - r) > 1 && Math.abs(_evcNum(x.rot, 0) - r) < 359) return;   // girado torto: não dá para julgar
+    let w = W * _evcNum(x.escala, 0), h = w * md.h / md.w; if(r === 90 || r === 270){ const q = w; w = h; h = q; }
+    const cx = W * _evcNum(x.x, 0.5), cy = H * _evcNum(x.y, 0.3), tw = W * L.cobre, th = H * L.cobre;
+    const cobre = cx - w / 2 <= tw && cx + w / 2 >= W - tw && cy - h / 2 <= th && cy + h / 2 >= H - th;
+    if(!cobre) add(_evcNum(x.t0, 0), "apoio_faixa", "grave", "O apoio " + aspas(x.nome || "vídeo") + " não cobre a tela: aparece como faixa (sobra " + (h < H - th ? "em cima/embaixo" : "nas laterais") + ").", "Marque " + aspas("Tela cheia") + " no apoio ou aumente o tamanho até cobrir.");
+  });
+  /* 11. manchete que lê invertida: a frase foi partida e a linha2 (menor) aparece em cima */
+  (Array.isArray(p.textos) ? p.textos : []).forEach(function(x){
+    if(!x || !String(x.linha2 || "").trim() || !String(x.texto || "").trim()) return;
+    const t1 = String(x.texto).trim(), l2 = String(x.linha2).trim();
+    if(/[.!?…:;,]$/.test(t1) || !/^[a-zà-ú]/.test(l2)) return;
+    const cima = _evcLinha2EmCima(o.galeria, x.modelo); if(cima === false) return;
+    add(_evcNum(x.t0, 0), "manchete", "medio", "A frase está partida: " + aspas(l2) + " aparece " + (cima ? "em cima de" : "(pode aparecer) em cima de") + " " + aspas(t1) + " e lê invertida.", "Coloque a frase inteira no texto principal (" + aspas(t1 + " " + l2) + ") e deixe a linha 2 vazia.");
+  });
+  /* 12. dois apoios do mesmo bruto, colados, com trechos quase iguais */
+  const vs = imgs.filter(function(x){ return x && x.camada === "video" && x.clipe; }).slice().sort(function(a, b){ return _evcNum(a.t0, 0) - _evcNum(b.t0, 0); });
+  for(let k = 1; k < vs.length; k++){
+    const a = vs[k - 1], b = vs[k];
+    if(a.clipe === b.clipe && _evcNum(b.t0, 0) - _evcNum(a.t1, 0) <= L.apoioGap && Math.abs(_evcNum(a.ini, 0) - _evcNum(b.ini, 0)) < L.apoioIni)
+      add(_evcNum(b.t0, 0), "apoio_repetido", "leve", "Dois apoios seguidos mostram quase o mesmo pedaço do mesmo vídeo (" + aspas(a.nome || "apoio") + ").", "Troque o segundo por outro trecho ou outro vídeo.");
+  }
+
+  const ordem = { grave:0, medio:1, leve:2 };
+  itens.sort(function(a, b){ return a.t - b.t || ordem[a.grau] - ordem[b.grau]; });
+  return { itens:itens, resumo:_evcResumo(itens) };
+}
+function _evcResumo(itens){
+  const n = { grave:0, medio:0, leve:0 }; (itens || []).forEach(function(x){ if(x && n[x.grau] != null) n[x.grau]++; });
+  const partes = []; if(n.grave) partes.push(n.grave + (n.grave > 1 ? " graves" : " grave")); if(n.medio) partes.push(n.medio + (n.medio > 1 ? " médios" : " médio")); if(n.leve) partes.push(n.leve + (n.leve > 1 ? " leves" : " leve"));
+  return { graves:n.grave, medios:n.medio, leves:n.leve, total:(itens || []).length, frase:partes.length ? partes.join(" · ") : "Nada a conferir: tudo certo nos dados." };
+}
+/* ==== FIM ==== */
+/* v36 (17/10/2026) conferência automática: o painel abre embaixo do botão "✅ Conferir" da barra de cima (absolute, como o de Versões).
+   Grave em vermelho, médio em amarelo, leve em cinza; clicar num item leva a agulha 1 s antes do ponto (para ouvir a emenda). */
+const _EVC_COR = { grave:"#dc2626", medio:"#ca8a04", leve:"#64748b" };
+const _EVC_ROT = { grave:"Grave", medio:"Médio", leve:"Leve" };
+function _evcSelo(res){ const r = res && res.resumo; if(!r || !r.total) return null; return r.graves ? { n:r.graves, cor:_EVC_COR.grave } : r.medios ? { n:r.medios, cor:_EVC_COR.medio } : { n:r.leves, cor:_EVC_COR.leve }; }
+function _EvcPainelConferir({ res, onIr, onFechar }){
+  const [filtro, setFiltro] = useState("todos");
+  const itens = (res && res.itens) || [], rs = (res && res.resumo) || _evcResumo([]);
+  const lista = itens.filter(function(x){ return filtro === "todos" || x.grau === filtro; });
+  const chip = function(id, rot, n, cor){ const on = filtro === id; return <button key={id} type="button" aria-pressed={on} onClick={function(){ setFiltro(id); }} disabled={id !== "todos" && !n}
+    style={{font:"inherit",fontSize:11.5,fontWeight:700,padding:"4px 10px",borderRadius:99,cursor:id !== "todos" && !n ? "default" : "pointer",opacity:id !== "todos" && !n ? 0.45 : 1,
+      border:"1px solid " + (on ? (cor || _EVP_COR.roxo) : _EVP_COR.linha),background:on ? _EVP_COR.faixa : "transparent",color:cor || _EVP_COR.ink}}>{rot} {n}</button>; };
+  return (
+    <div role="dialog" aria-label="Conferência automática" data-conferir-auto="1" style={Object.assign({}, _EVP_PAINEL, {position:"absolute",right:10,top:"calc(100% + 8px)",width:480,maxWidth:"calc(100vw - 32px)",maxHeight:"64vh",overflow:"auto",zIndex:41,padding:14})}>
+      <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}>✅ Conferência automática
+        <span style={{fontSize:11,fontWeight:700,color:_EVP_COR.sub,background:_EVP_COR.faixa,border:"1px solid " + _EVP_COR.linha2,borderRadius:99,padding:"2px 8px"}}>grátis · sem IA</span>
+        <button onClick={onFechar} aria-label="Fechar conferência" style={Object.assign(_evpBtn("icone"), {marginLeft:"auto",padding:5})}><_EvpIco n="fechar" s={14}/></button></div>
+      <div style={{fontSize:12,color:_EVP_COR.sub,margin:"6px 0 10px",lineHeight:1.45}}>Olha só os dados da edição (cortes, fala, batida, apoios e textos). <b style={{color:_EVP_COR.ink}}>{rs.frase}</b>{rs.total ? " Clique num item para ir até lá." : ""}</div>
+      {rs.total > 0 && <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+        {chip("todos", "Todos", rs.total)}{chip("grave", "Graves", rs.graves, _EVC_COR.grave)}{chip("medio", "Médios", rs.medios, _EVC_COR.medio)}{chip("leve", "Leves", rs.leves, _EVC_COR.leve)}</div>}
+      {lista.map(function(x, k){
+        const cor = _EVC_COR[x.grau] || _EVC_COR.leve;
+        return <button key={k + ":" + x.tipo + ":" + x.t} type="button" data-conferir-item={x.tipo} onClick={function(){ if(onIr) onIr(Math.max(0, x.t - 1)); }} title={"Ir para " + _evcTempo(x.t)}
+          style={{font:"inherit",display:"flex",gap:10,width:"100%",textAlign:"left",cursor:"pointer",padding:"9px 10px 9px 0",border:0,borderTop:"1px solid " + _EVP_COR.linha2,background:"transparent",color:_EVP_COR.ink}}>
+          <span aria-hidden="true" style={{width:4,borderRadius:4,background:cor,flexShrink:0}}/>
+          <span style={{minWidth:46,fontFamily:_EVP_MONO,fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,paddingTop:1}}>{_evcTempo(x.t)}</span>
+          <span style={{flex:1,minWidth:0,fontSize:12.5,lineHeight:1.4}}>
+            <b style={{color:cor,fontSize:11,textTransform:"uppercase",letterSpacing:0.3,marginRight:6}}>{_EVC_ROT[x.grau] || x.grau}</b>{x.texto}
+            {x.como && <span style={{display:"block",marginTop:2,fontSize:11.5,color:_EVP_COR.sub}}>{x.como}</span>}</span>
+        </button>; })}
     </div>
   );
 }
