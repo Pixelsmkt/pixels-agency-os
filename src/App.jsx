@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 69/69 | Nao editar diretamente
+// Modulos: 71/71 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -144587,6 +144587,80 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const irPara = function(x){ const tt = _evClamp(x, 0, calc.total); if(motorRef.current) motorRef.current.seek(tt); setTempo(tt); };
   if(typeof window !== "undefined" && window.__EVP_TESTE) window.__evpIrPara = irPara;          // v78: só nos testes automáticos
   const tocar = function(){ const m = motorRef.current; if(!m) return; if(m.tocando){ m.pause(); setTocando(false); } else { if(micQuer){ setMicQuer(false); return; } if(micSegura()) return; m.play(); setTocando(true); } };   // v30 (16/10/2026) item 1: espera o microfone
+  /* ─── v37 (17/10/2026) RÉGUA NO CONFERIR + CONSERTAR O BÁSICO (52h régua · 52i conserto · 52f painel/junção) ───
+     A régua NÃO roda a cada quadro: roda ao abrir o painel e 700 ms depois da última mudança do projeto (o play não muda o projeto).
+     Extras da régua: mapa de movimento (video_movimento, lido UMA vez por edição pelo caminho do arquivo; erro/sem permissão = sem mapa),
+     música (o que o Estúdio já carregou: duração, bpm, clima, energia, gênero), energia do microfone (o som já carregado; sem ele, a régua passa sem)
+     e as exceções do projeto (p.excecoes, lidas pela própria régua). */
+  const [movEd, setMovEd] = useState(null);            // null = lendo · {} = sem mapa
+  /* revisão 17/10/2026: video_movimento é fechada (RLS sem política, sem GRANT) → lê pela função criacao_movimento (proposta em _sql/regua_movimento_ler.sql);
+     sem a função o rpc dá erro e fica {} (sem mapa), igual a antes */
+  useEffect(function(){
+    let vivo = true; setMovEd(null);
+    const cams = {}; clipes.forEach(function(c){ const k = _evcrCamClipe(c); if(k) cams[k] = 1; });
+    const lista = Object.keys(cams).slice(0, 150);
+    if(pcAuto || !window._sb || !lista.length){ setMovEd({}); return; }
+    try{ window._sb.rpc("criacao_movimento", { p_caminhos:lista })
+      .then(function(r){ if(vivo) setMovEd(r && !r.error && Array.isArray(r.data) ? _evcrMovimento(r.data, clipes) : {}); }, function(){ if(vivo) setMovEd({}); }); }catch(_){ setMovEd({}); }
+    return function(){ vivo = false; };
+  }, [ed.id]);
+  /* energia do microfone: só com UM microfone e o som dele já carregado (narr); tempo = segundos do microfone (A + t·(1+B), a régua converte) */
+  const micFn = useMemo(function(){
+    if(!_evpMicAtivo(p)) return null;
+    const ids = {}; (calc.narracoes || []).forEach(function(n){ if(n && n.micro && n._mic && !ids[n._mic]) ids[n._mic] = n.id; });
+    const ms = Object.keys(ids); if(ms.length !== 1) return null;
+    const buf = narr[ids[ms[0]]]; if(!buf || typeof buf.getChannelData !== "function") return null;
+    let d = null; try{ d = buf.getChannelData(0); }catch(_){ return null; }
+    const sr = buf.sampleRate; return function(a, b){ return _evcrRms(d, sr, a, b); };
+  }, [narr, p.micro]);
+  const micRef = useRef(null); micRef.current = micFn;
+  const regO = function(pp, cc){
+    const info = {}; clipes.forEach(function(c){ if(!c) return; const m = _evpMidia[c.id] || {}, q = {};
+      if(m.wb && m.hb){ q.w = m.wb; q.h = m.hb; q.rot = _evtxRot(c); } const du = Number(m.dur || c.dur || c.duracao); if(du > 0) q.dur = du; if(Number(c.fps) > 0) q.fps = Number(c.fps); info[c.id] = q; });
+    const D = _evpDim(pp.formato), an = pp.anuncio, mi = musInfo || null;
+    return { p:pp, calc:cc, fala:falaEd, infoClipe:info, W:D.w, H:D.h, galeria:kit && kit._galeria, teto:an && an.ligado !== false && an.alvo ? Number(an.alvo) : 0, kit:kitN,
+      movimento:movEd || {}, musicaInfo:mi ? { id:mi.id, duracao:mi.duracao, bpm:mi.bpm, fase:mi.batida_fase, clima:mi.clima, energia:mi.energia, genero:mi.genero } : null,
+      micEnergia:micRef.current || undefined };
+  };
+  const [regSnap, setRegSnap] = useState(null);
+  useEffect(function(){ const tm = setTimeout(function(){ setRegSnap({ p:p, calc:calc }); }, 700); return function(){ clearTimeout(tm); }; }, [calc]);
+  useEffect(function(){ if(confAuto) setRegSnap({ p:pRef.current, calc:calc }); }, [confAuto]);
+  const confR = useMemo(function(){
+    if(!regSnap || typeof _evrConferir !== "function" || typeof _evrContexto !== "function") return null;
+    try{ return _evrConferir(_evrContexto(regO(regSnap.p, regSnap.calc))); }catch(e){ try{ console.warn("[régua]", e); }catch(_){} return null; }
+  }, [regSnap, movEd, musInfo, !!micFn, falaEd, kit]);
+  const confM = useMemo(function(){ return _evcrJuntar(confA, confR || []); }, [confA, confR]);
+  /* 🛠️ consertar o básico: prepara (sem mexer) → a pessoa vê a lista → Aplicar entra no desfazer e o salvar sozinho grava como RASCUNHO (não cria versão) */
+  const [ultK, setUltK] = useState(null), [avisoK, setAvisoK] = useState(null);
+  const evkPode = typeof _evkConsertar === "function" && !soVer;
+  /* revisão 17/10/2026: em pedaços (_evkConsertarAos: ~25 ms por vez, a tela não trava; mesmo resultado do _evkConsertar) */
+  const evkRodar = function(base){ return typeof _evkConsertarAos === "function" ? _evkConsertarAos(base, regO(base, calc)) : Promise.resolve(_evkConsertar(base, regO(base, calc))); };
+  const evkPreparar = function(){ const base = pRef.current; return evkRodar(base).then(function(r){ if(r) r._base = JSON.stringify(base); return r; }); };
+  const evkAplicar = function(r){
+    if(!r || !r.projeto || !(r.feitos || []).length) return false;
+    if(JSON.stringify(pRef.current) !== r._base){ _evToast("warning", "A edição mudou enquanto eu conferia. Clique em Consertar o básico de novo."); return false; }
+    confirmar(pRef.current, r.projeto); setUltK({ feitos:r.feitos, restam:r.restam, auto:false }); setAvisoK(null); return true;
+  };
+  /* conserto automático quando a IA monta: opção NASCE DESLIGADA (guarda a hora em que ligou: só vale para montagens da IA feitas depois disso);
+     uma vez por versão (pxev-regua-feito-<edição>); nunca no PC do escritório, nos testes automáticos, no Estúdio escondido do PC nem no celular */
+  const [autoK, setAutoK] = useState(function(){ try{ return localStorage.getItem("pxev-regua-auto") || ""; }catch(_){ return ""; } });
+  const mudarAutoK = function(on){ const v = on ? new Date().toISOString() : ""; setAutoK(v); try{ if(v) localStorage.setItem("pxev-regua-auto", v); else localStorage.removeItem("pxev-regua-auto"); }catch(_){} };
+  const kBloq = (typeof window !== "undefined" && (!!window.__CFG || !!window.__EVP_TESTE)) || !!pcAuto || soVer || !!isMob;
+  const iaVer = useMemo(function(){ return _evcrVersaoIA(ed); }, [ed.id, ed.versoes, ed.receita_em, ed.atualizado_em, !!ed.receita]);
+  useEffect(function(){
+    if(movEd === null || !iaVer) return;
+    let feitoJa = true; try{ feitoJa = localStorage.getItem("pxev-regua-feito-" + ed.id) === iaVer.chave; }catch(_){ feitoJa = true; }
+    if(!_evcrAutoDeve({ bloqueado:kBloq || typeof _evkConsertar !== "function", ligadoEm:autoK, ia:iaVer, alterado:alterado, feito:feitoJa })) return;
+    try{ localStorage.setItem("pxev-regua-feito-" + ed.id, iaVer.chave); }catch(_){ return; }      // sem guardar não roda (não repete a cada abertura)
+    const base = pRef.current;
+    setTimeout(function(){
+      const falhou = function(e){ try{ console.warn("[conserto automático]", e); }catch(_){} };
+      try{ if(pRef.current !== base) return; evkRodar(base).then(function(r){ if(!r || !(r.feitos || []).length || pRef.current !== base) return;
+        confirmar(base, r.projeto); setUltK({ feitos:r.feitos, restam:r.restam, auto:true }); setAvisoK({ n:r.feitos.length, antes:base });
+      }).catch(falhou); }catch(e){ falhou(e); }
+    }, 400);
+  }, [iaVer && iaVer.chave, alterado, autoK, movEd === null]);
+  const desfazerK = function(){ const a = avisoK; setAvisoK(null); if(a && desf.length && desf[desf.length - 1] === a.antes) desfazer(); else _evToast("info", "Você já mexeu depois do conserto: use Ctrl+Z ou o Histórico (Ctrl+H) para voltar."); };
 
   /* v18: DIVIDIR A LEGENDA na agulha — a próxima palavra começa um pedaço novo (cada pedaço com cor e estilo próprios) */
   const dividirLegenda = function(){
@@ -146135,8 +146209,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:isMob ? "flex-end" : "center",justifyContent:"center",padding:isMob ? 0 : 16}}>{/* mob (16/10/2026) celular como app: sobe de baixo, largura toda */}
         <div ref={expRef} style={{width:isMob ? "100%" : "min(620px, 100%)",maxHeight:isMob ? "92dvh" : "90vh",overflow:"auto",position:"relative",paddingBottom:isMob ? "env(safe-area-inset-bottom)" : undefined}}>
           <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
-          {confA.resumo.graves > 0 && <div data-conferir-exportar="1" role="status" style={Object.assign({}, _EVP_PAINEL, {display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:"9px 44px 9px 12px",marginBottom:8,fontSize:12.5,fontWeight:700,color:_EVC_COR.grave})}>{/* v36 (17/10/2026) conferência automática */}
-            ✅ {confA.resumo.graves} {confA.resumo.graves > 1 ? "graves" : "grave"} — confira antes de exportar{!isMob && <button onClick={function(){ setVerExp(false); setVerVersoes(false); setConfAuto(true); }} style={Object.assign(_evpBtn(), {padding:"4px 10px",fontSize:11.5})}>Ver a lista</button>}</div>}
+          {confM.resumo.graves > 0 && <div data-conferir-exportar="1" role="status" style={Object.assign({}, _EVP_PAINEL, {display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:"9px 44px 9px 12px",marginBottom:8,fontSize:12.5,fontWeight:700,color:_EVC_COR.grave})}>{/* v36 (17/10/2026) conferência automática */}
+            ✅ {confM.resumo.graves} {confM.resumo.graves > 1 ? "graves" : "grave"} — confira antes de exportar{!isMob && <button onClick={function(){ setVerExp(false); setVerVersoes(false); setConfAuto(true); }} style={Object.assign(_evpBtn(), {padding:"4px 10px",fontSize:11.5})}>Ver a lista</button>}</div>}
           <_EvExportar t={t} ed={ed} projeto={p} calc={micFalhou ? calcMotor : calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
             vozesTratadas={vozes} vozPalavra={vozPalavra} tirarTrechos={tirarTrechos} fala={falaEd} setSel={setSel} irPara={function(x){ setVerExp(false); irPara(x); }}
@@ -146274,8 +146348,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         {/* v68: o formato saiu do topo — botão "Formato" (Alt+R) na barra embaixo do vídeo */}
         <button data-abrir-girar="editor" onClick={function(){ setGirarAberto(true); }} title="Vídeo gravado com a câmera deitada? Gire aqui (o original não muda)" style={Object.assign(_evpBtn(), {fontSize:12})}>↻ Girar</button>
         {elTxBotao(Object.assign(_evpBtn(), {fontSize:12}), "📝 Transcrição completa")}{/* v28 (15/10/2026) transcrição */}
-        <button data-conferir-auto-abrir="1" onClick={function(){ setVerVersoes(false); setConfAuto(!confAuto); }} aria-pressed={confAuto} title={"Conferência automática (grátis, sem IA): " + confA.resumo.frase}
-          style={Object.assign(_evpBtn(), {fontSize:12}, confAuto ? { background:_EVP_COR.roxoSoft, color:_EVP_COR.roxo } : {})}>✅ Conferir{(function(s){ return s ? <span style={{minWidth:18,padding:"1px 6px",borderRadius:99,background:s.cor,color:"#fff",fontSize:10.5,fontWeight:800,textAlign:"center"}}>{s.n}</span> : null; })(_evcSelo(confA))}</button>{/* v36 (17/10/2026) conferência automática */}
+        <button data-conferir-auto-abrir="1" onClick={function(){ setVerVersoes(false); setConfAuto(!confAuto); }} aria-pressed={confAuto} title={"Conferência automática (grátis, sem IA): " + confM.resumo.frase}
+          style={Object.assign(_evpBtn(), {fontSize:12}, confAuto ? { background:_EVP_COR.roxoSoft, color:_EVP_COR.roxo } : {})}>✅ Conferir{(function(s){ return s ? <span style={{minWidth:18,padding:"1px 6px",borderRadius:99,background:s.cor,color:"#fff",fontSize:10.5,fontWeight:800,textAlign:"center"}}>{s.n}</span> : null; })(_evcSelo(confM))}</button>{/* v36 (17/10/2026) conferência automática */}
         <button onClick={function(){ setPaleta(true); }} title="Buscar comando ou ferramenta (Ctrl+K)" aria-label="Comandos" style={Object.assign(_evpBtn(), {fontSize:12})}><_EvpIco n="comandos" s={15}/>Comandos {!avisoRasc && <span style={{fontFamily:_EVP_MONO,fontSize:10.5,color:_EVP_COR.fraco}}>Ctrl+K</span>}</button>
         <button onClick={function(){ setBasico(!basico); }} aria-pressed={basico} title={basico ? "Modo básico: só o essencial. Clique para ver todas as ferramentas." : "Modo avançado: todas as ferramentas. Clique para o modo básico."}
           style={Object.assign(_evpBtn(basico ? "suave" : null), {fontSize:12})}>{basico ? "Básico" : "Avançado"}</button>
@@ -146285,6 +146359,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
           <_EvpIco n="nuvemOk" s={14}/>Rascunho das {new Date(avisoRasc.em).toLocaleString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
           <button onClick={function(){ setAvisoRasc(null); }} style={Object.assign(_evpBtn("suave"), {padding:"3px 8px",fontSize:11})}>Ok</button>
           <button onClick={descartarRascunho} title="Voltar para a última versão salva" style={Object.assign(_evpBtn(), {padding:"3px 8px",fontSize:11})}>Voltar</button></span>}
+        {avisoK && <span data-regua-aviso="1" role="status" title="Conserto automático depois que a IA montou (a opção fica no ✅ Conferir)" style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",color:_EVP_COR.ink,background:_EVP_COR.roxoSoft,border:"1px solid " + _EVP_COR.linha2,borderRadius:99,padding:"3px 4px 3px 10px"}}>{/* v37 (17/10/2026) conserto automático */}
+          🛠️ Consertei {avisoK.n} {avisoK.n > 1 ? "coisas" : "coisa"}
+          <button data-regua-aviso-ver="1" onClick={function(){ setVerVersoes(false); setConfAuto(true); }} style={Object.assign(_evpBtn("suave"), {padding:"3px 8px",fontSize:11})}>Ver</button>
+          <button data-regua-aviso-desfazer="1" onClick={desfazerK} style={Object.assign(_evpBtn(), {padding:"3px 8px",fontSize:11})}>Desfazer</button>
+          <button onClick={function(){ setAvisoK(null); }} aria-label="Fechar aviso do conserto" style={Object.assign(_evpBtn("icone"), {padding:3})}><_EvpIco n="fechar" s={12}/></button></span>}
         <span style={{marginLeft:"auto"}}/>
         {expAtivo && <button onClick={function(){ setVerExp(true); }} style={Object.assign(_evpBtn("suave"), {fontSize:12})}><_EvpIco n="exportar" s={15}/>Exportando {exp.pct || 0}%</button>}
         <span title="O Estúdio guarda sozinho a cada alteração. 'Salvar versão' cria um ponto na lista de versões." style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",
@@ -146298,7 +146377,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <button onClick={function(){ setVerExp(true); }} style={_evpBtn("verde")}><_EvpIco n="exportar" s={16}/>Exportar</button>
         <button onClick={trocarTema} title={tema === "escuro" ? "Modo claro" : "Modo escuro"} aria-label={tema === "escuro" ? "Modo claro" : "Modo escuro"} style={bTopo(false)}><_EvpIco n={tema === "escuro" ? "sol" : "lua"} s={17}/></button>
         <button onClick={trocarCheia} title={cheia ? "Tela normal" : "Tela cheia"} aria-label={cheia ? "Tela normal" : "Tela cheia"} style={bTopo(false)}><_EvpIco n={cheia ? "recolher" : "expandir"} s={16}/></button>
-        {confAuto && <_EvcPainelConferir res={confA} onIr={irPara} onFechar={function(){ setConfAuto(false); }}/>}{/* v36 (17/10/2026) conferência automática */}
+        {confAuto && <_EvcPainelConferir res={confA} juntos={confM} onIr={irPara} onFechar={function(){ setConfAuto(false); }}
+          conserto={evkPode ? { preparar:evkPreparar, aplicar:evkAplicar, auto:!!autoK, setAuto:mudarAutoK, autoBloq:kBloq, ultimo:ultK } : null}/>}{/* v36 (17/10/2026) conferência automática · v37 régua + consertar o básico */}
         {verVersoes && (
           <div role="dialog" aria-label="Versões" style={Object.assign({}, _EVP_PAINEL, {position:"absolute",right:10,top:"calc(100% + 8px)",width:420,maxHeight:"60vh",overflow:"auto",zIndex:40,padding:14})}>
             <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}><span style={{color:_EVP_COR.roxo}}><_EvpIco n="versoes"/></span>Versões
@@ -154381,39 +154461,1365 @@ function _evcResumo(itens){
   return { graves:n.grave, medios:n.medio, leves:n.leve, total:(itens || []).length, frase:partes.length ? partes.join(" · ") : "Nada a conferir: tudo certo nos dados." };
 }
 /* ==== FIM ==== */
+/* ─── v37 (17/10/2026) RÉGUA NO CONFERIR: o painel "✅ Conferir" junta a conferência acima (_evcConferir) com a régua das 10 regras (52h: _evrConferir)
+   sem repetir o mesmo problema (ex.: palavra cortada aparece nas duas → fica UM, o da régua quando ele tem mais dados), separa "🔒 Travas" × "Preferências"
+   e prepara o "🛠️ Consertar o básico" (52i: _evkConsertar). Também: caminho do arquivo (para o mapa de movimento), energia do microfone (RMS) e a decisão
+   do "Consertar sozinho quando a IA montar" (nasce DESLIGADO). Funções PURAS entre os marcadores: _testes/painel_regua.test.js recorta e roda. ─── */
+/* ==== PAINEL REGUA PURO ==== */
+/* o mesmo problema nas duas listas: tipo da conferência → regra da régua, com tolerância de tempo (segundos) */
+const _EVCR_PAR = { palavra_cortada:{ regra:"R7", tol:0.15 }, sem_folga:{ regra:"R7", tol:0.15 }, batida:{ regra:"R10", tol:0.15 }, apoio_repetido:{ regra:"R4", tol:0.35 } };
+const _EVCR_ORD = { grave:0, medio:1, leve:2 };
+function _evcrN(x, d){ const n = Number(x); return isFinite(n) ? n : d; }
+/* item da conferência → item do painel (grave da conferência vai para Travas: não pode sair assim) */
+function _evcrDoConferir(x){
+  const g = _EVCR_ORD[x.grau] != null ? x.grau : "leve", t = Math.max(0, _evcrN(x.t, 0));
+  return { t:t, t1:t, grau:g, trava:g === "grave", tipo:String(x.tipo || ""), regra:"", fonte:"conferir", texto:String(x.texto || ""), como:String(x.como || ""), dados:{} };
+}
+/* item da régua → item do painel (trava = sempre grave; preferência aceita como exceção já vem "leve" com "aceito: …") */
+function _evcrDaRegua(x){
+  const d = x.dados && typeof x.dados === "object" ? x.dados : {}, trava = x.tipo === "trava", t = Math.max(0, _evcrN(x.t, 0));
+  return { t:t, t1:Math.max(t, _evcrN(x.t1, t)), grau:trava ? "grave" : (_EVCR_ORD[x.nivel] != null ? x.nivel : "leve"), trava:trava, tipo:String(x.regra), regra:String(x.regra), fonte:"regua",
+    texto:String(x.msg || x.regra), como:String(d.sugestao || ""), dados:d, aceito:d.aceito ? String(d.aceito) : "" };
+}
+function _evcrMesmo(c, r){
+  const par = _EVCR_PAR[c.tipo]; if(!par || par.regra !== r.regra) return false;
+  if(r.regra === "R7" && (r.dados.takeIni != null || r.dados.sincronia)) return false;     // pausa morta / voz fora de sincronia: é outro problema
+  if(c.tipo === "batida" && r.dados.batida == null) return false;                          // R10 de legenda ou de ritmo (música animada): outro problema
+  return Math.abs(c.t - r.t) <= par.tol + 1e-9;
+}
+function _evcrPior(a, b){ return _EVCR_ORD[a] <= _EVCR_ORD[b] ? a : b; }
+/* junta as duas listas → { itens, resumo, comRegua } · itens ordenados por tempo (e gravidade) */
+function _evcrJuntar(resC, itensR){
+  const C = ((resC && Array.isArray(resC.itens)) ? resC.itens : []).filter(Boolean).map(_evcrDoConferir);
+  const R = (Array.isArray(itensR) ? itensR : []).filter(function(x){ return x && x.regra; }).map(_evcrDaRegua);
+  const usado = {}, out = [];
+  C.forEach(function(c){
+    let k = -1, dk = 1e9;
+    R.forEach(function(r, i){ if(usado[i] || !_evcrMesmo(c, r)) return; const d = Math.abs(c.t - r.t); if(d < dk){ dk = d; k = i; } });
+    if(k < 0){ out.push(c); return; }
+    usado[k] = 1; const r = R[k], daRegua = Object.keys(r.dados).length > 0 || !c.como;
+    const f = Object.assign({}, daRegua ? r : c);
+    f.grau = _evcrPior(c.grau, r.grau); f.trava = c.trava || r.trava; f.regra = r.regra; f.junto = daRegua ? c.tipo : r.regra;
+    if(!f.como) f.como = daRegua ? c.como : r.como;
+    out.push(f);
+  });
+  R.forEach(function(r, i){ if(!usado[i]) out.push(r); });
+  out.sort(function(a, b){ return a.t - b.t || _EVCR_ORD[a.grau] - _EVCR_ORD[b.grau] || String(a.regra || a.tipo).localeCompare(String(b.regra || b.tipo)); });
+  return { itens:out, resumo:_evcrResumo(out), comRegua:R.length > 0 };
+}
+/* resumo: graves = TRAVAS + graves de preferência (é o número do botão e o aviso do Exportar); médios/leves só das preferências */
+function _evcrResumo(itens){
+  let travas = 0, gp = 0, md = 0, lv = 0;
+  (itens || []).forEach(function(x){ if(!x) return; if(x.trava) travas++; else if(x.grau === "grave") gp++; else if(x.grau === "medio") md++; else lv++; });
+  const partes = [];
+  if(travas) partes.push(travas + (travas > 1 ? " travas" : " trava")); if(gp) partes.push(gp + (gp > 1 ? " graves" : " grave"));
+  if(md) partes.push(md + (md > 1 ? " médios" : " médio")); if(lv) partes.push(lv + (lv > 1 ? " leves" : " leve"));
+  return { travas:travas, graves:travas + gp, gravesPref:gp, medios:md, leves:lv, total:travas + gp + md + lv,
+    frase:partes.length ? partes.join(" · ") : "Nada a conferir: tudo certo nos dados e na régua." };
+}
+/* "Vou consertar N coisas: …" a partir do resultado do _evkConsertar */
+function _evcrPlano(r, max){
+  max = max || 6; const f = (r && Array.isArray(r.feitos)) ? r.feitos.filter(Boolean) : [], rs = (r && Array.isArray(r.restam)) ? r.restam.filter(Boolean) : [];
+  return { n:f.length, linhas:f.slice(0, max).map(function(x){ return { t:Math.max(0, _evcrN(x.t, 0)), regra:String(x.regra || ""), msg:String(x.msg || "") }; }),
+    mais:Math.max(0, f.length - max), restam:rs.length, restamTravas:rs.filter(function(x){ return x.tipo === "trava"; }).length };
+}
+/* a versão atual foi a IA que montou? (última de ed.versoes com "modelo"/custo, ou a 1ª montagem sem pedido; sem lista: a receita da IA) */
+function _evcrVersaoIA(ed){
+  if(!ed || !ed.id) return null;
+  const vs = Array.isArray(ed.versoes) ? ed.versoes : [], u = vs[vs.length - 1];
+  const ia = u ? !!(u.modelo || u.custo_brl != null || !u.pedido) : !!ed.receita;
+  if(!ia) return null;
+  const em = String((u && u.em) || ed.receita_em || ed.atualizado_em || "");
+  return { chave:String(ed.id) + "|v" + (u && u.n != null ? u.n : 1) + "|" + em, em:em, n:u && u.n != null ? u.n : 1 };
+}
+/* conserto automático depois que a IA monta: só com a opção LIGADA, versão da IA feita DEPOIS de ligar, sem mudança local e uma vez por versão */
+function _evcrAutoDeve(o){
+  o = o || {}; if(o.bloqueado || !o.ligadoEm || !o.ia || o.alterado || o.feito) return false;
+  const a = Date.parse(o.ia.em), b = Date.parse(o.ligadoEm); return isFinite(a) && isFinite(b) && a >= b;
+}
+/* caminho no armazenamento (o que vem depois de "agency-files/", sem ?query) — liga o clipe ao mapa de movimento (video_movimento.caminho) */
+function _evcrCaminho(u){
+  u = String(u || ""); const k = u.indexOf("agency-files/"); if(k < 0) return "";
+  let c = u.slice(k + 13).split(/[?#]/)[0]; try{ c = decodeURIComponent(c); }catch(_){} return c;
+}
+function _evcrCamClipe(c){ if(!c) return ""; const s = String(c.storagePath || ""); return _evcrCaminho(c.url) || (s && !/^https?:/.test(s) ? s.replace(/^\/+/, "") : ""); }
+/* linhas de video_movimento → { clipeId: { dur, passo, bons, resumo } } (o formato que a régua e o conserto leem) */
+function _evcrMovimento(linhas, clipes){
+  const porCam = {};
+  (Array.isArray(linhas) ? linhas : []).forEach(function(r){ if(r && r.caminho) porCam[r.caminho] = { dur:_evcrN(r.dur, 0), passo:_evcrN(r.passo, 0.1),
+    bons:Array.isArray(r.bons) ? r.bons.filter(function(b){ return Array.isArray(b) && b.length >= 2; }) : [], resumo:r.resumo && typeof r.resumo === "object" ? r.resumo : {} }; });
+  const m = {}; (Array.isArray(clipes) ? clipes : []).forEach(function(c){ const k = _evcrCamClipe(c); if(c && c.id && k && porCam[k]) m[c.id] = porCam[k]; });
+  return m;
+}
+/* energia (RMS 0..1) de um pedaço do som do microfone, em segundos do microfone · sem dado → NaN (a régua e o conserto ignoram) */
+function _evcrRms(dados, sr, t0, t1){
+  if(!dados || !(sr > 0) || !isFinite(t0) || !isFinite(t1)) return NaN;
+  const a = Math.max(0, Math.floor(Math.min(t0, t1) * sr)), b = Math.min(dados.length, Math.ceil(Math.max(t0, t1) * sr)); if(b <= a) return NaN;
+  const passo = Math.max(1, Math.floor((b - a) / 4000)); let s = 0, n = 0;
+  for(let i = a; i < b; i += passo){ const v = dados[i]; s += v * v; n++; }
+  return n ? Math.sqrt(s / n) : NaN;
+}
+/* ==== FIM PAINEL REGUA ==== */
 /* v36 (17/10/2026) conferência automática: o painel abre embaixo do botão "✅ Conferir" da barra de cima (absolute, como o de Versões).
    Grave em vermelho, médio em amarelo, leve em cinza; clicar num item leva a agulha 1 s antes do ponto (para ouvir a emenda). */
 const _EVC_COR = { grave:"#dc2626", medio:"#ca8a04", leve:"#64748b" };
 const _EVC_ROT = { grave:"Grave", medio:"Médio", leve:"Leve" };
 function _evcSelo(res){ const r = res && res.resumo; if(!r || !r.total) return null; return r.graves ? { n:r.graves, cor:_EVC_COR.grave } : r.medios ? { n:r.medios, cor:_EVC_COR.medio } : { n:r.leves, cor:_EVC_COR.leve }; }
-function _EvcPainelConferir({ res, onIr, onFechar }){
+/* v37 (17/10/2026) régua no Conferir: duas partes — "🔒 Travas (não pode sair assim)" e "Preferências"; os itens da régua levam a etiqueta da regra (R1…R10).
+   conserto (opcional) = { preparar() → resultado do _evkConsertar, aplicar(r) → true/false, auto, setAuto(bool), autoBloq, ultimo:{ feitos, restam, auto } }.
+   Nada roda sem clique: "🛠️ Consertar o básico" mostra antes "Vou consertar N coisas: …" com [Aplicar] [Cancelar]. */
+function _EvcPainelConferir({ res:resConf, juntos, onIr, onFechar, conserto }){
+  const res = juntos || resConf;   // régua 17/10/2026: "juntos" = conferência + régua (sem juntos = só a conferência, como antes)
   const [filtro, setFiltro] = useState("todos");
-  const itens = (res && res.itens) || [], rs = (res && res.resumo) || _evcResumo([]);
-  const lista = itens.filter(function(x){ return filtro === "todos" || x.grau === filtro; });
+  const [plano, setPlano] = useState(null);          // resultado do _evkConsertar esperando [Aplicar]
+  const [rodando, setRodando] = useState(false);
+  const [feito, setFeito] = useState(null);          // { n, restam } depois de aplicar
+  const [verFeitos, setVerFeitos] = useState(false);
+  const itens = (res && res.itens) || [], rs = (res && res.resumo) || _evcrResumo([]);
+  const passa = function(x){ return filtro === "todos" || x.grau === filtro; };
+  const travas = itens.filter(function(x){ return x.trava && passa(x); }), prefs = itens.filter(function(x){ return !x.trava && passa(x); });
+  const nGrave = rs.graves != null ? rs.graves : 0;
   const chip = function(id, rot, n, cor){ const on = filtro === id; return <button key={id} type="button" aria-pressed={on} onClick={function(){ setFiltro(id); }} disabled={id !== "todos" && !n}
     style={{font:"inherit",fontSize:11.5,fontWeight:700,padding:"4px 10px",borderRadius:99,cursor:id !== "todos" && !n ? "default" : "pointer",opacity:id !== "todos" && !n ? 0.45 : 1,
       border:"1px solid " + (on ? (cor || _EVP_COR.roxo) : _EVP_COR.linha),background:on ? _EVP_COR.faixa : "transparent",color:cor || _EVP_COR.ink}}>{rot} {n}</button>; };
+  const linha = function(x, k){
+    const cor = _EVC_COR[x.grau] || _EVC_COR.leve;
+    return <button key={k + ":" + (x.regra || x.tipo) + ":" + x.t} type="button" data-conferir-item={x.tipo} data-regua-regra={x.regra || undefined} onClick={function(){ if(onIr) onIr(Math.max(0, x.t - 1)); }} title={"Ir para " + _evcTempo(x.t) + " (1 s antes)"}
+      style={{font:"inherit",display:"flex",gap:10,width:"100%",textAlign:"left",cursor:"pointer",padding:"9px 10px 9px 0",border:0,borderTop:"1px solid " + _EVP_COR.linha2,background:"transparent",color:_EVP_COR.ink}}>
+      <span aria-hidden="true" style={{width:4,borderRadius:4,background:cor,flexShrink:0}}/>
+      <span style={{minWidth:46,fontFamily:_EVP_MONO,fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,paddingTop:1}}>{_evcTempo(x.t)}</span>
+      <span style={{flex:1,minWidth:0,fontSize:12.5,lineHeight:1.4}}>
+        {x.regra && <span title="Regra da régua de edição" style={{fontFamily:_EVP_MONO,fontSize:10,fontWeight:800,padding:"1px 5px",borderRadius:5,marginRight:6,background:_EVP_COR.faixa,border:"1px solid " + _EVP_COR.linha2,color:_EVP_COR.sub}}>{x.regra}</span>}
+        {!x.trava && <b style={{color:cor,fontSize:11,textTransform:"uppercase",letterSpacing:0.3,marginRight:6}}>{_EVC_ROT[x.grau] || x.grau}</b>}{x.texto}
+        {x.como && <span style={{display:"block",marginTop:2,fontSize:11.5,color:_EVP_COR.sub}}>{x.como}</span>}</span>
+    </button>; };
+  const titulo = function(txt, n, cor, extra){ return <div style={{display:"flex",alignItems:"center",gap:6,margin:"12px 0 2px",fontSize:12,fontWeight:800,color:cor || _EVP_COR.ink}}>{txt}
+    <span style={{fontSize:11,fontWeight:700,color:_EVP_COR.sub}}>· {n}</span>{extra}</div>; };
+  const preparar = function(){
+    if(!conserto || rodando) return; setRodando(true); setFeito(null); setPlano(null);
+    const erro = function(e){ return { feitos:[], restam:[], erro:String((e && e.message) || e) }; }, fim = function(r){ setPlano(r || { feitos:[], restam:[] }); setRodando(false); };
+    /* revisão 17/10/2026: preparar() pode devolver uma Promise (_evkConsertarAos: roda em pedaços, a tela não trava) */
+    setTimeout(function(){ let r = null; try{ r = conserto.preparar(); }catch(e){ fim(erro(e)); return; } Promise.resolve(r).then(fim, function(e){ fim(erro(e)); }); }, 30);   // deixa a tela mostrar "Consertando…"
+  };
+  const aplicar = function(){ if(!plano || !conserto) return; const pl = _evcrPlano(plano); if(conserto.aplicar(plano)){ setFeito({ n:pl.n, restam:pl.restam, travas:pl.restamTravas }); setPlano(null); } };
+  const pl = plano ? _evcrPlano(plano) : null, ult = conserto && conserto.ultimo, ultPl = ult ? _evcrPlano(ult, 40) : null;
+  const caixa = function(cor, filhos, attr){ return <div {...(attr || {})} style={{margin:"8px 0 4px",padding:"10px 12px",borderRadius:12,border:"1px solid " + (cor || _EVP_COR.linha),background:_EVP_COR.faixa,fontSize:12.5,lineHeight:1.45,color:_EVP_COR.ink}}>{filhos}</div>; };
   return (
-    <div role="dialog" aria-label="Conferência automática" data-conferir-auto="1" style={Object.assign({}, _EVP_PAINEL, {position:"absolute",right:10,top:"calc(100% + 8px)",width:480,maxWidth:"calc(100vw - 32px)",maxHeight:"64vh",overflow:"auto",zIndex:41,padding:14})}>
+    <div role="dialog" aria-label="Conferência automática" data-conferir-auto="1" style={Object.assign({}, _EVP_PAINEL, {position:"absolute",right:10,top:"calc(100% + 8px)",width:500,maxWidth:"calc(100vw - 32px)",maxHeight:"70vh",overflow:"auto",zIndex:41,padding:14})}>
       <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:800,fontSize:14}}>✅ Conferência automática
         <span style={{fontSize:11,fontWeight:700,color:_EVP_COR.sub,background:_EVP_COR.faixa,border:"1px solid " + _EVP_COR.linha2,borderRadius:99,padding:"2px 8px"}}>grátis · sem IA</span>
         <button onClick={onFechar} aria-label="Fechar conferência" style={Object.assign(_evpBtn("icone"), {marginLeft:"auto",padding:5})}><_EvpIco n="fechar" s={14}/></button></div>
-      <div style={{fontSize:12,color:_EVP_COR.sub,margin:"6px 0 10px",lineHeight:1.45}}>Olha só os dados da edição (cortes, fala, batida, apoios e textos). <b style={{color:_EVP_COR.ink}}>{rs.frase}</b>{rs.total ? " Clique num item para ir até lá." : ""}</div>
-      {rs.total > 0 && <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-        {chip("todos", "Todos", rs.total)}{chip("grave", "Graves", rs.graves, _EVC_COR.grave)}{chip("medio", "Médios", rs.medios, _EVC_COR.medio)}{chip("leve", "Leves", rs.leves, _EVC_COR.leve)}</div>}
-      {lista.map(function(x, k){
-        const cor = _EVC_COR[x.grau] || _EVC_COR.leve;
-        return <button key={k + ":" + x.tipo + ":" + x.t} type="button" data-conferir-item={x.tipo} onClick={function(){ if(onIr) onIr(Math.max(0, x.t - 1)); }} title={"Ir para " + _evcTempo(x.t)}
-          style={{font:"inherit",display:"flex",gap:10,width:"100%",textAlign:"left",cursor:"pointer",padding:"9px 10px 9px 0",border:0,borderTop:"1px solid " + _EVP_COR.linha2,background:"transparent",color:_EVP_COR.ink}}>
-          <span aria-hidden="true" style={{width:4,borderRadius:4,background:cor,flexShrink:0}}/>
-          <span style={{minWidth:46,fontFamily:_EVP_MONO,fontSize:11.5,fontWeight:700,color:_EVP_COR.sub,paddingTop:1}}>{_evcTempo(x.t)}</span>
-          <span style={{flex:1,minWidth:0,fontSize:12.5,lineHeight:1.4}}>
-            <b style={{color:cor,fontSize:11,textTransform:"uppercase",letterSpacing:0.3,marginRight:6}}>{_EVC_ROT[x.grau] || x.grau}</b>{x.texto}
-            {x.como && <span style={{display:"block",marginTop:2,fontSize:11.5,color:_EVP_COR.sub}}>{x.como}</span>}</span>
-        </button>; })}
+      <div style={{fontSize:12,color:_EVP_COR.sub,margin:"6px 0 8px",lineHeight:1.45}}>Olha só os dados da edição (cortes, fala, batida, apoios, textos){res && res.comRegua ? " e a régua das 10 regras" : ""}. <b style={{color:_EVP_COR.ink}}>{rs.frase}</b>{rs.total ? " Clique num item para ir até lá (1 s antes)." : ""}</div>
+      {conserto && <div data-regua-conserto="1">
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <button data-regua-consertar="1" onClick={preparar} disabled={rodando || !!plano} style={Object.assign(_evpBtn("suave", !(rodando || plano)), {fontSize:12})}>{rodando ? "Consertando… (preparo a lista antes de mexer)" : "🛠️ Consertar o básico"}</button>
+          <label title="Recurso novo: nasce desligado. Quando ligado, depois que a IA montar uma versão nova, eu confiro, conserto o básico e aviso (Ctrl+Z desfaz)."
+            style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11.5,fontWeight:700,color:conserto.autoBloq ? _EVP_COR.fraco : _EVP_COR.sub,cursor:conserto.autoBloq ? "default" : "pointer",marginLeft:"auto"}}>
+            <input type="checkbox" role="switch" data-regua-auto="1" checked={!!conserto.auto} disabled={!!conserto.autoBloq} onChange={function(e){ if(conserto.setAuto) conserto.setAuto(!!e.target.checked); }} style={{accentColor:_EVP_COR.roxoFixo}}/>
+            Consertar sozinho quando a IA montar</label>
+        </div>
+        {pl && (pl.n > 0 ? caixa(_EVP_COR.roxo, <Fragment>
+            <b>Vou consertar {pl.n} {pl.n > 1 ? "coisas" : "coisa"}:</b>
+            <ul style={{margin:"6px 0 0",paddingLeft:18}}>{pl.linhas.map(function(l, k){ return <li key={k} style={{margin:"2px 0"}}><span style={{fontFamily:_EVP_MONO,fontSize:11,color:_EVP_COR.sub}}>{_evcTempo(l.t)}{l.regra ? " · " + l.regra : ""}</span> {l.msg}</li>; })}
+              {pl.mais > 0 && <li style={{color:_EVP_COR.sub}}>e mais {pl.mais}.</li>}</ul>
+            <div style={{fontSize:11.5,color:_EVP_COR.sub,marginTop:6}}>{pl.restam ? "Depois disso ficam " + pl.restam + " para ver à mão" + (pl.restamTravas ? " (" + pl.restamTravas + (pl.restamTravas > 1 ? " travas" : " trava") + ")" : "") + ". " : ""}Fica como rascunho (não cria versão) e Ctrl+Z desfaz.</div>
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <button data-regua-aplicar="1" onClick={aplicar} style={Object.assign(_evpBtn("primario"), {fontSize:12})}>Aplicar</button>
+              <button data-regua-cancelar="1" onClick={function(){ setPlano(null); }} style={Object.assign(_evpBtn(), {fontSize:12})}>Cancelar</button></div></Fragment>, { "data-regua-plano":"1" })
+          : caixa(_EVP_COR.linha, <Fragment>{plano.erro ? "Não consegui conferir o conserto (" + plano.erro.slice(0, 80) + ")." : "Não achei nada que eu consiga consertar sozinho."}{pl.restam ? " Ficam " + pl.restam + " para ver à mão (na lista abaixo)." : ""}
+            <button onClick={function(){ setPlano(null); }} style={Object.assign(_evpBtn(), {padding:"3px 9px",fontSize:11.5,marginLeft:8})}>Ok</button></Fragment>, { "data-regua-plano":"0" }))}
+        {feito && caixa("rgba(22,163,74,.55)", <Fragment><b>Consertei {feito.n} {feito.n > 1 ? "coisas" : "coisa"}.</b> {feito.restam ? "Ficaram " + feito.restam + " para ver à mão" + (feito.travas ? " (" + feito.travas + (feito.travas > 1 ? " travas" : " trava") + ")" : "") + " — a lista abaixo já foi conferida de novo." : "A régua não achou mais nada."} Ctrl+Z desfaz.</Fragment>, { "data-regua-feito":"1" })}
+        {ultPl && ultPl.n > 0 && !feito && <div style={{margin:"6px 0 2px",fontSize:12}}>
+          <button onClick={function(){ setVerFeitos(!verFeitos); }} aria-expanded={verFeitos} style={{font:"inherit",border:0,background:"transparent",padding:0,cursor:"pointer",fontWeight:800,color:_EVP_COR.ink}}>
+            🛠️ {ult.auto ? "Consertei sozinho depois da IA" : "O que eu consertei"}: {ultPl.n} {ultPl.n > 1 ? "coisas" : "coisa"} {verFeitos ? "▴" : "▾"}</button>
+          {verFeitos && <ul data-regua-feitos="1" style={{margin:"4px 0 0",paddingLeft:18,color:_EVP_COR.sub}}>{ultPl.linhas.map(function(l, k){ return <li key={k} style={{margin:"2px 0"}}>
+            <button onClick={function(){ if(onIr) onIr(Math.max(0, l.t - 1)); }} style={{font:"inherit",fontFamily:_EVP_MONO,fontSize:11,border:0,background:"transparent",padding:0,cursor:"pointer",color:_EVP_COR.roxo}}>{_evcTempo(l.t)}{l.regra ? " · " + l.regra : ""}</button> {l.msg}</li>; })}</ul>}
+        </div>}
+      </div>}
+      {rs.total > 0 && <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"10px 0 0"}}>
+        {chip("todos", "Todos", rs.total)}{chip("grave", "Graves", nGrave, _EVC_COR.grave)}{chip("medio", "Médios", rs.medios, _EVC_COR.medio)}{chip("leve", "Leves", rs.leves, _EVC_COR.leve)}</div>}
+      {travas.length > 0 && <div data-regua-travas="1">{titulo("🔒 Travas (não pode sair assim)", travas.length, _EVC_COR.grave)}{travas.map(linha)}</div>}
+      {prefs.length > 0 && <div data-regua-prefs="1">{titulo("Preferências", prefs.length, null, <span style={{fontSize:11,fontWeight:600,color:_EVP_COR.fraco}}>· dependem do vídeo</span>)}{prefs.map(linha)}</div>}
     </div>
   );
 }
+
+// ======= 52h_video_regua.jsx ======= (Edição de vídeo · RÉGUA DE EDIÇÃO: confere as 10 regras de edição nos dados do projeto, sem IA e sem desenhar · só funções puras, testáveis no Node: _testes/regua.test.js · o juntar.py junta na ordem)
+/* ==== REGUA PURA ==== */
+/* CONTRATO (17/10/2026 — o conserto depende disso):
+   _evrPerfil(musica, tipoVideo, ctx?) → perfil { nome:"leve"|"animado"|"medio", minTela:{ideal,minimo}, trocaBatidas:{ideal,minimo,maximo}, velApoioRapido:{ideal,minimo},
+       velLimiarMov, zoomParado:{ideal,minimo}, cortesCurtosNaBatida, rostoMax:{ideal,maximo}, camLentaMin, repetirJanela, motivo, ajustes:[] } (com ctx, já vem ajustado)
+   _evrAjustarPerfil(perfil, ctx) → cópia do perfil ajustada ao projeto (nº de trechos bons dos takes de apoio, quanto motion tem, duração do vídeo)
+   _evrContexto(o) → ctx. o = o MESMO objeto do Conferir (_evcConferir no 52f): { p, calc, fala, infoClipe, W, H, galeria, teto }
+       + extras opcionais: movimento {clipeId:{dur,bons,resumo}}, musicaInfo {duracao,bpm,fase,clima,energia,genero}, micEnergia(tMic0,tMic1)→RMS 0..1,
+       fps {clipeId:fps}, duracao {clipeId:s}, excecoes [{regra,t,motivo}] (também lidas de p.excecoes), nomeLoja "Starken" (para a R5)
+   _evrConferir(ctx) → [{ regra:"R1".."R10", tipo:"trava"|"preferencia", nivel:"grave"|"medio"|"leve", t, t1, msg, dados:{...} }]
+   TRAVA = nunca pode (sempre "grave", não aceita exceção): tela preta/congelada, plano < 0,4 s, palavra cortada, música acabando antes do fim,
+       voz fora de sincronia, mesmo trecho de take repetido sobreposto. PREFERÊNCIA = depende do vídeo; se p.excecoes tiver {regra, t, motivo}
+       cobrindo o item, ele cai para "leve" com msg "aceito: <motivo>" (dados.aceito, dados.nivelOriginal). */
+const _EVR_LIM = { piscada:0.4, umQuadro:0.035, folga:0.08, folgaGrave:0.05, pausa:0.6, tolBatida:0.08, tarjaCob:0.3, legSumida:1, sobrepos:0.15,
+  juntaBons:0.35, tolBons:0.05, janelaFala:3, rmsAlto:0.08, rmsJanela:0.03, micConfMin:0.5, musicaFolga:0.5 };
+const _EVR_PERFIS = {
+  leve:{ nome:"leve", minTela:{ ideal:1.5, minimo:1.0 }, trocaBatidas:{ ideal:8, minimo:4, maximo:16 }, velApoioRapido:{ ideal:0.68, minimo:0.6 }, velLimiarMov:3.0, zoomParado:{ ideal:0.08, minimo:0.06 },
+    cortesCurtosNaBatida:false, rostoMax:{ ideal:6, maximo:9 }, camLentaMin:0.8, repetirJanela:30 },
+  medio:{ nome:"medio", minTela:{ ideal:1.2, minimo:0.8 }, trocaBatidas:{ ideal:4, minimo:2, maximo:8 }, velApoioRapido:{ ideal:0.8, minimo:0.65 }, velLimiarMov:3.5, zoomParado:{ ideal:0.10, minimo:0.07 },
+    cortesCurtosNaBatida:false, rostoMax:{ ideal:6, maximo:8 }, camLentaMin:0.8, repetirJanela:30 },
+  animado:{ nome:"animado", minTela:{ ideal:0.6, minimo:0.4 }, trocaBatidas:{ ideal:2, minimo:1, maximo:4 }, velApoioRapido:{ ideal:1, minimo:0.8 }, velLimiarMov:99, zoomParado:{ ideal:0.12, minimo:0.08 },
+    cortesCurtosNaBatida:true, rostoMax:{ ideal:4, maximo:6 }, camLentaMin:0.8, repetirJanela:20 }
+};
+const _EVR_DECOR = /bomba|gasolina|posto|lounge|decora|sofa|vitrine|fachada|recepcao|balcao|quadro|planta|ambiente|\bloja\b/;
+const _EVR_FALA_LOJA = ["loja", "lojas", "nos", "nossa", "nosso", "nossos", "nossas", "empresa", "starken", "starking", "starkey"];
+function _evrN(x, d){ const n = Number(x); return isFinite(n) ? n : d; }
+function _evrR(x){ return Math.round(_evrN(x, 0) * 100) / 100; }
+function _evrNorm(s){ return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); }
+function _evrS(t){ return _evrN(t, 0).toFixed(2).replace(/0$/, "").replace(".", ",") + " s"; }
+function _evrSeg(a, b){ return _evrS(a).replace(" s", "") + "–" + _evrS(b); }
+function _evrClone(o){ return JSON.parse(JSON.stringify(o)); }
+function _evrAspas(s){ return "“" + s + "”"; }
+function _evrNomeCurto(s, d){ s = String(s || "").replace(/^(Respiro|Apoio)\s*·\s*/i, "").trim(); return s || d || "take"; }
+
+/* ── PERFIL: música + tipo de vídeo → faixas de preferência ── */
+function _evrPerfil(musica, tipoVideo, ctx){
+  const m = musica || {}, clima = _evrNorm(m.clima), en = _evrNorm(m.energia), gen = _evrNorm(m.genero), bpm = _evrN(m.bpm || (m.beat && m.beat.bpm), 0), tv = _evrNorm(tipoVideo);
+  const agitado = /rock|hip hop|hiphop|rap|trap|eletron|electro|edm|house|techno|funk|dubstep|drum|punk|metal|reggaeton/.test(gen) || /energ|agit|festa|anim|intens|epic|urban/.test(clima);
+  const enAlta = /alta|forte|muito/.test(en), enCalma = !en || /baixa|media|calma|suave/.test(en);
+  const calmo = /inspir|corpor|motiv|calm|suave|emoc|ambient|acust|piano|leve|tranq|delicad|romant/.test(clima);
+  let nome, motivo;
+  if(agitado || enAlta){ nome = "animado"; motivo = "música " + (gen || clima || "agitada") + (enAlta ? " com energia alta" : ""); }
+  else if((calmo && enCalma) || (bpm > 0 && bpm <= 110 && !agitado && enCalma)){ nome = "leve"; motivo = "música " + (clima || "calma") + (bpm ? " a " + bpm + " bpm" : "") + (en ? ", energia " + en : ""); }
+  else { nome = "medio"; motivo = "música sem sinal claro de calma ou agitação" + (bpm ? " (" + bpm + " bpm)" : ""); }
+  if(/depoimento|institucional|entrevista|testemunho|case/.test(tv) && nome !== "leve"){ nome = nome === "animado" ? "medio" : "leve"; motivo += "; vídeo de " + tv + " puxa para mais calmo"; }
+  else if(tv) motivo += "; vídeo de " + tv;
+  const P = _evrClone(_EVR_PERFIS[nome]); P.motivo = motivo; P.ajustes = [];
+  return ctx ? _evrAjustarPerfil(P, ctx) : P;
+}
+/* ajustes do contexto: poucos takes bons → o rosto pode aparecer mais e repetir take é mais tolerado; muito motion → menos apoio;
+   vídeo curto (< 30 s) → planos podem ser mais curtos */
+function _evrAjustarPerfil(perfil, ctx){
+  const P = _evrClone(perfil || _EVR_PERFIS.medio); P.ajustes = Array.isArray(P.ajustes) ? P.ajustes.slice() : [];
+  ctx = ctx || {};
+  const mov = ctx.movimento || {}, falaIds = {}; (ctx.trechosFala || []).forEach(function(f){ if(f.clipe) falaIds[f.clipe] = 1; });
+  let nTakes = 0, segBons = 0, temMov = false;
+  Object.keys(mov).forEach(function(id){ const m = mov[id]; if(!m || falaIds[id]) return; temMov = true; nTakes++;
+    segBons += (Array.isArray(m.bons) ? m.bons : []).reduce(function(s, b){ return s + Math.max(0, _evrN(b[1], 0) - _evrN(b[0], 0)); }, 0); });
+  if(temMov && (nTakes < 8 || segBons < 30)){
+    P.rostoMax.ideal += 3; P.rostoMax.maximo += 4; P.repetirJanela = Math.min(P.repetirJanela, 15);
+    P.ajustes.push("poucos takes de apoio (" + nTakes + " takes, " + Math.round(segBons) + " s bons): o rosto pode aparecer mais e repetir take é tolerado mais perto");
+  }
+  const total = _evrN(ctx.total, 0);
+  const motSeg = (ctx.motion || []).filter(function(i){ return i && i.modelo !== "selo"; }).reduce(function(s, i){ return s + Math.max(0, _evrN(i.t1, 0) - _evrN(i.t0, 0)); }, 0);
+  if(total > 0 && motSeg / total > 0.2){ P.rostoMax.ideal += 2; P.rostoMax.maximo += 2; P.ajustes.push("muito motion (" + Math.round(motSeg / total * 100) + "% do vídeo): precisa de menos apoio"); }
+  if(total > 0 && total < 30){ P.minTela.ideal = Math.max(P.minTela.minimo, _evrR(P.minTela.ideal * 0.8)); P.trocaBatidas.ideal = Math.max(P.trocaBatidas.minimo, Math.round(P.trocaBatidas.ideal * 0.75));
+    P.ajustes.push("vídeo curto (" + Math.round(total) + " s): planos podem ser um pouco mais curtos"); }
+  P.dados = { nTakesApoio:nTakes, segBons:_evrR(segBons), motionSeg:_evrR(motSeg) };
+  return P;
+}
+
+/* ── CONTEXTO ── */
+function _evrPalavras(lista, corr){
+  return (Array.isArray(lista) ? lista : []).filter(function(w){ return w && isFinite(Number(w.i)) && String(w.p || "").trim(); }).map(function(w){
+    const i = Number(w.i), f = Math.max(i, _evrN(w.f, i)), p = String(w.p).trim(), n = _evrNorm(p);
+    return { i:i, f:f, p:p, pt:w.pt || "", n:corr && corr[n] ? corr[n] : n };
+  }).sort(function(a, b){ return a.i - b.i; });
+}
+function _evrContexto(o){
+  o = o || {}; const p = o.p || {}, calc = o.calc || {};
+  const clips = Array.isArray(p.clips) ? p.clips : [], cc = Array.isArray(calc.clips) ? calc.clips : [];
+  let soma = 0;
+  const tl = clips.map(function(c, i){
+    const vel = _evrN(c.vel, 1) || 1, dur = Math.max(0, (_evrN(c.fim, 0) - _evrN(c.ini, 0)) / vel), k = cc[i];
+    const t0 = k && isFinite(Number(k.t0)) ? Number(k.t0) : soma, t1 = k && isFinite(Number(k.t1)) ? Number(k.t1) : t0 + dur;
+    soma = t1; return { i:i, c:c, id:c.id, clipe:c.clipe, t0:t0, t1:t1, vel:vel, ini:_evrN(c.ini, 0), fim:_evrN(c.fim, 0), mudo:!!c.mudo, nome:c.nome || "" };
+  });
+  const fimCortes = isFinite(Number(calc.fimCortes)) ? Number(calc.fimCortes) : soma;
+  const total = isFinite(Number(calc.total)) ? Number(calc.total) : fimCortes + Math.max(0, _evrN(p.tela_final && p.tela_final.dur, 0));
+  const imgs = (Array.isArray(p.imagens) ? p.imagens : []).filter(function(x){ return x && !x.soFundo && _evrN(x.t1, 0) > _evrN(x.t0, 0); }).map(function(x, k){
+    return { k:k, x:x, id:x.id, clipe:x.clipe || "", t0:_evrN(x.t0, 0), t1:_evrN(x.t1, 0), ini:_evrN(x.ini, 0), vel:_evrN(x.vel, 1) || 1, nome:x.nome || "", video:x.camada === "video" || !!x.clipe };
+  });
+  const info = o.infoClipe || {}, mov = o.movimento || {};
+  const durBruto = function(id){ const d = o.duracao && o.duracao[id]; if(_evrN(d, 0) > 0) return Number(d); const q = info[id] || {};
+    if(_evrN(q.dur || q.duracao, 0) > 0) return Number(q.dur || q.duracao); if(mov[id] && _evrN(mov[id].dur, 0) > 0 && _evrN(mov[id].dur, 0) < 179.5) return Number(mov[id].dur); return 0; };   // revisão 17/10/2026: o mapa de movimento mede só os 3 primeiros minutos (dur = 180 não é a duração do take)
+  const fpsDe = function(id){ const f = (o.fps && o.fps[id]) || (info[id] && info[id].fps); return _evrN(f, 0) > 0 ? Number(f) : 0; };
+  const leg = p.legenda || {}, corr = {}, nomes = {};
+  (leg.correcoes || []).forEach(function(c){ if(c && c.de && c.para){ corr[_evrNorm(c.de)] = _evrNorm(c.para); nomes[_evrNorm(c.para)] = 1; nomes[_evrNorm(c.de)] = 1; } });
+  (leg.nomes || []).forEach(function(nm){ String(nm || "").split(/\s+/).forEach(function(w){ if(w) nomes[_evrNorm(w)] = 1; }); });
+  if(o.nomeLoja) nomes[_evrNorm(o.nomeLoja)] = 1;
+  /* trechos de fala: clips com som + narrações com palavras (tempo da fala = tempo do bruto/áudio) */
+  const trechosFala = [];
+  tl.forEach(function(k){ if(k.mudo) return; const ws = _evrPalavras(o.fala && o.fala[k.clipe], corr); if(!ws.length) return;
+    trechosFala.push({ tipo:"clip", id:k.id, clipe:k.clipe, ini:k.ini, fim:k.fim, t0:k.t0, t1:k.t1, vel:k.vel, ws:ws, i:k.i }); });
+  (Array.isArray(p.narracoes) ? p.narracoes : []).forEach(function(n){
+    if(!n || n.off || n.musica || !Array.isArray(n.palavras) || !n.palavras.length) return;
+    const ini = _evrN(n.corte, 0), d = _evrN(n.dur, 0), t0 = _evrN(n.t0, 0);
+    trechosFala.push({ tipo:"narracao", id:n.id, clipe:"narr_" + n.id, ini:ini, fim:ini + d, t0:t0, t1:t0 + d, vel:1, ws:_evrPalavras(n.palavras, corr) });
+  });
+  const mu = p.musica || {}, mi = o.musicaInfo || {}, beat = mu.beat || {};
+  const musicaInfo = { id:mu.id || mi.id, mudo:!!mu.mudo, duracao:_evrN(mi.duracao != null ? mi.duracao : mu.duracao, 0), bpm:_evrN(beat.bpm || mi.bpm, 0),
+    fase:_evrN(beat.fase != null ? beat.fase : mi.fase, 0), clima:mi.clima || mu.clima || "", energia:mi.energia || mu.energia || "", genero:mi.genero || mu.genero || "",
+    t0:_evrN(mu.t0, 0), ini:_evrN(mu.ini, 0), vel:_evrN(mu.vel, 1) || 1, fadeOut:_evrN(mu.fadeOut, 0), loop:!!(mu.loop || mu.remix || mu.repetir || (Array.isArray(mu.trechos) && mu.trechos.length) || mu.estender),
+    tem:!!(mu.id || mu.url) };
+  const motion = p.motion && Array.isArray(p.motion.itens) ? p.motion.itens.filter(Boolean) : [];
+  const micro = p.micro && p.micro.ativo !== false ? p.micro : null;
+  const ctx = { p:p, calc:calc, tl:tl, imgs:imgs, total:total, fimCortes:fimCortes, trechosFala:trechosFala, motion:motion, musica:musicaInfo,
+    movimento:mov, durBruto:durBruto, fpsDe:fpsDe, nomes:nomes, corr:corr, legenda:leg, blocos:Array.isArray(calc.blocos) ? calc.blocos : [],
+    micEnergia:typeof o.micEnergia === "function" ? o.micEnergia : null, micro:micro, nomeLoja:o.nomeLoja || "",
+    excecoes:[].concat(Array.isArray(p.excecoes) ? p.excecoes : [], Array.isArray(o.excecoes) ? o.excecoes : []), tipoVideo:p.tipo_video || p.objetivo || "" };
+  ctx.perfil = o.perfil ? _evrAjustarPerfil(o.perfil, ctx) : _evrPerfil(musicaInfo, ctx.tipoVideo, ctx);
+  return ctx;
+}
+
+/* ── ajudantes de tempo ── */
+function _evrNaLinha(tr, b){ return tr.t0 + (b - tr.ini) / (tr.vel || 1); }
+/* batida: T = t0 + (fase − ini) + k·60/bpm (fase em SEGUNDOS da música, a mesma grade do _evpBatidas). null = sem grade */
+function _evrBatida(t, m){
+  if(!m || m.mudo || !(m.bpm > 0)) return null;
+  const P = 60 / m.bpm; let f = m.fase; while(f < m.ini) f += P;
+  const T1 = m.t0 + (f - m.ini) / (m.vel || 1), Pv = P / (m.vel || 1); if(t < T1 - Pv) return null;
+  const k = Math.round((t - T1) / Pv), alvo = T1 + k * Pv; return { d:t - alvo, alvo:alvo, P:Pv };
+}
+function _evrUniao(iv){ const s = iv.filter(function(x){ return x[1] > x[0]; }).map(function(x){ return [x[0], x[1]]; }).sort(function(a, b){ return a[0] - b[0]; }), r = [];
+  s.forEach(function(x){ const z = r[r.length - 1]; if(z && x[0] <= z[1] + 1e-6) z[1] = Math.max(z[1], x[1]); else r.push(x); }); return r; }
+function _evrInter(a, b){ let s = 0; a.forEach(function(x){ b.forEach(function(y){ s += Math.max(0, Math.min(x[1], y[1]) - Math.max(x[0], y[0])); }); }); return s; }
+/* faixa de fala na linha do tempo (união das palavras inteiras dentro de cada trecho) */
+function _evrFalaNaLinha(ctx){
+  if(ctx._falaTL) return ctx._falaTL;
+  const iv = []; ctx.trechosFala.forEach(function(tr){ tr.ws.forEach(function(w){ const a = Math.max(w.i, tr.ini), b = Math.min(w.f, tr.fim); if(b > a) iv.push([_evrNaLinha(tr, a), _evrNaLinha(tr, b)]); }); });
+  /* palavras coladas (< 0,3 s) contam como fala contínua */
+  const u = _evrUniao(iv), r = []; u.forEach(function(x){ const z = r[r.length - 1]; if(z && x[0] - z[1] < 0.3) z[1] = x[1]; else r.push(x); });
+  ctx._falaTL = r; return r;
+}
+/* planos visíveis: o apoio de cima (imagem/vídeo por cima) ou o clip da faixa principal (rosto = clip com fala, respiro = clip mudo) */
+function _evrPlanos(ctx){
+  if(ctx._planos) return ctx._planos;
+  const fim = ctx.fimCortes, bs = [0, fim];
+  ctx.tl.forEach(function(k){ bs.push(k.t0, k.t1); }); ctx.imgs.forEach(function(x){ bs.push(Math.max(0, Math.min(fim, x.t0)), Math.max(0, Math.min(fim, x.t1))); });
+  const u = bs.filter(function(t){ return t >= 0 && t <= fim; }).sort(function(a, b){ return a - b; }).filter(function(t, i, a){ return i === 0 || t - a[i - 1] > 1e-6; });
+  const segs = [];
+  for(let i = 1; i < u.length; i++){
+    const a = u[i - 1], b = u[i], m = (a + b) / 2;
+    let top = null; ctx.imgs.forEach(function(x){ if(x.t0 <= m && x.t1 > m && (!top || x.k > top.k)) top = x; });
+    let pl;
+    if(top) pl = { chave:"i:" + top.id, tipo:"apoio", id:top.id, clipe:top.clipe, nome:top.nome };
+    else { const k = ctx.tl.find(function(q){ return q.t0 <= m && q.t1 > m; });
+      pl = k ? { chave:"c:" + k.id, tipo:k.mudo ? "respiro" : "rosto", id:k.id, clipe:k.clipe, nome:k.nome, ci:k.i } : { chave:"vazio", tipo:"vazio", id:null }; }
+    const z = segs[segs.length - 1];
+    /* mesmo plano, ou o mesmo bruto continuando sem pulo (clip seguinte começa onde o outro acabou) */
+    const cont = z && z.chave !== pl.chave && z.tipo === pl.tipo && pl.ci != null && z.ciFim != null && pl.ci === z.ciFim + 1 &&
+      ctx.tl[pl.ci].clipe === ctx.tl[z.ciFim].clipe && Math.abs(ctx.tl[pl.ci].ini - ctx.tl[z.ciFim].fim) < 0.05;
+    if(z && (z.chave === pl.chave || cont)){ z.t1 = b; if(cont) z.ciFim = pl.ci; }
+    else segs.push(Object.assign(pl, { t0:a, t1:b, ciFim:pl.ci != null ? pl.ci : null }));
+  }
+  ctx._planos = segs; return segs;
+}
+function _evrBonsJuntos(bons){
+  const s = (Array.isArray(bons) ? bons : []).map(function(b){ return [_evrN(b[0], 0), _evrN(b[1], 0)]; }).filter(function(b){ return b[1] > b[0]; }).sort(function(a, b){ return a[0] - b[0]; }), r = [];
+  s.forEach(function(b){ const z = r[r.length - 1]; if(z && b[0] - z[1] <= _EVR_LIM.juntaBons) z[1] = Math.max(z[1], b[1]); else r.push(b); }); return r;
+}
+/* quanto o zoom do item se mexe (0,06 = 6%) */
+function _evrZoomMexe(it){
+  const pts = it && it.anim && Array.isArray(it.anim.pts) ? it.anim.pts : [];
+  if(pts.length >= 2){ const zs = pts.map(function(q){ return _evrN(q.z, 1) || 1; }), lo = Math.min.apply(null, zs), hi = Math.max.apply(null, zs); return hi / lo - 1; }
+  const a = typeof (it && it.anim) === "string" ? _evrNorm(it.anim) : ""; if(a && a !== "nenhuma" && /zoom|ken|push|aprox|afast/.test(a)) return 0.1;
+  const mv = it && it.mov; if(mv && mv.tipo && mv.tipo !== "nenhum") return 0.1;
+  return 0;
+}
+
+/* ── A RÉGUA ── */
+function _evrConferir(ctx){
+  if(!ctx || !ctx.tl) ctx = _evrContexto(ctx);
+  const L = _EVR_LIM, P = ctx.perfil, itens = [];
+  const add = function(regra, tipo, nivel, t, t1, msg, dados){ itens.push({ regra:regra, tipo:tipo, nivel:tipo === "trava" ? "grave" : nivel, t:_evrR(t), t1:_evrR(t1 == null ? t : t1), msg:msg, dados:dados || {} }); };
+  const mus = ctx.musica, falaTL = _evrFalaNaLinha(ctx), planos = _evrPlanos(ctx);
+  const respiros = ctx.tl.filter(function(k){ return k.mudo; });
+  const apoiosVid = ctx.imgs.filter(function(x){ return x.video && x.clipe; });
+
+  /* R1 · nada de pedaço sobrando: plano visível curto demais */
+  planos.forEach(function(pl, i){
+    if(pl.tipo === "vazio") return;
+    const d = pl.t1 - pl.t0; if(d < L.umQuadro) return;              // menos de 1 quadro (30 fps) nem chega a aparecer
+    const ant = planos[i - 1], dep = planos[i + 1];
+    const nomeP = pl.tipo === "rosto" ? "O rosto" : (pl.tipo === "apoio" ? "O apoio " : "O respiro ") + (pl.tipo === "rosto" ? "" : _evrAspas(_evrNomeCurto(pl.nome)));
+    const entre = pl.tipo === "rosto" && ant && dep && ant.tipo !== "rosto" && dep.tipo !== "rosto" ? " entre " + (ant.tipo === "apoio" ? "o apoio " + _evrAspas(_evrNomeCurto(ant.nome)) : "o respiro") + " e " + (dep.tipo === "apoio" ? "o apoio " + _evrAspas(_evrNomeCurto(dep.nome)) : "o respiro") : "";
+    const sug = pl.tipo === "rosto" && ant && ant.tipo === "apoio" ? "Estique o apoio " + _evrAspas(_evrNomeCurto(ant.nome)) + " até " + _evrS(pl.t1) + " (ou encurte para dar ≥ " + _evrS(P.minTela.ideal) + " de rosto)."
+      : pl.tipo === "rosto" && dep && dep.tipo === "apoio" ? "Puxe o início do apoio " + _evrAspas(_evrNomeCurto(dep.nome)) + " para " + _evrS(pl.t0) + "."
+      : "Deixe o plano com pelo menos " + _evrS(P.minTela.ideal) + " ou junte com o vizinho.";
+    const dados = { tipoPlano:pl.tipo, id:pl.id, clipe:pl.clipe, t0:_evrR(pl.t0), t1:_evrR(pl.t1), dur:_evrR(d), antes:ant ? { tipo:ant.tipo, id:ant.id } : null, depois:dep ? { tipo:dep.tipo, id:dep.id } : null, sugestao:sug };
+    if(d < L.piscada){ add("R1", "trava", "grave", pl.t0, pl.t1, nomeP + " aparece só " + _evrS(d) + entre + " — pisca na tela.", dados); return; }
+    if(d >= P.minTela.ideal - 0.03) return;                          // 1,48 s num ideal de 1,5 s é arredondamento, não pedaço sobrando
+    if(P.cortesCurtosNaBatida){ const a = _evrBatida(pl.t0, mus), b = _evrBatida(pl.t1, mus); if(a && b && Math.abs(a.d) <= L.tolBatida && Math.abs(b.d) <= L.tolBatida) return; }
+    add("R1", "preferencia", d < P.minTela.minimo ? "medio" : "leve", pl.t0, pl.t1, nomeP + " fica só " + _evrS(d) + entre + " (o ideal neste vídeo é " + _evrS(P.minTela.ideal) + ").", dados);
+  });
+
+  /* R2 · nada de tela preta/congelada */
+  let fimAnt = 0;
+  ctx.tl.forEach(function(k){
+    if(k.t0 - fimAnt > 0.02) add("R2", "trava", "grave", fimAnt, k.t0, "Buraco sem imagem de " + _evrS(k.t0 - fimAnt) + " antes do clip em " + _evrS(k.t0) + " (tela preta).", { antesDe:k.id, sugestao:"Encoste o clip no anterior." });
+    fimAnt = Math.max(fimAnt, k.t1);
+    if(k.fim - k.ini <= 0) add("R2", "trava", "grave", k.t0, k.t1, "Clip sem duração (fim antes do início no take).", { id:k.id, clipe:k.clipe });
+    const D = ctx.durBruto(k.clipe);
+    if(D > 0 && k.fim > D + 0.03) add("R2", "trava", "grave", _evrNaLinha(k, D), k.t1, "O clip pede o take até " + _evrS(k.fim) + ", mas o take acaba em " + _evrS(D) + " — a imagem congela/fica preta no fim.", { id:k.id, clipe:k.clipe, fimTake:_evrR(D), fimPedido:_evrR(k.fim), sugestao:"Encurte o fim do clip para " + _evrS(D - 0.05) + "." });
+  });
+  apoiosVid.forEach(function(x){
+    const D = ctx.durBruto(x.clipe), usoFim = x.ini + (x.t1 - x.t0) * x.vel;
+    if(D > 0 && usoFim > D + 0.03){ const tq = x.t0 + (D - x.ini) / x.vel;
+      add("R2", "trava", "grave", tq, x.t1, "O apoio " + _evrAspas(_evrNomeCurto(x.nome)) + " precisa do take até " + _evrS(usoFim) + " e o take acaba em " + _evrS(D) + " — congela por " + _evrS(x.t1 - tq) + ".", { id:x.id, clipe:x.clipe, fimTake:_evrR(D), sugestao:"Comece o apoio antes no take (início ≤ " + _evrS(Math.max(0, D - (x.t1 - x.t0) * x.vel - 0.05)) + ") ou encurte para terminar em " + _evrS(tq) + "." }); }
+  });
+
+  /* R3 · apoio/respiro com movimento bom: trecho dentro dos "bons" do take; take sem bons → precisa de zoom */
+  const usos = respiros.map(function(k){ return { tipo:"respiro", id:k.id, clipe:k.clipe, nome:k.nome, ini:k.ini, fim:k.fim, t0:k.t0, t1:k.t1, vel:k.vel, it:k.c }; })
+    .concat(apoiosVid.map(function(x){ return { tipo:"apoio", id:x.id, clipe:x.clipe, nome:x.nome, ini:x.ini, fim:x.ini + (x.t1 - x.t0) * x.vel, t0:x.t0, t1:x.t1, vel:x.vel, it:x.x }; }));
+  usos.forEach(function(u){
+    const m = ctx.movimento[u.clipe]; if(!m) return;
+    const bons = _evrBonsJuntos(m.bons), oQue = (u.tipo === "apoio" ? "O apoio " : "O respiro ") + _evrAspas(_evrNomeCurto(u.nome));
+    if(!bons.length){
+      const z = _evrZoomMexe(u.it), ZP = P.zoomParado; if(z >= ZP.ideal - 0.005) return;
+      add("R3", "preferencia", z >= ZP.minimo - 0.005 ? "leve" : "medio", u.t0, u.t1, oQue + " usa um take sem nenhum trecho bom de movimento" + (z > 0 ? " e o zoom atual é só " + Math.round(z * 100) + "%" : "") + ": precisa de zoom (" + Math.round(ZP.ideal * 100) + "%) ou outro take.",
+        { tipoUso:u.tipo, id:u.id, clipe:u.clipe, ini:_evrR(u.ini), fim:_evrR(u.fim), bons:[], zoomAtual:_evrR(z), precisaZoom:true, zoomSugerido:ZP.ideal, resumo:m.resumo || null });
+      return;
+    }
+    if(bons.some(function(b){ return u.ini >= b[0] - L.tolBons && u.fim <= b[1] + L.tolBons; })) return;
+    const len = u.fim - u.ini; let melhor = null;
+    bons.forEach(function(b){ if(b[1] - b[0] + 1e-6 < len) return; const ini = Math.min(Math.max(u.ini, b[0]), b[1] - len), d = Math.abs(ini - u.ini); if(!melhor || d < melhor.d) melhor = { ini:ini, d:d }; });
+    const txtB = bons.map(function(b){ return _evrSeg(b[0], b[1]); }).join(", ");
+    add("R3", "preferencia", "medio", u.t0, u.t1, oQue + " usa " + _evrSeg(u.ini, u.fim) + " do take, fora dos trechos bons (" + txtB + ").",
+      { tipoUso:u.tipo, id:u.id, clipe:u.clipe, ini:_evrR(u.ini), fim:_evrR(u.fim), bons:bons, sugestaoIni:melhor ? _evrR(melhor.ini) : null, cabe:!!melhor,
+        sugestao:melhor ? "Mude o início no take para " + _evrS(melhor.ini) + " (mesma duração)." : "Nenhum trecho bom é longo o bastante: encurte, acelere ou use zoom/outro take." });
+  });
+
+  /* R4 · sem repetir cena (só takes de apoio/respiro: o rosto do mesmo bruto é normal) */
+  for(let a = 0; a < usos.length; a++) for(let b = a + 1; b < usos.length; b++){
+    const A = usos[a], B = usos[b]; if(A.clipe !== B.clipe) continue;
+    const ov = Math.min(A.fim, B.fim) - Math.max(A.ini, B.ini), X = A.t0 <= B.t0 ? A : B, Y = X === A ? B : A, dist = Y.t0 - X.t0;
+    const dados = { clipe:A.clipe, ids:[X.id, Y.id], usos:[{ id:X.id, tipo:X.tipo, t0:_evrR(X.t0), ini:_evrR(X.ini), fim:_evrR(X.fim) }, { id:Y.id, tipo:Y.tipo, t0:_evrR(Y.t0), ini:_evrR(Y.ini), fim:_evrR(Y.fim) }], sobrepoe:_evrR(Math.max(0, ov)) };
+    if(ov > L.sobrepos){ add("R4", "trava", "grave", Y.t0, Y.t1, "Cena repetida: " + _evrAspas(_evrNomeCurto(Y.nome)) + " em " + _evrS(Y.t0) + " mostra de novo " + _evrS(ov) + " do mesmo pedaço do take já usado em " + _evrS(X.t0) + ".",
+      Object.assign(dados, { sugestao:"Troque o segundo por outro trecho do take (sem cruzar " + _evrSeg(X.ini, X.fim) + ") ou por outro take." })); continue; }
+    if(ov > 0) { add("R4", "preferencia", "leve", Y.t0, Y.t1, _evrAspas(_evrNomeCurto(Y.nome)) + " em " + _evrS(Y.t0) + " encosta (" + _evrS(ov) + ") no pedaço do take usado em " + _evrS(X.t0) + ".", Object.assign(dados, { sugestao:"Afaste o início uns " + _evrS(ov + 0.1) + "." })); continue; }
+    if(dist < P.repetirJanela) add("R4", "preferencia", "leve", Y.t0, Y.t1, "O mesmo take " + _evrAspas(_evrNomeCurto(Y.nome)) + " aparece de novo " + _evrS(dist) + " depois (em " + _evrS(X.t0) + " e " + _evrS(Y.t0) + ").",
+      Object.assign(dados, { sugestao:"Use outro take ou dê um movimento diferente (zoom/espelho) ao segundo." }));
+  }
+
+  /* R5 · apoio combina com a fala (HEURÍSTICA pelo nome do apoio) */
+  const palTL = []; ctx.trechosFala.forEach(function(tr){ tr.ws.forEach(function(w){ if(w.f > tr.ini && w.i < tr.fim) palTL.push({ t:_evrNaLinha(tr, Math.max(w.i, tr.ini)), n:w.n, p:w.p }); }); });
+  const loja = _EVR_FALA_LOJA.concat(ctx.nomeLoja ? [_evrNorm(ctx.nomeLoja)] : []).concat(Object.keys(ctx.corr).map(function(k){ return ctx.corr[k]; }));
+  usos.forEach(function(u){
+    const nn = _evrNorm(_evrNomeCurto(u.nome, "")); if(!nn || !_EVR_DECOR.test(nn)) return;
+    const perto = palTL.filter(function(w){ return w.t >= u.t0 - L.janelaFala && w.t <= u.t1 + L.janelaFala; });
+    if(perto.some(function(w){ return loja.indexOf(w.n) >= 0; })) return;
+    const fala = perto.map(function(w){ return w.p; }).join(" ");
+    add("R5", "preferencia", "leve", u.t0, u.t1, "(heurística) " + _evrAspas(_evrNomeCurto(u.nome)) + " mostra a loja/decoração, mas a fala por perto não fala da loja" + (fala ? ": " + _evrAspas(fala.split(" ").slice(0, 8).join(" ") + (perto.length > 8 ? "…" : "")) : "") + ".",
+      { tipoUso:u.tipo, id:u.id, clipe:u.clipe, heuristica:true, falaPerto:fala, sugestao:"Troque por um take do produto/assunto da fala (ou deixe se fizer sentido de ouvido)." });
+  });
+
+  /* R6 · a música cobre o vídeo */
+  if(mus.tem && !mus.mudo && mus.duracao > 0 && !mus.loop){
+    const fimMus = mus.t0 + (mus.duracao - mus.ini) / mus.vel;
+    if(fimMus < ctx.total - L.musicaFolga){
+      const fade = mus.fadeOut > 0 ? " O fade de saída (" + _evrS(mus.fadeOut) + ") começa em " + _evrS(ctx.total - mus.fadeOut) + ", depois que a música já acabou." : "";
+      add("R6", "trava", "grave", fimMus, ctx.total, "A música acaba em " + _evrS(fimMus) + " e o vídeo vai até " + _evrS(ctx.total) + ": " + _evrS(ctx.total - fimMus) + " de fim mudo." + fade,
+        { musicaId:mus.id, fimMusica:_evrR(fimMus), total:_evrR(ctx.total), falta:_evrR(ctx.total - fimMus), fadeOutDepoisDoFim:mus.fadeOut > 0 && ctx.total - mus.fadeOut > fimMus,
+          sugestao:"Estique a música (repetir um trecho/loop na batida), escolha uma mais longa ou adiante o início (ini) em " + _evrS(ctx.total - fimMus) + "." });
+    }
+  }
+
+  /* R7 · palavra cortada (folga do corte) e pausa morta dentro da fala */
+  ctx.trechosFala.forEach(function(tr){
+    const ws = tr.ws, dentro = ws.filter(function(w){ return w.f > tr.ini + 0.005 && w.i < tr.fim - 0.005; });
+    if(!dentro.length) return;
+    const antes = ws.filter(function(w){ return w.f <= tr.ini + 0.005; }).pop(), depois = ws.find(function(w){ return w.i >= tr.fim - 0.005; });
+    const rms = function(tb){ if(!ctx.micEnergia || !ctx.micro || !ctx.micro.brutos || !ctx.micro.brutos[tr.clipe]) return null; const s = ctx.micro.brutos[tr.clipe];
+      const tm = _evrN(s.A, 0) + tb * (1 + _evrN(s.B, 0)); try{ return _evrN(ctx.micEnergia(tm - L.rmsJanela, tm + L.rmsJanela), null); }catch(e){ return null; } };
+    const borda = function(lado){
+      const tb = lado === "ini" ? tr.ini : tr.fim, tT = lado === "ini" ? tr.t0 : tr.t1;
+      const w = lado === "ini" ? dentro[0] : dentro[dentro.length - 1], viz = lado === "ini" ? antes : depois;
+      const base = { trecho:tr.id, tipoTrecho:tr.tipo, clipe:tr.clipe, lado:lado, corteTake:_evrR(tb) };
+      if(w.i < tb - 0.01 && w.f > tb + 0.01){
+        add("R7", "trava", "grave", tT, tT, "O corte " + (lado === "ini" ? "do começo" : "do fim") + " em " + _evrS(tT) + " parte a palavra " + _evrAspas(w.p) + " no meio.",
+          Object.assign(base, { palavra:w.p, palavraIni:_evrR(w.i), palavraFim:_evrR(w.f), sugestao:lado === "ini" ? "Puxe o início para " + _evrS(Math.max(0, w.i - 0.12)) + " no take (ou para depois da palavra)." : "Puxe o fim para " + _evrS(w.f + 0.12) + " no take." }));
+        return;
+      }
+      const fDentro = lado === "ini" ? w.i - tb : tb - w.f, fViz = viz ? (lado === "ini" ? tb - viz.f : viz.i - tb) : 9;
+      const f = Math.min(fDentro, fViz), qual = fDentro <= fViz ? w : viz, deQual = qual === w ? (lado === "ini" ? "antes de " : "depois de ") : (lado === "ini" ? "depois do fim de " : "antes de ");
+      const e = rms(tb), alto = e != null && e >= L.rmsAlto;
+      const dd = Object.assign(base, { palavra:qual.p, folga:_evrR(f), folgaDentro:_evrR(fDentro), folgaVizinha:_evrR(fViz), rms:e,
+        sugestao:qual === w ? "Deixe 0,1–0,2 s de sobra: corte em " + _evrS(lado === "ini" ? w.i - 0.12 : w.f + 0.12) + " no take." : "Afaste o corte da palavra vizinha " + _evrAspas(qual.p) + ": o meio entre as palavras fica em " + _evrS(lado === "ini" ? (viz.f + w.i) / 2 : (w.f + viz.i) / 2) + " no take." });
+      if(alto) add("R7", "trava", "grave", tT, tT, "Voz alta no ponto do corte em " + _evrS(tT) + " (microfone): o corte pega a palavra " + _evrAspas(qual.p) + ".", dd);
+      else if(f <= L.folgaGrave) add("R7", "trava", "grave", tT, tT, "Corte colado na fala em " + _evrS(tT) + ": só " + Math.round(Math.max(0, f) * 1000) + " ms " + deQual + _evrAspas(qual.p) + " — a sílaba pode sumir ou entrar um pedaço.", dd);
+      else if(f < L.folga) add("R7", "preferencia", "medio", tT, tT, "Folga curta no corte em " + _evrS(tT) + ": " + Math.round(f * 1000) + " ms " + deQual + _evrAspas(qual.p) + " (o certo é 0,1–0,25 s).", dd);
+    };
+    borda("ini"); borda("fim");
+    /* pausas mortas: buraco entre palavras > 0,6 s, ou palavra "esticada" (o alinhador engole a pausa/“éé” dentro da palavra) */
+    const inteiras = dentro.filter(function(w){ return w.i >= tr.ini - 0.01 && w.f <= tr.fim + 0.01; }), zonas = [];
+    for(let k = 0; k < inteiras.length; k++){
+      const w = inteiras[k], esp = 0.1 + 0.07 * w.p.length, exc = (w.f - w.i) - esp;
+      if(k > 0){ const g = w.i - inteiras[k - 1].f; if(g > L.pausa + 0.005) zonas.push({ a:inteiras[k - 1].f, b:w.i, morto:g, como:"pausa de " + _evrS(g) + " entre " + _evrAspas(inteiras[k - 1].p) + " e " + _evrAspas(w.p) }); }
+      if(exc > L.pausa + 0.005) zonas.push({ a:w.i, b:w.f, morto:exc, como:_evrAspas(w.p) + " esticada " + _evrS(w.f - w.i) + " (provável pausa ou “éé”)" });
+    }
+    const jun = []; zonas.forEach(function(z){ const y = jun[jun.length - 1]; if(y && z.a - y.b < 0.3){ y.b = Math.max(y.b, z.b); y.morto += z.morto; y.como += " + " + z.como; } else jun.push(Object.assign({}, z)); });
+    jun.forEach(function(z){ add("R7", "preferencia", "medio", _evrNaLinha(tr, z.a), _evrNaLinha(tr, z.b), "Pausa morta na fala em " + _evrS(_evrNaLinha(tr, z.a)) + ": " + z.como + ".",
+      { trecho:tr.id, tipoTrecho:tr.tipo, clipe:tr.clipe, takeIni:_evrR(z.a), takeFim:_evrR(z.b), morto:_evrR(z.morto), sugestao:"Tire o silêncio (Tirar trecho) deixando ~0,25 s entre as palavras." }); });
+  });
+  /* voz fora de sincronia: microfone casado com pouca confiança */
+  if(ctx.micro && ctx.micro.brutos) ctx.trechosFala.forEach(function(tr){ const s = ctx.micro.brutos[tr.clipe];
+    if(s && s.c != null && _evrN(s.c, 1) < L.micConfMin) add("R7", "trava", "grave", tr.t0, tr.t1, "A voz do microfone pode estar fora de sincronia com a boca neste trecho (casamento com " + Math.round(_evrN(s.c, 0) * 100) + "% de confiança).",
+      { trecho:tr.id, clipe:tr.clipe, sincronia:true, confianca:_evrN(s.c, 0), sugestao:"Refaça o casamento do microfone ou use o som da câmera aqui." }); });
+
+  /* R8 · tarja só com o rosto; legenda não some durante a fala */
+  const cobre = apoiosVid.map(function(x){ return { id:x.id, t0:x.t0, t1:x.t1, nome:x.nome, tipo:"apoio" }; }).concat(ctx.imgs.filter(function(x){ return !x.video; }).map(function(x){ return { id:x.id, t0:x.t0, t1:x.t1, nome:x.nome, tipo:"imagem" }; }))
+    .concat(respiros.map(function(k){ return { id:k.id, t0:k.t0, t1:k.t1, nome:k.nome, tipo:"respiro" }; }));
+  ctx.motion.forEach(function(it){
+    const ehTarja = it.modelo === "tarja" || (it.modelo === "receita" && it.receita && /tarja/.test(String(it.receita.cat || it.receita.id || ""))); if(!ehTarja) return;
+    const t0 = _evrN(it.t0, 0), t1 = _evrN(it.t1, 0), cs = [];
+    cobre.forEach(function(c){ const a = Math.max(t0, c.t0), b = Math.min(t1, c.t1); if(b - a > 0.01) cs.push({ id:c.id, tipo:c.tipo, nome:c.nome, t0:_evrR(a), t1:_evrR(b), seg:_evrR(b - a) }); });
+    cs.sort(function(x, y){ return x.t0 - y.t0; });
+    const tot = _evrInter([[t0, t1]], _evrUniao(cs.map(function(c){ return [c.t0, c.t1]; })));
+    if(tot <= L.tarjaCob) return;
+    /* sugestão: a maior janela de rosto livre perto da tarja */
+    const livres = planos.filter(function(pl){ return pl.tipo === "rosto" && pl.t1 > t0 - 3 && pl.t0 < t1 + 6; }).sort(function(a, b){ return (b.t1 - b.t0) - (a.t1 - a.t0); });
+    const lv = livres[0];
+    add("R8", "preferencia", "grave", t0, t1, "A tarja " + _evrAspas(it.nome || "de nome") + " (" + _evrSeg(t0, t1) + ") fica " + _evrS(tot) + " por cima de apoio/respiro: o nome aparece sem o rosto.",
+      { motion:"tarja", nome:it.nome || "", t0:_evrR(t0), t1:_evrR(t1), coberto:_evrR(tot), cobrem:cs, rostoLivre:lv ? { t0:_evrR(lv.t0), t1:_evrR(lv.t1) } : null,
+        sugestao:lv ? "Ponha a tarja em " + _evrSeg(lv.t0, lv.t1) + " (rosto livre) ou tire/encurte os apoios por baixo dela." : "Tire/encurte os apoios por baixo da tarja." });
+  });
+  const legOn = ctx.legenda && ctx.legenda.ativa !== false && ctx.legenda.estilo !== "sem";
+  if(legOn) ctx.motion.forEach(function(it){
+    const m = it.modelo, rc = it.receita;
+    let como = null;
+    if(m === "tarja") como = "a tarja"; else if(m === "receita" && rc && rc.legenda === "esconde") como = "o motion " + _evrAspas(rc.nome || rc.id || "receita"); else if(m === "palco") como = "o palco";
+    if(!como) return;                                                    // kinetic mostra as próprias palavras; número/citação/selo deixam a legenda (menor)
+    const t0 = _evrN(it.t0, 0) - 0.05, t1 = _evrN(it.t1, 0), s = _evrInter([[t0, t1]], falaTL);
+    if(s <= L.legSumida) return;
+    add("R8", "preferencia", m === "palco" ? "leve" : "medio", t0, t1, "A legenda some por " + _evrS(s) + " com gente falando (" + _evrSeg(t0, t1) + "): " + como + " esconde a legenda.",
+      { motion:m, t0:_evrR(t0), t1:_evrR(t1), falaEscondida:_evrR(s), nome:it.nome || it.titulo || "", sugestao:m === "tarja" ? "Encurte a tarja (2–3 s) ou mude para um trecho sem fala importante." : "Encurte o motion ou deixe a legenda menor (não esconder)." });
+  });
+
+  /* R9 · leveza: apoio rápido sem desacelerar; câmera lenta que pode picotar */
+  usos.forEach(function(u){
+    const m = ctx.movimento[u.clipe], r = m && m.resumo, vm = r ? _evrN(r.vel_media, 0) : 0, oQue = (u.tipo === "apoio" ? "O apoio " : "O respiro ") + _evrAspas(_evrNomeCurto(u.nome));
+    const fps = ctx.fpsDe(u.clipe);
+    /* revisão 17/10/2026: a câmera lenta sugerida depende do fps (30 fps abaixo de camLentaMin picota): 30 fps → camLentaMin (0,8) ·
+       60 fps → a do perfil (0,65–0,7) · fps desconhecido → a faixa, sem acusar picote */
+    if(P.nome === "leve" && r && u.vel >= 0.99 && (vm > P.velLimiarMov || r.tipo === "rapido")){
+      const v30 = fps > 0 && fps <= 30.5, vS = v30 ? Math.max(P.velApoioRapido.ideal, P.camLentaMin) : P.velApoioRapido.ideal, vM = v30 ? Math.max(P.velApoioRapido.minimo, P.camLentaMin) : P.velApoioRapido.minimo;
+      add("R9", "preferencia", "medio", u.t0, u.t1, oQue + " tem movimento rápido (" + vm + ") em velocidade normal — pesado para um vídeo leve.", { tipoUso:u.tipo, id:u.id, clipe:u.clipe, velMedia:vm, velSugerida:vS, fpsTake:fps || undefined,
+        sugestao:v30 ? "Use velocidade " + vS + " (take de " + Math.round(fps) + " fps: mais lento que isso picota)." : fps > 0 ? "Use velocidade " + vS + " (mínimo " + vM + ")." : "Use velocidade entre " + vS + " (take de 60 fps) e " + Math.max(vS, P.camLentaMin) + " (take de 30 fps)." });
+    }
+    if(fps > 0 && fps <= 30.5 && u.vel < P.camLentaMin - 0.001)
+      add("R9", "preferencia", "leve", u.t0, u.t1, oQue + " está a " + Math.round(u.vel * 100) + "% num take de " + Math.round(fps) + " fps: pode picotar.", { tipoUso:u.tipo, id:u.id, clipe:u.clipe, fps:fps, vel:u.vel, sugestao:"Use ≥ " + Math.round(P.camLentaMin * 100) + "% ou um take de 60 fps." });
+  });
+
+  /* R10 · ritmo pela música + legenda que junta duas frases */
+  if(mus.bpm > 0 && !mus.mudo){
+    if(P.nome !== "animado"){
+      respiros.forEach(function(k){ if(k.t0 < 0.05) return; const b = _evrBatida(k.t0, mus); if(!b || Math.abs(b.d) <= L.tolBatida) return;
+        add("R10", "preferencia", "leve", k.t0, k.t0, "Troca de cena em " + _evrS(k.t0) + " (" + _evrAspas(_evrNomeCurto(k.nome)) + ") fora da batida: " + Math.round(Math.abs(b.d) * 1000) + " ms " + (b.d > 0 ? "depois" : "antes") + ".",
+          { id:k.id, clipe:k.clipe, desvio:_evrR(b.d), batida:_evrR(b.alvo), sugestao:"Mova o corte para " + _evrS(b.alvo) + " (ajuste a duração do plano anterior)." }); });
+    } else {
+      const trocas = planos.slice(1).map(function(pl){ return pl.t0; }), Pb = 60 / mus.bpm;
+      for(let i = 1; i < trocas.length; i++){ const g = trocas[i] - trocas[i - 1]; if(g > P.trocaBatidas.maximo * Pb * 2)
+        add("R10", "preferencia", "leve", trocas[i - 1], trocas[i], "Fica " + _evrS(g) + " sem troca de cena numa música animada.", { sugestao:"Ponha um apoio a cada " + P.trocaBatidas.ideal + " batidas (" + _evrS(P.trocaBatidas.ideal * Pb) + ")." }); }
+    }
+  }
+  if(legOn) ctx.blocos.forEach(function(bl){
+    const ws = Array.isArray(bl.words) ? bl.words : [];
+    for(let k = 0; k < ws.length - 1; k++){
+      const a = String(ws[k].p || ""), b = String(ws[k + 1].p || ""), nb = _evrNorm(b);
+      const fimFrase = /[.!?…]$/.test(a), maiusc = /^[A-ZÀ-Ý]/.test(b) && !ctx.nomes[nb] && !/^\d/.test(b);
+      if(fimFrase || maiusc){
+        const txt = ws.map(function(w){ return w.p; }).join(" ");
+        add("R10", "preferencia", "leve", _evrN(bl.a, 0), _evrN(bl.b, 0), "Legenda junta o fim de uma frase com o começo de outra: " + _evrAspas(txt) + ".",
+          { legenda:true, texto:txt, quebraDepois:a, palavraQuebra:_evrR(ws[k + 1].a), cid:bl.cid || null, sugestao:"Divida a legenda antes de " + _evrAspas(b) + " (Dividir legenda na agulha em " + _evrS(ws[k + 1].a) + ")." });
+        break;
+      }
+    }
+  });
+
+  /* exceções registradas (só preferência) */
+  const exc = ctx.excecoes || [];
+  itens.forEach(function(it){
+    if(it.tipo !== "preferencia" || !exc.length) return;
+    const e = exc.find(function(x){ return x && x.regra === it.regra && (x.t == null || (_evrN(x.t, -1) >= it.t - 0.5 && _evrN(x.t, -1) <= it.t1 + 0.5)); });
+    if(!e) return;
+    it.dados.nivelOriginal = it.nivel; it.dados.msgOriginal = it.msg; it.dados.aceito = String(e.motivo || "sem motivo");
+    it.nivel = "leve"; it.msg = "aceito: " + it.dados.aceito;
+  });
+  const ordem = { grave:0, medio:1, leve:2 };
+  itens.sort(function(a, b){ return a.t - b.t || ordem[a.nivel] - ordem[b.nivel] || a.regra.localeCompare(b.regra); });
+  return itens;
+}
+function _evrResumo(itens){
+  const n = { grave:0, medio:0, leve:0 }, travas = (itens || []).filter(function(x){ return x.tipo === "trava"; }).length; (itens || []).forEach(function(x){ if(n[x.nivel] != null) n[x.nivel]++; });
+  return { graves:n.grave, medios:n.medio, leves:n.leve, travas:travas, total:(itens || []).length,
+    frase:(itens || []).length ? [n.grave && n.grave + " grave" + (n.grave > 1 ? "s" : ""), n.medio && n.medio + " médio" + (n.medio > 1 ? "s" : ""), n.leve && n.leve + " leve" + (n.leve > 1 ? "s" : "")].filter(Boolean).join(" · ") : "Régua: tudo certo." };
+}
+/* ==== FIM REGUA ==== */
+
+// ======= 52i_video_conserto.jsx ======= (Edição de vídeo, parte 9: CONSERTAR O BÁSICO — conserta sozinho o que a régua das 10 regras (52h) apontou, sem IA e sem gasto · o juntar.py junta na ordem)
+/* ─── v1 (17/10/2026) CONSERTAR O BÁSICO
+   _evkConsertar(projeto, o) → { projeto (CÓPIA nova; o original não muda), feitos:[{regra, t, msg}], restam:[itens da régua que sobraram (+ motivo)], rodadas }
+   o = o mesmo objeto da Conferência ({ p, calc, fala, infoClipe, W, H, galeria, teto, kit }) + opcionais:
+       movimento  { [bruto]: { dur, bons:[[a,b]…], resumo:{ tipo, vel_media } } }   (mapa de movimento do PC, segundos do bruto)
+       musicaInfo { duracao }   (segundos do arquivo da música) · fps · micEnergia { [bruto]: { passo, v:[…] } } ou function(bruto, t) → energia
+       tipoVideo · perfil (já pronto) · takes [{ clipe, assunto, papel:"produto"|"decoracao", dur, bons }] (apoios livres para trocar)
+   A régua (52h) é: _evrPerfil(musica, tipoVideo) · _evrContexto(o) · _evrConferir(ctx) → itens { regra:"R1".."R10", nivel, tipo:"trava"|"preferencia", t, t1, msg, dados }.
+   Ordem fixa dos consertos (cada um só mexe se a régua apontou a regra dele): R6 música · R7 corte de palavra · R4 repetição · R3 movimento ·
+   R9 leveza · R1 pedaço sobrando · R2 tela preta · R8 tarja/legenda · R5/R10 só avisam (menos o respiro de decoração com fala de outro assunto).
+   Depois de cada conserto a régua roda de novo: se ele piorou outra regra, o conserto é desfeito e o item fica em "restam" com o motivo.
+   Até 3 rodadas. Determinístico (sem sorteio, sem relógio). Nunca mexe na fala escolhida (ordem/conteúdo), nos textos escritos, na cor,
+   nem no motion além da tarja (o motion só ANDA junto quando a linha do tempo anda, para não sair de cima da fala).
+   PREFERÊNCIA (tipo "preferencia") busca o ideal da faixa {ideal, minimo} e pode parar no mínimo; projeto.excecoes [{regra, t, motivo}] vale só para
+   preferência (trava não aceita exceção).
+   Funções PURAS entre os marcadores: o teste _testes/conserto.test.js recorta e roda. ─── */
+/* ==== CONSERTO PURO ==== */
+const _EVK = { folgaMin:0.10, folgaIdeal:0.15, folgaMax:0.25, janelaMic:0.15, pausaMorta:0.6, pausaFica:0.3, tarjaMin:1.5, rodadas:3, zoom:0.06, tol:0.03, perto:0.35 };
+const _EVK_TRAVAS = { R2:1, R4:1, R6:1, R7:1 };            // sem "tipo" no item: estas regras contam como trava
+const _EVK_PERFIL = { nome:"padrao", minTela:{ ideal:1.5, minimo:1.0 }, trocaBatidas:{ ideal:4, minimo:2 }, velApoioRapido:{ ideal:0.65, minimo:0.65 }, velLimiarMov:4, zoomParado:{ ideal:0.06, minimo:0.04 }, cortesCurtosNaBatida:false };
+function _evkNum(x, d){ const n = Number(x); return isFinite(n) ? n : d; }
+function _evkR(x){ return Math.round(_evkNum(x, 0) * 1000) / 1000; }
+function _evkCopia(o){ return o == null ? o : JSON.parse(JSON.stringify(o)); }
+function _evkNorm(s){ return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); }
+/* faixa de preferência: número → { ideal:n, minimo:n } · { ideal, minimo } → igual · nada → padrão */
+function _evkFaixa(v, pad){
+  if(v && typeof v === "object"){ const i = _evkNum(v.ideal, NaN), m = _evkNum(v.minimo, NaN); if(isFinite(i) || isFinite(m)) return { ideal:isFinite(i) ? i : m, minimo:isFinite(m) ? m : i }; }
+  const n = _evkNum(v, NaN); if(isFinite(n)) return { ideal:n, minimo:n };
+  return pad ? _evkFaixa(pad) : { ideal:0, minimo:0 };
+}
+function _evkPerfil(p, o){
+  let pf = o && o.perfil;
+  if(!pf && typeof _evrContexto === "function"){ try{ const cx = _evrContexto(Object.assign({}, o || {}, { p:p, calc:_evkCalc(p, o) })); pf = cx && cx.perfil; }catch(_){ pf = null; } }
+  if(!pf && typeof _evrPerfil === "function"){ try{ pf = _evrPerfil(p && p.musica, (o && o.tipoVideo) || (p && p.tipoVideo)); }catch(_){ pf = null; } }
+  pf = Object.assign({}, _EVK_PERFIL, pf || {});
+  return { nome:String(pf.nome || "padrao"), leve:pf.leve === true || /leve/i.test(String(pf.nome || "")),
+    minTela:_evkFaixa(pf.minTela, _EVK_PERFIL.minTela), velApoioRapido:_evkFaixa(pf.velApoioRapido, _EVK_PERFIL.velApoioRapido),
+    velLimiarMov:_evkFaixa(pf.velLimiarMov, _EVK_PERFIL.velLimiarMov).ideal, zoomParado:_evkFaixa(pf.zoomParado, _EVK_PERFIL.zoomParado), bruto:pf };
+}
+/* ── linha do tempo (as mesmas contas do Estúdio: _evpDurClip e a soma em ordem do _evpCalcular) ── */
+function _evkNormal(c){ return !(_evkNum(c.congelar, 0) > 0) && !c.reverso && !(c.rampa && c.rampa !== "nenhuma"); }
+function _evkDurClip(c){
+  if(typeof _evpDurClip === "function"){ try{ return _evpDurClip(Object.assign({}, c)); }catch(_){} }
+  if(_evkNum(c.congelar, 0) > 0) return Math.max(0.1, _evkNum(c.congelar, 2));
+  return Math.max(0.1, (_evkNum(c.fim, 0) - _evkNum(c.ini, 0)) / (_evkNum(c.vel, 1) || 1));
+}
+function _evkLinha(p){
+  let t = 0; const cl = (p.clips || []).map(function(c){ const d = _evkDurClip(c), r = { t0:t, t1:t + d, dur:d }; t += d; return r; });
+  return { clips:cl, fimCortes:t, total:t + Math.max(0, _evkNum(p.tela_final && p.tela_final.dur, 0)) };
+}
+/* calc para a régua. Durante as tentativas: o mínimo (clips com t0/t1 pelas mesmas contas do _evpCalcular, total, listas) — o _evpCalcular
+   de verdade também monta a legenda e aquece os sons automáticos, pesado para rodar centenas de vezes. completo = true: o do Estúdio
+   (usado só na régua final, para o relatório trazer também os avisos da legenda). */
+function _evkCalc(p, o, completo){
+  if(completo && typeof _evpCalcular === "function"){ try{ return _evpCalcular(p, o && o.fala, (o && o.kit) || {}); }catch(_){} }
+  const L = _evkLinha(p), clips = (p.clips || []).map(function(c, i){ return Object.assign({}, c, { i:i, t0:L.clips[i].t0, t1:L.clips[i].t1, dur:L.clips[i].dur }); });
+  let mic = []; if(typeof _evpMicItens === "function"){ try{ mic = _evpMicItens(p, clips); }catch(_){ mic = []; } }
+  return { clips:clips, fimCortes:L.fimCortes, total:L.total, textos:(p.textos || []).filter(function(x){ return x && !x.off; }), imagens:(p.imagens || []).filter(function(x){ return x && !x.off; }),
+    musica:p.musica, narracoes:(p.narracoes || []).filter(function(x){ return x && !x.off; }).concat(mic), motion:(p.motion && p.motion.itens && p.motion.itens.length) ? p.motion : null, legenda:p.legenda || {}, tela_final:p.tela_final || {} };
+}
+/* ── a régua ── */
+function _evkItensDe(r){ const l = Array.isArray(r) ? r : (r && Array.isArray(r.itens) ? r.itens : []); return l.filter(function(x){ return x && x.regra && x.nivel !== "ok"; }); }
+/* cache (revisão 17/10/2026): dentro de UM conserto o mesmo projeto é conferido várias vezes (o "depois" de um item = o "antes" do próximo;
+   desfazer volta ao "antes") — a régua é pura, então guarda por projeto (JSON) e devolve cópias rasas. Só sem "completo". */
+function _evkRegua(p, o, completo, cache){
+  if(typeof _evrConferir !== "function") return [];
+  const ch = cache && !completo ? JSON.stringify(p) : null;
+  if(ch != null && cache[ch]) return cache[ch].map(function(x){ return Object.assign({}, x); });
+  const oo = Object.assign({}, o || {}, { p:p, calc:_evkCalc(p, o, completo) });
+  let ctx = oo; if(typeof _evrContexto === "function"){ try{ ctx = _evrContexto(oo); }catch(_){ ctx = oo; } }
+  let r; try{ r = _evkItensDe(_evrConferir(ctx)).map(function(x){ return Object.assign({}, x, { t:_evkNum(x.t, 0), t1:x.t1 == null ? null : _evkNum(x.t1, _evkNum(x.t, 0)) }); }); }catch(_){ r = []; }
+  if(ch != null){ cache[ch] = r.map(function(x){ return Object.assign({}, x); }); }
+  return r;
+}
+function _evkEhTrava(it){ return it.tipo === "trava" || (!it.tipo && !!_EVK_TRAVAS[it.regra]) || (it.tipo !== "preferencia" && it.nivel === "trava"); }
+function _evkExcecao(p, it){
+  if(_evkEhTrava(it)) return false;
+  if(_evkDados(it).aceito) return true;                 // a régua já marcou como aceito (exceção registrada)
+  return (Array.isArray(p && p.excecoes) ? p.excecoes : []).some(function(e){ return e && e.regra === it.regra && Math.abs(_evkNum(e.t, -99) - it.t) <= 0.5; });
+}
+function _evkPeso(it){ if(_evkEhTrava(it) || it.nivel === "grave") return 100; return it.nivel === "medio" || it.nivel === "aviso" ? 10 : 1; }
+function _evkPontos(itens){ const s = {}; itens.forEach(function(x){ s[x.regra] = (s[x.regra] || 0) + _evkPeso(x); }); return s; }
+/* ── palavras de um bruto (fragil = tempo incerto na transcrição, como na Conferência) ── */
+function _evkPalavras(fala, id){
+  const l = (fala && Array.isArray(fala[id]) ? fala[id] : []).filter(function(w){ return w && isFinite(Number(w.i)) && String(w.p || "").trim(); })
+    .map(function(w){ const i = Number(w.i), f = Math.max(i, _evkNum(w.f, i)); return { i:i, f:f, p:String(w.p).trim(), pt:w.pt || "", fragil:(f - i) < 0.06 }; });
+  l.sort(function(a, b){ return a.i - b.i || a.f - b.f; }); return l;
+}
+/* ── medidas dos takes ── */
+function _evkDurTake(o, id){
+  const ic = o && o.infoClipe && o.infoClipe[id], mv = o && o.movimento && o.movimento[id], du = o && o.duracoes && o.duracoes[id];
+  /* o mapa de movimento mede no máximo os 3 primeiros minutos (MOV_MAX_SEG = 180 no PC): com 180 s ele não diz a duração do take */
+  const d = _evkNum(ic && (ic.dur != null ? ic.dur : ic.duracao), 0) || _evkNum(du, 0) || (mv && _evkNum(mv.dur, 0) < 179.5 ? _evkNum(mv.dur, 0) : 0);
+  if(d > 0) return d;
+  const tk = (o && Array.isArray(o.takes) ? o.takes : []).find(function(x){ return x && x.clipe === id; }); return tk ? _evkNum(tk.dur, 0) : 0;
+}
+function _evkBons(o, id){
+  const mv = o && o.movimento && o.movimento[id]; if(mv && Array.isArray(mv.bons)) return _evkBonsJuntos(mv.bons);
+  const tk = (o && Array.isArray(o.takes) ? o.takes : []).find(function(x){ return x && x.clipe === id; }); return tk && Array.isArray(tk.bons) ? _evkBonsJuntos(tk.bons) : null;
+}
+/* trechos bons que quase se encostam (≤ 0,35 s) contam como um só — a mesma conta da régua (_evrBonsJuntos) */
+function _evkBonsJuntos(bons){
+  const l = (Array.isArray(bons) ? bons : []).map(function(b){ return [_evkNum(b[0], 0), _evkNum(b[1], 0)]; }).filter(function(b){ return b[1] > b[0]; }).sort(function(a, b){ return a[0] - b[0]; }), r = [];
+  l.forEach(function(b){ const z = r[r.length - 1]; if(z && b[0] - z[1] <= 0.35) z[1] = Math.max(z[1], b[1]); else r.push(b); }); return r;
+}
+function _evkMov(o, id){ const mv = o && o.movimento && o.movimento[id]; return mv && mv.resumo ? mv.resumo : null; }
+/* apoio por cima que cobre a tela (é o que esconde o rosto) */
+function _evkCobre(x){ return !!x && !x.off && !x.soFundo && x.camada !== "efeito" && x.camada !== "texto3d" && x.camada !== "texto" && (!!x.cheia || _evkNum(x.escala, 0) >= 0.9) && _evkNum(x.t1, 0) > _evkNum(x.t0, 0); }
+function _evkApoioVideo(x){ return _evkCobre(x) && x.camada === "video" && !!x.clipe && x.rampa !== "montagem"; }
+/* todos os usos de um bruto como imagem (apoio por cima e respiro da linha): { tipo, ref, ini, fim (no bruto), t0, t1 } */
+function _evkUsos(p, L){
+  const u = [];
+  (p.imagens || []).forEach(function(x){ if(!_evkApoioVideo(x)) return; const v = _evkNum(x.vel, 1) || 1, s = (_evkNum(x.t1, 0) - _evkNum(x.t0, 0)) * v;
+    u.push({ tipo:"imagem", ref:x, clipe:x.clipe, ini:_evkNum(x.ini, 0), fim:_evkNum(x.ini, 0) + s, t0:_evkNum(x.t0, 0), t1:_evkNum(x.t1, 0) }); });
+  (p.clips || []).forEach(function(c, i){ if(!c.mudo || !c.clipe || !_evkNormal(c)) return; u.push({ tipo:"clip", ref:c, i:i, clipe:c.clipe, ini:_evkNum(c.ini, 0), fim:_evkNum(c.fim, 0), t0:L.clips[i].t0, t1:L.clips[i].t1 }); });
+  return u;
+}
+function _evkSobrepoe(a0, a1, b0, b1, m){ m = m || 0; return a0 < b1 - m && b0 < a1 - m; }
+/* acha um pedaço [ini, ini+span] dentro de "zonas" (intervalos do bruto), sem tocar nos "ocupados", o mais perto de "perto" */
+function _evkVaga(zonas, ocupados, span, perto){
+  let melhor = null;
+  zonas.forEach(function(z){
+    const livres = [[z[0], z[1]]];
+    ocupados.slice().sort(function(a, b){ return a[0] - b[0]; }).forEach(function(q){
+      for(let k = livres.length - 1; k >= 0; k--){ const L = livres[k]; if(q[1] <= L[0] || q[0] >= L[1]) continue;
+        const nv = []; if(q[0] > L[0]) nv.push([L[0], q[0]]); if(q[1] < L[1]) nv.push([q[1], L[1]]); livres.splice.apply(livres, [k, 1].concat(nv)); }
+    });
+    livres.forEach(function(L){ if(L[1] - L[0] + 1e-6 < span) return; const ini = Math.max(L[0], Math.min(L[1] - span, perto)), d = Math.abs(ini - perto);
+      if(!melhor || d < melhor.d - 1e-9) melhor = { ini:ini, d:d }; });
+  });
+  return melhor ? _evkR(melhor.ini) : null;
+}
+/* ── mapa da linha do tempo: tempo antigo → tempo novo, pelo segundo do bruto de cada clip (clips divididos guardam a origem em _o) ── */
+function _evkMapa(pA, pN){
+  const LA = _evkLinha(pA), LN = _evkLinha(pN), cA = pA.clips || [], cN = pN.clips || [];
+  const porOrig = {}; cN.forEach(function(c, k){ const o = c._o || c.id; (porOrig[o] = porOrig[o] || []).push(k); });
+  const bruto = function(c, L, t){ if(!_evkNormal(c)) return _evkNum(c.ini, 0) + (t - L.t0) / Math.max(1e-6, L.dur) * (_evkNum(c.fim, 0) - _evkNum(c.ini, 0)); return _evkNum(c.ini, 0) + (t - L.t0) * (_evkNum(c.vel, 1) || 1); };
+  const linha = function(k, s){ const c = cN[k], L = LN.clips[k]; if(!_evkNormal(c)) return L.t0 + (s - _evkNum(c.ini, 0)) / Math.max(1e-6, _evkNum(c.fim, 0) - _evkNum(c.ini, 0)) * L.dur; return L.t0 + (s - _evkNum(c.ini, 0)) / (_evkNum(c.vel, 1) || 1); };
+  return function(t){
+    t = _evkNum(t, 0);
+    if(!cA.length) return t;
+    if(t >= LA.fimCortes - 1e-9) return t - LA.fimCortes + LN.fimCortes;
+    let j = 0; while(j < cA.length - 1 && t >= LA.clips[j].t1 - 1e-9) j++;
+    const s = bruto(cA[j], LA.clips[j], t), ks = porOrig[cA[j].id] || [];
+    if(!ks.length){ for(let q = j + 1; q < cA.length; q++){ const kk = porOrig[cA[q].id]; if(kk && kk.length) return LN.clips[kk[0]].t0; } return LN.fimCortes; }
+    let best = null;
+    ks.forEach(function(k){ const c = cN[k], a = _evkNum(c.ini, 0), b = _evkNum(c.fim, 0);
+      const d = s < a ? a - s : s > b ? s - b : 0, tt = d === 0 ? linha(k, s) : (s < a ? LN.clips[k].t0 : LN.clips[k].t1);
+      if(!best || d < best.d - 1e-9) best = { d:d, t:tt }; });
+    return best.t;
+  };
+}
+/* aplica o mapa em tudo o que tem tempo absoluto (o mesmo que o "empurra"/"puxa" do Estúdio + motion e narração ligada ao clip) */
+function _evkAplicarMapa(pA, pN, o){
+  const m = _evkMapa(pA, pN), r = _evkR;
+  const par = function(x){ if(!x || x.t0 == null) return; const a = m(x.t0); if(x.t1 != null){ const b = m(x.t1); x.t1 = r(Math.max(a + 0.1, b)); } x.t0 = r(a); };
+  (pN.textos || []).forEach(par);
+  (pN.imagens || []).forEach(par);
+  (pN.sfx || []).forEach(function(x){ if(x && x.t0 != null) x.t0 = r(m(x.t0)); });
+  (pN.marcas || []).forEach(function(x){ if(x && x.t != null) x.t = r(m(x.t)); });
+  (pN.excecoes || []).forEach(function(x){ if(x && x.t != null) x.t = r(m(x.t)); });
+  (pN.motion && Array.isArray(pN.motion.itens) ? pN.motion.itens : []).forEach(function(it){ if(!it || it.t0 == null) return; const a0 = _evkNum(it.t0, 0), a = m(a0);
+    if(it.marca_t != null) it.marca_t = r(_evkNum(it.marca_t, 0) + (a - a0)); par(it); });
+  const LN = _evkLinha(pN), porId = {}; (pN.clips || []).forEach(function(c, k){ porId[c.id] = k; });
+  (pN.narracoes || []).forEach(function(n){
+    if(!n) return;
+    const cid = n._clip || (n.micro && String(n.id || "").indexOf("mic_") === 0 ? String(n.id).slice(4) : null);
+    if(cid && porId[cid] != null){                    // narração do microfone gravada no projeto: anda com o clip de fala (mesmo t0, corte e duração)
+      const k = porId[cid], c = pN.clips[k], cOld = (pA.clips || []).find(function(x){ return x.id === cid; });
+      const kk = _evkNum(n.vel, 1) / (_evkNum(c.vel, 1) || 1);
+      if(cOld) n.corte = r(_evkNum(n.corte, 0) + kk * (_evkNum(c.ini, 0) - _evkNum(cOld.ini, 0)));
+      n.t0 = r(LN.clips[k].t0); n.dur = r(LN.clips[k].dur); return;
+    }
+    if(n.t0 != null) n.t0 = r(m(n.t0));
+  });
+}
+/* troca um clip (ini/fim/vel) ou a lista de clips e faz tudo andar junto */
+function _evkMexerClips(p, fn, o){ const pA = _evkCopia(p); fn(p); _evkAplicarMapa(pA, p, o); (p.clips || []).forEach(function(c){ delete c._o; }); }
+/* clip de onde a régua apontou: dados.id / dados.clip / tempo */
+function _evkDados(it){ return (it && it.dados && typeof it.dados === "object") ? it.dados : {}; }
+function _evkIdsDe(it){ const d = _evkDados(it), l = []; ["id", "clip", "clipId", "imagem", "apoio", "respiro", "tarja", "alvo", "trecho"].forEach(function(k){ if(typeof d[k] === "string") l.push(d[k]); }); if(Array.isArray(d.ids)) d.ids.forEach(function(x){ if(typeof x === "string") l.push(x); }); return l; }
+/* o item da régua aponta este objeto? com ids nos dados, só pelo id; sem ids, pelo tempo (o ponto/intervalo do item cai DENTRO dele) */
+function _evkAponta(it, id, t0, t1){
+  const li = _evkIdsDe(it); if(li.length) return li.indexOf(id) >= 0;
+  const a = it.t, b = it.t1 == null ? it.t : Math.max(it.t, it.t1);
+  return b - a < 0.01 ? (a >= t0 - 0.05 && a < t1 - 0.05) : (a < t1 - 0.05 && b > t0 + 0.05);
+}
+function _evkApontado(itens, id, t0, t1){ return itens.some(function(it){ return _evkAponta(it, id, t0, t1); }); }
+function _evkFeito(lista, regra, t, msg){ lista.push({ regra:regra, t:_evkR(t), msg:msg }); }
+
+/* ═══ 1) R6 MÚSICA — termina no final natural junto com o fim do vídeo (remix na batida) ═══ */
+function _evkRemix(md, ini, usa, beat){
+  let rx = null;
+  if(typeof _evpRemix === "function"){ try{ rx = _evpRemix(md, ini, usa, beat); }catch(_){ rx = null; } }
+  else {
+    if(!(md > 0) || md - ini <= usa + 0.5) return null;
+    const P = beat && beat.bpm ? 60 / beat.bpm : 0, fase = beat ? _evkNum(beat.fase, 0) : 0;
+    const naBatida = function(x){ if(!P) return x; const k = Math.round((x - fase) / P); return fase + k * P; };
+    const a = naBatida(ini + usa * 0.45); let b = md - (usa - (a - ini)); if(P){ const k = Math.round((b - a) / P); b = a + k * P; }
+    if(!(b > a + 1) || b >= md) return null; rx = { a:Math.round(a * 1000) / 1000, b:Math.round(b * 1000) / 1000 };
+  }
+  if(!rx) return null;
+  /* o pulo arredondado na batida pode passar do fim do arquivo (a música recomeçaria no fim): recua uma batida */
+  const P = beat && beat.bpm ? 60 / beat.bpm : 0;
+  if(P && ini + usa + (rx.b - rx.a) > md + 0.005){ const b2 = Math.round((rx.b - P) * 1000) / 1000; if(b2 > rx.a + 1) rx = { a:rx.a, b:b2 }; }
+  return rx;
+}
+function _evkMusica(p, itens, o){
+  const out = { feitos:[], avisos:[] }, mu = p.musica, t = itens[0] ? itens[0].t : 0;
+  if(!mu || mu.mudo || mu.off){ out.avisos.push({ regra:"R6", t:t, msg:"Sem música ligada: nada a consertar." }); return out; }
+  const md = _evkNum(o && o.musicaInfo && (o.musicaInfo.duracao != null ? o.musicaInfo.duracao : o.musicaInfo.dur), 0) || _evkNum(mu.duracao, 0);
+  if(!(md > 0)){ out.avisos.push({ regra:"R6", t:t, msg:"Não sei a duração da música (musicaInfo.duracao): não dá para encaixar o fim." }); return out; }
+  if(Math.abs(_evkNum(mu.vel, 1) - 1) > 0.001){ out.avisos.push({ regra:"R6", t:t, msg:"Música com velocidade diferente de 1×: o remix do app só vale em 1×." }); return out; }
+  const L = _evkLinha(p), t0 = _evkNum(mu.t0, 0), usa = L.total - t0, ini = _evkNum(mu.ini, 0), fo = _evkNum(mu.fadeOut, 1.5);
+  if(usa <= 0.5) return out;
+  if(mu.dur != null) delete mu.dur;                  // a música vai até o fim do vídeo
+  if(md >= usa + 0.05){
+    if(md - ini <= usa + 0.5){                        // cabe sem pular: começa no ponto certo para acabar no final de verdade
+      const ni = Math.max(0, _evkR(md - usa)); delete mu.remix; mu.ini = ni; if(ni === 0) mu.pulaIntro = false; mu.fadeOut = Math.min(fo, 0.6);
+      _evkFeito(out.feitos, "R6", L.total, "Música começa em " + ni.toFixed(2) + " s do arquivo para terminar no final natural junto com o vídeo.");
+    } else {
+      const rx = _evkRemix(md, ini, usa, mu.beat);
+      if(rx){ mu.remix = rx; mu.fadeOut = Math.min(fo, 0.6); _evkFeito(out.feitos, "R6", t0 + (rx.a - ini), "Remix na batida: toca até " + rx.a.toFixed(2) + " s, pula para " + rx.b.toFixed(2) + " s e termina no final natural da música junto com o vídeo."); }
+      else { const ni = Math.max(0, _evkR(md - usa)); delete mu.remix; mu.ini = ni; if(ni === 0) mu.pulaIntro = false; mu.fadeOut = Math.min(fo, 0.6);
+        _evkFeito(out.feitos, "R6", L.total, "Sem remix possível: a música começa em " + ni.toFixed(2) + " s para terminar no final natural."); }
+    }
+  } else {                                            // a música é mais curta que o vídeo: toca uma vez e a saída suave termina antes do fim dela
+    delete mu.remix; mu.ini = 0; mu.pulaIntro = false; mu.dur = _evkR(Math.max(0.5, md - 0.05)); mu.fadeOut = _evkR(Math.min(Math.max(fo, 1.5), md * 0.3));
+    _evkFeito(out.feitos, "R6", t0 + md, "Música mais curta que o vídeo: toca uma vez inteira e some suave antes do fim dela (não repete).");
+    out.avisos.push({ regra:"R6", t:t0 + md, msg:"A música (" + md.toFixed(1) + " s) é mais curta que o vídeo (" + usa.toFixed(1) + " s): troque por uma mais longa." });
+  }
+  return out;
+}
+
+/* ═══ 2) R7 CORTE DE PALAVRA — corte no silêncio mais perto (folga 0,10–0,25 s) e pausa morta encurtada ═══ */
+function _evkEnergia(o, id, t){
+  const me = o && o.micEnergia; if(!me) return null;
+  if(typeof me === "function"){
+    try{
+      const m = o._micMap;                           // contrato do 52h: micEnergia(tMic0, tMic1) → RMS 0..1, no tempo do MICROFONE (A + t·(1+B))
+      const v = m ? Number(me(_evkNum(m.A, 0) + t * (1 + _evkNum(m.B, 0)) - 0.015, _evkNum(m.A, 0) + t * (1 + _evkNum(m.B, 0)) + 0.015)) : Number(me(id, t));
+      return isFinite(v) ? v : null;
+    }catch(_){ return null; }
+  }
+  const e = me[id] || me["*"]; if(!e || !Array.isArray(e.v)) return null;
+  const k = Math.round((t - _evkNum(e.t0, 0)) / (_evkNum(e.passo, 0.01) || 0.01)); return k >= 0 && k < e.v.length ? _evkNum(e.v[k], null) : null;
+}
+/* escolhe o ponto do corte: ideal dentro de [lo, hi]; com energia do microfone, o menor nível na janela ±0,15 s */
+function _evkPonto(o, id, ideal, lo, hi){
+  let x = Math.max(lo, Math.min(hi, ideal));
+  if(o && o.micEnergia){
+    const a = Math.max(lo, ideal - _EVK.janelaMic), b = Math.min(hi, ideal + _EVK.janelaMic); let best = null;
+    for(let s = a; s <= b + 1e-9; s += 0.01){ const e = _evkEnergia(o, id, s); if(e == null) continue; if(!best || e < best.e - 1e-12 || (Math.abs(e - best.e) <= 1e-12 && Math.abs(s - ideal) < Math.abs(best.s - ideal))) best = { s:s, e:e }; }
+    if(best) x = best.s;
+  }
+  return _evkR(x);
+}
+/* novo início/fim de um trecho de fala → { x } (novo corte), { aviso } (não dá) ou null (já está bom).
+   Palavra partida no corte: as 2 saídas (a palavra entra inteira / sai inteira) são testadas; vale a que tem silêncio com folga sem invadir
+   a vizinha — com as duas boas, fica a do lado onde estava mais da metade da palavra. O corte NUNCA passa do começo da palavra de fora
+   (não entra palavra que o editor deixou de fora). Palavra de tempo incerto (fragil) conta como ~0,15 s.
+   Folga: 0,15 s da palavra (0,10–0,25) se o vão deixa ≥ 0,10 s do outro lado; senão o meio do vão (a régua mede o menor dos dois lados). */
+const _EVK_FRAGIL = 0.15;
+function _evkVao(lado, dentro, fora){
+  /* dentro = palavra que fica (borda do trecho); fora = vizinha que não entra. Devolve { lo, hi, ideal } no bruto ou null */
+  if(lado === "ini"){
+    const a = fora ? (fora.fragil ? fora.i + _EVK_FRAGIL : fora.f) : -1e9, b = dentro.i;
+    if(fora && dentro.i <= fora.i + 0.02) return null;                 // palavras no mesmo tempo: transcrição sem tempo confiável
+    const ideal = b - _EVK.folgaIdeal;
+    if(ideal - a >= _EVK.folgaMin) return { lo:Math.max(0, a + _EVK.folgaMin), hi:b - _EVK.folgaMin, ideal:Math.max(0, ideal) };
+    const m = (a + b) / 2; return b - m >= 0.06 ? { lo:m, hi:m, ideal:m } : null;
+  }
+  const a = dentro.fragil ? dentro.i + _EVK_FRAGIL : dentro.f, b = fora ? fora.i : 1e9;
+  if(fora && fora.i <= dentro.i + 0.02) return null;
+  const ideal = a + _EVK.folgaIdeal;
+  if(b - ideal >= _EVK.folgaMin) return { lo:a + _EVK.folgaMin, hi:b - _EVK.folgaMin, ideal:ideal };
+  const m = (a + b) / 2; return m - a >= 0.06 ? { lo:m, hi:m, ideal:m } : null;
+}
+function _evkCorteIni(ws, ini, fim, o, id){
+  const T = _EVK.tol, ops = [];
+  for(let k = 0; k < ws.length; k++){
+    const w = ws[k];
+    if(w.fragil && (Math.abs(w.i - ini) <= 0.08 || Math.abs(w.f - ini) <= 0.08) && w.i < fim){ ops.push({ d:w, f:ws[k - 1] || null }); break; }
+    if(w.f <= ini + T) continue;
+    if(w.i < ini - T && w.f > ini + T){
+      const fica = { d:w, f:ws[k - 1] || null }, sai = { d:ws[k + 1] || null, f:w };
+      if(w.f - ini >= (w.f - w.i) / 2) ops.push(fica, sai); else ops.push(sai, fica); break;
+    }
+    ops.push({ d:w, f:ws[k - 1] || null }); break;
+  }
+  if(!ops.length || !ops[0].d) return null;
+  const f0 = ops[0], dist = function(op){ return Math.min(op.d.i - ini, op.f ? ini - (op.f.fragil ? op.f.i + _EVK_FRAGIL : op.f.f) : 9); };
+  if(ops.length === 1 && !f0.d.fragil && dist(f0) >= _EVK.folgaMin - 0.005) return null;      // já está bom
+  for(let k = 0; k < ops.length; k++){
+    const op = ops[k]; if(!op.d || op.d.i >= fim) continue;
+    const v = _evkVao("ini", op.d, op.f); if(!v) continue;
+    const x = _evkPonto(o, id, v.ideal, v.lo, v.hi); if(Math.abs(x - ini) < 0.005) return dist(op) < _EVK.folgaMin - 0.005 ? { aviso:"o vão entre as palavras é curto: o corte já está no melhor ponto possível (" + Math.round(Math.max(0, dist(op)) * 1000) + " ms de cada lado)" } : null;
+    if(dist(op) >= 0 && ops.length === 1){ const nd = Math.min(op.d.i - x, op.f ? x - (op.f.fragil ? op.f.i + _EVK_FRAGIL : op.f.f) : 9); if(nd <= dist(op) + 0.005) return { aviso:"o vão entre as palavras é pequeno demais para melhorar a folga" }; }
+    return { x:x };
+  }
+  return { aviso:"o vão entre " + (f0.f ? "\u201c" + f0.f.p + "\u201d e " : "") + "\u201c" + f0.d.p + "\u201d é pequeno demais (ou a transcrição não tem tempo confiável aqui) — confira de ouvido" };
+}
+function _evkCorteFim(ws, ini, fim, o, id){
+  const T = _EVK.tol, ops = [];
+  for(let k = ws.length - 1; k >= 0; k--){
+    const w = ws[k];
+    if(w.fragil && (Math.abs(w.i - fim) <= 0.08 || Math.abs(w.f - fim) <= 0.08) && w.f > ini){ ops.push({ d:w, f:ws[k + 1] || null }); break; }
+    if(w.i >= fim - T) continue;
+    if(w.f > fim + T){
+      const fica = { d:w, f:ws[k + 1] || null }, sai = { d:ws[k - 1] || null, f:w };
+      if(fim - w.i >= (w.f - w.i) / 2) ops.push(fica, sai); else ops.push(sai, fica); break;
+    }
+    ops.push({ d:w, f:ws[k + 1] || null }); break;
+  }
+  if(!ops.length || !ops[0].d) return null;
+  const f0 = ops[0], dist = function(op){ return Math.min(fim - (op.d.fragil ? op.d.i + _EVK_FRAGIL : op.d.f), op.f ? op.f.i - fim : 9); };
+  if(ops.length === 1 && !f0.d.fragil && dist(f0) >= _EVK.folgaMin - 0.005) return null;
+  for(let k = 0; k < ops.length; k++){
+    const op = ops[k]; if(!op.d || op.d.f <= ini) continue;
+    const v = _evkVao("fim", op.d, op.f); if(!v) continue;
+    const x = _evkPonto(o, id, v.ideal, v.lo, v.hi); if(Math.abs(x - fim) < 0.005) return dist(op) < _EVK.folgaMin - 0.005 ? { aviso:"o vão entre as palavras é curto: o corte já está no melhor ponto possível (" + Math.round(Math.max(0, dist(op)) * 1000) + " ms de cada lado)" } : null;
+    if(ops.length === 1){ const nd = Math.min(x - (op.d.fragil ? op.d.i + _EVK_FRAGIL : op.d.f), op.f ? op.f.i - x : 9); if(nd <= dist(op) + 0.005) return { aviso:"o vão entre as palavras é pequeno demais para melhorar a folga" }; }
+    return { x:x };
+  }
+  return { aviso:"o vão entre \u201c" + f0.d.p + "\u201d" + (f0.f ? " e \u201c" + f0.f.p + "\u201d" : "") + " é pequeno demais (ou a transcrição não tem tempo confiável aqui) — confira de ouvido" };
+}
+function _evkCortes(p, itens, o){
+  const out = { feitos:[], avisos:[] };
+  const L0 = _evkLinha(p), alvo = [];
+  (p.clips || []).forEach(function(c, i){
+    if(c.mudo || !c.clipe || !_evkNormal(c)) return;
+    const L = L0.clips[i], meus = itens.filter(function(it){ const li = _evkIdsDe(it); return li.length ? li.indexOf(c.id) >= 0 : (it.t >= L.t0 - _EVK.perto && it.t <= L.t1 + _EVK.perto); });
+    if(!meus.length) return;
+    const d = function(it){ return _evkDados(it); };
+    alvo.push({ id:c.id, ini:meus.some(function(it){ return d(it).lado === "ini" || (!d(it).lado && Math.abs(it.t - L.t0) <= _EVK.perto); }),
+      fim:meus.some(function(it){ return d(it).lado === "fim" || (!d(it).lado && Math.abs(it.t - L.t1) <= _EVK.perto); }),
+      pausa:meus.filter(function(it){ return !d(it).lado && !d(it).sincronia && (d(it).pausa || d(it).takeIni != null || (it.t > L.t0 + _EVK.perto && it.t < L.t1 - _EVK.perto) || /pausa/i.test(String(it.msg || ""))); }) });
+    meus.forEach(function(it){ if(d(it).sincronia) out.avisos.push({ regra:"R7", t:it.t, msg:"Voz do microfone com pouca confiança de sincronia: refaça o casamento do microfone (o conserto não mexe nisso)." }); });
+  });
+  alvo.forEach(function(a){
+    const i = (p.clips || []).findIndex(function(c){ return c.id === a.id; }); if(i < 0) return;
+    const c = p.clips[i], ws = _evkPalavras(o && o.fala, c.clipe); if(!ws.length){ out.avisos.push({ regra:"R7", t:_evkLinha(p).clips[i].t0, msg:"Sem transcrição deste trecho: não dá para achar o silêncio." }); return; }
+    const ini0 = _evkNum(c.ini, 0), fim0 = _evkNum(c.fim, 0);
+    const mm = p.micro && ((p.micro.clips && p.micro.clips[c.id]) || (p.micro.brutos && p.micro.brutos[c.clipe])), oo = Object.assign({}, o || {}, { _micMap:mm || null });
+    const ri = a.ini ? _evkCorteIni(ws, ini0, fim0, oo, c.clipe) : null, rf = a.fim ? _evkCorteFim(ws, ini0, fim0, oo, c.clipe) : null;
+    const ni = ri && ri.x != null ? ri.x : null, nf = rf && rf.x != null ? rf.x : null, Lq = _evkLinha(p).clips[i];
+    if(ri && ri.aviso) out.avisos.push({ regra:"R7", t:Lq.t0, msg:"Início do trecho: " + ri.aviso + "." });
+    if(rf && rf.aviso) out.avisos.push({ regra:"R7", t:Lq.t1, msg:"Fim do trecho: " + rf.aviso + "." });
+    if(ni != null || nf != null){
+      const t0 = _evkLinha(p).clips[i].t0;
+      _evkMexerClips(p, function(q){ const cc = q.clips[i]; if(ni != null) cc.ini = ni; if(nf != null) cc.fim = nf; }, o);
+      if(ni != null) _evkFeito(out.feitos, "R7", t0, "Início do trecho movido de " + ini0.toFixed(2) + " para " + ni.toFixed(2) + " s do bruto (silêncio antes da 1ª palavra).");
+      if(nf != null) _evkFeito(out.feitos, "R7", _evkLinha(p).clips[i].t1, "Fim do trecho movido de " + fim0.toFixed(2) + " para " + nf.toFixed(2) + " s do bruto (silêncio depois da última palavra).");
+    }
+    /* pausa morta > 0,6 s dentro do trecho: divide e deixa ~0,3 s */
+    if(!a.pausa.length) return;
+    const c2 = p.clips[i], ini = _evkNum(c2.ini, 0), fim = _evkNum(c2.fim, 0), vel = _evkNum(c2.vel, 1) || 1, L = _evkLinha(p).clips[i];
+    const dentro = ws.filter(function(w){ return w.i >= ini - 0.001 && w.f <= fim + 0.001; }), cortes = [];
+    for(let k = 1; k < dentro.length; k++){
+      const w1 = dentro[k - 1], w2 = dentro[k], gap = w2.i - w1.f; if(gap <= _EVK.pausaMorta) continue;
+      const tg = L.t0 + (w1.f - ini) / vel, tg2 = L.t0 + (w2.i - ini) / vel;
+      if(!a.pausa.some(function(it){ const dd = _evkDados(it); return dd.takeIni != null ? (dd.takeIni <= w2.i + 0.05 && _evkNum(dd.takeFim, dd.takeIni) >= w1.f - 0.05) : (it.t >= tg - _EVK.perto && it.t <= tg2 + _EVK.perto); })) continue;
+      if(w1.fragil || w2.fragil){ out.avisos.push({ regra:"R7", t:tg, msg:"Pausa longa entre palavras de tempo incerto: não encurtei (confira de ouvido)." }); continue; }
+      cortes.push([_evkR(w1.f + _EVK.pausaFica / 2), _evkR(w2.i - _EVK.pausaFica / 2), tg]);
+    }
+    /* palavra "esticada" (a pausa/“éé” está DENTRO do tempo da palavra): sem saber onde a voz acaba, cortar ali pode comer a palavra → só avisa */
+    a.pausa.forEach(function(it){ const dd = _evkDados(it); if(!/esticad/i.test(String(it.msg || ""))) return;
+      const temBuraco = cortes.some(function(x){ return dd.takeIni != null && x[0] <= _evkNum(dd.takeFim, 0) + 0.05 && x[1] >= dd.takeIni - 0.05; });
+      if(!temBuraco) out.avisos.push({ regra:"R7", t:it.t, msg:"Pausa dentro de uma palavra \u201cesticada\u201d na transcrição: não dá para saber onde a voz acaba sem ouvir — encurte à mão (Tirar trecho)." }); });
+    if(!cortes.length) return;
+    _evkMexerClips(p, function(q){
+      const base = q.clips[i], novos = []; let a0 = _evkNum(base.ini, 0), n = 0;
+      cortes.forEach(function(x){ const pc = _evkCopia(base); pc.ini = a0; pc.fim = x[0]; pc._o = base.id; if(n){ pc.id = base.id + "_k" + n; pc.trans = "corte"; pc.fi = 0; } pc.fo = 0; novos.push(pc); a0 = x[1]; n++; });
+      const ul = _evkCopia(base); ul.ini = a0; ul._o = base.id; ul.id = base.id + "_k" + n; ul.trans = "corte"; ul.fi = 0; novos.push(ul);
+      q.clips.splice.apply(q.clips, [i, 1].concat(novos));
+      const mc = q.micro && q.micro.clips && q.micro.clips[base.id];           // o microfone ligado a este clip vale para os pedaços
+      if(mc) novos.forEach(function(pc){ if(pc.id !== base.id) q.micro.clips[pc.id] = _evkCopia(mc); });
+    }, o);
+    cortes.forEach(function(x){ _evkFeito(out.feitos, "R7", x[2], "Pausa morta de " + ((x[1] - x[0]) + _EVK.pausaFica).toFixed(2) + " s encurtada para " + _EVK.pausaFica.toFixed(1) + " s (trecho dividido; microfone acompanha)."); });
+  });
+  return out;
+}
+
+/* ═══ 3) R4 REPETIÇÃO — o 2º uso do mesmo pedaço vai para outra parte boa do take (ou outro apoio do mesmo assunto) ═══ */
+function _evkAssunto(x){ const n = String((x && x.nome) || ""), k = n.indexOf("·"); return _evkNorm(k >= 0 ? n.slice(k + 1) : n); }
+function _evkMoverUso(u, ini, clipe, doador){
+  const d = ini - u.ini, x = u.ref;
+  if(x.anim && Array.isArray(x.anim.pts) && (!clipe || clipe === x.clipe)) x.anim.pts.forEach(function(q){ if(q && q.t != null) q.t = _evkR(_evkNum(q.t, 0) + d); });
+  if(clipe && clipe !== x.clipe){ x.clipe = clipe; if(x.anim && typeof x.anim === "object") delete x.anim; /* no apoio por cima, anim "texto" é a entrada: fica */ if(doador){ ["rot", "escala", "x", "y", "cheia"].forEach(function(k){ if(doador[k] !== undefined) x[k] = _evkCopia(doador[k]); }); } }
+  if(u.tipo === "imagem") x.ini = _evkR(ini); else { const s = u.fim - u.ini; x.ini = _evkR(ini); x.fim = _evkR(ini + s); }
+}
+function _evkZonas(o, clipe, dur){ const b = _evkBons(o, clipe); if(b && b.length) return b; return dur > 0 ? [[0.3, Math.max(0.3, dur - 0.3)]] : null; }
+function _evkRepeticao(p, itens, o){
+  const out = { feitos:[], avisos:[] }, L = _evkLinha(p), usos = _evkUsos(p, L);
+  const ids = {}; itens.forEach(function(it){ _evkIdsDe(it).forEach(function(x){ ids[x] = 1; }); });
+  const feitosRef = [];
+  for(let a = 0; a < usos.length; a++) for(let b = 0; b < usos.length; b++){
+    const A = usos[a], B = usos[b];
+    if(a === b || A.clipe !== B.clipe || !(A.t0 < B.t0 || (A.t0 === B.t0 && a < b)) || !_evkSobrepoe(A.ini, A.fim, B.ini, B.fim, 0.01)) continue;
+    if(feitosRef.indexOf(B.ref) >= 0) continue;
+    const apontado = _evkApontado(itens, B.ref.id, B.t0, B.t1);
+    if(!apontado) continue;
+    const span = B.fim - B.ini, dur = _evkDurTake(o, B.clipe), zonas = _evkZonas(o, B.clipe, dur);
+    const ocup = usos.filter(function(u){ return u !== B && u.clipe === B.clipe; }).map(function(u){ return [u.ini - 0.05, u.fim + 0.05]; });
+    let vaga = zonas ? _evkVaga(zonas, ocup, span, B.ini) : null, foraBons = false;
+    /* repetir sobreposto é trava: sem vaga nos trechos bons, vale um pedaço livre fora deles */
+    if(vaga == null && dur > 0 && _evkEhTrava(itens[0] || {})){ vaga = _evkVaga([[0.1, dur - 0.05]], ocup, span, B.ini); foraBons = vaga != null; }
+    if(vaga != null){ const de = B.ini; _evkMoverUso(B, vaga, null); B.ini = vaga; B.fim = vaga + span; feitosRef.push(B.ref);
+      _evkFeito(out.feitos, "R4", B.t0, "Trecho repetido de " + (B.ref.nome || "apoio") + " trocado por outra parte " + (foraBons ? "livre (fora dos trechos de movimento bom — não havia outra)" : "boa") + " do mesmo take (" + de.toFixed(2) + " → " + vaga.toFixed(2) + " s)."); continue; }
+    /* outro apoio do mesmo assunto (outro bruto com pedaço livre) */
+    const as = _evkAssunto(B.ref); let feito = false;
+    const cands = [];
+    usos.forEach(function(u){ if(u.clipe !== B.clipe && as && _evkAssunto(u.ref) === as && !cands.some(function(c){ return c.clipe === u.clipe; })) cands.push({ clipe:u.clipe, doador:u.ref }); });
+    (o && Array.isArray(o.takes) ? o.takes : []).forEach(function(tk){ if(tk && tk.clipe && tk.clipe !== B.clipe && as && _evkNorm(tk.assunto) === as && !cands.some(function(c){ return c.clipe === tk.clipe; })) cands.push({ clipe:tk.clipe, doador:tk }); });
+    cands.sort(function(x, y){ return x.clipe < y.clipe ? -1 : x.clipe > y.clipe ? 1 : 0; });
+    for(let k = 0; k < cands.length && !feito; k++){
+      const cd = cands[k], z = _evkZonas(o, cd.clipe, _evkDurTake(o, cd.clipe)); if(!z) continue;
+      const oc = usos.filter(function(u){ return u.clipe === cd.clipe; }).map(function(u){ return [u.ini - 0.05, u.fim + 0.05]; });
+      const v = _evkVaga(z, oc, span, z[0][0]); if(v == null) continue;
+      _evkMoverUso(B, v, cd.clipe, cd.doador); B.clipe = cd.clipe; B.ini = v; B.fim = v + span; feitosRef.push(B.ref); feito = true;
+      _evkFeito(out.feitos, "R4", B.t0, "Trecho repetido trocado por outro apoio do mesmo assunto (" + as + ").");
+    }
+    if(!feito) out.avisos.push({ regra:"R4", t:B.t0, msg:"Trecho repetido de " + (B.ref.nome || "apoio") + ": não achei outra parte boa do take nem outro apoio do mesmo assunto." });
+  }
+  return out;
+}
+
+/* ═══ 4) R3 MOVIMENTO — apoio/respiro dentro do trecho bom; take parado → zoom leve alternando ═══ */
+function _evkZoomPts(ini, span, z, k){
+  const t0 = _evkR(ini), t1 = _evkR(ini + span), zz = _evkR(1 + z), m = k % 3;
+  if(m === 1) return [{ t:t0, z:zz, x:0, y:0, e:"io" }, { t:t1, z:1, x:0, y:0, e:"io" }];               // afasta
+  if(m === 2) return [{ t:t0, z:1, x:0, y:0, e:"io" }, { t:t1, z:zz, x:_evkR(z / 3), y:0, e:"io" }];    // aproxima deslocado
+  return [{ t:t0, z:1, x:0, y:0, e:"io" }, { t:t1, z:zz, x:0, y:0, e:"io" }];                          // aproxima
+}
+function _evkMovimento(p, itens, o, perfil){
+  const out = { feitos:[], avisos:[] }, L = _evkLinha(p), usos = _evkUsos(p, L);
+  let nZoom = usos.filter(function(u){ return u.ref.anim && u.ref.anim._evk; }).length;
+  const zNec = (perfil.zoomParado.ideal > 0.5 ? perfil.zoomParado.ideal - 1 : perfil.zoomParado.ideal) || _EVK.zoom;
+  usos.forEach(function(u){
+    if(!_evkApontado(itens, u.ref.id, u.t0, u.t1)) return;
+    const span = u.fim - u.ini, bons = _evkBons(o, u.clipe), mm = o && o.movimento && o.movimento[u.clipe], nome = u.ref.nome || (u.tipo === "clip" ? "Respiro" : "Apoio");
+    if(mm && _evkNum(mm.dur, 0) >= 179.5 && u.fim > _evkNum(mm.dur, 0)){ out.avisos.push({ regra:"R3", t:u.t0, msg:nome + ": pedaço depois dos 3 primeiros minutos do take (o mapa de movimento não mede ali)." }); return; }
+    const dentro = bons && bons.some(function(b){ return u.ini >= b[0] - 0.05 && u.fim <= b[1] + 0.05; });
+    if(bons && bons.length){
+      if(dentro) return;
+      const ocup = usos.filter(function(x){ return x !== u && x.clipe === u.clipe; }).map(function(x){ return [x.ini - 0.05, x.fim + 0.05]; });
+      const v = _evkVaga(bons, ocup, span, u.ini);
+      if(v != null){ const de = u.ini; _evkMoverUso(u, v, null); u.ini = v; u.fim = v + span;
+        _evkFeito(out.feitos, "R3", u.t0, nome + ": pedaço movido para dentro do trecho bom do take (" + de.toFixed(2) + " → " + v.toFixed(2) + " s)."); return; }
+      const cabeSo = _evkVaga(bons, [], span, u.ini) != null;
+      out.avisos.push({ regra:"R3", t:u.t0, msg:nome + (cabeSo ? ": o trecho bom que caberia já está usado por outro apoio do mesmo take (repetiria a cena)." : ": nenhum trecho bom do take tem " + span.toFixed(1) + " s.") }); return;
+    }
+    if(!mm){ out.avisos.push({ regra:"R3", t:u.t0, msg:nome + ": take sem mapa de movimento." }); return; }
+    /* take sem nenhum trecho bom: zoom leve (o perfil diz quanto) */
+    if(u.tipo === "imagem"){ out.avisos.push({ regra:"R3", t:u.t0, msg:nome + ": take sem trecho bom no apoio por cima — o motor só faz zoom com pontos ◆ em clip da linha (no apoio, \u201canim\u201d é a entrada): troque o take ou passe para respiro." }); return; }
+    const pts = u.ref.anim && Array.isArray(u.ref.anim.pts) ? u.ref.anim.pts : null;
+    if(pts && pts.length >= 2){                        // já tem pontos ◆: aumenta só a amplitude do zoom até o necessário
+      const zs = pts.map(function(q){ return _evkNum(q.z, 1) || 1; }), lo = Math.min.apply(null, zs), hi = Math.max.apply(null, zs);
+      if(hi / lo - 1 >= zNec - 0.005) return;
+      if(hi - lo > 1e-6){ const k = (lo * (1 + zNec) - lo) / (hi - lo); pts.forEach(function(q){ q.z = _evkR(lo + ((_evkNum(q.z, 1) || 1) - lo) * k); }); }
+      else { const ul = pts.reduce(function(a, q){ return _evkNum(q.t, 0) > _evkNum(a.t, 0) ? q : a; }, pts[0]); ul.z = _evkR(lo * (1 + zNec)); }
+      _evkFeito(out.feitos, "R3", u.t0, nome + ": take sem trecho bom → zoom que já existia aumentado para " + Math.round(zNec * 100) + "%."); return;
+    }
+    u.ref.anim = Object.assign({}, u.ref.anim && typeof u.ref.anim === "object" ? u.ref.anim : {}, { pts:_evkZoomPts(u.ini, span, zNec, nZoom), _evk:1 }); nZoom++;
+    _evkFeito(out.feitos, "R3", u.t0, nome + ": take sem trecho bom → zoom leve de " + Math.round(zNec * 100) + "% na duração.");
+  });
+  return out;
+}
+
+/* ═══ 5) R9 LEVEZA — no perfil leve, take rápido vai para a câmera lenta do perfil (mesma duração na tela) ═══ */
+function _evkLeveza(p, itens, o, perfil){
+  const out = { feitos:[], avisos:[] }, nv0 = perfil.velApoioRapido.ideal, nvMin0 = perfil.velApoioRapido.minimo, nv = nv0;
+  /* "câmera lenta pode picotar" (take de 30 fps abaixo de ~80%): subir a velocidade muda a duração e briga com a câmera lenta do perfil → só avisa */
+  itens.forEach(function(it){ const d = _evkDados(it); if(d.fps) out.avisos.push({ regra:"R9", t:it.t, msg:"Câmera lenta a " + Math.round(_evkNum(d.vel, 0) * 100) + "% em take de " + Math.round(d.fps) + " fps pode picotar: o certo é ≥ " + Math.round(Math.max(nv, _evkNum(perfil.bruto && perfil.bruto.camLentaMin, 0.8) || 0.8) * 100) + "% (ou um take de 60 fps); mudar a velocidade muda a duração na tela — decisão do editor." }); });
+  const rap = itens.filter(function(it){ return !_evkDados(it).fps; }); if(!rap.length) return out;
+  if(!perfil.leve){ out.avisos.push({ regra:"R9", t:rap[0].t, msg:"Perfil não é leve: R9 não se aplica." }); return out; }
+  const L = _evkLinha(p), usos = _evkUsos(p, L);
+  usos.forEach(function(u){
+    if(!_evkApontado(rap, u.ref.id, u.t0, u.t1)) return;
+    const mv = _evkMov(o, u.clipe); if(!mv || !(_evkNum(mv.vel_media, 0) > perfil.velLimiarMov || mv.tipo === "rapido")) return;
+    /* revisão 17/10/2026: take de 30 fps não desce abaixo da câmera lenta mínima (0,8) — senão a régua acusaria "pode picotar" logo depois */
+    const fq = _evkNum((o.fps && o.fps[u.clipe]) || (o.infoClipe && o.infoClipe[u.clipe] && o.infoClipe[u.clipe].fps), 0), cl = _evkNum(perfil.bruto && perfil.bruto.camLentaMin, 0.8) || 0.8;
+    const nv = fq > 0 && fq <= 30.5 ? Math.max(nv0, cl) : nv0, nvMin = fq > 0 && fq <= 30.5 ? Math.max(nvMin0, cl) : nvMin0;
+    const vel0 = _evkNum(u.ref.vel, 1) || 1; if(vel0 <= nv + 1e-6) return;
+    const D = u.t1 - u.t0, dur = _evkDurTake(o, u.clipe), bons = _evkBons(o, u.clipe);
+    const tenta = function(v){ const span = D * v, zonas = bons && bons.length ? bons : (dur > 0 ? [[0, dur - 0.05]] : [[u.ini, u.ini + span]]);
+      const cabe = zonas.some(function(b){ return u.ini >= b[0] - 0.01 && u.ini + span <= b[1] + 0.01; }); if(cabe) return u.ini; return _evkVaga(zonas, [], span, u.ini); };
+    let v = nv, ini = tenta(v); if(ini == null && nvMin !== nv){ v = nvMin; ini = tenta(v); }
+    if(ini == null){ out.avisos.push({ regra:"R9", t:u.t0, msg:(u.ref.nome || "Apoio") + ": não cabe em câmera lenta no take." }); return; }
+    const x = u.ref; if(ini !== u.ini) _evkMoverUso(u, ini, null);
+    x.vel = v; if(u.tipo === "clip"){ x.ini = _evkR(ini); x.fim = _evkR(ini + D * v); } else x.ini = _evkR(ini);
+    _evkFeito(out.feitos, "R9", u.t0, (x.nome || "Apoio") + ": take rápido (" + _evkNum(mv.vel_media, 0).toFixed(1) + ") em câmera lenta " + Math.round(v * 100) + "%, mesma duração na tela.");
+  });
+  return out;
+}
+
+/* ═══ 6) R1 PEDAÇO SOBRANDO — rosto curto entre dois apoios e apoio/respiro curto ═══ */
+function _evkLimiteTake(o, x, ini){
+  const bons = _evkBons(o, x.clipe); if(bons && bons.length){ const b = bons.find(function(q){ return ini >= q[0] - 0.01 && ini <= q[1]; }); if(b) return b[1]; }
+  const d = _evkDurTake(o, x.clipe); return d > 0 ? d - 0.05 : Infinity;
+}
+function _evkSobrando(p, itens, o, perfil){
+  const out = { feitos:[], avisos:[] }, mt = perfil.minTela, ids = {};
+  itens.forEach(function(it){ _evkIdsDe(it).forEach(function(x){ ids[x] = 1; }); });
+  const toca = function(a, b, it){ const t1 = it.t1 == null ? it.t : it.t1; return a <= t1 + 0.05 && b >= it.t - 0.05; };   // o rosto curto entre dois apoios (tempo do vão)
+  const tirados = {};
+  itens.forEach(function(it){
+    if(_evkDados(it).tipoPlano){ _evkPlanoCurto(p, it, o, perfil, out); return; }
+    const imgs = (p.imagens || []).filter(_evkCobre).slice().sort(function(a, b){ return _evkNum(a.t0, 0) - _evkNum(b.t0, 0); });
+    /* (a) rosto curto entre dois apoios */
+    for(let k = 1; k < imgs.length; k++){
+      const A = imgs[k - 1], B = imgs[k], g = _evkNum(B.t0, 0) - _evkNum(A.t1, 0);
+      if(!(g > 0.001 && g < mt.minimo - 0.001) || !toca(_evkNum(A.t1, 0), _evkNum(B.t0, 0), it)) continue;
+      if(A.camada === "video" && A.clipe){
+        const vA = _evkNum(A.vel, 1) || 1, fimB = _evkNum(A.ini, 0) + (_evkNum(B.t0, 0) - _evkNum(A.t0, 0)) * vA;
+        if(fimB <= _evkLimiteTake(o, A, _evkNum(A.ini, 0)) + 1e-6){ A.t1 = _evkR(B.t0); _evkFeito(out.feitos, "R1", A.t1, "Rosto de " + g.toFixed(2) + " s entre dois apoios: o 1º apoio estica até o 2º."); return; }
+      } else if(A.camada !== "video"){ A.t1 = _evkR(B.t0); _evkFeito(out.feitos, "R1", A.t1, "Rosto de " + g.toFixed(2) + " s entre dois apoios: o 1º estica até o 2º."); return; }
+      /* encurta o 2º para o rosto ficar ≥ mínimo da tela (ideal, se couber) */
+      const vB = _evkNum(B.vel, 1) || 1;
+      for(const alvo of [mt.ideal, mt.minimo]){
+        const nt0 = _evkNum(A.t1, 0) + alvo; if(_evkNum(B.t1, 0) - nt0 < mt.minimo - 1e-6) continue;
+        const d = nt0 - _evkNum(B.t0, 0); if(B.camada === "video") B.ini = _evkR(_evkNum(B.ini, 0) + d * vB); B.t0 = _evkR(nt0);
+        _evkFeito(out.feitos, "R1", nt0, "Rosto curto entre apoios: o 2º apoio começa " + d.toFixed(2) + " s depois (rosto fica " + alvo.toFixed(1) + " s)."); return;
+      }
+      out.avisos.push({ regra:"R1", t:_evkNum(A.t1, 0), msg:"Rosto de " + g.toFixed(2) + " s entre dois apoios: não deu para juntar nem encurtar." }); return;
+    }
+    /* (b) apoio curto */
+    for(let k = 0; k < imgs.length; k++){
+      const x = imgs[k], D = _evkNum(x.t1, 0) - _evkNum(x.t0, 0); if(D >= mt.minimo - 0.001 || !_evkAponta(it, x.id, _evkNum(x.t0, 0), _evkNum(x.t1, 0))) continue;
+      const prox = imgs[k + 1], L = _evkLinha(p), teto = Math.min(prox ? _evkNum(prox.t0, 0) : Infinity, L.fimCortes);
+      for(const alvo of [mt.ideal, mt.minimo]){
+        let nt1 = _evkNum(x.t0, 0) + alvo; if(prox && teto - nt1 < mt.minimo && teto - nt1 > 0) nt1 = teto;       // não deixa sobrar rosto curto até o próximo
+        if(nt1 > teto + 1e-6) continue;
+        if(x.camada === "video" && x.clipe && _evkNum(x.ini, 0) + (nt1 - _evkNum(x.t0, 0)) * (_evkNum(x.vel, 1) || 1) > _evkLimiteTake(o, x, _evkNum(x.ini, 0)) + 1e-6) continue;
+        x.t1 = _evkR(nt1); _evkFeito(out.feitos, "R1", x.t0, (x.nome || "Apoio") + " de " + D.toFixed(2) + " s esticado para " + (nt1 - _evkNum(x.t0, 0)).toFixed(2) + " s."); return;
+      }
+      tirados[x.id] = 1; p.imagens = (p.imagens || []).filter(function(q){ return q !== x; });
+      _evkFeito(out.feitos, "R1", x.t0, (x.nome || "Apoio") + " de " + D.toFixed(2) + " s tirado (curto demais e sem trecho para esticar)."); return;
+    }
+    /* (c) respiro curto (clip mudo da linha) */
+    const L = _evkLinha(p);
+    for(let i = 0; i < (p.clips || []).length; i++){
+      const c = p.clips[i]; if(!c.mudo || !_evkNormal(c)) continue;
+      const D = L.clips[i].dur; if(D >= mt.minimo - 0.001 || !_evkAponta(it, c.id, L.clips[i].t0, L.clips[i].t1)) continue;
+      const vel = _evkNum(c.vel, 1) || 1;
+      for(const alvo of [mt.ideal, mt.minimo]){
+        const nf = _evkNum(c.ini, 0) + alvo * vel, lim = _evkLimiteTake(o, c, _evkNum(c.ini, 0));
+        let ni = _evkNum(c.ini, 0), nfim = nf;
+        if(nf > lim + 1e-6){ ni = _evkR(lim - alvo * vel); nfim = lim; if(ni < 0) continue; }
+        _evkMexerClips(p, function(q){ q.clips[i].ini = _evkR(ni); q.clips[i].fim = _evkR(nfim); }, o);
+        _evkFeito(out.feitos, "R1", L.clips[i].t0, "Respiro de " + D.toFixed(2) + " s esticado para " + alvo.toFixed(1) + " s."); return;
+      }
+      if((p.clips || []).length > 1){ const cid = c.id; _evkMexerClips(p, function(q){ q.clips.splice(i, 1); }, o);
+        _evkFeito(out.feitos, "R1", L.clips[i].t0, "Respiro de " + D.toFixed(2) + " s tirado (curto e sem trecho para esticar)."); void cid; return; }
+    }
+    out.avisos.push({ regra:"R1", t:it.t, msg:"Pedaço sobrando: não achei o que esticar ou juntar." });
+  });
+  return out;
+}
+
+/* R1 com os dados da régua (52h): plano { tipoPlano:"rosto"|"apoio"|"respiro", id, t0, t1, antes:{tipo,id}, depois:{tipo,id} } */
+function _evkPlanoCurto(p, it, o, perfil, out){
+  const d = _evkDados(it), mt = perfil.minTela, t0 = _evkNum(d.t0, it.t), t1 = _evkNum(d.t1, it.t1 == null ? it.t : it.t1), D = t1 - t0;
+  const img = function(id){ return (p.imagens || []).find(function(x){ return x && x.id === id; }); };
+  const cabeFim = function(x, nt1){ return !(x.camada === "video" && x.clipe) || _evkNum(x.ini, 0) + (nt1 - _evkNum(x.t0, 0)) * (_evkNum(x.vel, 1) || 1) <= _evkLimiteTake(o, x, _evkNum(x.ini, 0)) + 1e-6; };
+  const iniMin = function(x){ const bons = _evkBonsJuntos(_evkBons(o, x.clipe)); if(bons && bons.length){ const b = bons.find(function(q){ return _evkNum(x.ini, 0) >= q[0] - 0.05 && _evkNum(x.ini, 0) <= q[1]; }); return b ? b[0] : _evkNum(x.ini, 0); } return 0; };
+  const nm = function(x){ return x.nome || "apoio"; };
+  if(d.tipoPlano === "rosto"){
+    const A = d.antes && d.antes.tipo === "apoio" ? img(d.antes.id) : null, B = d.depois && d.depois.tipo === "apoio" ? img(d.depois.id) : null;
+    const juntar = [
+      function(){ if(!A || !cabeFim(A, t1)) return false; A.t1 = _evkR(t1); _evkFeito(out.feitos, "R1", t0, "Rosto de " + D.toFixed(2) + " s: o apoio " + nm(A) + " estica até " + t1.toFixed(2) + " s."); return true; },
+      function(){ if(!B || !(B.camada === "video" && B.clipe)) return false; const vB = _evkNum(B.vel, 1) || 1, ni = _evkNum(B.ini, 0) - (_evkNum(B.t0, 0) - t0) * vB; if(ni < iniMin(B) - 1e-6) return false;
+        B.ini = _evkR(ni); B.t0 = _evkR(t0); _evkFeito(out.feitos, "R1", t0, "Rosto de " + D.toFixed(2) + " s: o apoio " + nm(B) + " começa " + D.toFixed(2) + " s antes (mesmo take, pedaço anterior)."); return true; } ];
+    const encurtar = [
+      function(){ if(!A) return false; for(const alvo of [mt.ideal, mt.minimo]){ const nt1 = t1 - alvo; if(nt1 - _evkNum(A.t0, 0) < mt.minimo - 1e-6 || nt1 >= _evkNum(A.t1, 0)) continue;
+        A.t1 = _evkR(nt1); _evkFeito(out.feitos, "R1", nt1, "Rosto curto: o apoio " + nm(A) + " termina antes e o rosto fica " + alvo.toFixed(1) + " s."); return true; } return false; },
+      function(){ if(!B) return false; const vB = _evkNum(B.vel, 1) || 1; for(const alvo of [mt.ideal, mt.minimo]){ const nt0 = t0 + alvo; if(_evkNum(B.t1, 0) - nt0 < mt.minimo - 1e-6 || nt0 <= _evkNum(B.t0, 0)) continue;
+        if(B.camada === "video") B.ini = _evkR(_evkNum(B.ini, 0) + (nt0 - _evkNum(B.t0, 0)) * vB); B.t0 = _evkR(nt0); _evkFeito(out.feitos, "R1", nt0, "Rosto curto: o apoio " + nm(B) + " começa depois e o rosto fica " + alvo.toFixed(1) + " s."); return true; } return false; } ];
+    const ordem = D < mt.minimo ? juntar.concat(encurtar) : encurtar.concat(juntar);
+    for(let k = 0; k < ordem.length; k++) if(ordem[k]()) return;
+    out.avisos.push({ regra:"R1", t:t0, msg:"Rosto de " + D.toFixed(2) + " s entre planos: o take do apoio vizinho não cobre e encurtar deixaria o apoio curto demais." }); return;
+  }
+  if(d.tipoPlano === "apoio"){
+    const x = img(d.id); if(!x){ out.avisos.push({ regra:"R1", t:t0, msg:"Plano curto: não achei o apoio." }); return; }
+    if(D >= mt.minimo - 1e-6 && it.nivel === "leve"){ /* já está no mínimo aceitável: tenta o ideal sem forçar */ }
+    const L = _evkLinha(p), prox = (p.imagens || []).filter(function(q){ return _evkCobre(q) && q !== x && _evkNum(q.t0, 0) >= _evkNum(x.t1, 0) - 0.01; }).sort(function(a, b){ return _evkNum(a.t0, 0) - _evkNum(b.t0, 0); })[0];
+    const teto = Math.min(prox ? _evkNum(prox.t0, 0) : Infinity, L.fimCortes);
+    for(const alvo of [mt.ideal, mt.minimo]){
+      let nt1 = _evkNum(x.t0, 0) + alvo; if(teto - nt1 < mt.minimo && teto - nt1 > 0) nt1 = teto; if(nt1 > teto + 1e-6 || nt1 <= _evkNum(x.t1, 0) + 1e-6) continue; if(!cabeFim(x, nt1)) continue;
+      x.t1 = _evkR(nt1); _evkFeito(out.feitos, "R1", t0, "Apoio " + nm(x) + " de " + D.toFixed(2) + " s esticado para " + (nt1 - _evkNum(x.t0, 0)).toFixed(2) + " s."); return;
+    }
+    if(D < mt.minimo){ p.imagens = (p.imagens || []).filter(function(q){ return q !== x; }); _evkFeito(out.feitos, "R1", t0, "Apoio " + nm(x) + " de " + D.toFixed(2) + " s tirado (curto e sem trecho do take para esticar)."); return; }
+    out.avisos.push({ regra:"R1", t:t0, msg:"Apoio " + nm(x) + " fica no mínimo (" + D.toFixed(2) + " s): o take não deixa esticar até o ideal." }); return;
+  }
+  if(d.tipoPlano === "respiro"){
+    const i = (p.clips || []).findIndex(function(c){ return c.id === d.id; }); if(i < 0) return;
+    const c = p.clips[i], Lc = _evkLinha(p).clips[i];
+    if(Lc.dur >= mt.minimo - 1e-6){ out.avisos.push({ regra:"R1", t:t0, msg:"Respiro no mínimo aceitável (" + Lc.dur.toFixed(2) + " s): esticar empurraria todos os cortes seguintes para fora da batida." }); return; }
+    const vel = _evkNum(c.vel, 1) || 1;
+    for(const alvo of [mt.ideal, mt.minimo]){
+      const lim = _evkLimiteTake(o, c, _evkNum(c.ini, 0)); let ni = _evkNum(c.ini, 0), nf = ni + alvo * vel;
+      if(nf > lim + 1e-6){ ni = lim - alvo * vel; nf = lim; if(ni < 0) continue; }
+      _evkMexerClips(p, function(q){ q.clips[i].ini = _evkR(ni); q.clips[i].fim = _evkR(nf); }, o);
+      _evkFeito(out.feitos, "R1", t0, "Respiro de " + Lc.dur.toFixed(2) + " s esticado para " + alvo.toFixed(1) + " s (o resto anda junto)."); return;
+    }
+    if(p.clips.length > 1){ _evkMexerClips(p, function(q){ q.clips.splice(i, 1); }, o); _evkFeito(out.feitos, "R1", t0, "Respiro de " + Lc.dur.toFixed(2) + " s tirado (curto e sem trecho para esticar)."); }
+    return;
+  }
+  out.avisos.push({ regra:"R1", t:t0, msg:"Plano curto de tipo desconhecido: não mexi." });
+}
+/* ═══ 7) R2 TELA PRETA — trecho do take que passa do fim do arquivo ═══ */
+function _evkTelaPreta(p, itens, o){
+  const out = { feitos:[], avisos:[] }, L = _evkLinha(p), usos = _evkUsos(p, L);
+  const ids = {}; itens.forEach(function(it){ _evkIdsDe(it).forEach(function(x){ ids[x] = 1; }); });
+  usos.forEach(function(u){
+    if(!_evkApontado(itens, u.ref.id, u.t0, u.t1)) return;
+    const dur = _evkDurTake(o, u.clipe); if(!(dur > 0)){ out.avisos.push({ regra:"R2", t:u.t0, msg:"Não sei a duração do take: não dá para saber onde ele acaba." }); return; }
+    const span = u.fim - u.ini, lim = dur - 0.04;
+    if(u.fim <= lim + 1e-6 && u.ini >= 0) return;
+    if(span <= lim){ const ni = _evkR(Math.max(0, lim - span)); const de = u.ini; _evkMoverUso(u, ni, null); u.ini = ni; u.fim = ni + span;
+      _evkFeito(out.feitos, "R2", u.t0, (u.ref.nome || "Apoio") + ": o pedaço passava do fim do take; começa antes (" + de.toFixed(2) + " → " + ni.toFixed(2) + " s)."); return; }
+    if(u.tipo === "imagem"){ const v = _evkNum(u.ref.vel, 1) || 1; _evkMoverUso(u, 0, null); u.ref.t1 = _evkR(u.t0 + lim / v);
+      _evkFeito(out.feitos, "R2", u.t0, (u.ref.nome || "Apoio") + ": take mais curto que o pedaço → encurtado para caber."); return; }
+    const i = u.i; _evkMexerClips(p, function(q){ q.clips[i].ini = 0; q.clips[i].fim = _evkR(lim); }, o);
+    _evkFeito(out.feitos, "R2", u.t0, (u.ref.nome || "Respiro") + ": take mais curto que o pedaço → encurtado para caber.");
+  });
+  return out;
+}
+
+/* ═══ 8) R8 TARJA — no intervalo em que o rosto aparece (≥ 1,5 s); legenda sumida com fala volta ═══ */
+function _evkRostos(p){
+  const L = _evkLinha(p), zonas = [];
+  (p.clips || []).forEach(function(c, i){ if(c.mudo) return; const z = zonas[zonas.length - 1]; if(z && Math.abs(z[1] - L.clips[i].t0) < 0.05) z[1] = L.clips[i].t1; else zonas.push([L.clips[i].t0, L.clips[i].t1]); });
+  const cob = (p.imagens || []).filter(_evkCobre).map(function(x){ return [_evkNum(x.t0, 0), _evkNum(x.t1, 0)]; }).sort(function(a, b){ return a[0] - b[0]; });
+  const out = [];
+  zonas.forEach(function(z){ let cur = z[0]; cob.forEach(function(q){ if(q[1] <= cur || q[0] >= z[1]) return; if(q[0] > cur) out.push([cur, q[0]]); cur = Math.max(cur, q[1]); }); if(cur < z[1]) out.push([cur, z[1]]); });
+  return out.filter(function(r){ return r[1] - r[0] > 0.01; });
+}
+function _evkTarja(p, itens, o){
+  const out = { feitos:[], avisos:[] }, mot = p.motion && Array.isArray(p.motion.itens) ? p.motion.itens : [];
+  const ids = {}; itens.forEach(function(it){ _evkIdsDe(it).forEach(function(x){ ids[x] = 1; }); });
+  const rostos = _evkRostos(p).filter(function(r){ return r[1] - r[0] >= _EVK.tarjaMin - 1e-6; });
+  mot.forEach(function(it){
+    if(!it || it.modelo !== "tarja") return;
+    const t0 = _evkNum(it.t0, 0), t1 = _evkNum(it.t1, t0 + 3), D = t1 - t0;
+    if(!itens.some(function(x){ return !/legenda/i.test(String(x.msg || "")) && !_evkDados(x).legenda && (_evkIdsDe(x).length ? _evkIdsDe(x).indexOf(it.id) >= 0 : (x.t >= t0 - 0.3 && x.t <= t1 + 0.3)); })) return;
+    if(rostos.some(function(r){ return t0 >= r[0] - 0.01 && t1 <= r[1] + 0.01; })) return;         // já está no rosto
+    if(!rostos.length){ out.avisos.push({ regra:"R8", t:t0, msg:"Tarja: não há trecho de rosto com " + _EVK.tarjaMin + " s ou mais." }); return; }
+    let best = null;
+    rostos.forEach(function(r){ const ov = Math.max(0, Math.min(t1, r[1]) - Math.max(t0, r[0])), d = Math.abs(r[0] - t0);
+      if(!best || ov > best.ov + 1e-9 || (Math.abs(ov - best.ov) <= 1e-9 && d < best.d)) best = { r:r, ov:ov, d:d }; });
+    const r = best.r; let n0, n1;
+    if(best.ov >= _EVK.tarjaMin){ n0 = Math.max(t0, r[0]); n1 = Math.min(t1, r[1]); }
+    else { n0 = r[1] - r[0] >= _EVK.tarjaMin + 0.1 ? r[0] + 0.1 : r[0]; n1 = Math.min(r[1], n0 + Math.max(_EVK.tarjaMin, D)); }
+    if(it.marca_t != null) it.marca_t = _evkR(Math.min(n1, Math.max(n0, _evkNum(it.marca_t, 0) + (n0 - t0))));
+    it.t0 = _evkR(n0); it.t1 = _evkR(n1);
+    _evkFeito(out.feitos, "R8", n0, "Tarja movida para o rosto (" + n0.toFixed(2) + "–" + n1.toFixed(2) + " s).");
+  });
+  /* legenda sumida com fala */
+  if(itens.some(function(x){ return /legenda/i.test(String(x.msg || "")) || _evkDados(x).legenda; })){
+    let mexeu = false;
+    if(p.legenda && p.legenda.ativa === false && (p.clips || []).some(function(c){ return !c.mudo; })){ p.legenda.ativa = true; mexeu = true; _evkFeito(out.feitos, "R8", 0, "Legenda estava desligada com fala: religada."); }
+    mot.forEach(function(it){ if(it && it.receita && it.receita.legenda === "esconde" && it.modelo !== "kinetic"){ it.receita.legenda = "menor"; mexeu = true; _evkFeito(out.feitos, "R8", it.t0, "Legenda não some mais nesta peça: fica menor, embaixo dela."); } });
+    const qual = _evkDados(itens[0]).motion || "tarja";
+    if(!mexeu) out.avisos.push({ regra:"R8", t:itens[0].t, msg:qual === "tarja" ? "A tarja esconde a legenda enquanto aparece e o motor não tem a opção de subir a legenda na tarja (só na receita): a tarja precisa de ≥ 1,5 s no rosto, então a legenda some esse tempo." :
+      "O " + qual + " esconde a legenda e o motor não tem opção de deixá-la (o conserto não mexe em motion além da tarja): encurte à mão se a fala for importante." });
+  }
+  return out;
+}
+
+/* ═══ 9) R5 / R10 — só avisam (menos: respiro de decoração com fala de outro assunto → respiro de produto não usado) ═══ */
+function _evkAvisos(p, itens, o){
+  const out = { feitos:[], avisos:[] }, L = _evkLinha(p);
+  itens.forEach(function(it){
+    const d = _evkDados(it);
+    if((it.regra === "R10" || it.regra === "R5") && (d.decoracao || /decora/i.test(String(it.msg || "")))){
+      const i = (p.clips || []).findIndex(function(c, k){ return c.mudo && (_evkIdsDe(it).indexOf(c.id) >= 0 || (it.t >= L.clips[k].t0 - 0.05 && it.t <= L.clips[k].t1 + 0.05)); });
+      const usados = {}; _evkUsos(p, L).forEach(function(u){ usados[u.clipe] = 1; });
+      const tk = (o && Array.isArray(o.takes) ? o.takes : []).filter(function(x){ return x && x.clipe && x.papel === "produto" && !usados[x.clipe]; })
+        .sort(function(a, b){ return a.clipe < b.clipe ? -1 : 1; });
+      if(i >= 0 && tk.length){
+        const c = p.clips[i], span = _evkNum(c.fim, 0) - _evkNum(c.ini, 0);
+        for(let k = 0; k < tk.length; k++){ const z = _evkZonas(o, tk[k].clipe, _evkNum(tk[k].dur, 0) || _evkDurTake(o, tk[k].clipe)); const v = z ? _evkVaga(z, [], span, z[0][0]) : null; if(v == null) continue;
+          c.clipe = tk[k].clipe; c.ini = v; c.fim = _evkR(v + span); if(tk[k].rot != null) c.rot = tk[k].rot; if(c.anim) delete c.anim; if(tk[k].nome) c.nome = tk[k].nome;
+          _evkFeito(out.feitos, "R10", L.clips[i].t0, "Respiro de decoração trocado por um respiro de produto não usado (" + (tk[k].nome || tk[k].assunto || "produto") + ")."); return; }
+      }
+    }
+    out.avisos.push({ regra:it.regra, t:it.t, msg:"Só aviso (não mexo): " + String(it.msg || it.regra) });
+  });
+  return out;
+}
+
+/* os consertos depois do R6 podem mudar a duração do vídeo (fala com folga, pausa encurtada, respiro esticado/tirado): a música é
+   encaixada de novo a partir da original, para continuar terminando no final natural junto com o fim */
+function _evkReencaixarMusica(p, projeto, o, m){
+  const tot = _evkLinha(p).total; if(Math.abs(tot - m.total) < 0.001 || !projeto || !projeto.musica) return;
+  p.musica = _evkCopia(projeto.musica); _evkMusica(p, [{ t:0 }], o); m.total = tot;
+}
+/* ═══ a ordem fixa e as rodadas ═══ */
+const _EVK_ORDEM = [
+  { regras:["R6"], fn:_evkMusica }, { regras:["R7"], fn:_evkCortes }, { regras:["R4"], fn:_evkRepeticao }, { regras:["R3"], fn:_evkMovimento },
+  { regras:["R9"], fn:_evkLeveza }, { regras:["R1"], fn:_evkSobrando }, { regras:["R2"], fn:_evkTelaPreta }, { regras:["R8"], fn:_evkTarja }, { regras:["R5", "R10"], fn:_evkAvisos, soAviso:true }
+];
+/* chave estável de um item (o tempo anda quando a linha do tempo anda; os ids não) */
+function _evkChave(it){ const d = _evkDados(it); return [it.regra, d.id || "", d.trecho || "", d.lado || "", d.tipoPlano || "", d.takeIni != null ? d.takeIni : "", (d.ids || []).join("+"), d.motion || "", d.legenda ? "leg" : "", d.sincronia ? "sinc" : "",
+  _evkIdsDe(it).length || d.lado || d.tipoPlano || d.takeIni != null ? "" : String(it.msg || "").slice(0, 40)].join("|"); }
+/* revisão 17/10/2026: o conserto é um gerador que para (yield) depois de cada tentativa — _evkConsertar roda tudo de uma vez (mesmo resultado
+   de antes); _evkConsertarAos(projeto, o) roda em pedaços de ~25 ms com uma pausa entre eles (a tela não trava) e devolve uma Promise com o
+   MESMO resultado (a ordem das contas não muda: determinístico). cache = régua guardada por projeto (ver _evkRegua). */
+function _evkConsertar(projeto, o){ const g = _evkPassos(projeto, o); let x = g.next(); while(!x.done) x = g.next(); return x.value; }
+function _evkConsertarAos(projeto, o, fatia){
+  const g = _evkPassos(projeto, o), ms = fatia > 0 ? fatia : 25, agora = function(){ return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now(); };
+  return new Promise(function(ok, falha){
+    const passo = function(){ try{ const t0 = agora(); let x = g.next(); while(!x.done && agora() - t0 < ms) x = g.next(); if(x.done) ok(x.value); else setTimeout(passo, 0); }catch(e){ falha(e); } };
+    setTimeout(passo, 0);
+  });
+}
+function* _evkPassos(projeto, o){
+  o = o || {};
+  let p = _evkCopia(projeto || {});
+  if(!Array.isArray(p.clips)) p.clips = [];
+  const cache = {}, perfil = _evkPerfil(p, o), feitos = [], motivos = [];
+  let itens = _evkRegua(p, o, false, cache), rodadas = 0, musica = null;
+  const valem = function(l){ return l.filter(function(it){ return !_evkExcecao(p, it); }); };
+  const motivo = function(a){ if(!motivos.some(function(m){ return m.regra === a.regra && Math.abs(m.t - a.t) < 0.05 && m.msg === a.msg; })) motivos.push({ regra:a.regra, t:_evkR(a.t), msg:a.msg, chave:a.chave || "" }); };
+  for(let r = 0; r < _EVK.rodadas; r++){
+    if(!valem(itens).some(function(it){ return _EVK_ORDEM.some(function(s){ return s.regras.indexOf(it.regra) >= 0 && (!s.soAviso || /decora/i.test(String(it.msg || "")) || _evkDados(it).decoracao); }); })) break;
+    rodadas++; let mexeu = false;
+    for(const s of _EVK_ORDEM){
+      const tentados = {};
+      for(let volta = 0; volta < 400; volta++){
+        if(volta) yield 1;
+        const atuais = valem(_evkRegua(p, o, false, cache));
+        const it = atuais.filter(function(x){ return s.regras.indexOf(x.regra) >= 0 && !tentados[_evkChave(x)]; })[0];
+        if(!it) break;
+        const ch = _evkChave(it); tentados[ch] = 1;
+        const antes = _evkPontos(atuais), snap = _evkCopia(p), sAntes = JSON.stringify(p);
+        let res; try{ res = s.fn(p, [it], o, perfil) || { feitos:[], avisos:[] }; }catch(e){ p = snap; motivo({ regra:it.regra, t:it.t, msg:"Conserto falhou: " + String(e && e.message || e), chave:ch }); continue; }
+        (res.avisos || []).forEach(function(a){ motivo(Object.assign({ chave:ch }, a)); });
+        if(!res.feitos.length) continue;
+        if(JSON.stringify(p) === sAntes) continue;      // nada mudou de verdade (ex.: a música já estava encaixada)
+        if(s.soAviso){ res.feitos.forEach(function(f){ feitos.push(f); }); mexeu = true; continue; }
+        const depois = _evkPontos(valem(_evkRegua(p, o, false, cache))), trava = _evkEhTrava(it);
+        /* piorou? trava: só desfaz se outra trava/grave nasceu (≥ 100 pontos); preferência: qualquer piora em qualquer regra */
+        const piorou = Object.keys(depois).filter(function(k){ const d = (depois[k] || 0) - (antes[k] || 0); return k === it.regra ? d > (trava ? 99 : 0) : (trava ? d >= 100 : d > 0); }).sort();
+        if(piorou.length){ p = snap; motivo({ regra:it.regra, t:it.t, msg:"Conserto desfeito: piorava " + piorou.join(", ") + ".", chave:ch }); continue; }
+        res.feitos.forEach(function(f){ feitos.push(f); }); mexeu = true;
+        if(s.regras[0] === "R6") musica = { total:_evkLinha(p).total };
+      }
+      yield 1;
+    }
+    if(musica) _evkReencaixarMusica(p, projeto, o, musica);
+    itens = _evkRegua(p, o, false, cache);
+    if(!mexeu) break;
+  }
+  (p.clips || []).forEach(function(c){ delete c._o; });
+  (p.imagens || []).concat(p.clips || []).forEach(function(x){ if(x && x.anim && typeof x.anim === "object" && x.anim._evk) delete x.anim._evk; });
+  itens = _evkRegua(p, o, true);
+  const restam = itens.map(function(it){
+    const ch = _evkChave(it), m = motivos.filter(function(q){ return q.chave ? q.chave === ch : (q.regra === it.regra && Math.abs(q.t - it.t) <= 1); }).map(function(q){ return q.msg; });
+    const exc = _evkExcecao(p, it), ex = exc ? ((p.excecoes || []).find(function(e){ return e && e.regra === it.regra && Math.abs(_evkNum(e.t, -99) - it.t) <= 0.5; }) || { motivo:_evkDados(it).aceito }) : null;
+    if(!m.length && !exc) m.push(_EVK_ORDEM.some(function(s){ return s.soAviso && s.regras.indexOf(it.regra) >= 0; }) ? "Só aviso: o conserto automático não mexe nesta regra." : "O conserto automático não achou o que mexer aqui (confira à mão).");
+    return Object.assign({}, it, m.length ? { motivo:m.filter(function(x, k){ return m.indexOf(x) === k; }).join(" · ") } : {}, ex ? { excecao:ex.motivo || "exceção registrada" } : {});
+  });
+  return { projeto:p, feitos:feitos, restam:restam, rodadas:rodadas, avisos:motivos.map(function(m){ return { regra:m.regra, t:m.t, msg:m.msg }; }) };
+}
+/* ==== FIM CONSERTO ==== */
 
 // ======= 52g_video_paineis_exportar.jsx ======= (Edição de vídeo, parte 7 de 7: painéis e exportar: animar, transição, legenda, altura e área segura, assistir, cor completa, teste de velocidade, painel da direita, corrigir edição, galeria, exportar, legenda boa, revisor, conferência · o juntar.py junta na ordem)
 /* ─── v17: ANIMAR — painel do clipe (prontos, pontos ◆ na agulha, curva, lista, tremor, batida, copiar) ─── */
