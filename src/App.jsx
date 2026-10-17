@@ -138676,10 +138676,16 @@ async function _evpTratar(clipe, opcoes){
 /* v31 (17/10/2026) SOM DO MICROFONE PRONTO NO COMPUTADOR: o arquivo do microfone já ficava guardado (Cache Storage "pixels-video-v1"), mas a
    LIMPEZA (_evpTratar: tirar ruído com RNNoise quadro a quadro, proteção da fala, eco, cliques, voz, nivelar) só ficava na memória da aba —
    a cada abertura do Estúdio rodava de novo nos ~21 min de áudio ("Preparando o som do microfone (limpando a voz)…" toda vez).
-   Agora o resultado limpo fica guardado neste computador (Cache Storage "pixels-mic-tratado-v1", Int16 mono 48 kHz = 2 bytes por amostra,
-   ~5,8 MB por minuto). Chave = id do microfone + assinatura dos ajustes que mudam a limpeza + tamanho do áudio + versão do algoritmo.
-   Mudou um ajuste (ou o algoritmo: suba _EVP_TRAT_VER) → limpa de novo e troca o guardado. Fica só a última versão de cada microfone e no
-   máximo 4 microfones. Sem espaço / navegador sem Cache Storage → segue sem guardar. No PC do escritório (window.__CFG) e nos testes: como antes. */
+   Chave = id do microfone + assinatura dos ajustes que mudam a limpeza + tamanho do áudio + versão do algoritmo (_EVP_TRAT_VER).
+   Mudou um ajuste (ou o algoritmo: suba _EVP_TRAT_VER) → limpa de novo. No PC do escritório (window.__CFG) e nos testes: como antes.
+   v32 (17/10/2026) MICROFONE LIMPO GUARDADO NO CARD (decisão do dono: o PRIMEIRO navegador limpa e guarda; os outros baixam pronto):
+   · ordem: (a) este computador (Cache Storage "pixels-mic-tratado-v2") → (b) o arquivo do card no armazenamento (bucket público
+     "agency-files", video-mic-limpo/<id do mic>/<hash da chave>.ogg; sem tabela nova: existe = URL pública responde) → (c) limpa como antes,
+     devolve na hora e, em SEGUNDO PLANO, codifica Opus mono 48 kHz ~96 kbps (WebCodecs AudioEncoder), monta o Ogg aqui mesmo (muxer mínimo
+     abaixo), DECODIFICA de volta e confere tamanho e sincronia (o pre-skip do OpusHead é o ponto sensível); só guarda/sobe se passar.
+   · guardado = o próprio .ogg (~0,7 MB por minuto; antes Int16 = 5,8 MB/min). O cache antigo "pixels-mic-tratado-v1" é apagado.
+   · o arquivo leva nas etiquetas (OpusTags) a chave inteira e o resumo da limpeza (método de ruído etc.): chave diferente = ignora.
+   · só sobe se o ruído foi tirado com RNNoise (mesma regra de antes). Sem AudioEncoder / falha / sem login: não sobe, segue normal. */
 /* ==== CACHE MIC PURA ==== */
 const _EVP_TRAT_VER = "mic1";
 function _evpHash(s){ s = String(s); let h = 0x811c9dc5; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); }
@@ -138694,62 +138700,321 @@ function _evpMicCacheChave(micId, opcoes, amostras, sr){
 }
 function _evpF32paraI16(f){ const o = new Int16Array(f.length); for(let i = 0; i < f.length; i++){ const v = f[i]; o[i] = v >= 1 ? 32767 : v <= -1 ? -32768 : Math.round(v * 32767) || 0; } return o; }
 function _evpI16paraF32(a){ const o = new Float32Array(a.length); for(let i = 0; i < a.length; i++) o[i] = a[i] / 32767; return o; }
+/* endereço fixo do som limpo no armazenamento do card (bucket "agency-files"): id saneado + hash curto (2 × FNV = ~12 letras) da chave */
+function _evpMicLimpoCaminho(micId, chave){
+  const id = String(micId == null ? "" : micId).replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "sem-id", c = String(chave || "");
+  return "video-mic-limpo/" + id + "/" + _evpHash(c) + _evpHash("#" + c) + ".ogg";
+}
+/* --- Ogg Opus mínimo (RFC 3533 + RFC 7845): só o que o Estúdio precisa (mono, 48 kHz, um fluxo) --- */
+const _EVP_OPUS_PRESKIP = 312;                 // atraso padrão do libopus a 48 kHz (lookahead 2,5 ms + 4 ms) — usado se o codificador não informar
+let _EVP_CRC_T = null;
+/* CRC32 do Ogg: polinômio 0x04C11DB7, sem inverter bits, começa em 0, sem XOR final (confere: "123456789" → 0x89A1897F) */
+function _evpCrc32Ogg(b, ini, fim){
+  if(!_EVP_CRC_T){ _EVP_CRC_T = new Uint32Array(256);
+    for(let i = 0; i < 256; i++){ let r = i << 24; for(let k = 0; k < 8; k++) r = (r & 0x80000000) ? ((r << 1) ^ 0x04c11db7) : (r << 1); _EVP_CRC_T[i] = r >>> 0; } }
+  let c = 0; const a = ini | 0, z = fim == null ? b.length : fim;
+  for(let i = a; i < z; i++) c = ((c << 8) ^ _EVP_CRC_T[((c >>> 24) ^ b[i]) & 0xff]) >>> 0;
+  return c >>> 0;
+}
+/* quantas amostras (48 kHz) um pacote Opus tem, pelo byte TOC (RFC 6716 §3.1) */
+function _evpOpusAmostras(p){
+  if(!p || !p.length) return 0;
+  const cfg = p[0] >> 3, c = p[0] & 3;
+  const fs = cfg < 12 ? [480, 960, 1920, 2880][cfg & 3] : cfg < 16 ? [480, 960][cfg & 1] : [120, 240, 480, 960][cfg & 3];
+  return fs * (c === 0 ? 1 : c === 3 ? (p.length > 1 ? p[1] & 63 : 0) : 2);
+}
+function _evpOpusHead(preSkip, sr, canais){
+  const h = new Uint8Array(19), dv = new DataView(h.buffer); h.set([79, 112, 117, 115, 72, 101, 97, 100], 0); h[8] = 1; h[9] = canais || 1;
+  dv.setUint16(10, preSkip & 0xffff, true); dv.setUint32(12, (sr || 48000) >>> 0, true); dv.setInt16(16, 0, true); h[18] = 0; return h;
+}
+function _evpOpusHeadLer(b){
+  if(!b || b.length < 19 || String.fromCharCode.apply(null, Array.from(b.subarray(0, 8))) !== "OpusHead") return null;
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  return { versao:b[8], canais:b[9], preSkip:dv.getUint16(10, true), sr:dv.getUint32(12, true), ganho:dv.getInt16(16, true), mapa:b[18] };
+}
+/* pre-skip informado pelo codificador (decoderConfig.description = OpusHead, quando existe); senão o padrão do libopus */
+function _evpPreSkipDe(desc){
+  try{ const b = desc instanceof Uint8Array ? desc : desc instanceof ArrayBuffer ? new Uint8Array(desc) : (desc && desc.buffer instanceof ArrayBuffer) ? new Uint8Array(desc.buffer, desc.byteOffset || 0, desc.byteLength) : null;
+    const h = _evpOpusHeadLer(b); if(h && h.preSkip < 4000) return h.preSkip; }catch(_){}
+  return _EVP_OPUS_PRESKIP;
+}
+function _evpOpusTags(vendor, coms){
+  const te = new TextEncoder(), v = te.encode(String(vendor || "")), cs = (coms || []).map(function(s){ return te.encode(String(s)); });
+  let L = 16 + v.length; cs.forEach(function(c){ L += 4 + c.length; });
+  const o = new Uint8Array(L), dv = new DataView(o.buffer); o.set([79, 112, 117, 115, 84, 97, 103, 115], 0); let p = 8;
+  dv.setUint32(p, v.length, true); p += 4; o.set(v, p); p += v.length; dv.setUint32(p, cs.length, true); p += 4;
+  cs.forEach(function(c){ dv.setUint32(p, c.length, true); p += 4; o.set(c, p); p += c.length; });
+  return o;
+}
+function _evpOpusTagsLer(b){
+  try{
+    if(!b || b.length < 16 || String.fromCharCode.apply(null, Array.from(b.subarray(0, 8))) !== "OpusTags") return null;
+    const td = new TextDecoder(), dv = new DataView(b.buffer, b.byteOffset, b.byteLength); let p = 8;
+    const lv = dv.getUint32(p, true); p += 4; const vendor = td.decode(b.subarray(p, p + lv)); p += lv;
+    const n = dv.getUint32(p, true); p += 4; const comentarios = [], mapa = {};
+    for(let i = 0; i < n && p + 4 <= b.length; i++){ const l = dv.getUint32(p, true); p += 4; if(p + l > b.length) break; const s = td.decode(b.subarray(p, p + l)); p += l;
+      comentarios.push(s); const k = s.indexOf("="); if(k > 0) mapa[s.slice(0, k).toUpperCase()] = s.slice(k + 1); }
+    return { vendor:vendor, comentarios:comentarios, mapa:mapa };
+  }catch(_){ return null; }
+}
+/* uma página Ogg. flags: 2 = começo (BOS), 4 = fim (EOS). Cada pacote vira segmentos de 255 + o resto (0 se múltiplo de 255). */
+function _evpOggPagina(flags, granule, serial, seq, pacotes){
+  const segs = []; let corpo = 0;
+  pacotes.forEach(function(p){ let L = p.length; while(L >= 255){ segs.push(255); L -= 255; } segs.push(L); corpo += p.length; });
+  if(segs.length > 255) throw new Error("ogg: página com mais de 255 segmentos");
+  const o = new Uint8Array(27 + segs.length + corpo), dv = new DataView(o.buffer);
+  o.set([79, 103, 103, 83], 0); o[4] = 0; o[5] = flags & 7;
+  dv.setUint32(6, (granule % 4294967296) >>> 0, true); dv.setUint32(10, Math.floor(granule / 4294967296) >>> 0, true);
+  dv.setUint32(14, serial >>> 0, true); dv.setUint32(18, seq >>> 0, true); dv.setUint32(22, 0, true); o[26] = segs.length;
+  o.set(segs, 27); let q = 27 + segs.length; pacotes.forEach(function(p){ o.set(p, q); q += p.length; });
+  dv.setUint32(22, _evpCrc32Ogg(o), true);
+  return o;
+}
+/* arquivo Ogg Opus inteiro: página 0 = OpusHead (BOS), página 1 = OpusTags, depois o áudio (até porPagina pacotes por página).
+   granule = amostras decodificadas dos pacotes que terminam na página (o pre-skip JÁ está dentro delas: o tocador joga fora as primeiras
+   preSkip); a última (EOS) = pre-skip + total → o tocador corta a sobra do fim. Pacotes depois disso (sobra do codificador) ficam de fora. */
+function _evpOggMontar(o){
+  const serial = (o.serial || 1) >>> 0, pre = o.preSkip | 0, porPag = o.porPagina || 50, fim = pre + Math.max(0, o.total | 0), partes = [];
+  let seq = 0;
+  partes.push(_evpOggPagina(2, 0, serial, seq++, [_evpOpusHead(pre, 48000, 1)]));
+  partes.push(_evpOggPagina(0, 0, serial, seq++, [_evpOpusTags(o.vendor || "Pixels", o.tags || [])]));
+  const pk = []; let s0 = 0;
+  for(const p of (o.pacotes || [])){ if(s0 >= fim && pk.length) break; pk.push(p); s0 += _evpOpusAmostras(p); }
+  if(!pk.length) throw new Error("ogg: sem áudio");
+  let i = 0, soma = 0;
+  while(i < pk.length){
+    const grupo = []; let nseg = 0;
+    while(i < pk.length && grupo.length < porPag){ const sg = Math.floor(pk[i].length / 255) + 1; if(sg > 255) throw new Error("ogg: pacote grande demais"); if(nseg + sg > 255) break;
+      grupo.push(pk[i]); soma += _evpOpusAmostras(pk[i]); nseg += sg; i++; }
+    const ultimo = i >= pk.length;
+    partes.push(_evpOggPagina(ultimo ? 4 : 0, ultimo ? Math.min(fim, soma) : soma, serial, seq++, grupo));
+  }
+  let L = 0; partes.forEach(function(p){ L += p.length; }); const out = new Uint8Array(L); let q = 0; partes.forEach(function(p){ out.set(p, q); q += p.length; });
+  return out;
+}
+/* lê um Ogg: páginas (flags, granule, CRC confere?) e pacotes. maxPacotes > 0 para cedo (só os cabeçalhos: maxPacotes = 2). */
+function _evpOggLer(b, maxPacotes){
+  const paginas = [], pacotes = []; let p = 0, atual = [];
+  const junta = function(ps){ if(ps.length === 1) return ps[0]; let L = 0; ps.forEach(function(x){ L += x.length; }); const o = new Uint8Array(L); let q = 0; ps.forEach(function(x){ o.set(x, q); q += x.length; }); return o; };
+  while(p + 27 <= b.length){
+    if(b[p] !== 79 || b[p + 1] !== 103 || b[p + 2] !== 103 || b[p + 3] !== 83) break;
+    const ns = b[p + 26]; if(p + 27 + ns > b.length) break;
+    let corpo = 0; for(let k = 0; k < ns; k++) corpo += b[p + 27 + k];
+    const tam = 27 + ns + corpo; if(p + tam > b.length) break;
+    const dv = new DataView(b.buffer, b.byteOffset + p, tam), pg = b.slice(p, p + tam); pg[22] = pg[23] = pg[24] = pg[25] = 0;
+    const lo = dv.getUint32(6, true), hi = dv.getUint32(10, true);
+    const segs = Array.from(b.subarray(p + 27, p + 27 + ns));
+    paginas.push({ flags:b[p + 5], granule:hi === 0xffffffff && lo === 0xffffffff ? -1 : hi * 4294967296 + lo, serial:dv.getUint32(14, true), seq:dv.getUint32(18, true),
+      segs:segs, crcOk:dv.getUint32(22, true) === _evpCrc32Ogg(pg), inicio:p, tam:tam });
+    let q = p + 27 + ns;
+    for(const s of segs){ atual.push(b.subarray(q, q + s)); q += s; if(s < 255){ pacotes.push(junta(atual)); atual = []; if(maxPacotes && pacotes.length >= maxPacotes) return { paginas:paginas, pacotes:pacotes, head:_evpOpusHeadLer(pacotes[0]), tags:_evpOpusTagsLer(pacotes[1]) }; } }
+    p += tam;
+  }
+  return { paginas:paginas, pacotes:pacotes, head:_evpOpusHeadLer(pacotes[0]), tags:_evpOpusTagsLer(pacotes[1]) };
+}
+/* deixa o som decodificado com o tamanho exato do original: corta a sobra do fim ou completa com silêncio (sempre igual) */
+function _evpAjustarTam(f, n){ if(f.length === n) return f; const o = new Float32Array(n); o.set(f.length > n ? f.subarray(0, n) : f); return o; }
+/* correlação normalizada de a[i] com b[i + lag] na janela [i0, i0 + len) */
+function _evpCorrNorm(a, b, lag, i0, len){
+  let s = 0, ea = 0, eb = 0; const z = i0 + len;
+  for(let i = i0; i < z; i++){ const j = i + lag; if(j < 0 || j >= b.length || i >= a.length) continue; const x = a[i], y = b[j]; s += x * y; ea += x * x; eb += y * y; }
+  return ea > 0 && eb > 0 ? s / Math.sqrt(ea * eb) : 0;
+}
+/* começo do trecho de len amostras com mais energia em [0, ate) (passos de len/4) — evita medir sincronia em silêncio */
+function _evpJanelaForte(x, len, ate){
+  const z = Math.min(x.length, ate), passo = Math.max(1, len >> 2); let best = 0, be = -1;
+  for(let i0 = 0; i0 + len <= z || i0 === 0; i0 += passo){ let e = 0; const f = Math.min(z, i0 + len); for(let i = i0; i < f; i++) e += x[i] * x[i]; if(e > be){ be = e; best = i0; } if(i0 + len >= z) break; }
+  return best;
+}
+/* deslocamento (em amostras) que melhor alinha b com a, de −max a +max. +D = b está D amostras atrasado (pre-skip curto demais).
+   null = trecho sem som suficiente para medir. Solta a tela a cada 40 deslocamentos. */
+async function _evpBuscaDesloc(a, b, max, i0, len){
+  let e = 0; for(let i = i0; i < Math.min(a.length, i0 + len); i++) e += a[i] * a[i];
+  if(!(e > 1e-4)) return null;
+  let best = 0, bc = -2;
+  for(let L = -max, k = 0; L <= max; L++, k++){ const c = _evpCorrNorm(a, b, L, i0, len); if(c > bc + 1e-9 || (Math.abs(c - bc) <= 1e-9 && Math.abs(L) < Math.abs(best))){ bc = c; best = L; }
+    if(k % 40 === 39) await new Promise(function(r){ setTimeout(r, 0); }); }
+  return best;
+}
+/* confere a sincronia: deslocamento 0 melhor que ±1..10 ms (48..480 amostras) e parecido de verdade (> 0,7) */
+function _evpAlinhadoOk(a, b, i0, len){
+  const c0 = _evpCorrNorm(a, b, 0, i0, len); if(!(c0 > 0.7)) return false;
+  for(let k = 1; k <= 10; k++){ if(_evpCorrNorm(a, b, 48 * k, i0, len) >= c0 || _evpCorrNorm(a, b, -48 * k, i0, len) >= c0) return false; }
+  return true;
+}
 /* ==== FIM CACHE MIC ==== */
 /* revisão 0A.2: converter 21 min (60 M amostras) de uma vez trava a tela ~1 s → em pedaços de 2 M amostras, soltando a tela entre eles */
 async function _evpConvPedacos(src, Tipo, um){ const o = new Tipo(src.length), P = 2000000;
   for(let i0 = 0; i0 < src.length; i0 += P){ o.set(um(src.subarray(i0, Math.min(src.length, i0 + P))), i0); if(i0 + P < src.length) await new Promise(function(r){ setTimeout(r, 0); }); }
   return o; }
-const _EVP_MIC_CACHE = "pixels-mic-tratado-v1", _EVP_MIC_CACHE_MAX = 300 * 1024 * 1024;   // até ~52 min de áudio
+const _EVP_MIC_CACHE = "pixels-mic-tratado-v2", _EVP_MIC_CACHE_VELHO = "pixels-mic-tratado-v1", _EVP_MIC_CACHE_MAX = 300 * 1024 * 1024;   // .ogg ~0,7 MB/min
 function _evpMicCacheUsar(){ try{ return typeof window !== "undefined" && !window.__CFG && !window.__EVP_TESTE && typeof caches !== "undefined" && typeof Response !== "undefined"; }catch(_){ return false; } }
+/* o card (armazenamento): só no navegador normal, com o Supabase aberto. No PC do escritório (__CFG) e nos testes nada muda. */
+function _evpMicCardUsar(){ try{ return typeof window !== "undefined" && !window.__CFG && !window.__EVP_TESTE && !!(window._sb && window._sb.storage) && typeof fetch === "function"; }catch(_){ return false; } }
+function _evpMicCardUrl(micId, chave){ try{ const u = window._sb.storage.from("agency-files").getPublicUrl(_evpMicLimpoCaminho(micId, chave)).data.publicUrl || "";
+  return u ? u + (u.indexOf("?") < 0 ? "?" : "&") + "v=" + Math.floor(Date.now() / 300000) : ""; }catch(_){ return ""; } }   // revisão 0A.3: ?v= muda a cada 5 min → um 404 guardado pela CDN antes da subida não dura
 function _evpTratChave(o){ return (o.ruido?"r":"") + (o.eco?"e":"") + (o.voz?"v":"") + (o.nivelar?"n":"") + _evpChaveExtra(o); }   // a mesma do _evpTratar (memória da aba)
-/* procura o som limpo guardado (só lê; o áudio do microfone já precisa estar aberto). Uma leitura por chave (promessa guardada). */
+let _evpMicVelhoApagado = false;
+function _evpMicVelhoApagar(){ if(_evpMicVelhoApagado) return; _evpMicVelhoApagado = true; try{ caches.delete(_EVP_MIC_CACHE_VELHO).catch(function(){}); }catch(_){} }   // o Int16 antigo (~121 MB) sai uma vez
+function _evpPausa(ms){ return new Promise(function(r){ setTimeout(r, ms || 0); }); }
+/* decodifica um .ogg (o navegador respeita o pre-skip do OpusHead e o corte do fim pelo granule da última página) */
+async function _evpMicOggDecodificar(bytes){
+  try{ const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const b = await new OfflineAudioContext(1, 48000, 48000).decodeAudioData(ab);
+    return b && b.sampleRate === 48000 ? b.getChannelData(0) : null;
+  }catch(_){ return null; }
+}
+/* .ogg guardado (do computador ou do card) → AudioBuffer do tamanho do bruto. null = não serve (chave diferente, sem RNNoise, tamanho errado). */
+async function _evpMicOggParaBuffer(bytes, chave, n, opcoes){
+  try{
+    const info = _evpOggLer(bytes, 2), mp = (info.tags && info.tags.mapa) || {};
+    if(!info.head || info.head.canais !== 1 || mp.PIXELS_CHAVE !== chave) return null;
+    let meta = {}; try{ meta = JSON.parse(mp.PIXELS_META || "{}") || {}; }catch(_){ meta = {}; }
+    if(opcoes && opcoes.ruido && meta.metodoRuido !== "rnnoise") return null;
+    const f = await _evpMicOggDecodificar(bytes); if(!f || Math.abs(f.length - n) > 960) return null;   // ±1 quadro Opus de 20 ms
+    const out = new AudioBuffer({ length:n, numberOfChannels:1, sampleRate:48000 }); out.copyToChannel(_evpAjustarTam(f, n), 0);
+    out._metodoRuido = meta.metodoRuido || null; out._doCache = true;
+    if(meta.protecao) out._protecaoFala = meta.protecao;
+    if(meta.limpeza) out._limpezaConferida = meta.limpeza;
+    if(meta.eco) out._eco = meta.eco;
+    return out;
+  }catch(_){ return null; }
+}
+async function _evpMicCardBaixar(micId, chave){
+  try{ const u = _evpMicCardUrl(micId, chave); if(!u) return null;
+    const r = await fetch(u, { cache:"no-store" }); if(!r.ok) return null;                 // 404/400 = ainda não existe
+    const b = new Uint8Array(await r.arrayBuffer()); return b.length > 64 && b.length <= _EVP_MIC_CACHE_MAX ? b : null;
+  }catch(_){ return null; }
+}
+/* sobe o .ogg (upsert:false — se outro navegador já subiu, tudo certo) */
+async function _evpMicCardSubir(micId, chave, bytes){
+  try{
+    const path = _evpMicLimpoCaminho(micId, chave), jaTem = function(e){ return e && (String(e.statusCode || e.status || "") === "409" || /exist|duplicate|409/i.test(String(e.message || e.error || e))); };
+    if(bytes.length > 40 * 1024 * 1024 && typeof pxUploadResumable === "function"){   // acima de ~40 MB o POST simples é cortado
+      try{ await pxUploadResumable(new File([bytes], path.split("/").pop(), { type:"audio/ogg" }), path, function(){}); return true; }catch(e){ return jaTem(e); }
+    }
+    const r = await window._sb.storage.from("agency-files").upload(path, new Blob([bytes], { type:"audio/ogg" }), { upsert:false, contentType:"audio/ogg", cacheControl:"31536000" });
+    return !r.error || jaTem(r.error);
+  }catch(_){ return false; }
+}
+/* achado neste computador mas o card não tem (a subida falhou antes, sem rede) → confere uma vez por sessão e sobe */
+const _evpMicCardVisto = {};
+async function _evpMicCardGarantir(micId, chave, bytes){
+  try{ if(!_evpMicCardUsar() || _evpMicCardVisto[chave]) return; _evpMicCardVisto[chave] = true;
+    const u = _evpMicCardUrl(micId, chave); if(!u) return;
+    const r = await fetch(u, { method:"HEAD", cache:"no-store" }); if(r.ok) return;
+    await _evpMicCardSubir(micId, chave, bytes);
+  }catch(_){}
+}
+async function _evpMicCacheGuardarOgg(micId, chave, bytes){
+  if(!bytes || !bytes.length || !_evpMicCacheUsar()) return false;
+  try{
+    if(bytes.length > _EVP_MIC_CACHE_MAX) return false;
+    try{ if(navigator.storage && navigator.storage.estimate){ const e = await navigator.storage.estimate(); if(e && e.quota && e.quota - (e.usage || 0) < bytes.length * 2 + 50e6) return false; } }catch(_){}
+    const meu = "/" + encodeURIComponent(String(micId || "")) + "/", c = await caches.open(_EVP_MIC_CACHE), ks = await c.keys(), outros = [];
+    for(const k of ks){ if(k.url === chave) continue; if(k.url.indexOf(meu) >= 0){ await c.delete(k); continue; }    // a versão velha deste microfone sai
+      try{ const r = await c.match(k); outros.push({ k:k, em:Number((r && r.headers.get("x-em")) || 0) }); }catch(_){} }
+    outros.sort(function(a, b){ return a.em - b.em; }); while(outros.length > 3){ await c.delete(outros.shift().k); }   // no máximo 4 microfones guardados
+    await c.put(chave, new Response(new Blob([bytes], { type:"audio/ogg" }), { headers:{ "content-type":"audio/ogg", "x-em":String(Date.now()) } }));
+    return true;
+  }catch(_){ return false; }                                                   // sem espaço (QuotaExceeded) etc.: segue sem guardar
+}
+/* procura o som limpo guardado: (a) neste computador, (b) no card. Só lê; o áudio do microfone já precisa estar aberto. Uma busca por chave. */
 function _evpMicCacheLer(micId, opcoes){
   const m = _evpM("mic:" + micId), ch = _evpTratChave(opcoes || {});
   if(!m.audio || !ch) return Promise.resolve(null);
   if(m.tratado[ch]) return Promise.resolve(m.tratado[ch]);
-  if(!_evpMicCacheUsar()) return Promise.resolve(null);
-  const sr = m.audio.sampleRate, n = m.audio.length, url = _evpMicCacheChave(micId, opcoes, n, sr);
+  const local = _evpMicCacheUsar(), card = _evpMicCardUsar();
+  if((!local && !card) || m.audio.sampleRate !== 48000) return Promise.resolve(null);
+  const n = m.audio.length, url = _evpMicCacheChave(micId, opcoes, n, 48000);
   m.cacheLer = m.cacheLer || {};
   if(m.cacheLer[url]) return m.cacheLer[url];
+  const pronto = function(out){ if(m.tratado[ch]) return m.tratado[ch]; if(out._eco){ try{ _evpEcoUltimo["mic:" + micId] = out._eco; }catch(_){} } m.tratado[ch] = out; _evpAvisar(); return out; };
   return (m.cacheLer[url] = (async function(){
     try{
-      const c = await caches.open(_EVP_MIC_CACHE), r = await c.match(url); if(!r) return null;
-      let meta = {}; try{ meta = JSON.parse(decodeURIComponent(r.headers.get("x-meta") || "")) || {}; }catch(_){ meta = {}; }
-      const ab = await r.arrayBuffer(); if(ab.byteLength !== n * 2) return null;
-      if(m.tratado[ch]) return m.tratado[ch];
-      const out = new AudioBuffer({ length:n, numberOfChannels:1, sampleRate:sr }); out.copyToChannel(await _evpConvPedacos(new Int16Array(ab), Float32Array, _evpI16paraF32), 0);
-      out._metodoRuido = meta.metodoRuido || null; out._doCache = true;
-      if(meta.protecao) out._protecaoFala = meta.protecao;
-      if(meta.limpeza) out._limpezaConferida = meta.limpeza;
-      if(meta.eco){ out._eco = meta.eco; try{ _evpEcoUltimo["mic:" + micId] = meta.eco; }catch(_){} }
-      m.tratado[ch] = out; _evpAvisar();
-      return out;
+      if(local){ _evpMicVelhoApagar();
+        try{ const c = await caches.open(_EVP_MIC_CACHE), r = await c.match(url);
+          if(r){ const b = new Uint8Array(await r.arrayBuffer()), out = await _evpMicOggParaBuffer(b, url, n, opcoes);
+            if(out){ _evpMicCardGarantir(micId, url, b); return pronto(out); } } }catch(_){}
+      }
+      if(card){ const b = await _evpMicCardBaixar(micId, url);
+        if(b){ const out = await _evpMicOggParaBuffer(b, url, n, opcoes);
+          if(out){ out._doCard = true; if(local) _evpMicCacheGuardarOgg(micId, url, b).catch(function(){}); return pronto(out); } } }
+      return null;
     }catch(_){ return null; }
   })());
 }
-async function _evpMicCacheGuardar(micId, opcoes, out){
-  if(!out || !out.length || !_evpMicCacheUsar()) return false;
+/* WebCodecs: Float32 mono 48 kHz → pacotes Opus (~96 kbps, 20 ms). Em pedaços de 1 s, soltando a tela. null = não dá (sem AudioEncoder etc.) */
+async function _evpMicOggCodificar(x){
+  if(typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") return null;
+  const base = { codec:"opus", sampleRate:48000, numberOfChannels:1, bitrate:96000 }; let cfg = null;
+  for(const c of [Object.assign({}, base, { opus:{ format:"ogg", frameDuration:20000 } }), Object.assign({}, base, { opus:{ frameDuration:20000 } }), base]){
+    try{ const s = await AudioEncoder.isConfigSupported(c); if(s && s.supported){ cfg = c; break; } }catch(_){} }
+  if(!cfg) return null;
+  const pacotes = []; let desc = null, erro = null, enc = null;
   try{
-    const bytes = out.length * 2; if(bytes > _EVP_MIC_CACHE_MAX) return false;
-    try{ if(navigator.storage && navigator.storage.estimate){ const e = await navigator.storage.estimate(); if(e && e.quota && e.quota - (e.usage || 0) < bytes * 2 + 50e6) return false; } }catch(_){}
-    const url = _evpMicCacheChave(micId, opcoes, out.length, out.sampleRate), meu = "/" + encodeURIComponent(String(micId || "")) + "/";
-    let meta = encodeURIComponent(JSON.stringify({ metodoRuido:out._metodoRuido || null, protecao:out._protecaoFala || null, limpeza:out._limpezaConferida || null, eco:out._eco || null }));
-    if(meta.length > 6000) meta = encodeURIComponent(JSON.stringify({ metodoRuido:out._metodoRuido || null }));
-    const c = await caches.open(_EVP_MIC_CACHE), ks = await c.keys(), outros = [];
-    for(const k of ks){ if(k.url === url) continue; if(k.url.indexOf(meu) >= 0){ await c.delete(k); continue; }    // a versão velha deste microfone sai
-      try{ const r = await c.match(k); outros.push({ k:k, em:Number((r && r.headers.get("x-em")) || 0) }); }catch(_){} }
-    outros.sort(function(a, b){ return a.em - b.em; }); while(outros.length > 3){ await c.delete(outros.shift().k); }   // no máximo 4 microfones guardados
-    const i16 = await _evpConvPedacos(out.getChannelData(0), Int16Array, _evpF32paraI16);
-    await c.put(url, new Response(new Blob([i16.buffer]), { headers:{ "content-type":"application/octet-stream", "x-meta":meta, "x-em":String(Date.now()) } }));
-    return true;
-  }catch(_){ return false; }                                                   // sem espaço (QuotaExceeded) etc.: segue sem guardar
+    enc = new AudioEncoder({ output:function(ck, md){ try{ const b = new Uint8Array(ck.byteLength); ck.copyTo(b); pacotes.push(b);
+        if(!desc && md && md.decoderConfig && md.decoderConfig.description) desc = md.decoderConfig.description; }catch(e){ erro = e; } },
+      error:function(e){ erro = e || new Error("AudioEncoder"); } });
+    enc.configure(cfg);
+    const SR = 48000, total = x.length + 1920;                                 // +40 ms de silêncio: o último quadro cobre o atraso do codificador
+    for(let i0 = 0, k = 0; i0 < total; i0 += SR, k++){
+      if(erro) throw erro;
+      const len = Math.min(SR, total - i0), d = new Float32Array(len); if(i0 < x.length) d.set(x.subarray(i0, Math.min(x.length, i0 + len)));
+      const ad = new AudioData({ format:"f32", sampleRate:SR, numberOfFrames:len, numberOfChannels:1, timestamp:Math.round(i0 * 1e6 / SR), data:d });
+      enc.encode(ad); ad.close();
+      while(enc.encodeQueueSize > 4 && !erro) await _evpPausa(4);
+      if(k % 10 === 9) await _evpPausa(0);
+    }
+    await enc.flush(); if(erro) throw erro;
+    return pacotes.length ? { pacotes:pacotes, desc:desc } : null;
+  }catch(_){ return null; }
+  finally{ try{ if(enc && enc.state !== "closed") enc.close(); }catch(_){} }
 }
-/* limpa o som do microfone: usa o guardado neste computador se a chave bater; senão limpa (como antes) e guarda em segundo plano */
+/* codifica, monta o Ogg e confere de ida e volta: tamanho = original (±960) e sincronia (pre-skip). Se o deslocamento medido não for 0,
+   corrige o pre-skip UMA vez e confere de novo. Só devolve o arquivo se passar. */
+async function _evpMicOggCriar(x, chave, metaJson){
+  try{
+    const enc = await _evpMicOggCodificar(x); if(!enc) return null;
+    let pre = _evpPreSkipDe(enc.desc);
+    const serial = (parseInt(_evpHash(chave), 36) >>> 0) || 1, tags = ["PIXELS_CHAVE=" + chave, "PIXELS_N=" + x.length, "PIXELS_META=" + metaJson];
+    const i0 = _evpJanelaForte(x, 48000, Math.min(x.length, 60 * 48000)), len = Math.min(48000, x.length - i0);
+    for(let t = 0; t < 2; t++){
+      const ogg = _evpOggMontar({ pacotes:enc.pacotes, preSkip:pre, total:x.length, serial:serial, tags:tags });
+      const d = await _evpMicOggDecodificar(ogg); if(!d || Math.abs(d.length - x.length) > 960) return null;
+      const L = await _evpBuscaDesloc(x, d, 480, i0, len); if(L === null) return null;
+      if(L !== 0){ if(t || pre + L < 0 || pre + L > 65535) return null; pre += L; continue; }
+      const c0 = Math.max(0, Math.min(x.length - 480000, i0 - 216000));
+      return _evpAlinhadoOk(x, d, c0, Math.min(480000, x.length - c0)) ? ogg : null;
+    }
+    return null;
+  }catch(_){ return null; }
+}
+/* segundo plano: cria o .ogg conferido, guarda neste computador e sobe para o card (uma vez por chave) */
+async function _evpMicGuardar(micId, opcoes, out){
+  const local = _evpMicCacheUsar(), card = _evpMicCardUsar();
+  if((!local && !card) || !out || !out.length || out.sampleRate !== 48000) return false;
+  const m = _evpM("mic:" + micId), a = m.audio || out; if(a.sampleRate !== 48000) return false;
+  const url = _evpMicCacheChave(micId, opcoes, a.length, 48000);
+  m.guardando = m.guardando || {}; if(m.guardando[url]) return m.guardando[url];
+  return (m.guardando[url] = (async function(){
+    try{
+      await _evpPausa(1500);                                                   // deixa a tela tocar primeiro
+      let mj = JSON.stringify({ metodoRuido:out._metodoRuido || null, protecao:out._protecaoFala || null, limpeza:out._limpezaConferida || null, eco:out._eco || null });
+      if(mj.length > 6000) mj = JSON.stringify({ metodoRuido:out._metodoRuido || null });
+      const b = await _evpMicOggCriar(out.getChannelData(0), url, mj); if(!b) return false;
+      if(local){ _evpMicVelhoApagar(); await _evpMicCacheGuardarOgg(micId, url, b); }
+      if(card){ _evpMicCardVisto[url] = true; await _evpMicCardSubir(micId, url, b); }
+      return true;
+    }catch(_){ return false; }
+  })());
+}
+/* limpa o som do microfone: usa o guardado (computador → card) se a chave bater; senão limpa (como antes) e guarda em segundo plano */
 async function _evpTratarMic(micId, opcoes){
   const pr = await _evpMicCacheLer(micId, opcoes); if(pr) return pr;
   const out = await _evpTratar("mic:" + micId, opcoes);
   const semRnn = opcoes && opcoes.ruido && out && out.sampleRate === 48000 && out._metodoRuido !== "rnnoise";   // revisão 0A.2: RNNoise não abriu (rede) → a limpeza simples não fica guardada para sempre
-  if(out && !out._doCache && !semRnn && out !== _evpM("mic:" + micId).audio) _evpMicCacheGuardar(micId, opcoes, out).catch(function(){});
+  if(out && !out._doCache && !semRnn && out !== _evpM("mic:" + micId).audio) _evpMicGuardar(micId, opcoes, out).catch(function(){});
   return out;
 }
 
@@ -143719,7 +143984,11 @@ const _EVP_CSS_MOB = '[data-mob="1"]{touch-action:pan-x pan-y;-webkit-tap-highli
   '[data-gaveta] [data-painel-ferr]{border:0!important;box-shadow:none!important;background:transparent!important}[data-gaveta] [data-painel-ferr]>div:first-child{display:none!important}';   // a gaveta já tem título e "Pronto"
 /* v31 (17/10/2026) AVISO "N vídeos novos chegaram no card": conta só os brutos incluídos depois da triagem da IA (incluido.manual) que a versão
    atual NÃO usa em lugar nenhum (linha do tempo, apoio por cima, som do clipe). O X guarda "já vi" neste computador (localStorage, por edição):
-   o aviso só volta quando chega um vídeo novo de verdade (id que não estava na lista vista). Nada vai para o banco. */
+   o aviso só volta quando chega um vídeo novo de verdade (id que não estava na lista vista).
+   v32 (17/10/2026) o "já vi" vale POR PESSOA em qualquer computador: além do localStorage, fica na tabela video_avisos_vistos (_sql/0a3, 1 linha
+   por edição + pessoa; o banco só deixa cada um ler/gravar a própria). Ao abrir junta local + banco (união); ao fechar grava local na hora e manda
+   ao banco em segundo plano. Sem tabela / erro / PC do escritório (__CFG): segue só com o localStorage, calado. Para não piscar: se o local não
+   cobre todos, espera o banco até 1,5 s antes de mostrar. */
 /* ==== AVISOS PURA ==== */
 function _evpNovosPendentes(clipes, p){
   const u = {}; p = p || {};
@@ -143732,10 +144001,28 @@ function _evpNovosAssin(ids){ const v = {}; (ids || []).forEach(function(id){ if
 function _evpNovosVistos(guardado, ids){ if(!guardado || !(ids || []).length) return false; const g = {}; String(guardado).split(",").forEach(function(h){ g[h] = 1; });
   return ids.every(function(id){ return g[_evpHash(String(id))]; }); }
 function _evpNovosChave(edId){ return "evp_novos_vistos:" + String(edId || ""); }
+const _EVP_NOVOS_MAX = 20000;   // = check do banco (length(vistos) <= 20000)
+/* v32: junta duas listas "h1,h2" (local + banco) sem repetir; ignora lixo; passa de 20000 letras → corta as primeiras (nunca chega: são até 50 vídeos) */
+function _evpNovosUniao(a, b){ const v = {}; String(a || "").split(",").concat(String(b || "").split(",")).forEach(function(h){ h = h.trim(); if(h && h.length <= 16 && /^[0-9a-z]+$/.test(h)) v[h] = 1; });
+  let t = Object.keys(v).sort().join(","); while(t.length > _EVP_NOVOS_MAX){ const i = t.indexOf(","); t = i < 0 ? "" : t.slice(i + 1); } return t; }
+/* v32: mostra o aviso? só quando já dá para decidir (pronto = banco respondeu, falhou, passou 1,5 s ou não usa banco) e falta algum na lista vista */
+function _evpNovosMostra(guardado, ids, pronto){ return !!pronto && (ids || []).length > 0 && !_evpNovosVistos(guardado, ids); }
+/* v32: usa o banco? precisa do cliente, não ser o PC do escritório e o id da edição ser uuid (a coluna é uuid) */
+function _evpNovosUsaBanco(edId, temSb, noPC){ return !!temSb && !noPC && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(edId || "")); }
 /* ==== FIM AVISOS ==== */
 function _evpNovosLer(edId){ try{ return window.localStorage.getItem(_evpNovosChave(edId)) || ""; }catch(_){ return ""; } }
-function _evpNovosGuardar(edId, ids, antes){ const v = {}; String(antes || "").split(",").concat(_evpNovosAssin(ids).split(",")).forEach(function(h){ if(h) v[h] = 1; });
-  const s = Object.keys(v).sort().join(","); try{ window.localStorage.setItem(_evpNovosChave(edId), s); }catch(_){} return s; }
+function _evpNovosGuardarTexto(edId, s){ try{ window.localStorage.setItem(_evpNovosChave(edId), s); }catch(_){} return s; }
+function _evpNovosGuardar(edId, ids, antes){ return _evpNovosGuardarTexto(edId, _evpNovosUniao(antes, _evpNovosAssin(ids))); }
+let _evpNovosSemTabela = false;    // v32: a tabela ainda não existe → para de perguntar nesta sessão
+function _evpNovosNoBanco(edId){ try{ return !_evpNovosSemTabela && _evpNovosUsaBanco(edId, !!(window._sb && window._sb.from), !!(window.__CFG || window.__EVP_TESTE)); }catch(_){ return false; } }
+function _evpNovosErro(e){ if(e && (e.code === "PGRST205" || e.code === "42P01" || /video_avisos_vistos/.test(String(e.message || "")))) _evpNovosSemTabela = true; }
+/* lê o "já vi" da pessoa: "" = sem linha · null = deu erro (aí não grava por cima) */
+function _evpNovosBancoLer(edId){ try{ return Promise.resolve(window._sb.from("video_avisos_vistos").select("vistos").eq("edicao_id", edId).eq("chave", "novos").maybeSingle())
+  .then(function(r){ if(!r || r.error){ _evpNovosErro(r && r.error); return null; } return r.data ? String(r.data.vistos || "") : ""; }, function(){ return null; }); }catch(_){ return Promise.resolve(null); } }
+function _evpNovosBancoGravar(edId, s){ if(!_evpNovosNoBanco(edId)) return;
+  _evpNovosBancoLer(edId).then(function(b){ if(b === null) return null;
+    return window._sb.from("video_avisos_vistos").upsert({ edicao_id:edId, chave:"novos", vistos:_evpNovosUniao(s, b), em:new Date().toISOString() }, { onConflict:"edicao_id,uid,chave" })
+      .then(function(r){ if(r && r.error) _evpNovosErro(r.error); }); }).then(function(){}, function(){}); }
 function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou, pcAuto, erroAjuste, limparErroAjuste }){
   _evpUsarMidia();
   /* v81: a guarda de vídeo do app (00b: gasta 1 vez + trava de 3 voltas) fica de fora do Estúdio — ele tem o próprio cache e o "repetir trecho" é de propósito */
@@ -145349,8 +145636,16 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     })();
   }, [novosCard.map(function(f){ return f.id + (f.previewUrl ? "+" : ""); }).join(","), soVer]);     // v80: a cópia leve chegou → tenta de novo
   const novosIA = ((ed && ed.clipes) || []).filter(function(c){ return c && c.incluido && c.incluido.manual; });   // na Mídia, mas a IA ainda não leu
-  const [reed, setReed] = useState(null), [novosVistos, setNovosVistos] = useState(function(){ return _evpNovosLer(ed && ed.id); });   // v31: "já vi" guardado neste computador
-  useEffect(function(){ setNovosVistos(_evpNovosLer(ed && ed.id)); }, [ed && ed.id]);
+  const [reed, setReed] = useState(null), [novosVistos, setNovosVistos] = useState(function(){ return _evpNovosLer(ed && ed.id); });   // v31: "já vi" deste computador · v32: + o da pessoa no banco
+  const [novosProntoId, setNovosProntoId] = useState(function(){ const id = ed && ed.id; return (pcAuto || !_evpNovosNoBanco(id)) ? id : null; });   // v32: edição cujo "já vi" já dá para decidir
+  useEffect(function(){ const id = ed && ed.id; setNovosVistos(_evpNovosLer(id));
+    if(pcAuto || !_evpNovosNoBanco(id)){ setNovosProntoId(id); return; }
+    let vivo = true; const tm = setTimeout(function(){ if(vivo) setNovosProntoId(id); }, 1500);     // banco lento: depois de 1,5 s decide só com o local
+    _evpNovosBancoLer(id).then(function(b){ if(!vivo) return; clearTimeout(tm);
+      if(b){ const u = _evpNovosGuardarTexto(id, _evpNovosUniao(_evpNovosLer(id), b)); setNovosVistos(function(a){ return _evpNovosUniao(a, u); }); }
+      setNovosProntoId(id); });
+    return function(){ vivo = false; clearTimeout(tm); };
+  }, [ed && ed.id]);
   const olharReed = function(){ if(!window._sb || !ed || !ed.id) return;
     window._sb.rpc("criacao_edicao_reeditar_status", { p_id:ed.id }).then(function(r){ const d = r && r.data; if(!d || !d.existe) return;
       setReed(function(a){
@@ -145634,8 +145929,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const verMidiaNovos = function(){ setMenu("bib-midia"); setFerrGlobal({ ferramenta:"midia", sub:null }); if(isMob) setMobBib(true); };
   const reedAtivo = !!(reed && (reed.status === "fila" || reed.status === "processando"));
   const novosVer = useMemo(function(){ return _evpNovosPendentes(novosIA, p); }, [novosIA.map(function(c){ return c.id; }).join(","), p.clips, p.imagens, p.narracoes]);   // v31: só os que a versão atual não usa
-  const novosIds = novosVer.map(function(c){ return c.id; }), novosMostra = novosVer.length > 0 && !_evpNovosVistos(novosVistos, novosIds);
-  const fecharNovos = function(){ setNovosVistos(_evpNovosGuardar(ed && ed.id, novosIds, novosVistos)); };
+  const novosIds = novosVer.map(function(c){ return c.id; }), novosMostra = _evpNovosMostra(novosVistos, novosIds, novosProntoId === (ed && ed.id));
+  const fecharNovos = function(){ const id = ed && ed.id, s = _evpNovosGuardar(id, novosIds, novosVistos); setNovosVistos(s); if(!pcAuto) _evpNovosBancoGravar(id, s); };   // v32: local na hora, banco por trás
   const chaveNA = naoAbriu.map(function(f){ return f.id; }).join(",");
   const elNaoAbriu = naoAbriu.length && ocultarNA !== chaveNA ? (
     <div data-nao-abriu="1" role="alert" style={Object.assign({}, _EVP_PAINEL, {padding:"8px 10px 8px 12px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontSize:12.5,fontWeight:600,flexShrink:0,borderColor:"rgba(234,179,8,.55)",background:_EVP_COR.aviso})}>
