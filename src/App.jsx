@@ -138673,6 +138673,86 @@ async function _evpTratar(clipe, opcoes){
   return out;
 }
 
+/* v31 (17/10/2026) SOM DO MICROFONE PRONTO NO COMPUTADOR: o arquivo do microfone já ficava guardado (Cache Storage "pixels-video-v1"), mas a
+   LIMPEZA (_evpTratar: tirar ruído com RNNoise quadro a quadro, proteção da fala, eco, cliques, voz, nivelar) só ficava na memória da aba —
+   a cada abertura do Estúdio rodava de novo nos ~21 min de áudio ("Preparando o som do microfone (limpando a voz)…" toda vez).
+   Agora o resultado limpo fica guardado neste computador (Cache Storage "pixels-mic-tratado-v1", Int16 mono 48 kHz = 2 bytes por amostra,
+   ~5,8 MB por minuto). Chave = id do microfone + assinatura dos ajustes que mudam a limpeza + tamanho do áudio + versão do algoritmo.
+   Mudou um ajuste (ou o algoritmo: suba _EVP_TRAT_VER) → limpa de novo e troca o guardado. Fica só a última versão de cada microfone e no
+   máximo 4 microfones. Sem espaço / navegador sem Cache Storage → segue sem guardar. No PC do escritório (window.__CFG) e nos testes: como antes. */
+/* ==== CACHE MIC PURA ==== */
+const _EVP_TRAT_VER = "mic1";
+function _evpHash(s){ s = String(s); let h = 0x811c9dc5; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); }
+function _evpTratAssin(o){
+  o = o || {}; const n = function(v){ v = Number(v); return isFinite(v) ? Math.round(v * 100) / 100 : 0; };
+  const eq = Array.isArray(o.eq) && o.eq.some(function(g){ return Math.abs(n(g)) > 0.1; }) ? o.eq.map(n) : [];
+  return JSON.stringify([!!o.ruido, !!o.voz, !!o.eco, o.eco && o.ecoForca != null ? n(o.ecoForca) : null, !!o.nivelar, o.hum ? n(o.hum) : 0, !!o.cliques, !!o.pops, eq,
+    o.conferirLimpeza === false, o.protegerFala === false]);
+}
+function _evpMicCacheChave(micId, opcoes, amostras, sr){
+  return "https://pixels-cache.local/mic-tratado/" + _EVP_TRAT_VER + "/" + encodeURIComponent(String(micId || "")) + "/" + _evpHash(_evpTratAssin(opcoes) + "|" + (amostras | 0) + "|" + (sr | 0));
+}
+function _evpF32paraI16(f){ const o = new Int16Array(f.length); for(let i = 0; i < f.length; i++){ const v = f[i]; o[i] = v >= 1 ? 32767 : v <= -1 ? -32768 : Math.round(v * 32767) || 0; } return o; }
+function _evpI16paraF32(a){ const o = new Float32Array(a.length); for(let i = 0; i < a.length; i++) o[i] = a[i] / 32767; return o; }
+/* ==== FIM CACHE MIC ==== */
+/* revisão 0A.2: converter 21 min (60 M amostras) de uma vez trava a tela ~1 s → em pedaços de 2 M amostras, soltando a tela entre eles */
+async function _evpConvPedacos(src, Tipo, um){ const o = new Tipo(src.length), P = 2000000;
+  for(let i0 = 0; i0 < src.length; i0 += P){ o.set(um(src.subarray(i0, Math.min(src.length, i0 + P))), i0); if(i0 + P < src.length) await new Promise(function(r){ setTimeout(r, 0); }); }
+  return o; }
+const _EVP_MIC_CACHE = "pixels-mic-tratado-v1", _EVP_MIC_CACHE_MAX = 300 * 1024 * 1024;   // até ~52 min de áudio
+function _evpMicCacheUsar(){ try{ return typeof window !== "undefined" && !window.__CFG && !window.__EVP_TESTE && typeof caches !== "undefined" && typeof Response !== "undefined"; }catch(_){ return false; } }
+function _evpTratChave(o){ return (o.ruido?"r":"") + (o.eco?"e":"") + (o.voz?"v":"") + (o.nivelar?"n":"") + _evpChaveExtra(o); }   // a mesma do _evpTratar (memória da aba)
+/* procura o som limpo guardado (só lê; o áudio do microfone já precisa estar aberto). Uma leitura por chave (promessa guardada). */
+function _evpMicCacheLer(micId, opcoes){
+  const m = _evpM("mic:" + micId), ch = _evpTratChave(opcoes || {});
+  if(!m.audio || !ch) return Promise.resolve(null);
+  if(m.tratado[ch]) return Promise.resolve(m.tratado[ch]);
+  if(!_evpMicCacheUsar()) return Promise.resolve(null);
+  const sr = m.audio.sampleRate, n = m.audio.length, url = _evpMicCacheChave(micId, opcoes, n, sr);
+  m.cacheLer = m.cacheLer || {};
+  if(m.cacheLer[url]) return m.cacheLer[url];
+  return (m.cacheLer[url] = (async function(){
+    try{
+      const c = await caches.open(_EVP_MIC_CACHE), r = await c.match(url); if(!r) return null;
+      let meta = {}; try{ meta = JSON.parse(decodeURIComponent(r.headers.get("x-meta") || "")) || {}; }catch(_){ meta = {}; }
+      const ab = await r.arrayBuffer(); if(ab.byteLength !== n * 2) return null;
+      if(m.tratado[ch]) return m.tratado[ch];
+      const out = new AudioBuffer({ length:n, numberOfChannels:1, sampleRate:sr }); out.copyToChannel(await _evpConvPedacos(new Int16Array(ab), Float32Array, _evpI16paraF32), 0);
+      out._metodoRuido = meta.metodoRuido || null; out._doCache = true;
+      if(meta.protecao) out._protecaoFala = meta.protecao;
+      if(meta.limpeza) out._limpezaConferida = meta.limpeza;
+      if(meta.eco){ out._eco = meta.eco; try{ _evpEcoUltimo["mic:" + micId] = meta.eco; }catch(_){} }
+      m.tratado[ch] = out; _evpAvisar();
+      return out;
+    }catch(_){ return null; }
+  })());
+}
+async function _evpMicCacheGuardar(micId, opcoes, out){
+  if(!out || !out.length || !_evpMicCacheUsar()) return false;
+  try{
+    const bytes = out.length * 2; if(bytes > _EVP_MIC_CACHE_MAX) return false;
+    try{ if(navigator.storage && navigator.storage.estimate){ const e = await navigator.storage.estimate(); if(e && e.quota && e.quota - (e.usage || 0) < bytes * 2 + 50e6) return false; } }catch(_){}
+    const url = _evpMicCacheChave(micId, opcoes, out.length, out.sampleRate), meu = "/" + encodeURIComponent(String(micId || "")) + "/";
+    let meta = encodeURIComponent(JSON.stringify({ metodoRuido:out._metodoRuido || null, protecao:out._protecaoFala || null, limpeza:out._limpezaConferida || null, eco:out._eco || null }));
+    if(meta.length > 6000) meta = encodeURIComponent(JSON.stringify({ metodoRuido:out._metodoRuido || null }));
+    const c = await caches.open(_EVP_MIC_CACHE), ks = await c.keys(), outros = [];
+    for(const k of ks){ if(k.url === url) continue; if(k.url.indexOf(meu) >= 0){ await c.delete(k); continue; }    // a versão velha deste microfone sai
+      try{ const r = await c.match(k); outros.push({ k:k, em:Number((r && r.headers.get("x-em")) || 0) }); }catch(_){} }
+    outros.sort(function(a, b){ return a.em - b.em; }); while(outros.length > 3){ await c.delete(outros.shift().k); }   // no máximo 4 microfones guardados
+    const i16 = await _evpConvPedacos(out.getChannelData(0), Int16Array, _evpF32paraI16);
+    await c.put(url, new Response(new Blob([i16.buffer]), { headers:{ "content-type":"application/octet-stream", "x-meta":meta, "x-em":String(Date.now()) } }));
+    return true;
+  }catch(_){ return false; }                                                   // sem espaço (QuotaExceeded) etc.: segue sem guardar
+}
+/* limpa o som do microfone: usa o guardado neste computador se a chave bater; senão limpa (como antes) e guarda em segundo plano */
+async function _evpTratarMic(micId, opcoes){
+  const pr = await _evpMicCacheLer(micId, opcoes); if(pr) return pr;
+  const out = await _evpTratar("mic:" + micId, opcoes);
+  const semRnn = opcoes && opcoes.ruido && out && out.sampleRate === 48000 && out._metodoRuido !== "rnnoise";   // revisão 0A.2: RNNoise não abriu (rede) → a limpeza simples não fica guardada para sempre
+  if(out && !out._doCache && !semRnn && out !== _evpM("mic:" + micId).audio) _evpMicCacheGuardar(micId, opcoes, out).catch(function(){});
+  return out;
+}
+
 /* ═══ v48 (06/10/2026): VOCAL ATTACKER — compressor de voz (pedido do dono, inspirado no Single-band Compressor do Premiere) ═══
    Configuração no projeto (contrato C6): p.vocal_attacker = { ativo, intensidade 0–100, threshold −22, ratio 4, attack_ms 8, release_ms 120,
    makeup "auto", lufs −14, true_peak −1 }. O PC lê o mesmo campo para a normalização final (−14 LUFS / −1 dBTP, ffmpeg) no arquivo gravado.
@@ -140016,6 +140096,70 @@ const _EVG_CORES = [ { id:"principal", label:"Cor principal" }, { id:"apoio", la
 const _EVG_FORMAS = [ { id:"caixa", label:"Caixa arredondada" }, { id:"pilula", label:"Pílula" }, { id:"barra", label:"Faixa de ponta a ponta" }, { id:"nenhum", label:"Sem fundo (só o texto)" } ];
 const _EVG_ANIMS = [ { id:"pop", label:"Pop" }, { id:"deslizar", label:"Deslizar" }, { id:"aparecer", label:"Aparecer" }, { id:"nenhuma", label:"Sem animação" } ];
 
+/* ═══ v31 (17/10/2026) área segura — pedido do Vini: "um tamanho máximo padrão para tudo e uma margem de segurança".
+   Um retângulo só (por formato) onde texto, legenda e peças têm que caber. Fora dele o Instagram/TikTok cobre (botões, nome, legenda do post)
+   ou a tela corta. Regras: (1) legenda quebra pela LARGURA MEDIDA; palavra sozinha maior que a largura encolhe só ela (mínimo 70%);
+   (2) a legenda não encosta nas peças do quadro (folga de 2% da altura): vai para o espaço livre mais perto, senão fica menor;
+   (3) caixa de texto inteira dentro da área: quebra em até 2 linhas antes de diminuir a letra; (4) só mexe no que está FORA ou COLIDINDO —
+   vídeo antigo que já cabia sai igual. Os avisos de cada quadro ficam em _evpLayoutAvisos (fora_area · encostando · palavra_reduzida). ═══ */
+const _EVP_AREA_SEGURA = {
+  "9x16": { lado:0.06, topo:0.08, base:0.14 },      // Reels/TikTok: embaixo ficam o nome, a legenda do post e os botões
+  "4x5":  { lado:0.06, topo:0.06, base:0.09 },
+  "1x1":  { lado:0.06, topo:0.06, base:0.07 },
+  "16x9": { lado:0.05, topo:0.07, base:0.10 },
+  folga:0.02,          // distância mínima entre a legenda e uma peça (fração da altura)
+  minPalavra:0.7       // palavra sozinha maior que a linha encolhe até 70% do tamanho, não menos
+};
+function _evpAreaFormato(W, H){ const r = (Number(H) || 1) / (Number(W) || 1); return r > 1.5 ? "9x16" : r > 1.1 ? "4x5" : r > 0.8 ? "1x1" : "16x9"; }
+/* retângulo seguro da tela W×H → { x, y, x1, y1, w, h, formato } (px) */
+function _evpAreaSegura(W, H){
+  const f = _evpAreaFormato(W, H), a = _EVP_AREA_SEGURA[f], x = Math.round(W * a.lado), y = Math.round(H * a.topo), x1 = W - x, y1 = Math.round(H * (1 - a.base));
+  return { x:x, y:y, x1:x1, y1:y1, w:x1 - x, h:y1 - y, formato:f };
+}
+function _evpDentroArea(c, A, tol){ tol = tol == null ? 0.5 : tol; return !!c && c.x >= A.x - tol && c.y >= A.y - tol && c.x + c.w <= A.x1 + tol && c.y + c.h <= A.y1 + tol; }
+/* quanto a caixa precisa andar para entrar na área (se for maior que a área, fica centrada nela) → { dx, dy } */
+function _evpEncaixarArea(c, A){
+  const eixo = function(p, t, a, a1){ if(t >= a1 - a) return (a + a1) / 2 - (p + t / 2); if(p < a) return a - p; if(p + t > a1) return a1 - (p + t); return 0; };
+  return { dx:eixo(c.x, c.w, A.x, A.x1), dy:eixo(c.y, c.h, A.y, A.y1) };
+}
+/* duas caixas se encostam (com folga m em volta)? */
+function _evpColide(a, b, m){ m = m || 0; return !!a && !!b && a.x < b.x + b.w + m && a.x + a.w + m > b.x && a.y < b.y + b.h + m && a.y + a.h + m > b.y; }
+/* quebra palavras pela largura medida: medir(s) → px. Cada linha = lista de índices. A palavra que não cabe vai para a linha seguinte;
+   palavra sozinha maior que maxW ganha escala própria (até minK) → { linhas, escala:{ i:k }, avisos:[{ i, k, minimo }] } */
+function _evpLegQuebraLargura(medir, palavras, maxW, minK){
+  minK = minK || _EVP_AREA_SEGURA.minPalavra; const sp = medir(" "), linhas = [], escala = {}, avisos = []; let l = [], w = 0;
+  palavras.forEach(function(p, i){
+    let pw = medir(String(p));
+    if(pw > maxW){ const k = Math.max(minK, maxW / pw); escala[i] = k; avisos.push({ i:i, k:k, minimo:maxW / pw < minK }); pw *= k; }
+    if(l.length && w + sp + pw > maxW){ linhas.push(l); l = []; w = 0; }
+    if(l.length) w += sp; l.push(i); w += pw;
+  });
+  if(l.length) linhas.push(l);
+  return { linhas:linhas, escala:escala, avisos:avisos };
+}
+/* escala da palavra sozinha maior que a linha (1 = cabe) e se ficou no mínimo */
+function _evpPalavraCaber(largura, maxW, minK){ minK = minK || _EVP_AREA_SEGURA.minPalavra; if(!(largura > maxW)) return { k:1, minimo:false }; const k = maxW / largura; return { k:Math.max(minK, k), minimo:k < minK }; }
+/* legenda × peças do quadro: se a caixa da legenda encosta numa peça (folga m) ou sai da área A, procura a posição (só na vertical)
+   mais perto da original, logo acima ou logo abaixo de cada peça, dentro da área e sem encostar em nada → { y, movida, ok } */
+function _evpLegLivre(cx0, obst, A, m){
+  const L = (obst || []).filter(function(o){ return o && o.w >= 0 && o.h >= 0 && o.x < cx0.x + cx0.w + m && o.x + o.w + m > cx0.x; });
+  const livre = function(y){ const c = { x:cx0.x, y:y, w:cx0.w, h:cx0.h }; return y >= A.y - 0.5 && y + cx0.h <= A.y1 + 0.5 && !L.some(function(o){ return _evpColide(c, o, (o.m != null ? o.m : m) - 0.5); }); };   // o.m = folga própria da peça
+  if(livre(cx0.y)) return { y:cx0.y, movida:false, ok:true };
+  const cands = [Math.max(A.y, Math.min(A.y1 - cx0.h, cx0.y))];
+  L.forEach(function(o){ const mo = o.m != null ? o.m : m; cands.push(o.y - mo - cx0.h, o.y + o.h + mo); });
+  let best = null; cands.forEach(function(y){ if(livre(y) && (best == null || Math.abs(y - cx0.y) < Math.abs(best - cx0.y))) best = y; });
+  return best == null ? { y:cx0.y, movida:false, ok:false } : { y:best, movida:true, ok:true };
+}
+/* registro leve por quadro (para a conferência e para quem estiver olhando): { t, tipo:"fora_area"|"encostando"|"palavra_reduzida", quem } */
+const _evpLayoutAvisos = [];
+function _evpLayoutAviso(t, tipo, quem, extra){
+  const tt = Math.round((Number(t) || 0) * 100) / 100, u = _evpLayoutAvisos[_evpLayoutAvisos.length - 1];
+  if(u && u.tipo === tipo && u.quem === quem && Math.abs(u.t - tt) < 0.5){ u.t = tt; return; }      // o mesmo aviso quadro após quadro: guarda um só
+  _evpLayoutAvisos.push(Object.assign({ t:tt, tipo:tipo, quem:String(quem || "") }, extra || {}));
+  if(_evpLayoutAvisos.length > 300) _evpLayoutAvisos.splice(0, _evpLayoutAvisos.length - 300);
+}
+function _evpLayoutLista(t, d){ if(t == null) return _evpLayoutAvisos.slice(); d = d == null ? 0.5 : d; return _evpLayoutAvisos.filter(function(a){ return Math.abs(a.t - t) <= d; }); }
+
 function _evgItens(kit, tipo){ return ((kit && kit._galeria) || []).filter(function(x){ return x && x.tipo === tipo && x.ativo !== false; }); }
 function _evgAchar(kit, id){ if(!id || id === "app") return null; return ((kit && kit._galeria) || []).find(function(x){ return x && x.id === id && x.ativo !== false; }) || null; }
 /* padrão automático: só o que o CLIENTE marcou (unidade primeiro). Modelo Pixels nunca entra sozinho. */
@@ -140109,8 +140253,8 @@ function _evgQuebrar(cx, texto, maxW, lista){
   return linhas;
 }
 /* acha o maior tamanho de letra (de fs0 até fs0/2) em que o texto cabe em maxW × maxH com no máximo maxL linhas */
-function _evgCaber(cx, texto, campo, fam, maxW, maxH, fs0){
-  const peso = campo.peso || 800, maxL = Math.max(1, Math.min(8, Number(campo.max_linhas) || 2)), lh = 1.14;
+function _evgCaber(cx, texto, campo, fam, maxW, maxH, fs0, maxL2){
+  const peso = campo.peso || 800, maxL = maxL2 || Math.max(1, Math.min(8, Number(campo.max_linhas) || 2)), lh = 1.14;
   const txt = campo.caixa === "alta" ? String(texto).toUpperCase() : String(texto);
   let fs = fs0, ult = null;
   for(let n=0;n<16;n++){
@@ -140121,9 +140265,19 @@ function _evgCaber(cx, texto, campo, fam, maxW, maxH, fs0){
     if(fs <= fs0 * 0.5) break;
     fs = Math.max(fs0 * 0.5, fs * 0.93);
   }
+  /* v31 (17/10/2026) área segura: não coube em 1 linha nem com a letra na metade → tenta 2 linhas ANTES de diminuir mais */
+  let r2 = null;
+  if(!maxL2 && maxL < 2 && !campo.lista){ r2 = _evgCaber(cx, texto, campo, fam, maxW, maxH, fs0, 2); if(r2.cabe){ r2.quebrou = true; return r2; } }
   cx.font = peso + " " + Math.round(fs) + "px " + fam; _evgEspaco(cx, campo, fs);
-  const ls = _evgQuebrar(cx, txt, maxW * 3, !!campo.lista) || [txt];
-  return { linhas:ls.slice(0, maxL), fs:Math.round(fs), lh:lh, cabe:false };
+  let ls = _evgQuebrar(cx, txt, maxW * 3, !!campo.lista) || [txt];
+  if(maxL === 1 && !campo.lista) ls = [txt.replace(/\s+/g, " ")];
+  else if(ls.length > maxL) ls = ls.slice(0, maxL - 1).concat([ls.slice(maxL - 1).join(" ")]);   // antes as palavras que sobravam sumiam
+  /* v31: a linha mais larga nunca passa da caixa (antes ficava até 3× mais larga e saía da tela): diminui só o que faltar */
+  let red = false;
+  for(let n=0;n<4;n++){ const lw = Math.max.apply(null, ls.map(function(l){ return cx.measureText(l).width; }).concat([1])); if(lw <= maxW + 0.5) break;
+    red = true; fs = Math.max(4, fs * maxW / lw * 0.99); cx.font = peso + " " + Math.round(fs) + "px " + fam; _evgEspaco(cx, campo, fs); }
+  const r1 = { linhas:ls, fs:Math.round(fs), lh:lh, cabe:false, reduzida:red };
+  return r2 && r2.fs > r1.fs && (!maxH || r2.linhas.length * r2.fs * lh <= maxH + 1) ? Object.assign(r2, { quebrou:true }) : r1;
 }
 function _evgEscrever(cx, lay, campo, cor, x, y, w, alinhar, fam){
   const peso = campo.peso || 800;
@@ -140147,9 +140301,10 @@ function _evgDesenhar(cx, W, H, it, vals, o){
   const pos = d.pos || {}, esc = Math.max(0.3, Math.min(3, Number(obj.tam) || 1));
   const cxX = W * (Number(pos.x) >= 0 ? Number(pos.x) : 0.5) + (Number(obj.dx) || 0) * W;
   const cyY = obj.y != null && isFinite(Number(obj.y)) ? H * Number(obj.y) : H * (Number(pos.y) >= 0 ? Number(pos.y) : 0.3);
-  const larg = U * Math.max(0.1, Math.min(1, Number(pos.larg) || 0.8)) * esc;
+  const A = _evpAreaSegura(W, H);                                  // v31 (17/10/2026) área segura: a caixa nunca é mais larga que a área
+  const larg = Math.min(A.w, U * Math.max(0.1, Math.min(1, Number(pos.larg) || 0.8)) * esc);
   const campos = (Array.isArray(d.campos) ? d.campos : []).filter(function(c){ return c && String(vals[c.id] || "").trim(); });
-  let box, lays = [], cabe = true, im = null;
+  let box, lays = [], cabe = true, im = null, reduz = false;
   if(d.midia === "imagem" && d.url){
     im = o.img ? o.img(d.url) : null;
     const pr = Number(d.h) > 0 && Number(d.w) > 0 ? Number(d.h) / Number(d.w) : (im && im.naturalWidth ? im.naturalHeight / im.naturalWidth : 0.3);
@@ -140159,7 +140314,7 @@ function _evgDesenhar(cx, W, H, it, vals, o){
       const r = { x:box.x + (Number(c.x) || 0) * w, y:box.y + (Number(c.y) || 0) * h, w:Math.max(4, (Number(c.w) || 1) * w), h:Math.max(4, (Number(c.h) || 1) * h) };
       const fam = _evgFamilia(c, kit), maxL = Math.max(1, Number(c.max_linhas) || 1);
       const lay = _evgCaber(cx, vals[c.id], c, fam, r.w, r.h, Math.min(r.h / maxL / 1.14, U * 0.2, Number(c.fs_rel) > 0 ? Number(c.fs_rel) * w : 1e9));
-      if(!lay.cabe) cabe = false;
+      if(!lay.cabe) cabe = false; if(lay.reduzida) reduz = true;
       lays.push({ c:c, lay:lay, r:r, fam:fam, fundo:null });
     });
   } else {
@@ -140171,7 +140326,7 @@ function _evgDesenhar(cx, W, H, it, vals, o){
     campos.forEach(function(c, i){
       const fam = _evgFamilia(c, kit);
       const lay = _evgCaber(cx, vals[c.id], c, fam, maxW, 0, U * (Number(c.tam) || 0.07) * esc);
-      if(!lay.cabe) cabe = false;
+      if(!lay.cabe) cabe = false; if(lay.reduzida) reduz = true;
       cx.font = (c.peso || 800) + " " + lay.fs + "px " + fam;
       lay.linhas.forEach(function(l){ wT = Math.max(wT, cx.measureText(l).width); });
       lays.push({ c:c, lay:lay, fam:fam, fundo:fundo, hh:lay.linhas.length * lay.fs * lay.lh });
@@ -140182,9 +140337,12 @@ function _evgDesenhar(cx, W, H, it, vals, o){
     let yy = box.y + pad * 0.7;
     lays.forEach(function(q, i){ if(i) yy += gap; q.r = { x:barra ? pad : box.x + pad, y:yy, w:barra ? W - pad*2 : w - pad*2, h:q.hh }; yy += q.hh; });
   }
-  // nunca sai da tela para os lados
-  if(box.w < W){ const m = W * 0.02; const sh = Math.max(m - box.x, 0) - Math.max(box.x + box.w - (W - m), 0); if(sh){ box.x += sh; lays.forEach(function(q){ q.r.x += sh; }); } }
-  if(o.sem) return { x:box.x, y:box.y, w:box.w, h:box.h, cabe:cabe };
+  // nunca sai da tela para os lados · v31 (17/10/2026): a caixa inteira fica DENTRO da área segura (antes: 2% das bordas e só na horizontal).
+  // Só anda o que estava fora — a caixa que já cabia fica no mesmo lugar.
+  const ench = _evpEncaixarArea(box, A), shX = box.w < W ? ench.dx : 0, shY = ench.dy;
+  if(shX || shY){ box.x += shX; box.y += shY; lays.forEach(function(q){ q.r.x += shX; q.r.y += shY; }); }
+  if(!o.sem && o.t != null){ if(shX || shY) _evpLayoutAviso(o.t, "fora_area", obj.id || it.id, { andou:[Math.round(shX), Math.round(shY)] }); if(reduz) _evpLayoutAviso(o.t, "palavra_reduzida", obj.id || it.id); }
+  if(o.sem) return { x:box.x, y:box.y, w:box.w, h:box.h, cabe:cabe, movida:!!(shX || shY) };
   // animação
   const k = o.anim || { pin:1, pout:1 }, an = obj.anim || d.anim || "pop";
   let sc = 1, al = Math.min(1, k.pout), dx = 0, dy = 0;
@@ -140461,6 +140619,7 @@ function desenharVideo(im, rx, ry, rw, rh, raio, z, focoY){
 
 /* ── LEGENDA palavra a palavra (palavra ativa com fundo na cor da marca) ── */
 let BLOCOS = null;
+let QUADRO = [];            // v31 (17/10/2026) área segura: caixas das partes do palco desenhadas neste quadro (a legenda do palco não encosta nelas)
 function blocos(){
   if(BLOCOS) return BLOCOS; BLOCOS = []; let cur = [];
   (R.palavras || []).forEach((w, i) => { cur.push(w); const fimFrase = /[.,:?!]$/.test(w.p);
@@ -140473,9 +140632,21 @@ function legenda(t, area){
   if(!b) return;
   const ws = b.map((w) => w.p.replace(/[.,:?!]+$/, "").toUpperCase());
   let tam = area.tam, esp, larg, total;
-  for(let k = 0; k < 8; k++){ esp = tam * 0.26; larg = ws.map((s) => medir(s, tam, "Inter", 800, "", -1)); total = larg.reduce((a, c) => a + c, 0) + esp * (ws.length - 1) + tam * 0.36;
+  const medeL = () => { esp = tam * 0.26; larg = ws.map((s) => medir(s, tam, "Inter", 800, "", -1)); total = larg.reduce((a, c) => a + c, 0) + esp * (ws.length - 1) + tam * 0.36; };
+  for(let k = 0; k < 8; k++){ medeL();
     if(!area.maxW || total <= area.maxW) break; tam *= Math.max(0.7, area.maxW / total); }
-  let x = area.cx - total / 2; const y = area.y, ent = EOUT(prog(t, b[0].t0 - 0.04, 0.16));
+  let y = area.y;
+  /* v31 (17/10/2026) área segura: no palco "metade" a legenda não encosta no título, no fluxo/contadores, no rodapé nem corta a borda do
+     vídeo (folga de 2% da altura): vai para o espaço livre mais perto (acima/abaixo); sem espaço, fica 28% menor; sem jeito, fica e avisa.
+     Onde já estava livre, não anda (o que muda é só o caso que encostava — ex.: palco com fluxo de 3 passos). */
+  if(area.obst && area.obst.length){
+    const A = _evpAreaSegura(W, H), m = H * _EVP_AREA_SEGURA.folga, cxL = () => ({ x: area.cx - total / 2 - tam * 0.18, y: y - tam * 0.92, w: total + tam * 0.36, h: tam * 1.18 });
+    let c0 = cxL(), r = _evpLegLivre(c0, area.obst, A, m);
+    if(!r.ok){ const tam0 = tam; tam = tam0 * 0.72; medeL(); const c2 = cxL(), r2 = _evpLegLivre(c2, area.obst, A, m); if(r2.ok){ c0 = c2; r = r2; } else { tam = tam0; medeL(); } }
+    if(r.ok && r.movida){ y += r.y - c0.y; _evpLayoutAviso(t, "encostando", "legenda_palco", { andou: Math.round(r.y - c0.y) }); }
+    else if(!r.ok) _evpLayoutAviso(t, "encostando", "legenda_palco");
+  }
+  let x = area.cx - total / 2; const ent = EOUT(prog(t, b[0].t0 - 0.04, 0.16));
   X.save(); X.globalAlpha = ent;
   ws.forEach((s, i) => { const w = b[i], ativo = t >= w.t0 - 0.02 && (i === ws.length - 1 || t < b[i + 1].t0 - 0.02);
     if(ativo){ const pa = EOUT(prog(t, w.t0 - 0.02, 0.12)); X.save(); X.fillStyle = tech() ? R.marca.logo : R.marca.pri; X.globalAlpha = ent; if(tech()){ X.shadowColor = cL(.95); X.shadowBlur = 34; }
@@ -140750,15 +140921,20 @@ function palco(it, t, im){
   linhaSobe(prog(t, c0, 0.45), col.x, cy + 56, it.rotulo, fR.tam, "Inter", escuro ? R.tom.t2 : "#6b6478", { peso: 700, esp: 3.5 });
   fT.linhas.forEach((ln, i) => linhaSobe(prog(t, c0 + 0.08 + i * 0.07, 0.55), col.x - 3, yT(i), ln, fT.tam, "Anton", tinta, { esp: 1 }));
   fS.linhas.forEach((ln, i) => linhaSobe(prog(t, c0 + 0.16 + i * 0.07, 0.55), col.x, yS(i), ln, fS.tam, "ISerif", sub, { estilo: "italic" })); }
+  /* v31 (17/10/2026) área segura: guarda onde fica cada parte do palco neste quadro (a legenda do palco não encosta nelas) */
+  const qd = (b) => { if(!SO_CONT) QUADRO.push({ x: b.x + DX, y: b.y + DY, w: b.w, h: b.h, quem: b.quem }); };
+  qd({ x: col.x, y: cy, w: col.w, h: (fS.linhas.length ? yS(fS.linhas.length - 1) + fS.tam * 0.3 : yT(fT.linhas.length - 1) + fT.tam * 0.25) - cy, quem: "palco_titulo" });
   if(it.rodape){ const fRo = ajusta(it.rodape, 22, "Inter", W - 2 * SAFE.lado - 8, { peso: 700, esp: 3 }, 1, 0.6);          // v33: rodapé dentro da área segura (era SAFE.base + 92)
-    linhaSobe(prog(t, c0 + 0.5, 0.5), SAFE.lado + 4, c.metade ? cy + (temBaixo ? 362 + 150 + 40 : 330 + 44) : SAFE.base - 12, it.rodape, fRo.tam, "Inter", escuro ? cT(.75) : "#6b6478", { peso: 700, esp: 3 }); }
+    const yRo = c.metade ? cy + (temBaixo ? 362 + 150 + 40 : 330 + 44) : SAFE.base - 12; qd({ x: SAFE.lado, y: yRo - 22, w: W - 2 * SAFE.lado, h: 28, quem: "palco_rodape" });
+    linhaSobe(prog(t, c0 + 0.5, 0.5), SAFE.lado + 4, yRo, it.rodape, fRo.tam, "Inter", escuro ? cT(.75) : "#6b6478", { peso: 700, esp: 3 }); }
   if(it.marcaDagua){ const md = EASE(prog(t, c0 + 0.2, 0.9)); X.save(); X.globalAlpha *= 0.06 * md; X.font = fonte(380, "Anton"); X.fillStyle = escuro ? "#ffffff" : R.marca.pri;
     X.fillText(it.marcaDagua, SAFE.lado - 30 - ((t - it.t0) * 14) % 400, c.metade ? c.y - 30 : SAFE.base + 520); X.restore(); }
   (it.dentro || []).forEach((d) => {
-    if(d.modelo === "mapa"){ const box = it.lado === "esquerda" ? { x: col.x, y: cy + 360, w: col.w, h: 580 } : { x: SAFE.lado - 10, y: cy + 352, w: c.x - SAFE.lado - 20, h: 560 }; mapa(d, t, prog(t, c0 + 0.25, 0.6), box); }
-    if(d.modelo === "contadores"){ const m2 = it.dentro.find((q) => q.modelo === "mapa"); contadores(d, t, prog(t, c0 + 0.6, 0.6), m2, c.metade ? { x: SAFE.lado, y: cy + 350, w: W - 2 * SAFE.lado, h: 170 } : { x: c.x, y: c.y + c.h + 26, w: c.w, h: 170 }); }
-    if(d.modelo === "fluxo") fluxo(d, t, 1, { x: SAFE.lado, y: c.metade ? cy + 362 : c.y + c.h + 40, w: W - 2 * SAFE.lado, h: 150 });
-    if(d.modelo === "grafico") grafico(d, t, prog(t, c0 + 0.3, 0.6), { x: col.x, y: cy + 372, w: col.w, h: 396 });
+    if(d.modelo === "mapa"){ const box = it.lado === "esquerda" ? { x: col.x, y: cy + 360, w: col.w, h: 580 } : { x: SAFE.lado - 10, y: cy + 352, w: c.x - SAFE.lado - 20, h: 560 }; mapa(d, t, prog(t, c0 + 0.25, 0.6), box); qd(Object.assign({ quem: "palco_mapa" }, box)); }
+    if(d.modelo === "contadores"){ const m2 = it.dentro.find((q) => q.modelo === "mapa"); const bC = c.metade ? { x: SAFE.lado, y: cy + 350, w: W - 2 * SAFE.lado, h: 170 } : { x: c.x, y: c.y + c.h + 26, w: c.w, h: 170 }; contadores(d, t, prog(t, c0 + 0.6, 0.6), m2, bC); qd(Object.assign({ quem: "palco_contadores" }, bC)); }
+    if(d.modelo === "fluxo"){ const bF = { x: SAFE.lado, y: c.metade ? cy + 362 : c.y + c.h + 40, w: W - 2 * SAFE.lado, h: 150 }; fluxo(d, t, 1, bF);
+      qd({ x: bF.x, y: bF.y - 6, w: bF.w, h: bF.h + 12, quem: "palco_fluxo" }); }                     // v31: + a mola dos cartões (cresce ~4%)
+    if(d.modelo === "grafico"){ grafico(d, t, prog(t, c0 + 0.3, 0.6), { x: col.x, y: cy + 372, w: col.w, h: 396 }); qd({ x: col.x, y: cy + 372, w: col.w, h: 396, quem: "palco_grafico" }); }
   });
   X.restore();
   // v53: na metade a legenda fica na faixa roxa logo acima do vídeo (embaixo, até a área do Reels, ela cairia em cima do rosto)
@@ -140766,6 +140942,7 @@ function palco(it, t, im){
   //   it.leg_dy = ajuste à mão (px, o sócio puxa para cima/baixo no inspetor); sempre dentro da área segura.
   let leg = c.metade ? (it.rodape ? { y: c.y + 78, tam: 46, maxW: W - 2 * SAFE.lado } : c.y >= 900 ? { y: c.y - 36, tam: 44, maxW: W - 2 * SAFE.lado } : { y: c.y - 70, tam: 50, maxW: W - 2 * SAFE.lado }) : null;
   if(it.leg_dy){ const b0 = leg || { y: ry + rh - 56, tam: 40, maxW: rw - 36, cx: rx + rw / 2 }; leg = Object.assign({}, b0, { y: cl(b0.y + it.leg_dy, SAFE.topo + 40, SAFE.base - 10) }); }
+  if(c.metade && !SO_CONT) QUADRO.push({ x: 0, y: ry, w: W, h: 0, m: 4, quem: "palco_cartao" });   // v31: a borda de cima do vídeo — a legenda fica toda acima ou toda abaixo · revisão 0A.2: folga de 4 px (com 2% = 38 px a legenda desenhada a 24/36 px da borda — c.y ≥ 900 e com rodapé — andava sem precisar)
   if(SO_CONT) return { card: { x: rx, y: ry, w: rw, h: rh }, s, leg };              // v38: medindo a caixa do conteúdo
   // o vídeo dentro do quadro
   X.save(); if(s > 0.02){ X.shadowColor = "rgba(0,0,0," + (0.45 * s) + ")"; X.shadowBlur = 60 * s; X.shadowOffsetY = 26 * s; X.fillStyle = "#000"; ret(rx, ry, rw, rh, raio); X.fill(); } X.restore();
@@ -140777,7 +140954,7 @@ function palco(it, t, im){
       X.fillStyle = pi ? "#ff4670" : "rgba(255,70,112,.35)"; X.beginPath(); X.arc(rx + 36, ry + 35, 7, 0, Math.PI * 2); X.fill(); texto(rx + 50, ry + 43, "REC", 22, "Mono", "#ffffff"); }
     const cg = X.createLinearGradient(0, ry + rh - 220, 0, ry + rh); cg.addColorStop(0, "rgba(0,0,0,0)"); cg.addColorStop(1, "rgba(0,0,0,.55)"); X.fillStyle = cg; ret(rx, ry, rw, rh, raio); X.fill();
     X.restore(); }
-  return { card: { x: rx, y: ry, w: rw, h: rh }, s, leg };
+  return { card: { x: rx, y: ry, w: rw, h: rh }, s, leg, obst: QUADRO.slice() };
 }
 
 /* ── TRANSIÇÃO "MARCA" (faixas com as cores da marca) ── */
@@ -141221,7 +141398,7 @@ API.preparar = function(ctx, mot, info){ X = ctx; INFO = info;
   return API; };
 let _snap = null;
 API.palco = function(ctx, tela, t){
-  X = ctx; const pal = R.itens.filter((i) => i.modelo === "palco"); const p = pal.find((q) => palcoEstado(q, t) > 0); if(!p) return null;
+  X = ctx; QUADRO = []; const pal = R.itens.filter((i) => i.modelo === "palco"); const p = pal.find((q) => palcoEstado(q, t) > 0); if(!p) return null;
   if(!_snap) _snap = document.createElement("canvas"); if(_snap.width !== W) _snap.width = W; if(_snap.height !== H) _snap.height = H;
   const sx = _snap.getContext("2d"); sx.setTransform(1, 0, 0, 1, 0, 0); sx.globalAlpha = 1; sx.globalCompositeOperation = "source-over"; sx.clearRect(0, 0, W, H); sx.drawImage(tela, 0, 0, W, H);
   X.save(); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1; X.globalCompositeOperation = "source-over";     // o fundo do palco é opaco: cobre a tela toda
@@ -141243,13 +141420,15 @@ API.sobre = function(ctx, t, emPalco){
   R.itens.forEach((it) => { if(_EVM_ESCONDE.indexOf(it.modelo) >= 0) des(it); });                     // v34: numero, lista, antesdepois, citacao
   R.itens.forEach((it) => { if(it.modelo === "receita") des(it); });                                   // v74: motions de receita
   R.itens.forEach((it) => { if(it.modelo === "selo") des(it); });                                      // v34: o selo fica por cima
-  if(emPalco && emPalco.s > 0.6) legenda(t, emPalco.leg ? { cx: emPalco.leg.cx || W / 2, y: emPalco.leg.y, tam: emPalco.leg.tam, maxW: emPalco.leg.maxW }       // v53: palco "metade" · v56d: + ajuste à mão
+  if(emPalco && emPalco.s > 0.6) legenda(t, emPalco.leg ? { cx: emPalco.leg.cx || W / 2, y: emPalco.leg.y, tam: emPalco.leg.tam, maxW: emPalco.leg.maxW, obst: emPalco.obst }       // v53: palco "metade" · v56d: + ajuste à mão · v31: + não encostar
     : { cx: emPalco.card.x + emPalco.card.w / 2, y: emPalco.card.y + emPalco.card.h - 56, tam: 40, maxW: emPalco.card.w - 36 });
   const ctaIt = R.itens.find((i) => i.modelo === "cta"); if(ctaIt) des(ctaIt);
   R.itens.forEach((it) => { if(it.modelo === "palco" && it.entrada === "marca") comPeca(it, false, () => marcaWipe(it.t0, t)); });
   X.restore();
 };
 API.SAFE = SAFE; API.W = W; API.H = H;
+API.avisosLayout = function(t){ return _evpLayoutLista(t); };          // v31 (17/10/2026) área segura: avisos perto do tempo t (sem t = todos)
+API.quadro = function(){ return QUADRO.slice(); };                       // v31: caixas do palco no último quadro (para conferir)
 API._teste = { ajusta: (...a) => ajusta(...a), medir: (...a) => medir(...a), usar: (ctx, est) => { X = ctx; R = R || {}; R = Object.assign({}, R, { estilo: est }); } };   // v33: só para os testes automáticos
 return API;
 })();
@@ -141726,6 +141905,25 @@ function _evpMotor(canvas, o){
   /* v38: dados do motion (a paleta de cada peça sai de evmMarcaDe, que guarda pronta por cor) e consultas do player (clicar e arrastar a peça) */
   const evmInfo = function(){ return { marca:evmMarcaDe(calc.motion.cor), marcaDe:evmMarcaDe, palavras:evmPalavras(), fim:calc.fimCortes, logo:logo, nome:(base && base.nome) || "" }; };
   const evmUsa = function(fn, nada){ if(!evmLiga() || evmErro) return nada; try{ _EVM.preparar(cx, calc.motion, evmInfo()); return fn(); }catch(_){ return nada; } };
+  /* v31 (17/10/2026) área segura: caixas das peças do motion na tela agora (a legenda do editor não encosta nelas).
+     Revisão 0A.2: a caixa de cada peça é a SOMA de 3 momentos FIXOS da vida dela (entrada assentada, meio, fim) — calculada uma vez por peça
+     (muda só se a peça andar/crescer ou o motion mudar). Antes era medida a cada 0,1 s no 1º quadro que caísse ali: a legenda seguia a animação
+     de entrada em degraus e o resultado dependia da ordem dos quadros (prévia × gravação no PC). Agora é a mesma posição em todo quadro. */
+  const legObstC = new Map(); let legObstDe = null;
+  const legObstMotion = function(){
+    if(!evmLiga() || evmErro || !calc.motion || !Array.isArray(calc.motion.itens)) return [];
+    if(legObstDe !== calc.motion){ legObstDe = calc.motion; legObstC.clear(); }
+    const out = [];
+    calc.motion.itens.forEach(function(it, i){
+      if(!it || ["numero", "lista", "antesdepois", "citacao", "selo", "cta", "receita", "manchete"].indexOf(it.modelo) < 0 || t < it.t0 || (it.modelo !== "cta" && t >= it.t1)) return;
+      const k = i + ":" + it.t0 + ":" + it.t1 + ":" + (it.dx || 0) + ":" + (it.dy || 0) + ":" + (it.esc || 1); let c = legObstC.get(k);
+      if(c === undefined){
+        const fim = it.modelo === "cta" ? Math.max(it.t0 + 0.6, (it.marca_t || it.t0) + 1) : it.t1 - 0.34, a = it.t0 + 0.05, z = Math.max(a, it.modelo === "cta" ? fim : Math.min(fim, it.t1 - 0.05));
+        c = null; [it.t0 + 0.7, it.t0 + 1.5, fim].forEach(function(tt){ tt = Math.max(a, Math.min(z, tt)); const b = evmUsa(function(){ return _EVM.caixa(i, tt); }, null);
+          if(b) c = c ? { x:Math.min(c.x, b.x), y:Math.min(c.y, b.y), w:Math.max(c.x + c.w, b.x + b.w) - Math.min(c.x, b.x), h:Math.max(c.y + c.h, b.y + b.h) - Math.min(c.y, b.y) } : b; });
+        if(legObstC.size > 60) legObstC.clear(); legObstC.set(k, c); }
+      if(c) out.push(Object.assign({ id:"motion:" + i, tipo:"motion", modelo:it.modelo }, c)); });
+    return out; };
   let evmRefazer = false;
   /* roteiro com defeito: desliga só o motion deste vídeo, desfaz o estado da tela (save/clip que ficaram abertos) e redesenha o quadro limpo */
   const evmFalhou = function(e){ evmErro = true; evmRefazer = true; try{ for(let k = 0; k < 64; k++) cx.restore(); cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
@@ -142282,19 +142480,26 @@ function _evpMotor(canvas, o){
   function animK(x, tt){ const pin = _evClamp((tt - x.t0)/0.3, 0, 1), pout = x.saida && x.saida !== "sumir" ? 1 : _evClamp((x.t1 - tt)/0.25, 0, 1); return { pin:pin, pout:pout }; }   // v26: saída escolhida
   /* v12: GC / elemento da GALERIA do Kit (arte do cliente ou Modelo Pixels) — a caixa guarda o centro (yRef) para arrastar */
   function desenharModelo(x, it){
-    const r = _evgDesenhar(cx, W, H, it, _evgValores(it, x, kit, base), { kit:kit, img:imagem, x:x, anim:animK(x, t) });
+    const r = _evgDesenhar(cx, W, H, it, _evgValores(it, x, kit, base), { kit:kit, img:imagem, x:x, anim:animK(x, t), t:t });   // v31: t = para o registro da área segura
     const pos = (it.dados && it.dados.pos) || {};
     caixas.push({ id:x.id, x:r.x, y:r.y, w:r.w, h:r.h, yRef:x.y != null ? Number(x.y) : (Number(pos.y) >= 0 ? Number(pos.y) : 0.3), modelo:it.id });
   }
   function desenharTarja(x){
     const k0 = animK(x, t), k = Math.min(1 - Math.pow(1 - k0.pin, 3), k0.pout);
-    const y = x.y!=null ? H * x.y : H*0.62, dx = (x.anim === "nenhuma" ? 0 : -(1-k)*W*0.6) + _evpNum(x.dx, 0) * W, modelo = kit.tarja_modelo || "barra";
+    let y = x.y!=null ? H * x.y : H*0.62; const dx = (x.anim === "nenhuma" ? 0 : -(1-k)*W*0.6) + _evpNum(x.dx, 0) * W, modelo = kit.tarja_modelo || "barra";
     const cc = x.corHex ? [x.corHex, _evpCorContraste(x.corHex), x.corHex] : coresTx(x.cor), cor = cc[0], cTxt = cc[1];   // v26: cor livre
     const F2 = x.fonte ? "\"" + x.fonte + "\", " + F : F;
-    cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, k*1.3)); const tam = x.tam || 1;
-    cx.font = "800 " + Math.round(50*tam) + "px " + F2; const wn = cx.measureText(x.texto).width;
-    cx.font = "600 " + Math.round(36*tam) + "px " + F2; const w2 = x.linha2 ? cx.measureText(x.linha2).width : 0;
+    cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, k*1.3)); let tam = x.tam || 1, wn = 0, w2 = 0;
     const bx0 = 60 + _evpNum(x.dx, 0) * W;
+    /* v31 (17/10/2026) área segura: a tarja não passa da borda DIREITA da área nem sai por cima/baixo (a esquerda encostada é o desenho dela) */
+    const A = _evpAreaSegura(W, H), medeT = function(){ cx.font = "800 " + Math.round(50*tam) + "px " + F2; wn = cx.measureText(x.texto).width;
+      cx.font = "600 " + Math.round(36*tam) + "px " + F2; w2 = x.linha2 ? cx.measureText(x.linha2).width : 0;
+      return modelo === "etiqueta" ? [bx0, Math.max(wn, w2) + 64*tam, (x.linha2 ? 138 : 92)*tam] : modelo === "discreta" ? [bx0, Math.max(wn, w2) + 40, (x.linha2 ? 120 : 70)*tam]
+        : [_evpNum(x.dx, 0) * W, wn + 90*tam + (x.linha2 ? w2 + 60*tam : 0), 96*tam]; };
+    let mT = medeT(), redT = false;
+    for(let n=0;n<4 && mT[0] + mT[1] > A.x1 + 0.5;n++){ const kT = Math.max(0.3, (A.x1 - Math.max(0, mT[0])) / mT[1]); if(kT >= 0.995) break; tam *= kT * 0.99; redT = true; mT = medeT(); }
+    const yT0 = y; y = Math.max(A.y, Math.min(A.y1 - mT[2], y));
+    if(redT) _evpLayoutAviso(t, "palavra_reduzida", x.id); if(Math.abs(y - yT0) > 0.5) _evpLayoutAviso(t, "fora_area", x.id, { andou:[0, Math.round(y - yT0)] });
     if(modelo === "etiqueta") caixas.push({ id:x.id, x:bx0, y:y, w:Math.max(wn, w2) + 64*tam, h:(x.linha2 ? 138 : 92)*tam });
     else if(modelo === "discreta") caixas.push({ id:x.id, x:bx0, y:y, w:Math.max(wn, w2) + 50, h:(x.linha2 ? 120 : 70)*tam });
     else caixas.push({ id:x.id, x:_evpNum(x.dx, 0) * W, y:y, w:wn + 90*tam + (x.linha2 ? w2 + 60*tam : 0), h:96*tam });
@@ -142328,12 +142533,22 @@ function _evpMotor(canvas, o){
     const FX = x.fonte ? "\"" + x.fonte + "\", " + F : F;
     const comFundo = x.fundo !== false;
     cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, al));
-    const fs = Math.round((destaque ? 86 : 64) * tam); cx.font = (x.italico ? "italic " : "") + (destaque ? "900 " : "800 ") + fs + "px " + FX; cx.textBaseline = "middle";
-    if(x.espaco) try{ cx.letterSpacing = Math.round(_evpNum(x.espaco, 0) * fs) + "px"; }catch(_){}                    // v26: espaço entre as letras
-    const linhas = _evQuebra(cx, (destaque ? txtV.toUpperCase() : txtV).split(/\s+/).filter(Boolean), W*0.8);
-    const lh = fs * 1.18 * _evClamp(_evpNum(x.entre, 1), 0.6, 2.5), bw = Math.max.apply(null, linhas.map(function(l){ return cx.measureText(l.join(" ")).width; }).concat([10])) + 70*tam, bh = linhas.length*lh + 40*tam;
-    const cy = x.y!=null ? H * x.y : (x.pos === "meio" ? H*0.45 : x.pos === "baixo" ? H*0.72 : H*0.2);
-    const cxX = W/2 + _evpNum(x.dx, 0) * W;
+    let fs = Math.round((destaque ? 86 : 64) * tam);
+    const fonteTx = function(){ cx.font = (x.italico ? "italic " : "") + (destaque ? "900 " : "800 ") + fs + "px " + FX; cx.textBaseline = "middle";
+      if(x.espaco) try{ cx.letterSpacing = Math.round(_evpNum(x.espaco, 0) * fs) + "px"; }catch(_){} };                // v26: espaço entre as letras
+    fonteTx();
+    /* v31 (17/10/2026) área segura: a linha não passa da largura segura (80% da tela, ou menos se a área for menor); palavra sozinha maior
+       que isso ou caixa mais alta que a área → a letra diminui só o que faltar. Texto que já cabia fica igual. */
+    const A = _evpAreaSegura(W, H), pal = (destaque ? txtV.toUpperCase() : txtV).split(/\s+/).filter(Boolean), entre = _evClamp(_evpNum(x.entre, 1), 0.6, 2.5);
+    let linhas, lh, bw, bh, red = false;
+    const medeTx = function(){ const mW = Math.min(W*0.8, A.w - 70*tam); linhas = _evQuebra(cx, pal, mW); lh = fs * 1.18 * entre;
+      const lm = Math.max.apply(null, linhas.map(function(l){ return cx.measureText(l.join(" ")).width; }).concat([10])); bw = lm + 70*tam; bh = linhas.length*lh + 40*tam; return Math.min(1, mW / lm, A.h / bh); };
+    for(let n=0;n<5;n++){ const k = medeTx(); if(k >= 0.995) break; red = true; fs = Math.max(8, Math.floor(fs * k)); fonteTx(); }
+    let cy = x.y!=null ? H * x.y : (x.pos === "meio" ? H*0.45 : x.pos === "baixo" ? H*0.72 : H*0.2);
+    let cxX = W/2 + _evpNum(x.dx, 0) * W;
+    const ench = _evpEncaixarArea({ x:cxX - bw/2, y:cy - bh/2, w:bw, h:bh }, A); cxX += ench.dx; cy += ench.dy;
+    if(ench.dx || ench.dy) _evpLayoutAviso(t, "fora_area", x.id, { andou:[Math.round(ench.dx), Math.round(ench.dy)] });
+    if(red) _evpLayoutAviso(t, "palavra_reduzida", x.id);
     caixas.push({ id:x.id, x:cxX - bw/2, y:cy - bh/2, w:bw, h:bh });
     cx.translate(cxX, cy + dy); cx.scale(sc, sc); if(destaque) cx.rotate(-0.02);
     const al2 = x.alinha === "esq" ? "left" : x.alinha === "dir" ? "right" : "center", xT = al2 === "left" ? -bw/2 + 35*tam : al2 === "right" ? bw/2 - 35*tam : 0;   // v26: alinhamento
@@ -142389,7 +142604,7 @@ function _evpMotor(canvas, o){
     /* v78: sem pontuação (opcional) e "Formato título" vêm do _evpCaixaLeg */
     const tiraP = function(s){ return lg.semPont ? String(s).replace(/[.,!?;:…"“”]+/g, "") || String(s) : String(s); };
     const ws = b.words.map(function(w){ return Object.assign({}, w, { p:tiraP(_evpCaixaLeg(lg, String(w.p))) }); });
-    const maxW = W * 0.82;
+    const AL = _evpAreaSegura(W, H), maxW = Math.min(W * 0.82, AL.w);       // v31 (17/10/2026) área segura: 82% da tela ou a largura segura, o que for menor
     /* v78: AJUSTE AUTOMÁTICO — a frase cabe numa linha diminuindo a letra (até 62%), em vez de quebrar */
     if(lg.autoTam){ const sp0 = cx.measureText(" ").width, tot = ws.reduce(function(s2, w, k){ return s2 + cx.measureText(w.p).width + (k ? sp0 : 0); }, 0);
       if(tot > maxW){ const k2 = Math.max(0.62, maxW / tot); fs = Math.round(fs * k2); cx.font = ital + peso + " " + fs + "px " + FL; try{ cx.letterSpacing = espL ? (fs * espL).toFixed(1) + "px" : "0px"; }catch(_){} } }
@@ -142404,8 +142619,24 @@ function _evpMotor(canvas, o){
       for(let k=0;k<pg;k++) n0 += linhas[k].length;
       linhas = linhas.slice(pg, pg + maxL);
     }
-    const kL = modo ? modo.k : 1, yc = modo ? Math.max(_evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), modo.yMin) : _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), dxL = W * _evpNum(lg.dx, 0);
+    let kL = modo ? modo.k : 1, yc = modo ? Math.max(_evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H), modo.yMin) : _evpLegCentro(calc.posLegenda, lg.y, linhas.length, lh, H); const dxL = W * _evpNum(lg.dx, 0);
     const cxB = W / 2 + dxL;
+    /* v31 (17/10/2026) área segura — (a) palavra SOZINHA mais larga que a linha encolhe só ela (até 70%; abaixo disso fica nos 70% e avisa);
+       (b) a legenda não encosta nas peças já desenhadas neste quadro (textos, galeria, tarja, peças do motion) nem sai da área: vai para o
+       espaço livre mais perto (acima/abaixo da peça); sem espaço, tenta a versão menor (72%); sem jeito, fica e avisa "encostando".
+       O tempo das palavras (karaokê, destaque) não muda. Legenda que já estava livre e dentro da área não anda. */
+    const redP = new Map();
+    linhas.forEach(function(l){ l.forEach(function(w){ const q = _evpPalavraCaber(cx.measureText(w.p).width, maxW); if(q.k < 1){ redP.set(w, q.k); _evpLayoutAviso(t, "palavra_reduzida", "legenda", { palavra:String(w.p), minimo:q.minimo }); } }); });
+    (function(){
+      const sp0 = cx.measureText(" ").width, wQ = Math.max.apply(null, linhas.map(function(l){ return l.reduce(function(s2, w, k){ return s2 + cx.measureText(w.p).width * (redP.get(w) || 1) + (k ? sp0 : 0); }, 0); }).concat([10]));
+      const m = H * _EVP_AREA_SEGURA.folga, hQ = linhas.length * lh;
+      const caixaK = function(k){ return { x:cxB - wQ * k / 2, y:yc - hQ * k / 2, w:wQ * k, h:hQ * k }; };
+      const obst = caixas.filter(function(c){ return c && c.id !== "legenda" && c.tipo !== "imagem" && c.w * c.h < W * H * 0.5; }).concat(legObstMotion());
+      let r = _evpLegLivre(caixaK(kL), obst, AL, m);
+      if(!r.ok && kL > 0.72){ const r2 = _evpLegLivre(caixaK(0.72), obst, AL, m); if(r2.ok){ kL = 0.72; r = r2; } }
+      if(r.ok && r.movida){ const c0 = caixaK(kL); yc += r.y - c0.y; const enc = obst.some(function(o){ return _evpColide(caixaK(1), o, 0); }); _evpLayoutAviso(t, enc ? "encostando" : "fora_area", "legenda", { andou:Math.round(r.y - c0.y) }); }
+      else if(!r.ok){ const c0 = caixaK(kL), d = _evpEncaixarArea(c0, AL); yc += d.dy; _evpLayoutAviso(t, "encostando", "legenda"); }
+    })();
     if(kL !== 1){ cx.translate(cxB, yc); cx.scale(kL, kL); cx.translate(-cxB, -yc); }
     const anim = lg.anim || "nenhuma", velA = _evClamp(_evpNum(lg.velAnim, 1) || 1, 0.4, 2.5);
     const hashB = (function(){ let h = 7; const s = String((b.words[0] && b.words[0].chave) || b.a); for(let i=0;i<s.length;i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; })();
@@ -142430,7 +142661,7 @@ function _evpMotor(canvas, o){
     const sp = cx.measureText(" ").width; let n = n0;
     const enfaseL = {}; (Array.isArray(lg.enfase) ? lg.enfase : []).forEach(function(k){ enfaseL[k] = 1; });        // v78: palavras de ênfase (IA ou à mão)
     const escEnf = _evClamp(_evpNum(lg.escEnfase, 1.12), 1, 1.5);
-    const largW = function(w){ return cx.measureText(w.p).width * (enfaseL[w.chave] ? escEnf : 1); };          // a palavra de ênfase ocupa o espaço do tamanho maior
+    const largW = function(w){ return cx.measureText(w.p).width * (enfaseL[w.chave] ? escEnf : 1) * (redP.get(w) || 1); };          // a palavra de ênfase ocupa o espaço do tamanho maior · v31: a reduzida, o menor
     const largLinha = function(l){ return l.reduce(function(s2, w, k){ return s2 + largW(w) + (k ? sp : 0); }, 0); };
     /* v78: ALINHAMENTO — centro (padrão), esquerda, direita ou aleatório (linhas desencontradas) */
     const alinh = ["esq", "dir", "aleatorio"].indexOf(lg.alinh) >= 0 ? lg.alinh : "centro";
@@ -142438,6 +142669,9 @@ function _evpMotor(canvas, o){
       if(alinh === "esq") x0 = W * 0.09 + dxL; else if(alinh === "dir") x0 = W * 0.91 - lw + dxL;
       else if(alinh === "aleatorio" && linhas.length > 1){ const h2 = (hashB >>> (li * 3)) % 3; x0 += (h2 - 1) * W * 0.07; x0 = Math.max(W * 0.06, Math.min(W * 0.94 - lw, x0)); }
       return { x:x0, w:lw, y:yc - (linhas.length*lh)/2 + lh/2 + li*lh }; });
+    (function(){ const a = Math.min.apply(null, posLinhas.map(function(q){ return q.x; }).concat([W])), z = Math.max.apply(null, posLinhas.map(function(q){ return q.x + q.w; }).concat([0]));   // v31: linha que sai da área pelos lados volta para dentro
+      const d = _evpEncaixarArea({ x:cxB + (a - cxB) * kL, y:0, w:(z - a) * kL, h:0 }, { x:AL.x, x1:AL.x1, y:0, y1:0 }).dx / kL;
+      if(Math.abs(d) > 0.5){ posLinhas.forEach(function(q){ q.x += d; }); _evpLayoutAviso(t, "fora_area", "legenda", { andou:Math.round(d) }); } })();
     const xMin = Math.min.apply(null, posLinhas.map(function(q){ return q.x; }).concat([W])), xMax = Math.max.apply(null, posLinhas.map(function(q){ return q.x + q.w; }).concat([0]));
     // área da legenda na tela (para clicar e ARRASTAR na prévia)
     (function(){ const x0 = Math.min(xMin, cxB - 20), x1 = Math.max(xMax, cxB + 20);
@@ -142513,6 +142747,7 @@ function _evpMotor(canvas, o){
         else if(anim === "acende"){ alW = falada ? 0.35 + 0.65 * kA(0.14) : 0.35; }
         if(escF && atual && anim !== "pulso" && anim !== "cresce") esc *= escF;
         if(enfaseL[w.chave]) esc *= escEnf;                             // v78: palavra de ênfase um pouco maior
+        if(redP.has(w)) esc *= redP.get(w);                             // v31: palavra sozinha maior que a linha, encolhida para caber
         if(futura && futOp < 1 && anim !== "acende") alW *= futOp;      // v78: ainda não falada = apagada
         if(alvo === "palavra" && ent){ if(t < w.a) mostra = false; }
         if(mostra){
@@ -142934,6 +143169,7 @@ function _evpMotor(canvas, o){
     motionEm: function(x, y){ return evmUsa(function(){ return _EVM.pecaEm(x, y, t); }, -1); },          // v38: peça de motion no ponto (px da tela)
     motionCaixa: function(i){ return evmUsa(function(){ return _EVM.caixa(i, t); }, null); },             // v38: onde a peça está agora
     motionLimites: function(i){ return evmUsa(function(){ return _EVM.limites(i); }, null); },            // v38: quanto pode andar (área segura)
+    avisosLayout: function(tt){ return _evpLayoutLista(tt == null ? t : tt); },                           // v31 (17/10/2026): área segura — avisos perto do tempo tt
     play: function(){ if(!calc.clips.length) return; if(t >= calc.total - 0.02) t = 0; if(ac.state === "suspended") ac.resume(); agendar(); tocando = true; },
     relIniAudio: function(){ return relIni; },          // v42: hora do AudioContext em que o tempo do vídeo começou (sincronia do som no quadro a quadro)
     pause: function(){ segurar(false); tocando = false; pararAudio(); Object.keys(els).forEach(function(k){ try{ els[k].pause(); }catch(_){} }); Object.keys(els2).forEach(function(k){ try{ els2[k].pause(); }catch(_){} }); },
@@ -143481,6 +143717,25 @@ const _EVP_CSS_MOB = '[data-mob="1"]{touch-action:pan-x pan-y;-webkit-tap-highli
   '[data-mob="1"] [data-rola-flecha]{display:none!important}' +
   '[data-mob="1"] button:active:not(:disabled){filter:brightness(1.18)}' +
   '[data-gaveta] [data-painel-ferr]{border:0!important;box-shadow:none!important;background:transparent!important}[data-gaveta] [data-painel-ferr]>div:first-child{display:none!important}';   // a gaveta já tem título e "Pronto"
+/* v31 (17/10/2026) AVISO "N vídeos novos chegaram no card": conta só os brutos incluídos depois da triagem da IA (incluido.manual) que a versão
+   atual NÃO usa em lugar nenhum (linha do tempo, apoio por cima, som do clipe). O X guarda "já vi" neste computador (localStorage, por edição):
+   o aviso só volta quando chega um vídeo novo de verdade (id que não estava na lista vista). Nada vai para o banco. */
+/* ==== AVISOS PURA ==== */
+function _evpNovosPendentes(clipes, p){
+  const u = {}; p = p || {};
+  (p.clips || []).forEach(function(c){ if(c && c.clipe && !c.off) u[c.clipe] = 1; });
+  (p.imagens || []).forEach(function(x){ if(x && x.camada === "video" && x.clipe) u[x.clipe] = 1; });
+  (p.narracoes || []).forEach(function(n){ if(n && n.fonte === "clipe" && n.clipe) u[n.clipe] = 1; });
+  return (clipes || []).filter(function(c){ return c && c.incluido && c.incluido.manual && !u[c.id]; });
+}
+function _evpNovosAssin(ids){ const v = {}; (ids || []).forEach(function(id){ if(id != null && id !== "") v[_evpHash(String(id))] = 1; }); return Object.keys(v).sort().join(","); }
+function _evpNovosVistos(guardado, ids){ if(!guardado || !(ids || []).length) return false; const g = {}; String(guardado).split(",").forEach(function(h){ g[h] = 1; });
+  return ids.every(function(id){ return g[_evpHash(String(id))]; }); }
+function _evpNovosChave(edId){ return "evp_novos_vistos:" + String(edId || ""); }
+/* ==== FIM AVISOS ==== */
+function _evpNovosLer(edId){ try{ return window.localStorage.getItem(_evpNovosChave(edId)) || ""; }catch(_){ return ""; } }
+function _evpNovosGuardar(edId, ids, antes){ const v = {}; String(antes || "").split(",").concat(_evpNovosAssin(ids).split(",")).forEach(function(h){ if(h) v[h] = 1; });
+  const s = Object.keys(v).sort().join(","); try{ window.localStorage.setItem(_evpNovosChave(edId), s); }catch(_){} return s; }
 function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou, pcAuto, erroAjuste, limparErroAjuste }){
   _evpUsarMidia();
   /* v81: a guarda de vídeo do app (00b: gasta 1 vez + trava de 3 voltas) fica de fora do Estúdio — ele tem o próprio cache e o "repetir trecho" é de propósito */
@@ -143834,6 +144089,11 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   useEffect(function(){
     let vivo = true; setNarrCarregando(true); const chaveCarr = chaveNarr;
     const falhas = [], nomeN = function(n, i){ return n.nome || (n.ia ? "locução da IA" : "narração") + " " + (i + 1); };
+    /* v31 (17/10/2026): o som do microfone já limpo e guardado neste computador entra JÁ (o play não espera as outras narrações) */
+    const micOpc = { ruido:!!p.audio.ruido, voz:!!p.audio.voz, eco:!!p.audio.eco, ecoForca:p.audio.ecoForca, nivelar:!!p.audio.nivelar, hum:p.audio.hum, cliques:!!p.audio.cliques, pops:!!p.audio.pops, eq:p.audio.eq };
+    micItens.forEach(function(n){ if(_evpMicGrande(n._mic)) return;
+      _evpAudio("mic:" + n._mic, _evpMicUrlAbrir(n._mic, n.url)).then(function(a){ return a ? _evpMicCacheLer(n._mic, micOpc) : null; })
+        .then(function(b){ if(b && vivo) setNarr(function(o){ const x = Object.assign({}, o); micItens.forEach(function(q){ if(q._mic === n._mic) x[q.id] = b; }); return x; }); }, function(){}); });
     (async function(){
       const out = {};
       for(const [i, n] of (p.narracoes || []).entries()){
@@ -143848,8 +144108,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       const micBuf = {};                                                        // v88 F3: cada microfone é aberto e limpo UMA vez e serve a todos os clipes
       for(const n of micItens){
         if(!(n._mic in micBuf)){ const a = _evpMicGrande(n._mic) ? null : await _evpAudio("mic:" + n._mic, _evpMicUrlAbrir(n._mic, n.url));   // v30 (16/10/2026) item 5: a cópia leve, se o PC já fez
-          micBuf[n._mic] = a ? await _evpTratar("mic:" + n._mic, { ruido:!!p.audio.ruido, voz:!!p.audio.voz, eco:!!p.audio.eco, ecoForca:p.audio.ecoForca, nivelar:!!p.audio.nivelar,
-            hum:p.audio.hum, cliques:!!p.audio.cliques, pops:!!p.audio.pops, eq:p.audio.eq }) : null;
+          micBuf[n._mic] = a ? await _evpTratarMic(n._mic, micOpc) : null;   // v31: guardado neste computador → segundos
           if(!micBuf[n._mic]) falhas.push("som do microfone"); }
         if(micBuf[n._mic]) out[n.id] = micBuf[n._mic];
       }
@@ -145090,7 +145349,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     })();
   }, [novosCard.map(function(f){ return f.id + (f.previewUrl ? "+" : ""); }).join(","), soVer]);     // v80: a cópia leve chegou → tenta de novo
   const novosIA = ((ed && ed.clipes) || []).filter(function(c){ return c && c.incluido && c.incluido.manual; });   // na Mídia, mas a IA ainda não leu
-  const [reed, setReed] = useState(null), [ocultarNovos, setOcultarNovos] = useState("");
+  const [reed, setReed] = useState(null), [novosVistos, setNovosVistos] = useState(function(){ return _evpNovosLer(ed && ed.id); });   // v31: "já vi" guardado neste computador
+  useEffect(function(){ setNovosVistos(_evpNovosLer(ed && ed.id)); }, [ed && ed.id]);
   const olharReed = function(){ if(!window._sb || !ed || !ed.id) return;
     window._sb.rpc("criacao_edicao_reeditar_status", { p_id:ed.id }).then(function(r){ const d = r && r.data; if(!d || !d.existe) return;
       setReed(function(a){
@@ -145373,7 +145633,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   };
   const verMidiaNovos = function(){ setMenu("bib-midia"); setFerrGlobal({ ferramenta:"midia", sub:null }); if(isMob) setMobBib(true); };
   const reedAtivo = !!(reed && (reed.status === "fila" || reed.status === "processando"));
-  const chaveNovos = novosIA.map(function(c){ return c.id; }).join(",");
+  const novosVer = useMemo(function(){ return _evpNovosPendentes(novosIA, p); }, [novosIA.map(function(c){ return c.id; }).join(","), p.clips, p.imagens, p.narracoes]);   // v31: só os que a versão atual não usa
+  const novosIds = novosVer.map(function(c){ return c.id; }), novosMostra = novosVer.length > 0 && !_evpNovosVistos(novosVistos, novosIds);
+  const fecharNovos = function(){ setNovosVistos(_evpNovosGuardar(ed && ed.id, novosIds, novosVistos)); };
   const chaveNA = naoAbriu.map(function(f){ return f.id; }).join(",");
   const elNaoAbriu = naoAbriu.length && ocultarNA !== chaveNA ? (
     <div data-nao-abriu="1" role="alert" style={Object.assign({}, _EVP_PAINEL, {padding:"8px 10px 8px 12px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontSize:12.5,fontWeight:600,flexShrink:0,borderColor:"rgba(234,179,8,.55)",background:_EVP_COR.aviso})}>
@@ -145382,15 +145644,15 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         <span style={{color:_EVP_COR.sub,fontWeight:500}}> · {naoAbriu.some(function(f){ return !f.leve; }) ? "o navegador não lê este formato (HEVC/HDR). O PC faz a cópia leve e ele entra sozinho." : "o arquivo pode estar estragado: suba de novo no card."}</span></span>
       <button onClick={function(){ setOcultarNA(chaveNA); }} aria-label="Fechar aviso" title="Fechar" style={Object.assign(_evpBtn("icone"), {padding:5})}><_EvpIco n="fechar" s={13}/></button>
     </div>) : null;
-  const elNovos = (reedAtivo || (novosIA.length > 0 && ocultarNovos !== chaveNovos)) ? (
+  const elNovos = (reedAtivo || novosMostra) ? (
     <div data-novos-banner="1" role="status" style={Object.assign({}, _EVP_PAINEL, {padding:"8px 10px 8px 12px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontSize:12.5,fontWeight:600,flexShrink:0,
       borderColor:"rgba(139,92,246,.45)",background:"linear-gradient(90deg, rgba(139,92,246,.18), rgba(139,92,246,0) 70%), " + _EVP_COR.painel})}>
       <span style={{color:_EVP_COR.roxo,display:"grid"}}><_EvpIco n={reedAtivo ? "ia" : "midia"} s={18}/></span>
       {reedAtivo ? <span style={{flex:"1 1 220px",minWidth:0}}>A IA está juntando os vídeos novos no PC…{reed.msg ? <span style={{color:_EVP_COR.sub,fontWeight:500}}> {reed.msg}</span> : null}</span>
-        : <span style={{flex:"1 1 220px",minWidth:0}}>{novosIA.length > 1 ? novosIA.length + " vídeos novos chegaram no card" : "1 vídeo novo chegou no card"}<span style={{color:_EVP_COR.sub,fontWeight:500}}> · já {novosIA.length > 1 ? "estão" : "está"} na Mídia</span></span>}
+        : <span style={{flex:"1 1 220px",minWidth:0}}>{novosVer.length > 1 ? novosVer.length + " vídeos novos chegaram no card" : "1 vídeo novo chegou no card"}<span style={{color:_EVP_COR.sub,fontWeight:500}}> · já {novosVer.length > 1 ? "estão" : "está"} na Mídia, ainda fora da edição</span></span>}
       {!reedAtivo && <button data-reeditar-novos="1" onClick={reeditarNovos} style={Object.assign(_evpBtn("primario"), {padding:"6px 12px"})}>✨ Reeditar com os vídeos novos</button>}
       {!reedAtivo && <button onClick={verMidiaNovos} style={Object.assign(_evpBtn(), {padding:"6px 10px"})}>Ver na Mídia</button>}
-      {!reedAtivo && <button onClick={function(){ setOcultarNovos(chaveNovos); }} aria-label="Agora não" title="Agora não" style={Object.assign(_evpBtn("icone"), {padding:5})}><_EvpIco n="fechar" s={13}/></button>}
+      {!reedAtivo && <button onClick={fecharNovos} aria-label="Agora não" title="Agora não (só volta se chegar vídeo novo)" style={Object.assign(_evpBtn("icone"), {padding:5})}><_EvpIco n="fechar" s={13}/></button>}
     </div>) : null;
   /* v92 (08/10/2026) dúvidas da fala: aviso no topo — "A IA não entendeu N trechos da fala — confira" (+ vídeos deixados de fora) */
   const elConferir = (conf.nAviso > 0 && !ocultarConf) ? (
@@ -145627,9 +145889,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       function(){ setOcultarNA(chaveNA); },
       function(){ _evToast("info", naoAbriu.some(function(f){ return !f.leve; }) ? "O navegador não lê este formato (HEVC/HDR). O PC faz a cópia leve e ele entra sozinho." : "O arquivo pode estar estragado: suba de novo no card."); }));
     if(reedAtivo) avisos.push(avisoMob("novos", "ia", "rgba(139,92,246,.55)", "rgba(139,92,246,.14)", "A IA está juntando os vídeos novos no PC…" + (reed.msg ? " " + reed.msg : ""), null, null, null));
-    else if(novosIA.length > 0 && ocultarNovos !== chaveNovos) avisos.push(avisoMob("novos", "midia", "rgba(139,92,246,.55)", "rgba(139,92,246,.14)",
-      (novosIA.length > 1 ? novosIA.length + " vídeos novos no card" : "1 vídeo novo no card") + " · toque para ver na Mídia", btAviso("✨ Reeditar", reeditarNovos, { "data-reeditar-novos":"1" }),
-      function(){ setOcultarNovos(chaveNovos); }, verMidiaNovos));
+    else if(novosMostra) avisos.push(avisoMob("novos", "midia", "rgba(139,92,246,.55)", "rgba(139,92,246,.14)",
+      (novosVer.length > 1 ? novosVer.length + " vídeos novos no card" : "1 vídeo novo no card") + " · toque para ver na Mídia", btAviso("✨ Reeditar", reeditarNovos, { "data-reeditar-novos":"1" }),
+      fecharNovos, verMidiaNovos));
     if(conf.nAviso > 0 && !ocultarConf) avisos.push(avisoMob("conferir", "alerta", "rgba(234,179,8,.6)", "rgba(234,179,8,.12)", _evpConferirFrase(conf),
       btAviso("Conferir", function(){ abrirConferir(null); }, { "data-conferir-abrir":"1" }), function(){ setOcultarConf(true); }, null));
     /* arrastar a gaveta para baixo fecha */
@@ -153646,6 +153908,11 @@ function _evcLinha2EmCima(galeria, id){
   const menor = (L2.tam != null && T.tam != null) ? Number(L2.tam) < Number(T.tam) : (L2.h != null && T.h != null ? Number(L2.h) < Number(T.h) : true);
   return acima && menor;
 }
+/* v31 (17/10/2026) área segura — a mesma régua do motor (_EVP_AREA_SEGURA no 52c), repetida aqui porque este bloco roda sozinho no teste */
+function _evcAreaSegura(W, H){
+  const r = H / W, a = r > 1.5 ? [0.06, 0.08, 0.14] : r > 1.1 ? [0.06, 0.06, 0.09] : r > 0.8 ? [0.06, 0.06, 0.07] : [0.05, 0.07, 0.10];
+  const x = Math.round(W * a[0]), y = Math.round(H * a[1]), y1 = Math.round(H * (1 - a[2])); return { x:x, y:y, x1:W - x, y1:y1, w:W - 2 * x, h:y1 - y };
+}
 /* a conferência. o = { p, calc, fala, infoClipe, teto, W, H, galeria } → { itens:[{ t, tipo, grau, texto, como }], resumo } */
 function _evcConferir(o){
   o = o || {}; const p = o.p || {}, L = _EVC_LIM, itens = [];
@@ -153777,6 +154044,37 @@ function _evcConferir(o){
     if(a.clipe === b.clipe && _evcNum(b.t0, 0) - _evcNum(a.t1, 0) <= L.apoioGap && Math.abs(_evcNum(a.ini, 0) - _evcNum(b.ini, 0)) < L.apoioIni)
       add(_evcNum(b.t0, 0), "apoio_repetido", "leve", "Dois apoios seguidos mostram quase o mesmo pedaço do mesmo vídeo (" + aspas(a.nome || "apoio") + ").", "Troque o segundo por outro trecho ou outro vídeo.");
   }
+
+  /* 13. v31 (17/10/2026) área segura: texto grande (destaque/manchete) mais largo que a área segura e sem poder quebrar → pode sair da tela.
+     Só dados (sem desenhar): largura ≈ nº de letras × fator da fonte × tamanho (fator 0,55 + 0,06 se negrito + 0,08 se CAIXA ALTA). */
+  const AS = _evcAreaSegura(W, H), U = Math.min(W, H * 0.5625), gal = Array.isArray(o.galeria) ? o.galeria : [];
+  const larg1 = function(s, fs, peso, alta){ return String(s).length * (0.55 + (peso >= 800 ? 0.06 : 0) + (alta ? 0.08 : 0)) * fs; };
+  const maior = function(s){ return String(s).split(/\s+/).reduce(function(a, w){ return w.length > a.length ? w : a; }, ""); };
+  const metade = function(s){ const ws = String(s).split(/\s+/).filter(Boolean); let b = ws.join(" ");      // a linha maior da melhor divisão em 2 linhas
+    for(let k = 1; k < ws.length; k++){ const a = ws.slice(0, k).join(" "), z = ws.slice(k).join(" "), m = a.length > z.length ? a : z; if(m.length < b.length) b = m; } return b; };
+  (Array.isArray(p.textos) ? p.textos : []).forEach(function(x){
+    if(!x || (x.tipo !== "destaque" && x.tipo !== "manchete") || !String(x.texto || "").trim()) return;
+    const esc = Math.max(0.3, Math.min(3, _evcNum(x.tam, 1) || 1));
+    const it = x.modelo && x.modelo !== "app" ? gal.find(function(g){ return g && g.id === x.modelo; }) : null, d = it && it.dados;
+    if(d && Array.isArray(d.campos) && d.midia !== "imagem"){
+      const pad = U * (_evcNum(d.pad, -1) >= 0 ? _evcNum(d.pad, 0) : 0.035) * esc, cx = Math.min(AS.w, U * Math.max(0.1, Math.min(1, _evcNum(d.pos && d.pos.larg, 0.8))) * esc) - pad * 2;
+      d.campos.forEach(function(c){
+        const v = String((c && x[c.id]) || "").trim(); if(!v) return;
+        const fs = U * (_evcNum(c.tam, 0) || 0.07) * esc, alta = c.caixa === "alta", maxL = Math.max(1, _evcNum(c.max_linhas, 2) || 2), peso = _evcNum(c.peso, 800);
+        const w1 = larg1(v, fs, peso, alta), wP = larg1(maior(v), fs, peso, alta), w2l = larg1(metade(v), fs, peso, alta);
+        if((maxL === 1 && w1 * 0.5 > cx && w2l * 0.5 > cx) || wP * 0.5 > cx)     // revisão 0A.2: o motor quebra em 2 linhas antes de diminuir → só acusa se nem em 2 linhas cabe
+          add(_evcNum(x.t0, 0), "texto_fora", "medio", "Texto pode sair da tela: " + aspas(alta ? v.toUpperCase() : v) + " no modelo " + aspas(it.nome || "da galeria") + (maxL === 1 ? " (1 linha)" : "") + " precisa de ~" + Math.round(maxL === 1 ? w1 : wP) + " px e a caixa tem " + Math.round(cx) + " px.",
+            "Encurte o texto" + (c.max_letras ? " (até " + c.max_letras + " letras)" : "") + ", passe parte para a linha 2 ou escolha um modelo de 2 linhas. O motor agora quebra em 2 linhas e diminui a letra para caber, mas fica pequeno.");
+      });
+    } else if(!d){
+      const fs = 86 * esc, mW = Math.min(W * 0.8, AS.w - 70 * esc), wP = larg1(maior(x.texto), fs, 900, true);       // desenho do app: quebra por palavra; só a palavra sozinha pode passar
+      if(wP > mW) add(_evcNum(x.t0, 0), "texto_fora", "medio", "Texto pode sair da tela: a palavra " + aspas(maior(x.texto).toUpperCase()) + " sozinha precisa de ~" + Math.round(wP) + " px e cabem " + Math.round(mW) + " px.", "Diminua o tamanho do texto ou troque a palavra (o motor diminui a letra para caber).");
+    }
+  });
+  /* 13b. manchete do motion: palavra do título (Anton) mais larga que a coluna mesmo no menor tamanho (72%) */
+  const mot = p.motion && Array.isArray(p.motion.itens) ? p.motion.itens : [];
+  mot.forEach(function(it){ if(!it || it.modelo !== "manchete" || !it.titulo) return; const w = String(maior(it.titulo)).length * 0.5 * 168 * 0.72;
+    if(w > 1080 - 2 * 65 - 12) add(_evcNum(it.t0, 0), "texto_fora", "medio", "Título da manchete pode sair da tela: " + aspas(maior(it.titulo)) + " é uma palavra longa demais para a largura.", "Troque por uma palavra mais curta ou parta em duas."); });
 
   const ordem = { grave:0, medio:1, leve:2 };
   itens.sort(function(a, b){ return a.t - b.t || ordem[a.grau] - ordem[b.grau]; });
