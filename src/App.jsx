@@ -131606,7 +131606,7 @@ function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
     return (tasks || []).filter(function(t){ return t && !t.deletedAt && ids.indexOf(String(t.status || "")) >= 0 && (typeof pxIsVideoTask === "function" ? pxIsVideoTask(t) : false); }).length; }, [tasks]);
   const ABAS = [["fila", "Fila", nFila || null], ["estudio","Estúdio"], ["kit", "Kit do cliente"], ["musicas", "Músicas"], ["vozes", "Vozes"], ["aprendizado", "Aprendizado"]];
   return (
-    <div style={Object.assign({}, _EVP_TEMAS[tema], {padding:isMob ? "14px 12px 90px" : "22px 28px 40px",minHeight:"100%",background:_EVT.fundoPag,color:_EVT.texto})}>
+    <div style={Object.assign({}, _EVP_TEMAS[tema], {padding:isMob ? "4px 0 12px" : "22px 28px 40px",minHeight:"100%",background:_EVT.fundoPag,color:_EVT.texto})}>
       <div style={{maxWidth:aba === "estudio" ? 1640 : 1180,margin:"0 auto"}}>
         <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
           <div style={{flex:1,minWidth:0}}>
@@ -143471,6 +143471,12 @@ function _EvpCarregandoMidias({ carga, onAbrir, isMob }){
     </div>);
 }
 
+/* mob (16/10/2026) celular como app: sem zoom de dois toques/pinça no editor, sem "piscar" azul ao tocar, a barra desliza com o dedo (sem as setinhas ‹ › por cima dos botões) */
+const _EVP_CSS_MOB = '[data-mob="1"]{touch-action:pan-x pan-y;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%;overscroll-behavior:none}' +
+  '[data-mob="1"] button,[data-mob="1"] label{touch-action:manipulation}' +
+  '[data-mob="1"] [data-rola-flecha]{display:none!important}' +
+  '[data-mob="1"] button:active:not(:disabled){filter:brightness(1.18)}' +
+  '[data-gaveta] [data-painel-ferr]{border:0!important;box-shadow:none!important;background:transparent!important}[data-gaveta] [data-painel-ferr]>div:first-child{display:none!important}';   // a gaveta já tem título e "Pronto"
 function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, ajustando, onRefazer, onVoltarVersao, onMusicasMudou, pcAuto, erroAjuste, limparErroAjuste }){
   _evpUsarMidia();
   /* v81: a guarda de vídeo do app (00b: gasta 1 vez + trava de 3 voltas) fica de fora do Estúdio — ele tem o próprio cache e o "repetir trecho" é de propósito */
@@ -143541,7 +143547,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [revisando, setRevisando] = useState(false), [passoRev, setPassoRev] = useState("");
   const cvRef = useRef(null), motorRef = useRef(null), pRef = useRef(p), copiaRef = useRef(null), expRef = useRef(null), tempoUi = useRef({ em:0, toc:false, esp:false });
   pRef.current = p;
-  const [mobAberto, setMobAberto] = useState(false);   // v71: CELULAR — o editor abre em tela cheia (antes: "Para editar, use o computador")
+  const [mobAberto, setMobAberto] = useState(function(){ return !!isMob; });   // v71: CELULAR — o editor abre em tela cheia (antes: "Para editar, use o computador") · mob (16/10/2026) celular como app: abre direto, sem o passo "Editar no celular"
   const soVer = !!isMob && !mobAberto;                 // v71d: no celular, com o editor aberto, salva e grava rascunho como no computador
 
   /* v48 (06/10/2026): E2-1 + E2-4 + C2 — chegou uma versão nova de fora (IA, motion, PC, outra pessoa) enquanto a pessoa tem mudança não salva:
@@ -145012,6 +145018,15 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [tema, setTema] = useState(function(){ return lerLS("pxev-tema", "claro") === "escuro" ? "escuro" : "claro"; });
   const trocarTema = function(){ const n = tema === "escuro" ? "claro" : "escuro"; setTema(n); gravarLS("pxev-tema", n); try{ window.dispatchEvent(new Event("pxev-tema")); }catch(_){} };
   useEffect(function(){ const f = function(){ setTema(lerLS("pxev-tema", "claro") === "escuro" ? "escuro" : "claro"); }; window.addEventListener("pxev-tema", f); return function(){ window.removeEventListener("pxev-tema", f); }; }, []);   // v79: a página e o Estúdio trocam juntos
+  const temaV = (isMob && mobAberto) ? "escuro" : tema;   // mob (16/10/2026) celular como app: o editor do celular é todo escuro (como os apps de edição); o computador segue o tema escolhido
+  /* mob (16/10/2026) celular como app: com o editor aberto no celular, a tela não dá zoom sozinha (iPhone aumentava ao tocar numa caixa de texto e
+     tudo ficava "desconjuntado" e difícil de clicar). Ao fechar, volta como era. */
+  useEffect(function(){
+    if(!isMob || !mobAberto) return;
+    let m = null, antes = null;
+    try{ m = document.querySelector('meta[name="viewport"]'); if(m){ antes = m.getAttribute("content"); if(!/maximum-scale/.test(antes || "")) m.setAttribute("content", (antes || "width=device-width, initial-scale=1") + ", maximum-scale=1"); } }catch(_){}
+    return function(){ try{ if(m && antes != null) m.setAttribute("content", antes); }catch(_){} };
+  }, [isMob, mobAberto]);
   const [cheia, setCheia] = useState(function(){ return lerLS("pxev-cheia", "1") !== "0"; });
   const [assistir, setAssistir] = useState(false);          // v18: só o vídeo, em tela cheia (tecla F)
   const trocarCheia = function(){ const n = !cheia; setCheia(n); gravarLS("pxev-cheia", n ? "1" : "0"); if(!n) lembrarEnsinar("fechar"); };   // v92 (08/10/2026) lembrete de ensinar: o "voltar" (sair da tela cheia) é o fechar do computador
@@ -145080,6 +145095,18 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(!r.error && r.data) setFmtJobs((r.data.itens || []).filter(function(it){ return (it.opcoes || {}).formato; })); }).catch(function(){}); };   // v68b: fundos da marca guardados nesta sessão (o kit só recarrega ao abrir de novo)
   const [folha, setFolha] = useState(false);           // v71: celular — gaveta com a ferramenta do item escolhido
   const [mobBib, setMobBib] = useState(false);         // v71: celular — biblioteca (mídia, figurinhas…) em gaveta
+  const [mobIA, setMobIA] = useState(false);           // mob (16/10/2026) celular como app: o Assistente de IA numa gaveta (no celular não há painel da direita)
+  const gavArr = useRef(null);                         // mob (16/10/2026) arrastar a gaveta para baixo fecha
+  const mobBibRef = useRef(false); mobBibRef.current = mobBib;
+  /* mob (16/10/2026) celular como app: a "Cola da fala" mora no painel da esquerda — no celular ele só existe com a Biblioteca aberta.
+     Pediu a cola com a Biblioteca fechada → abre a gaveta e repete o pedido quando o painel já estiver na tela. */
+  useEffect(function(){
+    if(!isMob || !mobAberto) return;
+    const f = function(e){ if(mobBibRef.current || (e && e.detail && e.detail.__mob)) return; const d = e ? e.detail : null;
+      setFerrGlobal({ ferramenta:null, sub:null }); setMobIA(false); setMobBib(true);
+      setTimeout(function(){ try{ window.dispatchEvent(new CustomEvent("evp-cola", { detail:d && typeof d === "object" ? Object.assign({}, d, { __mob:1 }) : (d || true) })); }catch(_){} }, 120); };
+    window.addEventListener("evp-cola", f); return function(){ window.removeEventListener("evp-cola", f); };
+  }, [isMob, mobAberto]);
   useEffect(function(){ setFolha(false); }, [sel ? sel.tipo + ":" + sel.id : ""]);
   const [resumoAberto, setResumoAberto] = useState(function(){ try { return window.localStorage.getItem("evp_resumo_aberto") === "1"; } catch(_e){ return false; } });   // v66
   const alternarResumo = function(){ setResumoAberto(function(v){ try { window.localStorage.setItem("evp_resumo_aberto", v ? "0" : "1"); } catch(_e){} return !v; }); };
@@ -145114,6 +145141,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(id === "dividir") return cortar();
     setSel({ tipo:"clip", id:clipAg.id }); setFerr(function(o){ return Object.assign({}, o, { clip:id }); }); setEnquadrar(id === "recortar");
   };
+  /* mob (16/10/2026) celular como app: "Ajustes rápidos" do Assistente — fecha a gaveta da IA e abre a do clipe (depois que a seleção mudou) */
+  const abrirFerrMob = function(id){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima de um clipe."); return; } abrirFerr(id); if(id === "dividir") return; setMobIA(false); setTimeout(function(){ setFolha(true); }, 80); };
   /* v88: "Abrir X" — abre a ferramenta que a IA indicou (as do clipe abrem no clipe da agulha) */
   const abrirDaIA = function(b){ try{ window.__pxAbrirIA = null; }catch(_){}
     if(b.ferr === "clip"){ if(!clipAg){ _evToast("warning", "Leve a agulha para cima do clipe e clique de novo."); return; } setAbrirIA([]); abrirFerr(b.sub); return; }
@@ -145288,7 +145317,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(id === "corrigir"){ const nC = (p.ajustes_trecho || []).filter(function(x){ return x.status === "aberto" || x.status === "nao"; }).length;   // v49
       return [ Q("lista", "Correções" + (nC ? " (" + nC + ")" : ""), "listaCorrecoes", { sub:"lista" }), Q("marcar", "Marcar aqui", "marcarAqui", { dica:"Trecho de 2 s em volta da agulha", acao:marcarPontoCorr }),
         Q("trecho", marcaCorr == null ? "Começo (C)" : "Fim (C)", "trecho", { dica:"C no começo e C no fim do trecho", acao:marcarCorrecao }) ]; }
-    if(id === "ia") return [ Q("editar", "Editar com IA", "pedirIA", { dica:"Pedir à IA (painel direito)", acao:function(){ setSel(null); fecharSub(); setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 30); } }),
+    if(id === "ia") return [ Q("editar", "Editar com IA", "pedirIA", { dica:"Pedir à IA (painel direito)", acao:function(){ setSel(null); fecharSub(); if(isMob){ setMobBib(false); setMobIA(true); } setTimeout(function(){ if(iaRef.current) iaRef.current.focus(); }, 30); } }),
       ...(conf.tem ? [Q("conferir", "Conferir a IA" + (conf.nAviso ? " (" + conf.nAviso + ")" : ""), "alerta", { dica:"Fala que a IA não entendeu, vídeos que ela deixou de fora e cortes que ela esticou", sub:"conferir" })] : []),   // v92 (08/10/2026) dúvidas da fala
       Q("corrigir", "Corrigir", "corrigir", { dica:"Cartões de correção (C marca começo/fim)", sub:"corrigir" }), Q("anuncio", "Anúncio", "anuncio", { sub:"anuncio" }),
       Q("revisor", revisando ? "Revisando…" : "Revisor", "revisor", { dica:"A IA olha quadros do vídeo e aponta problemas", acao:function(){ setSel(null); fecharSub(); revisarIA(); } }),
@@ -145299,7 +145328,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   };
   const quads = ferrGlobal.ferramenta ? quadsDe(ferrGlobal.ferramenta) : [];
   const expAtivo = exp && (exp.fase === "preparando" || exp.fase === "gravando" || exp.fase === "enviando");
-  const raiz = Object.assign({}, _EVP_TEMAS[tema], { userSelect:"none", color:_EVP_COR.ink, background:_EVP_COR.fundo, display:"flex", flexDirection:"column", gap:10, padding:10, boxSizing:"border-box" },
+  /* mob (16/10/2026) celular como app: a IA terminou (prévia para aplicar) ou o pedido falhou → a gaveta ✨ IA abre sozinha (antes ficava escondida no painel que o celular não tem) */
+  useEffect(function(){ if(isMob && mobAberto && (previa || (erroAjuste && erroAjuste.msg))){ setMobBib(false); setMobIA(true); } }, [!!previa, !!(erroAjuste && erroAjuste.msg)]);
+  const raiz = Object.assign({}, _EVP_TEMAS[temaV], { userSelect:"none", color:_EVP_COR.ink, background:_EVP_COR.fundo, display:"flex", flexDirection:"column", gap:10, padding:10, boxSizing:"border-box" },
     isMob ? { position:"fixed", inset:0, zIndex:1200, height:"100dvh", padding:0, gap:0 }   // v71: celular = tela cheia sempre
     : cheia ? { position:"fixed", inset:0, zIndex:1200, height:"100vh" } : { marginTop:14, borderRadius:18, height:"max(760px, calc(100vh - 110px))" });
   const bTopo = function(on){ return Object.assign(_evpBtn("icone"), { width:36, height:36, justifyContent:"center", padding:0 }, on ? { background:_EVP_COR.roxoSoft, color:_EVP_COR.roxo, borderColor:"transparent" } : {}); };
@@ -145440,6 +145471,12 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
                 {/* v67: o "Mais…" saiu — a barra desliza (‹ ›). O menu antigo segue no Ctrl+K › "Menu antigo". */}
               </_EvpBarraRola>);
           })();
+  const elAssistente = (   /* mob (16/10/2026) celular como app: o mesmo Assistente do painel da direita; no celular abre na gaveta ✨ IA */
+          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={isMob ? abrirFerrMob : abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
+            ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
+            mostrarAntes={mostrarAntes} setMostrarAntes={setMostrarAntes} simulando={simulando}
+            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido} p={p} calc={calc} mudar={mudar}
+            erroAjuste={erroAjuste} limparErroAjuste={limparErroAjuste}/>);
   const elPainel = ferrGlobal.sub ? (   /* v41: a barrinha pediu configuração → seção da ferramenta no painel direito */
           <_EvpPainelFerramenta ferramenta={ferrGlobal.ferramenta} sub={ferrGlobal.sub} rotulo={ferrRotulo} subRotulo={subRotulo} fechar={fecharSub} propsMenu={propsMenu}/>
         ) : sel && selObj && sel.tipo === "motion" ? <_EvmInspetor evm={evm} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem}/> : sel && selObj ? (   /* v35 */
@@ -145447,13 +145484,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
             tCard={t} prepRev={prepRev} p={p} calc={calc} sel={sel} selObj={selObj} ferr={ferrAtual} nomeItem={nomeItem} mudar={mudar} setP={setP} pRef={pRef} confirmar={confirmar} kit={kit} base={base}
             infoClipe={infoClipe} musicas={musicas} musInfo={musInfoN} setMusica={setMusica} enquadrar={enquadrar} setEnquadrar={setEnquadrar}
             trat={trat} tratados={tratados} analisando={analisando} pedirEstab={pedirEstab} medindoAcao={medindoAcao} fala={falaEd} tempo={tempo} irPara={irPara} edUnidade={ed.unidade || ""} setSel={setSel} edId={ed.id} dividir={cortar} tocar={tocar} tocando={tocando}/>
-        ) : (
-          <_EvpAssistente pedido={pedido} setPedido={setPedido} pedirIA={pedirIA} ajustando={ajustando || simulando} iaRef={iaRef} abrirFerr={abrirFerr} clipAg={clipAg} infoClipe={infoClipe} edId={ed.id}
-            ed={ed} onVoltarVersao={onVoltarVersao} previa={previa} aplicarPrevia={aplicarPrevia} descartarPrevia={descartarPrevia} aplicandoPrev={aplicandoPrev}
-            mostrarAntes={mostrarAntes} setMostrarAntes={setMostrarAntes} simulando={simulando}
-            revIA={revIA} revisando={revisando} passoRev={passoRev} revisarIA={revisarIA} irPara={irPara} usarPedido={usarPedido} p={p} calc={calc} mudar={mudar}
-            erroAjuste={erroAjuste} limparErroAjuste={limparErroAjuste}/>
-        );
+        ) : elAssistente;
   const elTimeline = <_EvpTimeline evm={evm} abrirAnimar={function(id){ setSel({ tipo:"clip", id:id }); setFerr(function(f){ return Object.assign({}, f, { clip:"mov" }); }); }}
           p={p} calc={calc} sel={sel} setSel={setSel} selecionar={selecionar} tempo={tempo} irPara={irPara} pxs={pxs} setPxs={setPxs} infoClipe={infoClipe}
           setP={setP} pRef={pRef} confirmar={confirmar} mudar={mudar} tocando={tocando} cortar={cortar} duplicar={duplicar} apagar={apagar} musInfo={musInfoN} batidas={batidas} gravando={gravando} comentarios={comentarios}
@@ -145504,9 +145535,9 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const elTx = txAberto ? <_EvTranscricaoCompleta t={t} ed={ed} p={p} calc={calc} clipes={clipes} fala={falaEd} motivos={(ed.receita && ed.receita.motivos_corte) || []} nomesKit={nomesKit}
       isMob={isMob} soLer={soVer} onAbrirEditor={isMob && !mobAberto ? function(){ setMobAberto(true); } : null} onFechar={function(){ setTxAberto(false); setTxFoco(null); }} irPara={irPara}
       tirarTrechos={tirarTrechos} voltarTrechos={voltarTrechos} desfazer={desfazer} podeDesf={desf.length > 0} onRefazerIA={pcAuto ? null : refazerTransc} ajustando={ajustando}
-      reeditarNovos={novosIA.length ? reeditarNovos : null} tema={tema} addClipe={soVer ? null : addClipe} focoClipe={txFoco ? txFoco.clipe : null} onRecarregar={onRecarregar} onAbrirMesa={function(){ setTxAberto(false); setTxFoco(null); setMesaAberta(true); }}/> : null;   // v28 (15/10/2026) transcrição (tema: o celular fechado fica fora do "raiz" com as cores)
+      reeditarNovos={novosIA.length ? reeditarNovos : null} tema={temaV} addClipe={soVer ? null : addClipe} focoClipe={txFoco ? txFoco.clipe : null} onRecarregar={onRecarregar} onAbrirMesa={function(){ setTxAberto(false); setTxFoco(null); setMesaAberta(true); }}/> : null;   // v28 (15/10/2026) transcrição (tema: o celular fechado fica fora do "raiz" com as cores)
   const elMesa = mesaAberta ? <_EvMesaRoteiro t={t} ed={ed} p={p} calc={calc} clipes={clipes} fala={falaEd} motivos={(ed.receita && ed.receita.motivos_corte) || []} nomesKit={nomesKit}
-      isMob={isMob} soLer={soVer} tema={tema} irPara={irPara} onRecarregar={onRecarregar} onFechar={function(){ setMesaAberta(false); }} onAbrirTx={function(){ setMesaAberta(false); setTxAberto(true); }}
+      isMob={isMob} soLer={soVer} tema={temaV} irPara={irPara} onRecarregar={onRecarregar} onFechar={function(){ setMesaAberta(false); }} onAbrirTx={function(){ setMesaAberta(false); setTxAberto(true); }}
       onEditarRoteiro={pcAuto ? null : onEditarRoteiro}/> : null;   // v29 (15/10/2026) item 14: 🎬 Mesa do roteiro
   const elTxBotao = function(estilo, rot){ return <button data-abrir-transcricao="editor" onClick={function(){ setTxAberto(true); }} title="Toda a fala dos vídeos: o que entrou no vídeo e o que ficou de fora" style={estilo}>{rot}</button>; };   // v28 (15/10/2026) transcrição
   if(isMob && !mobAberto){
@@ -145515,14 +145546,16 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
         {elLembrete}{/* v92 (08/10/2026) lembrete de ensinar: o celular fechado também mostra (Ensinar agora reabre o editor) */}
         {!midiaPronta && <style>{_EVP_CSS}</style>}{!midiaPronta && <_EvpCarregandoMidias carga={carga} isMob={true} onAbrir={function(){ setMidiaPronta(true); }}/>}
         {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
-        <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} sel={null} enquadrar={false} soVer={true} nome={(base && base.nome) || ""}/>
+        <div style={{display:"flex",justifyContent:"center"}}>{/* mob (16/10/2026) celular como app: o vídeo no meio */}
+          <_EvpViewer cvRef={cvRef} motorRef={motorRef} w={W_VIEW} h={H_VIEW} dim={DIMF} tocar={tocar} tocando={tocando} esperando={esperando} sel={null} enquadrar={false} soVer={true} nome={(base && base.nome) || ""}/>
+        </div>
         <div style={{display:"flex",gap:10,alignItems:"center",marginTop:10}}>
           <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} style={_evpBtn("primario")}><_EvpIco n={tocando ? "pause" : "play"}/></button>
           <input type="range" min={0} max={calc.total} step={0.05} value={Math.min(tempo, calc.total)} onChange={function(e){ irPara(Number(e.target.value)); }} style={{flex:1,accentColor:_EVP_COR.roxo}}/>
           <span style={{fontSize:12,fontWeight:700,color:_EVP_COR.sub,fontFamily:_EVP_MONO}}>{_evTempo(tempo)} / {_evTempo(calc.total)}</span>
           <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" title="Assistir em tela cheia" style={_evpBtn("icone")}><_EvpIco n="expandir" s={16}/></button>
         </div>
-        <button data-mob-abrir="1" onClick={function(){ setMobAberto(true); }} style={Object.assign(_evpBtn("primario"), {marginTop:12,width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14})}><_EvpIco n="celular" s={17}/>Editar no celular</button>
+        <button data-mob-abrir="1" onClick={function(){ setMobAberto(true); }} style={Object.assign(_evpBtn("primario"), {marginTop:12,width:"100%",justifyContent:"center",padding:"13px 16px",fontSize:14})}><_EvpIco n="celular" s={17}/>Abrir o editor</button>{/* mob (16/10/2026): o editor já abre sozinho; ‹ Voltar traz para cá */}
         {elTxBotao(Object.assign(_evpBtn(), {marginTop:8,width:"100%",justifyContent:"center",padding:"11px 16px",fontSize:13.5}), "📝 Transcrição completa")}{/* v28 (15/10/2026) transcrição */}
         {elTx}
         {elMesa}{/* v29 (15/10/2026) item 14 */}
@@ -145533,8 +145566,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
       {elLembrete}{/* v92 (08/10/2026) lembrete de ensinar */}
       {!midiaPronta && <_EvpCarregandoMidias carga={carga} isMob={isMob} onAbrir={function(){ setMidiaPronta(true); }}/>}
       <div role={verExp ? "dialog" : undefined} aria-label="Exportar" aria-hidden={!verExp} onPointerDown={function(e){ if(e.target === e.currentTarget && !expAtivo) setVerExp(false); }}
-        style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:"center",justifyContent:"center",padding:16}}>
-        <div ref={expRef} style={{width:"min(620px, 100%)",maxHeight:"90vh",overflow:"auto",position:"relative"}}>
+        style={{position:"fixed",inset:0,zIndex:60,background:"rgba(5,8,18,.55)",backdropFilter:"blur(3px)",display:verExp ? "flex" : "none",alignItems:isMob ? "flex-end" : "center",justifyContent:"center",padding:isMob ? 0 : 16}}>{/* mob (16/10/2026) celular como app: sobe de baixo, largura toda */}
+        <div ref={expRef} style={{width:isMob ? "100%" : "min(620px, 100%)",maxHeight:isMob ? "92dvh" : "90vh",overflow:"auto",position:"relative",paddingBottom:isMob ? "env(safe-area-inset-bottom)" : undefined}}>
           <button onClick={function(){ setVerExp(false); }} aria-label="Fechar exportar" title={expAtivo ? "Fechar (a exportação continua)" : "Fechar"} style={Object.assign(_evpBtn("icone"), {position:"absolute",right:10,top:10,zIndex:2,padding:6})}><_EvpIco n="fechar" s={15}/></button>
           <_EvExportar t={t} ed={ed} projeto={p} calc={micFalhou ? calcMotor : calc} kit={kit} base={base} musicaUrl={musicaUrl} musInfo={musInfoN} vozes={vozes} narr={narr} tratados={tratados}
             logoUrl={_evLogoKit(kit, t.client)} exp={exp} setExp={setExp} alterado={alterado} salvar={salvar} trat={trat} precisaEstab={precisaEstab} mudar={mudar}
@@ -145554,58 +145587,98 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   /* ─── v71 (07/10/2026): EDITOR NO CELULAR — no jeito do CapCut: vídeo em cima, linha do tempo no meio, barra embaixo;
      cada ferramenta abre numa GAVETA que sobe (os mesmos painéis do computador). Antes: "Para editar, use o computador". ─── */
   if(isMob){
-    const gaveta = mobBib ? "bib" : ferrGlobal.sub ? "ferr" : (folha && sel && selObj) ? "item" : null;
-    const fecharGaveta = function(){ if(gaveta === "bib"){ setMobBib(false); return; } if(gaveta === "ferr"){ fecharSub(); return; } setFolha(false); };
-    const bM = function(extra){ return Object.assign({ font:"inherit", width:38, height:38, borderRadius:11, border:0, background:"transparent", color:_EVP_COR.ink, display:"grid", placeItems:"center", cursor:"pointer", padding:0, flexShrink:0 }, extra || {}); };
+    /* mob (16/10/2026) celular como app: pedido do Vini — "quero que abra como se fosse um aplicativo realmente do celular… totalmente desconjuntado…
+       até pra clicar nos botões tá difícil". O editor do v71 continua o mesmo por dentro (mesmos painéis, mesmas funções); muda a casca:
+       • abre direto em tela cheia (sem o passo "Editar no celular"); ‹ volta para a tela do vídeo;
+       • tudo no tema escuro, como os apps de edição (antes: topo claro + linha do tempo escura);
+       • topo de 56 px com botões de 44 px; avisos numa linha só (antes: um cartão alto que comia o vídeo);
+       • ✨ IA sempre à mão: abre o Assistente numa gaveta (antes, no celular, "Editar com IA" não abria nada — o assistente ficava no painel da direita, que o celular não tem);
+       • gaveta com título e "Pronto"; arrastar para baixo fecha; a tela não dá zoom sozinha ao digitar nem com dois toques. */
+    const gaveta = mobBib ? "bib" : mobIA ? "ia" : ferrGlobal.sub ? "ferr" : (folha && sel && selObj) ? "item" : null;
+    const fecharGaveta = function(){ if(gaveta === "bib"){ setMobBib(false); return; } if(gaveta === "ia"){ setMobIA(false); return; } if(gaveta === "ferr"){ fecharSub(); return; } setFolha(false); };
+    const tituloGaveta = gaveta === "bib" ? "Biblioteca" : gaveta === "ia" ? "✨ Pedir à IA" : gaveta === "ferr" ? ([ferrRotulo, subRotulo].filter(Boolean).join(" · ") || "Ferramenta") : (nomeItem || "Item");
+    const bM = function(extra){ return Object.assign({ font:"inherit", width:44, height:44, borderRadius:12, border:0, background:"transparent", color:_EVP_COR.ink, display:"grid", placeItems:"center", cursor:"pointer", padding:0, flexShrink:0 }, extra || {}); };
+    const fecharEditor = function(){ setMobAberto(false); setSel(null); setFerrGlobal({ ferramenta:null, sub:null }); setMobBib(false); setMobIA(false); /* v92 (08/10/2026) lembrete de ensinar: avisa ao fechar no celular */ lembrarEnsinar("fechar"); };
+    const abrirIAMob = function(){ setSel(null); setMobBib(false); setFerrGlobal({ ferramenta:null, sub:null }); setMobIA(true); };
+    const iaOcupada = !!(ajustando || simulando);
+    /* avisos numa linha: ícone · frase · 1 botão · ✕ (a frase toca para ver mais) */
+    const avisoMob = function(chave, icone, cor, fundo, frase, botao, fechar, tocarFrase){
+      return <div key={chave} data-mob-aviso={chave} role="status" style={{display:"flex",alignItems:"center",gap:8,minHeight:46,padding:"4px 4px 4px 12px",borderRadius:14,background:fundo,border:"1px solid " + cor,boxSizing:"border-box"}}>
+        <span style={{color:cor,display:"grid",flexShrink:0}}><_EvpIco n={icone} s={18}/></span>
+        <span onClick={tocarFrase || undefined} style={{flex:1,minWidth:0,fontSize:13,fontWeight:650,lineHeight:1.25,color:_EVP_COR.ink,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",cursor:tocarFrase ? "pointer" : "default"}}>{frase}</span>
+        {botao}
+        {fechar && <button onClick={fechar} aria-label="Agora não" title="Agora não" style={bM({ width:40, height:40, color:_EVP_COR.sub })}><_EvpIco n="fechar" s={16}/></button>}
+      </div>; };
+    const btAviso = function(rot, fn, attrs){ return <button {...(attrs || {})} onClick={fn} style={Object.assign(_evpBtn("primario"), {height:38,padding:"0 14px",borderRadius:11,fontSize:13,flexShrink:0})}>{rot}</button>; };
+    const avisos = [];
+    if(naoAbriu.length && ocultarNA !== chaveNA) avisos.push(avisoMob("naoabriu", "alerta", "rgba(234,179,8,.6)", "rgba(234,179,8,.12)",
+      (naoAbriu.length > 1 ? naoAbriu.length + " vídeos do card não abriram" : "1 vídeo do card não abriu") + ": " + naoAbriu.slice(0, 2).map(function(f){ return f.nome; }).join(", ") + (naoAbriu.length > 2 ? "…" : ""), null,
+      function(){ setOcultarNA(chaveNA); },
+      function(){ _evToast("info", naoAbriu.some(function(f){ return !f.leve; }) ? "O navegador não lê este formato (HEVC/HDR). O PC faz a cópia leve e ele entra sozinho." : "O arquivo pode estar estragado: suba de novo no card."); }));
+    if(reedAtivo) avisos.push(avisoMob("novos", "ia", "rgba(139,92,246,.55)", "rgba(139,92,246,.14)", "A IA está juntando os vídeos novos no PC…" + (reed.msg ? " " + reed.msg : ""), null, null, null));
+    else if(novosIA.length > 0 && ocultarNovos !== chaveNovos) avisos.push(avisoMob("novos", "midia", "rgba(139,92,246,.55)", "rgba(139,92,246,.14)",
+      (novosIA.length > 1 ? novosIA.length + " vídeos novos no card" : "1 vídeo novo no card") + " · toque para ver na Mídia", btAviso("✨ Reeditar", reeditarNovos, { "data-reeditar-novos":"1" }),
+      function(){ setOcultarNovos(chaveNovos); }, verMidiaNovos));
+    if(conf.nAviso > 0 && !ocultarConf) avisos.push(avisoMob("conferir", "alerta", "rgba(234,179,8,.6)", "rgba(234,179,8,.12)", _evpConferirFrase(conf),
+      btAviso("Conferir", function(){ abrirConferir(null); }, { "data-conferir-abrir":"1" }), function(){ setOcultarConf(true); }, null));
+    /* arrastar a gaveta para baixo fecha */
+    const gavIni = function(e){ if(e.target && e.target.closest && e.target.closest("button")) return; gavArr.current = { y:e.clientY, id:e.pointerId }; try{ e.currentTarget.setPointerCapture(e.pointerId); }catch(_){} };
+    const gavFim = function(e){ const a = gavArr.current; gavArr.current = null; if(a && e.clientY - a.y > 60) fecharGaveta(); };
     return (
-      <div style={raiz} data-tema={tema} data-mob="1">
-        <style>{_EVP_CSS}</style>
+      <div style={raiz} data-tema={temaV} data-mob="1">
+        <style>{_EVP_CSS}</style><style>{_EVP_CSS_MOB}</style>
         {assistir && <_EvpAssistir cvRef={cvRef} motorRef={motorRef} tocar={tocar} tocando={tocando} tempo={tempo} total={calc.total} irPara={irPara} onFechar={function(){ setAssistir(false); }} nome={(base && base.nome) || ""}/>}
-        {/* topo: fechar · nome · desfazer · refazer · salvar · exportar */}
-        <div style={{display:"flex",alignItems:"center",gap:2,padding:"6px 6px",paddingTop:"max(6px, env(safe-area-inset-top))",background:_EVP_COR.painel,borderBottom:"1px solid " + _EVP_COR.linha,flexShrink:0}}>
-          <button onClick={function(){ setMobAberto(false); setSel(null); setFerrGlobal({ ferramenta:null, sub:null }); setMobBib(false); /* v92 (08/10/2026) lembrete de ensinar: avisa ao fechar no celular */ lembrarEnsinar("fechar"); }} aria-label="Fechar o editor" title="Fechar" style={bM()}><_EvpIco n="fechar" s={19}/></button>
+        {/* topo: voltar · nome · desfazer · refazer · salvar · exportar */}
+        <div data-mob-topo="1" style={{display:"flex",alignItems:"center",gap:2,minHeight:56,padding:"4px 6px",paddingTop:"max(4px, env(safe-area-inset-top))",boxSizing:"border-box",background:_EVP_COR.painel,borderBottom:"1px solid " + _EVP_COR.linha,flexShrink:0}}>
+          <button onClick={fecharEditor} aria-label="Voltar" title="Voltar" style={bM()}><_EvpIco n="voltar" s={22}/></button>
           <div style={{flex:1,minWidth:0,padding:"0 4px"}}>
-            <div style={{fontWeight:800,fontSize:14,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title || "Estúdio"}</div>
-            <div style={{fontSize:11,color:auto && auto.estado === "erro" ? _EV.verm : _EVP_COR.fraco,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{expAtivo ? "Exportando " + (exp.pct || 0) + "%" : autoTxt}</div>
+            <div style={{fontWeight:800,fontSize:15,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title || "Estúdio"}</div>
+            <div style={{fontSize:11.5,lineHeight:1.3,color:auto && auto.estado === "erro" ? _EV.verm : alterado ? _EVX.amarelo : _EVP_COR.fraco,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{expAtivo ? "Exportando " + (exp.pct || 0) + "%" : autoTxt}</div>
           </div>
-          {elTxBotao(bM({ fontSize:17 }), "📝")}{/* v28 (15/10/2026) transcrição */}
-          <button onClick={desfazer} disabled={!desf.length} aria-label="Desfazer" style={bM({ opacity:desf.length ? 1 : 0.35 })}><_EvpIco n="desfazer" s={18}/></button>
-          <button onClick={refazer} disabled={!refaz.length} aria-label="Refazer" style={bM({ opacity:refaz.length ? 1 : 0.35 })}><_EvpIco n="refazer" s={18}/></button>
-          <button onClick={salvar} disabled={!alterado || salvando} aria-label="Salvar versão" style={Object.assign(_evpBtn(alterado ? "primario" : null, alterado && !salvando), {padding:"8px 11px",marginLeft:2})}><_EvpIco n="salvar" s={15}/>{salvando ? "…" : "Salvar"}</button>
-          <button onClick={function(){ setVerExp(true); }} aria-label="Exportar" style={Object.assign(_evpBtn("verde"), {padding:"8px 10px",marginLeft:4})}><_EvpIco n="exportar" s={16}/></button>
+          <button onClick={desfazer} disabled={!desf.length} aria-label="Desfazer" title="Desfazer" style={bM({ opacity:desf.length ? 1 : 0.32 })}><_EvpIco n="desfazer" s={20}/></button>
+          <button onClick={refazer} disabled={!refaz.length} aria-label="Refazer" title="Refazer" style={bM({ opacity:refaz.length ? 1 : 0.32 })}><_EvpIco n="refazer" s={20}/></button>
+          {alterado || salvando
+            ? <button onClick={salvar} disabled={salvando} aria-label="Salvar versão" style={Object.assign(_evpBtn("primario", !salvando), {height:40,padding:"0 12px",borderRadius:12,marginLeft:2,fontSize:13.5})}><_EvpIco n="salvar" s={16}/>{salvando ? "Salvando…" : "Salvar"}</button>
+            : <span aria-label="Tudo salvo" title="Tudo salvo" style={bM({ cursor:"default", color:_EVP_COR.fraco })}><_EvpIco n="nuvemOk" s={20}/></span>}
+          <button onClick={function(){ setVerExp(true); }} aria-label="Exportar" title="Exportar" style={Object.assign(_evpBtn("verde"), {width:44,height:40,padding:0,justifyContent:"center",borderRadius:12,marginLeft:4})}><_EvpIco n="exportar" s={18}/></button>
         </div>
-        {elNovos && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elNovos}</div>}
+        {avisos.length > 0 && <div data-mob-avisos="1" style={{display:"flex",flexDirection:"column",gap:6,padding:"6px 8px 0",flexShrink:0,maxHeight:"24dvh",overflowY:"auto"}}>{avisos}</div>}
         {elMicFaixa && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elMicFaixa}</div>}{/* v30 (16/10/2026) item 1 */}
-        {elConferir && <div style={{padding:"6px 8px 0",flexShrink:0}}>{elConferir}</div>}{/* v92 (08/10/2026) dúvidas da fala */}
         {/* vídeo */}
         <div ref={palcoRef} style={{flex:"1 1 auto",minHeight:150,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative",background:_EVP_COR.palco}}>
           {elViewer}
         </div>
-        {/* tocar · tempo · assistir */}
-        <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",flexShrink:0,background:_EVP_COR.palco}}>
-          <span style={{fontFamily:_EVP_MONO,fontSize:12,fontWeight:700,color:_EVP_COR.ink,minWidth:0,whiteSpace:"nowrap"}}>{_evTempo(tempo)} <span style={{color:_EVP_COR.fraco}}>/ {_evTempo(calc.total)}</span></span>
-          <span style={{flex:1}}/>
-          <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} style={bM({ width:44, height:44, borderRadius:99, background:_EVP_COR.roxoFixo, color:"#fff" })}><_EvpIco n={tocando ? "pause" : "play"} s={20}/></button>
-          <span style={{flex:1}}/>
-          <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" style={bM()}><_EvpIco n="expandir" s={18}/></button>
+        {/* tempo · tocar · IA · transcrição · assistir (o tocar fica no meio) */}
+        <div data-mob-transporte="1" style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:6,padding:"6px 8px",flexShrink:0,background:_EVP_COR.palco}}>
+          <span style={{fontFamily:_EVP_MONO,fontSize:12.5,fontWeight:700,color:_EVP_COR.ink,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontVariantNumeric:"tabular-nums"}}>{_evTempo(tempo)} <span style={{color:_EVP_COR.fraco}}>/ {_evTempo(calc.total)}</span></span>
+          <button onClick={tocar} aria-label={tocando ? "Pausar" : "Tocar"} style={bM({ width:52, height:52, borderRadius:99, background:_EVP_COR.roxoFixo, color:"#fff", boxShadow:"0 8px 20px -8px rgba(124,58,237,.8)" })}><_EvpIco n={tocando ? "pause" : "play"} s={22}/></button>
+          <span style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:2,minWidth:0}}>
+            <button data-mob-ia="1" onClick={abrirIAMob} aria-label="Pedir à IA" title="Pedir à IA"
+              style={Object.assign(_evpBtn(previa ? "primario" : "suave"), {height:40,padding:"0 11px",borderRadius:12,fontSize:13,flexShrink:0})}>
+              {iaOcupada ? <span className="evp-gira" style={{display:"grid"}}><_EvpIco n="carregando" s={16}/></span> : <_EvpIco n="ia" s={16}/>}{previa ? "Prévia" : "IA"}</button>
+            {elTxBotao(bM({ width:40, fontSize:18 }), "📝")}{/* v28 (15/10/2026) transcrição */}
+            <button onClick={function(){ setAssistir(true); }} aria-label="Assistir em tela cheia" title="Assistir em tela cheia" style={bM({ width:40 })}><_EvpIco n="expandir" s={19}/></button>
+          </span>
         </div>
         {/* linha do tempo */}
-        <div data-mob-tl="1" style={{flexShrink:0,height:"34dvh",minHeight:180,display:"flex",flexDirection:"column",overflow:"hidden"}}>{elTimeline}</div>
+        <div data-mob-tl="1" style={{flexShrink:0,height:"32dvh",minHeight:170,display:"flex",flexDirection:"column",overflow:"hidden"}}>{elTimeline}</div>
         {/* barra única (a mesma do computador) */}
-        <div style={{flexShrink:0,paddingBottom:"env(safe-area-inset-bottom)",background:_EVP_COR.campo}}>{elBarra}</div>
+        <div data-mob-barra="1" style={{flexShrink:0,paddingBottom:"env(safe-area-inset-bottom)",background:_EVP_COR.campo}}>{elBarra}</div>
         {/* gaveta */}
         {gaveta && (
           <div data-gaveta={gaveta} onPointerDown={function(e){ if(e.target === e.currentTarget) fecharGaveta(); }}
-            style={{position:"fixed",inset:0,zIndex:1300,background:"rgba(3,6,15,.38)",display:"flex",alignItems:"flex-end"}}>
-            <div className="evp-sobe" style={{width:"100%",height:"64dvh",maxHeight:"calc(100dvh - 60px)",background:_EVP_COR.fundo,borderRadius:"18px 18px 0 0",display:"flex",flexDirection:"column",overflow:"hidden",
-              boxShadow:"0 -18px 50px rgba(0,0,0,.45)",paddingBottom:"env(safe-area-inset-bottom)"}}>
-              <div style={{position:"relative",display:"flex",justifyContent:"center",alignItems:"center",height:30,flexShrink:0}}>
-                <span onClick={fecharGaveta} style={{width:42,height:5,borderRadius:99,background:_EVP_COR.linha,cursor:"pointer"}}/>
-                <button onClick={fecharGaveta} aria-label="Fechar" style={bM({ position:"absolute", right:6, top:0, width:30, height:30 })}><_EvpIco n="fechar" s={16}/></button>
+            style={{position:"fixed",inset:0,zIndex:1300,background:"rgba(3,6,15,.45)",display:"flex",alignItems:"flex-end"}}>
+            <div className="evp-sobe" style={{width:"100%",height:gaveta === "ia" ? "72dvh" : "64dvh",maxHeight:"calc(100dvh - 56px)",background:_EVP_COR.fundo,borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",overflow:"hidden",
+              boxShadow:"0 -18px 50px rgba(0,0,0,.5)",paddingBottom:"env(safe-area-inset-bottom)"}}>
+              <div data-gaveta-topo="1" onPointerDown={gavIni} onPointerUp={gavFim} onPointerCancel={function(){ gavArr.current = null; }}
+                style={{position:"relative",display:"flex",alignItems:"center",gap:8,minHeight:54,padding:"10px 8px 4px 16px",boxSizing:"border-box",flexShrink:0,touchAction:"none",borderBottom:"1px solid " + _EVP_COR.linha}}>
+                <span aria-hidden="true" style={{position:"absolute",left:"50%",top:6,transform:"translateX(-50%)",width:40,height:5,borderRadius:99,background:_EVP_COR.linha}}/>
+                <span style={{flex:1,minWidth:0,fontSize:15,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tituloGaveta}</span>
+                <button onClick={fecharGaveta} aria-label="Fechar" style={Object.assign(_evpBtn("suave"), {height:40,padding:"0 16px",borderRadius:12,fontSize:14,flexShrink:0})}>Pronto</button>
               </div>
-              <div style={{flex:1,minHeight:0,padding:"0 8px 8px",display:"flex",flexDirection:"column"}}>
-                <div key={gaveta + "|" + (ferrGlobal.sub || "") + "|" + (sel ? sel.tipo + ":" + sel.id : "") + "|" + (ferrAtual || "")} className="evp-entra" style={{flex:1,minHeight:0}}>
-                  {gaveta === "bib" ? <_EvpPainelMenu {...propsMenu} menu={menu} papel="menu"/> : elPainel}
+              <div style={{flex:1,minHeight:0,padding:"8px 8px 8px",display:"flex",flexDirection:"column"}}>
+                <div key={gaveta + "|" + (ferrGlobal.sub || "") + "|" + (sel ? sel.tipo + ":" + sel.id : "") + "|" + (ferrAtual || "")} className="evp-entra" style={{flex:1,minHeight:0,overflowY:gaveta === "ia" ? "auto" : undefined}}>
+                  {gaveta === "bib" ? <_EvpPainelMenu {...propsMenu} menu={menu} papel="menu"/> : gaveta === "ia" ? elAssistente : elPainel}
                 </div>
               </div>
             </div>
@@ -148219,7 +148292,7 @@ function _EvpBarraRola({ fixo, estilo, attrs, children }){
   const solta = function(){ const a = arr.current; if(a && a.mov){ const el = ref.current; const bloq = function(e){ e.stopPropagation(); e.preventDefault(); el.removeEventListener("click", bloq, true); };
     el.addEventListener("click", bloq, true); setTimeout(function(){ el.removeEventListener("click", bloq, true); }, 0); } arr.current = null; };
   const flecha = function(lado){ const on = lado < 0 ? lados.e : lados.d;
-    return <button type="button" onClick={function(){ ir(lado); }} aria-label={lado < 0 ? "Ver ferramentas à esquerda" : "Ver mais ferramentas"} title={lado < 0 ? "Voltar" : "Ver mais"} tabIndex={on ? 0 : -1}
+    return <button type="button" data-rola-flecha="1" onClick={function(){ ir(lado); }} aria-label={lado < 0 ? "Ver ferramentas à esquerda" : "Ver mais ferramentas"} title={lado < 0 ? "Voltar" : "Ver mais"} tabIndex={on ? 0 : -1}
       style={{position:"absolute",top:"50%",[lado < 0 ? "left" : "right"]:2,transform:"translateY(-50%)",width:30,height:30,borderRadius:99,border:"1px solid " + _EVP_COR.linha,
         background:_EVP_COR.painel,color:_EVP_COR.ink,cursor:"pointer",display:"grid",placeItems:"center",fontSize:19,fontWeight:900,lineHeight:1,padding:0,zIndex:3,
         boxShadow:"0 4px 14px rgba(15,10,40,.22)",opacity:on ? 1 : 0,pointerEvents:on ? "auto" : "none",transition:"opacity .18s"}}>{lado < 0 ? "‹" : "›"}</button>; };
@@ -152201,6 +152274,7 @@ function _EvpTimeline({ evm, p, calc, sel, setSel:setSelP, selecionar, tempo, ir
   const btnT = function(on, ok){ return { font:"inherit", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6, minWidth:30, height:30, padding:"0 7px", borderRadius:8,
     border:"1px solid " + (on ? "#8b5cf6" : _EVP_TL.linha), background:on ? "rgba(139,92,246,.24)" : _EVP_TL.botao, color:on ? "#c4b5fd" : _EVP_TL.texto, cursor:ok === false ? "default" : "pointer",
     opacity:ok === false ? 0.4 : 1, fontSize:12, fontWeight:700 }; };
+  const btnTM = Object.assign({}, btnT(false), { width:42, height:38, borderRadius:10 });   // mob (16/10/2026) celular como app
   /* arrastar a borda de cima muda a altura da linha do tempo */
   const puxarAlt = function(e){
     if(!onAlt || e.button !== 0) return; e.preventDefault();
@@ -152213,14 +152287,14 @@ function _EvpTimeline({ evm, p, calc, sel, setSel:setSelP, selecionar, tempo, ir
   return (
     <div onPointerDownCapture={toqueIni} style={Object.assign({position:"relative",background:_EVP_TL.fundo,color:_EVP_TL.texto,borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",height:alt || undefined,
         border:"1px solid " + _EVP_TL.linha,boxShadow:"0 18px 40px -24px rgba(0,0,0,.7)"}, mob ? { height:"100%", borderRadius:0, border:0, boxShadow:"none" } : {})}>
-      {mob && <div style={{display:"flex",gap:4,alignItems:"center",padding:"4px 8px",borderBottom:"1px solid "+_EVP_TL.linha,flexShrink:0}}>{/* v71: celular — só o essencial */}
-        <button onClick={cortar} aria-label="Dividir" style={btnT(false)}><_EvpIco n="dividir" s={16}/></button>
-        <button onClick={duplicar} aria-label="Duplicar" style={btnT(false)}><_EvpIco n="duplicar" s={16}/></button>
-        <button onClick={apagar} aria-label="Apagar" style={Object.assign(btnT(false), {color:"#fca5a5"})}><_EvpIco n="apagar" s={16}/></button>
+      {mob && <div style={{display:"flex",gap:6,alignItems:"center",padding:"4px 8px",borderBottom:"1px solid "+_EVP_TL.linha,flexShrink:0}}>{/* v71: celular — só o essencial · mob (16/10/2026) celular como app: botões de 42×38 (antes 32×30, difícil de acertar) */}
+        <button onClick={cortar} aria-label="Dividir" style={btnTM}><_EvpIco n="dividir" s={19}/></button>
+        <button onClick={duplicar} aria-label="Duplicar" style={btnTM}><_EvpIco n="duplicar" s={19}/></button>
+        <button onClick={apagar} aria-label="Apagar" style={Object.assign({}, btnTM, {color:"#fca5a5"})}><_EvpIco n="apagar" s={19}/></button>
         <span style={{flex:1}}/>
-        <button onClick={function(){ setPxs(function(z){ return Math.max(6, z / 1.4); }); }} aria-label="Afastar" style={btnT(false)}><_EvpIco n="zoomMenos" s={16}/></button>
-        <button onClick={function(){ setPxs(function(z){ return Math.min(400, z * 1.4); }); }} aria-label="Aproximar" style={btnT(false)}><_EvpIco n="zoomMais" s={16}/></button>
-        <button onClick={encaixarTela} aria-label="Ver tudo" style={btnT(false)}><_EvpIco n="encaixar" s={16}/></button>
+        <button onClick={function(){ setPxs(function(z){ return Math.max(6, z / 1.4); }); }} aria-label="Afastar" style={btnTM}><_EvpIco n="zoomMenos" s={19}/></button>
+        <button onClick={function(){ setPxs(function(z){ return Math.min(400, z * 1.4); }); }} aria-label="Aproximar" style={btnTM}><_EvpIco n="zoomMais" s={19}/></button>
+        <button onClick={encaixarTela} aria-label="Ver tudo" style={btnTM}><_EvpIco n="encaixar" s={19}/></button>
       </div>}
       {onAlt && !mob && <div onPointerDown={puxarAlt} title="Arraste para aumentar ou diminuir a linha do tempo" aria-label="Altura da linha do tempo"
         style={{position:"absolute",left:0,right:0,top:0,height:7,cursor:"ns-resize",zIndex:12,display:"flex",justifyContent:"center"}}>
