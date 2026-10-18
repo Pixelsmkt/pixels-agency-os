@@ -136793,12 +136793,12 @@ function _EvpMicPainel({ p, mudar, infoClipe, fala, t, sel, tempo, calc }){
 /* v30 (16/10/2026) item 1/5: FAIXA DO MICROFONE no Estúdio — "🎙️ Carregando o áudio do microfone: 23 de 50 MB (46%)" com barra; o play que espera;
    a sincronização com "vídeo 12 de 50 · falta ~1 min"; o áudio que não abriu (com o motivo certo). No celular fica numa linha só (toque abre). */
 function _evpMicCarga(mics){
-  let rec = 0, tot = 0, todosAbertos = true, baixando = false, chegou = false;
+  let rec = 0, tot = 0, todosAbertos = true, baixando = false, chegou = false, card = false;
   (mics || []).forEach(function(x){ const u = _evpMicUrlAbrir(x.id, x.url), pg = _evProg[u], m = _evpMidia["mic:" + x.id] || {};
     if(pg){ rec += pg.rec || 0; tot += pg.tot || 0; if(!pg.tot || pg.rec < pg.tot) baixando = true; else chegou = true; }
-    if(!m.audio) todosAbertos = false; });
+    if(!m.audio) todosAbertos = false; if(m.cardBaixando) card = true; });
   const pc = tot > 0 ? Math.min(99, Math.floor(rec * 100 / tot)) : null;
-  return { rec:rec, tot:tot, pc:pc, fase:todosAbertos ? "preparando" : baixando ? "baixando" : chegou ? "lendo" : "abrindo" };
+  return { rec:rec, tot:tot, pc:pc, card:card, fase:todosAbertos ? "preparando" : baixando ? "baixando" : chegou ? "lendo" : "abrindo" };   // card = o som limpo está vindo pronto do card (não está limpando)
 }
 function _EvpMicFaixa({ task, mics, carregando, falhou, quer, isMob, onSemEsperar, onCancelar, erro }){
   const st = _evpUsarMicSt(), sinc = st.sinc[String(task || "")] || null, rodando = !!(sinc && sinc.rodando);
@@ -136829,7 +136829,7 @@ function _EvpMicFaixa({ task, mics, carregando, falhou, quer, isMob, onSemEspera
   const cg = _evpMicCarga(mics), pcTx = cg.pc != null ? " (" + cg.pc + "%)" : "";
   const tx = cg.fase === "baixando" && cg.tot ? "🎙️ Carregando o áudio do microfone: " + mb(cg.rec) + " de " + mb(cg.tot) + " MB" + pcTx
     : cg.fase === "baixando" ? "🎙️ Carregando o áudio do microfone: " + mb(cg.rec) + " MB"
-    : cg.fase === "preparando" ? "🎙️ Preparando o som do microfone (limpando a voz)…" : cg.fase === "lendo" ? "🎙️ O áudio do microfone chegou: abrindo…" : "🎙️ Abrindo o áudio do microfone…";
+    : cg.fase === "preparando" ? (cg.card ? "🎙️ Baixando o som pronto do card…" : "🎙️ Preparando o som do microfone (limpando a voz)…") : cg.fase === "lendo" ? "🎙️ O áudio do microfone chegou: abrindo…" : "🎙️ Abrindo o áudio do microfone…";
   const curto = isMob && !aberto && !quer;
   return caixa(quer ? "rgba(234,179,8,.6)" : "rgba(139,92,246,.45)", [
     <div key="t" onClick={isMob ? function(){ setAberto(function(a){ return !a; }); } : undefined} style={{display:"flex",gap:8,alignItems:"center",cursor:isMob ? "pointer" : "default"}}>
@@ -138883,6 +138883,7 @@ async function _evpMicOggParaBuffer(bytes, chave, n, opcoes){
 async function _evpMicCardBaixar(micId, chave){
   try{ const u = _evpMicCardUrl(micId, chave); if(!u) return null;
     const r = await fetch(u, { cache:"no-store" }); if(!r.ok) return null;                 // 404/400 = ainda não existe
+    try{ _evpM("mic:" + micId).cardBaixando = true; _evpAvisar(); }catch(_){}                // existe no card: a faixa diz "Baixando o som pronto do card…" (não "limpando")
     const b = new Uint8Array(await r.arrayBuffer()); return b.length > 64 && b.length <= _EVP_MIC_CACHE_MAX ? b : null;
   }catch(_){ return null; }
 }
@@ -138937,9 +138938,9 @@ function _evpMicCacheLer(micId, opcoes){
           if(r){ const b = new Uint8Array(await r.arrayBuffer()), out = await _evpMicOggParaBuffer(b, url, n, opcoes);
             if(out){ _evpMicCardGarantir(micId, url, b); return pronto(out); } } }catch(_){}
       }
-      if(card){ const b = await _evpMicCardBaixar(micId, url);
-        if(b){ const out = await _evpMicOggParaBuffer(b, url, n, opcoes);
-          if(out){ out._doCard = true; if(local) _evpMicCacheGuardarOgg(micId, url, b).catch(function(){}); return pronto(out); } } }
+      if(card){ let b = null, out = null;
+        try{ b = await _evpMicCardBaixar(micId, url); out = b ? await _evpMicOggParaBuffer(b, url, n, opcoes) : null; }finally{ if(m.cardBaixando){ m.cardBaixando = false; if(!out) _evpAvisar(); } }
+        if(out){ out._doCard = true; if(local) _evpMicCacheGuardarOgg(micId, url, b).catch(function(){}); return pronto(out); } }
       return null;
     }catch(_){ return null; }
   })());
@@ -154652,7 +154653,11 @@ function _EvcPainelConferir({ res:resConf, juntos, onIr, onFechar, conserto }){
    _evrAjustarPerfil(perfil, ctx) → cópia do perfil ajustada ao projeto (nº de trechos bons dos takes de apoio, quanto motion tem, duração do vídeo)
    _evrContexto(o) → ctx. o = o MESMO objeto do Conferir (_evcConferir no 52f): { p, calc, fala, infoClipe, W, H, galeria, teto }
        + extras opcionais: movimento {clipeId:{dur,bons,resumo}}, musicaInfo {duracao,bpm,fase,clima,energia,genero}, micEnergia(tMic0,tMic1)→RMS 0..1,
-       fps {clipeId:fps}, duracao {clipeId:s}, excecoes [{regra,t,motivo}] (também lidas de p.excecoes), nomeLoja "Starken" (para a R5)
+       fps {clipeId:fps}, duracao {clipeId:s}, excecoes [{regra,t,motivo}] (também lidas de p.excecoes), nomeLoja "Starken" (para a R5),
+       micNivel(tMic0,tMic1)→L (opcional: nível típico da fala do trecho; sem ele a régua mede L = percentil 60 das janelas de 20 ms com micEnergia)
+   R7 COM MICROFONE (17/10/2026): o corte vale pela energia RELATIVA e = RMS(±15 ms)/L do trecho (mapa = micro.clips[id do clip] ou micro.brutos[bruto]):
+       e ≥ 0,5 trava "voz no corte" · 0,25–0,5 médio "conferir de ouvido" · < 0,25 OK (o que a transcrição acusar cai para leve: "o microfone está em silêncio aqui").
+       dados ganham { e, rms, nivel, vale:{t0,t1} (silêncio ≥ 40 ms com e < 0,25 mais perto, segundos do bruto) | null }. Sem micEnergia (ou sem L): como antes.
    _evrConferir(ctx) → [{ regra:"R1".."R10", tipo:"trava"|"preferencia", nivel:"grave"|"medio"|"leve", t, t1, msg, dados:{...} }]
    TRAVA = nunca pode (sempre "grave", não aceita exceção): tela preta/congelada, plano < 0,4 s, palavra cortada, música acabando antes do fim,
        voz fora de sincronia, mesmo trecho de take repetido sobreposto. PREFERÊNCIA = depende do vídeo; se p.excecoes tiver {regra, t, motivo}
@@ -154762,7 +154767,7 @@ function _evrContexto(o){
   const micro = p.micro && p.micro.ativo !== false ? p.micro : null;
   const ctx = { p:p, calc:calc, tl:tl, imgs:imgs, total:total, fimCortes:fimCortes, trechosFala:trechosFala, motion:motion, musica:musicaInfo,
     movimento:mov, durBruto:durBruto, fpsDe:fpsDe, nomes:nomes, corr:corr, legenda:leg, blocos:Array.isArray(calc.blocos) ? calc.blocos : [],
-    micEnergia:typeof o.micEnergia === "function" ? o.micEnergia : null, micro:micro, nomeLoja:o.nomeLoja || "",
+    micEnergia:typeof o.micEnergia === "function" ? o.micEnergia : null, micNivel:typeof o.micNivel === "function" ? o.micNivel : null, micro:micro, nomeLoja:o.nomeLoja || "",
     excecoes:[].concat(Array.isArray(p.excecoes) ? p.excecoes : [], Array.isArray(o.excecoes) ? o.excecoes : []), tipoVideo:p.tipo_video || p.objetivo || "" };
   ctx.perfil = o.perfil ? _evrAjustarPerfil(o.perfil, ctx) : _evrPerfil(musicaInfo, ctx.tipoVideo, ctx);
   return ctx;
@@ -154823,6 +154828,49 @@ function _evrZoomMexe(it){
   const mv = it && it.mov; if(mv && mv.tipo && mv.tipo !== "nenhum") return 0.1;
   return 0;
 }
+
+/* ── microfone: energia RELATIVA no ponto do corte (17/10/2026 — medido no microfone limpo da Starken: corte no silêncio = 3–14% de L,
+   corte com voz vazando/fala emendada = 77–164% de L; a transcrição erra o tempo, o áudio manda) ── */
+const _EVR_MIC = { janela:0.015, nivelJanela:0.02, nivelPct:0.6, voz:0.5, conferir:0.25, vale:0.25, valeMin:0.04, busca:0.3, buscaMax:0.6, passo:0.01, nivelMin:0.003 };
+const _EVR_MICC = typeof WeakMap === "function" ? new WeakMap() : null;
+function _evrMicCache(fn){
+  if(!_EVR_MICC || typeof fn !== "function") return { L:{}, e:{}, n:0 };
+  let c = _EVR_MICC.get(fn); if(!c || c.n > 60000){ c = { L:{}, e:{}, n:0 }; _EVR_MICC.set(fn, c); } return c;
+}
+/* mapa do microfone do trecho: o casamento só deste clip (micro.clips[id do clip da linha]) vale mais que o do bruto inteiro */
+function _evrMicMapa(micro, tr){ if(!micro || !tr) return null; return (micro.clips && tr.id != null && micro.clips[tr.id]) || (micro.brutos && micro.brutos[tr.clipe]) || null; }
+function _evrMicV(v){ return v == null || v === "" ? null : _evrN(v, null); }   // null do microfone (fora do áudio) NÃO vira 0
+function _evrMicT(m, tb){ return _evrN(m.A, 0) + tb * (1 + _evrN(m.B, 0)); }
+function _evrMicRms(fn, m, tb, meia){
+  const c = _evrMicCache(fn), tm = _evrMicT(m, tb), k = tm.toFixed(4) + "|" + meia; if(Object.prototype.hasOwnProperty.call(c.e, k)) return c.e[k];
+  let v = null; try{ v = _evrMicV(fn(tm - meia, tm + meia)); }catch(_){ v = null; } c.e[k] = v; c.n++; return v;
+}
+/* L do trecho [ini, fim] (segundos do bruto): micNivel se vier; senão percentil 60 das janelas de 20 ms (só as que o microfone tem) */
+function _evrMicNivel(o, m, ini, fim){
+  const fn = o && o.micEnergia; if(typeof fn !== "function" || !m) return null;
+  const c = _evrMicCache(typeof o.micNivel === "function" ? o.micNivel : fn), t0 = _evrMicT(m, ini), t1 = _evrMicT(m, fim), k = "L" + t0.toFixed(3) + "|" + t1.toFixed(3); if(Object.prototype.hasOwnProperty.call(c.L, k)) return c.L[k];
+  let L = null;
+  if(typeof o.micNivel === "function"){ try{ L = _evrMicV(o.micNivel(t0, t1)); }catch(_){ L = null; } }
+  if(L == null && t1 > t0){
+    const J = _EVR_MIC.nivelJanela, n = Math.floor((t1 - t0) / J + 1e-6), vs = [];
+    for(let i = 0; i < n; i++){ let v = null; try{ v = _evrMicV(fn(t0 + i * J, t0 + (i + 1) * J)); }catch(_){ v = null; } if(v != null) vs.push(v); }
+    if(vs.length >= 5){ vs.sort(function(a, b){ return a - b; }); L = vs[Math.round(_EVR_MIC.nivelPct * (vs.length - 1))]; }
+  }
+  if(!(L >= _EVR_MIC.nivelMin)) L = null;
+  c.L[k] = L; c.n++; return L;
+}
+/* silêncios perto do corte tb: trechos contínuos ≥ 40 ms com e < 0,25 (amostras a cada 10 ms) em ±R → [{t0,t1,d}] do mais perto ao mais longe */
+function _evrMicVales(eDe, tb, R){
+  const P = _EVR_MIC.passo, n = Math.round(R / P), r3 = function(x){ return Math.round(x * 1000) / 1000; }, vs = []; let run = null;
+  for(let k = -n; k <= n + 1; k++){
+    const t = tb + k * P, e = k <= n ? eDe(t) : null;
+    if(e != null && e < _EVR_MIC.vale){ if(!run) run = { t0:t, t1:t }; else run.t1 = t; }
+    else if(run){ if(run.t1 - run.t0 + P >= _EVR_MIC.valeMin - 1e-6) vs.push(run); run = null; }
+  }
+  vs.forEach(function(v){ v.t0 = r3(v.t0); v.t1 = r3(v.t1); v.d = r3(tb < v.t0 ? v.t0 - tb : tb > v.t1 ? tb - v.t1 : 0); });
+  return vs.sort(function(a, b){ return a.d - b.d || a.t0 - b.t0; });
+}
+function _evrMicValeMaisPerto(eDe, tb){ const v = _evrMicVales(eDe, tb, _EVR_MIC.busca)[0] || _evrMicVales(eDe, tb, _EVR_MIC.buscaMax)[0]; return v ? { t0:v.t0, t1:v.t1 } : null; }
 
 /* ── A RÉGUA ── */
 function _evrConferir(ctx){
@@ -154926,12 +154974,16 @@ function _evrConferir(ctx){
     const ws = tr.ws, dentro = ws.filter(function(w){ return w.f > tr.ini + 0.005 && w.i < tr.fim - 0.005; });
     if(!dentro.length) return;
     const antes = ws.filter(function(w){ return w.f <= tr.ini + 0.005; }).pop(), depois = ws.find(function(w){ return w.i >= tr.fim - 0.005; });
-    const rms = function(tb){ if(!ctx.micEnergia || !ctx.micro || !ctx.micro.brutos || !ctx.micro.brutos[tr.clipe]) return null; const s = ctx.micro.brutos[tr.clipe];
-      const tm = _evrN(s.A, 0) + tb * (1 + _evrN(s.B, 0)); try{ return _evrN(ctx.micEnergia(tm - L.rmsJanela, tm + L.rmsJanela), null); }catch(e){ return null; } };
+    const mapa = ctx.micEnergia ? _evrMicMapa(ctx.micro, tr) : null;          // revisão 17/10/2026: micro.clips[id do clip] antes de micro.brutos[bruto]
+    const rms = function(tb){ if(!mapa) return null; return _evrMicRms(ctx.micEnergia, mapa, tb, L.rmsJanela); };
+    const nivel = mapa ? _evrMicNivel(ctx, mapa, tr.ini, tr.fim) : null;
+    const eDe = function(tb){ const r = _evrMicRms(ctx.micEnergia, mapa, tb, _EVR_MIC.janela); return r == null ? null : r / nivel; };
     const borda = function(lado){
       const tb = lado === "ini" ? tr.ini : tr.fim, tT = lado === "ini" ? tr.t0 : tr.t1;
       const w = lado === "ini" ? dentro[0] : dentro[dentro.length - 1], viz = lado === "ini" ? antes : depois;
       const base = { trecho:tr.id, tipoTrecho:tr.tipo, clipe:tr.clipe, lado:lado, corteTake:_evrR(tb) };
+      const rM = nivel ? _evrMicRms(ctx.micEnergia, mapa, tb, _EVR_MIC.janela) : null;
+      if(rM != null){ bordaMic(lado, tb, tT, w, viz, base, rM); return; }
       if(w.i < tb - 0.01 && w.f > tb + 0.01){
         add("R7", "trava", "grave", tT, tT, "O corte " + (lado === "ini" ? "do começo" : "do fim") + " em " + _evrS(tT) + " parte a palavra " + _evrAspas(w.p) + " no meio.",
           Object.assign(base, { palavra:w.p, palavraIni:_evrR(w.i), palavraFim:_evrR(w.f), sugestao:lado === "ini" ? "Puxe o início para " + _evrS(Math.max(0, w.i - 0.12)) + " no take (ou para depois da palavra)." : "Puxe o fim para " + _evrS(w.f + 0.12) + " no take." }));
@@ -154946,6 +154998,28 @@ function _evrConferir(ctx){
       else if(f <= L.folgaGrave) add("R7", "trava", "grave", tT, tT, "Corte colado na fala em " + _evrS(tT) + ": só " + Math.round(Math.max(0, f) * 1000) + " ms " + deQual + _evrAspas(qual.p) + " — a sílaba pode sumir ou entrar um pedaço.", dd);
       else if(f < L.folga) add("R7", "preferencia", "medio", tT, tT, "Folga curta no corte em " + _evrS(tT) + ": " + Math.round(f * 1000) + " ms " + deQual + _evrAspas(qual.p) + " (o certo é 0,1–0,25 s).", dd);
     };
+    /* com microfone (e = RMS ±15 ms / L do trecho): o áudio manda, a transcrição só explica */
+    const bordaMic = function(lado, tb, tT, w, viz, base, rM){
+      const e = rM / nivel, pct = Math.round(e * 100), qualCorte = lado === "ini" ? "do começo" : "do fim";
+      const partida = w.i < tb - 0.01 && w.f > tb + 0.01;
+      const fDentro = lado === "ini" ? w.i - tb : tb - w.f, fViz = viz ? (lado === "ini" ? tb - viz.f : viz.i - tb) : 9, f = Math.min(fDentro, fViz), qual = partida || fDentro <= fViz ? w : viz;
+      const transc = partida ? "parte a palavra " + _evrAspas(w.p) : f <= L.folgaGrave ? "está a só " + Math.round(Math.max(0, f) * 1000) + " ms de " + _evrAspas(qual.p) : f < L.folga ? "tem só " + Math.round(f * 1000) + " ms de folga até " + _evrAspas(qual.p) : "";
+      if(e < _EVR_MIC.conferir && !transc) return;
+      const vale = _evrMicValeMaisPerto(eDe, tb);
+      const novo = vale ? _evrR(lado === "ini" ? Math.max(vale.t1 - 0.04, vale.t0 + 0.02) : Math.min(vale.t0 + 0.04, vale.t1 - 0.02)) : null;
+      const dd = Object.assign(base, { palavra:qual.p, e:_evrR(e), rms:rM, nivel:nivel, vale:vale, microfone:true, transcricao:transc || null },
+        partida ? { palavraIni:_evrR(w.i), palavraFim:_evrR(w.f) } : { folga:_evrR(f), folgaDentro:_evrR(fDentro), folgaVizinha:_evrR(fViz) });
+      if(e >= _EVR_MIC.voz){
+        dd.sugestao = vale ? "Mude o corte para " + _evrS(novo) + " no take: o microfone fica em silêncio de " + _evrSeg(vale.t0, vale.t1) + "." : "Não há silêncio perto deste corte (fala emendada): escolha outro ponto de corte ouvindo.";
+        add("R7", "trava", "grave", tT, tT, "Voz no corte " + qualCorte + " em " + _evrS(tT) + " (microfone): a voz está soando no ponto do corte (" + pct + "% do nível da fala)" + (transc && partida ? " — a transcrição também diz que " + transc : "") + ".", dd);
+      } else if(e >= _EVR_MIC.conferir){
+        dd.sugestao = "Ouça o corte; se pegar pedaço de sílaba, " + (vale ? "mude para " + _evrS(novo) + " no take (silêncio de " + _evrSeg(vale.t0, vale.t1) + ")." : "escolha outro ponto de corte.");
+        add("R7", "preferencia", "medio", tT, tT, "Conferir de ouvido o corte " + qualCorte + " em " + _evrS(tT) + ": o microfone tem um pouco de voz no ponto do corte (" + pct + "% do nível da fala).", dd);
+      } else {
+        dd.sugestao = "Nada a fazer: o microfone (o som que vai no vídeo) está em silêncio no corte.";
+        add("R7", "preferencia", "leve", tT, tT, "A transcrição diz que o corte " + qualCorte + " em " + _evrS(tT) + " " + transc + ", mas o microfone está em silêncio aqui (" + pct + "% do nível da fala).", dd);
+      }
+    };
     borda("ini"); borda("fim");
     /* pausas mortas: buraco entre palavras > 0,6 s, ou palavra "esticada" (o alinhador engole a pausa/“éé” dentro da palavra) */
     const inteiras = dentro.filter(function(w){ return w.i >= tr.ini - 0.01 && w.f <= tr.fim + 0.01; }), zonas = [];
@@ -154959,7 +155033,7 @@ function _evrConferir(ctx){
       { trecho:tr.id, tipoTrecho:tr.tipo, clipe:tr.clipe, takeIni:_evrR(z.a), takeFim:_evrR(z.b), morto:_evrR(z.morto), sugestao:"Tire o silêncio (Tirar trecho) deixando ~0,25 s entre as palavras." }); });
   });
   /* voz fora de sincronia: microfone casado com pouca confiança */
-  if(ctx.micro && ctx.micro.brutos) ctx.trechosFala.forEach(function(tr){ const s = ctx.micro.brutos[tr.clipe];
+  if(ctx.micro) ctx.trechosFala.forEach(function(tr){ const s = _evrMicMapa(ctx.micro, tr);
     if(s && s.c != null && _evrN(s.c, 1) < L.micConfMin) add("R7", "trava", "grave", tr.t0, tr.t1, "A voz do microfone pode estar fora de sincronia com a boca neste trecho (casamento com " + Math.round(_evrN(s.c, 0) * 100) + "% de confiança).",
       { trecho:tr.id, clipe:tr.clipe, sincronia:true, confianca:_evrN(s.c, 0), sugestao:"Refaça o casamento do microfone ou use o som da câmera aqui." }); });
 
@@ -155059,6 +155133,12 @@ function _evrResumo(itens){
    o = o mesmo objeto da Conferência ({ p, calc, fala, infoClipe, W, H, galeria, teto, kit }) + opcionais:
        movimento  { [bruto]: { dur, bons:[[a,b]…], resumo:{ tipo, vel_media } } }   (mapa de movimento do PC, segundos do bruto)
        musicaInfo { duracao }   (segundos do arquivo da música) · fps · micEnergia { [bruto]: { passo, v:[…] } } ou function(bruto, t) → energia
+         (no app: micEnergia(tMic0, tMic1) → RMS do microfone, o mesmo da régua; micNivel(tMic0, tMic1) → L opcional, como na régua)
+   R7 COM MICROFONE (17/10/2026): corte com voz (e = RMS ±15 ms / L do trecho ≥ 0,25) vai para o VALE de silêncio mais perto (≥ 40 ms com e < 0,25,
+       em ±0,30 s; se não houver, ±0,60 s): início → fim do vale − 0,04 (≥ 0,02 dentro); fim → começo do vale + 0,04. Não tira palavra inteira da fala
+       escolhida nem põe palavra inteira de fora; tirar > 0,35 s de fala = não mexe ("fala emendada aqui — precisa de outro ponto de corte (ouça)").
+       Corte indo PARA FORA: voz (e ≥ 0,25) > 0,08 s que entra sem estar colada (sem vale ≥ 40 ms) à 1ª/última palavra escolhida = não mexe ("voz de fora entraria aqui — ouça").
+       Dois trechos do mesmo bruto encostados (fim de um ≈ início do outro, ±0,15 s) caem no MESMO vale sem sobrepor. Corte já em silêncio: não mexe.
        tipoVideo · perfil (já pronto) · takes [{ clipe, assunto, papel:"produto"|"decoracao", dur, bons }] (apoios livres para trocar)
    A régua (52h) é: _evrPerfil(musica, tipoVideo) · _evrContexto(o) · _evrConferir(ctx) → itens { regra:"R1".."R10", nivel, tipo:"trava"|"preferencia", t, t1, msg, dados }.
    Ordem fixa dos consertos (cada um só mexe se a régua apontou a regra dele): R6 música · R7 corte de palavra · R4 repetição · R3 movimento ·
@@ -155300,6 +155380,73 @@ function _evkEnergia(o, id, t){
   const e = me[id] || me["*"]; if(!e || !Array.isArray(e.v)) return null;
   const k = Math.round((t - _evkNum(e.t0, 0)) / (_evkNum(e.passo, 0.01) || 0.01)); return k >= 0 && k < e.v.length ? _evkNum(e.v[k], null) : null;
 }
+/* ── microfone: energia RELATIVA (17/10/2026 — mesma conta da régua 52h: e = RMS(±15 ms) / L, L = percentil 60 das janelas de 20 ms do trecho) ── */
+const _EVK_MIC = { janela:0.015, nivelJanela:0.02, nivelPct:0.6, vale:0.25, valeMin:0.04, busca:0.3, buscaMax:0.6, passo:0.01, nivelMin:0.003, tiraMax:0.35, par:0.15, tolPal:0.03, vozFora:0.08 };
+const _EVK_MICC = typeof WeakMap === "function" ? new WeakMap() : null;
+function _evkMicV(v){ return v == null || v === "" ? null : _evkNum(v, null); }
+function _evkMicCache(fn){ if(!_EVK_MICC || typeof fn !== "function") return { L:{}, e:{}, n:0 }; let c = _EVK_MICC.get(fn); if(!c || c.n > 60000){ c = { L:{}, e:{}, n:0 }; _EVK_MICC.set(fn, c); } return c; }
+function _evkMicT(m, tb){ return _evkNum(m.A, 0) + tb * (1 + _evkNum(m.B, 0)); }
+function _evkMicRms(fn, m, tb){
+  const c = _evkMicCache(fn), tm = _evkMicT(m, tb), k = tm.toFixed(4); if(Object.prototype.hasOwnProperty.call(c.e, k)) return c.e[k];
+  let v = null; try{ v = _evkMicV(fn(tm - _EVK_MIC.janela, tm + _EVK_MIC.janela)); }catch(_){ v = null; } c.e[k] = v; c.n++; return v;
+}
+function _evkMicNivel(o, m, ini, fim){
+  const fn = o && o.micEnergia; if(typeof fn !== "function" || !m) return null;
+  const c = _evkMicCache(typeof o.micNivel === "function" ? o.micNivel : fn), t0 = _evkMicT(m, ini), t1 = _evkMicT(m, fim), k = t0.toFixed(3) + "|" + t1.toFixed(3);
+  if(Object.prototype.hasOwnProperty.call(c.L, k)) return c.L[k];
+  let L = null;
+  if(typeof o.micNivel === "function"){ try{ L = _evkMicV(o.micNivel(t0, t1)); }catch(_){ L = null; } }
+  if(L == null && t1 > t0){ const J = _EVK_MIC.nivelJanela, n = Math.floor((t1 - t0) / J + 1e-6), vs = [];
+    for(let i = 0; i < n; i++){ let v = null; try{ v = _evkMicV(fn(t0 + i * J, t0 + (i + 1) * J)); }catch(_){ v = null; } if(v != null) vs.push(v); }
+    if(vs.length >= 5){ vs.sort(function(a, b){ return a - b; }); L = vs[Math.round(_EVK_MIC.nivelPct * (vs.length - 1))]; } }
+  if(!(L >= _EVK_MIC.nivelMin)) L = null; c.L[k] = L; c.n++; return L;
+}
+function _evkMicVales(eDe, tb, R){
+  const P = _EVK_MIC.passo, n = Math.round(R / P), vs = []; let run = null;
+  for(let k = -n; k <= n + 1; k++){ const t = tb + k * P, e = k <= n ? eDe(t) : null;
+    if(e != null && e < _EVK_MIC.vale){ if(!run) run = { t0:t, t1:t }; else run.t1 = t; }
+    else if(run){ if(run.t1 - run.t0 + P >= _EVK_MIC.valeMin - 1e-6) vs.push(run); run = null; } }
+  vs.forEach(function(v){ v.t0 = _evkR(v.t0); v.t1 = _evkR(v.t1); v.d = _evkR(tb < v.t0 ? v.t0 - tb : tb > v.t1 ? tb - v.t1 : 0); });
+  return vs.sort(function(a, b){ return a.d - b.d || a.t0 - b.t0; });
+}
+function _evkMicPonto(v, lado){ return _evkR(lado === "ini" ? Math.max(v.t1 - 0.04, v.t0 + 0.02) : Math.min(v.t0 + 0.04, v.t1 - 0.02)); }
+/* corte indo PARA FORA (x antes do início / depois do fim): segundos de voz (e ≥ 0,25) que entram e NÃO estão colados à 1ª/última palavra escolhida.
+   Anda da borda da palavra (w.i no início, w.f no fim) para fora até x; um vale ≥ 40 ms no caminho descola: a voz além dele é de fora (revisão 17/10/2026) */
+function _evkMicVoz(eDe, ws, ini, fim, lado, x){
+  const tb = lado === "ini" ? ini : fim, sg = lado === "ini" ? -1 : 1, P = _EVK_MIC.passo, out = { fora:0, colada:0 };
+  if(typeof eDe !== "function" || sg * (x - tb) <= 1e-9) return out;
+  const esc = ws.filter(function(w){ const m = (w.i + w.f) / 2; return m >= ini && m <= fim; }); if(!esc.length) return out;
+  const E = lado === "ini" ? esc[0].i : esc[esc.length - 1].f; let colado = true, quieto = 0;
+  for(let k = 0; k < 400; k++){ const t = _evkR(E + sg * k * P); if(sg * (t - x) > 1e-9) break;
+    const e = eDe(t);
+    if(e == null || e < _EVK_MIC.vale){ quieto += P; if(quieto >= _EVK_MIC.valeMin - 1e-6) colado = false; continue; }
+    quieto = 0; if(sg * (t - tb) > 1e-9) out[colado ? "colada" : "fora"] += P; }
+  out.fora = _evkR(out.fora); out.colada = _evkR(out.colada); return out;
+}
+/* o novo corte x (lado do trecho [ini, fim]) respeita a fala? não tira palavra inteira escolhida, não põe palavra inteira de fora, tira ≤ 0,35 s,
+   e (com eDe) não põe voz de fora > 0,08 s */
+function _evkMicPode(ws, ini, fim, lado, x, eDe){
+  const tb = lado === "ini" ? ini : fim, a = Math.min(x, tb), b = Math.max(x, tb), T = _EVK_MIC.tolPal, tira = lado === "ini" ? x > tb : x < tb;
+  const escolhida = function(w){ const m = (w.i + w.f) / 2; return m >= ini && m <= fim; };
+  if(lado === "ini" ? x >= fim - 0.1 : x <= ini + 0.1) return "trecho";
+  if(tira && b - a > _EVK_MIC.tiraMax + 1e-9) return "emendada";
+  if(ws.some(function(w){ return (tira ? escolhida(w) : !escolhida(w)) && w.i >= a - T && w.f <= b + T; })) return tira ? "palavra" : "fora";
+  if(!tira && eDe && _evkMicVoz(eDe, ws, ini, fim, lado, x).fora > _EVK_MIC.vozFora + 1e-9) return "vozFora";
+  return null;
+}
+/* um lado do trecho com microfone → null (sem microfone aqui: segue a transcrição) · { ok } (já em silêncio) · { x, vale, e0 } · { aviso, e0 } */
+function _evkMicBorda(o, mm, L, ws, ini, fim, lado){
+  const tb = lado === "ini" ? ini : fim, eDe = function(t){ const r = _evkMicRms(o.micEnergia, mm, t); return r == null ? null : r / L; };
+  const e0 = eDe(tb); if(e0 == null) return null;
+  if(e0 < _EVK_MIC.vale) return { ok:true, e0:e0 };
+  let fora = false;
+  for(const R of [_EVK_MIC.busca, _EVK_MIC.buscaMax]){
+    const vs = _evkMicVales(eDe, tb, R);
+    for(let k = 0; k < vs.length; k++){ const x = _evkMicPonto(vs[k], lado), por = _evkMicPode(ws, ini, fim, lado, x, eDe);
+      if(!por) return { x:x, vale:vs[k], e0:e0, eDe:eDe, voz:_evkMicVoz(eDe, ws, ini, fim, lado, x) }; if(por === "vozFora") fora = true; }
+  }
+  return { aviso:fora ? "voz de fora entraria aqui — ouça" : "fala emendada aqui — precisa de outro ponto de corte (ouça)", e0:e0 };
+}
 /* escolhe o ponto do corte: ideal dentro de [lo, hi]; com energia do microfone, o menor nível na janela ±0,15 s */
 function _evkPonto(o, id, ideal, lo, hi){
   let x = Math.max(lo, Math.min(hi, ideal));
@@ -155379,6 +155526,48 @@ function _evkCorteFim(ws, ini, fim, o, id){
   }
   return { aviso:"o vão entre \u201c" + f0.d.p + "\u201d" + (f0.f ? " e \u201c" + f0.f.p + "\u201d" : "") + " é pequeno demais (ou a transcrição não tem tempo confiável aqui) — confira de ouvido" };
 }
+/* aplica os cortes do microfone (dos 2 lados do clip i) + o vizinho do mesmo bruto encostado (o mesmo vale, sem sobrepor) · { mexeu } */
+function _evkCortesMic(p, i, ws, mm, L, mi, mf, o, out){
+  const c = p.clips[i], ini0 = _evkNum(c.ini, 0), fim0 = _evkNum(c.fim, 0), muda = {}, txt = [], pc = function(e){ return Math.round(e * 100) + "%"; };
+  const Lq = _evkLinha(p).clips[i];
+  [["ini", mi], ["fim", mf]].forEach(function(z){ const lado = z[0], r = z[1]; if(!r) return;
+    if(r.aviso) out.avisos.push({ regra:"R7", t:lado === "ini" ? Lq.t0 : Lq.t1, msg:(lado === "ini" ? "Início" : "Fim") + " do trecho (" + (lado === "ini" ? ini0 : fim0).toFixed(2) + " s do bruto, voz no corte a " + pc(r.e0) + " do nível da fala): " + r.aviso + "." });
+    if(r.x == null) return;
+    (muda[i] = muda[i] || {})[lado] = r.x; txt.push({ k:i, lado:lado, de:lado === "ini" ? ini0 : fim0, r:r });
+    /* vizinho do mesmo bruto encostado neste corte (fim deste ≈ início dele, ou o contrário): vai para o MESMO vale */
+    const oposto = lado === "ini" ? "fim" : "ini", tb = lado === "ini" ? ini0 : fim0;
+    (p.clips || []).forEach(function(q, j){
+      if(j === i || q.mudo || q.clipe !== c.clipe || !_evkNormal(q) || Math.abs(_evkNum(q[oposto], 0) - tb) > _EVK_MIC.par) return;
+      const qb = _evkNum(q[oposto], 0), dentroVale = qb >= r.vale.t0 - 1e-6 && qb <= r.vale.t1 + 1e-6;
+      let xq = dentroVale ? qb : _evkMicPonto(r.vale, oposto);
+      if(!dentroVale && _evkMicPode(ws, _evkNum(q.ini, 0), _evkNum(q.fim, 0), oposto, xq, r.eDe)) return;     // o vizinho não pode ir para lá: fica como está
+      /* sem sobrepor: fim de um ≤ início do outro */
+      let xf = lado === "fim" ? r.x : xq, xi = lado === "fim" ? xq : r.x;
+      if(xf > xi){ const m = _evkR((xf + xi) / 2); xf = m; xi = m; }
+      muda[i][lado] = lado === "fim" ? xf : xi;
+      if(!dentroVale || Math.abs((lado === "fim" ? xi : xf) - qb) > 1e-6){ (muda[j] = muda[j] || {})[oposto] = lado === "fim" ? xi : xf; txt.push({ k:j, lado:oposto, de:qb, r:{ vale:r.vale, e0:null }, par:true }); }
+    });
+  });
+  if(!txt.length) return { mexeu:false };
+  /* apoio/imagem cortado junto com o clip (começa no início dele ou acaba no fim dele): continua colado no corte novo quando o corte vai para FORA
+     (senão o mapa deixaria o rosto aparecer só o pedaço que entrou — pisca na tela) */
+  const L0 = _evkLinha(p), colados = [];
+  Object.keys(muda).forEach(function(k){ const m = muda[k], c0 = p.clips[+k], Lk = L0.clips[+k];
+    (p.imagens || []).forEach(function(x){ if(!x || x.t0 == null) return;
+      if(m.ini != null && m.ini < _evkNum(c0.ini, 0) && Math.abs(_evkNum(x.t0, 0) - Lk.t0) <= 0.02) colados.push({ x:x, k:+k, lado:"ini" });
+      if(m.fim != null && m.fim > _evkNum(c0.fim, 0) && x.t1 != null && Math.abs(_evkNum(x.t1, 0) - Lk.t1) <= 0.02) colados.push({ x:x, k:+k, lado:"fim" }); }); });
+  _evkMexerClips(p, function(q){ Object.keys(muda).forEach(function(k){ const cc = q.clips[+k], m = muda[k]; if(m.ini != null) cc.ini = m.ini; if(m.fim != null) cc.fim = m.fim; }); }, o);
+  const L1 = _evkLinha(p);
+  colados.forEach(function(z){ const x = z.x, Lk = L1.clips[z.k];
+    if(z.lado === "ini"){ const d = _evkNum(x.t0, 0) - Lk.t0; if(!(d > 0.0005)) return; const v = _evkNum(x.vel, 1) || 1;
+      if(x.clipe && x.ini != null){ const ni = _evkNum(x.ini, 0) - d * v; if(ni < 0) return; x.ini = _evkR(ni); } x.t0 = _evkR(Lk.t0); }
+    else { const d = Lk.t1 - _evkNum(x.t1, 0); if(d > 0.0005) x.t1 = _evkR(Lk.t1); } });
+  txt.forEach(function(x){ const novo = muda[x.k][x.lado], v = x.r.vale;
+    _evkFeito(out.feitos, "R7", x.lado === "ini" ? L1.clips[x.k].t0 : L1.clips[x.k].t1, (x.lado === "ini" ? "Início" : "Fim") + " do trecho movido de " + x.de.toFixed(2) + " para " + novo.toFixed(2) +
+      " s do bruto (microfone: silêncio de " + v.t0.toFixed(2) + "–" + v.t1.toFixed(2) + " s" + (x.r.e0 != null ? "; a voz no corte estava a " + pc(x.r.e0) + " do nível da fala" : "") + (x.par ? "; vizinho do mesmo take, no mesmo silêncio" : "") + ")" +
+      (x.r.voz && x.r.voz.colada > _EVK_MIC.vozFora + 1e-9 ? " — entraram " + x.r.voz.colada.toFixed(2) + " s de voz colada à " + (x.lado === "ini" ? "1ª" : "última") + " palavra que a transcrição não marca (ouça)" : "") + "."); });
+  return { mexeu:true };
+}
 function _evkCortes(p, itens, o){
   const out = { feitos:[], avisos:[] };
   const L0 = _evkLinha(p), alvo = [];
@@ -155397,7 +155586,11 @@ function _evkCortes(p, itens, o){
     const c = p.clips[i], ws = _evkPalavras(o && o.fala, c.clipe); if(!ws.length){ out.avisos.push({ regra:"R7", t:_evkLinha(p).clips[i].t0, msg:"Sem transcrição deste trecho: não dá para achar o silêncio." }); return; }
     const ini0 = _evkNum(c.ini, 0), fim0 = _evkNum(c.fim, 0);
     const mm = p.micro && ((p.micro.clips && p.micro.clips[c.id]) || (p.micro.brutos && p.micro.brutos[c.clipe])), oo = Object.assign({}, o || {}, { _micMap:mm || null });
-    const ri = a.ini ? _evkCorteIni(ws, ini0, fim0, oo, c.clipe) : null, rf = a.fim ? _evkCorteFim(ws, ini0, fim0, oo, c.clipe) : null;
+    /* com microfone (função no tempo do microfone + mapa + L do trecho): o áudio decide o lado; sem leitura do microfone num lado, vale a transcrição */
+    const Lm = mm && o && typeof o.micEnergia === "function" ? _evkMicNivel(o, mm, ini0, fim0) : null;
+    const mi = Lm && a.ini ? _evkMicBorda(o, mm, Lm, ws, ini0, fim0, "ini") : null, mf = Lm && a.fim ? _evkMicBorda(o, mm, Lm, ws, ini0, fim0, "fim") : null;
+    if(mi || mf){ const rm = _evkCortesMic(p, i, ws, mm, Lm, mi, mf, o, out); if(rm && rm.mexeu) return; }
+    const ri = a.ini && !mi ? _evkCorteIni(ws, ini0, fim0, oo, c.clipe) : null, rf = a.fim && !mf ? _evkCorteFim(ws, ini0, fim0, oo, c.clipe) : null;
     const ni = ri && ri.x != null ? ri.x : null, nf = rf && rf.x != null ? rf.x : null, Lq = _evkLinha(p).clips[i];
     if(ri && ri.aviso) out.avisos.push({ regra:"R7", t:Lq.t0, msg:"Início do trecho: " + ri.aviso + "." });
     if(rf && rf.aviso) out.avisos.push({ regra:"R7", t:Lq.t1, msg:"Fim do trecho: " + rf.aviso + "." });
